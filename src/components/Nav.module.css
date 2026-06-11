@@ -1,0 +1,201 @@
+/* Center navbar ported from G.U.I.D.E. Codex.html lines 562–752.
+   Five framed slots over the glyph: Equipment (hover-expands to Inventory
+   above + Stat Panel below), Lore, Spellbook, Character, Journal. */
+
+.navbar {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 18px;
+  z-index: 25;
+}
+
+.slot {
+  position: relative;
+  width: 180px;
+  display: flex;
+  justify-content: center;
+}
+.slot.equipment {
+  /* extend hover area vertically so the cursor can travel onto the revealed
+     sub-buttons without leaving the slot (margin cancels the layout effect) */
+  padding: 120px 0;
+  margin: -120px 0;
+}
+
+.btn {
+  --w: 180px;
+  --h: 96px;
+  --cut: 12px;
+  width: var(--w);
+  height: var(--h);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--text);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  position: relative;
+  transition: transform 180ms ease;
+  text-decoration: none;
+  display: block;
+}
+.btn .frame {
+  position: absolute;
+  inset: 0;
+  background: var(--beige);
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
+  transition: background 180ms ease, filter 180ms ease;
+}
+.btn .inner {
+  position: absolute;
+  inset: 1.5px;
+  background:
+    radial-gradient(120% 90% at 50% 60%, rgba(212, 191, 125, 0.04), transparent 60%),
+    linear-gradient(180deg, #1c1c1c, #141414);
+  clip-path: polygon(
+    calc(var(--cut) - 1px) 0,
+    100% 0,
+    100% calc(100% - var(--cut) + 1px),
+    calc(100% - var(--cut) + 1px) 100%,
+    0 100%,
+    0 calc(var(--cut) - 1px)
+  );
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: box-shadow 180ms ease, background 180ms ease;
+}
+.btn .icon {
+  color: var(--beige);
+  font-size: 26px;
+  line-height: 1;
+  transition: color 180ms ease, text-shadow 180ms ease, transform 180ms ease;
+}
+.btn .label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  color: var(--text);
+  text-transform: uppercase;
+  transition: color 180ms ease;
+}
+.btn .marker {
+  position: absolute;
+  top: 8px;
+  left: 14px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.2em;
+  color: var(--cyan);
+  opacity: 0.7;
+  z-index: 1;
+}
+
+.btn:hover { transform: translateY(-2px); }
+.btn:hover .inner,
+.btn.active .inner {
+  box-shadow:
+    inset 0 0 28px rgba(0, 166, 214, 0.18),
+    0 0 18px rgba(0, 166, 214, 0.35);
+}
+.btn:hover .icon,
+.btn.active .icon {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(0, 166, 214, 0.7);
+}
+.btn:active { transform: translateY(0); }
+
+/* Equipment hover-expand sub buttons */
+.sub {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, 0) scale(0.95);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 220ms cubic-bezier(.2, .7, .2, 1),
+    opacity 180ms ease;
+  z-index: 1; /* behind main btn so the "slide from behind" reads right */
+}
+.sub.above { bottom: calc(50% + 56px); }
+.sub.below { top:    calc(50% + 56px); }
+
+.sub .btn {
+  --w: 126px;
+  --h: 70px;
+  --cut: 10px;
+}
+.sub .btn .frame { background: var(--cyan); }
+.sub .btn .inner {
+  background:
+    radial-gradient(120% 90% at 50% 60%, rgba(0, 166, 214, 0.10), transparent 60%),
+    linear-gradient(180deg, #141a1d, #0e1316);
+}
+.sub .btn .icon {
+  color: var(--cyan);
+  font-size: 18px;
+}
+.sub .btn .label {
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+}
+.sub .btn:hover .inner,
+.sub .btn.active .inner {
+  box-shadow:
+    inset 0 0 24px rgba(0, 166, 214, 0.30),
+    0 0 18px rgba(0, 166, 214, 0.5);
+}
+.sub .btn:hover .icon,
+.sub .btn.active .icon {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(0, 166, 214, 0.85);
+}
+
+.slot.equipment:hover .sub,
+.slot.equipment:focus-within .sub {
+  opacity: 1;
+  pointer-events: auto;
+}
+.slot.equipment:hover .sub.above,
+.slot.equipment:focus-within .sub.above {
+  transform: translate(-50%, -8px) scale(1);
+}
+.slot.equipment:hover .sub.below,
+.slot.equipment:focus-within .sub.below {
+  transform: translate(-50%, 8px) scale(1);
+}
+
+/* breadcrumb under the navbar */
+.hint {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(58% + 78px);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+  text-transform: uppercase;
+  z-index: 24;
+  opacity: 0.7;
+}
+.hint .k {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 4px;
+  border: 1px solid var(--beige-dim);
+  color: var(--beige);
+  font-size: 9px;
+}

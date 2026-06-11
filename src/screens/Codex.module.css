@@ -1,0 +1,216 @@
+/* Story cards ported from G.U.I.D.E. Codex.html lines 330–523. */
+
+/* ---- Background G.U.I.D.E. glyph (rotating sigil behind the cards) ---- */
+.glyphWrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+}
+.glyph {
+  width: 640px;
+  height: 640px;
+  color: var(--beige);
+  opacity: 0.18;
+  flex: none;
+}
+.glyph .rotateSlow {
+  transform-origin: 320px 320px;
+  animation: glyph-rot 60s linear infinite;
+}
+.glyph .rotateRev {
+  transform-origin: 320px 320px;
+  animation: glyph-rot 90s linear infinite reverse;
+}
+@keyframes glyph-rot {
+  to { transform: rotate(360deg); }
+}
+.glyph .pulse {
+  transform-origin: 320px 320px;
+  animation: glyph-pulse 3s ease-in-out infinite;
+}
+@keyframes glyph-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.95); }
+  50%      { opacity: 1;    transform: scale(1.08); }
+}
+
+.storyRow {
+  margin-top: 20px;
+  display: flex;
+  gap: 56px;
+  align-items: flex-end;
+  justify-content: center;
+  position: relative;
+  z-index: 40;
+  flex-wrap: wrap;
+}
+
+.cardWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  position: relative;
+}
+
+.card {
+  --w: 220px;
+  --h: 168px;
+  --cut: 18px;
+  width: var(--w);
+  height: var(--h);
+  position: relative;
+  cursor: pointer;
+  transition: transform 220ms cubic-bezier(.2, .7, .2, 1);
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
+  background: transparent;
+}
+.frame {
+  position: absolute;
+  inset: 0;
+  background: var(--beige);
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
+}
+.inner {
+  position: absolute;
+  inset: 2px;
+  background:
+    radial-gradient(120% 90% at 50% 60%, rgba(0, 166, 214, 0.10), transparent 60%),
+    linear-gradient(180deg, #1b1b1b, #131313);
+  clip-path: polygon(
+    calc(var(--cut) - 1px) 0,
+    100% 0,
+    100% calc(100% - var(--cut) + 1px),
+    calc(100% - var(--cut) + 1px) 100%,
+    0 100%,
+    0 calc(var(--cut) - 1px)
+  );
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 18px;
+  box-shadow:
+    inset 0 0 24px rgba(0, 166, 214, 0.10),
+    inset 0 0 1px rgba(255, 255, 255, 0.05);
+  transition: box-shadow 220ms ease;
+}
+.card:hover { transform: translateY(-3px) scale(1.04); }
+.card:hover .inner {
+  box-shadow:
+    inset 0 0 36px rgba(0, 166, 214, 0.22),
+    0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.telemetry {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.22em;
+  color: var(--cyan);
+  text-transform: uppercase;
+  align-self: flex-start;
+  opacity: 0.85;
+}
+.emblem {
+  width: 78px;
+  height: 78px;
+  color: var(--beige);
+  filter: drop-shadow(0 0 6px rgba(212, 191, 125, 0.25));
+  transition: filter 220ms ease;
+}
+.card:hover .emblem { filter: drop-shadow(0 0 10px rgba(212, 191, 125, 0.55)); }
+
+.title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  color: var(--text);
+  text-transform: uppercase;
+  align-self: stretch;
+  display: flex;
+  justify-content: space-between;
+}
+.title .dot { color: var(--cyan); }
+
+.pct {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 36px;
+  color: var(--beige);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-align: center;
+}
+.pct::before {
+  content: "";
+  display: block;
+  width: 28px;
+  height: 1px;
+  background: var(--beige);
+  margin: 0 auto 10px;
+  opacity: 0.6;
+}
+.pctSign { color: var(--beige-dim); font-size: 24px; }
+.pctLabel {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.32em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-top: 6px;
+  text-align: center;
+}
+
+.tooltip {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  width: 280px;
+  padding: 10px 14px;
+  background: rgba(10, 10, 10, 0.96);
+  border: 1px solid var(--beige);
+  box-shadow:
+    0 0 0 1px rgba(212, 191, 125, 0.2),
+    0 12px 24px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(0, 166, 214, 0.2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text);
+  letter-spacing: 0.04em;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease, transform 180ms ease;
+  z-index: 30;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+.tooltip strong {
+  color: var(--cyan);
+  font-weight: 500;
+  display: block;
+  margin-bottom: 3px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 9.5px;
+}
+.cardWrap:hover .tooltip { opacity: 1; transform: translateX(-50%) translateY(0); }

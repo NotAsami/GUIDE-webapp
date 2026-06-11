@@ -1,0 +1,347 @@
+/* Shared chrome ported from G.U.I.D.E. Codex.html lines 140–305, 1107–1224.
+   Pixel-perfect parity is a later-phase task; this is the recognizable scaffold. */
+
+.shell {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: grid;
+  grid-template-rows: var(--bar-top-h) 1fr var(--bar-bottom-h);
+}
+
+/* ---- Topbar ---- */
+
+.topbar {
+  position: relative;
+  z-index: 50;
+  display: grid;
+  /* minmax(0, …) keeps the side columns equal regardless of their content
+     width, so the centered name doesn't shift when the HP digits change. */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  padding: 0 36px;
+  background: linear-gradient(to bottom,
+    rgba(15, 15, 15, 0.95) 0%,
+    rgba(22, 22, 22, 0.92) 100%);
+  border-bottom: 1px solid var(--beige);
+  box-shadow:
+    0 1px 0 rgba(212, 191, 125, 0.15),
+    0 8px 24px -8px rgba(0, 0, 0, 0.6);
+}
+.topbar::before {
+  /* scanline texture inside the bar */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.04) 0px,
+    rgba(255, 255, 255, 0.04) 1px,
+    transparent 1px,
+    transparent 4px);
+  mix-blend-mode: overlay;
+}
+.topbar::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: var(--beige);
+  box-shadow: 0 0 8px rgba(212, 191, 125, 0.4);
+}
+
+.topLeft, .topRight {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  position: relative;
+  z-index: 1;
+}
+.topRight { justify-content: flex-end; }
+
+.statBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+}
+.statRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.statNum {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--beige);
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+.statLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cyan);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.bar {
+  height: 3px;
+  width: 110px;
+  border: 1px solid var(--beige);
+  background: rgba(0, 0, 0, 0.5);
+  position: relative;
+  overflow: hidden;
+}
+.bar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+  box-shadow: 0 0 6px rgba(0, 166, 214, 0.6);
+  display: block;
+}
+
+.topCenter { text-align: center; padding: 0 24px; position: relative; z-index: 1; }
+.charName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.4em;
+  color: var(--text);
+  text-transform: uppercase;
+  line-height: 1;
+}
+.cursor {
+  display: inline-block;
+  color: var(--cyan);
+  transform: translateY(-1px);
+  margin-left: 4px;
+  animation: blink 1s steps(2, end) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+.charSub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+.charSub :global(.sep) { color: var(--beige-dim); margin: 0 8px; }
+
+.coinBlock, .burdenBlock, .hpBlock {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  white-space: nowrap;
+}
+.coinBlock :global(.ic), .burdenBlock :global(.ic), .hpBlock :global(.ic) {
+  font-family: var(--font-display);
+  color: var(--beige);
+  font-size: 20px;
+  line-height: 1;
+}
+.coinBlock :global(.val), .burdenBlock :global(.val), .hpBlock :global(.val) {
+  font-family: var(--font-display);
+  color: var(--beige);
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+.coinBlock :global(.lab), .burdenBlock :global(.lab), .hpBlock :global(.lab) {
+  font-family: var(--font-mono);
+  color: var(--cyan);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* HP reads inline like Gold/Burden (no boxed border — that overflowed the bar);
+   the compact steppers are the Phase 0 write surface until the Stat Panel owns edits. */
+.hpBlock {
+  align-items: center;
+  gap: 8px;
+}
+.hpBlock :global(.ic) { font-size: 16px; color: var(--cyan); }
+/* Fixed-width value box so the stepper buttons never shift as the number's
+   pixel width changes (Cinzel has no tabular figures, so digits vary). */
+.hpBlock :global(.val) {
+  display: inline-block;
+  min-width: 3.6em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.hpBlock :global(.val.low) { color: var(--danger); }
+.hpStepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+.hpStepper button {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--beige-dim);
+  color: var(--beige);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.4);
+  transition: border-color 120ms, color 120ms, background 120ms;
+}
+.hpStepper button:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 166, 214, 0.08);
+}
+.hpStepper button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.signOut {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-left: 4px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  transition: color 120ms, border-color 120ms;
+}
+.signOut:hover { color: var(--cyan); border-color: var(--beige-dim); }
+
+/* ---- Main ---- */
+
+.main {
+  position: relative;
+  z-index: 10;
+  overflow: auto;
+  padding: 24px 36px 16px;
+}
+
+/* ---- Bottombar ---- */
+
+.bottombar {
+  position: relative;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  background:
+    linear-gradient(to top,
+      rgba(15, 15, 15, 0.95) 0%,
+      rgba(22, 22, 22, 0.92) 100%);
+  border-top: 1px solid var(--beige);
+  box-shadow:
+    0 -1px 0 rgba(212, 191, 125, 0.15),
+    0 -8px 24px -8px rgba(0, 0, 0, 0.6);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.bottombar::before {
+  /* scanline texture inside the bar (divider is the border-top + box-shadow above) */
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.04) 0px,
+    rgba(255, 255, 255, 0.04) 1px,
+    transparent 1px,
+    transparent 4px);
+  mix-blend-mode: overlay;
+}
+.bbLine {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+.bbLine :global(.lab) { color: var(--beige); }
+.bbLine :global(.val) { color: var(--cyan); }
+.bbLine :global(.dim) { color: var(--muted); }
+.bbLine :global(.sep) { color: var(--beige-dim); margin: 0 4px; }
+.bbLine .bbRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.bbDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(0, 166, 214, 0.7);
+}
+
+/* ---- Ticker fragments hugging the top divider ---- */
+
+.ticker {
+  position: fixed;
+  left: 0; right: 0;
+  height: 12px;
+  z-index: 51;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: rgba(0, 166, 214, 0.55);
+  pointer-events: none;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
+.ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212, 191, 125, 0.45); }
+.ticker :global(.gap) { width: 32px; display: inline-block; }
+.ticker :global(.dim) { color: rgba(170, 170, 170, 0.4); }
+
+/* ---- Side decorations: corner brackets + vertical labels ----
+   decoLayer mirrors the mockup's <main> box so the absolute offsets match. */
+
+.decoLayer {
+  position: fixed;
+  top: var(--bar-top-h);
+  bottom: var(--bar-bottom-h);
+  left: 0; right: 0;
+  pointer-events: none;
+  z-index: 12;
+}
+.corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  opacity: 0.7;
+}
+.corner.tl { top: calc(var(--bar-top-h) + 28px); left: 28px;
+  border-top: 1px solid var(--beige); border-left: 1px solid var(--beige); }
+.corner.tr { top: calc(var(--bar-top-h) + 28px); right: 28px;
+  border-top: 1px solid var(--beige); border-right: 1px solid var(--beige); }
+.corner.bl { bottom: calc(var(--bar-bottom-h) + 28px); left: 28px;
+  border-bottom: 1px solid var(--beige); border-left: 1px solid var(--beige); }
+.corner.br { bottom: calc(var(--bar-bottom-h) + 28px); right: 28px;
+  border-bottom: 1px solid var(--beige); border-right: 1px solid var(--beige); }
+
+.sideLabel {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.sideLabel.left  { left: 28px;  top: 50%; writing-mode: vertical-rl; transform: rotate(180deg) translateY(50%); }
+.sideLabel.right { right: 28px; top: 50%; writing-mode: vertical-rl; transform: translateY(-50%); }
+.sideLabel :global(.acc) { color: var(--cyan); }

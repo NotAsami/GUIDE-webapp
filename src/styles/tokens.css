@@ -1,0 +1,24 @@
+/* Design tokens, ported from the GUIDE-Hud mockups. The same :root block ships
+   with Codex.html / Spellbook.html / Shard Tree.html — single source for the
+   whole SPA. */
+
+:root {
+  --bg:        #1d1d1d;
+  --bg-2:      #161616;
+  --beige:     #d4bf7d;
+  --beige-dim: #8a7a4a;
+  --cyan:      #00a6d6;
+  --cyan-dim:  #0d6e8c;
+  --cyan-hot:  #4dd6ff;
+  --text:      #dedede;
+  --muted:     #aaaaaa;
+  --danger:    #b93a3a;
+  --gold-rare: #e2b021;
+
+  --bar-top-h:    62px;
+  --bar-bottom-h: 50px;
+
+  --font-display: "Cinzel", serif;
+  --font-prose:   "EB Garamond", serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+}
