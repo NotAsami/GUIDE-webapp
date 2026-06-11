@@ -33,4 +33,30 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 → 3 Level-up (DM-side) → 4 Mobile port.
 
 ## Commands
-[fill in once set up: dev server, build, supabase start, migrations, etc.]
+- `npm install` — install deps
+- `npm run dev` — Vite dev server on http://localhost:5173
+- `npm run build` — TS build + Vite production build to `dist/`
+- `npm run typecheck` — `tsc -b --noEmit`
+- `npm run preview` — serve the production build locally
+
+## Supabase setup (one-time, done by the human)
+1. Create a Supabase project at supabase.com; add `http://localhost:5173/auth/callback`
+   to Authentication → URL Configuration → Redirect URLs. Enable Email auth (magic link).
+2. Copy `.env.example` to `.env.local` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+   from Settings → API.
+3. Apply the schema: open Supabase SQL editor, paste `supabase/migrations/0001_init.sql`, Run.
+4. Sign in once via `/login` so an `auth.users` row exists for the player email.
+5. Apply `supabase/seed.sql` (it joins `auth.users` by email) to insert the canonical character.
+6. To grant DM access, log the DM in once, then in SQL: `insert into dm_users (user_id) select id from auth.users where email = 'DM_EMAIL';`
+
+## Phase 0 smoke test (proves the loop)
+- Login → land on `/` → topbar shows HP 52/52 and the three story cards render from `progress.stories`.
+- Topbar HP `−` / `+` writes through to `characters.sheet.hp.current`; reload preserves the new value.
+- A second account (no character row, not in `dm_users`) sees the "no character bound" screen — RLS holds.
+
+## Project layout
+- `src/lib/` — `supabase.ts` (client), `auth.tsx` (session + magic link), `character.ts` (row hook + section update), `database.types.ts` (hand-written types, replace with `supabase gen types` later).
+- `src/components/Layout.tsx` + `Topbar.tsx` (HP pill = Phase 0 write surface) + `Bottombar.tsx` + `Nav.tsx` — the shared chrome from the Codex mockup, identical across routes.
+- `src/screens/Codex.tsx` — wired end-to-end (reads `progress.stories[]`). The other eight screens are `Stub`s that dump their owning JSONB section as JSON; visual ports are Phase 1+ work.
+- `src/styles/tokens.css` + `global.css` — design tokens (CSS vars) shared by all screens.
+- `supabase/migrations/0001_init.sql` + `supabase/seed.sql` — paste-and-run via the Supabase SQL editor.
