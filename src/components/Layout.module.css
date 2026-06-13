@@ -306,42 +306,4 @@
 .ticker :global(.gap) { width: 32px; display: inline-block; }
 .ticker :global(.dim) { color: rgba(170, 170, 170, 0.4); }
 
-/* ---- Side decorations: corner brackets + vertical labels ----
-   decoLayer mirrors the mockup's <main> box so the absolute offsets match. */
-
-.decoLayer {
-  position: fixed;
-  top: var(--bar-top-h);
-  bottom: var(--bar-bottom-h);
-  left: 0; right: 0;
-  pointer-events: none;
-  z-index: 12;
-}
-.corner {
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  pointer-events: none;
-  opacity: 0.7;
-}
-.corner.tl { top: calc(var(--bar-top-h) + 28px); left: 28px;
-  border-top: 1px solid var(--beige); border-left: 1px solid var(--beige); }
-.corner.tr { top: calc(var(--bar-top-h) + 28px); right: 28px;
-  border-top: 1px solid var(--beige); border-right: 1px solid var(--beige); }
-.corner.bl { bottom: calc(var(--bar-bottom-h) + 28px); left: 28px;
-  border-bottom: 1px solid var(--beige); border-left: 1px solid var(--beige); }
-.corner.br { bottom: calc(var(--bar-bottom-h) + 28px); right: 28px;
-  border-bottom: 1px solid var(--beige); border-right: 1px solid var(--beige); }
-
-.sideLabel {
-  position: absolute;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.3em;
-  color: var(--muted);
-  text-transform: uppercase;
-  pointer-events: none;
-}
-.sideLabel.left  { left: 28px;  top: 50%; writing-mode: vertical-rl; transform: rotate(180deg) translateY(50%); }
-.sideLabel.right { right: 28px; top: 50%; writing-mode: vertical-rl; transform: translateY(-50%); }
-.sideLabel :global(.acc) { color: var(--cyan); }
+/* Side-rails + corner frame moved to components/Deco.tsx (per-screen). */

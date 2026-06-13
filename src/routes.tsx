@@ -4,6 +4,7 @@ import { Codex } from './screens/Codex'
 import { Login } from './screens/Login'
 import { AuthCallback } from './screens/AuthCallback'
 import { Stub } from './screens/Stub'
+import { Stats } from './screens/Stats'
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -17,8 +18,7 @@ export const router = createBrowserRouter([
           blurb="Reads the 7 gear slots from `equipped`; resolves item detail from the bundled item catalog. Visual port pending." /> },
       { path: 'inventory', element: <Stub title="Inventory" section="inventory"
           blurb="Carried items with grid position (`col`,`row`) and footprint. Equipped vs carried — one flag decides which; never both." /> },
-      { path: 'stat-panel', element: <Stub title="Stat Panel" section="sheet"
-          blurb="AC, initiative, speed, proficiency, HP, hit dice, ability scores, saves, skills, senses. HP steppers live in the topbar today; the Stat Panel will own them in the full port." /> },
+      { path: 'stat-panel', element: <Stats /> },
       { path: 'character', element: <Stub title="Character" section="sheet"
           blurb="Ability scores + skill/save proficiencies → d20 rolls. Rolling is ephemeral (a log), not persisted state." /> },
       { path: 'shard', element: <Stub title="Shard Interface" section="shards"

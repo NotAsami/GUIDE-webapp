@@ -19,6 +19,8 @@ export type CharacterIdentity = {
   flavor?: string[]
 }
 
+export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'
+
 export type AbilityScores = {
   str: number
   dex: number
@@ -34,15 +36,45 @@ export type HP = {
   temp?: number
 }
 
+/** AC source breakdown for the Combat widget. Optional — when absent the
+ *  Stat Panel shows the flat AC value with no "= base + DEX" line, rather
+ *  than inventing an armor source. */
+export type AcBreakdown = {
+  base: number
+  source?: string
+  dex?: boolean
+  bonuses?: { label: string; value: number }[]
+}
+
+/** Which abilities this character is proficient in for saving throws.
+ *  Authored per-character (class-granted); not derivable from scores. */
+export type Proficiencies = {
+  armor?: string[]
+  weapons?: string[]
+  tools?: string[]
+  languages?: string[]
+  fightingStyles?: string[]
+}
+
 export type CharacterSheet = {
   abilities?: AbilityScores
   hp?: HP
   hitDice?: { current: number; max: number; die: string }
   ac?: number
+  acBreakdown?: AcBreakdown
   initiative?: number
   speed?: number
   proficiencyBonus?: number
   coins?: { gold: number; silver?: number; copper?: number }
+  /** Ability keys with save proficiency, e.g. ['str','con'] for a Fighter. */
+  saveProficiencies?: AbilityKey[]
+  /** Skill keys (camelCase, see lib/dnd.ts SKILLS) the character is proficient in. */
+  skillProficiencies?: string[]
+  /** Skill keys with expertise (double proficiency). */
+  skillExpertise?: string[]
+  /** Senses overrides. darkvision in feet; absent/0 means none (e.g. Human). */
+  senses?: { darkvision?: number }
+  proficiencies?: Proficiencies
 }
 
 export type ProgressStory = {

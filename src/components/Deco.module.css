@@ -1,0 +1,45 @@
+/* Side-rails + corner frame, ported from the mockups. Corners appear only on
+   Codex (the "mainframe"); other screens use just the vertical rail text.
+   decoLayer mirrors the content box so the absolute offsets match. */
+
+.decoLayer {
+  position: fixed;
+  top: var(--bar-top-h);
+  bottom: var(--bar-bottom-h);
+  left: 0; right: 0;
+  pointer-events: none;
+  z-index: 12;
+}
+
+.corner {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  opacity: 0.7;
+}
+.corner.tl { top: calc(var(--bar-top-h) + 28px); left: 28px;
+  border-top: 1px solid var(--beige); border-left: 1px solid var(--beige); }
+.corner.tr { top: calc(var(--bar-top-h) + 28px); right: 28px;
+  border-top: 1px solid var(--beige); border-right: 1px solid var(--beige); }
+.corner.bl { bottom: calc(var(--bar-bottom-h) + 28px); left: 28px;
+  border-bottom: 1px solid var(--beige); border-left: 1px solid var(--beige); }
+.corner.br { bottom: calc(var(--bar-bottom-h) + 28px); right: 28px;
+  border-bottom: 1px solid var(--beige); border-right: 1px solid var(--beige); }
+
+.sideLabel {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+  text-transform: uppercase;
+  pointer-events: none;
+}
+/* Frameless screens hug the edges (13px); the Codex frame keeps its rails
+   aligned to the corner brackets at 28px. */
+.sideLabel.left  { left: 8px;  top: 50%; writing-mode: vertical-rl; transform: rotate(180deg) translateY(50%); }
+.sideLabel.right { right: 8px; top: 50%; writing-mode: vertical-rl; transform: translateY(-50%); }
+.framed .sideLabel.left  { left: 28px; }
+.framed .sideLabel.right { right: 28px; }
+.sideLabel :global(.acc) { color: var(--cyan); }

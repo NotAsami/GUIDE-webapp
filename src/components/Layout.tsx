@@ -80,19 +80,8 @@ export function Layout() {
         <span className="dim">CHANNEL 1F-Δ</span>
       </div>
 
-      {/* corner brackets + vertical side labels framing the content area */}
-      <div className={styles.decoLayer} aria-hidden="true">
-        <div className={`${styles.corner} ${styles.tl}`} />
-        <div className={`${styles.corner} ${styles.tr}`} />
-        <div className={`${styles.corner} ${styles.bl}`} />
-        <div className={`${styles.corner} ${styles.br}`} />
-        <div className={`${styles.sideLabel} ${styles.left}`}>
-          <span className="acc">G.U.I.D.E.</span> &nbsp;//&nbsp; v 2.4.7 &nbsp;//&nbsp; Castella Mainframe
-        </div>
-        <div className={`${styles.sideLabel} ${styles.right}`}>
-          Session 04F1A &nbsp;//&nbsp; <span className="acc">Brettany Theater</span> &nbsp;//&nbsp; DM Online
-        </div>
-      </div>
+      {/* Side-rails + corner frame are now per-screen (Codex owns the frame);
+          each screen renders its own <Deco> so the rail text is screen-specific. */}
 
       <div className={styles.shell}>
         <Topbar character={character} updateSection={updateSection} />
