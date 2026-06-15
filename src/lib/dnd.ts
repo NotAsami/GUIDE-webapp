@@ -68,11 +68,13 @@ export function proficiency(sheet: CharacterSheet): number {
   return sheet.proficiencyBonus ?? 2
 }
 
-/** Saving-throw total for one ability = mod + (proficiency if proficient). */
+/** Saving-throw total for one ability = mod + (proficiency if proficient) + flat
+ *  bonuses (authored or layered in from gear effects via effectiveSheet). */
 export function saveTotal(sheet: CharacterSheet, key: AbilityKey): number {
   const mod = abilityMod(abilities(sheet)[key])
   const prof = (sheet.saveProficiencies ?? []).includes(key) ? proficiency(sheet) : 0
-  return mod + prof
+  const bonus = sheet.saveBonuses?.[key] ?? 0
+  return mod + prof + bonus
 }
 
 export type SkillTotal = {
@@ -87,7 +89,8 @@ export function skillTotal(sheet: CharacterSheet, skill: Skill): SkillTotal {
   const proficient = (sheet.skillProficiencies ?? []).includes(skill.key)
   const expertise = (sheet.skillExpertise ?? []).includes(skill.key)
   const mult = expertise ? 2 : proficient ? 1 : 0
-  const mod = abilityMod(abilities(sheet)[skill.ability]) + proficiency(sheet) * mult
+  const bonus = sheet.skillBonuses?.[skill.key] ?? 0
+  const mod = abilityMod(abilities(sheet)[skill.ability]) + proficiency(sheet) * mult + bonus
   return { skill, mod, proficient: proficient || expertise, expertise }
 }
 
