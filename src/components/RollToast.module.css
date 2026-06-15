@@ -1,0 +1,84 @@
+/* Roll result toast — bottom-right, above the bottombar. Rendered at Layout top
+   level (outside .main) so it isn't trapped in that stacking context. */
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: calc(var(--bar-bottom-h) + 18px);
+  z-index: 120;
+  width: 300px;
+  cursor: pointer;
+  padding: 14px 16px 12px;
+  background: rgba(8, 8, 8, 0.97);
+  border: 1px solid var(--beige);
+  box-shadow:
+    0 0 0 1px rgba(212, 191, 125, 0.15),
+    0 14px 28px rgba(0, 0, 0, 0.6),
+    0 0 24px rgba(0, 166, 214, 0.25);
+  clip-path: polygon(12px 0, 100% 0,
+    100% calc(100% - 12px), calc(100% - 12px) 100%,
+    0 100%, 0 12px);
+  animation: toastIn 220ms cubic-bezier(.2, .7, .2, 1);
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.head {
+  display: flex; align-items: center; gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed rgba(212, 191, 125, 0.3);
+}
+.icon {
+  width: 34px; height: 34px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--beige); font-size: 16px;
+  border: 1px solid rgba(212, 191, 125, 0.4);
+  background: rgba(0, 0, 0, 0.4);
+}
+.titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.title {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 15px; letter-spacing: 0.06em; color: var(--cyan-hot);
+  text-transform: uppercase; line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sub {
+  font-family: var(--font-mono); font-size: 8.5px;
+  letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase;
+}
+.dismiss { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
+
+.line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-top: 9px;
+}
+.lab {
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase;
+}
+.total {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 24px; line-height: 1; color: var(--cyan-hot);
+  text-shadow: 0 0 12px rgba(0, 166, 214, 0.4);
+}
+.bd {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono); font-size: 9.5px;
+  letter-spacing: 0.04em; color: var(--muted);
+}
+
+/* crit / fumble accents */
+.line.crit .total { color: #6fdc8c; text-shadow: 0 0 14px rgba(111, 220, 140, 0.55); }
+.line.crit .lab { color: #6fdc8c; }
+.line.fumble .total { color: var(--danger-hot); text-shadow: 0 0 14px rgba(255, 84, 84, 0.5); }
+.line.fumble .lab { color: var(--danger-hot); }
+
+/* heal / buff accents (consumables) */
+.line.heal .total { color: #6fdc8c; text-shadow: 0 0 14px rgba(111, 220, 140, 0.55); }
+.line.heal .lab { color: #6fdc8c; }
+.line.buff .total { color: var(--cyan-hot); font-size: 14px; }
+.line.buff .lab { color: var(--cyan); }

@@ -5,6 +5,7 @@ import { Login } from './screens/Login'
 import { AuthCallback } from './screens/AuthCallback'
 import { Stub } from './screens/Stub'
 import { Stats } from './screens/Stats'
+import { Equipment } from './screens/Equipment'
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -14,8 +15,7 @@ export const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { index: true, element: <Codex /> },
-      { path: 'equipment', element: <Stub title="Equipment" section="equipped"
-          blurb="Reads the 7 gear slots from `equipped`; resolves item detail from the bundled item catalog. Visual port pending." /> },
+      { path: 'equipment', element: <Equipment /> },
       { path: 'inventory', element: <Stub title="Inventory" section="inventory"
           blurb="Carried items with grid position (`col`,`row`) and footprint. Equipped vs carried — one flag decides which; never both." /> },
       { path: 'stat-panel', element: <Stats /> },

@@ -219,6 +219,16 @@
 .abScore { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; color: var(--muted); text-transform: uppercase; }
 .paren { color: var(--beige-dim); }
 
+/* gear-buffed ability: cyan frame tint + a small green delta badge */
+.abilityGrid .ablock.buffed .abFrame { background: var(--cyan); }
+.abilityGrid .ablock.buffed .abScore { color: var(--cyan); }
+.abDelta {
+  position: absolute; top: 5px; right: 6px;
+  font-family: var(--font-mono); font-size: 9px; font-weight: 600;
+  letter-spacing: 0.04em; color: #6fdc8c;
+  text-shadow: 0 0 8px rgba(111, 220, 140, 0.5);
+}
+
 /* ---- 05 senses ---- */
 .sensesList { display: flex; flex-direction: column; gap: 4px; flex: 1; justify-content: center; }
 .senseRow { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 10px; padding: 5px 2px; border-bottom: 1px dashed rgba(212, 191, 125, 0.18); }

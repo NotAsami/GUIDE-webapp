@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import type {
-  AbilityKey, CharacterRow, CharacterSection, CharacterSheet, Json,
+  AbilityKey, CharacterRow, CharacterSection, CharacterSheet, EquippedWeapon, Json,
 } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
@@ -10,6 +10,8 @@ import {
   abilityMod, abilities, allSkillTotals, formatMod, passiveScore,
   proficientSkillCount, saveTotal,
 } from '../lib/dnd'
+import { effectiveSheet } from '../lib/effects'
+import { handLabel, weaponAttackBonus, weaponDamageString } from '../lib/weapons'
 import styles from './Stats.module.css'
 
 interface RouteContext {
@@ -35,7 +37,10 @@ const EXHAUSTION_EFFECTS = [
  *  ability scores — never the mockup's placeholder numbers. */
 export function Stats() {
   const { character, updateSection } = useOutletContext<RouteContext>()
-  const sheet = character.sheet ?? {}
+  // DISPLAY from the effective sheet (base + equipped-gear effects). Write-paths
+  // below spread from `character.sheet` (the canon base) — never from `view`.
+  const view = effectiveSheet(character)
+  const base = character.sheet ?? {}
 
   const meta = (
     <>
@@ -71,17 +76,17 @@ export function Stats() {
         </header>
 
         <div className={styles.grid}>
-          <Combat sheet={sheet} />
-          <HitPoints sheet={sheet} character={character} updateSection={updateSection} />
-          <HitDice sheet={sheet} character={character} updateSection={updateSection} />
-          <AbilityScores sheet={sheet} />
-          <Senses sheet={sheet} character={character} />
-          <SavingThrows sheet={sheet} />
+          <Combat sheet={view} />
+          <HitPoints sheet={view} character={character} updateSection={updateSection} />
+          <HitDice sheet={view} character={character} updateSection={updateSection} />
+          <AbilityScores sheet={view} base={base.abilities} />
+          <Senses sheet={view} character={character} />
+          <SavingThrows sheet={view} />
           <DeathSavesWidget character={character} updateSection={updateSection} />
           <Exhaustion character={character} updateSection={updateSection} />
-          <Skills sheet={sheet} />
-          <Attacks character={character} />
-          <Proficiencies character={character} sheet={sheet} />
+          <Skills sheet={view} />
+          <Attacks character={character} sheet={view} />
+          <Proficiencies character={character} sheet={view} />
         </div>
       </div>
     </>
@@ -288,21 +293,35 @@ function HitDice({ sheet, character, updateSection }: {
 
 /* ---------- 04 Ability Scores ---------- */
 
-function AbilityScores({ sheet }: { sheet: CharacterSheet }) {
+function AbilityScores({ sheet, base }: { sheet: CharacterSheet; base?: CharacterSheet['abilities'] }) {
   const scores = abilities(sheet)
+  const buffed = ABILITY_ORDER.some(k => base && scores[k] !== base[k])
   return (
-    <Widget num="04" title="Ability Scores" meta={<>6 attributes <span className="dim">·</span> static</>} span={8}>
+    <Widget
+      num="04" title="Ability Scores" span={8}
+      meta={buffed ? <><span className="acc">gear-modified</span> <span className="dim">·</span> live</> : <>6 attributes <span className="dim">·</span> static</>}
+    >
       <div className={styles.abilityGrid}>
-        {ABILITY_ORDER.map(key => (
-          <div key={key} className={styles.ablock}>
-            <span className={styles.abFrame} /><span className={styles.abInner} />
-            <div className={styles.abContent}>
-              <div className={styles.abName}>{ABILITY_NAMES[key]}</div>
-              <div className={styles.abMod}>{formatMod(abilityMod(scores[key]))}</div>
-              <div className={styles.abScore}><span className={styles.paren}>(</span>{scores[key]}<span className={styles.paren}>)</span></div>
+        {ABILITY_ORDER.map(key => {
+          const delta = base ? scores[key] - base[key] : 0
+          return (
+            <div key={key} className={`${styles.ablock}${delta !== 0 ? ' ' + styles.buffed : ''}`}>
+              <span className={styles.abFrame} /><span className={styles.abInner} />
+              <div className={styles.abContent}>
+                <div className={styles.abName}>{ABILITY_NAMES[key]}</div>
+                <div className={styles.abMod}>{formatMod(abilityMod(scores[key]))}</div>
+                <div className={styles.abScore}>
+                  <span className={styles.paren}>(</span>{scores[key]}<span className={styles.paren}>)</span>
+                </div>
+                {delta !== 0 && (
+                  <div className={styles.abDelta} title={`Base ${base![key]} ${delta > 0 ? '+' : '−'} ${Math.abs(delta)} from gear`}>
+                    {formatMod(delta)}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </Widget>
   )
@@ -466,10 +485,8 @@ function Skills({ sheet }: { sheet: CharacterSheet }) {
 
 /* ---------- 10 Attacks (derived from equipped weapons) ---------- */
 
-type Weapon = { name: string; hand?: string; toHit?: number; damage?: string; type?: string; icon?: string; flip?: boolean }
-
-function Attacks({ character }: { character: CharacterRow }) {
-  const weapons = (character.equipped?.weapons as unknown as Weapon[] | undefined) ?? []
+function Attacks({ character, sheet }: { character: CharacterRow; sheet: CharacterSheet }) {
+  const weapons = (character.equipped?.weapons as unknown as EquippedWeapon[] | undefined) ?? []
   return (
     <Widget num="10" title="Attacks" meta={weapons.length ? `${weapons.length} ready` : 'None'} span={4}>
       {weapons.length === 0 ? (
@@ -479,9 +496,9 @@ function Attacks({ character }: { character: CharacterRow }) {
           {weapons.map((w, i) => (
             <div key={i} className={styles.atRow}>
               <span className={styles.atIcon}><i className={`fa-solid ${w.icon ?? 'fa-khanda'}`} style={w.flip ? { transform: 'scaleX(-1)' } : undefined} /></span>
-              <span className={styles.atName}>{w.name}<span className={styles.hand}>{w.hand}</span></span>
-              <span className={styles.atToh}>{w.toHit !== undefined ? formatMod(w.toHit) : '—'}</span>
-              <span className={styles.atDmg}>{w.damage}<span className={styles.type}>{w.type}</span></span>
+              <span className={styles.atName}>{w.name}<span className={styles.hand}>{handLabel(w.hand)}</span></span>
+              <span className={styles.atToh}>{formatMod(weaponAttackBonus(w, sheet))}</span>
+              <span className={styles.atDmg}>{weaponDamageString(w, sheet)}<span className={styles.type}>{w.type}</span></span>
             </div>
           ))}
         </div>
