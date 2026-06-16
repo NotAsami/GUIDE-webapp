@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import styles from './Login.module.css'
 
 export function Login() {
   const { session, signInWithEmail, loading } = useAuth()
@@ -74,20 +75,14 @@ export function Login() {
                 Email
               </label>
               <input
+                className={styles.input}
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
+                autoFocus
                 disabled={busy}
-                placeholder="ros@castella-08"
-                style={{
-                  width: '100%', padding: '10px 12px',
-                  background: 'rgba(0, 0, 0, 0.5)',
-                  border: '1px solid var(--beige-dim)',
-                  fontFamily: 'var(--font-mono)', fontSize: 13,
-                  color: 'var(--beige)', letterSpacing: '0.04em',
-                  outline: 'none',
-                }}
+                placeholder="you@example.com"
               />
               {error && (
                 <div style={{

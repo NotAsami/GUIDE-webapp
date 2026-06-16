@@ -3,13 +3,19 @@ import { useCharacter } from '../lib/character'
 import { useAuth } from '../lib/auth'
 import { Topbar } from './Topbar'
 import { Bottombar } from './Bottombar'
+import { RollToast } from './RollToast'
 import styles from './Layout.module.css'
 import { useEffect, useState } from 'react'
 
 export function Layout() {
-  const { session, loading: authLoading } = useAuth()
-  const { character, loading, error, updateSection } = useCharacter()
+  const { session, loading: authLoading, signOut } = useAuth()
+  const { character, loading, error, updateSection, updateSections } = useCharacter()
   const nav = useNavigate()
+
+  async function handleSignOut() {
+    await signOut()
+    nav('/login', { replace: true })
+  }
 
   useEffect(() => {
     if (!authLoading && !session) nav('/login', { replace: true })
@@ -37,6 +43,7 @@ export function Layout() {
           <p style={{ color: 'var(--muted)', fontSize: 11 }}>
             If this is an RLS error, confirm you've been seeded a character row owned by this auth user id.
           </p>
+          <SignOutButton onClick={handleSignOut} />
         </CenterMessage>
       </>
     )
@@ -54,6 +61,12 @@ export function Layout() {
             Run <code>supabase/seed.sql</code> in the SQL editor with your auth user id substituted into the
             <code> :owner_id </code> placeholder. See <code>docs/GUIDE_Codex_Build_Handoff.md</code> §5 for the canon values.
           </p>
+          {session?.user?.email && (
+            <p style={{ color: 'var(--beige-dim)', fontSize: 10, letterSpacing: '0.12em', marginTop: 16 }}>
+              Signed in as {session.user.email}
+            </p>
+          )}
+          <SignOutButton onClick={handleSignOut} />
         </CenterMessage>
       </>
     )
@@ -80,27 +93,18 @@ export function Layout() {
         <span className="dim">CHANNEL 1F-Δ</span>
       </div>
 
-      {/* corner brackets + vertical side labels framing the content area */}
-      <div className={styles.decoLayer} aria-hidden="true">
-        <div className={`${styles.corner} ${styles.tl}`} />
-        <div className={`${styles.corner} ${styles.tr}`} />
-        <div className={`${styles.corner} ${styles.bl}`} />
-        <div className={`${styles.corner} ${styles.br}`} />
-        <div className={`${styles.sideLabel} ${styles.left}`}>
-          <span className="acc">G.U.I.D.E.</span> &nbsp;//&nbsp; v 2.4.7 &nbsp;//&nbsp; Castella Mainframe
-        </div>
-        <div className={`${styles.sideLabel} ${styles.right}`}>
-          Session 04F1A &nbsp;//&nbsp; <span className="acc">Brettany Theater</span> &nbsp;//&nbsp; DM Online
-        </div>
-      </div>
+      {/* Side-rails + corner frame are now per-screen (Codex owns the frame);
+          each screen renders its own <Deco> so the rail text is screen-specific. */}
 
       <div className={styles.shell}>
-        <Topbar character={character} updateSection={updateSection} />
+        <Topbar character={character} updateSections={updateSections} />
         <main className={styles.main}>
-          <Outlet context={{ character, updateSection }} />
+          <Outlet context={{ character, updateSection, updateSections }} />
         </main>
         <Bottombar />
       </div>
+
+      <RollToast />
     </>
   )
 }
@@ -123,6 +127,25 @@ function Sweep() {
   }, [])
 
   return <div key={runKey} className={runKey === 0 ? 'sweep' : 'sweep run'} aria-hidden="true" />
+}
+
+function SignOutButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        marginTop: 24, padding: '10px 28px',
+        background: 'rgba(185, 58, 58, 0.08)',
+        border: '1px solid var(--danger)',
+        color: 'var(--danger-hot)',
+        fontFamily: 'var(--font-display)', fontSize: 12, letterSpacing: '0.3em',
+        textTransform: 'uppercase', cursor: 'pointer',
+      }}
+    >
+      Sign Out
+    </button>
+  )
 }
 
 function CenterMessage({ children }: { children: React.ReactNode }) {

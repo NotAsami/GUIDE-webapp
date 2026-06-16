@@ -1,0 +1,43 @@
+/* Login email field — bigger, high-contrast, and immune to the browser
+   autofill "white box" (which was making beige text invisible). */
+.input {
+  width: 100%;
+  padding: 14px 14px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--beige-dim);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1.2;
+  color: var(--beige);
+  letter-spacing: 0.06em;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+  -webkit-text-fill-color: var(--beige);
+  caret-color: var(--cyan-hot);
+}
+.input::placeholder {
+  color: var(--beige-dim);
+  opacity: 0.6;
+  letter-spacing: 0.04em;
+}
+.input:hover {
+  border-color: var(--beige);
+}
+.input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--cyan-dim), 0 0 18px rgba(0, 166, 214, 0.25);
+}
+.input:disabled {
+  opacity: 0.5;
+}
+/* Defeat Chrome/Safari autofill: it forces a white background + dark text,
+   which is what made the field read as "white on white". */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--beige);
+  caret-color: var(--cyan-hot);
+  transition: background-color 9999s ease-in-out 0s;
+  box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.85) inset;
+}

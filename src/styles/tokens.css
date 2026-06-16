@@ -17,6 +17,9 @@
 
   --bar-top-h:    62px;
   --bar-bottom-h: 50px;
+  --nav-h:        72px;   /* compact dock-nav button height (content screens) */
+  --nav-top-gap:  26px;   /* gap between topbar and the docked navbar */
+  --danger-hot:   #ff5454;
 
   --font-display: "Cinzel", serif;
   --font-prose:   "EB Garamond", serif;
