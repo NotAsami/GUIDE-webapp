@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import type {
-  ActiveEffect, CharacterRow, CharacterSection, CharacterSheet, EquippedItem,
-  EquippedWeapon, InventoryItem, ItemRarity, ItemSlot, Json, WeaponHand,
+  ActiveEffect, CharacterRow, CharacterSection, CharacterSheet, EquippedGear,
+  EquippedItem, EquippedWeapon, InventoryItem, ItemRarity, ItemSlot, WeaponHand,
 } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { formatMod } from '../lib/dnd'
+import {
+  addQuickPatch, equipGearPatch, equipWeaponPatch,
+  unequipGearPatch, unequipQuickPatch, unequipWeaponPatch,
+} from '../lib/equip'
 import { activeEffects, effectiveSheet, summarizeEffects } from '../lib/effects'
+import { consumeEffect } from '../lib/consume'
 import {
   handLabel, rollWeaponAttack, weaponAttackBonus, weaponDamageString,
 } from '../lib/weapons'
-import { rollHeal } from '../lib/dice'
 import { useRollLog } from '../lib/rolls'
-import type { RollLine } from '../lib/rolls'
 import styles from './Equipment.module.css'
 
 interface RouteContext {
@@ -66,62 +69,35 @@ export function Equipment() {
   }, [overlayOpen])
 
   /** Move an inventory item into a gear slot — single atomic write so the item
-   *  is never in both places (or neither) on a partial failure. */
+   *  is never in both places (or neither) on a partial failure. The move math is
+   *  shared with Inventory (lib/equip) so there's one owner of the operation. */
   async function equip(slot: ItemSlot, item: InventoryItem) {
-    const { col: _col, row: _row, ...gearItem } = item
-    const nextEquipped = { ...gear, [slot]: gearItem as EquippedItem }
-    const nextInventory = inventory.filter(i => i.id !== item.id)
     setOpenSlot(null)
-    await updateSections({
-      equipped: nextEquipped as unknown as CharacterRow['equipped'],
-      inventory: nextInventory as unknown as Json[],
-    })
+    await updateSections(equipGearPatch(item, slot, gear, inventory))
   }
 
   /** Move the equipped item in a slot back to the inventory (atomic). */
   async function unequip(slot: ItemSlot) {
-    const item = gear[slot]
-    if (!item) return
-    const nextEquipped = { ...gear, [slot]: null }
-    const nextInventory = [...inventory, item as InventoryItem]
+    const p = unequipGearPatch(slot, gear, inventory)
+    if (!p) return
     setOpenSlot(null)
-    await updateSections({
-      equipped: nextEquipped as unknown as CharacterRow['equipped'],
-      inventory: nextInventory as unknown as Json[],
-    })
+    await updateSections(p)
   }
 
   /** Equip an inventory weapon into a specific hand. A weapon already in that hand
    *  is displaced back to the inventory so a hand never holds two — one item, one
    *  place. Atomic, like gear equip. */
   async function equipWeapon(item: InventoryItem, hand: WeaponHand) {
-    const { col: _col, row: _row, ...rest } = item
-    const weaponItem = { ...rest, category: 'weapon' as const, hand }
-    const displaced = weapons.filter(w => w.hand === hand)
-    const keptWeapons = weapons.filter(w => w.hand !== hand)
-    const nextEquipped = { ...gear, weapons: [...keptWeapons, weaponItem] }
-    const nextInventory = [
-      ...inventory.filter(i => i.id !== item.id),
-      ...displaced as unknown as InventoryItem[],
-    ]
     setWeaponPicker(null)
-    await updateSections({
-      equipped: nextEquipped as unknown as CharacterRow['equipped'],
-      inventory: nextInventory as unknown as Json[],
-    })
+    await updateSections(equipWeaponPatch(item, hand, gear, inventory))
   }
 
   /** Move the weapon in a given hand back to the inventory (atomic). */
   async function unequipWeapon(hand: WeaponHand) {
-    const w = weapons.find(wp => wp.hand === hand)
-    if (!w) return
-    const nextEquipped = { ...gear, weapons: weapons.filter(wp => wp.hand !== hand) }
-    const nextInventory = [...inventory, w as unknown as InventoryItem]
+    const p = unequipWeaponPatch(hand, gear, inventory)
+    if (!p) return
     setManageWeapon(null)
-    await updateSections({
-      equipped: nextEquipped as unknown as CharacterRow['equipped'],
-      inventory: nextInventory as unknown as Json[],
-    })
+    await updateSections(p)
   }
 
   /** Roll a weapon's attack AND damage as one action, pushing the combined result
@@ -149,58 +125,27 @@ export function Equipment() {
   async function useConsumable(index: number) {
     const item = quickAccess[index]
     if (!item) return
-    const base = character.sheet
-    const cur = base.hp?.current ?? 0
-    const max = base.hp?.max ?? 0
-    const hasEffects = !!item.effects && Object.keys(item.effects).length > 0
-    const canHeal = item.heal !== undefined && (max <= 0 || cur < max)
+    const outcome = consumeEffect(item, character)
+    setUseSlot(null)
 
-    // A pure healing potion at full HP would only waste a charge — block it.
-    if (item.heal !== undefined && !hasEffects && !canHeal) {
-      setUseSlot(null)
-      addRoll({
-        kind: 'custom', title: item.name, subtitle: 'Already at full HP',
-        icon: item.icon ?? 'fa-flask', lines: [{ label: 'No effect', total: '—' }],
-      })
+    // Pure heal at full HP — surface "no effect" and don't spend the charge.
+    if (outcome.wasted) {
+      addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
       return
     }
 
-    const lines: RollLine[] = []
+    // Fold the consume's sheet/resources changes together with this screen's own
+    // container update (decrement the quick-access stack) into one atomic write.
     const patch: Partial<Pick<CharacterRow, CharacterSection>> = {}
-
-    if (canHeal) {
-      const { total, breakdown } = rollHeal(item.heal!)
-      const next = max > 0 ? Math.min(max, cur + total) : cur + total
-      patch.sheet = { ...base, hp: { ...(base.hp ?? { max }), current: next } }
-      lines.push({ label: 'Healed', total: `+${next - cur}`, breakdown: `${breakdown} · HP ${cur} → ${next}`, tone: 'heal' })
-    }
-
-    if (hasEffects) {
-      const eff: ActiveEffect = {
-        id: crypto.randomUUID(), name: item.name, icon: item.icon,
-        effects: item.effects!, source: item.name, note: item.duration, at: Date.now(),
-      }
-      patch.resources = {
-        ...character.resources, activeEffects: [...effects, eff],
-      } as unknown as CharacterRow['resources']
-      lines.push({
-        label: 'Status', total: summarizeEffects(item.effects!),
-        breakdown: `${item.name}${item.duration ? ` · ${item.duration}` : ' · until rest'}`, tone: 'buff',
-      })
-    }
-
+    if (outcome.sheet) patch.sheet = outcome.sheet
+    if (outcome.resources) patch.resources = outcome.resources
     const nextQty = (item.qty ?? 1) - 1
     const nextItem = nextQty > 0 ? { ...item, qty: nextQty } : null
     const nextQA = quickAccess.map((it, i) => (i === index ? nextItem : it))
     patch.equipped = { ...gear, quickAccess: nextQA } as unknown as CharacterRow['equipped']
 
-    setUseSlot(null)
     await updateSections(patch)
-    addRoll({
-      kind: 'custom', title: item.name, subtitle: 'Consumable used',
-      icon: item.icon ?? 'fa-flask',
-      lines: lines.length ? lines : [{ label: 'Used', total: '✓' }],
-    })
+    addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
   }
 
   /** Manually end an active status effect (atomic). Rest will later clear all. */
@@ -215,29 +160,16 @@ export function Equipment() {
   /** Move an inventory consumable into a quick-access sub-slot (atomic), like the
    *  gear/weapon equip flow — the item lives in exactly one place. */
   async function addQuickItem(item: InventoryItem, index: number) {
-    const { col: _col, row: _row, ...rest } = item
-    const nextQA: (QuickItem | null)[] = [quickAccess[0] ?? null, quickAccess[1] ?? null]
-    nextQA[index] = rest as QuickItem
-    const nextInventory = inventory.filter(i => i.id !== item.id)
     setQuickPicker(null)
-    await updateSections({
-      equipped: { ...gear, quickAccess: nextQA } as unknown as CharacterRow['equipped'],
-      inventory: nextInventory as unknown as Json[],
-    })
+    await updateSections(addQuickPatch(item, index, gear, inventory))
   }
 
   /** Move a quick-access consumable back to the inventory unused (atomic). */
   async function unequipQuick(index: number) {
-    const item = quickAccess[index]
-    if (!item) return
-    const nextQA: (QuickItem | null)[] = [quickAccess[0] ?? null, quickAccess[1] ?? null]
-    nextQA[index] = null
-    const nextInventory = [...inventory, item as unknown as InventoryItem]
+    const p = unequipQuickPatch(index, gear, inventory)
+    if (!p) return
     setUseSlot(null)
-    await updateSections({
-      equipped: { ...gear, quickAccess: nextQA } as unknown as CharacterRow['equipped'],
-      inventory: nextInventory as unknown as Json[],
-    })
+    await updateSections(p)
   }
 
   const meta = (
@@ -335,7 +267,7 @@ export function Equipment() {
               icon="fa-bolt" label="Effects" count={effects.length}
               active={effectsOpen} onClick={() => setEffectsOpen(o => !o)}
             />
-            <ActionBtn icon="fa-medal" label="Features" soon />
+            <ActionBtn to="/features" icon="fa-medal" label="Features" />
           </div>
         </section>
       </div>
@@ -402,14 +334,10 @@ export function Equipment() {
 /* ---------- equipped gear shape (local view onto `equipped`) ---------- */
 
 /** A quick-access consumable (potion/scroll/usable). EquippedItem already carries
- *  qty + heal + effects + duration, so no extra fields are needed. */
+ *  qty + heal + effects + duration, so no extra fields are needed. (`EquippedGear`
+ *  — the typed view onto `equipped` — is shared from database.types now that
+ *  Inventory equips into the same slots.) */
 type QuickItem = EquippedItem
-
-type EquippedGear = {
-  weapons?: EquippedWeapon[]
-  quickAccess?: (QuickItem | null)[] | null
-  guideShard?: EquippedItem | null
-} & { [K in ItemSlot]?: EquippedItem | null }
 
 type SlotConfig = { key: ItemSlot; label: string; icon: string; type: string }
 

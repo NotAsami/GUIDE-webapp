@@ -58,7 +58,7 @@
   position: relative;
   z-index: 1;
 }
-.topRight { justify-content: flex-end; }
+.topRight { justify-content: flex-end; gap: 18px; }
 
 .statBlock {
   display: flex;
@@ -157,10 +157,10 @@
   text-transform: uppercase;
 }
 
-/* HP reads inline like Gold/Burden (no boxed border — that overflowed the bar);
-   the compact steppers are the Phase 0 write surface until the Stat Panel owns edits. */
+/* HP reads inline like Gold/Burden (no boxed border — that overflowed the bar).
+   Baseline-aligned so the heart/number sit on the same line as Burden & Gold. */
 .hpBlock {
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
 }
 .hpBlock :global(.ic) { font-size: 16px; color: var(--cyan); }

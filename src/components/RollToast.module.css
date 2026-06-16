@@ -1,5 +1,10 @@
 /* Roll result toast — bottom-right, above the bottombar. Rendered at Layout top
    level (outside .main) so it isn't trapped in that stacking context. */
+/* Angled corners WITH a stroked border on the diagonals: clip-path would clip a
+   plain `border` off the cut edges, so the toast paints a beige fill clipped to
+   the octagon and an inset ::before paints the dark interior 1px smaller — the
+   1px the fill shows through is the border (diagonals included). Same technique
+   as the Feature cards / Stat Panel frames. */
 .toast {
   position: fixed;
   right: 24px;
@@ -8,8 +13,7 @@
   width: 300px;
   cursor: pointer;
   padding: 14px 16px 12px;
-  background: rgba(8, 8, 8, 0.97);
-  border: 1px solid var(--beige);
+  background: var(--beige);
   box-shadow:
     0 0 0 1px rgba(212, 191, 125, 0.15),
     0 14px 28px rgba(0, 0, 0, 0.6),
@@ -19,6 +23,17 @@
     0 100%, 0 12px);
   animation: toastIn 220ms cubic-bezier(.2, .7, .2, 1);
 }
+.toast::before {
+  content: "";
+  position: absolute; inset: 1px;
+  background: rgba(8, 8, 8, 0.97);
+  clip-path: polygon(11px 0, 100% 0,
+    100% calc(100% - 11px), calc(100% - 11px) 100%,
+    0 100%, 0 11px);
+  pointer-events: none;
+}
+/* keep content above the inset interior */
+.head, .line { position: relative; z-index: 1; }
 @keyframes toastIn {
   from { opacity: 0; transform: translateY(10px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -64,6 +79,7 @@
   font-family: var(--font-display); font-weight: 600;
   font-size: 24px; line-height: 1; color: var(--cyan-hot);
   text-shadow: 0 0 12px rgba(0, 166, 214, 0.4);
+  white-space: nowrap;
 }
 .bd {
   grid-column: 1 / -1;

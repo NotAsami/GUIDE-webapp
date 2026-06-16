@@ -6,6 +6,8 @@ import { AuthCallback } from './screens/AuthCallback'
 import { Stub } from './screens/Stub'
 import { Stats } from './screens/Stats'
 import { Equipment } from './screens/Equipment'
+import { Features } from './screens/Features'
+import { Inventory } from './screens/Inventory'
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -16,9 +18,9 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Codex /> },
       { path: 'equipment', element: <Equipment /> },
-      { path: 'inventory', element: <Stub title="Inventory" section="inventory"
-          blurb="Carried items with grid position (`col`,`row`) and footprint. Equipped vs carried — one flag decides which; never both." /> },
+      { path: 'inventory', element: <Inventory /> },
       { path: 'stat-panel', element: <Stats /> },
+      { path: 'features', element: <Features /> },
       { path: 'character', element: <Stub title="Character" section="sheet"
           blurb="Ability scores + skill/save proficiencies → d20 rolls. Rolling is ephemeral (a log), not persisted state." /> },
       { path: 'shard', element: <Stub title="Shard Interface" section="shards"
