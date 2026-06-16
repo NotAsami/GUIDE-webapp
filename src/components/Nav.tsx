@@ -19,7 +19,7 @@ const PRIMARY: NavItem[] = [
 
 /** Routes that live "under" the Equipment slot — when one is active the
  *  Equipment parent button reads lit, the same as the mockup's treatment. */
-const EQUIPMENT_GROUP = ['/equipment', '/inventory', '/stat-panel']
+const EQUIPMENT_GROUP = ['/equipment', '/inventory', '/stat-panel', '/features']
 
 type Variant = 'hero' | 'dock'
 

@@ -1,0 +1,517 @@
+/* Inventory screen — ported from G.U.I.D.E. Inventory.html.
+   Shared chrome (topbar, dock nav, tickers, side-rails, bottombar) lives in
+   Layout / Nav / Deco; this module owns only the two-region body: a left Cargo
+   Grid (10x8 spatial inventory) and a right column of Item Detail + Load/Coin.
+
+   Layout model matches Equipment: a position:fixed, non-scrolling body filling
+   the space between the dock nav and the bottombar (it escapes .main's overflow,
+   like the fixed Deco/Nav do). The grid cells are fractional (1fr) so the grid
+   fills its framed region; items span cells by footprint.
+
+   Drag-to-rearrange is an enhancement over the static mockup: tiles keep their
+   grid cells, a translucent preview marks the drop target, and a click (no move)
+   pins the detail panel. Pointer->cell math measures the live grid rect. */
+
+.inv {
+  position: fixed;
+  top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
+  bottom: calc(var(--bar-bottom-h) + 18px);
+  left: 0; right: 0;
+  display: grid;
+  grid-template-columns: 62fr 36fr;
+  /* A definite row height (the body is position:fixed top/bottom) so the columns
+     and their framed regions get a definite height to flex within — that's what
+     lets the Item Detail bound its scrolling desc and keep the actions pinned. */
+  grid-template-rows: minmax(0, 1fr);
+  gap: 22px;
+  padding: 0 34px;
+  z-index: 10;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.inv::-webkit-scrollbar { width: 8px; }
+.inv::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15);
+}
+.inv::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  border: 2px solid #111;
+}
+
+.col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.left { min-height: 460px; }
+.right { gap: 0; min-height: 520px; }
+
+/* --- Column-level chrome --- */
+.colHeader {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 10px;
+  padding: 0 2px 7px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
+  flex: 0 0 auto;
+}
+.colHeader.tight { margin-top: 12px; }
+.chNum {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+}
+.chTitle {
+  font-family: var(--font-mono); font-size: 12px;
+  letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
+}
+.chMeta {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+}
+.chMeta :global(.acc) { color: var(--cyan); }
+.chMeta :global(.dim) { color: var(--beige-dim); }
+
+/* ----- Framed region: angular clip + beige double-line ----- */
+.region {
+  --cut: 16px;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.region.detail { flex: 48 1 0; }
+.region.load { flex: 52 1 0; }
+.rFrame {
+  position: absolute; inset: 0;
+  background: var(--beige);
+  clip-path: polygon(var(--cut) 0, 100% 0,
+    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+    0 100%, 0 var(--cut));
+}
+.rGap {
+  position: absolute; inset: 1.5px;
+  background: var(--bg);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+    100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+    0 100%, 0 calc(var(--cut) - 1px));
+}
+.rLine {
+  position: absolute; inset: 4px;
+  background: var(--beige); opacity: 0.42;
+  clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
+    100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
+    0 100%, 0 calc(var(--cut) - 4px));
+}
+.rInner {
+  position: absolute; inset: 5.5px;
+  background:
+    radial-gradient(130% 100% at 50% 0%, rgba(0, 166, 214, 0.05), transparent 60%),
+    linear-gradient(180deg, #151515, #0e0e0e);
+  clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0,
+    100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%,
+    0 100%, 0 calc(var(--cut) - 5px));
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.rInner::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: repeating-linear-gradient(to bottom,
+    rgba(0, 166, 214, 0.035) 0px, rgba(0, 166, 214, 0.035) 1px,
+    transparent 1px, transparent 4px);
+  mix-blend-mode: screen; opacity: 0.6;
+}
+.rCorner {
+  position: absolute; width: 14px; height: 14px;
+  border-color: var(--cyan); opacity: 0.7; z-index: 5; pointer-events: none;
+}
+.rCorner.tl { top: 9px; left: 9px; border-top: 1px solid; border-left: 1px solid; }
+.rCorner.br { bottom: 9px; right: 9px; border-bottom: 1px solid; border-right: 1px solid; }
+
+/* ============================================================
+   01 CARGO GRID
+   ============================================================ */
+.cargoPad {
+  position: relative; z-index: 1;
+  flex: 1; min-height: 0;
+  padding: 16px 18px;
+  display: flex;
+}
+.cargoGrid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* empty cell */
+.cellEmpty {
+  border: 1px solid rgba(212, 191, 125, 0.10);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0, 166, 214, 0.10) 0.5px, transparent 1.6px),
+    rgba(0, 0, 0, 0.22);
+  border-radius: 1px;
+}
+
+/* item cell */
+.cellItem {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  border-radius: 1px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0; margin: 0;
+  font: inherit; color: inherit; text-align: center;
+  transition: transform 140ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+.glyph {
+  color: var(--text);
+  filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.6));
+  transition: color 160ms ease, transform 140ms ease;
+  line-height: 1;
+}
+.catCorner {
+  position: absolute; top: 3px; left: 4px;
+  font-size: 10px; color: var(--muted); opacity: 0.85;
+  z-index: 3; line-height: 1;
+}
+.stack {
+  position: absolute; right: 4px; bottom: 3px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.04em; color: var(--text);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9), 0 1px 1px rgba(0, 0, 0, 0.9);
+  z-index: 3; line-height: 1;
+}
+.cellItem:hover { transform: translateY(-1px); filter: brightness(1.16); z-index: 4; }
+
+/* footprint icon scale */
+.fpS .glyph { font-size: 19px; }
+.fpM .glyph { font-size: 25px; }
+.fpL .glyph { font-size: 34px; }
+.fpV .glyph { font-size: 26px; }
+
+/* category tints (very low alpha) */
+.cellItem[data-cat="weapon"]     { background: rgba(0, 166, 214, 0.07); }
+.cellItem[data-cat="gear"]       { background: rgba(212, 191, 125, 0.07); }
+.cellItem[data-cat="consumable"] { background: rgba(63, 199, 180, 0.07); }
+.cellItem[data-cat="misc"]       { background: rgba(0, 0, 0, 0.3); }
+
+/* rarity borders (dominant read) */
+.cellItem[data-rarity="common"]   { border: 1px solid rgba(212, 191, 125, 0.42); }
+.cellItem[data-rarity="common"] .catCorner { color: var(--beige-dim); }
+
+.cellItem[data-rarity="uncommon"] {
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 8px rgba(0, 166, 214, 0.22), inset 0 0 10px rgba(0, 166, 214, 0.08);
+}
+.cellItem[data-rarity="uncommon"] .glyph { color: var(--cyan-hot); }
+.cellItem[data-rarity="uncommon"] .catCorner { color: var(--cyan); }
+
+.cellItem[data-rarity="rare"] {
+  border: 1px solid var(--cyan-hot);
+  box-shadow: 0 0 12px rgba(77, 214, 255, 0.3);
+  animation: rarePulse 9s ease-in-out infinite;
+}
+.cellItem[data-rarity="rare"] .glyph { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(77, 214, 255, 0.5); }
+@keyframes rarePulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(77, 214, 255, 0.3), inset 0 0 6px rgba(77, 214, 255, 0.05); }
+  50%      { box-shadow: 0 0 18px rgba(77, 214, 255, 0.5), inset 0 0 16px rgba(77, 214, 255, 0.2); }
+}
+
+.cellItem[data-rarity="legendary"] {
+  border: 1px solid var(--gold-rare);
+  box-shadow: 0 0 12px rgba(226, 176, 33, 0.3);
+}
+.cellItem[data-rarity="legendary"] .glyph { color: var(--gold-rare); text-shadow: 0 0 8px rgba(226, 176, 33, 0.5); }
+.cellItem[data-rarity="legendary"] .catCorner { color: var(--gold-rare); }
+
+/* selected (pinned) */
+.cellItem.selected {
+  outline: 1px solid var(--cyan);
+  outline-offset: 1px;
+  box-shadow: 0 0 14px rgba(0, 166, 214, 0.4), inset 0 0 14px rgba(0, 166, 214, 0.12);
+  z-index: 5;
+}
+
+/* dragged tile fades while the preview marks the drop target */
+.cellItem.dragging { opacity: 0.32; filter: grayscale(0.3); }
+
+/* drag placement preview (rendered as a grid item over the target cells) */
+.preview {
+  border: 1px dashed var(--cyan);
+  background: rgba(0, 166, 214, 0.16);
+  box-shadow: inset 0 0 14px rgba(0, 166, 214, 0.25);
+  border-radius: 1px; z-index: 6; pointer-events: none;
+}
+.preview.bad {
+  border-color: var(--danger);
+  background: rgba(185, 58, 58, 0.18);
+  box-shadow: inset 0 0 14px rgba(185, 58, 58, 0.3);
+}
+
+/* ============================================================
+   02 ITEM DETAIL
+   ============================================================ */
+.detailBody {
+  position: relative; z-index: 1;
+  flex: 1; min-height: 0;
+  padding: 16px 18px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.detailEmpty {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 12px;
+}
+.detailEmpty :global(.prompt) {
+  font-family: var(--font-mono); font-size: 13px;
+  letter-spacing: 0.42em; color: var(--muted); text-transform: uppercase;
+}
+.detailEmpty :global(.cur) {
+  font-family: var(--font-mono); font-size: 16px; color: var(--cyan);
+  animation: blink 1.1s steps(2, end) infinite;
+}
+.detailEmpty :global(.hint) {
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.28em; color: var(--beige-dim); text-transform: uppercase;
+  margin-top: 4px;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.detailActive { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* Everything above the actions scrolls as one block, so the Equip/Use/Drop row
+   (and the pin hint) is ALWAYS pinned and visible — regardless of how much
+   detail content there is (rows, long flavor, both, or neither). */
+.daScroll { flex: 1 1 0; min-height: 0; overflow: auto; }
+.daScroll::-webkit-scrollbar { width: 5px; }
+.daScroll::-webkit-scrollbar-thumb { background: rgba(0, 166, 214, 0.4); }
+
+.daName {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 22px; letter-spacing: 0.04em; line-height: 1.1;
+  color: var(--text);
+}
+.daName[data-rarity="uncommon"] { color: var(--cyan-hot); }
+.daName[data-rarity="rare"]     { color: var(--cyan-hot); text-shadow: 0 0 10px rgba(77, 214, 255, 0.4); }
+.daName[data-rarity="legendary"] { color: var(--gold-rare); text-shadow: 0 0 10px rgba(226, 176, 33, 0.4); }
+
+.daTags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.daTag {
+  font-family: var(--font-mono); font-size: 8.5px;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--beige);
+  border: 1px solid rgba(212, 191, 125, 0.45);
+  padding: 3px 8px;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+}
+
+.daStats {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  margin-top: 12px; padding: 9px 0;
+  border-top: 1px dashed rgba(212, 191, 125, 0.25);
+  border-bottom: 1px dashed rgba(212, 191, 125, 0.25);
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+}
+.daStats :global(.k) { color: var(--beige); }
+.daStats :global(.v) { color: var(--text); }
+.daStats :global(.sep) { color: var(--beige-dim); }
+
+.daDesc {
+  margin-top: 13px;
+  font-family: var(--font-prose); font-style: italic;
+  font-size: 15px; line-height: 1.5; color: var(--muted);
+}
+
+.daRows {
+  margin-top: 11px; display: flex; flex-direction: column; gap: 4px;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.08em; color: var(--muted);
+}
+.daRows :global(.row) { display: flex; gap: 8px; }
+.daRows :global(.rk) { color: var(--beige); min-width: 92px; }
+.daRows :global(.rv) { color: var(--text); }
+
+.daAttune {
+  margin-top: 10px;
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--cyan);
+}
+.daAttune.no { color: var(--beige-dim); }
+
+.daPinHint {
+  margin-top: 14px; flex: 0 0 auto;
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.22em; color: var(--beige-dim); text-transform: uppercase;
+}
+.daActions { display: flex; gap: 10px; margin-top: 14px; flex: 0 0 auto; }
+.actBtn {
+  --cut: 8px;
+  position: relative;
+  background: transparent; border: 0; padding: 0;
+  height: 38px; cursor: pointer; font-family: var(--font-mono);
+}
+.actBtn.primary { flex: 1; }
+.actBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.abFrame {
+  position: absolute; inset: 0; background: var(--cyan);
+  clip-path: polygon(var(--cut) 0, 100% 0,
+    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+    0 100%, 0 var(--cut));
+}
+.abInner {
+  position: absolute; inset: 1.5px;
+  background: linear-gradient(180deg, #141a1d, #0e1316);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+    100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+    0 100%, 0 calc(var(--cut) - 1px));
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  color: var(--cyan-hot); font-size: 10px;
+  letter-spacing: 0.26em; text-transform: uppercase;
+  transition: box-shadow 170ms ease, color 170ms ease;
+}
+.abInner i { font-size: 11px; opacity: 0.85; }
+.actBtn.primary:not(:disabled):hover .abInner {
+  color: #fff;
+  box-shadow: inset 0 0 20px rgba(0, 166, 214, 0.3), 0 0 16px rgba(0, 166, 214, 0.45);
+}
+/* DROP — low-emphasis red outline */
+.actBtn.drop { width: 96px; flex: 0 0 auto; }
+.actBtn.drop .abFrame { background: rgba(185, 58, 58, 0.55); }
+.actBtn.drop .abInner { color: var(--danger); letter-spacing: 0.22em; }
+.actBtn.drop:not(:disabled):hover .abInner {
+  color: var(--danger-hot);
+  box-shadow: inset 0 0 18px rgba(185, 58, 58, 0.22), 0 0 12px rgba(185, 58, 58, 0.3);
+}
+.actBtn.confirm .abFrame { background: var(--danger); }
+.actBtn.confirm .abInner { color: var(--danger-hot); }
+
+/* ============================================================
+   03 LOAD / COIN
+   ============================================================ */
+.loadBody {
+  position: relative; z-index: 1;
+  flex: 1; min-height: 0;
+  padding: 12px 18px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.subHead {
+  font-family: var(--font-mono); font-size: 9.5px;
+  letter-spacing: 0.3em; color: var(--cyan); text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+  padding-bottom: 6px;
+}
+.subHead::after {
+  content: ""; flex: 1; height: 1px;
+  background: rgba(0, 166, 214, 0.25);
+}
+
+/* burden */
+.burden { flex: 0 0 auto; }
+.burdenReadout {
+  display: flex; align-items: baseline; gap: 6px;
+  font-family: var(--font-mono); margin: 1px 0 6px;
+}
+.burdenReadout :global(.cur) {
+  font-size: 26px; font-weight: 500; color: var(--cyan-hot);
+  line-height: 1; text-shadow: 0 0 12px rgba(0, 166, 214, 0.4);
+}
+.burdenReadout.over :global(.cur) { color: var(--danger-hot); text-shadow: 0 0 12px rgba(185, 58, 58, 0.5); }
+.burdenReadout :global(.slash) { font-size: 16px; color: var(--beige-dim); }
+.burdenReadout :global(.max) { font-size: 18px; color: var(--muted); }
+.burdenReadout :global(.unit) {
+  font-size: 11px; color: var(--cyan); letter-spacing: 0.2em; margin-left: 2px;
+}
+.burdenBar {
+  position: relative; height: 7px;
+  border: 1px solid var(--beige);
+  background: rgba(0, 0, 0, 0.5); margin: 4px 0 2px;
+}
+.burdenBar :global(.fill) {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+  box-shadow: 0 0 8px rgba(0, 166, 214, 0.5);
+}
+.burdenBar.over :global(.fill) {
+  background: linear-gradient(90deg, var(--danger), var(--danger-hot));
+  box-shadow: 0 0 8px rgba(185, 58, 58, 0.6);
+}
+.burdenBar :global(.tick) {
+  position: absolute; top: -3px; bottom: -3px; width: 1px;
+  background: rgba(212, 191, 125, 0.7);
+}
+.burdenTicks {
+  position: relative; height: 11px;
+  font-family: var(--font-mono); font-size: 7.5px;
+  letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase;
+}
+.burdenTicks span { position: absolute; transform: translateX(-50%); top: 2px; white-space: nowrap; }
+.slotRow {
+  display: flex; gap: 7px; margin-top: 6px;
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase;
+}
+.slotRow :global(.acc) { color: var(--cyan); }
+.slotRow :global(.sep) { color: var(--beige-dim); }
+
+.ldDivider { height: 1px; background: rgba(212, 191, 125, 0.2); margin: 8px 0; flex: 0 0 auto; }
+
+/* coin purse */
+.coin { flex: 0 0 auto; display: flex; flex-direction: column; min-height: 0; }
+.coinRow {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 6px; margin: 3px 0 0;
+}
+.coinBadge {
+  --cut: 5px;
+  position: relative;
+  border: 1px solid var(--beige-dim);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 5px 3px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  clip-path: polygon(var(--cut) 0, 100% 0,
+    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+    0 100%, 0 var(--cut));
+}
+.coinBadge :global(.ci) {
+  width: 15px; height: 15px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 7.5px;
+  line-height: 1;
+}
+.coinBadge :global(.cval) {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  color: var(--text); letter-spacing: 0.02em; line-height: 1;
+}
+.coinBadge :global(.clab) {
+  font-family: var(--font-mono); font-size: 7px;
+  letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase;
+}
+.coinBadge.gp { border-color: rgba(212, 191, 125, 0.6); }
+.coinBadge.gp :global(.ci) { background: var(--beige); color: #1d1d1d; }
+.coinBadge.sp { border-color: rgba(170, 170, 170, 0.45); }
+.coinBadge.sp :global(.ci) { border: 1px solid var(--muted); color: var(--muted); }
+.coinBadge.cp { border-color: rgba(138, 122, 74, 0.55); }
+.coinBadge.cp :global(.ci) { border: 1px solid var(--beige-dim); color: var(--beige-dim); }
+.coinTotal {
+  margin-top: 8px;
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+}
+.coinTotal :global(.v) { color: var(--beige); }
+.coinTotal :global(.approx) { color: var(--beige-dim); }
+
+/* empty bag */
+.empty {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; color: var(--muted); text-align: center; padding: 60px 0;
+}
+.empty i { font-size: 28px; color: var(--beige-dim); margin-bottom: 6px; }
+.emptySub { font-size: 13px; color: var(--beige-dim); }
+
+@media (max-width: 1080px) {
+  .inv { grid-template-columns: 1fr; grid-auto-rows: minmax(0, 1fr); }
+}

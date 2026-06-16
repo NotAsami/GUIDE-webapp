@@ -97,7 +97,7 @@ export function Layout() {
           each screen renders its own <Deco> so the rail text is screen-specific. */}
 
       <div className={styles.shell}>
-        <Topbar character={character} updateSection={updateSection} />
+        <Topbar character={character} updateSections={updateSections} />
         <main className={styles.main}>
           <Outlet context={{ character, updateSection, updateSections }} />
         </main>

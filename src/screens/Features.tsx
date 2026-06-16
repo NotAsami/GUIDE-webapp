@@ -1,0 +1,257 @@
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import type { CharacterRow, CharacterSection, Feature, FeatureCategory } from '../lib/database.types'
+import { Nav } from '../components/Nav'
+import { Deco } from '../components/Deco'
+import { rollHeal } from '../lib/dice'
+import { useRollLog, type RollLine } from '../lib/rolls'
+import styles from './Features.module.css'
+
+interface RouteContext {
+  character: CharacterRow
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+}
+
+/** Display order + labels for the dossier sections. Empty groups are skipped. */
+const GROUPS: { key: FeatureCategory; label: string; icon: string }[] = [
+  { key: 'class',      label: 'Class Features', icon: 'fa-shield-halved' },
+  { key: 'feat',       label: 'Feats',          icon: 'fa-star' },
+  { key: 'racial',     label: 'Racial Traits',  icon: 'fa-dna' },
+  { key: 'background', label: 'Background',      icon: 'fa-scroll' },
+  { key: 'sense',      label: 'Senses',         icon: 'fa-eye' },
+  { key: 'other',      label: 'Other',          icon: 'fa-asterisk' },
+]
+
+/** A feature can be "used" when it rolls something or tracks limited uses. */
+function isUsable(f: Feature): boolean {
+  return !!f.roll || !!f.uses
+}
+
+/** Features — a dossier of the character's class features, feats, racial traits
+ *  and senses, rendered from `sheet.features`. Usable features (a roll and/or a
+ *  limited-use counter) get a Use button: it rolls, decrements the counter, and
+ *  surfaces the result as a single-roll toast (the player applies the effect, as
+ *  with an attack). Use lives ON THE CARD so the toast (z120) isn't buried under
+ *  the detail modal (z400). */
+export function Features() {
+  const { character, updateSection } = useOutletContext<RouteContext>()
+  const nav = useNavigate()
+  const { addRoll } = useRollLog()
+  const features = character.sheet?.features ?? []
+  const [selected, setSelected] = useState<Feature | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  // Close the detail panel on Escape.
+  useEffect(() => {
+    if (!selected) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelected(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected])
+
+  /** Spend/roll a feature: roll its expression (if any), decrement its use
+   *  counter (if any) in one write, then toast the result. */
+  async function useFeature(f: Feature) {
+    if (busy) return
+    if (f.uses && f.uses.current <= 0) return
+    setBusy(true)
+
+    const sheet = character.sheet ?? {}
+    let nextSheet = sheet
+    const lines: RollLine[] = []
+
+    if (f.roll) {
+      const { total, breakdown } = rollHeal(f.roll)
+      if (f.rollTone === 'heal') {
+        // Heal-tagged rolls raise real HP, like a potion (clamped to max).
+        const hp = sheet.hp ?? { current: 0, max: 0 }
+        const max = hp.max ?? 0
+        const cur = hp.current ?? 0
+        const next = Math.min(max, cur + total)
+        nextSheet = { ...nextSheet, hp: { ...hp, current: next, max } }
+        lines.push({ label: f.rollLabel ?? 'Healed', total: `+${next - cur}`, breakdown: `${breakdown} · HP ${cur} → ${next}`, tone: 'heal' })
+      } else {
+        // Other rolls are show-only — the player applies the effect (like an attack).
+        lines.push({ label: f.rollLabel ?? 'Result', total: `${total}`, breakdown, tone: f.rollTone })
+      }
+    }
+
+    let remaining = f.uses?.current ?? null
+    if (f.uses) {
+      remaining = f.uses.current - 1
+      nextSheet = { ...nextSheet, features: features.map(x =>
+        x.id === f.id ? { ...x, uses: { ...f.uses!, current: remaining! } } : x) }
+    }
+
+    if (nextSheet !== sheet) await updateSection('sheet', nextSheet)
+    setBusy(false)
+
+    const subtitle = f.uses ? `${remaining} / ${f.uses.max} uses left` : (f.usage ?? 'Feature')
+    addRoll({ kind: 'custom', title: f.name, subtitle, icon: f.icon, lines })
+  }
+
+  // Bucket features by category, preserving GROUPS order. Anything missing or
+  // with an unrecognized category string falls into 'other' so a DM typo never
+  // makes a feature silently disappear.
+  const known = new Set(GROUPS.map(g => g.key))
+  const groupKey = (f: Feature): FeatureCategory =>
+    f.category && known.has(f.category) ? f.category : 'other'
+  const byGroup = GROUPS.map(g => ({
+    ...g,
+    items: features.filter(f => groupKey(f) === g.key),
+  })).filter(g => g.items.length > 0)
+
+  const meta = (
+    <>
+      <span className="dim">◇</span>
+      <span>Section</span>
+      <span className="acc">/ Features</span>
+      <span className="dim">·</span>
+      <span>Abilities &amp; Traits</span>
+      <span className="dim">·</span>
+      <span className="stamp">FEATURE_DOSSIER</span>
+      <span className="dim">::</span>
+      <span className="acc">Online</span>
+    </>
+  )
+
+  return (
+    <>
+      <Deco
+        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; FEATURE_DOSSIER &nbsp;//&nbsp; SYNC OK</>}
+        right={<>Castella-08 &nbsp;//&nbsp; <span className="acc">TRAITS: BOUND</span> &nbsp;//&nbsp; Loadout 02</>}
+      />
+      <Nav variant="dock" meta={meta} />
+
+      <div className={styles.dash}>
+        <header className={styles.dashHead}>
+          <span className={styles.dhNum}>10</span>
+          <span className={styles.dhTitle}>Features</span>
+          <span className={styles.dhMeta}>
+            <span><span className="dim">Catalogued</span> {features.length}</span>
+            <span className="dim">·</span>
+            <span><span className="dim">Source</span> <span className="acc">DM-Authored</span></span>
+            <span className={styles.cursor}>▌</span>
+          </span>
+          <button type="button" className={styles.closeScreen} onClick={() => nav('/equipment')}>
+            <i className="fa-solid fa-xmark" aria-hidden="true" /> Close
+          </button>
+        </header>
+
+        {byGroup.length === 0 ? (
+          <div className={styles.empty}>
+            <i className="fa-solid fa-folder-open" aria-hidden="true" />
+            <p>No features catalogued yet.</p>
+            <p className={styles.emptySub}>
+              The DM authors class features, feats and traits into <code>sheet.features</code>.
+            </p>
+          </div>
+        ) : (
+          byGroup.map(group => (
+            <section key={group.key} className={styles.group}>
+              <div className={styles.groupHead}>
+                <span className={styles.ghIcon}><i className={`fa-solid ${group.icon}`} /></span>
+                <span className={styles.ghLabel}>{group.label}</span>
+                <span className={styles.ghCount}>{group.items.length}</span>
+                <span className={styles.ghRule} />
+              </div>
+              <div className={styles.cards}>
+                {group.items.map(f => (
+                  <FeatureCard key={f.id} feature={f} busy={busy}
+                    onOpen={() => setSelected(f)} onUse={() => useFeature(f)} />
+                ))}
+              </div>
+            </section>
+          ))
+        )}
+      </div>
+
+      {selected && createPortal(
+        <FeatureDetail
+          feature={selected} busy={busy}
+          onClose={() => setSelected(null)}
+          onUse={() => { const f = selected; setSelected(null); useFeature(f) }}
+        />,
+        document.body,
+      )}
+    </>
+  )
+}
+
+function FeatureCard({ feature, busy, onOpen, onUse }: {
+  feature: Feature; busy: boolean; onOpen: () => void; onUse: () => void
+}) {
+  const tag = feature.usage ?? (feature.level ? `Lv ${feature.level}` : null)
+  const exhausted = !!feature.uses && feature.uses.current <= 0
+  return (
+    <div className={styles.card}>
+      <span className={styles.cFrame} aria-hidden="true" />
+      <button type="button" className={styles.cOpen} onClick={onOpen}>
+        <span className={styles.cIcon}><i className={`fa-solid ${feature.icon ?? 'fa-bolt'}`} /></span>
+        <span className={styles.cName}>{feature.name}</span>
+        {feature.summary && <span className={styles.cSummary}>{feature.summary}</span>}
+      </button>
+      <div className={styles.cFoot}>
+        {feature.source && <span className={styles.cSource}>{feature.source}</span>}
+        {feature.uses
+          ? <span className={styles.cUses}>{feature.uses.current}/{feature.uses.max}</span>
+          : tag && <span className={styles.cTag}>{tag}</span>}
+        {isUsable(feature) && (
+          <button type="button" className={styles.useBtn} onClick={onUse} disabled={busy || exhausted}>
+            {exhausted ? 'Spent' : 'Use'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function FeatureDetail({ feature, busy, onClose, onUse }: {
+  feature: Feature; busy: boolean; onClose: () => void; onUse: () => void
+}) {
+  const paragraphs = (feature.description ?? '').split(/\n\s*\n/).filter(Boolean)
+  const exhausted = !!feature.uses && feature.uses.current <= 0
+  return (
+    <div className={styles.overlay} onClick={onClose}>
+      <div className={styles.panel} onClick={e => e.stopPropagation()} role="dialog" aria-label={feature.name}>
+        <button type="button" className={styles.close} onClick={onClose} aria-label="Close">✕</button>
+        <div className={styles.pHead}>
+          <span className={styles.pIcon}><i className={`fa-solid ${feature.icon ?? 'fa-bolt'}`} /></span>
+          <div className={styles.pTitles}>
+            <div className={styles.pName}>{feature.name}</div>
+            <div className={styles.pSub}>
+              {[feature.source, feature.usage].filter(Boolean).join(' · ') || 'Feature'}
+              {feature.uses && ` · ${feature.uses.current}/${feature.uses.max} left`}
+            </div>
+          </div>
+        </div>
+
+        {feature.rows && feature.rows.length > 0 && (
+          <div className={styles.pRows}>
+            {feature.rows.map(([k, v], i) => (
+              <div key={i} className={styles.pRow}>
+                <span className={styles.prK}>{k}</span>
+                <span className={styles.prV}>{v}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className={styles.pBody}>
+          {paragraphs.length > 0
+            ? paragraphs.map((p, i) => <p key={i}>{p}</p>)
+            : <p className={styles.pEmpty}>No description provided.</p>}
+        </div>
+
+        {isUsable(feature) && (
+          <div className={styles.pFoot}>
+            <button type="button" className={styles.pUse} onClick={onUse} disabled={busy || exhausted}>
+              {exhausted ? 'No Uses Left' : feature.roll ? 'Use & Roll' : 'Use'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
