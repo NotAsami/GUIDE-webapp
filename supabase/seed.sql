@@ -36,7 +36,21 @@ select
     'initiative',       2,
     'speed',            30,
     'proficiencyBonus', 3,
-    'coins',            jsonb_build_object('gold', 1247, 'silver', 0, 'copper', 0)
+    'coins',            jsonb_build_object('gold', 1247, 'silver', 0, 'copper', 0),
+    -- Class-mechanical (follows from class=Fighter, SRD — not invented lore):
+    'saveProficiencies', jsonb_build_array('str', 'con'),
+    'proficiencies', jsonb_build_object(
+      'armor',          jsonb_build_array('Light Armor', 'Medium Armor', 'Heavy Armor', 'Shields'),
+      'weapons',        jsonb_build_array('Simple', 'Martial'),
+      'tools',          '[]'::jsonb,
+      'languages',      jsonb_build_array('Common'),
+      'fightingStyles', '[]'::jsonb
+    ),
+    -- Authored character choices (leave for the player/DM to set; the Stat
+    -- Panel renders honest empty states until then). Do NOT seed the mockup's
+    -- invented Champion / Soldier / Castellan / skill picks (handoff §5).
+    'skillProficiencies', '[]'::jsonb,
+    'skillExpertise',     '[]'::jsonb
   ),
   jsonb_build_object(
     'attunement',   jsonb_build_object('available', 0, 'spent', 0, 'capacity', 3),

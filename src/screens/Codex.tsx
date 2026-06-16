@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import type { CharacterRow, ProgressStory } from '../lib/database.types'
 import { Nav } from '../components/Nav'
+import { Deco } from '../components/Deco'
 import styles from './Codex.module.css'
 
 interface RouteContext {
@@ -22,6 +23,11 @@ export function Codex() {
 
   return (
     <>
+      <Deco
+        corners
+        left={<><span className="acc">G.U.I.D.E.</span> &nbsp;//&nbsp; v 2.4.7 &nbsp;//&nbsp; Castella Mainframe</>}
+        right={<>Session 04F1A &nbsp;//&nbsp; <span className="acc">Brettany Theater</span> &nbsp;//&nbsp; DM Online</>}
+      />
       <Glyph />
       <section className={styles.storyRow} aria-label="Story progress">
         {stories.length === 0 && (

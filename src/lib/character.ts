@@ -12,6 +12,10 @@ interface CharacterState {
     section: K,
     next: CharacterRow[K],
   ) => Promise<void>
+  /** Patch several sections in ONE atomic DB update. Required when a mutation
+   *  spans sections that must stay consistent — e.g. equip/unequip moving an
+   *  item between `inventory` and `equipped` ("never both", handoff §4). */
+  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
   refetch: () => Promise<void>
 }
 
@@ -73,5 +77,26 @@ export function useCharacter(): CharacterState {
     [character],
   )
 
-  return { character, loading, error, updateSection, refetch: fetchOnce }
+  const updateSections: CharacterState['updateSections'] = useCallback(
+    async patch => {
+      if (!character) return
+      const optimistic = { ...character, ...patch }
+      setCharacter(optimistic)
+      const { data, error: err } = await supabase
+        .from('characters')
+        .update(patch as CharacterUpdate)
+        .eq('id', character.id)
+        .select()
+        .single<CharacterRow>()
+      if (err) {
+        setError(err.message)
+        setCharacter(character) // roll back — both sections revert together
+      } else if (data) {
+        setCharacter(data)
+      }
+    },
+    [character],
+  )
+
+  return { character, loading, error, updateSection, updateSections, refetch: fetchOnce }
 }
