@@ -89,25 +89,34 @@
 }
 .ghRule { flex: 1; height: 1px; background: rgba(212, 191, 125, 0.18); }
 
-/* ---- cards ---- */
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+/* ---- masonry: 3 fixed columns, cards scale to content (no vertical grid) ---- */
+.masonry {
+  display: flex;
+  align-items: flex-start;
   gap: 12px;
 }
+.mCol {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+@media (max-width: 880px) {
+  .masonry { flex-direction: column; }
+}
+
 /* Angled corners WITH a visible border on the diagonals: clip-path clips a
    border off, so the cut edges would be unstroked. Instead the card paints a
    beige fill clipped to the octagon shape, and an inset pseudo paints the dark
    interior 1px smaller — the 1px the fill shows through is the border, diagonals
-   included. Hover swaps the fill to cyan. */
+   included. Cards scale to their description; no fixed height. */
 .card {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 128px;
   background: var(--beige-dim);
-  cursor: pointer;
-  transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+  transition: background 140ms ease, box-shadow 140ms ease;
   clip-path: polygon(10px 0, 100% 0,
     100% calc(100% - 10px), calc(100% - 10px) 100%,
     0 100%, 0 10px);
@@ -121,59 +130,73 @@
     0 100%, 0 9px);
   pointer-events: none;
 }
-.card:hover {
-  background: var(--cyan);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5), 0 0 18px rgba(0, 166, 214, 0.15);
-}
-.cFrame {
-  position: absolute; top: 8px; right: 8px;
-  width: 14px; height: 14px;
-  border-top: 1px solid rgba(0, 166, 214, 0.5);
-  border-right: 1px solid rgba(0, 166, 214, 0.5);
-  z-index: 2;
-}
-/* clickable body that opens the detail panel — grows so the footer (uses + Use
-   button) pins to the card bottom, aligned across a row regardless of summary length */
+.card:hover { box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5), 0 0 18px rgba(0, 166, 214, 0.12); }
+
+/* clickable body that opens the detail panel */
 .cOpen {
   position: relative;
   z-index: 1;
-  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
   width: 100%;
-  padding: 16px 16px 8px;
-  text-align: left;
   background: transparent;
   border: none;
   cursor: pointer;
 }
 .cOpen:focus-visible { outline: 1px solid var(--cyan); outline-offset: -3px; }
+
+/* header: a vibrant kind-tinted backdrop square holding the icon + name on one
+   row; the name reads in the codex cyan. Default = fuller yellow. */
+.cHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 8px 0;
+  padding: 9px 11px;
+  text-align: left;
+  background: rgba(226, 176, 33, 0.20);
+  border: 1px solid rgba(226, 176, 33, 0.62);
+  clip-path: polygon(6px 0, 100% 0,
+    100% calc(100% - 6px), calc(100% - 6px) 100%,
+    0 100%, 0 6px);
+}
 .cIcon {
-  width: 34px; height: 34px;
+  width: 30px; height: 30px; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
-  color: var(--cyan-hot); font-size: 15px;
-  border: 1px solid rgba(0, 166, 214, 0.4);
-  background: rgba(0, 0, 0, 0.4);
+  color: var(--gold-rare); font-size: 14px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(226, 176, 33, 0.5);
 }
 .cName {
+  flex: 1; min-width: 0;
   font-family: var(--font-display); font-weight: 600;
-  font-size: 14px; letter-spacing: 0.08em; color: var(--text);
+  font-size: 14px; letter-spacing: 0.06em; color: var(--cyan-hot);
   line-height: 1.2;
 }
-.cSummary {
-  font-family: var(--font-prose); font-size: 13px;
-  color: var(--muted); line-height: 1.35;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden;
+
+/* kind tints — DM picks the origin; backdrop + icon accent shift to match.
+   default/levelup = fuller yellow; equipment = warm tan; corruption = violet. */
+.card[data-kind="equipment"] .cHead  { background: rgba(212, 191, 125, 0.20); border-color: rgba(212, 191, 125, 0.62); }
+.card[data-kind="equipment"] .cIcon  { color: var(--beige); border-color: rgba(212, 191, 125, 0.55); }
+.card[data-kind="corruption"] .cHead { background: rgba(140, 110, 175, 0.28); border-color: rgba(176, 150, 214, 0.62); }
+.card[data-kind="corruption"] .cIcon { color: #cdb8ea; border-color: rgba(176, 150, 214, 0.6); }
+
+/* short card description — the card scales to it */
+.cDesc {
+  padding: 10px 14px 4px;
+  font-family: var(--font-prose); font-size: 13.5px;
+  line-height: 1.45; color: var(--muted); text-align: left;
 }
+.cDesc p { margin: 0 0 6px; }
+.cDesc p:last-child { margin-bottom: 0; }
+.cDesc strong { color: var(--text); font-weight: 600; }
+.cDesc em { color: var(--beige); font-style: italic; }
+
 .cFoot {
   position: relative;
   z-index: 1;
   display: flex; align-items: center; gap: 8px;
-  padding: 0 14px 12px;
+  padding: 8px 14px 12px;
 }
 .cSource {
   font-family: var(--font-mono); font-size: 8.5px;
@@ -252,7 +275,7 @@
 .close {
   position: absolute; top: 12px; right: 14px;
   color: var(--muted); font-size: 14px; cursor: pointer;
-  background: none; border: none; line-height: 1;
+  background: none; border: none; line-height: 1; z-index: 2;
 }
 .close:hover { color: var(--cyan-hot); }
 .pHead {
@@ -263,18 +286,20 @@
 .pIcon {
   width: 44px; height: 44px; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
-  color: var(--cyan-hot); font-size: 19px;
-  border: 1px solid rgba(0, 166, 214, 0.4);
+  color: var(--gold-rare); font-size: 19px;
+  border: 1px solid rgba(226, 176, 33, 0.5);
   background: rgba(0, 0, 0, 0.4);
 }
+.pHead[data-kind="equipment"] .pIcon  { color: var(--beige); border-color: rgba(212, 191, 125, 0.5); }
+.pHead[data-kind="corruption"] .pIcon { color: #cdb8ea; border-color: rgba(176, 150, 214, 0.6); }
 .pTitles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .pName {
   font-family: var(--font-display); font-weight: 600;
-  font-size: 19px; letter-spacing: 0.08em; color: var(--text); line-height: 1.1;
+  font-size: 19px; letter-spacing: 0.08em; color: var(--cyan-hot); line-height: 1.1;
 }
 .pSub {
   font-family: var(--font-mono); font-size: 9px;
-  letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan);
+  letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige);
 }
 .pRows {
   display: flex; flex-wrap: wrap; gap: 8px;
@@ -300,11 +325,15 @@
 }
 .pBody p { margin: 0 0 12px; }
 .pBody p:last-child { margin-bottom: 0; }
+/* light = the card text, restated at the top of the body; deep = the extra detail */
+.pLight p { color: var(--text); }
+.pDeep { margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(212, 191, 125, 0.2); }
+.pDeep p { color: var(--muted); }
+.pBody strong { color: var(--cyan-hot); font-weight: 600; }
+.pBody em { color: var(--beige); font-style: italic; }
 .pEmpty { color: var(--muted); font-style: italic; }
 
-.pFoot {
-  padding: 0 20px 20px;
-}
+.pFoot { padding: 0 20px 20px; }
 .pUse {
   width: 100%;
   padding: 12px 0;

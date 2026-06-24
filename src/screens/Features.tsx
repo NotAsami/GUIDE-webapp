@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, Feature, FeatureCategory } from '../lib/database.types'
@@ -23,17 +23,55 @@ const GROUPS: { key: FeatureCategory; label: string; icon: string }[] = [
   { key: 'other',      label: 'Other',          icon: 'fa-asterisk' },
 ]
 
+const COLS = 3
+
 /** A feature can be "used" when it rolls something or tracks limited uses. */
 function isUsable(f: Feature): boolean {
   return !!f.roll || !!f.uses
 }
 
+/** The short text shown on the card (scales the card). Falls back to the legacy
+ *  summary/description fields so pre-migration data still renders. */
+function cardText(f: Feature): string {
+  return f.light_description ?? f.summary ?? f.description ?? ''
+}
+
+/** Lightweight inline markdown → React nodes: **bold** and *italics* (no raw HTML,
+ *  so it's injection-safe). Unmatched markers render literally. */
+function renderInline(text: string): ReactNode[] {
+  const out: ReactNode[] = []
+  const re = /\*\*([^*]+)\*\*|\*([^*]+)\*/g
+  let last = 0
+  let m: RegExpExecArray | null
+  let i = 0
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index))
+    if (m[1] !== undefined) out.push(<strong key={i++}>{m[1]}</strong>)
+    else out.push(<em key={i++}>{m[2]}</em>)
+    last = re.lastIndex
+  }
+  if (last < text.length) out.push(text.slice(last))
+  return out
+}
+
+/** Render prose with blank-line paragraph breaks + inline markdown. */
+function Prose({ text, className }: { text: string; className?: string }) {
+  const paragraphs = text.split(/\n\s*\n/).filter(Boolean)
+  return (
+    <div className={className}>
+      {paragraphs.map((p, i) => <p key={i}>{renderInline(p)}</p>)}
+    </div>
+  )
+}
+
 /** Features — a dossier of the character's class features, feats, racial traits
- *  and senses, rendered from `sheet.features`. Usable features (a roll and/or a
- *  limited-use counter) get a Use button: it rolls, decrements the counter, and
- *  surfaces the result as a single-roll toast (the player applies the effect, as
- *  with an attack). Use lives ON THE CARD so the toast (z120) isn't buried under
- *  the detail modal (z400). */
+ *  and senses, rendered from `sheet.features`. Each category is a horizontal
+ *  masonry: cards flow into 3 columns and scale to their short light_description
+ *  (no vertical row alignment). Clicking a card opens a detail panel with the
+ *  full light + deep description, the action/stats, and a Use button. Usable
+ *  features (a roll and/or a limited-use counter) get a Use button on the card
+ *  too: it rolls, decrements the counter, and surfaces the result as a
+ *  single-roll toast (the player applies the effect, as with an attack). */
 export function Features() {
   const { character, updateSection } = useOutletContext<RouteContext>()
   const nav = useNavigate()
@@ -156,10 +194,18 @@ export function Features() {
                 <span className={styles.ghCount}>{group.items.length}</span>
                 <span className={styles.ghRule} />
               </div>
-              <div className={styles.cards}>
-                {group.items.map(f => (
-                  <FeatureCard key={f.id} feature={f} busy={busy}
-                    onOpen={() => setSelected(f)} onUse={() => useFeature(f)} />
+              <div className={styles.masonry}>
+                {/* Round-robin into fixed columns so the layout stays stable. */}
+                {Array.from({ length: COLS }, (_, c) => (
+                  <div key={c} className={styles.mCol}>
+                    {group.items.filter((_, i) => i % COLS === c).map(f => (
+                      <FeatureCard
+                        key={f.id} feature={f} busy={busy}
+                        onOpen={() => setSelected(f)}
+                        onUse={() => useFeature(f)}
+                      />
+                    ))}
+                  </div>
                 ))}
               </div>
             </section>
@@ -184,14 +230,20 @@ function FeatureCard({ feature, busy, onOpen, onUse }: {
 }) {
   const tag = feature.usage ?? (feature.level ? `Lv ${feature.level}` : null)
   const exhausted = !!feature.uses && feature.uses.current <= 0
+  const text = cardText(feature)
+
   return (
-    <div className={styles.card}>
-      <span className={styles.cFrame} aria-hidden="true" />
+    <div className={styles.card} data-kind={feature.kind ?? 'none'}>
+      {/* clickable body opens the detail panel */}
       <button type="button" className={styles.cOpen} onClick={onOpen}>
-        <span className={styles.cIcon}><i className={`fa-solid ${feature.icon ?? 'fa-bolt'}`} /></span>
-        <span className={styles.cName}>{feature.name}</span>
-        {feature.summary && <span className={styles.cSummary}>{feature.summary}</span>}
+        {/* header: kind-tinted backdrop square holding the icon + name */}
+        <span className={styles.cHead}>
+          <span className={styles.cIcon}><i className={`fa-solid ${feature.icon ?? 'fa-bolt'}`} /></span>
+          <span className={styles.cName}>{feature.name}</span>
+        </span>
+        {text && <Prose text={text} className={styles.cDesc} />}
       </button>
+
       <div className={styles.cFoot}>
         {feature.source && <span className={styles.cSource}>{feature.source}</span>}
         {feature.uses
@@ -210,13 +262,13 @@ function FeatureCard({ feature, busy, onOpen, onUse }: {
 function FeatureDetail({ feature, busy, onClose, onUse }: {
   feature: Feature; busy: boolean; onClose: () => void; onUse: () => void
 }) {
-  const paragraphs = (feature.description ?? '').split(/\n\s*\n/).filter(Boolean)
+  const light = cardText(feature)
   const exhausted = !!feature.uses && feature.uses.current <= 0
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.panel} onClick={e => e.stopPropagation()} role="dialog" aria-label={feature.name}>
         <button type="button" className={styles.close} onClick={onClose} aria-label="Close">✕</button>
-        <div className={styles.pHead}>
+        <div className={styles.pHead} data-kind={feature.kind ?? 'none'}>
           <span className={styles.pIcon}><i className={`fa-solid ${feature.icon ?? 'fa-bolt'}`} /></span>
           <div className={styles.pTitles}>
             <div className={styles.pName}>{feature.name}</div>
@@ -239,9 +291,9 @@ function FeatureDetail({ feature, busy, onClose, onUse }: {
         )}
 
         <div className={styles.pBody}>
-          {paragraphs.length > 0
-            ? paragraphs.map((p, i) => <p key={i}>{p}</p>)
-            : <p className={styles.pEmpty}>No description provided.</p>}
+          {light && <Prose text={light} className={styles.pLight} />}
+          {feature.deep_description && <Prose text={feature.deep_description} className={styles.pDeep} />}
+          {!light && !feature.deep_description && <p className={styles.pEmpty}>No description provided.</p>}
         </div>
 
         {isUsable(feature) && (
