@@ -15,6 +15,23 @@
   --danger:    #b93a3a;
   --gold-rare: #e2b021;
 
+  /* Amber = the system-truth accent of the DM / Operator Console layer (the
+     player layer is cyan-led; the operator layer is amber-led). Ported from
+     "G.U.I.D.E. Operator Console.html" :root. */
+  --amber:      #e2b021;
+  --amber-hot:  #ffce4d;
+  --amber-dim:  #8a6d1a;
+  --amber-deep: #2a2110;
+  --good:       #4fae6b;
+
+  /* Extended rarity scale (Operator Console catalog). The player screens only
+     needed common→legendary; the catalog also reads very-rare. */
+  --rar-common:   #b8b8b8;
+  --rar-uncommon: #4fae6b;
+  --rar-rare:     #00a6d6;
+  --rar-vrare:    #a07ad6;
+  --rar-legend:   #e2b021;
+
   --bar-top-h:    62px;
   --bar-bottom-h: 50px;
   --nav-h:        72px;   /* compact dock-nav button height (content screens) */

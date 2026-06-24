@@ -96,6 +96,11 @@ export type CharacterSheet = {
  *  trait, 'background' = background feature, 'sense' = e.g. Darkvision. */
 export type FeatureCategory = 'class' | 'feat' | 'racial' | 'background' | 'sense' | 'other'
 
+/** Where a feature came from — drives the card header's backdrop colour so the
+ *  player can tell a level-up ability from a magic-item grant or a corruption at
+ *  a glance. DM-authored; absent = neutral. */
+export type FeatureKind = 'levelup' | 'equipment' | 'corruption'
+
 /** A single character feature/feat/trait. Purely descriptive — the engine never
  *  reads numbers off it (those live on the sheet or on item `effects`); this is
  *  the "what can my character do" reference the player reads. */
@@ -103,6 +108,8 @@ export type Feature = {
   id: string
   name: string
   category?: FeatureCategory
+  /** Origin of the feature — tints the card header backdrop. */
+  kind?: FeatureKind
   /** e.g. "Fighter 1", "Variant Human", "Soldier". */
   source?: string
   /** Font Awesome icon name, e.g. 'fa-wind'. */
@@ -111,10 +118,15 @@ export type Feature = {
   level?: number
   /** Recharge/usage tag, e.g. "1/short rest", "passive", "2/long rest". */
   usage?: string
-  /** One-line summary shown on the card. */
+  /** Short card text — shown on the card (the card scales to it) and at the top
+   *  of the detail panel. Supports lightweight markdown: **bold** and *italics*. */
+  light_description?: string
+  /** Deeper detail shown only in the detail panel, below `light_description`.
+   *  Same markdown support. */
+  deep_description?: string
+  /** Legacy fields — fall back to these for the card text when
+   *  `light_description` is absent (pre-migration data). */
   summary?: string
-  /** Full prose, shown in the detail panel. May contain multiple paragraphs
-   *  separated by blank lines. */
   description?: string
   /** Optional label/value detail rows (like item `rows`), e.g. ["Range","60 ft"]. */
   rows?: [string, string][]

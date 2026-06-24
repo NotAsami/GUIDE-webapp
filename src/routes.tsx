@@ -8,10 +8,15 @@ import { Stats } from './screens/Stats'
 import { Equipment } from './screens/Equipment'
 import { Features } from './screens/Features'
 import { Inventory } from './screens/Inventory'
+import { OperatorConsole } from './screens/OperatorConsole'
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/auth/callback', element: <AuthCallback /> },
+  // DM-only Operator Console (Phase 2). Standalone full-screen surface with its
+  // own amber chrome — NOT a child of the player Layout. The screen self-gates on
+  // dm_users membership and redirects non-DM users back to '/'.
+  { path: '/dm', element: <OperatorConsole /> },
   {
     path: '/',
     element: <Layout />,
