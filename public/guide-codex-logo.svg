@@ -1,0 +1,11 @@
+<svg width="490" height="130" viewBox="0 0 490 130" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="G.U.I.D.E. Codex — Operator Console">
+  <defs>
+    <style>@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap');</style>
+  </defs>
+  <polygon points="75,27 108,46 108,84 75,103 42,84 42,46" fill="#1d1d1d" stroke="#d4bf7d" stroke-width="2"/>
+  <polygon points="75,34 102,49.5 102,80.5 75,96 48,80.5 48,49.5" fill="none" stroke="#d4bf7d" stroke-width="0.8" opacity="0.5"/>
+  <polyline points="66,44 87,65 66,86" fill="none" stroke="#00a6d6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="102,49 95,66 104,77 92,94" fill="none" stroke="#e2b021" stroke-width="1.6" stroke-linecap="round" opacity="0.9"/>
+  <text x="140" y="72" font-family="'Cinzel', serif" font-size="40" font-weight="700" fill="#d4bf7d">G.U.I.D.E<tspan fill="#e2b021">.</tspan></text>
+  <text x="142" y="98" font-family="'JetBrains Mono', monospace" font-size="14" letter-spacing="3" fill="#8a8a8a"><tspan fill="#00a6d6">CODEX</tspan> // OPERATOR CONSOLE</text>
+</svg>
