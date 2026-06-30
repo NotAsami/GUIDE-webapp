@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmParty } from '../lib/dm'
 import { longRestPatch } from '../lib/rest'
-import type { CharacterRow, CharacterUpdate, HP } from '../lib/database.types'
+import type { CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP } from '../lib/database.types'
 import styles from './OperatorConsole.module.css'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -37,7 +37,7 @@ interface PartyMember {
   effects: { name: string; kind: 'buff' | 'cond' | 'debuff' }[]
 }
 
-function toMember(c: CharacterRow): PartyMember {
+function toMember(c: CharacterRow, secret?: CharacterSecret): PartyMember {
   const hp = (c.sheet?.hp?.current ?? 0) as number
   const hpMax = (c.sheet?.hp?.max ?? 0) as number
   const tempHp = (c.sheet?.hp?.temp ?? 0) as number
@@ -48,16 +48,15 @@ function toMember(c: CharacterRow): PartyMember {
     race: c.identity?.race ?? '—',
     cls: c.identity?.class ?? '—',
     level: c.identity?.level ?? '—',
-    icon: 'fa-user',
+    icon: c.identity?.icon ?? 'fa-user',
     hp,
     hpMax,
     tempHp,
     // Presence is a realtime concern (a later slice) — unknown for now.
     online: false,
-    // DM-only horror gauge. Lives in a DM-only table (RLS = dm_all) so it can
-    // never reach a player client; that table + its value land in a later slice,
-    // so it reads 0 here.
-    digitization: 0,
+    // DM-only horror gauge from the `character_secrets` table (RLS = DM-only).
+    // Absent until the DM first authors it, so default to 0.
+    digitization: secret?.digitization ?? 0,
     effects: raw.map(e => ({ name: e.name ?? 'Effect', kind: 'buff' as const })),
   }
 }
@@ -70,20 +69,23 @@ const hpClassOf = (p: PartyMember): '' | 'warn' | 'crit' => {
 const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hpMax) * 100)) : 0)
 
 type View = 'overview' | 'character'
+type CharTab = 'actions' | 'lore'
 
 export function OperatorConsole() {
   const { session, loading: authLoading } = useAuth()
   const { isDm, loading: dmLoading } = useDmStatus()
-  const { party, loading: partyLoading, error, updateCharacter } = useDmParty()
+  const { party, secrets, loading: partyLoading, error, updateCharacter, updateSecret } = useDmParty()
 
   const [view, setView] = useState<View>('overview')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  /** Which per-character tab is showing when a PC is selected. */
+  const [charTab, setCharTab] = useState<CharTab>('actions')
 
   if (authLoading || dmLoading) return <Boot>Authorizing operator link…</Boot>
   if (!session) return <Navigate to="/login" replace />
   if (!isDm) return <Navigate to="/" replace />
 
-  const members = party.map(toMember)
+  const members = party.map(m => toMember(m, secrets[m.id]))
   const selected = members.find(m => m.id === selectedId) ?? null
   const selectedRow = party.find(c => c.id === selectedId) ?? null
 
@@ -94,6 +96,7 @@ export function OperatorConsole() {
   function openCharacter(id: string) {
     setView('character')
     setSelectedId(id)
+    setCharTab('actions')
   }
 
   return (
@@ -192,8 +195,20 @@ export function OperatorConsole() {
               {/* "Oversee" is the oversight pane — party dashboard when nothing is
                   selected, the selected PC's action console otherwise. Clicking it
                   zooms back out to the party overview. */}
-              <div className={cx(styles.wtab, styles.active)} onClick={openOverview} title="Party overview">Oversee</div>
-              <div className={cx(styles.wtab, styles.disabled)} title="Lore editor — next slice">Lore Editor</div>
+              <div
+                className={cx(styles.wtab, (view === 'overview' || charTab === 'actions') && styles.active)}
+                onClick={() => (view === 'character' ? setCharTab('actions') : openOverview())}
+                title={view === 'character' ? 'Action console' : 'Party overview'}
+              >
+                Oversee
+              </div>
+              <div
+                className={cx(styles.wtab, view !== 'character' && styles.disabled, view === 'character' && charTab === 'lore' && styles.active)}
+                onClick={() => view === 'character' && setCharTab('lore')}
+                title={view === 'character' ? 'Lore & corruption (DM-only)' : 'Select a character first'}
+              >
+                Lore Editor
+              </div>
               <div className={cx(styles.wtab, styles.lvl, styles.disabled)} title="Level-up — later slice">
                 <i className="fa-solid fa-arrow-up-right-dots" /> Level Up
               </div>
@@ -204,7 +219,11 @@ export function OperatorConsole() {
               ) : partyLoading ? (
                 <div className={styles.soonPanel}><i className="fa-solid fa-spinner" /><span>Loading party…</span></div>
               ) : view === 'character' && selected && selectedRow ? (
-                <ActionsTab row={selectedRow} member={selected} onUpdate={patch => updateCharacter(selectedRow.id, patch)} />
+                charTab === 'lore' ? (
+                  <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
+                ) : (
+                  <ActionsTab row={selectedRow} member={selected} onUpdate={patch => updateCharacter(selectedRow.id, patch)} />
+                )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
               )}
@@ -492,6 +511,150 @@ function ActionsTab({ row, member, onUpdate }: {
   )
 }
 
+/** Memory-fidelity levels (eerie player-facing horror descriptor), ordered from
+ *  intact to fully corrupted — mirrors the design's MEM_LEVELS. */
+const MEM_LEVELS = ['INTACT', 'PARTIAL', 'DEGRADED', 'FRAGMENTED', 'CORRUPTED'] as const
+
+/** Preset roster glyphs the DM can assign as a character's menu portrait. */
+const GLYPHS = ['fa-user', 'fa-chess-rook', 'fa-hat-wizard', 'fa-shield-halved', 'fa-mask', 'fa-skull', 'fa-dragon', 'fa-khanda', 'fa-cross', 'fa-feather', 'fa-hand-fist', 'fa-eye']
+
+/** The DM-only Lore tab. Two layers in ONE save:
+ *   - `character_secrets` (DM-only, RLS, migration 0002): digitization + true lore —
+ *     a player can NEVER read these.
+ *   - `characters` row (player-readable): memory-fidelity descriptor + menu glyph.
+ *  Drafts are local with a single explicit "Save Lore" (matches the design) so the
+ *  slider can't spam writes; mount with key={characterId} so drafts reset on switch.
+ *  The full player-facing lore form (backstory / personality / relations / identity)
+ *  is a separate slice that lands with the player Lore screen. */
+function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
+  row: CharacterRow
+  member: PartyMember
+  secret?: CharacterSecret
+  onUpdateSecret: (patch: CharacterSecretUpdate) => Promise<void>
+  onUpdateChar: (patch: CharacterUpdate) => Promise<void>
+}) {
+  const savedDig = secret?.digitization ?? 0
+  const savedLore = secret?.true_lore ?? ''
+  const savedMem = (row.lore?.memoryFidelity as string | undefined) ?? 'INTACT'
+  const savedIcon = row.identity?.icon ?? 'fa-user'
+
+  const [dig, setDig] = useState(savedDig)
+  const [lore, setLore] = useState(savedLore)
+  const [mem, setMem] = useState(savedMem)
+  const [icon, setIcon] = useState(savedIcon)
+  const [busy, setBusy] = useState(false)
+
+  const secretDirty = dig !== savedDig || lore !== savedLore
+  const charDirty = mem !== savedMem || icon !== savedIcon
+  const dirty = secretDirty || charDirty
+  const digClass: '' | 'high' | 'crit' = dig >= 80 ? 'crit' : dig >= 50 ? 'high' : ''
+
+  async function save() {
+    setBusy(true)
+    const jobs: Promise<void>[] = []
+    if (secretDirty) jobs.push(onUpdateSecret({ digitization: dig, true_lore: lore }))
+    if (charDirty) {
+      const patch: CharacterUpdate = {}
+      if (mem !== savedMem) patch.lore = { ...(row.lore ?? {}), memoryFidelity: mem }
+      if (icon !== savedIcon) patch.identity = { ...(row.identity ?? {}), icon }
+      jobs.push(onUpdateChar(patch))
+    }
+    await Promise.all(jobs)
+    setBusy(false)
+  }
+
+  return (
+    <>
+      <div className={styles.selHead}>
+        <span className={styles.selPortrait}><i className={`fa-solid ${icon}`} /></span>
+        <div className={styles.selTitles}>
+          <div className={styles.selName}>{member.name}</div>
+          <div className={styles.selMeta}>
+            {member.race} {member.cls}
+            <span className={styles.sep}>·</span> Level {member.level}
+            <span className={styles.sep}>·</span>
+            <span className={styles.dmTag}><i className="fa-solid fa-lock" /> DM-Only Intel</span>
+          </div>
+        </div>
+        <div className={styles.selInt}>
+          <div className={styles.t}>G.U.I.D.E. Integrity · DM Only</div>
+          <div className={cx(styles.v, savedDig >= 50 && styles.high)}>{savedDig}%</div>
+          <div className={styles.intbar}><i style={{ width: `${savedDig}%` }} /></div>
+        </div>
+      </div>
+
+      {/* digitization + memory fidelity side by side */}
+      <div className={styles.loreGrid}>
+        <div className={styles.actCard}>
+          <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
+          <div className={styles.acTitle}><i className="fa-solid fa-radiation lead" /><span className={styles.t}>Digitization</span></div>
+          <div className={cx(styles.digRead, digClass && styles[digClass])}>
+            <span className={styles.digNum}>{dig}</span><span className={styles.digPct}>%</span>
+          </div>
+          <input
+            className={cx(styles.digSlider, digClass && styles[digClass])}
+            type="range" min={0} max={100} value={dig}
+            aria-label="Digitization level"
+            onChange={e => setDig(Number(e.target.value))}
+          />
+          <div className={styles.digSteps}>
+            <Btn tone="ghost" sm icon="fa-minus" label="5" onClick={() => setDig(d => Math.max(0, d - 5))} disabled={dig <= 0} />
+            <Btn tone="ghost" sm icon="fa-plus" label="5" onClick={() => setDig(d => Math.min(100, d + 5))} disabled={dig >= 100} />
+          </div>
+          <p className={styles.acHint}>Hidden corruption metric · DM only</p>
+        </div>
+
+        <div className={styles.actCard}>
+          <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
+          <div className={styles.acTitle}><i className="fa-solid fa-wave-square lead" /><span className={styles.t}>Memory Fidelity</span></div>
+          <select className={styles.memSelect} value={mem} onChange={e => setMem(e.target.value)} aria-label="Memory fidelity">
+            {MEM_LEVELS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <div className={styles.memBars} aria-hidden="true">
+            {MEM_LEVELS.map((m, i) => (
+              <span key={m} className={cx(styles.memBar, i <= MEM_LEVELS.indexOf(mem as typeof MEM_LEVELS[number]) && styles.on, i >= 3 && styles.warn)} />
+            ))}
+          </div>
+          <p className={styles.acHint}>System descriptor · shown on the player Lore screen</p>
+        </div>
+      </div>
+
+      {/* menu glyph picker */}
+      <div className={styles.glyphRow}>
+        <span className={styles.glyphLab}>Menu Glyph</span>
+        <div className={styles.glyphBtns}>
+          {GLYPHS.map(g => (
+            <button key={g} className={cx(styles.glyphBtn, g === icon && styles.on)} onClick={() => setIcon(g)} title={g} aria-label={g} aria-pressed={g === icon}>
+              <i className={`fa-solid ${g}`} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* true lore — the dramatic-irony layer (design: q-gm-head + q-gmnotes) */}
+      <div className={styles.gmHead}>
+        <i className="fa-solid fa-user-secret" />
+        <span className={styles.t}>True Lore</span>
+        <span className={styles.s}><i className="fa-solid fa-eye-slash" /> Hidden from players</span>
+      </div>
+      <textarea
+        className={styles.gmNotes}
+        value={lore}
+        placeholder={`What is actually true behind what ${member.name.split(' ')[0]} believes — DM eyes only…`}
+        onChange={e => setLore(e.target.value)}
+      />
+
+      <div className={styles.qActions}>
+        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : dirty ? 'Save Lore' : 'Saved'} onClick={() => void save()} disabled={!dirty || busy} />
+      </div>
+
+      <p className={styles.deferNote}>
+        Backstory, personality &amp; relations authoring arrives with the player Lore screen.
+      </p>
+    </>
+  )
+}
+
 type DeathStatusClass = 'stable' | 'dying' | 'stab' | 'dead'
 
 /** Death-save banner state, derived from the success/failure counts — same
@@ -523,13 +686,13 @@ function DeathRow({ kind, label, count, onSet }: {
 
 /** Clip-path action button (amber/cyan/good/danger/ghost), matching the mockup's
  *  two-layer `.btn > .bf + .bi` structure. */
-function Btn({ tone, sm, icon, label, onClick, disabled, title }: {
+function Btn({ tone, sm, lg, icon, label, onClick, disabled, title }: {
   tone: 'amber' | 'cyan' | 'good' | 'danger' | 'ghost'
-  sm?: boolean; icon: string; label: string
+  sm?: boolean; lg?: boolean; icon: string; label: string
   onClick?: () => void; disabled?: boolean; title?: string
 }) {
   return (
-    <button className={cx(styles.btn, styles[tone], sm && styles.sm)} onClick={onClick} disabled={disabled} title={title}>
+    <button className={cx(styles.btn, styles[tone], sm && styles.sm, lg && styles.lg)} onClick={onClick} disabled={disabled} title={title}>
       <span className={styles.bf} />
       <span className={styles.bi}><i className={`fa-solid ${icon}`} /> {label}</span>
     </button>

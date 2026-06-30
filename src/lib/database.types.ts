@@ -17,6 +17,9 @@ export type CharacterIdentity = {
   level?: number
   reputation?: number
   flavor?: string[]
+  /** Font Awesome glyph (e.g. "fa-chess-rook") for the roster/menu portrait when
+   *  no image is set. Authored DM-side in the Lore tab; defaults to "fa-user". */
+  icon?: string
   /** Public image URL for the operator portrait (e.g. a Supabase Storage public
    *  URL). Absent/failed → the screen falls back to the handshake "PORTRAIT_FEED"
    *  panel, so the layout is identical whether or not an image is set. */
@@ -322,6 +325,18 @@ export type CharacterInsert = Omit<CharacterRow, 'id' | 'updated_at'> & {
 }
 export type CharacterUpdate = Partial<Omit<CharacterRow, 'id' | 'owner'>>
 
+/** DM-only per-character secrets (table `character_secrets`, migration 0002).
+ *  Stored OFF the `characters` row so the `own_character` RLS policy can't leak
+ *  them to a player — only `dm_users` can read this table at all. */
+export type CharacterSecret = {
+  character_id: string
+  digitization: number   // 0–100 horror gauge — DM-only
+  true_lore: string      // the real story behind the character — DM-only
+  updated_at: string
+}
+export type CharacterSecretInsert = { character_id: string } & Partial<Omit<CharacterSecret, 'character_id'>>
+export type CharacterSecretUpdate = Partial<Omit<CharacterSecret, 'character_id'>>
+
 export type Database = {
   public: {
     Tables: {
@@ -335,6 +350,12 @@ export type Database = {
         Row: { user_id: string }
         Insert: { user_id: string }
         Update: { user_id?: string }
+        Relationships: []
+      }
+      character_secrets: {
+        Row: CharacterSecret
+        Insert: CharacterSecretInsert
+        Update: CharacterSecretUpdate
         Relationships: []
       }
     }
