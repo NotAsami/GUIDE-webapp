@@ -468,6 +468,8 @@
 .btn.ghost .bi { background: linear-gradient(180deg, #1a1813, #12110e); color: var(--beige); }
 .btn.ghost:hover .bi { color: var(--amber-hot); box-shadow: inset 0 0 16px rgba(226,176,33,0.12); }
 .btn.sm { height: 31px; }
+.btn.lg { height: 42px; }
+.btn.lg .bi { font-size: 11px; letter-spacing: 0.2em; }
 .btn:disabled { cursor: not-allowed; }
 .btn:disabled .bf { background: var(--beige-dim); opacity: 0.35; }
 .btn:disabled .bi { color: var(--muted); background: linear-gradient(180deg, #141312, #0e0d0c); box-shadow: none; }
@@ -562,3 +564,91 @@
   font: 400 10.5px/1.5 var(--font-mono, monospace); letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--amber-dim);
 }
+
+/* ============================================================
+   LORE EDITOR TAB (slice 3) — DM-only secrets (character_secrets)
+   ============================================================ */
+.dmTag { color: var(--amber-hot); letter-spacing: 0.14em; text-transform: uppercase; }
+.dmTag i { margin-right: 4px; font-size: 8px; }
+
+.loreGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* digitization gauge editor */
+.digRead { display: flex; align-items: baseline; gap: 3px; margin-bottom: 9px; }
+.digNum { font-family: var(--font-display); font-weight: 700; font-size: 40px; line-height: 1; color: var(--amber); letter-spacing: 0.02em; }
+.digPct { font-family: var(--font-mono); font-size: 13px; color: var(--amber-dim); letter-spacing: 0.1em; }
+.digRead.high .digNum { color: var(--amber-hot); text-shadow: 0 0 12px rgba(226,176,33,0.5); }
+.digRead.crit .digNum { color: var(--danger-hot); text-shadow: 0 0 14px rgba(255,84,84,0.55); animation: opBlink 1.6s steps(2,end) infinite; }
+.digRead.crit .digPct { color: var(--danger-hot); }
+
+.digSlider {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 6px; margin: 2px 0 12px;
+  background: rgba(0,0,0,0.6); border: 1px solid rgba(226,176,33,0.28); cursor: pointer; outline: none;
+}
+.digSlider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 13px; height: 17px;
+  background: var(--amber); box-shadow: 0 0 8px rgba(226,176,33,0.6);
+  clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%);
+}
+.digSlider::-moz-range-thumb {
+  border: 0; width: 13px; height: 17px; border-radius: 0;
+  background: var(--amber); box-shadow: 0 0 8px rgba(226,176,33,0.6);
+}
+.digSlider.crit::-webkit-slider-thumb { background: var(--danger-hot); box-shadow: 0 0 9px rgba(255,84,84,0.65); }
+.digSlider.crit::-moz-range-thumb { background: var(--danger-hot); box-shadow: 0 0 9px rgba(255,84,84,0.65); }
+
+.digSteps { display: flex; gap: 7px; margin-bottom: 10px; }
+
+.acHint { margin: 0; font-family: var(--font-mono); font-size: 8px; line-height: 1.5; letter-spacing: 0.1em; color: var(--amber-dim); text-transform: uppercase; }
+
+/* memory-fidelity selector (player-facing horror descriptor on characters.lore) */
+.memSelect {
+  width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(212,191,125,0.32);
+  color: var(--text); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
+  padding: 9px 11px; margin-bottom: 11px; cursor: pointer;
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+  appearance: none; -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--amber) 50%), linear-gradient(135deg, var(--amber) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 15px, calc(100% - 10px) 15px;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+.memSelect:focus { outline: none; border-color: var(--amber); }
+.memSelect option { background: #14130f; color: var(--text); }
+.memBars { display: flex; gap: 5px; margin-bottom: 11px; }
+.memBar { flex: 1; height: 6px; background: rgba(0,0,0,0.6); border: 1px solid rgba(226,176,33,0.22); }
+.memBar.on { background: linear-gradient(180deg, var(--amber-dim), var(--amber)); box-shadow: 0 0 6px rgba(226,176,33,0.45); border-color: transparent; }
+.memBar.on.warn { background: linear-gradient(180deg, #6e1f1f, var(--danger-hot)); box-shadow: 0 0 6px rgba(255,84,84,0.5); }
+
+/* menu glyph picker (writes characters.identity.icon) */
+.glyphRow { display: flex; align-items: center; gap: 13px; margin: 14px 0 4px; flex-wrap: wrap; }
+.glyphLab { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; flex: 0 0 auto; }
+.glyphBtns { display: flex; gap: 6px; flex-wrap: wrap; }
+.glyphBtn {
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.4); border: 1px solid rgba(212,191,125,0.22); color: var(--beige-dim);
+  font-size: 14px; cursor: pointer; transition: color 130ms ease, border-color 130ms ease, background 130ms ease;
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+}
+.glyphBtn:hover { color: var(--amber); border-color: rgba(226,176,33,0.45); }
+.glyphBtn.on { color: var(--amber-hot); background: rgba(226,176,33,0.12); border-color: var(--amber); box-shadow: inset 0 0 12px rgba(226,176,33,0.14); }
+
+/* true lore — design's q-gm-head + q-gmnotes */
+.gmHead {
+  display: flex; align-items: center; gap: 9px; margin: 18px 0 8px; padding: 7px 11px;
+  background: rgba(226,176,33,0.08); border: 1px solid rgba(226,176,33,0.4); border-left: 3px solid var(--amber);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+}
+.gmHead i { color: var(--amber-hot); font-size: 12px; }
+.gmHead .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--amber-hot); }
+.gmHead .s { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber-dim); }
+.gmNotes {
+  width: 100%; min-height: 132px; resize: vertical;
+  background: var(--amber-deep); border: 1px solid rgba(226,176,33,0.45);
+  color: var(--amber-hot); font-family: var(--font-mono); font-size: 12.5px; line-height: 1.62; letter-spacing: 0.02em;
+  padding: 12px 14px; margin-bottom: 14px; text-shadow: 0 0 6px rgba(226,176,33,0.22);
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+.gmNotes:focus { outline: none; border-color: var(--amber); box-shadow: inset 0 0 16px rgba(226,176,33,0.12); }
+.gmNotes::placeholder { color: var(--amber-dim); }
+.qActions { display: flex; gap: 9px; }
+.qActions .btn { flex: 0 0 auto; min-width: 168px; }
