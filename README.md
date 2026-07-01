@@ -36,8 +36,6 @@ seed) via the Supabase SQL editor.
 | Command             | What it does                                      |
 | ------------------- | ------------------------------------------------- |
 | `npm run dev`       | Vite dev server on http://localhost:5173          |
-| `npm run build`     | TypeScript build + production build to `dist/`    |
-| `npm run typecheck` | `tsc -b --noEmit`                                 |
 | `npm run preview`   | Serve the production build locally                |
 
 ## Project layout
