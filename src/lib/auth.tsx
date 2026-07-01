@@ -20,8 +20,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session)
       setLoading(false)
     })
+    // supabase-js re-emits an auth event (usually SIGNED_IN) every time the tab
+    // regains focus, carrying the SAME session. Updating state unconditionally
+    // would hand every `session`-keyed hook a new object identity, refire their
+    // effects, and flip `loading` true → the whole app unmounts to <Boot> and
+    // remounts, discarding any in-progress form draft. Skip no-op updates: only
+    // adopt `next` when the token or user actually changed (real refresh / login
+    // / logout), so a plain tab refocus is inert.
     const { data } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next)
+      setSession(prev =>
+        prev?.access_token === next?.access_token && prev?.user?.id === next?.user?.id
+          ? prev
+          : next,
+      )
     })
     return () => data.subscription.unsubscribe()
   }, [])
