@@ -337,6 +337,46 @@ export type CharacterSecret = {
 export type CharacterSecretInsert = { character_id: string } & Partial<Omit<CharacterSecret, 'character_id'>>
 export type CharacterSecretUpdate = Partial<Omit<CharacterSecret, 'character_id'>>
 
+// ── Campaign-level tables (migration 0003): sessions + quests are campaign-wide,
+//    NOT per-character. Quest `gm_notes` lives in `quest_secrets` (DM-only). ──
+export type QuestType = 'main' | 'side'
+export type QuestStatus = 'active' | 'completed' | 'failed'
+export type QuestObjective = { text: string; done: boolean }
+
+export type QuestRow = {
+  id: string
+  title: string
+  type: QuestType
+  status: QuestStatus
+  location: string
+  given_by: string
+  description: string        // player-facing
+  objectives: QuestObjective[]
+  related: string[]          // tag names
+  created_at: string         // stable list order
+  updated_at: string
+}
+export type QuestInsert = Partial<Omit<QuestRow, 'created_at' | 'updated_at'>>
+export type QuestUpdate = Partial<Omit<QuestRow, 'id'>>
+
+/** DM-only quest notes — split off `quests` so the table stays safe to expose to
+ *  players later (same pattern as [[CharacterSecret]]). */
+export type QuestSecret = { quest_id: string; gm_notes: string; updated_at: string }
+export type QuestSecretInsert = { quest_id: string } & Partial<Omit<QuestSecret, 'quest_id'>>
+export type QuestSecretUpdate = Partial<Omit<QuestSecret, 'quest_id'>>
+
+export type SessionRow = {
+  id: string
+  num: number
+  title: string
+  date: string
+  recap: string
+  events: string[]
+  updated_at: string
+}
+export type SessionInsert = Partial<Omit<SessionRow, 'updated_at'>>
+export type SessionUpdate = Partial<Omit<SessionRow, 'id'>>
+
 export type Database = {
   public: {
     Tables: {
@@ -356,6 +396,24 @@ export type Database = {
         Row: CharacterSecret
         Insert: CharacterSecretInsert
         Update: CharacterSecretUpdate
+        Relationships: []
+      }
+      sessions: {
+        Row: SessionRow
+        Insert: SessionInsert
+        Update: SessionUpdate
+        Relationships: []
+      }
+      quests: {
+        Row: QuestRow
+        Insert: QuestInsert
+        Update: QuestUpdate
+        Relationships: []
+      }
+      quest_secrets: {
+        Row: QuestSecret
+        Insert: QuestSecretInsert
+        Update: QuestSecretUpdate
         Relationships: []
       }
     }

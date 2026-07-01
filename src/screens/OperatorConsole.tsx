@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useDmStatus, useDmParty } from '../lib/dm'
+import { useDmStatus, useDmParty, useDmCampaign, type DmCampaignState } from '../lib/dm'
 import { longRestPatch } from '../lib/rest'
-import type { CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP } from '../lib/database.types'
+import type {
+  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP,
+  QuestRow, QuestStatus, QuestType, QuestObjective, SessionRow,
+} from '../lib/database.types'
 import styles from './OperatorConsole.module.css'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -68,13 +71,14 @@ const hpClassOf = (p: PartyMember): '' | 'warn' | 'crit' => {
 }
 const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hpMax) * 100)) : 0)
 
-type View = 'overview' | 'character'
+type View = 'overview' | 'character' | 'quests' | 'sessions'
 type CharTab = 'actions' | 'lore'
 
 export function OperatorConsole() {
   const { session, loading: authLoading } = useAuth()
   const { isDm, loading: dmLoading } = useDmStatus()
   const { party, secrets, loading: partyLoading, error, updateCharacter, updateSecret } = useDmParty()
+  const campaign = useDmCampaign()
 
   const [view, setView] = useState<View>('overview')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -91,6 +95,14 @@ export function OperatorConsole() {
 
   function openOverview() {
     setView('overview')
+    setSelectedId(null)
+  }
+  function openQuests() {
+    setView('quests')
+    setSelectedId(null)
+  }
+  function openSessions() {
+    setView('sessions')
     setSelectedId(null)
   }
   function openCharacter(id: string) {
@@ -145,8 +157,20 @@ export function OperatorConsole() {
                     <span className={styles.ovS}>Combat Dashboard · All PCs</span>
                   </span>
                 </button>
-                <CampaignEntry icon="fa-scroll" title="Quest Log" sub="Campaign authoring" />
-                <CampaignEntry icon="fa-book-bookmark" title="Session Log" sub="Recaps" />
+                <button className={cx(styles.ovEntry, view === 'quests' && styles.active)} onClick={openQuests}>
+                  <span className={styles.ovIc}><i className="fa-solid fa-scroll" /></span>
+                  <span className={styles.ovTx}>
+                    <span className={styles.ovT}>Quest Log</span>
+                    <span className={styles.ovS}>{campaign.quests.filter(q => q.status === 'active').length} active · {campaign.quests.length} total</span>
+                  </span>
+                </button>
+                <button className={cx(styles.ovEntry, view === 'sessions' && styles.active)} onClick={openSessions}>
+                  <span className={styles.ovIc}><i className="fa-solid fa-book-bookmark" /></span>
+                  <span className={styles.ovTx}>
+                    <span className={styles.ovT}>Session Log</span>
+                    <span className={styles.ovS}>Recaps · {campaign.sessions.length} logged</span>
+                  </span>
+                </button>
                 <CampaignEntry icon="fa-box-archive" title="Catalog" sub="Shared library" />
 
                 <div className={styles.rosterDiv}>Characters</div>
@@ -196,7 +220,7 @@ export function OperatorConsole() {
                   selected, the selected PC's action console otherwise. Clicking it
                   zooms back out to the party overview. */}
               <div
-                className={cx(styles.wtab, (view === 'overview' || charTab === 'actions') && styles.active)}
+                className={cx(styles.wtab, (view === 'overview' || (view === 'character' && charTab === 'actions')) && styles.active)}
                 onClick={() => (view === 'character' ? setCharTab('actions') : openOverview())}
                 title={view === 'character' ? 'Action console' : 'Party overview'}
               >
@@ -218,6 +242,10 @@ export function OperatorConsole() {
                 <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
               ) : partyLoading ? (
                 <div className={styles.soonPanel}><i className="fa-solid fa-spinner" /><span>Loading party…</span></div>
+              ) : view === 'quests' ? (
+                <QuestsSurface campaign={campaign} />
+              ) : view === 'sessions' ? (
+                <SessionsSurface campaign={campaign} />
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
@@ -651,6 +679,345 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
       <p className={styles.deferNote}>
         Backstory, personality &amp; relations authoring arrives with the player Lore screen.
       </p>
+    </>
+  )
+}
+
+// ============================================================
+// QUEST LOG (campaign-level authoring surface) — slice 4
+// ============================================================
+const Q_STATUS: { key: QuestStatus; label: string }[] = [
+  { key: 'active', label: 'Active' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'failed', label: 'Failed' },
+]
+const questGlyph = (t: QuestType) => (t === 'main' ? '◈' : '◇')
+
+type QuestFields = Omit<QuestRow, 'id' | 'created_at' | 'updated_at'>
+
+/** Quest Log: grouped index (left) + create/edit form (right) — the authoring
+ *  twin of the player Journal's quest log. gmNotes round-trips through the DM-only
+ *  `quest_secrets` table; everything else is on the player-facing `quests` row. */
+function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
+  const { quests, questSecrets, createQuest, updateQuest, deleteQuest, updateQuestSecret, loading, error } = campaign
+  const [selId, setSelId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  const activeId = creating ? null : (selId ?? quests[0]?.id ?? null)
+  const selected = quests.find(q => q.id === activeId) ?? null
+
+  async function handleSubmit(fields: QuestFields, gmNotes: string) {
+    if (selected) {
+      await updateQuest(selected.id, fields)
+      if (gmNotes !== (questSecrets[selected.id]?.gm_notes ?? '')) await updateQuestSecret(selected.id, { gm_notes: gmNotes })
+    } else {
+      const created = await createQuest(fields)
+      if (created) {
+        if (gmNotes) await updateQuestSecret(created.id, { gm_notes: gmNotes })
+        setCreating(false)
+        setSelId(created.id)
+      }
+    }
+  }
+
+  async function handleDelete() {
+    if (!selected) return
+    await deleteQuest(selected.id)
+    setSelId(null)
+  }
+
+  return (
+    <>
+      <div className={styles.ovBanner}>
+        <span className={styles.big}>Quest Log</span>
+        <span>Campaign quests · authoring twin of the player Journal</span>
+        <span className={styles.sessCount}>{quests.length} quests</span>
+      </div>
+
+      {error ? (
+        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
+      ) : (
+        <div className={styles.questLayout}>
+          {/* index */}
+          <div className={styles.qIndex}>
+            <Btn tone="cyan" sm icon="fa-plus" label="New Quest" onClick={() => { setCreating(true); setSelId(null) }} />
+            {Q_STATUS.map(st => {
+              const items = quests.filter(q => q.status === st.key)
+              return (
+                <div key={st.key} className={cx(styles.qGroup, styles[st.key])}>
+                  <div className={styles.qGroupHead}><span className={styles.ghT}>{st.label}</span><span className={styles.ghC}>{items.length}</span></div>
+                  <div className={styles.qRows}>
+                    {items.length ? items.map(q => (
+                      <button key={q.id} className={cx(styles.qRow, q.id === activeId && !creating && styles.sel)} onClick={() => { setCreating(false); setSelId(q.id) }}>
+                        <span className={styles.qGlyph}>{questGlyph(q.type)}</span>
+                        <span className={styles.qRtx}>
+                          <span className={styles.qRt}>{q.title || 'Untitled'}</span>
+                          <span className={styles.qRl}>{q.location || '—'}</span>
+                        </span>
+                      </button>
+                    )) : <div className={styles.qEmpty}>{loading ? '· loading ·' : '— none —'}</div>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* form */}
+          <div className={styles.qForm}>
+            <QuestForm
+              key={activeId ?? 'new'}
+              quest={selected}
+              gmNotes={selected ? (questSecrets[selected.id]?.gm_notes ?? '') : ''}
+              onSubmit={handleSubmit}
+              onDelete={selected ? handleDelete : undefined}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function QuestForm({ quest, gmNotes, onSubmit, onDelete }: {
+  quest: QuestRow | null
+  gmNotes: string
+  onSubmit: (fields: QuestFields, gmNotes: string) => Promise<void>
+  onDelete?: () => void
+}) {
+  const [title, setTitle] = useState(quest?.title ?? '')
+  const [type, setType] = useState<QuestType>(quest?.type ?? 'side')
+  const [status, setStatus] = useState<QuestStatus>(quest?.status ?? 'active')
+  const [location, setLocation] = useState(quest?.location ?? '')
+  const [givenBy, setGivenBy] = useState(quest?.given_by ?? '')
+  const [description, setDescription] = useState(quest?.description ?? '')
+  const [objectives, setObjectives] = useState<QuestObjective[]>(quest?.objectives ?? [])
+  const [related, setRelated] = useState<string[]>(quest?.related ?? [])
+  const [gm, setGm] = useState(gmNotes)
+  const [objInput, setObjInput] = useState('')
+  const [tagInput, setTagInput] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  function addObjective() {
+    const t = objInput.trim()
+    if (!t) return
+    setObjectives(o => [...o, { text: t, done: false }])
+    setObjInput('')
+  }
+  function addTag() {
+    const t = tagInput.trim()
+    if (!t || related.includes(t)) { setTagInput(''); return }
+    setRelated(r => [...r, t])
+    setTagInput('')
+  }
+  async function submit() {
+    setBusy(true)
+    await onSubmit({ title, type, status, location, given_by: givenBy, description, objectives, related }, gm)
+    setBusy(false)
+  }
+
+  return (
+    <>
+      <span className={styles.fieldLab}>Title</span>
+      <input className={styles.sessIn} value={title} onChange={e => setTitle(e.target.value)} placeholder="Name the quest…" />
+
+      <div className={styles.qGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Type</span>
+          <div className={styles.qSeg}>
+            <button className={cx(styles.qSegOpt, type === 'main' && styles.sel)} onClick={() => setType('main')}><span className={styles.qGly}>◈</span> Main</button>
+            <button className={cx(styles.qSegOpt, type === 'side' && styles.sel)} onClick={() => setType('side')}><span className={styles.qGly}>◇</span> Side</button>
+          </div>
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Status</span>
+          <select className={styles.selIn} value={status} onChange={e => setStatus(e.target.value as QuestStatus)}>
+            {Q_STATUS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className={styles.qGrid2}>
+        <div><span className={styles.fieldLab}>Location</span><input className={styles.sessIn} value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Brettany" /></div>
+        <div><span className={styles.fieldLab}>Given By</span><input className={styles.sessIn} value={givenBy} onChange={e => setGivenBy(e.target.value)} placeholder="e.g. Wren, Archivist" /></div>
+      </div>
+
+      <div className={styles.qLabRow}>
+        <span className={styles.fieldLab}>Player Description</span>
+        <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Players see this</span>
+      </div>
+      <textarea className={styles.qPlayerDesc} value={description} onChange={e => setDescription(e.target.value)} placeholder="The prose the players read in their Journal…" />
+
+      <span className={styles.fieldLab}>Objectives</span>
+      <div className={styles.qObjList}>
+        {objectives.length ? objectives.map((o, i) => (
+          <div key={i} className={cx(styles.qObjLine, o.done && styles.done)}>
+            <button className={cx(styles.qCheck, o.done && styles.on)} aria-label="Toggle objective"
+              onClick={() => setObjectives(list => list.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))} />
+            <span className={styles.qOtx}>{o.text}</span>
+            <span className={styles.qOx} onClick={() => setObjectives(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
+          </div>
+        )) : <div className={styles.fxNone} style={{ padding: '4px 2px' }}>No objectives yet — add the steps the party must complete.</div>}
+      </div>
+      <div className={styles.qObjAdd}>
+        <input className={styles.sessIn} value={objInput} onChange={e => setObjInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addObjective()} placeholder="Add an objective…" />
+        <Btn tone="ghost" sm icon="fa-plus" label="Add" onClick={addObjective} />
+      </div>
+
+      <span className={styles.fieldLab}>Related</span>
+      <div className={styles.qTags}>
+        {related.length ? related.map((t, i) => (
+          <span key={i} className={styles.qTag}>{t}<span className={styles.qTx2} onClick={() => setRelated(r => r.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span></span>
+        )) : <span className={styles.qTagNone}>No related tags</span>}
+      </div>
+      <div className={styles.qTagAdd}>
+        <input className={styles.sessIn} value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTag()} placeholder="Add a related NPC or place…" />
+        <Btn tone="ghost" sm icon="fa-plus" label="Add" onClick={addTag} />
+      </div>
+
+      <div className={styles.gmHead}>
+        <i className="fa-solid fa-user-secret" />
+        <span className={styles.t}>GM Notes</span>
+        <span className={styles.s}><i className="fa-solid fa-eye-slash" /> Hidden from players</span>
+      </div>
+      <textarea className={styles.gmNotes} value={gm} onChange={e => setGm(e.target.value)} placeholder="The true purpose, the secret, the twist — DM eyes only…" />
+
+      <div className={styles.qActions}>
+        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : quest ? 'Save Quest' : 'Create Quest'} onClick={() => void submit()} disabled={busy || !title.trim()} />
+        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+      </div>
+    </>
+  )
+}
+
+// ============================================================
+// SESSION LOG (campaign-level recap authoring) — slice 4
+// ============================================================
+type SessionFields = Omit<SessionRow, 'id' | 'updated_at'>
+
+/** Session Log: a session picker + recap form. All fields are player-facing (the
+ *  campaign recap the players read), so there's no secret table — just `sessions`. */
+function SessionsSurface({ campaign }: { campaign: DmCampaignState }) {
+  const { sessions, createSession, updateSession, deleteSession, error } = campaign
+  const [selId, setSelId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  // Default to the latest session (highest num), matching the mockup.
+  const activeId = creating ? null : (selId ?? sessions[sessions.length - 1]?.id ?? null)
+  const selected = sessions.find(s => s.id === activeId) ?? null
+  const nextNum = sessions.reduce((m, s) => Math.max(m, s.num), 0) + 1
+
+  async function handleSubmit(fields: SessionFields) {
+    if (selected) {
+      await updateSession(selected.id, fields)
+    } else {
+      const created = await createSession(fields)
+      if (created) { setCreating(false); setSelId(created.id) }
+    }
+  }
+  async function handleDelete() {
+    if (!selected) return
+    await deleteSession(selected.id)
+    setSelId(null)
+  }
+
+  return (
+    <>
+      <div className={styles.ovBanner}>
+        <span className={styles.big}>Session Log</span>
+        <span>Campaign recap · Brettany Theater</span>
+        <span className={styles.sessCount}>{sessions.length} logged</span>
+      </div>
+
+      {error ? (
+        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
+      ) : (
+        <>
+          <div className={styles.sessPick}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span className={styles.fieldLab}>Editing session</span>
+              <select
+                className={styles.selIn} style={{ marginBottom: 0 }}
+                value={activeId ?? 'new'}
+                onChange={e => { if (e.target.value === 'new') { setCreating(true); setSelId(null) } else { setCreating(false); setSelId(e.target.value) } }}
+              >
+                {activeId === null && <option value="new">— New session (unsaved) —</option>}
+                {sessions.map(s => <option key={s.id} value={s.id}>S{String(s.num).padStart(2, '0')} · {s.title || 'Untitled'} · {s.date || '—'}</option>)}
+              </select>
+            </div>
+            <Btn tone="cyan" icon="fa-plus" label="New Session" onClick={() => { setCreating(true); setSelId(null) }} />
+          </div>
+
+          <div className={styles.sessForm}>
+            <SessionForm
+              key={activeId ?? 'new'}
+              session={selected}
+              nextNum={nextNum}
+              onSubmit={handleSubmit}
+              onDelete={selected ? handleDelete : undefined}
+            />
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
+function SessionForm({ session, nextNum, onSubmit, onDelete }: {
+  session: SessionRow | null
+  nextNum: number
+  onSubmit: (fields: SessionFields) => Promise<void>
+  onDelete?: () => void
+}) {
+  const [num, setNum] = useState(session?.num ?? nextNum)
+  const [date, setDate] = useState(session?.date ?? '')
+  const [title, setTitle] = useState(session?.title ?? '')
+  const [recap, setRecap] = useState(session?.recap ?? '')
+  const [events, setEvents] = useState<string[]>(session?.events ?? [])
+  const [evInput, setEvInput] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  function addEvent() {
+    const t = evInput.trim()
+    if (!t) return
+    setEvents(e => [...e, t])
+    setEvInput('')
+  }
+  async function submit() {
+    setBusy(true)
+    await onSubmit({ num, title, date, recap, events })
+    setBusy(false)
+  }
+
+  return (
+    <>
+      <div className={styles.sessGrid2}>
+        <div><span className={styles.fieldLab}>Session #</span><input className={styles.numIn} type="number" min={1} value={num} onChange={e => setNum(Number(e.target.value) || 1)} /></div>
+        <div><span className={styles.fieldLab}>Date</span><input className={styles.sessIn} value={date} onChange={e => setDate(e.target.value)} placeholder="e.g. 14th of Mistmoon" /></div>
+      </div>
+      <span className={styles.fieldLab}>Title</span>
+      <input className={styles.sessIn} value={title} onChange={e => setTitle(e.target.value)} placeholder="Give the session a title…" />
+      <span className={styles.fieldLab}>Recap</span>
+      <textarea className={styles.sessRecap} value={recap} onChange={e => setRecap(e.target.value)} placeholder="Write the session recap — what happened, who did what, where it left off…" />
+
+      <span className={styles.fieldLab}>Key Events</span>
+      <div className={styles.evList}>
+        {events.length ? events.map((ev, i) => (
+          <div key={i} className={styles.evLine}>
+            <span className={styles.evDot} />
+            <span className={styles.evTx}>{ev}</span>
+            <span className={styles.evX} onClick={() => setEvents(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
+          </div>
+        )) : <div className={styles.fxNone} style={{ padding: '4px 2px' }}>No key events yet — add the beats that mattered.</div>}
+      </div>
+      <div className={styles.evAdd}>
+        <input className={styles.sessIn} value={evInput} onChange={e => setEvInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addEvent()} placeholder="Add a key event…" />
+        <Btn tone="ghost" sm icon="fa-plus" label="Add" onClick={addEvent} />
+      </div>
+
+      <div className={styles.qActions}>
+        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : session ? 'Save Session' : 'Create Session'} onClick={() => void submit()} disabled={busy || !title.trim()} />
+        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+      </div>
     </>
   )
 }
