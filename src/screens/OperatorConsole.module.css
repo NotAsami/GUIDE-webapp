@@ -796,3 +796,200 @@
 .evAdd { display: flex; gap: 8px; align-items: stretch; margin-bottom: 15px; }
 .evAdd .sessIn { flex: 1; margin-bottom: 0; }
 .evAdd button { flex: 0 0 112px; }
+
+/* ============================================================
+   GRANT ITEM (Actions card B) — slice 5
+   ============================================================ */
+.searchWrap { position: relative; margin-bottom: 9px; }
+.searchWrap i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--beige-dim); font-size: 10px; }
+.searchIn {
+  width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(212,191,125,0.32);
+  color: var(--text); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em;
+  padding: 8px 10px 8px 28px;
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+}
+.searchIn:focus { outline: none; border-color: var(--amber); box-shadow: inset 0 0 12px rgba(226,176,33,0.1); }
+.searchIn::placeholder { color: var(--beige-dim); letter-spacing: 0.12em; }
+
+/* Cap kept just under the Vitals card's height so the Grant card never becomes the
+   tallest in its row — otherwise a full list stretches the row (and the Vitals card
+   with it), then snaps back when a search shrinks the list. With this cap the Vitals
+   card always drives the row height, so nothing resizes when you search. */
+.catList { max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding-right: 3px; }
+.catList::-webkit-scrollbar { width: 5px; }
+.catList::-webkit-scrollbar-thumb { background: rgba(226,176,33,0.35); }
+.catListEmpty { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.06em; color: var(--beige-dim); padding: 10px 4px; text-align: center; }
+/* Keep the Grant button at its natural 36px AND pinned to the card's bottom: as a
+   direct child of the flex-column .actCard a bare .btn (flex:1) would grow/shrink
+   vertically and collapse when the row is short. The wrapper is a fixed-height flex
+   row; margin-top:auto eats the card's spare height so the button stays at the
+   bottom instead of jumping up under a short search result. */
+/* margin-top:auto pins the button to the card's bottom (the card stretches to the
+   grid-row height) WITHOUT the list driving the card's height — the list stays
+   capped + scrollable, so a short search result no longer pushes the button up. */
+.grantAction { display: flex; flex: 0 0 auto; margin-top: auto; padding-top: 10px; }
+/* New Item button — same flex-column squish guard as the grant button (12 seeded
+   rows below it would otherwise collapse it to nothing). */
+.catNew { display: flex; flex: 0 0 auto; }
+.catItem {
+  position: relative; isolation: isolate;
+  display: flex; align-items: center; gap: 9px; cursor: pointer; text-align: left;
+  background: var(--beige); padding: 7px 9px;
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+  transition: background 140ms ease;
+}
+.catItem::before {
+  content: ""; position: absolute; inset: 1px; z-index: -1; background: #14130e;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+.catItem:hover { background: var(--amber); }
+.catItem:hover::before { background: #1b1810; }
+.catItem.sel { background: var(--amber); }
+.catItem.sel::before { background: #221d0e; box-shadow: inset 0 0 14px rgba(226,176,33,0.12); }
+.catItem .ciIc { width: 16px; text-align: center; font-size: 12px; }
+.catItem .ciTx { flex: 1; min-width: 0; }
+.catItem .ciNm { font-family: var(--font-prose); font-size: 13px; color: var(--text); line-height: 1.1; }
+.catItem .ciTy { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; margin-top: 2px; display: block; }
+.catItem .ciRar { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; }
+
+/* ============================================================
+   CATALOG MANAGER (campaign surface) — slice 5
+   ============================================================ */
+.catTabs { display: flex; gap: 6px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(212,191,125,0.22); }
+.catTab {
+  position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.24);
+  padding: 9px 15px;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition: border-color 130ms ease, color 130ms ease, background 130ms ease;
+}
+.catTab i { font-size: 11px; opacity: 0.8; }
+.catTab .ctC { font-size: 8px; color: var(--beige-dim); }
+.catTab:not(:disabled):hover { border-color: rgba(226,176,33,0.45); color: var(--text); }
+.catTab.sel { border-color: var(--amber); color: var(--amber-hot); background: rgba(226,176,33,0.1); box-shadow: inset 0 0 14px rgba(226,176,33,0.1); }
+.catTab.sel i { opacity: 1; }
+.catTab.stub { color: var(--beige-dim); cursor: default; }
+.catTab.stub::after { content: "soon"; font-size: 7px; letter-spacing: 0.14em; color: var(--amber-dim); border: 1px solid rgba(138,109,26,0.5); padding: 1px 4px; }
+
+.catLayout { display: grid; grid-template-columns: 250px 1fr; gap: 18px; align-items: start; }
+.catIndex { display: flex; flex-direction: column; gap: 13px; }
+.catGrp .catGrpHead { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+.catGrpHead .ghT { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--beige); }
+.catGrpHead .ghC { font-family: var(--font-mono); font-size: 8px; color: var(--beige-dim); }
+.catGrpHead::after { content: ""; flex: 1; height: 1px; background: rgba(212,191,125,0.15); }
+.catRows { display: flex; flex-direction: column; gap: 6px; }
+.catRow {
+  display: flex; align-items: center; gap: 11px; cursor: pointer; text-align: left; width: 100%;
+  padding: 8px 10px; background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(212,191,125,0.12); border-left: 2px solid var(--rar, var(--beige-dim));
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.catRow:hover { background: rgba(226,176,33,0.07); border-color: rgba(226,176,33,0.4); border-left-color: var(--rar, var(--beige-dim)); }
+.catRow.sel { background: rgba(226,176,33,0.1); border-color: var(--amber); box-shadow: inset 0 0 16px rgba(226,176,33,0.12); }
+.catRow .crIc { flex: 0 0 auto; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--beige); background: rgba(0,0,0,0.4); border: 1px solid rgba(212,191,125,0.2);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+.catRow .crTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.catRow .crT { font-family: var(--font-prose); font-size: 14px; color: var(--text); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.catRow .crS { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.catRow .crTag { flex: 0 0 auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 6px; border: 1px solid; }
+.catEmpty { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; padding: 4px 6px; }
+
+.catForm { display: flex; flex-direction: column; min-width: 0; }
+.catFormHead { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; padding-bottom: 11px; border-bottom: 1px solid rgba(212,191,125,0.18); }
+.catFormHead .cfhT { font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: 0.06em; color: var(--beige); }
+.catFormHead .cfhId { margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.catGrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.catGrid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+.catPrev {
+  display: flex; align-items: center; gap: 13px; padding: 12px 14px; margin-bottom: 14px;
+  border: 1.5px solid var(--rar, var(--beige-dim)); background: rgba(0,0,0,0.3);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+.catPrev .pvCell { flex: 0 0 auto; position: relative; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; font-size: 23px; color: var(--text); background: rgba(0,0,0,0.45); border: 1px solid color-mix(in oklab, var(--rar, var(--beige-dim)) 50%, transparent);
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+.catPrev .pvCell .pvCorner { position: absolute; bottom: 3px; right: 4px; font-size: 8px; color: var(--beige); opacity: 0.65; }
+.catPrev .pvTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.catPrev .pvName { font-family: var(--font-display); font-size: 14px; color: var(--text); }
+.catPrev .pvMeta { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); display: flex; flex-wrap: wrap; gap: 5px 10px; }
+
+.catDim { display: flex; align-items: center; gap: 9px; }
+.catDim .sessIn { width: 64px; margin-bottom: 0; text-align: center; }
+.catDim .x { font-family: var(--font-mono); font-size: 12px; color: var(--beige-dim); }
+.catDim .unit { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+
+.catIcons { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 6px; margin: 6px 0 13px; }
+.catIc {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 15px;
+  color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.2);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.catIc:hover { color: var(--text); border-color: rgba(226,176,33,0.45); }
+.catIc.sel { color: var(--amber-hot); border-color: var(--amber); background: rgba(226,176,33,0.12); box-shadow: inset 0 0 12px rgba(226,176,33,0.18); }
+
+.catTog { display: flex; align-items: center; flex-wrap: wrap; gap: 11px; padding: 9px 12px; margin-bottom: 13px; background: rgba(0,0,0,0.28); border: 1px solid rgba(212,191,125,0.2); border-left: 2px solid var(--beige-dim); cursor: pointer;
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); transition: border-color 140ms ease; }
+.catTog.on { border-left-color: var(--amber); }
+.catTog .tgSw { flex: 0 0 auto; width: 34px; height: 18px; border-radius: 9px; background: rgba(0,0,0,0.6); border: 1px solid var(--beige-dim); position: relative; transition: background 160ms ease, border-color 160ms ease; }
+.catTog .tgSw::after { content: ""; position: absolute; top: 1px; left: 1px; width: 14px; height: 14px; border-radius: 50%; background: var(--beige-dim); transition: transform 160ms ease, background 160ms ease; }
+.catTog.on .tgSw { background: rgba(226,176,33,0.25); border-color: var(--amber); }
+.catTog.on .tgSw::after { transform: translateX(16px); background: var(--amber-hot); box-shadow: 0 0 7px rgba(226,176,33,0.6); }
+.catTog .tgLab { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.catTog .tgLab .t { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); }
+.catTog .tgLab .s { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.06em; color: var(--muted); }
+
+.catProse {
+  width: 100%; min-height: 96px; resize: vertical;
+  background: rgba(0,0,0,0.4); border: 1px solid rgba(212,191,125,0.32); border-left: 2px solid var(--beige-dim);
+  color: var(--text); font-family: var(--font-prose); font-size: 15px; line-height: 1.6; padding: 12px 14px; margin-bottom: 13px;
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+.catProse:focus { outline: none; border-color: var(--amber); box-shadow: inset 0 0 14px rgba(226,176,33,0.08); }
+.catProse::placeholder { color: var(--beige-dim); }
+
+.catFx { border: 1px solid rgba(226,176,33,0.32); border-left: 3px solid var(--amber); background: rgba(226,176,33,0.05); padding: 12px 13px 13px; margin-bottom: 14px;
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+.catFxHead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.catFxHead i { color: var(--amber-hot); font-size: 11px; }
+.catFxHead .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber-hot); }
+.catFxHead .s { margin-left: auto; font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber-dim); }
+.catFxRows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.catFxRow { display: flex; align-items: center; gap: 8px; }
+.catFxRow .selIn, .catFxRow .sessIn { margin-bottom: 0; }
+.catFxRow .fxStat { flex: 1 1 auto; min-width: 0; }
+.catFxRow .fxMode { flex: 0 0 104px; }
+.catFxRow .fxAmt { flex: 0 0 62px; text-align: center; }
+.catFxRow .fxX { flex: 0 0 auto; cursor: pointer; color: var(--beige-dim); font-size: 11px; padding: 4px 6px; transition: color 130ms ease; }
+.catFxRow .fxX:hover { color: var(--danger-hot); }
+.catFxNone { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em; color: var(--amber-dim); padding: 3px 2px 10px; }
+.catFxAdd { display: flex; }
+.catFxAdd .btn { flex: 0 0 auto; min-width: 148px; }
+
+/* full-width equip-slot select (gear only) */
+.slotSel { width: 100%; }
+
+/* deferred sub-section (Features Granted) — reserves the design's place */
+.catSoonBlock {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; margin-bottom: 14px; padding: 11px 13px;
+  background: rgba(0,0,0,0.28); border: 1px dashed rgba(212,191,125,0.3); border-left: 2px solid var(--beige-dim);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.catSoonBlock i { color: var(--amber-dim); font-size: 11px; }
+.catSoonBlock .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige); }
+.catSoonBlock .s { flex: 1 1 100%; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.04em; color: var(--muted); }
+
+/* Strip the native number spinners across the catalog form — they crowded the
+   selects beside them and threw the footprint/weight/value row out of alignment. */
+.catForm input[type='number']::-webkit-outer-spin-button,
+.catForm input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.catForm input[type='number'] { appearance: textfield; -moz-appearance: textfield; }
+
+.detailRow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: rgba(0,0,0,0.28); border-left: 2px solid var(--beige-dim); }
+.detailRow .drLab { flex: 0 0 40%; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--beige); }
+.detailRow .drVal { flex: 1; font-family: var(--font-prose); font-size: 13.5px; color: var(--text); }
+.detailAdd { display: flex; gap: 8px; align-items: stretch; margin: 6px 0 15px; }
+.detailAdd .sessIn { flex: 1; margin-bottom: 0; }
+.detailAdd button { flex: 0 0 96px; }

@@ -383,8 +383,11 @@
   color: var(--danger-hot);
   box-shadow: inset 0 0 18px rgba(185, 58, 58, 0.22), 0 0 12px rgba(185, 58, 58, 0.3);
 }
+/* CONFIRM DROP? — wider than the plain Drop button so the longer label fits
+   (a fixed 96px clips the centered icon+text to the left edge). */
+.actBtn.confirm { width: 150px; flex: 0 0 auto; }
 .actBtn.confirm .abFrame { background: var(--danger); }
-.actBtn.confirm .abInner { color: var(--danger-hot); }
+.actBtn.confirm .abInner { color: var(--danger-hot); letter-spacing: 0.18em; }
 
 /* ============================================================
    03 LOAD / COIN
