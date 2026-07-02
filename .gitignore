@@ -27,3 +27,6 @@ dist-ssr
 .idea
 .vscode
 *.swp
+
+# Misc
+notes.md

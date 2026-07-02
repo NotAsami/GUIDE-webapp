@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useDmStatus, useDmParty, useDmCampaign, type DmCampaignState } from '../lib/dm'
+import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, type DmCampaignState, type DmCatalogState } from '../lib/dm'
 import { longRestPatch } from '../lib/rest'
 import type {
-  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP,
+  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json,
   QuestRow, QuestStatus, QuestType, QuestObjective, SessionRow,
+  CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity,
+  ItemEffects, ItemSlot, AbilityKey, WeaponAbility,
 } from '../lib/database.types'
 import styles from './OperatorConsole.module.css'
 
@@ -71,7 +73,7 @@ const hpClassOf = (p: PartyMember): '' | 'warn' | 'crit' => {
 }
 const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hpMax) * 100)) : 0)
 
-type View = 'overview' | 'character' | 'quests' | 'sessions'
+type View = 'overview' | 'character' | 'quests' | 'sessions' | 'catalog'
 type CharTab = 'actions' | 'lore'
 
 export function OperatorConsole() {
@@ -79,6 +81,7 @@ export function OperatorConsole() {
   const { isDm, loading: dmLoading } = useDmStatus()
   const { party, secrets, loading: partyLoading, error, updateCharacter, updateSecret } = useDmParty()
   const campaign = useDmCampaign()
+  const catalog = useDmCatalog()
 
   const [view, setView] = useState<View>('overview')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -103,6 +106,10 @@ export function OperatorConsole() {
   }
   function openSessions() {
     setView('sessions')
+    setSelectedId(null)
+  }
+  function openCatalog() {
+    setView('catalog')
     setSelectedId(null)
   }
   function openCharacter(id: string) {
@@ -171,7 +178,13 @@ export function OperatorConsole() {
                     <span className={styles.ovS}>Recaps · {campaign.sessions.length} logged</span>
                   </span>
                 </button>
-                <CampaignEntry icon="fa-box-archive" title="Catalog" sub="Shared library" />
+                <button className={cx(styles.ovEntry, view === 'catalog' && styles.active)} onClick={openCatalog}>
+                  <span className={styles.ovIc}><i className="fa-solid fa-box-archive" /></span>
+                  <span className={styles.ovTx}>
+                    <span className={styles.ovT}>Catalog</span>
+                    <span className={styles.ovS}>Item library · {catalog.items.length} authored</span>
+                  </span>
+                </button>
 
                 <div className={styles.rosterDiv}>Characters</div>
                 {members.map(p => {
@@ -246,11 +259,13 @@ export function OperatorConsole() {
                 <QuestsSurface campaign={campaign} />
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
+              ) : view === 'catalog' ? (
+                <CatalogSurface catalog={catalog} />
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} onUpdate={patch => updateCharacter(selectedRow.id, patch)} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} onUpdate={patch => updateCharacter(selectedRow.id, patch)} />
                 )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
@@ -293,18 +308,6 @@ export function OperatorConsole() {
         </div>
       </footer>
     </div>
-  )
-}
-
-function CampaignEntry({ icon, title, sub }: { icon: string; title: string; sub: string }) {
-  return (
-    <button className={cx(styles.ovEntry, styles.disabled)} disabled title="Built in a later slice">
-      <span className={styles.ovIc}><i className={`fa-solid ${icon}`} /></span>
-      <span className={styles.ovTx}>
-        <span className={styles.ovT}>{title}</span>
-        <span className={styles.ovS}>{sub}</span>
-      </span>
-    </button>
   )
 }
 
@@ -363,9 +366,10 @@ function OverviewDashboard({
  *  never clobbered, and targets the same fields the player screens read — HP and
  *  coins on `sheet`, death saves + exhaustion on `resources` (see Stats.tsx) —
  *  keeping one source of truth per value. */
-function ActionsTab({ row, member, onUpdate }: {
+function ActionsTab({ row, member, catalog, onUpdate }: {
   row: CharacterRow
   member: PartyMember
+  catalog: CatalogItemRow[]
   onUpdate: (patch: CharacterUpdate) => Promise<void>
 }) {
   const [hpAmt, setHpAmt] = useState(5)
@@ -457,12 +461,8 @@ function ActionsTab({ row, member, onUpdate }: {
           </div>
         </div>
 
-        {/* B — GRANT ITEM (deferred to the catalog slice) */}
-        <div className={cx(styles.actCard, styles.soon)}>
-          <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
-          <div className={styles.acTitle}><i className="fa-solid fa-box-open lead" /><span className={styles.num}>B</span><span className={styles.t}>Grant Item</span></div>
-          <div className={styles.acSoon}><i className="fa-solid fa-box-archive" /><span>Arrives with the item catalog slice</span></div>
-        </div>
+        {/* B — GRANT ITEM: snapshot a catalog template into this PC's inventory */}
+        <GrantItemCard member={member} catalog={catalog} row={row} onUpdate={onUpdate} />
 
         {/* C — APPLY EFFECT (deferred to the effect-catalog slice) */}
         <div className={cx(styles.actCard, styles.soon)}>
@@ -533,8 +533,499 @@ function ActionsTab({ row, member, onUpdate }: {
       </div>
 
       <p className={styles.deferNote}>
-        Grant Item, Apply Effect &amp; the activity log arrive in later slices.
+        Apply Effect &amp; the activity log arrive in later slices.
       </p>
+    </>
+  )
+}
+
+// ============================================================
+// GRANT ITEM (Actions card B) + CATALOG SURFACE — slice 5
+// ============================================================
+
+/** App-aligned item taxonomy (NOT the mockup's — the engine reads these). */
+const CAT_ORDER: ItemCategory[] = ['weapon', 'gear', 'consumable', 'misc']
+const CAT_DEF: Record<ItemCategory, { label: string; corner: string }> = {
+  weapon: { label: 'Weapon', corner: 'fa-gavel' },
+  gear: { label: 'Gear', corner: 'fa-shield-halved' },
+  consumable: { label: 'Consumable', corner: 'fa-flask' },
+  misc: { label: 'Misc', corner: 'fa-box' },
+}
+const RAR_ORDER: ItemRarity[] = ['common', 'uncommon', 'rare', 'legendary']
+const RAR_DEF: Record<ItemRarity, { label: string; token: string }> = {
+  common: { label: 'Common', token: 'var(--rar-common)' },
+  uncommon: { label: 'Uncommon', token: 'var(--rar-uncommon)' },
+  rare: { label: 'Rare', token: 'var(--rar-rare)' },
+  legendary: { label: 'Legendary', token: 'var(--rar-legend)' },
+}
+const GEAR_SLOTS: ItemSlot[] = ['helmet', 'armor', 'cloak', 'boots', 'accessory']
+const WEAPON_ABILITIES: WeaponAbility[] = ['str', 'dex', 'finesse']
+const ITEM_ICONS = [
+  'fa-khanda', 'fa-hammer', 'fa-bullseye', 'fa-gavel', 'fa-wand-sparkles', 'fa-staff-snake',
+  'fa-shirt', 'fa-shield-halved', 'fa-helmet-safety', 'fa-user-tie', 'fa-hat-wizard', 'fa-shoe-prints',
+  'fa-ring', 'fa-gem', 'fa-flask', 'fa-vial', 'fa-scroll', 'fa-book',
+  'fa-key', 'fa-fire', 'fa-drumstick-bite', 'fa-link', 'fa-bed', 'fa-box',
+]
+
+const rarColor = (r?: ItemRarity) => RAR_DEF[r ?? 'common']?.token ?? 'var(--muted)'
+const catDef = (c?: ItemCategory) => CAT_DEF[c ?? 'misc'] ?? CAT_DEF.misc
+
+function firstName(name: string) { return name.split(' ')[0] }
+
+/** Build a fresh inventory instance from a catalog template: a self-describing
+ *  snapshot of the template `data` + a unique instance id + the `item_id` back-ref.
+ *  Stackables (consumable/misc) get qty 1 so the grid renders a count badge. */
+function grantSnapshot(item: CatalogItemRow): InventoryItem {
+  const inst = `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
+  const data = item.data ?? ({} as CatalogItemData)
+  const stackable = data.category === 'consumable' || data.category === 'misc'
+  return { ...data, id: inst, item_id: item.id, ...(stackable ? { qty: 1 } : {}) } as InventoryItem
+}
+
+/** Grant Item: search the catalog, pick a template, snapshot it into this PC's
+ *  inventory. The WRITE is a plain `characters.inventory` append (spread so nothing
+ *  else is clobbered) — the player's verified Inventory/Equipment screens receive an
+ *  ordinary self-describing item and are untouched. The realtime "ITEM ACQUIRED"
+ *  toast is a later slice; for now the button flashes a local confirmation. */
+function GrantItemCard({ member, catalog, row, onUpdate }: {
+  member: PartyMember
+  catalog: CatalogItemRow[]
+  row: CharacterRow
+  onUpdate: (patch: CharacterUpdate) => Promise<void>
+}) {
+  const [query, setQuery] = useState('')
+  const [selId, setSelId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [flash, setFlash] = useState('')
+
+  const q = query.trim().toLowerCase()
+  const list = q ? catalog.filter(it => (it.data?.name ?? '').toLowerCase().includes(q)) : catalog
+  const selected = catalog.find(it => it.id === selId) ?? null
+
+  async function grant() {
+    if (!selected) return
+    setBusy(true)
+    const inv = ((row.inventory as unknown as InventoryItem[]) ?? [])
+    await onUpdate({ inventory: [...inv, grantSnapshot(selected)] as unknown as Json[] })
+    setBusy(false)
+    setFlash(`Granted ${selected.data?.name ?? 'item'}`)
+    setSelId(null)
+    setTimeout(() => setFlash(''), 2400)
+  }
+
+  return (
+    <div className={styles.actCard}>
+      <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
+      <div className={styles.acTitle}><i className="fa-solid fa-box-open lead" /><span className={styles.num}>B</span><span className={styles.t}>Grant Item</span></div>
+      <div className={styles.searchWrap}>
+        <i className="fa-solid fa-magnifying-glass" />
+        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search catalog…" />
+      </div>
+      <div className={styles.catList}>
+        {catalog.length === 0 ? (
+          <div className={styles.catListEmpty}>Catalog is empty — author items in the Catalog surface.</div>
+        ) : list.length === 0 ? (
+          <div className={styles.catListEmpty}>No items match.</div>
+        ) : list.map(it => {
+          const col = rarColor(it.data?.rarity)
+          return (
+            <button key={it.id} className={cx(styles.catItem, it.id === selId && styles.sel)} onClick={() => setSelId(it.id)}>
+              <span className={styles.ciIc} style={{ color: col }}><i className={`fa-solid ${it.data?.icon ?? 'fa-box'}`} /></span>
+              <span className={styles.ciTx}>
+                <span className={styles.ciNm}>{it.data?.name ?? 'Untitled'}</span>
+                <span className={styles.ciTy}>{catDef(it.data?.category).label}</span>
+              </span>
+              <span className={styles.ciRar} style={{ color: col }}>{RAR_DEF[it.data?.rarity ?? 'common']?.label ?? 'Common'}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className={styles.grantAction}>
+        <Btn tone="amber" icon="fa-arrow-right-to-bracket"
+          label={flash || (busy ? 'Granting…' : `Grant to ${firstName(member.name)}`)}
+          onClick={() => void grant()} disabled={!selected || busy} />
+      </div>
+    </div>
+  )
+}
+
+// ---- effects authoring: modifier rows <-> structured ItemEffects ----
+/** The numeric modifiers the engine (lib/effects.ts) actually reads. `Note` and
+ *  other descriptive perks are authored as Detail rows instead, not here. */
+const MOD_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'AC', 'Attack', 'Damage', 'Saves', 'Speed', 'Initiative', 'Darkvision'] as const
+/** One authored modifier: a stat, an amount, and (abilities only) whether the
+ *  amount is a flat bonus or a floor the score is set to (abilitySet). */
+type Mod = { stat: string; amt: number; set?: boolean }
+const ABIL_KEYS: Record<string, AbilityKey> = { STR: 'str', DEX: 'dex', CON: 'con', INT: 'int', WIS: 'wis', CHA: 'cha' }
+const isAbility = (stat: string) => stat in ABIL_KEYS
+
+/** Compile the GUI modifier rows into the structured `effects` the engine layers
+ *  over the sheet (lib/effects.ts). Abilities can be a flat bonus OR a "set to"
+ *  floor (Giant Strength); everything else is a flat bonus. */
+function compileEffects(mods: Mod[]): ItemEffects | undefined {
+  const eff: ItemEffects = {}
+  for (const m of mods) {
+    const n = m.amt
+    if (!Number.isFinite(n)) continue
+    const ak = ABIL_KEYS[m.stat]
+    if (ak) { if (m.set) (eff.abilitySet ??= {})[ak] = n; else (eff.abilities ??= {})[ak] = n }
+    else if (m.stat === 'AC') eff.ac = n
+    else if (m.stat === 'Attack') eff.attack = n
+    else if (m.stat === 'Damage') eff.damage = n
+    else if (m.stat === 'Saves') eff.saves = n
+    else if (m.stat === 'Speed') eff.speed = n
+    else if (m.stat === 'Initiative') eff.initiative = n
+    else if (m.stat === 'Darkvision') eff.darkvision = n
+  }
+  return Object.keys(eff).length ? eff : undefined
+}
+
+/** Reverse of compileEffects, to seed the editor when editing an existing item.
+ *  Object-form `saves` (per-ability) isn't round-tripped — the seed never uses it
+ *  and the editor only offers all-saves; such an item keeps its structured value. */
+function effectsToMods(eff?: ItemEffects): Mod[] {
+  if (!eff) return []
+  const mods: Mod[] = []
+  const up = (k: string) => k.toUpperCase()
+  for (const [k, v] of Object.entries(eff.abilities ?? {})) mods.push({ stat: up(k), amt: v as number })
+  for (const [k, v] of Object.entries(eff.abilitySet ?? {})) mods.push({ stat: up(k), amt: v as number, set: true })
+  if (eff.ac != null) mods.push({ stat: 'AC', amt: eff.ac })
+  if (eff.attack != null) mods.push({ stat: 'Attack', amt: eff.attack })
+  if (eff.damage != null) mods.push({ stat: 'Damage', amt: eff.damage })
+  if (typeof eff.saves === 'number') mods.push({ stat: 'Saves', amt: eff.saves })
+  if (eff.speed != null) mods.push({ stat: 'Speed', amt: eff.speed })
+  if (eff.initiative != null) mods.push({ stat: 'Initiative', amt: eff.initiative })
+  if (eff.darkvision != null) mods.push({ stat: 'Darkvision', amt: eff.darkvision })
+  return mods
+}
+
+/** Catalog Manager: the DM's item-authoring library. Left = index grouped by
+ *  category; right = the item form. Spells / Features / Shards are their own future
+ *  catalogs, shown as inert "soon" tabs to reserve their place (matches the mockup).
+ *  Items are stored in the app's structured shape (NOT the mockup's string effects)
+ *  so a granted copy is mechanically real the instant it lands. */
+function CatalogSurface({ catalog }: { catalog: DmCatalogState }) {
+  const { items, createItem, updateItem, deleteItem, loading, error } = catalog
+  const [selId, setSelId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  const activeId = creating ? null : (selId ?? items[0]?.id ?? null)
+  const selected = items.find(it => it.id === activeId) ?? null
+
+  async function handleSubmit(data: CatalogItemData) {
+    if (selected) {
+      await updateItem(selected.id, { data })
+    } else {
+      const created = await createItem({ data })
+      if (created) { setCreating(false); setSelId(created.id) }
+    }
+  }
+  async function handleDelete() {
+    if (!selected) return
+    await deleteItem(selected.id)
+    setSelId(null)
+  }
+
+  const catTabs: { key: string; label: string; icon: string; n?: number; soon: boolean }[] = [
+    { key: 'items', label: 'Items', icon: 'fa-box-open', n: items.length, soon: false },
+    { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', soon: true },
+    { key: 'features', label: 'Features', icon: 'fa-star', soon: true },
+    { key: 'shards', label: 'Shards', icon: 'fa-gem', soon: true },
+  ]
+
+  return (
+    <>
+      <div className={styles.ovBanner}>
+        <span className={styles.big}>Catalog</span>
+        <span>Content library · author once, grant from anywhere</span>
+        <span className={styles.dmonly}><i className="fa-solid fa-box-archive" /> Templates — not a grant</span>
+      </div>
+
+      <div className={styles.catTabs}>
+        {catTabs.map(t => (
+          <button key={t.key} className={cx(styles.catTab, t.key === 'items' && styles.sel, t.soon && styles.stub)}
+            disabled={t.soon} title={t.soon ? 'Its own later slice' : undefined}>
+            <i className={`fa-solid ${t.icon}`} />{t.label}
+            {t.n != null && <span className={styles.ctC}>{t.n}</span>}
+          </button>
+        ))}
+      </div>
+
+      {error ? (
+        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
+      ) : (
+        <div className={styles.catLayout}>
+          <div className={styles.catIndex}>
+            <div className={styles.catNew}>
+              <Btn tone="cyan" icon="fa-plus" label="New Item" onClick={() => { setCreating(true); setSelId(null) }} />
+            </div>
+            {CAT_ORDER.map(cat => {
+              const rows = items.filter(it => (it.data?.category ?? 'misc') === cat)
+              if (!rows.length) return null
+              return (
+                <div key={cat} className={styles.catGrp}>
+                  <div className={styles.catGrpHead}><span className={styles.ghT}>{CAT_DEF[cat].label}</span><span className={styles.ghC}>{rows.length}</span></div>
+                  <div className={styles.catRows}>
+                    {rows.map(it => {
+                      const col = rarColor(it.data?.rarity)
+                      return (
+                        <button key={it.id} className={cx(styles.catRow, it.id === activeId && !creating && styles.sel)}
+                          style={{ ['--rar' as string]: col }} onClick={() => { setCreating(false); setSelId(it.id) }}>
+                          <span className={styles.crIc}><i className={`fa-solid ${it.data?.icon ?? 'fa-box'}`} /></span>
+                          <span className={styles.crTx}>
+                            <span className={styles.crT}>{it.data?.name ?? 'Untitled'}</span>
+                            <span className={styles.crS}>{CAT_DEF[cat].label} · {it.data?.w ?? 1}×{it.data?.h ?? 1}</span>
+                          </span>
+                          <span className={styles.crTag} style={{ color: col, borderColor: col }}>{RAR_DEF[it.data?.rarity ?? 'common']?.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+            {items.length === 0 && <div className={styles.catEmpty}>{loading ? '· loading ·' : '— catalog empty —'}</div>}
+          </div>
+
+          <div className={styles.catForm}>
+            <CatalogForm key={activeId ?? 'new'} item={selected} onSubmit={handleSubmit} onDelete={selected ? handleDelete : undefined} />
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function CatalogForm({ item, onSubmit, onDelete }: {
+  item: CatalogItemRow | null
+  onSubmit: (data: CatalogItemData) => Promise<void>
+  onDelete?: () => void
+}) {
+  const d = item?.data
+  const [name, setName] = useState(d?.name ?? '')
+  const [category, setCategory] = useState<ItemCategory>(d?.category ?? 'misc')
+  const [rarity, setRarity] = useState<ItemRarity>(d?.rarity ?? 'common')
+  const [w, setW] = useState(d?.w ?? 1)
+  const [h, setH] = useState(d?.h ?? 1)
+  const [weight, setWeight] = useState(String(d?.weight ?? ''))
+  const [value, setValue] = useState(d?.value != null ? String(d.value) : '')
+  const [icon, setIcon] = useState(d?.icon ?? 'fa-box')
+  const [slot, setSlot] = useState<ItemSlot>((d?.slot as ItemSlot) ?? 'accessory')
+  const [attune, setAttune] = useState(!!d?.attune)
+  const [flavor, setFlavor] = useState(d?.flavor ?? '')
+  const [ability, setAbility] = useState<WeaponAbility>((d?.ability as WeaponAbility) ?? 'str')
+  const [damageDice, setDamageDice] = useState(d?.damageDice ?? '')
+  const [dmgType, setDmgType] = useState(d?.type ?? '')
+  const [heal, setHeal] = useState(d?.heal != null ? String(d.heal) : '')
+  const [duration, setDuration] = useState(d?.duration ?? '')
+  const [mods, setMods] = useState<Mod[]>(effectsToMods(d?.effects))
+  const [rows, setRows] = useState<[string, string][]>(d?.rows ?? [])
+  const [rowLab, setRowLab] = useState('')
+  const [rowVal, setRowVal] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const rd = RAR_DEF[rarity]
+  const def = CAT_DEF[category]
+
+  function build(): CatalogItemData {
+    const weightNum = parseFloat(weight)
+    const valueNum = parseInt(value, 10)
+    const data: CatalogItemData = {
+      name: name.trim(), category, rarity, icon, w, h,
+      ...(Number.isFinite(weightNum) ? { weight: weightNum } : {}),
+      ...(Number.isFinite(valueNum) ? { value: valueNum } : {}),
+      ...(category === 'gear' ? { slot } : {}),
+      ...(attune ? { attune: name.trim() } : {}),
+      ...(flavor.trim() ? { flavor: flavor.trim() } : {}),
+      ...(category === 'weapon'
+        ? { ability, ...(damageDice.trim() ? { damageDice: damageDice.trim() } : {}), ...(dmgType.trim() ? { type: dmgType.trim() } : {}) }
+        : {}),
+      ...(category === 'consumable'
+        ? { ...(heal.trim() ? { heal: heal.trim() } : {}), ...(duration.trim() ? { duration: duration.trim() } : {}) }
+        : {}),
+    }
+    const effects = compileEffects(mods)
+    if (effects) data.effects = effects
+    if (rows.length) data.rows = rows
+    return data
+  }
+  async function submit() {
+    setBusy(true)
+    await onSubmit(build())
+    setBusy(false)
+  }
+  function addRow() {
+    const l = rowLab.trim()
+    if (!l) return
+    setRows(r => [...r, [l, rowVal.trim()]])
+    setRowLab(''); setRowVal('')
+  }
+
+  return (
+    <>
+      <div className={styles.catFormHead}>
+        <span className={styles.cfhT}>{item ? 'Edit Item' : 'New Item'}</span>
+        <span className={styles.cfhId}>{item ? item.id : 'unsaved template'}</span>
+      </div>
+
+      {/* live preview tile */}
+      <div className={styles.catPrev} style={{ ['--rar' as string]: rd.token }}>
+        <span className={styles.pvCell}>
+          <i className={`fa-solid ${icon}`} />
+          <span className={styles.pvCorner}><i className={`fa-solid ${def.corner}`} /></span>
+        </span>
+        <span className={styles.pvTx}>
+          <span className={styles.pvName}>{name || 'Untitled Item'}</span>
+          <span className={styles.pvMeta}>
+            <span>{def.label}</span><span className={styles.rar} style={{ color: rd.token }}>{rd.label}</span>
+            <span>{w}×{h} cells</span>
+            {category === 'gear' && <span>{slot}</span>}
+            {attune && <span>attunement</span>}
+          </span>
+        </span>
+      </div>
+
+      <span className={styles.fieldLab}>Name</span>
+      <input className={styles.sessIn} value={name} onChange={e => setName(e.target.value)} placeholder="Name the item…" />
+
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Category</span>
+          <select className={styles.selIn} value={category} onChange={e => setCategory(e.target.value as ItemCategory)}>
+            {CAT_ORDER.map(c => <option key={c} value={c}>{CAT_DEF[c].label}</option>)}
+          </select>
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Rarity</span>
+          <select className={styles.selIn} value={rarity} onChange={e => setRarity(e.target.value as ItemRarity)}>
+            {RAR_ORDER.map(r => <option key={r} value={r}>{RAR_DEF[r].label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className={styles.catGrid3}>
+        <div>
+          <span className={styles.fieldLab}>Footprint</span>
+          <div className={styles.catDim}>
+            <input className={styles.sessIn} type="number" min={1} value={w} onChange={e => setW(Math.max(1, parseInt(e.target.value || '1', 10) || 1))} />
+            <span className={styles.x}>×</span>
+            <input className={styles.sessIn} type="number" min={1} value={h} onChange={e => setH(Math.max(1, parseInt(e.target.value || '1', 10) || 1))} />
+            <span className={styles.unit}>cells</span>
+          </div>
+        </div>
+        <div><span className={styles.fieldLab}>Weight</span><input className={styles.sessIn} type="number" min={0} step="0.1" value={weight} onChange={e => setWeight(e.target.value)} placeholder="lb" /></div>
+        <div><span className={styles.fieldLab}>Value</span><input className={styles.sessIn} type="number" min={0} value={value} onChange={e => setValue(e.target.value)} placeholder="gold" /></div>
+      </div>
+
+      <span className={styles.fieldLab}>Icon</span>
+      <div className={styles.catIcons}>
+        {ITEM_ICONS.map(ic => (
+          <button key={ic} className={cx(styles.catIc, ic === icon && styles.sel)} onClick={() => setIcon(ic)} title={ic} aria-label={ic}>
+            <i className={`fa-solid ${ic}`} />
+          </button>
+        ))}
+      </div>
+
+      {category === 'weapon' && (
+        <div className={styles.catGrid3}>
+          <div>
+            <span className={styles.fieldLab}>Attack Ability</span>
+            <select className={styles.selIn} value={ability} onChange={e => setAbility(e.target.value as WeaponAbility)}>
+              {WEAPON_ABILITIES.map(a => <option key={a} value={a}>{a === 'finesse' ? 'Finesse' : a.toUpperCase()}</option>)}
+            </select>
+          </div>
+          <div><span className={styles.fieldLab}>Damage Dice</span><input className={styles.sessIn} value={damageDice} onChange={e => setDamageDice(e.target.value)} placeholder="e.g. 1d8" /></div>
+          <div><span className={styles.fieldLab}>Damage Type</span><input className={styles.sessIn} value={dmgType} onChange={e => setDmgType(e.target.value)} placeholder="e.g. Slashing" /></div>
+        </div>
+      )}
+
+      {category === 'consumable' && (
+        <div className={styles.catGrid2}>
+          <div><span className={styles.fieldLab}>Heal (on use)</span><input className={styles.sessIn} value={heal} onChange={e => setHeal(e.target.value)} placeholder="e.g. 2d4 + 2" /></div>
+          <div><span className={styles.fieldLab}>Duration</span><input className={styles.sessIn} value={duration} onChange={e => setDuration(e.target.value)} placeholder="e.g. 1 hour" /></div>
+        </div>
+      )}
+
+      {category === 'gear' && (
+        <>
+          <span className={styles.fieldLab}>Equip Slot</span>
+          <select className={cx(styles.selIn, styles.slotSel)} value={slot} onChange={e => setSlot(e.target.value as ItemSlot)}>
+            {GEAR_SLOTS.map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+          </select>
+        </>
+      )}
+
+      <div className={cx(styles.catTog, attune && styles.on)} onClick={() => setAttune(a => !a)} role="switch" aria-checked={attune}>
+        <span className={styles.tgSw} />
+        <span className={styles.tgLab}><span className={styles.t}>Attunement Required</span><span className={styles.s}>Binds to one bearer on a short rest</span></span>
+      </div>
+
+      <div className={styles.qLabRow}>
+        <span className={styles.fieldLab}>Description</span>
+        <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing</span>
+      </div>
+      <textarea className={styles.catProse} value={flavor} onChange={e => setFlavor(e.target.value)} placeholder="The prose the player reads when they examine this item…" />
+
+      {/* structured effects (mechanical) — pick a stat, pick a number */}
+      <div className={styles.catFx}>
+        <div className={styles.catFxHead}><i className="fa-solid fa-flask-vial" /><span className={styles.t}>Effects Granted</span><span className={styles.s}>applied while equipped</span></div>
+        <div className={styles.catFxRows}>
+          {mods.length ? mods.map((m, i) => {
+            const patchMod = (p: Partial<Mod>) => setMods(list => list.map((x, j) => (j === i ? { ...x, ...p } : x)))
+            return (
+              <div key={i} className={styles.catFxRow}>
+                <select className={cx(styles.selIn, styles.fxStat)} value={m.stat}
+                  onChange={e => patchMod({ stat: e.target.value, set: isAbility(e.target.value) ? m.set : false })}>
+                  {MOD_STATS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                {isAbility(m.stat) && (
+                  <select className={cx(styles.selIn, styles.fxMode)} value={m.set ? 'set' : 'bonus'} onChange={e => patchMod({ set: e.target.value === 'set' })}>
+                    <option value="bonus">Bonus +</option>
+                    <option value="set">Set to</option>
+                  </select>
+                )}
+                <input className={cx(styles.sessIn, styles.fxAmt)} type="number" value={m.amt}
+                  onChange={e => patchMod({ amt: parseInt(e.target.value, 10) || 0 })} />
+                <span className={styles.fxX} onClick={() => setMods(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
+              </div>
+            )
+          }) : <div className={styles.catFxNone}>No modifiers — add the buffs this item grants while worn (e.g. AC +1, or set STR to 21).</div>}
+        </div>
+        <div className={styles.catFxAdd}>
+          <Btn tone="ghost" sm icon="fa-plus" label="Add Modifier" onClick={() => setMods(list => [...list, { stat: 'STR', amt: 1 }])} />
+        </div>
+      </div>
+
+      {/* features granted — deferred until the Features catalog exists to pick from */}
+      {category !== 'misc' && (
+        <div className={styles.catSoonBlock}>
+          <i className="fa-solid fa-star" />
+          <span className={styles.t}>Features Granted</span>
+          <span className={styles.s}>Picking features this item grants arrives with the Features catalog slice.</span>
+        </div>
+      )}
+
+      {/* display detail rows */}
+      <span className={styles.fieldLab}>Detail Rows</span>
+      <div className={styles.qObjList}>
+        {rows.length ? rows.map((r, i) => (
+          <div key={i} className={styles.detailRow}>
+            <span className={styles.drLab}>{r[0]}</span>
+            <span className={styles.drVal}>{r[1]}</span>
+            <span className={styles.qOx} onClick={() => setRows(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
+          </div>
+        )) : <div className={styles.fxNone} style={{ padding: '4px 2px' }}>No detail rows — add label/value pairs shown on the item card (e.g. Range · 80/320).</div>}
+      </div>
+      <div className={styles.detailAdd}>
+        <input className={styles.sessIn} value={rowLab} onChange={e => setRowLab(e.target.value)} placeholder="Label" />
+        <input className={styles.sessIn} value={rowVal} onChange={e => setRowVal(e.target.value)} onKeyDown={e => e.key === 'Enter' && addRow()} placeholder="Value" />
+        <Btn tone="ghost" sm icon="fa-plus" label="Add" onClick={addRow} />
+      </div>
+
+      <div className={styles.qActions}>
+        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : item ? 'Save Item' : 'Create Item'} onClick={() => void submit()} disabled={busy || !name.trim()} />
+        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+      </div>
     </>
   )
 }

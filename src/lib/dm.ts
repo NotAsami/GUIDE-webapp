@@ -4,6 +4,7 @@ import type {
   CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate,
   QuestRow, QuestInsert, QuestUpdate, QuestSecret, QuestSecretUpdate,
   SessionRow, SessionInsert, SessionUpdate,
+  CatalogItemRow, CatalogItemInsert, CatalogItemUpdate,
 } from './database.types'
 import { useAuth } from './auth'
 
@@ -281,4 +282,64 @@ export function useDmCampaign(): DmCampaignState {
     createQuest, updateQuest, deleteQuest, updateQuestSecret,
     createSession, updateSession, deleteSession,
   }
+}
+
+export interface DmCatalogState {
+  items: CatalogItemRow[]
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  createItem: (item: CatalogItemInsert) => Promise<CatalogItemRow | null>
+  updateItem: (id: string, patch: CatalogItemUpdate) => Promise<void>
+  deleteItem: (id: string) => Promise<void>
+}
+
+/** The DM's item-authoring library (`item_catalog`, migration 0004). DM-only RLS
+ *  (no player policy), so a non-DM gets an empty list. Grant Item lives in the
+ *  Actions tab and snapshots one of these `items` into a player's inventory — the
+ *  grant WRITE is a `characters` update, so it goes through useDmParty, not here.
+ *  Rows are ordered by name for a stable, browsable library. */
+export function useDmCatalog(): DmCatalogState {
+  const { session } = useAuth()
+  const [items, setItems] = useState<CatalogItemRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const byName = (a: CatalogItemRow, b: CatalogItemRow) =>
+    (a.data?.name ?? '').localeCompare(b.data?.name ?? '')
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setItems([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase.from('item_catalog').select('*')
+    if (err) { setError(err.message); setItems([]) }
+    else { setItems(((data as CatalogItemRow[]) ?? []).sort(byName)); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const createItem = useCallback<DmCatalogState['createItem']>(async (item) => {
+    const { data, error: err } = await supabase.from('item_catalog').insert(item).select().single<CatalogItemRow>()
+    if (err) { setError(err.message); return null }
+    setItems(prev => [...prev, data].sort(byName))
+    return data
+  }, [])
+
+  const updateItem = useCallback<DmCatalogState['updateItem']>(async (id, patch) => {
+    let previous: CatalogItemRow | undefined
+    setItems(prev => prev.map(it => { if (it.id !== id) return it; previous = it; return { ...it, ...patch } as CatalogItemRow }))
+    const { data, error: err } = await supabase.from('item_catalog').update(patch).eq('id', id).select().single<CatalogItemRow>()
+    if (err) { setError(err.message); if (previous) setItems(prev => prev.map(it => (it.id === id ? previous! : it))) }
+    else if (data) setItems(prev => prev.map(it => (it.id === id ? data : it)).sort(byName))
+  }, [])
+
+  const deleteItem = useCallback<DmCatalogState['deleteItem']>(async (id) => {
+    const snapshot = items
+    setItems(prev => prev.filter(it => it.id !== id))
+    const { error: err } = await supabase.from('item_catalog').delete().eq('id', id)
+    if (err) { setError(err.message); setItems(snapshot) }
+  }, [items])
+
+  return { items, loading, error, refetch: fetchAll, createItem, updateItem, deleteItem }
 }

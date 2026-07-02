@@ -197,14 +197,22 @@ export type ItemEffects = {
   darkvision?: number
 }
 
-/** A single item. Self-describing for now (no item_catalog yet): the object carries
- *  its own display detail + mechanical `effects`. The SAME shape lives in `equipped`
+/** A single item. Self-describing: the object carries its own display detail +
+ *  mechanical `effects`. Granted copies also keep an `item_id` back-ref to their
+ *  `item_catalog` template (Phase 2 slice 5), but the item stays self-describing —
+ *  Grant Item snapshots the template, it does NOT hydrate a bare reference at read
+ *  time. The SAME shape lives in `equipped`
  *  slots and in `inventory` — equipping just moves the object between them, so an item
  *  is in exactly one place ("one flag decides which; never both", handoff §4). `null`
  *  in a slot means unequipped → the screen renders an honest empty state. */
 export type EquippedItem = {
   /** Stable id so the item can be moved between inventory and equipped. */
   id?: string
+  /** Back-reference to the `item_catalog` template this was granted from (Phase 2
+   *  slice 5). Rides along through equip/unequip so a future live-hydration refactor
+   *  can match granted copies to their template with no migration. Absent on the
+   *  original pre-catalog seed items. */
+  item_id?: string
   name: string
   category?: ItemCategory
   /** Which gear slot this item fits; absent = not slotted gear (e.g. a weapon). */
@@ -214,6 +222,9 @@ export type EquippedItem = {
   rows?: [string, string][]
   flavor?: string
   attune?: string
+  /** Nominal worth in gold. DM-authored in the catalog; display-only (the engine
+   *  never spends it). Absent = priceless/unlisted. */
+  value?: number
   qty?: number
   /** Per-unit weight in pounds (SRD). Summed across carried + equipped for Burden;
    *  multiplied by `qty` for stacks. Absent = weightless (0). */
@@ -377,9 +388,25 @@ export type SessionRow = {
 export type SessionInsert = Partial<Omit<SessionRow, 'updated_at'>>
 export type SessionUpdate = Partial<Omit<SessionRow, 'id'>>
 
+// ── Item catalog (migration 0004): the DM's authoring library. Grant Item
+//    snapshots a template into a player's inventory. DM-only RLS (no player
+//    policy), so the catalog never reaches a player client. ──
+/** A catalog template's `data`: a full item definition MINUS per-instance state
+ *  (id / qty / grid position), which Grant Item stamps on at grant time. */
+export type CatalogItemData = Omit<InventoryItem, 'id' | 'col' | 'row' | 'qty'>
+export type CatalogItemRow = { id: string; data: CatalogItemData; updated_at: string }
+export type CatalogItemInsert = { id?: string; data: CatalogItemData }
+export type CatalogItemUpdate = { data?: CatalogItemData }
+
 export type Database = {
   public: {
     Tables: {
+      item_catalog: {
+        Row: CatalogItemRow
+        Insert: CatalogItemInsert
+        Update: CatalogItemUpdate
+        Relationships: []
+      }
       characters: {
         Row: CharacterRow
         Insert: CharacterInsert

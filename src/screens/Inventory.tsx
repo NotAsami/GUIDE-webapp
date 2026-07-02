@@ -581,7 +581,7 @@ function ItemDetail({ item, target, busy, actionable, onEquip, onUse, onDrop }: 
         {confirmDrop ? (
           <button type="button" className={`${styles.actBtn} ${styles.drop} ${styles.confirm}${canEquip || canUse ? '' : ' ' + styles.primary}`} onClick={onDrop} disabled={busy}>
             <span className={styles.abFrame} />
-            <span className={styles.abInner}><i className="fa-solid fa-trash-can" />Confirm Drop</span>
+            <span className={styles.abInner}><i className="fa-solid fa-trash-can" />Confirm Drop?</span>
           </button>
         ) : (
           <button type="button" className={`${styles.actBtn} ${styles.drop}${canEquip || canUse ? '' : ' ' + styles.primary}`} onClick={() => setConfirmDrop(true)} disabled={busy}>
