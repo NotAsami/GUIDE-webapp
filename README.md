@@ -1,6 +1,8 @@
-# G.U.I.D.E. Codex
 
-<img src="public/guide-codex-logo.svg" alt="G.U.I.D.E. Codex" width="360" />
+<div align="center">
+<img src="public/guide-codex-logo.svg" alt="G.U.I.D.E. Codex" width="800" />
+</div>
+<br>
 
 An in-world D&D character codex with a fantasy-cyberpunk terminal UI, built for a
 private 3–4 player campaign. Players view and manage their own character; the DM
@@ -34,8 +36,6 @@ seed) via the Supabase SQL editor.
 | Command             | What it does                                      |
 | ------------------- | ------------------------------------------------- |
 | `npm run dev`       | Vite dev server on http://localhost:5173          |
-| `npm run build`     | TypeScript build + production build to `dist/`    |
-| `npm run typecheck` | `tsc -b --noEmit`                                 |
 | `npm run preview`   | Serve the production build locally                |
 
 ## Project layout
