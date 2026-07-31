@@ -53,6 +53,44 @@ export function useCharacter(): CharacterState {
     void fetchOnce()
   }, [fetchOnce])
 
+  // Live read-sync (Phase 2 slice 6): when the DM edits this character from the
+  // Operator Console, the row UPDATE arrives here and the whole app re-renders
+  // from the fresh row — no reload. `characters` is in the realtime publication
+  // (0001_init.sql) and postgres_changes respects RLS, so a player only ever
+  // receives their own row. Keyed on the row id (not the row object) so our own
+  // optimistic writes don't churn the subscription.
+  //
+  // IMPORTANT: the event is only a SIGNAL — never adopt `payload.new` as the row.
+  // Postgres omits unchanged TOASTed columns from the WAL, and this row is all
+  // big JSONB, so a write to `inventory` arrives WITHOUT `sheet`/`resources`/…;
+  // adopting that partial payload guts the client state (HP 0/0, missing sheet).
+  // Refetch the full row instead. Silent (no `loading` flip) so the app never
+  // unmounts and in-progress form drafts survive.
+  const charId = character?.id
+  useEffect(() => {
+    if (!charId) return
+    const ch = supabase
+      .channel(`char-sync-${charId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'characters', filter: `id=eq.${charId}` },
+        () => {
+          void supabase
+            .from('characters')
+            .select('*')
+            .eq('id', charId)
+            .maybeSingle<CharacterRow>()
+            .then(({ data }) => {
+              if (data) setCharacter(data)
+            })
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(ch)
+    }
+  }, [charId])
+
   const updateSection: CharacterState['updateSection'] = useCallback(
     async (section, next) => {
       if (!character) return

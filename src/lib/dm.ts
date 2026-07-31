@@ -62,8 +62,10 @@ interface DmPartyState {
    *  caller pre-spreads the JSONB section (e.g. `{ sheet: { ...row.sheet, hp } }`)
    *  so the merge here is a shallow row-level replace and never clobbers sibling
    *  sections. Goes through the `dm_all` RLS policy (write only succeeds for a DM,
-   *  or for a row you own). Optimistic, with reconcile from the returned row. */
-  updateCharacter: (id: string, patch: CharacterUpdate) => Promise<void>
+   *  or for a row you own). Optimistic, with reconcile from the returned row.
+   *  Resolves true on success so callers can gate follow-ups (toast, log) on a
+   *  write that actually landed. */
+  updateCharacter: (id: string, patch: CharacterUpdate) => Promise<boolean>
   /** Upsert a character's DM-only secret. Existing rows are absent for untouched
    *  characters, so this UPSERTs (a plain update would silently hit zero rows);
    *  unspecified columns fall back to their defaults on first insert. Optimistic. */
@@ -114,6 +116,41 @@ export function useDmParty(): DmPartyState {
     void fetchAll()
   }, [fetchAll])
 
+  // Live read-sync (slice 6): player-side writes (HP pill, equip, rest…) stream
+  // into the party view as row UPDATEs, so the dashboard tracks the table live.
+  // The DM token passes the `dm_all` RLS check, so every character's changes
+  // arrive. INSERT/DELETE don't happen in normal play.
+  //
+  // IMPORTANT: the event is only a SIGNAL — `payload.new` omits unchanged
+  // TOASTed columns (all the big JSONB sections), so adopting it directly guts
+  // the row (see the matching note in character.ts). Refetch the full row by id
+  // (the primary key is always present in the payload) and merge that.
+  useEffect(() => {
+    if (!session) return
+    const ch = supabase
+      .channel('dm-party-sync')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'characters' },
+        payload => {
+          const id = (payload.new as { id?: string }).id
+          if (!id) return
+          void supabase
+            .from('characters')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle<CharacterRow>()
+            .then(({ data }) => {
+              if (data) setParty(prev => prev.map(c => (c.id === id ? data : c)))
+            })
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(ch)
+    }
+  }, [session])
+
   const updateCharacter = useCallback<DmPartyState['updateCharacter']>(async (id, patch) => {
     // Optimistic: row-level shallow merge (caller already spread the section).
     let previous: CharacterRow | undefined
@@ -131,9 +168,10 @@ export function useDmParty(): DmPartyState {
     if (err) {
       setError(err.message)
       if (previous) setParty(prev => prev.map(c => (c.id === id ? previous! : c))) // roll back
-    } else if (data) {
-      setParty(prev => prev.map(c => (c.id === id ? data : c)))
+      return false
     }
+    if (data) setParty(prev => prev.map(c => (c.id === id ? data : c)))
+    return true
   }, [])
 
   const updateSecret = useCallback<DmPartyState['updateSecret']>(async (characterId, patch) => {

@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, type DmCampaignState, type DmCatalogState } from '../lib/dm'
 import { longRestPatch } from '../lib/rest'
+import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/voice'
 import type {
   CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json,
   QuestRow, QuestStatus, QuestType, QuestObjective, SessionRow,
   CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity,
-  ItemEffects, ItemSlot, AbilityKey, WeaponAbility,
+  ItemEffects, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
 } from '../lib/database.types'
 import styles from './OperatorConsole.module.css'
 
@@ -46,7 +47,7 @@ function toMember(c: CharacterRow, secret?: CharacterSecret): PartyMember {
   const hp = (c.sheet?.hp?.current ?? 0) as number
   const hpMax = (c.sheet?.hp?.max ?? 0) as number
   const tempHp = (c.sheet?.hp?.temp ?? 0) as number
-  const raw = (c.resources?.activeEffects as { name?: string }[] | undefined) ?? []
+  const raw = (c.resources?.activeEffects as ActiveEffect[] | undefined) ?? []
   return {
     id: c.id,
     name: c.name,
@@ -62,8 +63,23 @@ function toMember(c: CharacterRow, secret?: CharacterSecret): PartyMember {
     // DM-only horror gauge from the `character_secrets` table (RLS = DM-only).
     // Absent until the DM first authors it, so default to 0.
     digitization: secret?.digitization ?? 0,
-    effects: raw.map(e => ({ name: e.name ?? 'Effect', kind: 'buff' as const })),
+    effects: raw.map(e => ({ name: e.name ?? 'Effect', kind: e.kind ?? ('buff' as const) })),
   }
+}
+
+/** One operator-action line in the right-rail Activity Log. Session-local by
+ *  design (the mockup's `logAct`): an aide-mémoire, not a stored audit trail. */
+interface LogEntry {
+  id: string
+  node: ReactNode
+  kind?: 'cyan' | 'danger'
+  time: string
+}
+
+const nowStamp = () => {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
 }
 
 const hpClassOf = (p: PartyMember): '' | 'warn' | 'crit' => {
@@ -87,6 +103,13 @@ export function OperatorConsole() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   /** Which per-character tab is showing when a PC is selected. */
   const [charTab, setCharTab] = useState<CharTab>('actions')
+
+  // The G.U.I.D.E. voice (slice 6): DM → player broadcast channel. Send-only here.
+  const sendVoice = useGuideVoice()
+  // Session-local activity log, newest first, capped like the mockup's logAct.
+  const [logEntries, setLogEntries] = useState<LogEntry[]>([])
+  const log = (node: ReactNode, kind?: LogEntry['kind']) =>
+    setLogEntries(prev => [{ id: crypto.randomUUID(), node, kind, time: nowStamp() }, ...prev].slice(0, 24))
 
   if (authLoading || dmLoading) return <Boot>Authorizing operator link…</Boot>
   if (!session) return <Navigate to="/login" replace />
@@ -265,7 +288,7 @@ export function OperatorConsole() {
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} onUpdate={patch => updateCharacter(selectedRow.id, patch)} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
                 )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
@@ -274,7 +297,7 @@ export function OperatorConsole() {
           </div>
         </section>
 
-        {/* RIGHT — BROADCAST (scaffolding; wired in the realtime slice) */}
+        {/* RIGHT — BROADCAST + ACTIVITY LOG (slice 6) */}
         <section className={styles.region} aria-label="Broadcast and system log">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
@@ -286,12 +309,21 @@ export function OperatorConsole() {
             </div>
             <div className={styles.rScroll}>
               <div className={styles.bcPad}>
-                <span className={styles.fieldLab}>System message</span>
-                <textarea className={styles.bcArea} placeholder="Compose a G.U.I.D.E. system notice…" disabled />
-                <span className={styles.fieldLab}>Broadcast + activity log arrive with the realtime slice.</span>
+                <BroadcastPanel selected={selected} onSend={sendVoice} log={log} />
                 <div className={styles.bcDivider}>Activity Log</div>
               </div>
-              <div className={styles.logEmpty}>No operator actions yet.</div>
+              {logEntries.length ? (
+                <div className={styles.logList}>
+                  {logEntries.map(e => (
+                    <div key={e.id} className={cx(styles.logItem, e.kind && styles[e.kind])}>
+                      <div className={styles.lgLine}>{e.node}</div>
+                      <div className={styles.lgTime}>{e.time} · this session</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={styles.logEmpty}>No operator actions yet.</div>
+              )}
             </div>
           </div>
         </section>
@@ -366,14 +398,20 @@ function OverviewDashboard({
  *  never clobbered, and targets the same fields the player screens read — HP and
  *  coins on `sheet`, death saves + exhaustion on `resources` (see Stats.tsx) —
  *  keeping one source of truth per value. */
-function ActionsTab({ row, member, catalog, onUpdate }: {
+function ActionsTab({ row, member, catalog, onUpdate, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
   catalog: CatalogItemRow[]
-  onUpdate: (patch: CharacterUpdate) => Promise<void>
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  onVoice: (msg: VoiceMsg) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
 }) {
   const [hpAmt, setHpAmt] = useState(5)
-  const [goldAmt, setGoldAmt] = useState(50)
+  const [coinAmt, setCoinAmt] = useState(50)
+  /** Which coin the Currency card's award/deduct targets (cells select it). */
+  const [coinKind, setCoinKind] = useState<'gold' | 'silver' | 'copper'>('gold')
+  const first = firstName(member.name)
+  const who = <span className={styles.who}>{first}</span>
 
   const sheet = row.sheet ?? {}
   const hp = (sheet.hp ?? { current: 0, max: 0 }) as HP
@@ -394,22 +432,37 @@ function ActionsTab({ row, member, catalog, onUpdate }: {
   const dsFail = ds.failures ?? 0
   const exh = (resources.exhaustion as number | undefined) ?? 0
 
-  // ---- writes (each pre-spreads its section) ----
+  // ---- writes (each pre-spreads its section; log lines are optimistic — the
+  //      log is a session aide-mémoire, and failures surface in the error rail) ----
   const writeHp = (next: number, nextTemp = tempHp) =>
     onUpdate({ sheet: { ...sheet, hp: { ...hp, current: next, max: hpMax, temp: nextTemp } } })
-  const heal = () => writeHp(Math.min(hpMax, hpCur + hpAmt))
-  const damage = () => writeHp(Math.max(0, hpCur - hpAmt))
-  const setHp = () => writeHp(Math.max(0, Math.min(hpMax, hpAmt)))
-  const addTemp = () => writeHp(hpCur, tempHp + hpAmt)
-  const longRest = () => onUpdate(longRestPatch(row).patch)
+  const heal = () => { void writeHp(Math.min(hpMax, hpCur + hpAmt)); log(<>Healed {who} <span className={styles.obj}>+{hpAmt} HP</span></>) }
+  const damage = () => { void writeHp(Math.max(0, hpCur - hpAmt)); log(<>Damaged {who} <span className={styles.obj}>−{hpAmt} HP</span></>, 'danger') }
+  const setHp = () => { void writeHp(Math.max(0, Math.min(hpMax, hpAmt))); log(<>Set {who} HP to <span className={styles.obj}>{Math.max(0, Math.min(hpMax, hpAmt))}</span></>) }
+  const addTemp = () => { void writeHp(hpCur, tempHp + hpAmt); log(<>Granted {who} <span className={styles.obj}>+{hpAmt} temp HP</span></>) }
+  const longRest = () => { void onUpdate(longRestPatch(row).patch); log(<>Applied <span className={styles.obj}>Long Rest</span> to {who}</>) }
 
-  const award = () => onUpdate({ sheet: { ...sheet, coins: { ...coins, gold: gold + goldAmt } } })
-  const deduct = () => onUpdate({ sheet: { ...sheet, coins: { ...coins, gold: Math.max(0, gold - goldAmt) } } })
+  const coinVal = { gold, silver, copper }[coinKind]
+  const moveCoins = async (op: 'award' | 'deduct') => {
+    const next = op === 'award' ? coinVal + coinAmt : Math.max(0, coinVal - coinAmt)
+    const ok = await onUpdate({ sheet: { ...sheet, coins: { ...coins, [coinKind]: next } } })
+    if (!ok) return
+    void onVoice({ kind: 'coins', target: member.id, amount: coinAmt, coin: coinKind, op })
+    if (op === 'award') log(<>Awarded <span className={styles.obj}>{coinAmt} {coinKind} coins</span> to {who}</>)
+    else log(<>Deducted <span className={styles.obj}>{coinAmt} {coinKind} coins</span> from {who}</>, 'danger')
+  }
+  const award = () => void moveCoins('award')
+  const deduct = () => void moveCoins('deduct')
 
-  const writeDeath = (next: { successes: number; failures: number }) =>
-    onUpdate({ resources: { ...resources, deathSaves: next } })
-  const setExh = (next: number) =>
-    onUpdate({ resources: { ...resources, exhaustion: Math.max(0, Math.min(6, next)) } })
+  const writeDeath = (next: { successes: number; failures: number }) => {
+    void onUpdate({ resources: { ...resources, deathSaves: next } })
+    log(<>Death saves of {who} → <span className={styles.obj}>S{next.successes} / F{next.failures}</span></>, next.failures >= 3 ? 'danger' : undefined)
+  }
+  const setExh = (raw: number) => {
+    const next = Math.max(0, Math.min(6, raw))
+    void onUpdate({ resources: { ...resources, exhaustion: next } })
+    log(<>Exhaustion of {who} → <span className={styles.obj}>Level {next}</span></>, next >= 5 ? 'danger' : undefined)
+  }
 
   const death = deathState(dsSucc, dsFail)
 
@@ -462,28 +515,31 @@ function ActionsTab({ row, member, catalog, onUpdate }: {
         </div>
 
         {/* B — GRANT ITEM: snapshot a catalog template into this PC's inventory */}
-        <GrantItemCard member={member} catalog={catalog} row={row} onUpdate={onUpdate} />
+        <GrantItemCard member={member} catalog={catalog} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
 
-        {/* C — APPLY EFFECT (deferred to the effect-catalog slice) */}
-        <div className={cx(styles.actCard, styles.soon)}>
-          <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
-          <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>C</span><span className={styles.t}>Apply Effect</span></div>
-          <div className={styles.acSoon}><i className="fa-solid fa-wand-sparkles" /><span>Arrives with the effect catalog slice</span></div>
-        </div>
+        {/* C — APPLY EFFECT: push a status effect onto this PC (slice 6) */}
+        <ApplyEffectCard member={member} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
 
         {/* D — CURRENCY */}
         <div className={styles.actCard}>
           <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
           <div className={styles.acTitle}><i className="fa-solid fa-coins lead" /><span className={styles.num}>D</span><span className={styles.t}>Currency</span></div>
-          <div className={styles.coinDisplay}><span className={styles.gp}>{gold.toLocaleString()}</span><span className={styles.gl}>Gold Pieces</span></div>
+          <div className={styles.coinDisplay}><span className={styles.gp}>{gold.toLocaleString()}</span><span className={styles.gl}>Gold Coins</span></div>
+          {/* the cells double as the award/deduct target selector */}
           <div className={styles.coinBreak}>
-            <div className={cx(styles.coinCell, styles.gp)}><div className={styles.cn}>{gold.toLocaleString()}</div><div className={styles.ct}>GP</div></div>
-            <div className={cx(styles.coinCell, styles.sp)}><div className={styles.cn}>{silver.toLocaleString()}</div><div className={styles.ct}>SP</div></div>
-            <div className={cx(styles.coinCell, styles.cp)}><div className={styles.cn}>{copper.toLocaleString()}</div><div className={styles.ct}>CP</div></div>
+            <button className={cx(styles.coinCell, styles.gp, coinKind === 'gold' && styles.sel)} onClick={() => setCoinKind('gold')} aria-pressed={coinKind === 'gold'}>
+              <div className={styles.cn}>{gold.toLocaleString()}</div><div className={styles.ct}>Gold</div>
+            </button>
+            <button className={cx(styles.coinCell, styles.sp, coinKind === 'silver' && styles.sel)} onClick={() => setCoinKind('silver')} aria-pressed={coinKind === 'silver'}>
+              <div className={styles.cn}>{silver.toLocaleString()}</div><div className={styles.ct}>Silver</div>
+            </button>
+            <button className={cx(styles.coinCell, styles.cp, coinKind === 'copper' && styles.sel)} onClick={() => setCoinKind('copper')} aria-pressed={coinKind === 'copper'}>
+              <div className={styles.cn}>{copper.toLocaleString()}</div><div className={styles.ct}>Copper</div>
+            </button>
           </div>
           <div className={styles.stepper}>
-            <input className={styles.numIn} type="number" min={1} value={goldAmt}
-              onChange={e => setGoldAmt(Math.max(0, parseInt(e.target.value || '0', 10) || 0))} />
+            <input className={styles.numIn} type="number" min={1} value={coinAmt}
+              onChange={e => setCoinAmt(Math.max(0, parseInt(e.target.value || '0', 10) || 0))} />
           </div>
           <div className={styles.btnRow}>
             <Btn tone="amber" sm icon="fa-plus" label="Award" onClick={award} />
@@ -532,9 +588,6 @@ function ActionsTab({ row, member, catalog, onUpdate }: {
         </div>
       </div>
 
-      <p className={styles.deferNote}>
-        Apply Effect &amp; the activity log arrive in later slices.
-      </p>
     </>
   )
 }
@@ -587,11 +640,13 @@ function grantSnapshot(item: CatalogItemRow): InventoryItem {
  *  else is clobbered) — the player's verified Inventory/Equipment screens receive an
  *  ordinary self-describing item and are untouched. The realtime "ITEM ACQUIRED"
  *  toast is a later slice; for now the button flashes a local confirmation. */
-function GrantItemCard({ member, catalog, row, onUpdate }: {
+function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
   member: PartyMember
   catalog: CatalogItemRow[]
   row: CharacterRow
-  onUpdate: (patch: CharacterUpdate) => Promise<void>
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  onVoice: (msg: VoiceMsg) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
 }) {
   const [query, setQuery] = useState('')
   const [selId, setSelId] = useState<string | null>(null)
@@ -606,9 +661,15 @@ function GrantItemCard({ member, catalog, row, onUpdate }: {
     if (!selected) return
     setBusy(true)
     const inv = ((row.inventory as unknown as InventoryItem[]) ?? [])
-    await onUpdate({ inventory: [...inv, grantSnapshot(selected)] as unknown as Json[] })
+    const ok = await onUpdate({ inventory: [...inv, grantSnapshot(selected)] as unknown as Json[] })
     setBusy(false)
-    setFlash(`Granted ${selected.data?.name ?? 'item'}`)
+    if (!ok) return
+    const d = selected.data
+    // Realtime ping → the player's ITEM ACQUIRED toast; the item itself already
+    // landed via the inventory write (and streams in through live read-sync).
+    void onVoice({ kind: 'item', target: member.id, name: d?.name ?? 'Item', icon: d?.icon, rarity: d?.rarity })
+    log(<>Granted <span className={styles.obj}>{d?.name ?? 'item'}</span> to <span className={styles.who}>{firstName(member.name)}</span></>, 'cyan')
+    setFlash(`Granted ${d?.name ?? 'item'}`)
     setSelId(null)
     setTimeout(() => setFlash(''), 2400)
   }
@@ -646,6 +707,171 @@ function GrantItemCard({ member, catalog, row, onUpdate }: {
           onClick={() => void grant()} disabled={!selected || busy} />
       </div>
     </div>
+  )
+}
+
+/** The Operator's quick-apply status list (mockup EFFECT_CATALOG). Static for
+ *  now — a DM-authored effect library can join the Catalog surface later. Numeric
+ *  modifiers are engine-real (layered by lib/effects.ts); dice/condition rules the
+ *  engine can't model stay honest prose in `note`, never fake numbers. */
+const EFFECT_CATALOG: { id: string; name: string; kind: 'buff' | 'cond' | 'debuff'; icon: string; effects: ItemEffects; note?: string }[] = [
+  { id: 'str-potion', name: '+3 STR Potion', kind: 'buff', icon: 'fa-flask', effects: { abilities: { str: 3 } } },
+  { id: 'bless', name: 'Bless', kind: 'buff', icon: 'fa-hands-praying', effects: {}, note: '+1d4 attacks & saves' },
+  { id: 'haste', name: 'Haste', kind: 'buff', icon: 'fa-gauge-high', effects: { ac: 2 }, note: 'speed ×2 · extra action' },
+  { id: 'poisoned', name: 'Poisoned', kind: 'cond', icon: 'fa-skull-crossbones', effects: {}, note: 'disadv. on attacks & checks' },
+  { id: 'frightened', name: 'Frightened', kind: 'cond', icon: 'fa-ghost', effects: {}, note: 'disadv. while source in sight' },
+  { id: 'stunned', name: 'Stunned', kind: 'debuff', icon: 'fa-bolt', effects: {}, note: 'incapacitated · auto-fail STR/DEX saves' },
+]
+const EFFECT_DURATIONS = ['1 round', '3 rounds', '10 minutes', '1 hour', 'until rest']
+
+/** Apply Effect (card C): push a status onto the PC's `resources.activeEffects` —
+ *  the SAME field the player's potion-drinking writes and the effects tray reads,
+ *  so the DM's push shows up in the tray, layers into the effective sheet, clears
+ *  on rest, and the player can shrug it off manually (all existing behavior). */
+function ApplyEffectCard({ member, row, onUpdate, onVoice, log }: {
+  member: PartyMember
+  row: CharacterRow
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  onVoice: (msg: VoiceMsg) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const [effId, setEffId] = useState(EFFECT_CATALOG[0].id)
+  const [dur, setDur] = useState(EFFECT_DURATIONS[0])
+  const [busy, setBusy] = useState(false)
+
+  const resources = row.resources ?? {}
+  const active = (resources.activeEffects as ActiveEffect[] | undefined) ?? []
+  const first = firstName(member.name)
+
+  async function apply() {
+    const def = EFFECT_CATALOG.find(e => e.id === effId)
+    if (!def) return
+    setBusy(true)
+    const eff: ActiveEffect = {
+      id: crypto.randomUUID(), name: def.name, icon: def.icon, kind: def.kind,
+      effects: def.effects, source: 'G.U.I.D.E. Operator',
+      note: [dur, def.note].filter(Boolean).join(' · '), at: Date.now(),
+    }
+    const ok = await onUpdate({ resources: { ...resources, activeEffects: [...active, eff] } as CharacterRow['resources'] })
+    setBusy(false)
+    if (!ok) return
+    void onVoice({ kind: 'effect', target: member.id, name: def.name, dur })
+    log(<>Applied <span className={styles.obj}>{def.name}</span> to <span className={styles.who}>{first}</span></>, def.kind === 'buff' ? 'cyan' : 'danger')
+  }
+
+  async function remove(id: string) {
+    const gone = active.find(e => e.id === id)
+    const ok = await onUpdate({ resources: { ...resources, activeEffects: active.filter(e => e.id !== id) } as CharacterRow['resources'] })
+    if (ok && gone) log(<>Cleared <span className={styles.obj}>{gone.name}</span> from <span className={styles.who}>{first}</span></>)
+  }
+
+  return (
+    <div className={styles.actCard}>
+      <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
+      <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>C</span><span className={styles.t}>Apply Effect</span></div>
+
+      <span className={styles.fieldLab}>Effect</span>
+      <select className={styles.selIn} value={effId} onChange={e => setEffId(e.target.value)}>
+        {EFFECT_CATALOG.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+      </select>
+
+      <span className={styles.fieldLab}>Duration</span>
+      <div className={styles.durGrid}>
+        {EFFECT_DURATIONS.map(d => (
+          <button key={d} className={cx(styles.durOpt, d === dur && styles.sel)} onClick={() => setDur(d)}>{d}</button>
+        ))}
+      </div>
+
+      <div className={styles.btnMount}>
+        <Btn tone="amber" icon="fa-bolt" label={busy ? 'Applying…' : 'Apply Effect'} onClick={() => void apply()} disabled={busy} />
+      </div>
+
+      <div className={styles.fxActive}>
+        <div className={styles.faHead}>Active on {first}</div>
+        {active.length ? active.map(e => (
+          <div key={e.id} className={cx(styles.fxLine, styles[e.kind ?? 'buff'])}>
+            <span className={styles.nm}>{e.name}</span>
+            {e.note && <span className={styles.du}>{e.note}</span>}
+            <span className={styles.x} onClick={() => void remove(e.id)} title="Clear effect"><i className="fa-solid fa-xmark" /></span>
+          </div>
+        )) : <div className={styles.fxNone}>— clear —</div>}
+      </div>
+    </div>
+  )
+}
+
+/** The Broadcast panel — compose a G.U.I.D.E. system notice and push it over the
+ *  voice channel to the selected PC or the whole party. Ephemeral by design (see
+ *  lib/voice.ts): an offline player misses it, like any tabletop aside. */
+function BroadcastPanel({ selected, onSend, log }: {
+  selected: PartyMember | null
+  onSend: (msg: VoiceMsg) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const [target, setTarget] = useState<'selected' | 'all'>('all')
+  const [message, setMessage] = useState('')
+  const [tone, setTone] = useState<VoiceTone>('normal')
+  const [flash, setFlash] = useState('')
+
+  // No PC selected → the Selected option is inert and 'all' takes over.
+  const effTarget = target === 'selected' && selected ? selected : null
+
+  async function push() {
+    const msg = message.trim()
+    if (!msg) return
+    const ok = await onSend({ kind: 'notice', target: effTarget?.id ?? ALL_PARTY, message: msg, tone })
+    if (!ok) {
+      setFlash('Link not ready — try again')
+      setTimeout(() => setFlash(''), 2000)
+      return
+    }
+    log(
+      <>Pushed {tone === 'corrupted' ? <span style={{ color: 'var(--amber-hot)' }}>corrupted </span> : null}notice to <span className={styles.who}>{effTarget ? firstName(effTarget.name) : 'All Party'}</span></>,
+      tone === 'corrupted' ? 'danger' : 'cyan',
+    )
+    setMessage('')
+    setFlash('Pushed ✓')
+    setTimeout(() => setFlash(''), 1800)
+  }
+
+  return (
+    <>
+      <span className={styles.fieldLab}>Recipient</span>
+      <div className={styles.bcTarget}>
+        <button
+          className={cx(styles.tg, target === 'selected' && !!selected && styles.sel, !selected && styles.off)}
+          onClick={() => selected && setTarget('selected')}
+          title={selected ? `Push to ${selected.name}` : 'Select a character first'}
+        >
+          {selected ? firstName(selected.name) : 'Selected PC'}
+        </button>
+        <button className={cx(styles.tg, (target === 'all' || !selected) && styles.sel)} onClick={() => setTarget('all')}>
+          All Party
+        </button>
+      </div>
+
+      <span className={styles.fieldLab}>System message</span>
+      <textarea
+        className={cx(styles.bcArea, tone === 'corrupted' && styles.corrupted)}
+        value={message}
+        onChange={e => setMessage(e.target.value)}
+        placeholder="Compose a G.U.I.D.E. system notice to push to the player…"
+      />
+
+      <span className={styles.fieldLab}>Tone</span>
+      <div className={styles.toneToggle}>
+        <button className={cx(styles.toneOpt, tone === 'normal' && styles.sel)} data-tone="normal" onClick={() => setTone('normal')}>
+          <span className={styles.led} /> Normal
+        </button>
+        <button className={cx(styles.toneOpt, tone === 'corrupted' && styles.sel)} data-tone="corrupted" onClick={() => setTone('corrupted')}>
+          <span className={styles.led} /> Corrupted
+        </button>
+      </div>
+
+      <div className={styles.btnMount}>
+        <Btn tone="amber" icon="fa-tower-broadcast" label={flash || 'Push Notification'} onClick={() => void push()} disabled={!message.trim()} />
+      </div>
+    </>
   )
 }
 
@@ -1050,7 +1276,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
   member: PartyMember
   secret?: CharacterSecret
   onUpdateSecret: (patch: CharacterSecretUpdate) => Promise<void>
-  onUpdateChar: (patch: CharacterUpdate) => Promise<void>
+  onUpdateChar: (patch: CharacterUpdate) => Promise<boolean>
 }) {
   const savedDig = secret?.digitization ?? 0
   const savedLore = secret?.true_lore ?? ''
@@ -1070,7 +1296,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
 
   async function save() {
     setBusy(true)
-    const jobs: Promise<void>[] = []
+    const jobs: Promise<unknown>[] = []
     if (secretDirty) jobs.push(onUpdateSecret({ digitization: dig, true_lore: lore }))
     if (charDirty) {
       const patch: CharacterUpdate = {}

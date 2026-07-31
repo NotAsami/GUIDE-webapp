@@ -176,9 +176,9 @@
 
 /* kind tints — DM picks the origin; backdrop + icon accent shift to match.
    default/levelup = fuller yellow; equipment = warm tan; corruption = violet. */
-.card[data-kind="equipment"] .cHead  { background: rgba(212, 191, 125, 0.20); border-color: rgba(212, 191, 125, 0.62); }
+.card[data-kind="equipment"] .cHead  { background-color: rgba(212, 191, 125, 0.20); --bc: rgba(212, 191, 125, 0.62); }
 .card[data-kind="equipment"] .cIcon  { color: var(--beige); border-color: rgba(212, 191, 125, 0.55); }
-.card[data-kind="corruption"] .cHead { background: rgba(140, 110, 175, 0.28); border-color: rgba(176, 150, 214, 0.62); }
+.card[data-kind="corruption"] .cHead { background-color: rgba(140, 110, 175, 0.28); --bc: rgba(176, 150, 214, 0.62); }
 .card[data-kind="corruption"] .cIcon { color: #cdb8ea; border-color: rgba(176, 150, 214, 0.6); }
 
 /* short card description — the card scales to it */
@@ -349,4 +349,33 @@
 .pUse:disabled {
   color: var(--muted); border-color: var(--beige-dim);
   background: transparent; cursor: default;
+}
+
+/* Cut-corner border fix (see OperatorConsole.module.css): redraw the border
+   segments that clip-path slices off along the 45° corners. Card-kind
+   variants recolor via --bc. */
+.cHead { --cut: 6px; --bc: rgba(226, 176, 33, 0.62); }
+.cHead {
+  border-color: var(--bc);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
+.panel {
+  --cut: 16px;
+  --bc: var(--beige);
+  border-color: var(--bc);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    radial-gradient(120% 80% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 60%);
+  background-color: rgba(10, 10, 10, 0.98);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right, 0 0;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px), auto;
 }

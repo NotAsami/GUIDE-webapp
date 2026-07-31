@@ -41,7 +41,10 @@
 
 .col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .left { min-height: 460px; }
-.right { gap: 0; min-height: 520px; }
+/* Match .left exactly — a taller min-height makes the right column overflow the
+   shared grid row, dropping the Load/Coin panel's bottom border below the
+   inventory widget's (and scrolling the screen on shorter viewports). */
+.right { gap: 0; min-height: 460px; }
 
 /* --- Column-level chrome --- */
 .colHeader {
@@ -491,21 +494,28 @@
   font-family: var(--font-mono); font-size: 7px;
   letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase;
 }
-.coinBadge.gp { border-color: rgba(212, 191, 125, 0.6); }
+.coinBadge.gp { --bc: rgba(212, 191, 125, 0.6); }
 .coinBadge.gp :global(.ci) { background: var(--beige); color: #1d1d1d; }
-.coinBadge.sp { border-color: rgba(170, 170, 170, 0.45); }
+.coinBadge.sp { --bc: rgba(170, 170, 170, 0.45); }
 .coinBadge.sp :global(.ci) { border: 1px solid var(--muted); color: var(--muted); }
-.coinBadge.cp { border-color: rgba(138, 122, 74, 0.55); }
+.coinBadge.cp { --bc: rgba(138, 122, 74, 0.55); }
 .coinBadge.cp :global(.ci) { border: 1px solid var(--beige-dim); color: var(--beige-dim); }
-.coinTotal {
-  margin-top: 8px;
-  font-family: var(--font-mono); font-size: 9px;
-  letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
-  display: flex; align-items: center; gap: 8px;
-}
-.coinTotal :global(.v) { color: var(--beige); }
-.coinTotal :global(.approx) { color: var(--beige-dim); }
 
+/* Cut-corner border fix (see OperatorConsole.module.css for the full note):
+   the border is clipped away along the 45° cuts, so corner-anchored gradient
+   stripes redraw the missing diagonals. Variants recolor via --bc. */
+.coinBadge { --bc: var(--beige-dim); }
+.daTag { --cut: 4px; --bc: rgba(212, 191, 125, 0.45); }
+.coinBadge, .daTag {
+  border-color: var(--bc);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
 /* empty bag */
 .empty {
   flex: 1;
