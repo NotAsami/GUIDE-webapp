@@ -41,10 +41,23 @@ function toEquipped(item: InventoryItem): EquippedItem {
   return rest as EquippedItem
 }
 
+/** Fresh instance id for a bag item (same shape the DM grant mints). */
+export function freshItemId(): string {
+  return `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
+}
+
 /** A displaced/unequipped item re-enters the bag with no grid position, so the
- *  Inventory grid auto-packs it into the first free cells. */
-function toCarried(item: EquippedItem): InventoryItem {
-  return item as InventoryItem
+ *  Inventory grid auto-packs it into the first free cells. If the bag already
+ *  holds an item with the same id (possible after a seed re-run restocked the
+ *  bag while this copy sat equipped), the returning copy is re-keyed — every
+ *  inventory operation (move/drop/use) targets items by id, so an id collision
+ *  makes two tiles move and drop as one. */
+function toCarried(item: EquippedItem, bag: InventoryItem[]): InventoryItem {
+  const carried = item as InventoryItem
+  if (carried.id && bag.some(i => i.id === carried.id)) {
+    return { ...carried, id: freshItemId() }
+  }
+  return carried
 }
 
 /** Cast helpers — the JSONB columns are typed loosely (Json), so the patch values
@@ -66,7 +79,7 @@ export function equipGearPatch(
   const occupant = gear[slot] ?? null
   const nextGear = { ...gear, [slot]: toEquipped(item) }
   const nextInv = inventory.filter(i => i.id !== item.id)
-  if (occupant) nextInv.push(toCarried(occupant))
+  if (occupant) nextInv.push(toCarried(occupant, nextInv))
   return patch(nextGear, nextInv)
 }
 
@@ -75,7 +88,7 @@ export function unequipGearPatch(
 ): Patch | null {
   const item = gear[slot]
   if (!item) return null
-  return patch({ ...gear, [slot]: null }, [...inventory, toCarried(item)])
+  return patch({ ...gear, [slot]: null }, [...inventory, toCarried(item, inventory)])
 }
 
 /* ---------- weapons ---------- */
@@ -90,10 +103,8 @@ export function equipWeaponPatch(
   const displaced = weapons.filter(w => w.hand === hand)
   const kept = weapons.filter(w => w.hand !== hand)
   const nextGear = { ...gear, weapons: [...kept, weaponItem] }
-  const nextInv = [
-    ...inventory.filter(i => i.id !== item.id),
-    ...displaced.map(w => toCarried(w)),
-  ]
+  const nextInv = inventory.filter(i => i.id !== item.id)
+  for (const w of displaced) nextInv.push(toCarried(w, nextInv))
   return patch(nextGear, nextInv)
 }
 
@@ -104,7 +115,7 @@ export function unequipWeaponPatch(
   const w = weapons.find(wp => wp.hand === hand)
   if (!w) return null
   const nextGear = { ...gear, weapons: weapons.filter(wp => wp.hand !== hand) }
-  return patch(nextGear, [...inventory, toCarried(w)])
+  return patch(nextGear, [...inventory, toCarried(w, inventory)])
 }
 
 /* ---------- quick-access pouch (consumables) ---------- */
@@ -126,7 +137,7 @@ export function unequipQuickPatch(
   const item = qa[index]
   if (!item) return null
   qa[index] = null
-  return patch({ ...gear, quickAccess: qa }, [...inventory, toCarried(item)])
+  return patch({ ...gear, quickAccess: qa }, [...inventory, toCarried(item, inventory)])
 }
 
 /* ---------- equip-target resolution (Inventory's single "Equip" button) ---------- */
