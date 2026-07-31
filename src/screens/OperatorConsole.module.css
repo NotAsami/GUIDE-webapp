@@ -227,7 +227,9 @@
   clip-path: polygon(7px 0, 100% 0, 100% 100%, 0 100%, 0 7px);
 }
 .wtab::before {
-  content: ""; position: absolute; inset: 1px 0 0 1px; z-index: -1;
+  /* right inset 1px so the frame's right line shows; bottom stays 0 (a tab is
+     open into the divider it sits on). */
+  content: ""; position: absolute; inset: 1px 1px 0 1px; z-index: -1;
   background: linear-gradient(180deg, #1a1814, #131210);
   clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
   transition: box-shadow 160ms ease;
@@ -998,8 +1000,12 @@
    recurring squish guard (see .grantAction / .catNew). */
 .btnMount { display: flex; flex: 0 0 auto; }
 
-/* duration chips (2-col grid, mockup .dur-grid/.dur-opt) */
-.durGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 11px; }
+/* duration row: amount × unit + until-rest override */
+.durRow { display: flex; gap: 7px; margin-bottom: 11px; align-items: stretch; }
+.durRow .numIn { flex: 0 0 56px; }
+.durRow .selIn { flex: 1; min-width: 0; margin-bottom: 0; }
+.durRow .durOpt { flex: 0 0 auto; padding: 7px 10px; }
+.durRow .numIn:disabled, .durRow .selIn:disabled { opacity: 0.45; cursor: not-allowed; }
 .durOpt {
   font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.24);
