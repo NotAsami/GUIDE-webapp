@@ -26,6 +26,8 @@ export type VoiceMsg =
   | { kind: 'effect'; target: string; name: string; dur?: string }
   /** Currency ping — coins awarded to / deducted from the PC. */
   | { kind: 'coins'; target: string; amount: number; coin: 'gold' | 'silver' | 'copper'; op: 'award' | 'deduct' }
+  /** Grant Feature ping — a roleplay boon landed on the sheet. */
+  | { kind: 'feature'; target: string; name: string; icon?: string }
 
 /** `target` is a character id, or 'all' for the whole party. */
 export const ALL_PARTY = 'all'

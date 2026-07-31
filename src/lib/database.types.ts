@@ -109,6 +109,9 @@ export type FeatureKind = 'levelup' | 'equipment' | 'corruption'
  *  the "what can my character do" reference the player reads. */
 export type Feature = {
   id: string
+  /** Back-reference to the `feature_catalog` template this was granted from
+   *  (slice 7). Snapshot semantics, same as item `item_id`. */
+  feature_id?: string
   name: string
   category?: FeatureCategory
   /** Origin of the feature — tints the card header backdrop. */
@@ -236,6 +239,11 @@ export type EquippedItem = {
   w?: number
   h?: number
   effects?: ItemEffects
+  /** Features this item grants while EQUIPPED — full snapshots (each carrying a
+   *  `feature_id` back-ref), embedded so the player client never needs to read
+   *  the DM-only feature catalog. Surfaced as the Gear Features group on the
+   *  player Features dossier; never merged into `sheet.features`. */
+  features?: Feature[]
   /** Consumable: HP restored on use. Number = flat; string = dice, e.g. "2d4 + 2". */
   heal?: number | string
   /** Consumable: free-text duration reminder ("10 rounds", "1 minute") carried onto
@@ -401,6 +409,16 @@ export type CatalogItemRow = { id: string; data: CatalogItemData; updated_at: st
 export type CatalogItemInsert = { id?: string; data: CatalogItemData }
 export type CatalogItemUpdate = { data?: CatalogItemData }
 
+// ── Feature catalog (migration 0005): the DM's feature-authoring library.
+//    Same snapshot pattern as item_catalog — items embed feature copies via the
+//    item form; the DM can also grant one directly (roleplay features). ──
+/** A catalog template's `data`: a Feature minus its instance id (stamped at
+ *  grant/embed time along with the `feature_id` back-ref). */
+export type CatalogFeatureData = Omit<Feature, 'id' | 'feature_id'>
+export type CatalogFeatureRow = { id: string; data: CatalogFeatureData; updated_at: string }
+export type CatalogFeatureInsert = { id?: string; data: CatalogFeatureData }
+export type CatalogFeatureUpdate = { data?: CatalogFeatureData }
+
 export type Database = {
   public: {
     Tables: {
@@ -408,6 +426,12 @@ export type Database = {
         Row: CatalogItemRow
         Insert: CatalogItemInsert
         Update: CatalogItemUpdate
+        Relationships: []
+      }
+      feature_catalog: {
+        Row: CatalogFeatureRow
+        Insert: CatalogFeatureInsert
+        Update: CatalogFeatureUpdate
         Relationships: []
       }
       characters: {

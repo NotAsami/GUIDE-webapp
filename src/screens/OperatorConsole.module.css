@@ -1125,6 +1125,23 @@
   background-size: calc(var(--cut) + var(--bw, 1px)) calc(var(--cut) + var(--bw, 1px));
 }
 
+/* ============================================================
+   FEATURE LIBRARY + GRANT FEATURE — slice 7-lite
+   ============================================================ */
+/* item form: attached-feature chips + add select */
+.featChips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.featChips .qTag i { color: var(--amber); font-size: 9px; margin-right: 2px; }
+.featAdd .selIn { margin-bottom: 0; }
+
+/* Grant Feature card: library picker | current-sheet list */
+.featGrantSplit { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.fgCol { display: flex; flex-direction: column; min-width: 0; }
+.fgCol .fieldLab { margin-bottom: 7px; }
+.fgCol .catList { max-height: 178px; }
+.fgList { margin-top: 0; padding-top: 0; border-top: 0; }
+.fgList .nm i { color: var(--amber); font-size: 10px; margin-right: 4px; }
+.fxLine.corr { border-color: #b096d6; }
+
 /* the blanket border-color above flattens mixed borders — re-assert the
    accent left edges (straight edge, so the plain border is correct there) */
 .catFx, .gmHead { border-left-color: var(--amber); }

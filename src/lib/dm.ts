@@ -5,6 +5,7 @@ import type {
   QuestRow, QuestInsert, QuestUpdate, QuestSecret, QuestSecretUpdate,
   SessionRow, SessionInsert, SessionUpdate,
   CatalogItemRow, CatalogItemInsert, CatalogItemUpdate,
+  CatalogFeatureRow, CatalogFeatureInsert, CatalogFeatureUpdate,
 } from './database.types'
 import { useAuth } from './auth'
 
@@ -380,4 +381,63 @@ export function useDmCatalog(): DmCatalogState {
   }, [items])
 
   return { items, loading, error, refetch: fetchAll, createItem, updateItem, deleteItem }
+}
+
+export interface DmFeaturesState {
+  features: CatalogFeatureRow[]
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  createFeature: (f: CatalogFeatureInsert) => Promise<CatalogFeatureRow | null>
+  updateFeature: (id: string, patch: CatalogFeatureUpdate) => Promise<void>
+  deleteFeature: (id: string) => Promise<void>
+}
+
+/** The DM's feature-authoring library (`feature_catalog`, migration 0005) —
+ *  structurally the twin of useDmCatalog. Consumed by the item form (embed
+ *  copies onto an item) and the Grant Feature card (copy onto a character);
+ *  both take SNAPSHOTS, so this table stays DM-only. */
+export function useDmFeatures(): DmFeaturesState {
+  const { session } = useAuth()
+  const [features, setFeatures] = useState<CatalogFeatureRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const byName = (a: CatalogFeatureRow, b: CatalogFeatureRow) =>
+    (a.data?.name ?? '').localeCompare(b.data?.name ?? '')
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setFeatures([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase.from('feature_catalog').select('*')
+    if (err) { setError(err.message); setFeatures([]) }
+    else { setFeatures(((data as CatalogFeatureRow[]) ?? []).sort(byName)); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const createFeature = useCallback<DmFeaturesState['createFeature']>(async (f) => {
+    const { data, error: err } = await supabase.from('feature_catalog').insert(f).select().single<CatalogFeatureRow>()
+    if (err) { setError(err.message); return null }
+    setFeatures(prev => [...prev, data].sort(byName))
+    return data
+  }, [])
+
+  const updateFeature = useCallback<DmFeaturesState['updateFeature']>(async (id, patch) => {
+    let previous: CatalogFeatureRow | undefined
+    setFeatures(prev => prev.map(f => { if (f.id !== id) return f; previous = f; return { ...f, ...patch } as CatalogFeatureRow }))
+    const { data, error: err } = await supabase.from('feature_catalog').update(patch).eq('id', id).select().single<CatalogFeatureRow>()
+    if (err) { setError(err.message); if (previous) setFeatures(prev => prev.map(f => (f.id === id ? previous! : f))) }
+    else if (data) setFeatures(prev => prev.map(f => (f.id === id ? data : f)).sort(byName))
+  }, [])
+
+  const deleteFeature = useCallback<DmFeaturesState['deleteFeature']>(async (id) => {
+    const snapshot = features
+    setFeatures(prev => prev.filter(f => f.id !== id))
+    const { error: err } = await supabase.from('feature_catalog').delete().eq('id', id)
+    if (err) { setError(err.message); setFeatures(snapshot) }
+  }, [features])
+
+  return { features, loading, error, refetch: fetchAll, createFeature, updateFeature, deleteFeature }
 }
