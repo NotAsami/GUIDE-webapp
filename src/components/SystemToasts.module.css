@@ -1,0 +1,93 @@
+/* System toast layer — top-right, under the topbar. Ported from the Operator
+   Console mockup's .toast-layer/.toast (the "player-side toast simulation");
+   cyan is the normal G.U.I.D.E. voice, amber+glitch is the corrupted tone. */
+
+.layer {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 26px;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  width: 390px;
+}
+
+.toast {
+  /* cut-corner border fix: the 1px border is clipped away along the 45° cuts,
+     so corner-anchored gradient stripes redraw the diagonals (layered on top
+     of the fill gradient). States recolor via --bc. */
+  --cut: 9px;
+  --bc: rgba(0, 166, 214, 0.5);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(180deg, #131a1e, #0d1215);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right, 0 0;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px), auto;
+  border: 1px solid var(--bc);
+  box-shadow: 0 0 0 1px rgba(0, 166, 214, 0.15), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 166, 214, 0.18);
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+  padding: 13px 16px 14px;
+  transform: translateX(120%);
+  opacity: 0;
+  animation: toastIn 360ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+/* exit: slide right, back into the void past the screen edge. toastOut MUST
+   declare `from` — swapping the animation drops toastIn's forwards-fill, so
+   without it the toast snaps to its declared base pose (already off-screen)
+   and the exit becomes an invisible no-op. Ease-in = accelerating away. */
+.toast.out { animation: toastOut 420ms cubic-bezier(0.55, 0, 1, 0.45) forwards; }
+@keyframes toastIn { to { transform: translateX(0); opacity: 1; } }
+@keyframes toastOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(calc(120% + 26px)); opacity: 0; }
+}
+
+.tgTag { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.22em; color: var(--beige-dim); text-transform: uppercase; margin-bottom: 6px; }
+.tgHead { display: flex; align-items: center; gap: 11px; }
+/* hexagon: nearly ALL its edges are angled, so a border would vanish entirely —
+   two-layer frame instead (outer = border color, ::before inset = fill), same
+   pattern as the roster portraits. */
+.tgIc {
+  width: 34px; height: 34px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  position: relative; isolation: isolate;
+  color: var(--cyan-hot); font-size: 16px; background: rgba(0, 166, 214, 0.5);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.tgIc::before {
+  content: ""; position: absolute; inset: 1px; z-index: -1;
+  background: #11252d; /* toast bg + the old rgba(0,166,214,0.08) wash, flattened */
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.tgTx { min-width: 0; }
+.tgT { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--cyan); text-transform: uppercase; line-height: 1.2; }
+.tgN { font-family: var(--font-prose); font-size: 16.5px; color: var(--text); line-height: 1.25; margin-top: 3px; }
+.tgN .rar, .rar { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.tgFoot { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; margin-top: 9px; display: flex; align-items: center; gap: 6px; }
+.led { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.8); }
+
+/* corrupted tone — amber, glitched title */
+.toast.corrupted {
+  --bc: var(--amber);
+  box-shadow: 0 0 0 1px rgba(226, 176, 33, 0.25), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(226, 176, 33, 0.35);
+}
+.toast.corrupted .tgIc { color: var(--amber-hot); background: rgba(226, 176, 33, 0.5); }
+.toast.corrupted .tgIc::before { background: #28291e; /* toast bg + amber wash, flattened */ }
+.toast.corrupted .tgT { color: var(--amber-hot); animation: glitchT 1.6s steps(3, end) infinite; }
+.toast.corrupted .tgN { color: var(--amber); font-family: var(--font-mono); letter-spacing: 0.04em; text-shadow: 0 0 6px rgba(226, 176, 33, 0.45); }
+.toast.corrupted .led { background: var(--amber); box-shadow: 0 0 6px rgba(226, 176, 33, 0.9); }
+@keyframes glitchT {
+  0%, 100% { transform: translateX(0); opacity: 1; }
+  33% { transform: translateX(1px); opacity: 0.75; }
+  66% { transform: translateX(-1px); opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast, .toast.out { animation: none; transform: none; opacity: 1; }
+  .toast.corrupted .tgT { animation: none; }
+}
