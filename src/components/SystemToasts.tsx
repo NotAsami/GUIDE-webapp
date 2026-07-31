@@ -89,6 +89,22 @@ function ToastCard({ msg, out }: { msg: VoiceMsg; out: boolean }) {
     )
   }
 
+  if (msg.kind === 'feature') {
+    return (
+      <div className={cls}>
+        <div className={styles.tgTag}>Realtime → You</div>
+        <div className={styles.tgHead}>
+          <span className={styles.tgIc}><i className={`fa-solid ${msg.icon ?? 'fa-star'}`} /></span>
+          <div className={styles.tgTx}>
+            <div className={styles.tgT}>Feature Acquired ::</div>
+            <div className={styles.tgN}>{msg.name}</div>
+          </div>
+        </div>
+        <div className={styles.tgFoot}><span className={styles.led} /> G.U.I.D.E. dossier sync</div>
+      </div>
+    )
+  }
+
   if (msg.kind === 'coins') {
     const coinName = msg.coin[0].toUpperCase() + msg.coin.slice(1)
     const gained = msg.op === 'award'

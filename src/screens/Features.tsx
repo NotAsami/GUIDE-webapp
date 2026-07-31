@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import type { CharacterRow, CharacterSection, Feature, FeatureCategory } from '../lib/database.types'
+import type { CharacterRow, CharacterSection, EquippedGear, EquippedItem, Feature, FeatureCategory } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { rollHeal } from '../lib/dice'
@@ -28,6 +28,30 @@ const COLS = 3
 /** A feature can be "used" when it rolls something or tracks limited uses. */
 function isUsable(f: Feature): boolean {
   return !!f.roll || !!f.uses
+}
+
+/** Features granted by EQUIPPED items (worn gear slots + wielded weapons + the
+ *  bound shard) — the derived Gear Features group. Copies live ON the item and
+ *  travel with it, so this is read-only derivation: unequip and they vanish.
+ *  `uses` counters are stripped — use-tracking writes to `sheet.features`,
+ *  where these don't live (the `usage` text still tells the story). */
+function gearFeatures(character: CharacterRow): Feature[] {
+  const eq = (character.equipped ?? {}) as EquippedGear
+  const slots: (EquippedItem | null | undefined)[] = [
+    eq.helmet, eq.armor, eq.cloak, eq.boots, eq.accessory,
+    ...(eq.weapons ?? []), eq.guideShard,
+  ]
+  return slots
+    .filter((i): i is EquippedItem => !!i)
+    .flatMap(item => (item.features ?? []).map((f, idx) => ({
+      ...f,
+      // Namespace the id per item instance so two copies of the same item
+      // can't collide as React keys; never written back anywhere.
+      id: `gear-${item.id ?? item.name}-${f.id ?? idx}`,
+      uses: undefined,
+      kind: f.kind ?? 'equipment',
+      source: f.source ?? item.name,
+    })))
 }
 
 /** The short text shown on the card (scales the card). Falls back to the legacy
@@ -135,10 +159,15 @@ export function Features() {
   const known = new Set(GROUPS.map(g => g.key))
   const groupKey = (f: Feature): FeatureCategory =>
     f.category && known.has(f.category) ? f.category : 'other'
-  const byGroup = GROUPS.map(g => ({
+  const byGroup: { key: string; label: string; icon: string; items: Feature[] }[] = GROUPS.map(g => ({
     ...g,
     items: features.filter(f => groupKey(f) === g.key),
   })).filter(g => g.items.length > 0)
+
+  // Derived from equipped items — its own section, after the intrinsic groups
+  // (handoff: "the player Gear Features group derives from equipped items").
+  const fromGear = gearFeatures(character)
+  if (fromGear.length) byGroup.push({ key: 'gear', label: 'Gear Features', icon: 'fa-gem', items: fromGear })
 
   const meta = (
     <>
@@ -167,7 +196,7 @@ export function Features() {
           <span className={styles.dhNum}>10</span>
           <span className={styles.dhTitle}>Features</span>
           <span className={styles.dhMeta}>
-            <span><span className="dim">Catalogued</span> {features.length}</span>
+            <span><span className="dim">Catalogued</span> {features.length + fromGear.length}</span>
             <span className="dim">·</span>
             <span><span className="dim">Source</span> <span className="acc">DM-Authored</span></span>
             <span className={styles.cursor}>▌</span>

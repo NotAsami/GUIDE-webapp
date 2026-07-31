@@ -5,6 +5,7 @@ import { Topbar } from './Topbar'
 import { Bottombar } from './Bottombar'
 import { RollToast } from './RollToast'
 import { SystemToasts } from './SystemToasts'
+import { usePresenceAnnounce } from '../lib/presence'
 import styles from './Layout.module.css'
 import { useEffect, useState } from 'react'
 
@@ -12,6 +13,10 @@ export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
   const { character, loading, error, updateSection, updateSections } = useCharacter()
   const nav = useNavigate()
+
+  // Announce this character on the party-presence channel while the app is
+  // open — lights the Link LED on the DM's Operator Console.
+  usePresenceAnnounce(character?.id)
 
   async function handleSignOut() {
     await signOut()
