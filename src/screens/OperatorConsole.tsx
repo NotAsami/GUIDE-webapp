@@ -255,28 +255,29 @@ export function OperatorConsole() {
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
             <span className={cx(styles.rCorner, styles.tl)} /><span className={cx(styles.rCorner, styles.br)} />
-            <div className={styles.workTabs}>
-              {/* "Oversee" is the oversight pane — party dashboard when nothing is
-                  selected, the selected PC's action console otherwise. Clicking it
-                  zooms back out to the party overview. */}
-              <div
-                className={cx(styles.wtab, (view === 'overview' || (view === 'character' && charTab === 'actions')) && styles.active)}
-                onClick={() => (view === 'character' ? setCharTab('actions') : openOverview())}
-                title={view === 'character' ? 'Action console' : 'Party overview'}
-              >
-                Oversee
+            {/* Per-character tabs — campaign surfaces (overview / quests /
+                sessions / catalog) have no tab modes, so no bar at all. */}
+            {view === 'character' && (
+              <div className={styles.workTabs}>
+                <div
+                  className={cx(styles.wtab, charTab === 'actions' && styles.active)}
+                  onClick={() => setCharTab('actions')}
+                  title="Action console"
+                >
+                  Oversee
+                </div>
+                <div
+                  className={cx(styles.wtab, charTab === 'lore' && styles.active)}
+                  onClick={() => setCharTab('lore')}
+                  title="Lore & corruption (DM-only)"
+                >
+                  Lore Editor
+                </div>
+                <div className={cx(styles.wtab, styles.lvl, styles.disabled)} title="Level-up — later slice">
+                  <i className="fa-solid fa-arrow-up-right-dots" /> Level Up
+                </div>
               </div>
-              <div
-                className={cx(styles.wtab, view !== 'character' && styles.disabled, view === 'character' && charTab === 'lore' && styles.active)}
-                onClick={() => view === 'character' && setCharTab('lore')}
-                title={view === 'character' ? 'Lore & corruption (DM-only)' : 'Select a character first'}
-              >
-                Lore Editor
-              </div>
-              <div className={cx(styles.wtab, styles.lvl, styles.disabled)} title="Level-up — later slice">
-                <i className="fa-solid fa-arrow-up-right-dots" /> Level Up
-              </div>
-            </div>
+            )}
             <div className={styles.workBody}>
               {error ? (
                 <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
@@ -731,7 +732,7 @@ const EFFECT_CATALOG: { id: string; name: string; kind: 'buff' | 'cond' | 'debuf
   { id: 'frightened', name: 'Frightened', kind: 'cond', icon: 'fa-ghost', effects: {}, note: 'disadv. while source in sight' },
   { id: 'stunned', name: 'Stunned', kind: 'debuff', icon: 'fa-bolt', effects: {}, note: 'incapacitated · auto-fail STR/DEX saves' },
 ]
-const EFFECT_DURATIONS = ['1 round', '3 rounds', '10 minutes', '1 hour', 'until rest']
+const DUR_UNITS = ['round', 'minute', 'hour', 'day'] as const
 
 /** Apply Effect (card C): push a status onto the PC's `resources.activeEffects` —
  *  the SAME field the player's potion-drinking writes and the effects tray reads,
@@ -745,8 +746,13 @@ function ApplyEffectCard({ member, row, onUpdate, onVoice, log }: {
   log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
 }) {
   const [effId, setEffId] = useState(EFFECT_CATALOG[0].id)
-  const [dur, setDur] = useState(EFFECT_DURATIONS[0])
+  // Duration = amount × unit, or the until-rest override (rests clear effects
+  // anyway, so "until rest" is the natural upper bound).
+  const [durN, setDurN] = useState(1)
+  const [durUnit, setDurUnit] = useState<typeof DUR_UNITS[number]>('round')
+  const [untilRest, setUntilRest] = useState(false)
   const [busy, setBusy] = useState(false)
+  const dur = untilRest ? 'until rest' : `${durN} ${durUnit}${durN === 1 ? '' : 's'}`
 
   const resources = row.resources ?? {}
   const active = (resources.activeEffects as ActiveEffect[] | undefined) ?? []
@@ -785,10 +791,17 @@ function ApplyEffectCard({ member, row, onUpdate, onVoice, log }: {
       </select>
 
       <span className={styles.fieldLab}>Duration</span>
-      <div className={styles.durGrid}>
-        {EFFECT_DURATIONS.map(d => (
-          <button key={d} className={cx(styles.durOpt, d === dur && styles.sel)} onClick={() => setDur(d)}>{d}</button>
-        ))}
+      <div className={styles.durRow}>
+        <input className={styles.numIn} type="number" min={1} value={durN} disabled={untilRest}
+          aria-label="Duration amount"
+          onChange={e => setDurN(Math.max(1, parseInt(e.target.value || '1', 10) || 1))} />
+        <select className={styles.selIn} value={durUnit} disabled={untilRest} aria-label="Duration unit"
+          onChange={e => setDurUnit(e.target.value as typeof DUR_UNITS[number])}>
+          {DUR_UNITS.map(u => <option key={u} value={u}>{u[0].toUpperCase() + u.slice(1)}{durN === 1 ? '' : 's'}</option>)}
+        </select>
+        <button className={cx(styles.durOpt, untilRest && styles.sel)} onClick={() => setUntilRest(r => !r)} aria-pressed={untilRest}>
+          Until Rest
+        </button>
       </div>
 
       <div className={styles.btnMount}>

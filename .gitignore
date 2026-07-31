@@ -29,4 +29,4 @@ dist-ssr
 *.swp
 
 # Misc
-notes.md
+docs/notes.md
