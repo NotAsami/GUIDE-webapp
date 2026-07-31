@@ -8,7 +8,7 @@ import { Deco } from '../components/Deco'
 import { burden } from '../lib/burden'
 import { consumeEffect } from '../lib/consume'
 import {
-  equipTargetPatch, getGear, getInventory, resolveEquipTarget, type EquipTarget,
+  equipTargetPatch, freshItemId, getGear, getInventory, resolveEquipTarget, type EquipTarget,
 } from '../lib/equip'
 import { useRollLog } from '../lib/rolls'
 import styles from './Inventory.module.css'
@@ -131,6 +131,26 @@ export function Inventory() {
   const gridRef = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<DragState | null>(null)
   const movedRef = useRef(false)
+
+  // One-time repair: two bag items sharing an id (e.g. a seed re-run restocked
+  // the bag while a copy sat equipped, then that copy was unequipped) makes every
+  // id-keyed operation treat them as one tile — moving one moves both, dropping
+  // one drops both. Re-key the later copies and persist once.
+  const healedRef = useRef(false)
+  useEffect(() => {
+    if (healedRef.current) return
+    const seen = new Set<string>()
+    let changed = false
+    const next = inventory.map(i => {
+      if (!i.id || seen.has(i.id)) { changed = true; return { ...i, id: freshItemId() } }
+      seen.add(i.id)
+      return i
+    })
+    if (changed) {
+      healedRef.current = true
+      void updateSection('inventory', next as unknown as Json[])
+    }
+  }, [inventory, updateSection])
 
   // Unpin / clear hover on Escape.
   useEffect(() => {
@@ -315,13 +335,18 @@ export function Inventory() {
                     onPointerMove={onPointerMove}
                     onPointerUp={() => void onPointerUp()}
                     onPointerCancel={() => setDrag(null)}
+                    onPointerLeave={() => { if (!drag && !pinned) setHovered(null) }}
                   >
-                    {/* empty cells — the lattice backdrop */}
+                    {/* empty cells — the lattice backdrop. Hover clears here (a
+                        genuinely empty region) and at the grid edge, NOT in the
+                        4px gaps between tiles — otherwise sweeping across the bag
+                        flickers between item detail and the placeholder. */}
                     {emptyCells(placed).map(({ col, row }) => (
                       <div
                         key={`e${row}-${col}`}
                         className={styles.cellEmpty}
                         style={{ gridColumn: col + 1, gridRow: row + 1 }}
+                        onPointerEnter={() => { if (!drag && !pinned) setHovered(null) }}
                       />
                     ))}
 
@@ -334,7 +359,6 @@ export function Inventory() {
                         selected={pinned === p.item.id}
                         onPointerDown={e => onTileDown(e, p)}
                         onEnter={() => { if (!drag && !pinned) setHovered(p.item.id ?? null) }}
-                        onLeave={() => { if (!drag && !pinned) setHovered(null) }}
                         onActivate={() => setPinned(prev => (prev === p.item.id ? null : p.item.id ?? null))}
                       />
                     ))}
@@ -386,8 +410,7 @@ export function Inventory() {
                   />
                 ) : (
                   <div className={styles.detailEmpty}>
-                    <div className="prompt">Select Item</div>
-                    <div className="cur">█</div>
+                    <div className="prompt">Select Item <span className="cur">█</span></div>
                     <div className="hint">// Hover or click any cell</div>
                   </div>
                 )}
@@ -476,10 +499,10 @@ function emptyCells(placed: Placed[]): { col: number; row: number }[] {
   return out
 }
 
-function ItemTile({ p, dragging, selected, onPointerDown, onEnter, onLeave, onActivate }: {
+function ItemTile({ p, dragging, selected, onPointerDown, onEnter, onActivate }: {
   p: Placed; dragging: boolean; selected: boolean
   onPointerDown: (e: React.PointerEvent) => void
-  onEnter: () => void; onLeave: () => void; onActivate: () => void
+  onEnter: () => void; onActivate: () => void
 }) {
   const { item } = p
   const rarity = item.rarity ?? 'common'
@@ -493,7 +516,6 @@ function ItemTile({ p, dragging, selected, onPointerDown, onEnter, onLeave, onAc
       style={{ gridColumn: `${p.col + 1} / span ${p.w}`, gridRow: `${p.row + 1} / span ${p.h}` }}
       onPointerDown={onPointerDown}
       onPointerEnter={onEnter}
-      onPointerLeave={onLeave}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate() } }}
       aria-label={`${item.name}${item.qty && item.qty > 1 ? ` ×${item.qty}` : ''}`}
     >

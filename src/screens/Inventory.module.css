@@ -270,7 +270,7 @@
   letter-spacing: 0.42em; color: var(--muted); text-transform: uppercase;
 }
 .detailEmpty :global(.cur) {
-  font-family: var(--font-mono); font-size: 16px; color: var(--cyan);
+  color: var(--cyan); letter-spacing: 0;
   animation: blink 1.1s steps(2, end) infinite;
 }
 .detailEmpty :global(.hint) {
