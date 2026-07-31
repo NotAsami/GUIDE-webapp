@@ -263,7 +263,6 @@ export function Inventory() {
   // 15xSTR — so the ticks sit at 1/3 and 2/3 of the bar, labels derived from max.
   const encAt = Math.round((load.max / 3) * 10) / 10
   const heavyAt = Math.round((load.max * 2 / 3) * 10) / 10
-  const totalGp = Math.round((coins.gold + (coins.silver ?? 0) / 10 + (coins.copper ?? 0) / 100) * 10) / 10
 
   const meta = (
     <>
@@ -445,11 +444,6 @@ export function Inventory() {
                     <div className={`${styles.coinBadge} ${styles.gp}`}><span className="ci">GP</span><span className="cval">{coins.gold.toLocaleString()}</span><span className="clab">Gold</span></div>
                     <div className={`${styles.coinBadge} ${styles.sp}`}><span className="ci">SP</span><span className="cval">{(coins.silver ?? 0).toLocaleString()}</span><span className="clab">Silver</span></div>
                     <div className={`${styles.coinBadge} ${styles.cp}`}><span className="ci">CP</span><span className="cval">{(coins.copper ?? 0).toLocaleString()}</span><span className="clab">Copper</span></div>
-                  </div>
-                  <div className={styles.coinTotal}>
-                    <span className="approx">≈</span>
-                    <span className="v">{totalGp.toLocaleString()} gp</span>
-                    <span>Total Coin Carried</span>
                   </div>
                 </div>
               </div>

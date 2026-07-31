@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth'
 import { Topbar } from './Topbar'
 import { Bottombar } from './Bottombar'
 import { RollToast } from './RollToast'
+import { SystemToasts } from './SystemToasts'
 import styles from './Layout.module.css'
 import { useEffect, useState } from 'react'
 
@@ -105,6 +106,9 @@ export function Layout() {
       </div>
 
       <RollToast />
+      {/* Operator pushes (grants / effects / notices) arrive here via the
+          G.U.I.D.E. voice channel — top-right, clear of RollToast. */}
+      <SystemToasts characterId={character.id} />
     </>
   )
 }

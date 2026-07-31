@@ -1196,3 +1196,18 @@
   }
   .portraitWrap { min-height: 360px; }
 }
+
+/* Cut-corner border fix (see OperatorConsole.module.css): redraw the border
+   segments that clip-path slices off along the tooltip's 45° corners. */
+.tt {
+  --cut: 10px;
+  --bc: var(--beige);
+  border-color: var(--bc);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}

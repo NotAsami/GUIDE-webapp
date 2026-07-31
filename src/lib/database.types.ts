@@ -251,6 +251,9 @@ export type ActiveEffect = {
   id: string
   name: string
   icon?: string
+  /** Visual family — colors the status chip / roster dot (cyan buff, amber
+   *  condition, red debuff). Absent (player-consumed potions) = 'buff'. */
+  kind?: 'buff' | 'cond' | 'debuff'
   effects: ItemEffects
   /** Where it came from, e.g. the potion name. */
   source?: string

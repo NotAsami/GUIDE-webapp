@@ -203,3 +203,20 @@
 }
 .confirm:hover { background: rgba(0, 166, 214, 0.18); }
 .cancel:disabled, .confirm:disabled { opacity: 0.5; cursor: default; }
+
+/* Cut-corner border fix (see OperatorConsole.module.css): redraw the border
+   segments that clip-path slices off along the panel's 45° corners. */
+.panel {
+  --cut: 14px;
+  --bc: var(--beige);
+  border-color: var(--bc);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    radial-gradient(120% 90% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 60%);
+  background-color: rgba(10, 10, 10, 0.98);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right, 0 0;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px), auto;
+}

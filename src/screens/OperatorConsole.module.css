@@ -294,9 +294,9 @@
   padding: 3px 6px; border: 1px solid; white-space: nowrap;
   clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
 }
-.drFx .chip.buff { color: var(--cyan-hot); border-color: rgba(0,166,214,0.5); }
-.drFx .chip.cond { color: var(--amber-hot); border-color: rgba(226,176,33,0.5); }
-.drFx .chip.debuff { color: var(--danger-hot); border-color: rgba(255,84,84,0.5); }
+.drFx .chip.buff { color: var(--cyan-hot); --bc: rgba(0,166,214,0.5); }
+.drFx .chip.cond { color: var(--amber-hot); --bc: rgba(226,176,33,0.5); }
+.drFx .chip.debuff { color: var(--danger-hot); --bc: rgba(255,84,84,0.5); }
 .drFx .none { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; color: var(--beige-dim); text-transform: uppercase; }
 
 /* digitization gauge — the hidden corruption metric (DM only) */
@@ -319,7 +319,7 @@
 .soonPanel i { font-size: 26px; color: var(--amber-dim); }
 
 /* right-panel broadcast scaffolding — visually present, wired in a later slice */
-.bcPad { padding: 13px; display: flex; flex-direction: column; gap: 9px; opacity: 0.55; }
+.bcPad { padding: 13px; display: flex; flex-direction: column; gap: 9px; }
 .bcArea {
   width: 100%; min-height: 88px; resize: none; background: rgba(0,0,0,0.45);
   border: 1px solid rgba(212,191,125,0.28); color: var(--text);
@@ -436,7 +436,7 @@
 }
 .numIn::-webkit-outer-spin-button,
 .numIn::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.numIn:focus { outline: none; border-color: var(--amber); box-shadow: inset 0 0 12px rgba(226,176,33,0.12); }
+.numIn:focus { outline: none; --bc: var(--amber); box-shadow: inset 0 0 12px rgba(226,176,33,0.12); }
 .numIn::placeholder { color: var(--beige-dim); }
 
 /* buttons */
@@ -484,7 +484,11 @@
 .coinBreak { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
 .coinCell {
   text-align: center; padding: 7px 3px; background: rgba(0,0,0,0.3); border: 1px solid rgba(212,191,125,0.2);
+  cursor: pointer; transition: border-color 130ms ease, background 130ms ease;
 }
+.coinCell:hover { border-color: rgba(226,176,33,0.45); }
+.coinCell.sel { border-color: var(--amber); background: rgba(226,176,33,0.1); box-shadow: inset 0 0 10px rgba(226,176,33,0.12); }
+.coinCell.sel .ct { color: var(--amber-hot); }
 .coinCell .cn { font-family: var(--font-display); font-weight: 600; font-size: 15px; line-height: 1; }
 .coinCell .ct { font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; margin-top: 3px; }
 .coinCell.gp .cn { color: var(--amber); }
@@ -612,7 +616,7 @@
   background-position: calc(100% - 15px) 15px, calc(100% - 10px) 15px;
   background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
 }
-.memSelect:focus { outline: none; border-color: var(--amber); }
+.memSelect:focus { outline: none; --bc: var(--amber); }
 .memSelect option { background: #14130f; color: var(--text); }
 .memBars { display: flex; gap: 5px; margin-bottom: 11px; }
 .memBar { flex: 1; height: 6px; background: rgba(0,0,0,0.6); border: 1px solid rgba(226,176,33,0.22); }
@@ -629,8 +633,8 @@
   font-size: 14px; cursor: pointer; transition: color 130ms ease, border-color 130ms ease, background 130ms ease;
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
 }
-.glyphBtn:hover { color: var(--amber); border-color: rgba(226,176,33,0.45); }
-.glyphBtn.on { color: var(--amber-hot); background: rgba(226,176,33,0.12); border-color: var(--amber); box-shadow: inset 0 0 12px rgba(226,176,33,0.14); }
+.glyphBtn:hover { color: var(--amber); --bc: rgba(226,176,33,0.45); }
+.glyphBtn.on { color: var(--amber-hot); background-color: rgba(226,176,33,0.12); --bc: var(--amber); box-shadow: inset 0 0 12px rgba(226,176,33,0.14); }
 
 /* true lore — design's q-gm-head + q-gmnotes */
 .gmHead {
@@ -648,7 +652,7 @@
   padding: 12px 14px; margin-bottom: 14px; text-shadow: 0 0 6px rgba(226,176,33,0.22);
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
 }
-.gmNotes:focus { outline: none; border-color: var(--amber); box-shadow: inset 0 0 16px rgba(226,176,33,0.12); }
+.gmNotes:focus { outline: none; --bc: var(--amber); box-shadow: inset 0 0 16px rgba(226,176,33,0.12); }
 .gmNotes::placeholder { color: var(--amber-dim); }
 .qActions { display: flex; gap: 9px; }
 .qActions .btn { flex: 0 0 auto; min-width: 168px; }
@@ -664,7 +668,7 @@
   font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; padding: 9px 11px; margin-bottom: 10px;
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
 }
-.sessIn:focus { outline: none; border-color: var(--amber); }
+.sessIn:focus { outline: none; --bc: var(--amber); }
 .sessIn::placeholder { color: var(--beige-dim); }
 .selIn {
   width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(212,191,125,0.32); color: var(--text);
@@ -674,7 +678,7 @@
   background-image: linear-gradient(45deg, transparent 50%, var(--amber) 50%), linear-gradient(135deg, var(--amber) 50%, transparent 50%);
   background-position: calc(100% - 14px) 14px, calc(100% - 9px) 14px; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
 }
-.selIn:focus { outline: none; border-color: var(--amber); }
+.selIn:focus { outline: none; --bc: var(--amber); }
 .selIn option { background: #14130f; color: var(--text); }
 
 .questLayout { display: grid; grid-template-columns: 232px 1fr; gap: 18px; align-items: start; }
@@ -717,8 +721,8 @@
   transition: border-color 130ms ease, color 130ms ease, background 130ms ease;
 }
 .qSegOpt .qGly { font-size: 13px; line-height: 1; }
-.qSegOpt:hover { border-color: rgba(226,176,33,0.4); color: var(--text); }
-.qSegOpt.sel { border-color: var(--amber); color: var(--amber-hot); background: rgba(226,176,33,0.1); }
+.qSegOpt:hover { --bc: rgba(226,176,33,0.4); color: var(--text); }
+.qSegOpt.sel { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226,176,33,0.1); }
 
 .qLabRow { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .qFacing {
@@ -733,7 +737,7 @@
   color: var(--text); font-family: var(--font-prose); font-size: 15px; line-height: 1.62; padding: 13px 15px; margin-bottom: 13px;
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
 }
-.qPlayerDesc:focus { outline: none; border-color: var(--cyan-hot); box-shadow: inset 0 0 16px rgba(0,166,214,0.1); }
+.qPlayerDesc:focus { outline: none; --bc: var(--cyan-hot); box-shadow: inset 0 0 16px rgba(0,166,214,0.1); }
 .qPlayerDesc::placeholder { color: var(--beige-dim); }
 
 /* objectives checklist */
@@ -746,8 +750,8 @@
   clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
   transition: border-color 140ms ease, background 200ms ease, box-shadow 200ms ease;
 }
-.qCheck:hover { border-color: var(--cyan); }
-.qCheck.on { background: var(--cyan); border-color: var(--cyan-hot); box-shadow: 0 0 8px rgba(0,166,214,0.5); }
+.qCheck:hover { --bc: var(--cyan); }
+.qCheck.on { background-color: var(--cyan); --bc: var(--cyan-hot); box-shadow: 0 0 8px rgba(0,166,214,0.5); }
 .qCheck.on::after { content: "\f00c"; font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: 9px; color: #06222b; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .qObjLine .qOtx { flex: 1; min-width: 0; font-family: var(--font-prose); font-size: 14px; color: var(--text); line-height: 1.3; }
 .qObjLine.done .qOtx { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(0,166,214,0.5); }
@@ -784,7 +788,7 @@
   font-family: var(--font-prose); font-size: 15px; line-height: 1.62; padding: 13px 15px; margin-bottom: 12px;
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
 }
-.sessRecap:focus { outline: none; border-color: var(--amber); box-shadow: inset 0 0 16px rgba(226,176,33,0.08); }
+.sessRecap:focus { outline: none; --bc: var(--amber); box-shadow: inset 0 0 16px rgba(226,176,33,0.08); }
 .sessRecap::placeholder { color: var(--beige-dim); }
 
 .evList { display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; }
@@ -808,7 +812,7 @@
   padding: 8px 10px 8px 28px;
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
 }
-.searchIn:focus { outline: none; border-color: var(--amber); box-shadow: inset 0 0 12px rgba(226,176,33,0.1); }
+.searchIn:focus { outline: none; --bc: var(--amber); box-shadow: inset 0 0 12px rgba(226,176,33,0.1); }
 .searchIn::placeholder { color: var(--beige-dim); letter-spacing: 0.12em; }
 
 /* Cap kept just under the Vitals card's height so the Grant card never becomes the
@@ -867,8 +871,8 @@
 }
 .catTab i { font-size: 11px; opacity: 0.8; }
 .catTab .ctC { font-size: 8px; color: var(--beige-dim); }
-.catTab:not(:disabled):hover { border-color: rgba(226,176,33,0.45); color: var(--text); }
-.catTab.sel { border-color: var(--amber); color: var(--amber-hot); background: rgba(226,176,33,0.1); box-shadow: inset 0 0 14px rgba(226,176,33,0.1); }
+.catTab:not(:disabled):hover { --bc: rgba(226,176,33,0.45); color: var(--text); }
+.catTab.sel { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226,176,33,0.1); box-shadow: inset 0 0 14px rgba(226,176,33,0.1); }
 .catTab.sel i { opacity: 1; }
 .catTab.stub { color: var(--beige-dim); cursor: default; }
 .catTab.stub::after { content: "soon"; font-size: 7px; letter-spacing: 0.14em; color: var(--amber-dim); border: 1px solid rgba(138,109,26,0.5); padding: 1px 4px; }
@@ -927,8 +931,8 @@
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
   transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
 }
-.catIc:hover { color: var(--text); border-color: rgba(226,176,33,0.45); }
-.catIc.sel { color: var(--amber-hot); border-color: var(--amber); background: rgba(226,176,33,0.12); box-shadow: inset 0 0 12px rgba(226,176,33,0.18); }
+.catIc:hover { color: var(--text); --bc: rgba(226,176,33,0.45); }
+.catIc.sel { color: var(--amber-hot); --bc: var(--amber); background-color: rgba(226,176,33,0.12); box-shadow: inset 0 0 12px rgba(226,176,33,0.18); }
 
 .catTog { display: flex; align-items: center; flex-wrap: wrap; gap: 11px; padding: 9px 12px; margin-bottom: 13px; background: rgba(0,0,0,0.28); border: 1px solid rgba(212,191,125,0.2); border-left: 2px solid var(--beige-dim); cursor: pointer;
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); transition: border-color 140ms ease; }
@@ -947,7 +951,7 @@
   color: var(--text); font-family: var(--font-prose); font-size: 15px; line-height: 1.6; padding: 12px 14px; margin-bottom: 13px;
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
 }
-.catProse:focus { outline: none; border-color: var(--amber); box-shadow: inset 0 0 14px rgba(226,176,33,0.08); }
+.catProse:focus { outline: none; --bc: var(--amber); box-shadow: inset 0 0 14px rgba(226,176,33,0.08); }
 .catProse::placeholder { color: var(--beige-dim); }
 
 .catFx { border: 1px solid rgba(226,176,33,0.32); border-left: 3px solid var(--amber); background: rgba(226,176,33,0.05); padding: 12px 13px 13px; margin-bottom: 14px;
@@ -986,6 +990,161 @@
 .catForm input[type='number']::-webkit-outer-spin-button,
 .catForm input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .catForm input[type='number'] { appearance: textfield; -moz-appearance: textfield; }
+
+/* ============================================================
+   APPLY EFFECT (Actions card C) + BROADCAST + ACTIVITY LOG — slice 6
+   ============================================================ */
+/* Fixed-height flex-row wrapper for a bare Btn inside a flex COLUMN — the
+   recurring squish guard (see .grantAction / .catNew). */
+.btnMount { display: flex; flex: 0 0 auto; }
+
+/* duration chips (2-col grid, mockup .dur-grid/.dur-opt) */
+.durGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 11px; }
+.durOpt {
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.24);
+  padding: 7px 5px; cursor: pointer; text-align: center;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  transition: border-color 130ms ease, color 130ms ease, background 130ms ease;
+}
+.durOpt:hover { --bc: rgba(226,176,33,0.4); color: var(--text); }
+.durOpt.sel { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226,176,33,0.1); }
+
+/* active-effects list under the Apply button */
+.fxActive { display: flex; flex-direction: column; gap: 5px; margin-top: 11px; padding-top: 11px; border-top: 1px dashed rgba(212,191,125,0.22); }
+.fxActive .faHead { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; color: var(--beige-dim); text-transform: uppercase; margin-bottom: 1px; }
+.fxLine { display: flex; align-items: center; gap: 8px; padding: 5px 7px; background: rgba(0,0,0,0.25); border-left: 2px solid; }
+.fxLine.buff { border-color: var(--cyan); }
+.fxLine.cond { border-color: var(--amber); }
+.fxLine.debuff { border-color: var(--danger-hot); }
+.fxLine .nm { font-family: var(--font-prose); font-size: 12.5px; color: var(--text); flex: 1; min-width: 0; }
+.fxLine .du { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.fxLine .x { cursor: pointer; color: var(--beige-dim); font-size: 10px; padding: 2px 4px; transition: color 130ms ease; }
+.fxLine .x:hover { color: var(--danger-hot); }
+
+/* broadcast recipient toggle */
+.bcTarget { display: flex; gap: 6px; }
+.bcTarget .tg {
+  flex: 1; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.24);
+  padding: 7px 5px; cursor: pointer; text-align: center;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  transition: border-color 130ms ease, color 130ms ease;
+}
+.bcTarget .tg.sel { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226,176,33,0.08); }
+.bcTarget .tg.off { opacity: 0.5; cursor: default; }
+
+/* corrupted compose mode — the textarea speaks in the glitched voice */
+.bcArea.corrupted { color: var(--amber-hot); font-family: var(--font-mono); letter-spacing: 0.04em; border-color: rgba(226,176,33,0.5); text-shadow: 0 0 6px rgba(226,176,33,0.4); }
+
+/* tone toggle (data-tone attr drives the led color — attrs aren't hashed) */
+.toneToggle { display: flex; gap: 7px; }
+.toneOpt {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.24);
+  padding: 7px 5px; cursor: pointer;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  transition: border-color 130ms ease, color 130ms ease, background 130ms ease;
+}
+.toneOpt .led { width: 7px; height: 7px; border-radius: 50%; }
+.toneOpt[data-tone='normal'] .led { background: var(--cyan); }
+.toneOpt[data-tone='corrupted'] .led { background: var(--amber); }
+.toneOpt.sel[data-tone='normal'] { --bc: var(--cyan); color: var(--cyan-hot); background-color: rgba(0,166,214,0.08); }
+.toneOpt.sel[data-tone='corrupted'] { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226,176,33,0.08); }
+.toneOpt.sel[data-tone='corrupted'] .led { box-shadow: 0 0 8px rgba(226,176,33,0.8); animation: toneBlink 1.4s steps(2, end) infinite; }
+@keyframes toneBlink { 50% { opacity: 0.35; } }
+
+/* activity log */
+.logList { display: flex; flex-direction: column; gap: 7px; padding: 0 13px 13px; }
+.logItem { padding: 7px 9px; background: rgba(0,0,0,0.28); border-left: 2px solid var(--amber); }
+.logItem.cyan { border-left-color: var(--cyan); }
+.logItem.danger { border-left-color: var(--danger-hot); }
+.logItem .lgLine { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.03em; color: var(--text); line-height: 1.4; }
+.lgLine .who, .who { color: var(--amber); }
+.lgLine .obj, .obj { color: var(--cyan-hot); }
+.logItem .lgTime { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; color: var(--beige-dim); text-transform: uppercase; margin-top: 3px; }
+
+/* ============================================================
+   CUT-CORNER BORDER FIX
+   A CSS `border` follows the RECTANGULAR box; `clip-path` then slices the
+   corners off — border included — so every 45° edge lost its line. The
+   two-layer frame pattern (.btn/.catItem/.actCard) isn't possible on
+   inputs/selects/textareas (no pseudo-elements), so instead: keep the real
+   border for the straight edges and paint the missing diagonal with a tiny
+   corner-anchored gradient stripe, clipped to exactly a 1px 45° line.
+   Each shape declares --cut (corner size) + --bc (border color); states
+   recolor by setting --bc (NOT border-color — the stripes read --bc too).
+   ============================================================ */
+
+/* per-shape geometry + border color */
+.opRootpill { --cut: 6px; --bc: rgba(226,176,33,0.5); }
+.ovBanner .dmonly { --cut: 4px; --bc: rgba(226,176,33,0.45); }
+.drFx .chip { --cut: 3px; --bc: rgba(212,191,125,0.4); }
+.catFx { --cut: 7px; --bc: rgba(226,176,33,0.32); }
+.catIc { --cut: 5px; --bc: rgba(212,191,125,0.2); }
+.catPrev { --cut: 8px; --bw: 1.5px; --bc: var(--rar, var(--beige-dim)); }
+.catPrev .pvCell { --cut: 7px; --bc: color-mix(in oklab, var(--rar, var(--beige-dim)) 50%, transparent); }
+.catProse { --cut: 7px; --bc: rgba(212,191,125,0.32); }
+.catRow .crIc { --cut: 5px; --bc: rgba(212,191,125,0.2); }
+.catSoonBlock { --cut: 6px; --bc: rgba(212,191,125,0.3); }
+.catTab { --cut: 6px; --bc: rgba(212,191,125,0.24); }
+.catTog { --cut: 5px; --bc: rgba(212,191,125,0.2); }
+.durOpt { --cut: 4px; --bc: rgba(212,191,125,0.24); }
+.glyphBtn { --cut: 5px; --bc: rgba(212,191,125,0.22); }
+.gmHead { --cut: 5px; --bc: rgba(226,176,33,0.4); }
+.gmNotes { --cut: 7px; --bc: rgba(226,176,33,0.45); }
+.memSelect { --cut: 5px; --bc: rgba(212,191,125,0.32); }
+.numIn { --cut: 5px; --bc: rgba(212,191,125,0.32); }
+.qCheck { --cut: 4px; --bc: var(--beige-dim); }
+.qPlayerDesc { --cut: 7px; --bc: rgba(0,166,214,0.4); }
+.qSegOpt { --cut: 5px; --bc: rgba(212,191,125,0.24); }
+.qTag { --cut: 4px; --bc: rgba(212,191,125,0.26); }
+.searchIn { --cut: 5px; --bc: rgba(212,191,125,0.32); }
+.selIn { --cut: 5px; --bc: rgba(212,191,125,0.32); }
+.sessIn { --cut: 5px; --bc: rgba(212,191,125,0.32); }
+.sessRecap { --cut: 7px; --bc: rgba(212,191,125,0.32); }
+.toneOpt { --cut: 4px; --bc: rgba(212,191,125,0.24); }
+.bcTarget .tg { --cut: 4px; --bc: rgba(212,191,125,0.24); }
+
+/* the stripe recipe: two corner-anchored gradients whose hard stop lands
+   --bw before the clip diagonal → after clipping, exactly a --bw-thick 45°
+   line remains. origin border-box so the corner box aligns with clip-path. */
+.opRootpill, .ovBanner .dmonly, .drFx .chip, .catFx, .catIc, .catPrev,
+.catPrev .pvCell, .catProse, .catRow .crIc, .catSoonBlock, .catTab, .catTog,
+.durOpt, .glyphBtn, .gmHead, .gmNotes, .memSelect, .numIn, .qCheck,
+.qPlayerDesc, .qSegOpt, .qTag, .searchIn, .selIn, .sessIn, .sessRecap,
+.toneOpt, .bcTarget .tg {
+  border-color: var(--bc);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - var(--bw, 1px)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw, 1px)), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - var(--bw, 1px)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw, 1px)), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + var(--bw, 1px)) calc(var(--cut) + var(--bw, 1px));
+}
+
+/* the blanket border-color above flattens mixed borders — re-assert the
+   accent left edges (straight edge, so the plain border is correct there) */
+.catFx, .gmHead { border-left-color: var(--amber); }
+.catTog { border-left-color: var(--beige-dim); }
+.catProse { border-left-color: var(--beige-dim); }
+.qPlayerDesc { border-left-color: var(--cyan); }
+
+/* .selIn keeps its dropdown chevrons — merge them with the corner stripes
+   (chevrons anchor to the padding box, stripes to the border box) */
+.selIn {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--amber) 50%),
+    linear-gradient(135deg, var(--amber) 50%, transparent 50%),
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: padding-box, padding-box, border-box, border-box;
+  background-position: calc(100% - 14px) 14px, calc(100% - 9px) 14px, top left, bottom right;
+  background-size: 5px 5px, 5px 5px, calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
 
 .detailRow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: rgba(0,0,0,0.28); border-left: 2px solid var(--beige-dim); }
 .detailRow .drLab { flex: 0 0 40%; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--beige); }

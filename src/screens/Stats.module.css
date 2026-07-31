@@ -247,7 +247,7 @@
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   display: grid; grid-template-columns: 10px 1fr auto; grid-template-rows: auto auto; gap: 1px 7px; align-items: center;
 }
-.saveCell.prof { background: rgba(0, 166, 214, 0.07); border-color: rgba(0, 166, 214, 0.4); }
+.saveCell.prof { background-color: rgba(0, 166, 214, 0.07); --bc: rgba(0, 166, 214, 0.4); }
 .saveCell .profDot { grid-row: 1 / span 2; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--beige-dim); background: transparent; align-self: center; }
 .saveCell.prof .profDot { background: var(--cyan); border-color: var(--cyan-hot); box-shadow: 0 0 6px rgba(0, 166, 214, 0.6); }
 .saveCell .name { font-family: var(--font-mono); font-size: 9px; color: var(--beige); letter-spacing: 0.22em; text-transform: uppercase; }
@@ -272,8 +272,8 @@
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
 }
 .deathBanner::before { content: "// "; opacity: 0.6; }
-.deathBanner.stable { border-color: var(--cyan); background: rgba(0, 166, 214, 0.1); color: var(--cyan-hot); box-shadow: 0 0 14px rgba(0, 166, 214, 0.3); text-shadow: 0 0 8px rgba(0, 166, 214, 0.5); }
-.deathBanner.failed { border-color: var(--danger); background: rgba(185, 58, 58, 0.12); color: var(--danger-hot); box-shadow: 0 0 16px rgba(185, 58, 58, 0.45); text-shadow: 0 0 8px rgba(185, 58, 58, 0.6); animation: failPulse 1.6s ease-in-out infinite; }
+.deathBanner.stable { --bc: var(--cyan); background-color: rgba(0, 166, 214, 0.1); color: var(--cyan-hot); box-shadow: 0 0 14px rgba(0, 166, 214, 0.3); text-shadow: 0 0 8px rgba(0, 166, 214, 0.5); }
+.deathBanner.failed { --bc: var(--danger); background-color: rgba(185, 58, 58, 0.12); color: var(--danger-hot); box-shadow: 0 0 16px rgba(185, 58, 58, 0.45); text-shadow: 0 0 8px rgba(185, 58, 58, 0.6); animation: failPulse 1.6s ease-in-out infinite; }
 @keyframes failPulse { 0%, 100% { box-shadow: 0 0 16px rgba(185, 58, 58, 0.45); } 50% { box-shadow: 0 0 26px rgba(185, 58, 58, 0.75); } }
 
 /* ---- 08 exhaustion ---- */
@@ -329,7 +329,25 @@
 .pgHead .ct { margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; color: var(--muted); letter-spacing: 0.18em; text-transform: uppercase; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip { --cut: 4px; padding: 3px 8px; font-family: var(--font-mono); font-size: 9px; color: var(--text); letter-spacing: 0.1em; background: rgba(0, 166, 214, 0.08); border: 1px solid rgba(0, 166, 214, 0.35); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); text-transform: uppercase; transition: all 160ms ease; cursor: default; }
-.chip:hover { color: var(--cyan-hot); border-color: var(--cyan); background: rgba(0, 166, 214, 0.18); box-shadow: 0 0 8px rgba(0, 166, 214, 0.3); }
-.chip.beige { background: rgba(212, 191, 125, 0.08); border-color: rgba(212, 191, 125, 0.35); color: var(--beige); }
-.chip.beige:hover { color: var(--text); border-color: var(--beige); box-shadow: 0 0 8px rgba(212, 191, 125, 0.3); }
-.chip.empty { background: transparent; border: 1px dashed rgba(170, 170, 170, 0.3); color: var(--beige-dim); }
+.chip:hover { color: var(--cyan-hot); --bc: var(--cyan); background-color: rgba(0, 166, 214, 0.18); box-shadow: 0 0 8px rgba(0, 166, 214, 0.3); }
+.chip.beige { background-color: rgba(212, 191, 125, 0.08); --bc: rgba(212, 191, 125, 0.35); color: var(--beige); }
+.chip.beige:hover { color: var(--text); --bc: var(--beige); box-shadow: 0 0 8px rgba(212, 191, 125, 0.3); }
+.chip.empty { background-color: transparent; border-style: dashed; --bc: rgba(170, 170, 170, 0.3); color: var(--beige-dim); }
+
+/* Cut-corner border fix (see OperatorConsole.module.css for the full note):
+   the border is clipped away along the 45° cuts, so corner-anchored gradient
+   stripes redraw the missing diagonals. States recolor via --bc. */
+.hpStep { --bc: var(--cyan-dim); }
+.saveCell { --bc: rgba(212, 191, 125, 0.3); }
+.chip { --bc: rgba(0, 166, 214, 0.35); }
+.deathBanner { --cut: 7px; --bc: transparent; }
+.hpStep, .saveCell, .chip, .deathBanner {
+  border-color: var(--bc);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
