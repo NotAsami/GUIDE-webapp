@@ -6,6 +6,7 @@ import type {
   SessionRow, SessionInsert, SessionUpdate,
   CatalogItemRow, CatalogItemInsert, CatalogItemUpdate,
   CatalogFeatureRow, CatalogFeatureInsert, CatalogFeatureUpdate,
+  ConfiscatedItemRow, ConfiscatedItemInsert, InventoryItem,
 } from './database.types'
 import { useAuth } from './auth'
 
@@ -381,6 +382,81 @@ export function useDmCatalog(): DmCatalogState {
   }, [items])
 
   return { items, loading, error, refetch: fetchAll, createItem, updateItem, deleteItem }
+}
+
+/* ============================================================
+   CONFISCATED ITEMS (migration 0006)
+   ============================================================ */
+
+export interface DmConfiscatedState {
+  /** Everything currently held, newest first, across all characters. */
+  rows: ConfiscatedItemRow[]
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  /** Take an item off a character. Returns the stored row so the caller can undo. */
+  confiscate: (characterId: string, item: InventoryItem, note?: string) => Promise<ConfiscatedItemRow | null>
+  /** Give it back. The caller writes the character row; this only drops the record. */
+  release: (id: string) => Promise<void>
+}
+
+/** The DM-side store for items taken off characters (`confiscated_items`, 0006).
+ *
+ *  Confiscation and LOCKING are different mechanics. A locked item stays in the
+ *  player's inventory with `locked: true` — carried, weighed, visibly present and
+ *  refusing to be used — and never touches this table. A confiscated item LEAVES
+ *  the character row entirely and lands here, which is what makes it invisible:
+ *  the table has DM-only RLS and no player policy, so invisibility is enforced by
+ *  Postgres rather than by a filter in the player's browser.
+ *
+ *  `from` is the item's placement copied verbatim at the moment it was taken, so
+ *  restoring is just putting it back where it was. */
+export function useDmConfiscated(): DmConfiscatedState {
+  const { session } = useAuth()
+  const [rows, setRows] = useState<ConfiscatedItemRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setRows([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase
+      .from('confiscated_items').select('*').order('taken_at', { ascending: false })
+    if (err) { setError(err.message); setRows([]) }
+    else { setRows((data as ConfiscatedItemRow[]) ?? []); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const confiscate = useCallback<DmConfiscatedState['confiscate']>(async (characterId, item, note) => {
+    const row: ConfiscatedItemInsert = {
+      character_id: characterId,
+      item,
+      // The placement object verbatim — col/row are simply absent when the item
+      // came out of a container, because a list has no geometry.
+      from: {
+        containerId: item.containerId,
+        ...(item.col != null ? { col: item.col } : {}),
+        ...(item.row != null ? { row: item.row } : {}),
+      },
+      ...(note ? { note } : {}),
+    }
+    const { data, error: err } = await supabase
+      .from('confiscated_items').insert(row).select().single<ConfiscatedItemRow>()
+    if (err) { setError(err.message); return null }
+    setRows(prev => [data, ...prev])
+    return data
+  }, [])
+
+  const release = useCallback<DmConfiscatedState['release']>(async (id) => {
+    const snapshot = rows
+    setRows(prev => prev.filter(r => r.id !== id))
+    const { error: err } = await supabase.from('confiscated_items').delete().eq('id', id)
+    if (err) { setError(err.message); setRows(snapshot) }
+  }, [rows])
+
+  return { rows, loading, error, refetch: fetchAll, confiscate, release }
 }
 
 export interface DmFeaturesState {

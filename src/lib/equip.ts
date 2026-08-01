@@ -191,6 +191,34 @@ export function unequipContainerPatch(
   return patch({ ...gear, containers: byKind }, [...inventory, toCarried(item, inventory, gear)])
 }
 
+/** Does this item consume one of the three attunement slots?
+ *
+ *  `attune` is DM-authored free text, so it doubles as both the flag and the
+ *  label ("Ring of Protection", "Required"). An explicit denial — "Not required",
+ *  "None", "No" — means the item is magical but doesn't tie up a slot; anything
+ *  else counts. Attunement is always DERIVED from what's worn, never stored. */
+export function consumesAttunement(item: EquippedItem | null | undefined): boolean {
+  const a = item?.attune?.trim()
+  return !!a && !/^(not required|none|no|n\/a|-|—)$/i.test(a)
+}
+
+/** The `ATTUNED n / 3` readout. Counts worn gear only: weapons don't attune in
+ *  this build, and a container grants storage rather than a magical bond. */
+export function attunedCount(gear: EquippedGear): number {
+  return ITEM_SLOTS.reduce((n, k) => n + (consumesAttunement(gear[k]) ? 1 : 0), 0)
+}
+
+/** The 5e attunement cap. Three, and it is the constraint that actually bites at
+ *  eight worn slots — rings and amulets are the attunement-hungry category. */
+export const ATTUNEMENT_CAP = 3
+
+/** Containers the character owns but isn't wearing. They sit in the inventory
+ *  like any other item; the sidebar lists them so "where did my backpack go" is
+ *  never a question. */
+export function stowedContainers(inventory: InventoryItem[]): InventoryItem[] {
+  return inventory.filter(i => !!i.container)
+}
+
 /** How many items are inside a container — the count its row and tab display, and
  *  what a non-empty-unequip confirmation asks about. */
 export function containerContents(

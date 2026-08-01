@@ -1,15 +1,19 @@
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import type {
-  ActiveEffect, CharacterRow, CharacterSection, CharacterSheet, EquippedGear,
-  EquippedItem, EquippedWeapon, InventoryItem, ItemRarity, ItemSlot, WeaponHand,
+  ActiveEffect, CharacterRow, CharacterSection, CharacterSheet, ContainerKind,
+  EquippedGear, EquippedItem, EquippedWeapon, InventoryItem, ItemRarity, ItemSlot,
+  Json, WeaponHand,
 } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { formatMod } from '../lib/dnd'
 import {
-  equipGearPatch, equipWeaponPatch, unequipGearPatch, unequipWeaponPatch,
+  ATTUNEMENT_CAP, attunedCount, consumesAttunement, containerContents,
+  equipContainerPatch, equipGearPatch, equipWeaponPatch, getContainers,
+  stowedContainers, unequipContainerPatch, unequipGearPatch, unequipWeaponPatch,
 } from '../lib/equip'
+import { CarrySidebar } from './EquipmentCarry'
 import { activeEffects, effectiveSheet, summarizeEffects } from '../lib/effects'
 import {
   handLabel, rollWeaponAttack, weaponAttackBonus, weaponDamageString,
@@ -30,7 +34,7 @@ interface RouteContext {
  *  equipped yet, and there's no item catalog to pull from). No mutation this
  *  pass: editing HP stays in the Stat Panel; equipping needs Inventory first. */
 export function Equipment() {
-  const { character, updateSections } = useOutletContext<RouteContext>()
+  const { character, updateSection, updateSections } = useOutletContext<RouteContext>()
   const sheet = effectiveSheet(character)
   const gear = (character.equipped ?? {}) as EquippedGear
   const weapons = gear.weapons ?? []
@@ -45,18 +49,27 @@ export function Equipment() {
   const [manageWeapon, setManageWeapon] = useState<WeaponHand | null>(null)
   /** Which hand the weapon picker is equipping into (null = closed). */
   const [weaponPicker, setWeaponPicker] = useState<WeaponHand | null>(null)
-  /** Whether the Active Effects sidebar is expanded. */
-  const [effectsOpen, setEffectsOpen] = useState(false)
+  /** Which slide-over is open. The Effects and Storage panels occupy the SAME
+   *  space over the gear column, so they are mutually exclusive by construction
+   *  rather than by remembering to close one before opening the other. */
+  const [drawer, setDrawer] = useState<'effects' | 'carry' | null>(null)
+  const effectsOpen = drawer === 'effects'
+  const carryOpen = drawer === 'carry'
+
+  /** Which ammunition stack is nocked. Deliberately NOT persisted: which arrow
+   *  you are firing is a property of the attack, not state the character carries
+   *  between sessions. */
+  const [nocked, setNocked] = useState<string | null>(null)
 
   // Close any open modal / the sidebar on Escape.
   const overlayOpen = openSlot !== null || manageWeapon !== null || weaponPicker !== null
-    || effectsOpen
+    || drawer !== null
   useEffect(() => {
     if (!overlayOpen) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       setOpenSlot(null); setManageWeapon(null); setWeaponPicker(null)
-      setEffectsOpen(false)
+      setDrawer(null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -100,14 +113,47 @@ export function Equipment() {
    *  modal whose overlay would bury the toast). */
   function attack(weapon: EquippedWeapon) {
     const { attack: atk, damage } = rollWeaponAttack(weapon, sheet)
+    const stack = isRanged(weapon) ? activeAmmo : null
     addRoll({
       kind: 'weapon',
       title: weapon.name,
-      subtitle: `${handLabel(weapon.hand)} · Attack`,
+      subtitle: stack
+        ? `${handLabel(weapon.hand)} · ${stack.name}`
+        : `${handLabel(weapon.hand)} · Attack`,
       icon: weapon.icon ?? 'fa-khanda',
       attack: atk,
       damage,
     })
+    // Firing spends a shaft. The count is derived from quiver contents, so this
+    // is an ordinary inventory write — no separate ammo counter to drift.
+    if (stack) void spendAmmo(stack)
+  }
+
+  /** Decrement (and remove at zero) the nocked ammunition stack. */
+  async function spendAmmo(stack: InventoryItem) {
+    const left = (stack.qty ?? 1) - 1
+    const next = left > 0
+      ? inventory.map(i => (i.id === stack.id ? { ...i, qty: left } : i))
+      : inventory.filter(i => i.id !== stack.id)
+    await updateSection('inventory', next as unknown as Json[])
+  }
+
+  /** Equip a carried container into its kind's slot. Its CONTENTS don't move —
+   *  they point at the container's id either way — so the Inventory tab simply
+   *  unlocks with everything already inside it. */
+  async function equipContainer(item: InventoryItem) {
+    const p = equipContainerPatch(item, gear, inventory)
+    if (!p) return
+    await updateSections(p)
+  }
+
+  /** Unequip a container. Contents travel with it: they stay in `inventory`
+   *  under its id and become unreachable until it is worn again, which is what
+   *  makes losing your pack a real stake rather than a bookkeeping event. */
+  async function unequipContainer(kind: ContainerKind) {
+    const p = unequipContainerPatch(kind, gear, inventory)
+    if (!p) return
+    await updateSections(p)
   }
 
   /** Manually end an active status effect (atomic). Rest will later clear all. */
@@ -119,6 +165,17 @@ export function Equipment() {
     })
   }
 
+  /** Ammunition available to a ranged attack, derived from the equipped quiver.
+   *  No quiver equipped -> no stacks -> the picker is absent entirely rather
+   *  than rendering an empty control. */
+  const containers = getContainers(gear)
+  const quiver = containers.find(c => c.container?.mode === 'inline')
+  const ammoStacks = containerContents(quiver?.id, inventory)
+  const activeAmmo = ammoStacks.find(a => a.id === nocked) ?? ammoStacks[0] ?? null
+
+  const attuned = attunedCount(gear)
+  const stowed = stowedContainers(inventory)
+
   const meta = (
     <>
       <span className="dim">◇</span>
@@ -128,6 +185,8 @@ export function Equipment() {
       <span>Loadout 02</span>
       <span className="dim">·</span>
       <span>Slots <span className="acc">{equippedCount(gear)} / 8</span></span>
+      <span className="dim">·</span>
+      <span>Attuned <span className={attuned >= ATTUNEMENT_CAP ? styles.attMaxed : 'acc'}>{attuned} / {ATTUNEMENT_CAP}</span></span>
     </>
   )
 
@@ -150,6 +209,9 @@ export function Equipment() {
               return w ? (
                 <WeaponCard
                   key={hand} weapon={w} sheet={sheet} bind={bind}
+                  ammo={isRanged(w) ? ammoStacks : null}
+                  active={activeAmmo}
+                  onNock={setNocked}
                   onAttack={() => attack(w)} onManage={() => setManageWeapon(hand)}
                 />
               ) : (
@@ -193,7 +255,10 @@ export function Equipment() {
 
         {/* ---------- RIGHT: Gear grid + shards + actions ---------- */}
         <section className={styles.col} aria-label="Gear slots">
-          <ColHeader num="04" title="Gear" meta="6 slots" />
+          <ColHeader
+            num="04" title="Gear"
+            meta={<>Attuned <span className={attuned >= ATTUNEMENT_CAP ? styles.attMaxed : 'acc'}>{attuned} / {ATTUNEMENT_CAP}</span></>}
+          />
           <div className={styles.gearGrid}>
             {GEAR_SLOTS.map(s => (
               <GearSlot
@@ -203,12 +268,31 @@ export function Equipment() {
             ))}
           </div>
 
+          {/* Containers extend what Ros can HOLD, shards extend what Ros can DO.
+              The button sits between them because that is the boundary it
+              straddles — and the panel itself is a slide-over rather than a
+              third block, so the gear column keeps its shape. */}
+          <button
+            type="button"
+            className={`${styles.carryBtn}${carryOpen ? ' ' + styles.on : ''}`}
+            onClick={() => setDrawer(d => (d === 'carry' ? null : 'carry'))}
+            aria-expanded={carryOpen}
+          >
+            <span className={styles.cbFrame} />
+            <span className={styles.cbInner}>
+              <i className="fa-solid fa-boxes-stacked" aria-hidden="true" />
+              <span className={styles.cbLabel}>Storage Containers</span>
+              <span className={styles.cbCount}>{containers.length}</span>
+              <i className={`fa-solid fa-chevron-${carryOpen ? 'right' : 'left'} ${styles.cbChev}`} aria-hidden="true" />
+            </span>
+          </button>
+
           <ShardBar guideShard={gear.guideShard ?? null} bind={bind} />
 
           <div className={styles.panelActions}>
             <ActionBtn
               icon="fa-bolt" label="Effects" count={effects.length}
-              active={effectsOpen} onClick={() => setEffectsOpen(o => !o)}
+              active={effectsOpen} onClick={() => setDrawer(d => (d === 'effects' ? null : 'effects'))}
             />
             <ActionBtn to="/features" icon="fa-medal" label="Features" />
           </div>
@@ -246,12 +330,22 @@ export function Equipment() {
         />
       )}
 
-      {effectsOpen && (
-        <div className={styles.sidebarScrim} onClick={() => setEffectsOpen(false)} aria-hidden="true" />
+      {drawer && (
+        <div className={styles.sidebarScrim} onClick={() => setDrawer(null)} aria-hidden="true" />
       )}
       <EffectsSidebar
         open={effectsOpen} effects={effects}
-        onRemove={id => void removeEffect(id)} onClose={() => setEffectsOpen(false)}
+        onRemove={id => void removeEffect(id)} onClose={() => setDrawer(null)}
+      />
+      <CarrySidebar
+        open={carryOpen}
+        containers={containers}
+        stowed={stowed}
+        inventory={inventory}
+        styles={styles}
+        onUnequip={unequipContainer}
+        onEquip={equipContainer}
+        onClose={() => setDrawer(null)}
       />
     </>
   )
@@ -293,7 +387,7 @@ function equippedCount(gear: EquippedGear): number {
 
 /* ---------- small chrome helpers ---------- */
 
-function ColHeader({ num, title, meta }: { num: string; title: string; meta: string }) {
+function ColHeader({ num, title, meta }: { num: string; title: string; meta: ReactNode }) {
   return (
     <div className={styles.colHeader}>
       <span className={styles.chNum}>{num}</span>
@@ -338,8 +432,12 @@ function ActionBtn({ to, onClick, icon, label, active, count, soon }: {
 
 /* ---------- weapon card ---------- */
 
-function WeaponCard({ weapon, sheet, bind, onAttack, onManage }: {
+function WeaponCard({ weapon, sheet, bind, ammo, active, onNock, onAttack, onManage }: {
   weapon: EquippedWeapon; sheet: CharacterSheet; bind: Bind
+  /** Stacks the quiver offers, or null when this weapon takes no ammunition. */
+  ammo: InventoryItem[] | null
+  active: InventoryItem | null
+  onNock: (id: string) => void
   onAttack: () => void; onManage: () => void
 }) {
   const rarity = weapon.rarity ?? 'common'
@@ -377,10 +475,22 @@ function WeaponCard({ weapon, sheet, bind, onAttack, onManage }: {
           >
             <i className="fa-solid fa-dice-d20" /> Attack
           </button>
+          {/* Which arrow is nocked belongs to the ATTACK, not to the quiver —
+              so the selector lives here. Absent, not empty, when nothing is
+              equipped to draw from. */}
+          {ammo && ammo.length > 0 && active && (
+            <AmmoPicker stacks={ammo} active={active} onNock={onNock} />
+          )}
         </div>
       </div></div>
     </div>
   )
+}
+
+/** A weapon draws from the quiver if it takes ammunition. Read off the SRD
+ *  `properties` the DM already authors, so no new field is needed. */
+function isRanged(w: EquippedWeapon): boolean {
+  return (w.properties ?? []).some(p => /ammunition/i.test(p))
 }
 
 function buildWeaponRows(w: EquippedWeapon, sheet: CharacterSheet): [string, string][] {
@@ -389,6 +499,52 @@ function buildWeaponRows(w: EquippedWeapon, sheet: CharacterSheet): [string, str
   rows.push(['Damage', `${weaponDamageString(w, sheet)}${w.type ? ` ${w.type.toLowerCase()}` : ''}`])
   if (w.hand) rows.push(['Slot', handLabel(w.hand)])
   return rows
+}
+
+/** The nocked-ammunition selector. Sits beside ATTACK because which arrow is
+ *  fired is a property of the attack; the quiver only answers "what do I have".
+ *  Rendered inline (not a portal) — the weapon card is clip-pathed, so the menu
+ *  is positioned above the button and allowed to overflow the card's padding
+ *  box rather than being clipped by it. */
+function AmmoPicker({ stacks, active, onNock }: {
+  stacks: InventoryItem[]; active: InventoryItem; onNock: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [open])
+
+  return (
+    <span className={`${styles.ammo}${open ? ' ' + styles.open : ''}`}>
+      <button
+        type="button" className={styles.ammoBtn}
+        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        aria-haspopup="listbox" aria-expanded={open}
+        aria-label={`Nocked: ${active.name}, ${active.qty ?? 1} left`}
+      >
+        <i className="fa-solid fa-location-arrow" aria-hidden="true" />
+        <span className={styles.amName}>{active.name}</span>
+        <span className={styles.amCt}>×{active.qty ?? 1}</span>
+        <i className={`fa-solid fa-chevron-down ${styles.amChev}`} aria-hidden="true" />
+      </button>
+      {open && (
+        <span className={styles.ammoMenu} role="listbox">
+          {stacks.map(a => (
+            <button
+              key={a.id} type="button" role="option" aria-selected={a.id === active.id}
+              className={`${styles.amOpt}${a.id === active.id ? ' ' + styles.on : ''}`}
+              onClick={e => { e.stopPropagation(); onNock(a.id!); setOpen(false) }}
+            >
+              <span>{a.name}</span><span className={styles.q}>×{a.qty ?? 1}</span>
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  )
 }
 
 /* ---------- gear slots ---------- */
@@ -416,6 +572,9 @@ function GearSlot({ slot, item, bind, onOpen }: {
         <span className={styles.sIcon}><i className={`fa-solid ${item?.icon ?? slot.icon}`} /></span>
         <span className={styles.sName}>{item ? item.name : '— Empty —'}</span>
       </span>
+      {/* Only slots actually spending one of the three attunement slots get the
+          pip — so the gear grid and the ATTUNED readout can't disagree. */}
+      {consumesAttunement(item) && <span className={styles.sAtt} aria-hidden="true">◈</span>}
       <span className={styles.rarityDot} />
     </button>
   )
