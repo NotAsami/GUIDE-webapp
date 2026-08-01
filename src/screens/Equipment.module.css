@@ -703,59 +703,6 @@
 .shardSub:hover i { filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.6)); }
 .shardSub:hover .shardSubLabel { color: var(--cyan-hot); }
 
-/* Quick Access split sub-slots */
-.slot.quick .sInner { padding: 8px 8px 10px; }
-.quickSubs {
-  flex: 1; width: 100%;
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-top: 4px;
-}
-.qsub {
-  position: relative;
-  border: 1px solid rgba(212, 191, 125, 0.4);
-  background: rgba(0, 0, 0, 0.35);
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  padding: 2px;
-  gap: 2px;
-}
-.qsub i {
-  font-size: 20px; color: var(--cyan-hot);
-  filter: drop-shadow(0 0 4px rgba(0, 166, 214, 0.4));
-}
-/* tiny stack-count badge (name + full qty live in the hover tooltip) */
-.qBadge {
-  position: absolute;
-  top: 2px; right: 3px;
-  font-family: var(--font-mono);
-  font-size: 8px; line-height: 1;
-  color: var(--beige);
-  background: rgba(0, 0, 0, 0.75);
-  border: 1px solid rgba(212, 191, 125, 0.4);
-  padding: 1px 3px;
-}
-.qsub.empty i { color: var(--beige-dim); opacity: 0.5; }
-.qsub.empty .qct { color: var(--muted); opacity: 0.7; }
-
-/* a filled, clickable quick-access consumable */
-.qsub.usable {
-  appearance: none;
-  font-family: var(--font-mono);
-  cursor: pointer;
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 120ms ease;
-}
-.qsub.usable .qct {
-  max-width: 100%;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.qsub.usable:hover {
-  border-color: rgba(0, 166, 214, 0.6);
-  box-shadow: inset 0 0 14px rgba(0, 166, 214, 0.2), 0 0 12px rgba(0, 166, 214, 0.3);
-}
-.qsub.usable:hover i { color: #fff; filter: drop-shadow(0 0 6px rgba(0, 166, 214, 0.6)); }
-.qsub.usable:active { transform: scale(0.96); }
-
 /* --- Active status effects (consumable buffs) --- */
 .statusList { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
 .statusHead {

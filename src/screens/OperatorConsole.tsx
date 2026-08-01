@@ -12,6 +12,7 @@ import type {
   ItemEffects, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
   Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, CatalogFeatureData,
 } from '../lib/database.types'
+import { ITEM_SLOTS, PERSON } from '../lib/equip'
 import styles from './OperatorConsole.module.css'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -607,13 +608,23 @@ function ActionsTab({ row, member, catalog, featureLib, onUpdate, onVoice, log }
 // ============================================================
 
 /** App-aligned item taxonomy (NOT the mockup's — the engine reads these). */
-const CAT_ORDER: ItemCategory[] = ['weapon', 'gear', 'consumable', 'misc']
+const CAT_ORDER: ItemCategory[] = [
+  'weapon', 'ammo', 'armor', 'consumable', 'tool', 'quest', 'misc',
+]
 const CAT_DEF: Record<ItemCategory, { label: string; corner: string }> = {
   weapon: { label: 'Weapon', corner: 'fa-gavel' },
-  gear: { label: 'Gear', corner: 'fa-shield-halved' },
+  ammo: { label: 'Ammunition', corner: 'fa-location-arrow' },
+  armor: { label: 'Armor', corner: 'fa-shield-halved' },
   consumable: { label: 'Consumable', corner: 'fa-flask' },
+  tool: { label: 'Tool', corner: 'fa-screwdriver-wrench' },
+  quest: { label: 'Quest', corner: 'fa-scroll' },
   misc: { label: 'Misc', corner: 'fa-box' },
 }
+/** Categories that occupy a worn gear slot, and so get the Equip Slot picker.
+ *  In the expanded taxonomy that is `armor` alone — weapons go to hands and
+ *  containers to the carry sidebar, so neither needs a slot. */
+const isSlotted = (c: ItemCategory) => c === 'armor'
+
 const RAR_ORDER: ItemRarity[] = ['common', 'uncommon', 'rare', 'legendary']
 const RAR_DEF: Record<ItemRarity, { label: string; token: string }> = {
   common: { label: 'Common', token: 'var(--rar-common)' },
@@ -621,7 +632,7 @@ const RAR_DEF: Record<ItemRarity, { label: string; token: string }> = {
   rare: { label: 'Rare', token: 'var(--rar-rare)' },
   legendary: { label: 'Legendary', token: 'var(--rar-legend)' },
 }
-const GEAR_SLOTS: ItemSlot[] = ['helmet', 'armor', 'cloak', 'boots', 'accessory']
+const GEAR_SLOTS: readonly ItemSlot[] = ITEM_SLOTS
 const WEAPON_ABILITIES: WeaponAbility[] = ['str', 'dex', 'finesse']
 const ITEM_ICONS = [
   'fa-khanda', 'fa-hammer', 'fa-bullseye', 'fa-gavel', 'fa-wand-sparkles', 'fa-staff-snake',
@@ -642,7 +653,16 @@ function grantSnapshot(item: CatalogItemRow): InventoryItem {
   const inst = `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
   const data = item.data ?? ({} as CatalogItemData)
   const stackable = data.category === 'consumable' || data.category === 'misc'
-  return { ...data, id: inst, item_id: item.id, ...(stackable ? { qty: 1 } : {}) } as InventoryItem
+  return {
+    ...data, id: inst, item_id: item.id,
+    // A granted item MUST declare where it landed — an item with no containerId
+    // belongs to no container, so it renders in no tab and is invisible to the
+    // player. Lands on person with no col/row, so the grid auto-packs it.
+    // (Slice 2: the spec §7 routing chain replaces this, which is also what
+    // retired the DM's grant-destination picker.)
+    containerId: PERSON,
+    ...(stackable ? { qty: 1 } : {}),
+  } as InventoryItem
 }
 
 /** Grant Item: search the catalog, pick a template, snapshot it into this PC's
@@ -1063,7 +1083,7 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
   const [weight, setWeight] = useState(String(d?.weight ?? ''))
   const [value, setValue] = useState(d?.value != null ? String(d.value) : '')
   const [icon, setIcon] = useState(d?.icon ?? 'fa-box')
-  const [slot, setSlot] = useState<ItemSlot>((d?.slot as ItemSlot) ?? 'accessory')
+  const [slot, setSlot] = useState<ItemSlot>((d?.slot as ItemSlot) ?? 'ring1')
   const [attune, setAttune] = useState(!!d?.attune)
   const [flavor, setFlavor] = useState(d?.flavor ?? '')
   const [ability, setAbility] = useState<WeaponAbility>((d?.ability as WeaponAbility) ?? 'str')
@@ -1088,7 +1108,7 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
       name: name.trim(), category, rarity, icon, w, h,
       ...(Number.isFinite(weightNum) ? { weight: weightNum } : {}),
       ...(Number.isFinite(valueNum) ? { value: valueNum } : {}),
-      ...(category === 'gear' ? { slot } : {}),
+      ...(isSlotted(category) ? { slot } : {}),
       ...(attune ? { attune: name.trim() } : {}),
       ...(flavor.trim() ? { flavor: flavor.trim() } : {}),
       ...(category === 'weapon'
@@ -1134,7 +1154,7 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
           <span className={styles.pvMeta}>
             <span>{def.label}</span><span className={styles.rar} style={{ color: rd.token }}>{rd.label}</span>
             <span>{w}×{h} cells</span>
-            {category === 'gear' && <span>{slot}</span>}
+            {isSlotted(category) && <span>{slot}</span>}
             {attune && <span>attunement</span>}
           </span>
         </span>
@@ -1201,7 +1221,7 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
         </div>
       )}
 
-      {category === 'gear' && (
+      {isSlotted(category) && (
         <>
           <span className={styles.fieldLab}>Equip Slot</span>
           <select className={cx(styles.selIn, styles.slotSel)} value={slot} onChange={e => setSlot(e.target.value as ItemSlot)}>
