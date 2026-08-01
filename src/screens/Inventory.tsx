@@ -1,16 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import type {
-  CharacterRow, CharacterSection, InventoryItem, ItemCategory, ItemRarity, Json,
+  CharacterRow, CharacterSection, ContainerKind, EquippedItem, InventoryItem,
+  ItemCategory, Json, WeaponData,
 } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
-import { burden } from '../lib/burden'
+import { useItemTooltip } from '../components/ItemTooltip'
+import { burden, itemWeight } from '../lib/burden'
 import { consumeEffect } from '../lib/consume'
 import {
-  equipTargetPatch, freshItemId, getGear, getInventory, resolveEquipTarget, type EquipTarget,
+  TAB_KIND_ORDER, equipTargetPatch, freshItemId, getGear, getInventory,
+  resolveEquipTarget,
 } from '../lib/equip'
+import {
+  GRID_CELLS, GRID_COLS, GRID_ROWS, PERSON, emptyCells, freeCellFor,
+  packPerson, place, type Placed,
+} from '../lib/placement'
+import { CAT_CORNER, CAT_LABEL, CAT_ORDER, rarityLabel } from '../lib/items'
 import { useRollLog } from '../lib/rolls'
+import { ItemPopup } from './InventoryPopup'
 import styles from './Inventory.module.css'
 
 interface RouteContext {
@@ -19,81 +28,23 @@ interface RouteContext {
   updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
 }
 
-/** The cargo grid is a fixed 10x8 spatial inventory (Diablo / Resident Evil
- *  tradition): items occupy rectangular footprints. The grid fills its framed
- *  region (landscape, so 10 wide x 8 tall keeps cells close to square). */
-const COLS = 10
-const ROWS = 8
-
-interface Placed { item: InventoryItem; col: number; row: number; w: number; h: number }
-
-function footprint(item: InventoryItem): { w: number; h: number } {
-  return {
-    w: Math.min(COLS, Math.max(1, item.w ?? 1)),
-    h: Math.min(ROWS, Math.max(1, item.h ?? 1)),
-  }
+/** Fallback chrome for a tab whose container isn't equipped — a locked tab still
+ *  has to say what it's a slot FOR. */
+const KIND_CHROME: Record<string, { label: string; icon: string }> = {
+  sack: { label: 'Sack', icon: 'fa-sack-xmark' },
+  backpack: { label: 'Backpack', icon: 'fa-bag-shopping' },
+  bagOfHolding: { label: 'Bag of Holding', icon: 'fa-database' },
 }
 
-/** Pack items into the 10x8 grid: honor each item's stored (col,row) when it fits
- *  and doesn't collide; auto-place the rest into the first free rectangle
- *  (row-major). Deterministic, so the layout is stable across renders. */
-function packItems(items: InventoryItem[]): Placed[] {
-  const occ = new Set<string>()
-  const key = (r: number, c: number) => `${r},${c}`
-  const fits = (col: number, row: number, w: number, h: number): boolean => {
-    if (col < 0 || row < 0 || col + w > COLS || row + h > ROWS) return false
-    for (let r = row; r < row + h; r++)
-      for (let c = col; c < col + w; c++)
-        if (occ.has(key(r, c))) return false
-    return true
-  }
-  const claim = (col: number, row: number, w: number, h: number) => {
-    for (let r = row; r < row + h; r++)
-      for (let c = col; c < col + w; c++) occ.add(key(r, c))
-  }
+type SortKey = 'name' | 'weight' | 'value' | 'category'
 
-  const placed: Placed[] = []
-  const pending: { item: InventoryItem; w: number; h: number }[] = []
-
-  for (const item of items) {
-    const { w, h } = footprint(item)
-    if (item.col != null && item.row != null && fits(item.col, item.row, w, h)) {
-      claim(item.col, item.row, w, h)
-      placed.push({ item, col: item.col, row: item.row, w, h })
-    } else {
-      pending.push({ item, w, h })
-    }
-  }
-  for (const { item, w, h } of pending) {
-    let done = false
-    for (let row = 0; row <= ROWS - h && !done; row++) {
-      for (let col = 0; col <= COLS - w; col++) {
-        if (fits(col, row, w, h)) {
-          claim(col, row, w, h)
-          placed.push({ item, col, row, w, h })
-          done = true
-          break
-        }
-      }
-    }
-    if (!done) placed.push({ item, col: 0, row: 0, w, h }) // overflow (grid full) — rare
-  }
-  return placed
-}
-
-/** Map our item category onto a corner glyph (mirrors the handoff CAT table). */
-const CAT_CORNER: Record<ItemCategory, string> = {
-  weapon: 'fa-khanda',
-  ammo: 'fa-location-arrow',
-  armor: 'fa-shield-halved',
-  consumable: 'fa-flask-vial',
-  tool: 'fa-screwdriver-wrench',
-  quest: 'fa-scroll',
-  misc: 'fa-circle-dot',
-}
-const CAT_LABEL: Record<ItemCategory, string> = {
-  weapon: 'Weapon', ammo: 'Ammunition', armor: 'Armor', consumable: 'Consumable',
-  tool: 'Tool', quest: 'Quest', misc: 'Misc',
+interface Tab {
+  /** Container id, or PERSON. `null` when the slot is empty (locked tab). */
+  id: string | null
+  kind: ContainerKind | null
+  label: string
+  icon: string
+  container: EquippedItem | null
 }
 
 function fpClass(w: number, h: number): string {
@@ -104,42 +55,76 @@ function fpClass(w: number, h: number): string {
   return styles.fpS
 }
 
-function rarityLabel(r: ItemRarity): string {
-  return r.charAt(0).toUpperCase() + r.slice(1)
-}
+const fmtWeight = (lb: number) => (Math.round(lb * 10) / 10).toString()
 
-/** Inventory — the carried-but-not-equipped manifest, ported to the handoff's
- *  two-region layout: a left Cargo Grid (10x8 spatial footprints) and a right
- *  column of Item Detail (hover to preview, click to pin) + Load/Coin (burden
- *  bar + coin purse, from data). Equipping moves the item into `equipped` via the
- *  SAME shared helpers Equipment uses — one owner of the move. Drag-to-rearrange
- *  is an enhancement over the static mockup. */
+/**
+ * Inventory — the carried manifest.
+ *
+ * The grid stopped being "your inventory" in the refactor: ON PERSON is a fixed
+ * 5x4 loadout of what the character can physically reach, and bulk lives in
+ * containers, which are unlimited filterable lists. Weight is the only capacity
+ * system and it never blocks a pickup, so there is no slot count to run out of.
+ *
+ * The tab bar is one tab per SLOT, not per owned item — a kind with nothing
+ * equipped renders locked rather than vanishing, so the bar is the same four
+ * buttons in the same places forever. Everything that changes lives inside the
+ * framed region; the surrounding chrome never moves when you switch tabs.
+ */
 export function Inventory() {
   const { character, updateSection, updateSections } = useOutletContext<RouteContext>()
   const nav = useNavigate()
   const { addRoll } = useRollLog()
+  const { tooltip, bind, hide: hideTooltip } = useItemTooltip()
+
   const inventory = getInventory(character)
   const gear = getGear(character)
   const load = burden(character)
   const coins = character.sheet.coins ?? { gold: 0 }
 
-  const placed = useMemo(() => packItems(inventory), [inventory])
-  const [pinned, setPinned] = useState<string | null>(null)
-  const [hovered, setHovered] = useState<string | null>(null)
+  /** Fixed four: ON PERSON plus one tab per page-container KIND. */
+  const tabs = useMemo<Tab[]>(() => [
+    { id: PERSON, kind: null, label: 'On Person', icon: 'fa-hand-fist', container: null },
+    ...TAB_KIND_ORDER.map(kind => {
+      const c = gear.containers?.[kind] ?? null
+      const chrome = KIND_CHROME[kind] ?? { label: String(kind), icon: 'fa-box' }
+      return {
+        id: c?.id ?? null,
+        kind,
+        label: c?.name ?? chrome.label,
+        icon: c?.icon ?? chrome.icon,
+        container: c,
+      }
+    }),
+  ], [gear])
+
+  const [activeId, setActiveId] = useState<string>(PERSON)
+  const [filter, setFilter] = useState<ItemCategory | 'all'>('all')
+  const [sortBy, setSortBy] = useState<SortKey>('name')
+  const [popupId, setPopupId] = useState<string | null>(null)
+  const [denyKind, setDenyKind] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const shownId = pinned ?? hovered
-  const shown = shownId ? inventory.find(i => i.id === shownId) ?? null : null
+  // A container unequipped from the Equipment screen must not strand us on a tab
+  // that no longer exists — fall back to ON PERSON.
+  const active = tabs.find(t => t.id != null && t.id === activeId) ?? tabs[0]
+  useEffect(() => {
+    if (active.id !== activeId) setActiveId(PERSON)
+  }, [active.id, activeId])
 
-  // Drag state. `moved` distinguishes a drag (reposition) from a click (pin).
+  const contents = useMemo(
+    () => inventory.filter(i => i.containerId === active.id),
+    [inventory, active.id],
+  )
+  const placed = useMemo(() => packPerson(inventory), [inventory])
+  const popupItem = popupId ? inventory.find(i => i.id === popupId) ?? null : null
+
+  // Drag state (ON PERSON only). `moved` distinguishes a drag from a click.
   const gridRef = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<DragState | null>(null)
   const movedRef = useRef(false)
 
-  // One-time repair: two bag items sharing an id (e.g. a seed re-run restocked
-  // the bag while a copy sat equipped, then that copy was unequipped) makes every
-  // id-keyed operation treat them as one tile — moving one moves both, dropping
-  // one drops both. Re-key the later copies and persist once.
+  // One-time repair: two bag items sharing an id makes every id-keyed operation
+  // treat them as one tile — moving one moves both, dropping one drops both.
   const healedRef = useRef(false)
   useEffect(() => {
     if (healedRef.current) return
@@ -156,29 +141,40 @@ export function Inventory() {
     }
   }, [inventory, updateSection])
 
-  // Unpin / clear hover on Escape.
+  // Escape closes the popup.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setPinned(null); setHovered(null) } }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPopupId(null) }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  function selectTab(t: Tab) {
+    if (t.id == null) {
+      // Locked: a visible slot to fill, not a hidden feature. Say so and shake.
+      setDenyKind(t.kind)
+      window.setTimeout(() => setDenyKind(null), 340)
+      return
+    }
+    if (t.id === activeId) return
+    setActiveId(t.id)
+    setFilter('all')
+  }
+
+  /* ---------- ON PERSON drag-to-rearrange ---------- */
+
   function cellFromPointer(clientX: number, clientY: number): { col: number; row: number } {
     const rect = gridRef.current!.getBoundingClientRect()
-    const cellW = rect.width / COLS
-    const cellH = rect.height / ROWS
     return {
-      col: Math.floor((clientX - rect.left) / cellW),
-      row: Math.floor((clientY - rect.top) / cellH),
+      col: Math.floor((clientX - rect.left) / (rect.width / GRID_COLS)) + 1,
+      row: Math.floor((clientY - rect.top) / (rect.height / GRID_ROWS)) + 1,
     }
   }
 
   function canPlace(col: number, row: number, w: number, h: number, selfId?: string): boolean {
-    if (col < 0 || row < 0 || col + w > COLS || row + h > ROWS) return false
+    if (col < 1 || row < 1 || col + w - 1 > GRID_COLS || row + h - 1 > GRID_ROWS) return false
     for (const p of placed) {
       if (p.item.id === selfId) continue
-      const overlap = col < p.col + p.w && col + w > p.col && row < p.row + p.h && row + h > p.row
-      if (overlap) return false
+      if (col < p.col + p.w && col + w > p.col && row < p.row + p.h && row + h > p.row) return false
     }
     return true
   }
@@ -201,10 +197,13 @@ export function Inventory() {
     if (!drag) return
     if (Math.abs(e.clientX - drag.x) > 4 || Math.abs(e.clientY - drag.y) > 4) movedRef.current = true
     const { col, row } = cellFromPointer(e.clientX, e.clientY)
-    const targetCol = Math.max(0, Math.min(COLS - drag.w, col - drag.grabCol))
-    const targetRow = Math.max(0, Math.min(ROWS - drag.h, row - drag.grabRow))
-    const valid = canPlace(targetCol, targetRow, drag.w, drag.h, drag.id)
-    setDrag({ ...drag, x: e.clientX, y: e.clientY, target: { col: targetCol, row: targetRow }, valid })
+    const targetCol = Math.max(1, Math.min(GRID_COLS - drag.w + 1, col - drag.grabCol))
+    const targetRow = Math.max(1, Math.min(GRID_ROWS - drag.h + 1, row - drag.grabRow))
+    setDrag({
+      ...drag, x: e.clientX, y: e.clientY,
+      target: { col: targetCol, row: targetRow },
+      valid: canPlace(targetCol, targetRow, drag.w, drag.h, drag.id),
+    })
   }
 
   async function onPointerUp() {
@@ -212,18 +211,18 @@ export function Inventory() {
     const d = drag
     setDrag(null)
     if (!movedRef.current) {
-      // A click, not a drag → toggle the pin on this tile.
-      setPinned(prev => (prev === d.id ? null : d.id))
+      // A click, not a drag → open the popup. One gesture, app-wide.
+      hideTooltip()
+      setPopupId(d.id)
       return
     }
     if (d.target && d.valid) {
-      // Pin EVERY item's current position, not just the dragged one. Seed items
-      // start position-less and get auto-packed; persisting only the dragged item
-      // would leave the rest to re-pack around its new cell on next render, making
-      // untouched tiles jump. `d.valid` already excludes overlap, so freezing the
-      // others stays collision-free.
+      // Pin EVERY on-person item's current position, not just the dragged one:
+      // auto-packed items would otherwise re-pack around the new cell on the next
+      // render, making untouched tiles jump. `d.valid` already excludes overlap.
       const next = inventory.map(i => {
         if (i.id === d.id) return { ...i, col: d.target!.col, row: d.target!.row }
+        if (i.containerId !== PERSON) return i
         const pl = placed.find(p => p.item.id === i.id)
         return pl ? { ...i, col: pl.col, row: pl.row } : i
       })
@@ -231,22 +230,19 @@ export function Inventory() {
     }
   }
 
-  /** Equip a carried item in one tap: the shared resolver picks the slot/hand, the
-   *  shared patch builder moves it into `equipped` (atomic). */
+  /* ---------- item actions (the popup drives all of these) ---------- */
+
   async function equip(item: InventoryItem) {
     if (busy) return
     const target = resolveEquipTarget(item, gear)
     if (target.kind === 'none') return
     const p = equipTargetPatch(item, target, gear, inventory)
     if (!p) return
-    setBusy(true)
-    setPinned(null); setHovered(null)
+    setBusy(true); setPopupId(null)
     await updateSections(p)
     setBusy(false)
   }
 
-  /** Use a carried consumable: shared consume math (HP + status), then spend one
-   *  from the bag. */
   async function use(item: InventoryItem) {
     if (busy) return
     const outcome = consumeEffect(item, character)
@@ -254,39 +250,57 @@ export function Inventory() {
       addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
       return
     }
-    setBusy(true)
+    setBusy(true); setPopupId(null)
     const patch: Partial<Pick<CharacterRow, CharacterSection>> = {}
     if (outcome.sheet) patch.sheet = outcome.sheet
     if (outcome.resources) patch.resources = outcome.resources
     const nextQty = (item.qty ?? 1) - 1
-    const nextInv = nextQty > 0
-      ? inventory.map(i => i.id === item.id ? { ...i, qty: nextQty } : i)
-      : inventory.filter(i => i.id !== item.id)
-    patch.inventory = nextInv as unknown as Json[]
-    if (nextQty <= 0) { setPinned(null); setHovered(null) }
+    patch.inventory = (nextQty > 0
+      ? inventory.map(i => (i.id === item.id ? { ...i, qty: nextQty } : i))
+      : inventory.filter(i => i.id !== item.id)) as unknown as Json[]
     await updateSections(patch)
     setBusy(false)
     addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
   }
 
-  /** Drop a carried item out of the bag entirely (atomic). */
+  /** Move an item between ON PERSON and a container. Both directions are the same
+   *  write, which is why no dragging across a tab switch is ever needed. */
+  async function moveTo(item: InventoryItem, destId: string) {
+    if (busy) return
+    const dest = destId === PERSON
+      ? (() => {
+          const cell = freeCellFor(inventory.filter(i => i.id !== item.id), item)
+          return cell ? { containerId: PERSON, ...cell } : null
+        })()
+      : { containerId: destId }
+    if (!dest) return           // no reachable space — the popup blocks this itself
+    setBusy(true); setPopupId(null)
+    await updateSection(
+      'inventory',
+      inventory.map(i => (i.id === item.id ? place(i, dest) : i)) as unknown as Json[],
+    )
+    setBusy(false)
+  }
+
   async function drop(item: InventoryItem) {
     if (busy) return
-    setBusy(true)
-    setPinned(null); setHovered(null)
+    setBusy(true); setPopupId(null)
     await updateSection('inventory', inventory.filter(i => i.id !== item.id) as unknown as Json[])
     setBusy(false)
   }
 
+  /* ---------- derived readouts ---------- */
+
+  const usedCells = placed.reduce((n, p) => n + p.w * p.h, 0)
   const overBurdened = load.ratio > 1
   const fillPct = Math.min(100, load.ratio * 100)
-  const totalSlots = COLS * ROWS
-  const usedCells = placed.reduce((n, p) => n + p.w * p.h, 0)
-  const freeCells = totalSlots - usedCells
-  // SRD load thresholds: encumbered at 5xSTR, heavily encumbered at 10xSTR, max at
-  // 15xSTR — so the ticks sit at 1/3 and 2/3 of the bar, labels derived from max.
+  // SRD thresholds: encumbered at 5xSTR, heavy at 10xSTR, max at 15xSTR — so the
+  // ticks sit at 1/3 and 2/3 of the bar.
   const encAt = Math.round((load.max / 3) * 10) / 10
   const heavyAt = Math.round((load.max * 2 / 3) * 10) / 10
+
+  const weightless = !!active.container?.container?.weightless
+  const viewWeight = contents.reduce((n, i) => n + itemWeight(i), 0)
 
   const meta = (
     <>
@@ -296,7 +310,7 @@ export function Inventory() {
       <span className="dim">·</span>
       <span>Cargo Manifest</span>
       <span className="dim">·</span>
-      <span>Storage <span className="acc">:: {usedCells} / {totalSlots}</span> Slots</span>
+      <span>Load <span className="acc">:: {load.current} / {load.max}</span> lb</span>
     </>
   )
 
@@ -309,15 +323,18 @@ export function Inventory() {
       <Nav variant="dock" meta={meta} />
 
       <main className={styles.inv}>
-        {/* ===================== LEFT — CARGO GRID ===================== */}
-        <section className={`${styles.col} ${styles.left}`} aria-label="Cargo grid">
+        {/* ===================== LEFT — CARRIED ===================== */}
+        <section className={`${styles.col} ${styles.left}`} aria-label="Carried items">
           <div className={styles.colHeader}>
             <span className={styles.chNum}>01</span>
-            <span className={styles.chTitle}>Cargo Grid</span>
+            <span className={styles.chTitle}>Carried</span>
             <span className={styles.chMeta}>
-              {inventory.length} Items <span className="dim">·</span> <span className="acc">{usedCells} / {totalSlots}</span>
+              {active.id === PERSON
+                ? <><span className="acc">Within Reach</span></>
+                : <>{weightless ? <span className="acc">Off-Device</span> : <span className="acc">Stowed</span>}</>}
             </span>
           </div>
+
           <div className={styles.region}>
             <div className={styles.rFrame} />
             <div className={styles.rGap} />
@@ -325,105 +342,131 @@ export function Inventory() {
             <div className={styles.rInner}>
               <span className={`${styles.rCorner} ${styles.tl}`} />
               <span className={`${styles.rCorner} ${styles.br}`} />
-              {inventory.length === 0 ? (
-                <div className={styles.empty}>
-                  <i className="fa-solid fa-box-open" aria-hidden="true" />
-                  <p>Your bag is empty.</p>
-                  <p className={styles.emptySub}>Items the DM grants you appear here to carry, equip and use.</p>
+
+              <div className={styles.cargoPad}>
+                {/* --- container switcher: fixed four, one per slot --- */}
+                <div className={styles.seg} role="tablist" aria-label="Container">
+                  {tabs.map(t => {
+                    const locked = t.id == null
+                    const count = locked ? 0 : inventory.filter(i => i.containerId === t.id).length
+                    return (
+                      <button
+                        key={t.kind ?? PERSON}
+                        type="button"
+                        role="tab"
+                        aria-selected={t.id === active.id}
+                        aria-disabled={locked}
+                        className={[
+                          styles.segBtn,
+                          t.id === active.id ? styles.on : '',
+                          locked ? styles.locked : '',
+                          denyKind && denyKind === t.kind ? styles.deny : '',
+                        ].filter(Boolean).join(' ')}
+                        title={locked ? 'No container equipped in this slot — equip one from the Equipment screen' : undefined}
+                        onClick={() => selectTab(t)}
+                      >
+                        <span className={styles.sgFrame} />
+                        <span className={styles.sgInner}>
+                          <i className={`fa-solid ${t.icon}`} aria-hidden="true" />
+                          {t.label}
+                          <span className={styles.sgN}>
+                            {locked ? <i className="fa-solid fa-lock" aria-hidden="true" /> : count}
+                          </span>
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
-              ) : (
-                <div className={styles.cargoPad}>
-                  <div
-                    ref={gridRef}
-                    className={styles.cargoGrid}
-                    onPointerMove={onPointerMove}
-                    onPointerUp={() => void onPointerUp()}
-                    onPointerCancel={() => setDrag(null)}
-                    onPointerLeave={() => { if (!drag && !pinned) setHovered(null) }}
-                  >
-                    {/* empty cells — the lattice backdrop. Hover clears here (a
-                        genuinely empty region) and at the grid edge, NOT in the
-                        4px gaps between tiles — otherwise sweeping across the bag
-                        flickers between item detail and the placeholder. */}
-                    {emptyCells(placed).map(({ col, row }) => (
-                      <div
-                        key={`e${row}-${col}`}
-                        className={styles.cellEmpty}
-                        style={{ gridColumn: col + 1, gridRow: row + 1 }}
-                        onPointerEnter={() => { if (!drag && !pinned) setHovered(null) }}
-                      />
-                    ))}
 
-                    {/* item tiles */}
-                    {placed.map(p => (
-                      <ItemTile
-                        key={p.item.id ?? `${p.col},${p.row}`}
-                        p={p}
-                        dragging={drag?.id === p.item.id && movedRef.current}
-                        selected={pinned === p.item.id}
-                        onPointerDown={e => onTileDown(e, p)}
-                        onEnter={() => { if (!drag && !pinned) setHovered(p.item.id ?? null) }}
-                        onActivate={() => setPinned(prev => (prev === p.item.id ? null : p.item.id ?? null))}
-                      />
-                    ))}
+                {/* --- header line: what this view is and what it holds --- */}
+                <div className={styles.ctrLine}>
+                  <span className={styles.nm}>{active.label}</span>
+                  <span className={styles.sep}>·</span>
+                  <span className={styles.v}>{contents.length}</span> Items
+                  <span className={styles.sep}>·</span>
+                  <span className={styles.v}>{weightless ? 'Weightless' : `${fmtWeight(viewWeight)} lb`}</span>
+                  {weightless && (
+                    <span className={styles.sys}><span className={styles.tick} />Off-Device</span>
+                  )}
+                </div>
 
-                    {/* drag placement preview */}
-                    {drag?.target && movedRef.current && (
-                      <div
-                        className={`${styles.preview}${drag.valid ? '' : ' ' + styles.bad}`}
-                        style={{
-                          gridColumn: `${drag.target.col + 1} / span ${drag.w}`,
-                          gridRow: `${drag.target.row + 1} / span ${drag.h}`,
-                        }}
-                        aria-hidden="true"
-                      />
-                    )}
+                {/* --- utility bar: reach readout (grid) / chips + sort (list) --- */}
+                <div className={styles.utilBar}>
+                  {active.id === PERSON ? (
+                    <>
+                      <span className={styles.reachRead}>
+                        <span className={styles.k}>Reach</span> Belt
+                        <span className={styles.k}>·</span> Pockets
+                        <span className={styles.k}>·</span> Quick-Access
+                      </span>
+                      <span className={`${styles.reachRead} ${styles.free}`}>
+                        <span className={styles.k}>Cells</span>
+                        <span className={styles.acc}>{usedCells} / {GRID_CELLS}</span>
+                      </span>
+                    </>
+                  ) : (
+                    <ListUtilBar
+                      items={contents} filter={filter} sortBy={sortBy}
+                      onFilter={setFilter} onSort={setSortBy}
+                    />
+                  )}
+                </div>
+
+                {/* --- the pane itself --- */}
+                {active.id === PERSON ? (
+                  <div className={styles.gridWrap}>
+                    <div
+                      ref={gridRef}
+                      className={styles.opGrid}
+                      onPointerMove={onPointerMove}
+                      onPointerUp={() => void onPointerUp()}
+                      onPointerCancel={() => setDrag(null)}
+                    >
+                      {emptyCells(placed).map(c => (
+                        <div
+                          key={`e${c.row}-${c.col}`}
+                          className={styles.cellEmpty}
+                          style={{ gridColumn: c.col, gridRow: c.row }}
+                        />
+                      ))}
+                      {placed.map(p => (
+                        <ItemTile
+                          key={p.item.id ?? `${p.col},${p.row}`}
+                          p={p}
+                          dragging={drag?.id === p.item.id && movedRef.current}
+                          bind={bind}
+                          onPointerDown={e => onTileDown(e, p)}
+                          onActivate={() => { hideTooltip(); setPopupId(p.item.id ?? null) }}
+                        />
+                      ))}
+                      {drag?.target && movedRef.current && (
+                        <div
+                          className={`${styles.preview}${drag.valid ? '' : ' ' + styles.bad}`}
+                          style={{
+                            gridColumn: `${drag.target.col} / span ${drag.w}`,
+                            gridRow: `${drag.target.row} / span ${drag.h}`,
+                          }}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* ===================== RIGHT — DETAIL + LOAD ===================== */}
-        <section className={`${styles.col} ${styles.right}`} aria-label="Item detail and load">
-          <div className={styles.colHeader}>
-            <span className={styles.chNum}>02</span>
-            <span className={styles.chTitle}>Item Detail</span>
-            <span className={styles.chMeta}>
-              {shown
-                ? <><span className="acc">{CAT_LABEL[shown.category ?? 'misc']}</span> · {rarityLabel(shown.rarity ?? 'common')}</>
-                : 'No Selection'}
-            </span>
-          </div>
-          <div className={`${styles.region} ${styles.detail}`}>
-            <div className={styles.rFrame} />
-            <div className={styles.rGap} />
-            <div className={styles.rLine} />
-            <div className={styles.rInner}>
-              <span className={`${styles.rCorner} ${styles.tl}`} />
-              <span className={`${styles.rCorner} ${styles.br}`} />
-              <div className={styles.detailBody}>
-                {shown ? (
-                  <ItemDetail
-                    item={shown} target={resolveEquipTarget(shown, gear)} busy={busy}
-                    actionable={pinned != null}
-                    onEquip={() => void equip(shown)}
-                    onUse={() => void use(shown)}
-                    onDrop={() => void drop(shown)}
-                  />
                 ) : (
-                  <div className={styles.detailEmpty}>
-                    <div className="prompt">Select Item <span className="cur">█</span></div>
-                    <div className="hint">// Hover or click any cell</div>
-                  </div>
+                  <ContainerList
+                    items={contents} filter={filter} sortBy={sortBy} weightless={weightless}
+                    bind={bind}
+                    onPick={id => { hideTooltip(); setPopupId(id) }}
+                  />
                 )}
               </div>
             </div>
           </div>
+        </section>
 
-          <div className={`${styles.colHeader} ${styles.tight}`}>
-            <span className={styles.chNum}>03</span>
+        {/* ===================== RIGHT — LOAD / COIN ===================== */}
+        <section className={`${styles.col} ${styles.right}`} aria-label="Load and coin">
+          <div className={styles.colHeader}>
+            <span className={styles.chNum}>02</span>
             <span className={styles.chTitle}>Load / Coin</span>
             <span className={styles.chMeta} onClick={() => nav('/equipment')} style={{ cursor: 'pointer' }}>Equipment ↩</span>
           </div>
@@ -435,7 +478,6 @@ export function Inventory() {
               <span className={`${styles.rCorner} ${styles.tl}`} />
               <span className={`${styles.rCorner} ${styles.br}`} />
               <div className={styles.loadBody}>
-                {/* burden */}
                 <div className={styles.burden}>
                   <div className={styles.subHead}>Burden Manifest</div>
                   <div className={`${styles.burdenReadout}${overBurdened ? ' ' + styles.over : ''}`}>
@@ -454,17 +496,23 @@ export function Inventory() {
                     <span style={{ left: '66.66%' }}>Heavy · {heavyAt}</span>
                   </div>
                   <div className={styles.slotRow}>
-                    <span className="acc">{inventory.length}</span><span>Items</span>
+                    <span className="acc">{inventory.length}</span><span>Items Carried</span>
                     <span className="sep">·</span>
-                    <span>{totalSlots}</span><span>Slots</span>
-                    <span className="sep">·</span>
-                    <span className="acc">{freeCells}</span><span>Free</span>
+                    <span className="acc">{usedCells}</span><span>/ {GRID_CELLS} Reachable</span>
+                  </div>
+                  {/* Weight is the ONLY capacity system now: these tiers slow the
+                      character, they never block a pickup. */}
+                  <div className={styles.encNote}>
+                    {load.current > heavyAt
+                      ? <span className={styles.warn}>// Heavily encumbered — speed −20 ft, disadv. on STR/DEX/CON checks</span>
+                      : load.current > encAt
+                        ? <span className={styles.warn}>// Encumbered — speed −10 ft</span>
+                        : <span>// Unencumbered</span>}
                   </div>
                 </div>
 
                 <div className={styles.ldDivider} />
 
-                {/* coin purse */}
                 <div className={styles.coin}>
                   <div className={styles.subHead}>Coin Purse</div>
                   <div className={styles.coinRow}>
@@ -478,6 +526,24 @@ export function Inventory() {
           </div>
         </section>
       </main>
+
+      {tooltip}
+
+      {popupItem && (
+        <ItemPopup
+          item={popupItem}
+          gear={gear}
+          inventory={inventory}
+          target={resolveEquipTarget(popupItem, gear)}
+          busy={busy}
+          onEquip={() => void equip(popupItem)}
+          onUse={() => void use(popupItem)}
+          onMove={destId => void moveTo(popupItem, destId)}
+          onDrop={() => void drop(popupItem)}
+          onOpenContainer={id => { setPopupId(null); setActiveId(id); setFilter('all') }}
+          onClose={() => setPopupId(null)}
+        />
+      )}
     </>
   )
 }
@@ -490,127 +556,154 @@ interface DragState {
   valid: boolean
 }
 
-/** Cells not covered by any placed item — rendered as the lattice backdrop. */
-function emptyCells(placed: Placed[]): { col: number; row: number }[] {
-  const occ = new Set<string>()
-  for (const p of placed)
-    for (let r = p.row; r < p.row + p.h; r++)
-      for (let c = p.col; c < p.col + p.w; c++) occ.add(`${r},${c}`)
-  const out: { col: number; row: number }[] = []
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++)
-      if (!occ.has(`${r},${c}`)) out.push({ col: c, row: r })
-  return out
+/** Facts-only hover card for a tile or row. Never prose, never buttons. */
+export function itemTooltipData(item: (InventoryItem | EquippedItem) & Partial<WeaponData>) {
+  const cat = item.category ?? 'misc'
+  const rows: [string, string][] = [
+    ['Category', CAT_LABEL[cat]],
+    ['Weight', item.weight != null ? `${itemWeight(item)} lb` : '—'],
+  ]
+  const keyStat = item.damage ?? item.damageDice ?? item.rows?.[0]?.[1]
+  if (keyStat) rows.push([item.category === 'weapon' ? 'Damage' : 'Detail', String(keyStat)])
+  if (item.qty && item.qty > 1) rows.push(['Quantity', `×${item.qty}`])
+  return {
+    name: item.name,
+    sub: `${rarityLabel(item.rarity ?? 'common')} · ${CAT_LABEL[cat]}`,
+    rows,
+    rarity: item.rarity ?? 'common',
+  }
 }
 
-function ItemTile({ p, dragging, selected, onPointerDown, onEnter, onActivate }: {
-  p: Placed; dragging: boolean; selected: boolean
+function ItemTile({ p, dragging, bind, onPointerDown, onActivate }: {
+  p: Placed; dragging: boolean
+  bind: ReturnType<typeof useItemTooltip>['bind']
   onPointerDown: (e: React.PointerEvent) => void
-  onEnter: () => void; onActivate: () => void
+  onActivate: () => void
 }) {
   const { item } = p
-  const rarity = item.rarity ?? 'common'
   const cat = item.category ?? 'misc'
   return (
     <button
       type="button"
-      className={`${styles.cellItem} ${fpClass(p.w, p.h)}${dragging ? ' ' + styles.dragging : ''}${selected ? ' ' + styles.selected : ''}`}
-      data-rarity={rarity}
+      className={`${styles.cellItem} ${fpClass(p.w, p.h)}${dragging ? ' ' + styles.dragging : ''}${item.locked ? ' ' + styles.lockedItem : ''}`}
+      data-rarity={item.rarity ?? 'common'}
       data-cat={cat}
-      style={{ gridColumn: `${p.col + 1} / span ${p.w}`, gridRow: `${p.row + 1} / span ${p.h}` }}
+      style={{ gridColumn: `${p.col} / span ${p.w}`, gridRow: `${p.row} / span ${p.h}` }}
       onPointerDown={onPointerDown}
-      onPointerEnter={onEnter}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate() } }}
       aria-label={`${item.name}${item.qty && item.qty > 1 ? ` ×${item.qty}` : ''}`}
+      {...bind(itemTooltipData(item))}
     >
       <i className={`fa-solid ${CAT_CORNER[cat]} ${styles.catCorner}`} aria-hidden="true" />
       <i className={`fa-solid ${item.icon ?? 'fa-cube'} ${styles.glyph}`} style={item.flip ? { transform: 'scaleX(-1)' } : undefined} aria-hidden="true" />
+      {item.locked && <i className={`fa-solid fa-lock ${styles.lockPip}`} aria-hidden="true" />}
       {item.qty && item.qty > 1 && <span className={styles.stack}>×{item.qty}</span>}
     </button>
   )
 }
 
-/** Per-equip-target label for the Equip button. */
-function equipLabel(target: EquipTarget): string {
-  switch (target.kind) {
-    case 'gear':      return 'Equip'
-    case 'weapon':    return target.hand === 'main' ? 'Equip · Main' : 'Equip · Off'
-    case 'container': return 'Equip · Carry'
-    case 'none':      return target.reason
+/** Category chips + sort. The main navigation tool once a container holds 100+
+ *  items, which is exactly the case the grid could never handle. */
+function ListUtilBar({ items, filter, sortBy, onFilter, onSort }: {
+  items: InventoryItem[]
+  filter: ItemCategory | 'all'
+  sortBy: SortKey
+  onFilter: (f: ItemCategory | 'all') => void
+  onSort: (s: SortKey) => void
+}) {
+  const counts = new Map<ItemCategory, number>()
+  for (const i of items) {
+    const c = i.category ?? 'misc'
+    counts.set(c, (counts.get(c) ?? 0) + 1)
   }
+  const chip = (key: ItemCategory | 'all', label: string, n: number) => (
+    <button
+      key={key} type="button"
+      className={`${styles.chip}${filter === key ? ' ' + styles.on : ''}`}
+      onClick={() => onFilter(key)}
+    >
+      {label}<span className={styles.n}>{n}</span>
+    </button>
+  )
+  return (
+    <>
+      {chip('all', 'All', items.length)}
+      {CAT_ORDER.filter(c => counts.has(c)).map(c => chip(c, CAT_LABEL[c], counts.get(c)!))}
+      <span className={styles.sortWrap}>
+        <span className={styles.lab}>Sort</span>
+        <select
+          className={styles.sortSel} value={sortBy}
+          onChange={e => onSort(e.target.value as SortKey)}
+          aria-label="Sort items"
+        >
+          <option value="name">Name</option>
+          <option value="weight">Weight</option>
+          <option value="value">Value</option>
+          <option value="category">Category</option>
+        </select>
+      </span>
+    </>
+  )
 }
 
-function ItemDetail({ item, target, busy, actionable, onEquip, onUse, onDrop }: {
-  item: InventoryItem; target: EquipTarget; busy: boolean; actionable: boolean
-  onEquip: () => void; onUse: () => void; onDrop: () => void
+/** A container view: an unlimited, sortable, filterable list. No geometry — sort
+ *  order is a view preference, never stored state. */
+function ContainerList({ items, filter, sortBy, weightless, bind, onPick }: {
+  items: InventoryItem[]
+  filter: ItemCategory | 'all'
+  sortBy: SortKey
+  weightless: boolean
+  bind: ReturnType<typeof useItemTooltip>['bind']
+  onPick: (id: string) => void
 }) {
-  const [confirmDrop, setConfirmDrop] = useState(false)
-  // Reset the drop confirmation whenever the shown item changes.
-  useEffect(() => { setConfirmDrop(false) }, [item.id])
+  const rows = useMemo(() => {
+    const list = filter === 'all' ? items.slice() : items.filter(i => (i.category ?? 'misc') === filter)
+    return list.sort((a, b) => {
+      if (sortBy === 'weight') return itemWeight(b) - itemWeight(a) || a.name.localeCompare(b.name)
+      if (sortBy === 'value') return (b.value ?? 0) * (b.qty ?? 1) - (a.value ?? 0) * (a.qty ?? 1) || a.name.localeCompare(b.name)
+      if (sortBy === 'category') {
+        return CAT_ORDER.indexOf(a.category ?? 'misc') - CAT_ORDER.indexOf(b.category ?? 'misc')
+          || a.name.localeCompare(b.name)
+      }
+      return a.name.localeCompare(b.name)
+    })
+  }, [items, filter, sortBy])
 
-  const rarity = item.rarity ?? 'common'
-  const cat = item.category ?? 'misc'
-  const canUse = item.category === 'consumable' && (item.heal !== undefined || !!item.effects)
-  const canEquip = target.kind !== 'none'
-  const weightTotal = item.weight !== undefined ? item.weight * (item.qty ?? 1) : undefined
+  if (rows.length === 0) {
+    return (
+      <div className={styles.listNone}>
+        <div className={styles.p}>Nothing Here</div>
+        <div className={styles.h}>
+          {items.length > 0 ? '// No items of that category in this container' : '// Empty — stow something from ON PERSON'}
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className={styles.detailActive}>
-      <div className={styles.daScroll}>
-        <div className={styles.daName} data-rarity={rarity}>{item.name}</div>
-        <div className={styles.daTags}>
-          <span className={styles.daTag}>{CAT_LABEL[cat]}</span>
-          <span className={styles.daTag}>{rarityLabel(rarity)}</span>
-          {item.qty && item.qty > 1 && <span className={styles.daTag}>Qty ×{item.qty}</span>}
-          {item.type && <span className={styles.daTag}>{item.type}</span>}
-        </div>
-
-        <div className={styles.daStats}>
-          <span className="k">Weight:</span>
-          <span className="v">{item.weight !== undefined ? `${item.weight} lb${item.qty && item.qty > 1 ? ` ea (${weightTotal})` : ''}` : '—'}</span>
-          {item.attune && <><span className="sep">·</span><span className="k">Attune:</span><span className="v">Yes</span></>}
-        </div>
-
-        {item.rows && item.rows.length > 0 && (
-          <div className={styles.daRows}>
-            {item.rows.map(([k, v], i) => (
-              <div key={i} className="row"><span className="rk">{k}</span><span className="rv">{v}</span></div>
-            ))}
-          </div>
-        )}
-
-        {item.flavor && <div className={styles.daDesc}>{item.flavor}</div>}
-      </div>
-
-      {!actionable ? (
-        <div className={styles.daPinHint}>// Click the tile to pin · then Equip / Use / Drop</div>
-      ) : (
-      <div className={styles.daActions}>
-        {canEquip && (
-          <button type="button" className={`${styles.actBtn} ${styles.primary}`} onClick={onEquip} disabled={busy}>
-            <span className={styles.abFrame} />
-            <span className={styles.abInner}><i className="fa-solid fa-circle-up" />{equipLabel(target)}</span>
+    <div className={styles.clist}>
+      {rows.map(it => {
+        const cat = it.category ?? 'misc'
+        return (
+          <button
+            key={it.id}
+            type="button"
+            className={`${styles.crow}${it.locked ? ' ' + styles.lockedItem : ''}`}
+            data-rar={it.rarity ?? 'common'}
+            onClick={() => onPick(it.id!)}
+            {...bind(itemTooltipData(it))}
+          >
+            <span className={styles.ri}><i className={`fa-solid ${it.icon ?? 'fa-cube'}`} aria-hidden="true" /></span>
+            <span className={styles.rn}>
+              {it.locked && <i className={`fa-solid fa-lock ${styles.rowLock}`} aria-hidden="true" />}
+              {it.name}
+            </span>
+            <span className={`${styles.rq}${it.qty && it.qty > 1 ? '' : ' ' + styles.none}`}>×{it.qty ?? 1}</span>
+            <span className={styles.rw}>{weightless ? '—' : `${fmtWeight(itemWeight(it))} lb`}</span>
+            <span className={styles.rc}>{CAT_LABEL[cat]}</span>
           </button>
-        )}
-        {canUse && (
-          <button type="button" className={`${styles.actBtn}${canEquip ? '' : ' ' + styles.primary}`} onClick={onUse} disabled={busy}>
-            <span className={styles.abFrame} />
-            <span className={styles.abInner}><i className="fa-solid fa-hand-holding-droplet" />Use</span>
-          </button>
-        )}
-        {confirmDrop ? (
-          <button type="button" className={`${styles.actBtn} ${styles.drop} ${styles.confirm}${canEquip || canUse ? '' : ' ' + styles.primary}`} onClick={onDrop} disabled={busy}>
-            <span className={styles.abFrame} />
-            <span className={styles.abInner}><i className="fa-solid fa-trash-can" />Confirm Drop?</span>
-          </button>
-        ) : (
-          <button type="button" className={`${styles.actBtn} ${styles.drop}${canEquip || canUse ? '' : ' ' + styles.primary}`} onClick={() => setConfirmDrop(true)} disabled={busy}>
-            <span className={styles.abFrame} />
-            <span className={styles.abInner}><i className="fa-solid fa-trash-can" />Drop</span>
-          </button>
-        )}
-      </div>
-      )}
+        )
+      })}
     </div>
   )
 }
