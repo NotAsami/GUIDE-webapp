@@ -550,14 +550,32 @@
 /* ============================================================
    RIGHT COLUMN — Gear Grid 3x3
    ============================================================ */
+/* Eight worn slots, 4 across x 2 down. Explicit rows (not grid-auto-rows) so the
+   block has a definite height and the storage button + shard panel below it keep
+   their positions whether slots are filled or empty. */
 .gearGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-auto-rows: 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   flex: 2;
   min-height: 0;
 }
+/* At 8 slots the labels have half the width they had at 6 — step the type down
+   rather than letting names wrap to three lines. */
+.gearGrid .sLabel { font-size: 8px; letter-spacing: 0.16em; }
+.gearGrid .sName { font-size: 8.5px; letter-spacing: 0.08em; }
+.gearGrid .sInner { padding: 6px 6px 7px; }
+.gearGrid .sIcon { font-size: clamp(15px, 2.1vh, 22px); }
+
+/* attunement pip — only on slots that actually consume one of the three */
+.sAtt {
+  position: absolute; right: 19px; top: 4px; z-index: 3;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em;
+  color: var(--cyan); opacity: 0.9; pointer-events: none;
+}
+/* the ATTUNED readout goes red at the cap — more slots never meant more magic */
+.attMaxed { color: var(--danger-hot); }
 .slot {
   --cut: 11px;
   position: relative;
@@ -1007,7 +1025,7 @@
   top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 50px);
   bottom: calc(var(--bar-bottom-h) + 22px);
   right: 0;
-  width: min(360px, 88vw);
+  width: min(400px, 90vw);
   z-index: 40;
   transform: translateX(106%);
   transition: transform 260ms cubic-bezier(.2, .7, .2, 1);
@@ -1066,3 +1084,192 @@
 }
 
 
+
+/* ============================================================
+   STORAGE CONTAINERS — button between the gear grid and the shards
+   Shards extend what Ros can DO; containers extend what Ros can HOLD. The
+   button sits on that boundary. The panel itself is a slide-over (see .sidebar)
+   rather than a third block, so the gear column keeps its shape.
+   ============================================================ */
+.carryBtn {
+  --cut: 9px;
+  position: relative; flex: 0 0 auto;
+  height: clamp(32px, 4vh, 40px);
+  width: 100%;
+  margin-top: clamp(7px, 1.2vh, 12px);
+  background: transparent; border: 0; padding: 0; cursor: pointer;
+  font-family: var(--font-mono);
+}
+.cbFrame {
+  position: absolute; inset: 0;
+  background: rgba(212, 191, 125, 0.55);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: background 200ms ease;
+}
+.cbInner {
+  position: absolute; inset: 1.5px;
+  background: linear-gradient(180deg, #1a1a1a, #111);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  display: flex; align-items: center; gap: 11px; padding: 0 13px;
+  color: var(--beige); font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+  transition: color 180ms ease, box-shadow 180ms ease;
+}
+.cbInner > i { font-size: 13px; color: var(--beige); transition: color 180ms ease; }
+.cbLabel { flex: 1; text-align: left; }
+.cbCount {
+  font-size: 9px; letter-spacing: 0.1em; color: var(--cyan);
+  min-width: 14px; text-align: right;
+}
+.cbChev { font-size: 9px; color: var(--beige-dim); }
+.carryBtn:hover .cbInner { color: var(--text); box-shadow: inset 0 0 20px rgba(0, 166, 214, 0.16); }
+.carryBtn:hover .cbInner > i { color: var(--cyan-hot); }
+.carryBtn.on .cbFrame { background: var(--cyan); }
+.carryBtn.on .cbInner {
+  color: var(--cyan-hot);
+  background:
+    radial-gradient(120% 90% at 50% 60%, rgba(0, 166, 214, 0.16), transparent 60%),
+    linear-gradient(180deg, #16252b, #0f1b21);
+  box-shadow: inset 0 0 22px rgba(0, 166, 214, 0.26);
+}
+.carryBtn.on .cbInner > i, .carryBtn.on .cbChev { color: var(--cyan-hot); }
+
+/* --- container rows inside the sidebar --- */
+.carryRow {
+  flex: 0 0 auto;
+  border: 1px solid rgba(212, 191, 125, 0.2);
+  background: rgba(0, 0, 0, 0.28);
+}
+.crMain { display: flex; align-items: center; gap: 9px; padding: 9px 10px; }
+.crIcon { flex: 0 0 16px; font-size: 13px; color: var(--beige); text-align: center; }
+.crName {
+  flex: 1; min-width: 0;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em;
+  color: var(--text); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.crRead {
+  flex: 0 0 auto;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.1em;
+  color: var(--beige-dim); text-transform: uppercase; white-space: nowrap;
+}
+.crRead .cap { color: var(--cyan); }
+.crChev {
+  flex: 0 0 auto; width: 16px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 0; cursor: pointer;
+  color: var(--cyan); font-size: 9px;
+  transition: transform 180ms ease;
+}
+.carryRow.expanded .crChev { transform: rotate(90deg); }
+
+.cAct {
+  --cut: 3px; --bc: rgba(212, 191, 125, 0.28);
+  flex: 0 0 auto;
+  background-color: transparent; border: 1px solid var(--bc);
+  color: var(--beige-dim);
+  font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.16em;
+  text-transform: uppercase; padding: 4px 7px; cursor: pointer;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: color 150ms ease, box-shadow 150ms ease;
+  /* cut-corner border fix — redraw the diagonals clip-path removes */
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat; background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
+.cAct:hover { color: var(--danger-hot); --bc: rgba(185, 58, 58, 0.6); }
+.cAct.equip { color: var(--cyan); --bc: rgba(0, 166, 214, 0.42); }
+.cAct.equip:hover { color: var(--cyan-hot); --bc: var(--cyan); box-shadow: 0 0 9px rgba(0, 166, 214, 0.26); }
+.cAct.danger { color: var(--danger-hot); --bc: var(--danger); }
+
+/* inline expansion — contents in place, CAPPED so the panel below can't shift
+   by an unpredictable amount */
+.crBody {
+  margin: 0 10px 8px 34px; padding: 5px 9px;
+  border-left: 1px solid rgba(0, 166, 214, 0.35);
+  background: rgba(0, 0, 0, 0.3);
+}
+.crLine {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--muted); padding: 2px 0;
+}
+.crLine .q { color: var(--text); }
+.crMore, .crMore .q { color: var(--beige-dim); }
+.crWarn {
+  padding: 0 10px 8px 34px;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--danger-hot);
+}
+
+/* owned-but-unequipped: one strip, so stowing never grows the panel */
+.carryStowed {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(212, 191, 125, 0.22);
+  background: rgba(0, 0, 0, 0.22);
+}
+.csKey {
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em;
+  color: var(--beige-dim); text-transform: uppercase;
+}
+.csRow { display: flex; align-items: center; gap: 8px; }
+.csName {
+  flex: 1; min-width: 0;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em;
+  color: var(--beige); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ============================================================
+   AMMO PICKER — which arrow is nocked is a property of the ATTACK
+   ============================================================ */
+.ammo { position: relative; flex: 0 0 auto; }
+.ammoBtn {
+  --cut: 5px; --bc: rgba(212, 191, 125, 0.32);
+  display: flex; align-items: center; gap: 7px;
+  height: 26px; padding: 0 9px;
+  background-color: rgba(0, 0, 0, 0.4); border: 1px solid var(--bc);
+  color: var(--beige);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em;
+  text-transform: uppercase; cursor: pointer;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: color 150ms ease;
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat; background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
+.ammoBtn > i:first-child { font-size: 9px; color: var(--beige-dim); }
+.amName { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.amCt { color: var(--cyan); }
+.amChev { font-size: 8px; color: var(--beige-dim); }
+.ammoBtn:hover { color: var(--text); --bc: rgba(0, 166, 214, 0.5); }
+.ammo.open .ammoBtn { --bc: var(--cyan); color: var(--text); }
+
+/* opens UPWARD and out of the weapon card: the card is clip-pathed, so a menu
+   dropping downward inside it would be sliced off at the corner cut */
+.ammoMenu {
+  position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 60;
+  min-width: 190px; padding: 5px;
+  background: rgba(8, 8, 8, 0.97); border: 1px solid var(--beige);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.6), 0 0 16px rgba(0, 166, 214, 0.18);
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+  display: flex; flex-direction: column;
+}
+.amOpt {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  width: 100%; background: transparent; border: 0; cursor: pointer;
+  padding: 7px 9px; text-align: left;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted);
+}
+.amOpt:hover { color: var(--text); background: rgba(0, 166, 214, 0.09); }
+.amOpt.on { color: var(--cyan-hot); }
+.amOpt .q { color: var(--beige); }
+.amOpt.on .q { color: var(--cyan); }
