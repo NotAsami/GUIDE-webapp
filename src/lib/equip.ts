@@ -13,6 +13,9 @@ import type {
   CharacterRow, CharacterSection, ContainerKind, EquippedGear, EquippedItem,
   EquippedWeapon, InventoryItem, ItemSlot, Json, WeaponHand,
 } from './database.types'
+import { PERSON, place, routeItem } from './placement'
+
+export { PERSON }
 
 type Patch = Partial<Pick<CharacterRow, CharacterSection>>
 
@@ -54,9 +57,6 @@ export const TAB_KIND_ORDER: readonly ContainerKind[] = [
   'sack', 'backpack', 'bagOfHolding',
 ] as const
 
-/** The on-person grid, which is a container id everywhere else in the app. */
-export const PERSON = 'person'
-
 /** The eight worn gear slots, in gear-grid order (4 across, 2 down). Every place
  *  that walks the worn slots reads THIS — burden, effects, features and the
  *  Equipment grid each used to carry their own copy, which is why widening the
@@ -82,19 +82,16 @@ export function freshItemId(): string {
   return `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
 }
 
-/** A displaced/unequipped item re-enters the bag ON PERSON with no position, so
- *  the grid auto-packs it into the first free cells. If the bag already holds an
- *  item with the same id (possible after a seed re-run restocked the bag while
- *  this copy sat equipped), the returning copy is re-keyed — every inventory
- *  operation (move/drop/use) targets items by id, so an id collision makes two
- *  tiles move and drop as one.
+/** A displaced/unequipped item re-enters the bag through the ROUTING CHAIN, so it
+ *  lands on person when there's room and overflows into a container when there
+ *  isn't — an unequip can never fail for lack of space.
  *
- *  NOTE (slice 2): this lands everything on person unconditionally. The routing
- *  chain from spec §7 — matching container, then on person, then bag of holding
- *  or backpack — belongs here and arrives with the Inventory screen, which is
- *  what will make "the grid is full" a non-event. */
-function toCarried(item: EquippedItem, bag: InventoryItem[]): InventoryItem {
-  const carried = { ...item, containerId: PERSON } as InventoryItem
+ *  If the bag already holds an item with the same id (possible after a seed re-run
+ *  restocked the bag while this copy sat equipped), the returning copy is re-keyed
+ *  — every inventory operation (move/drop/use) targets items by id, so an id
+ *  collision makes two tiles move and drop as one. */
+function toCarried(item: EquippedItem, bag: InventoryItem[], gear: EquippedGear): InventoryItem {
+  const carried = place({ ...item } as InventoryItem, routeItem(item, gear, bag))
   if (carried.id && bag.some(i => i.id === carried.id)) {
     return { ...carried, id: freshItemId() }
   }
@@ -120,7 +117,7 @@ export function equipGearPatch(
   const occupant = gear[slot] ?? null
   const nextGear = { ...gear, [slot]: toEquipped(item) }
   const nextInv = inventory.filter(i => i.id !== item.id)
-  if (occupant) nextInv.push(toCarried(occupant, nextInv))
+  if (occupant) nextInv.push(toCarried(occupant, nextInv, gear))
   return patch(nextGear, nextInv)
 }
 
@@ -129,7 +126,7 @@ export function unequipGearPatch(
 ): Patch | null {
   const item = gear[slot]
   if (!item) return null
-  return patch({ ...gear, [slot]: null }, [...inventory, toCarried(item, inventory)])
+  return patch({ ...gear, [slot]: null }, [...inventory, toCarried(item, inventory, gear)])
 }
 
 /* ---------- weapons ---------- */
@@ -145,7 +142,7 @@ export function equipWeaponPatch(
   const kept = weapons.filter(w => w.hand !== hand)
   const nextGear = { ...gear, weapons: [...kept, weaponItem] }
   const nextInv = inventory.filter(i => i.id !== item.id)
-  for (const w of displaced) nextInv.push(toCarried(w, nextInv))
+  for (const w of displaced) nextInv.push(toCarried(w, nextInv, gear))
   return patch(nextGear, nextInv)
 }
 
@@ -156,7 +153,7 @@ export function unequipWeaponPatch(
   const w = weapons.find(wp => wp.hand === hand)
   if (!w) return null
   const nextGear = { ...gear, weapons: weapons.filter(wp => wp.hand !== hand) }
-  return patch(nextGear, [...inventory, toCarried(w, inventory)])
+  return patch(nextGear, [...inventory, toCarried(w, inventory, gear)])
 }
 
 /* ---------- containers ---------- */
@@ -178,7 +175,7 @@ export function equipContainerPatch(
   const displaced = byKind[kind] ?? null
   byKind[kind] = toEquipped(item)
   const nextInv = inventory.filter(i => i.id !== item.id)
-  if (displaced) nextInv.push(toCarried(displaced, nextInv))
+  if (displaced) nextInv.push(toCarried(displaced, nextInv, gear))
   return patch({ ...gear, containers: byKind }, nextInv)
 }
 
@@ -191,7 +188,7 @@ export function unequipContainerPatch(
   const item = byKind[kind]
   if (!item) return null
   delete byKind[kind]
-  return patch({ ...gear, containers: byKind }, [...inventory, toCarried(item, inventory)])
+  return patch({ ...gear, containers: byKind }, [...inventory, toCarried(item, inventory, gear)])
 }
 
 /** How many items are inside a container — the count its row and tab display, and
