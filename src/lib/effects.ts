@@ -16,13 +16,15 @@ import type {
   AbilityKey, AbilityScores, ActiveEffect, CharacterRow, EffectiveSheet,
   EquippedItem, ItemEffects, ItemSlot,
 } from './database.types'
+import { ITEM_SLOTS } from './equip'
 
-const GEAR_SLOT_KEYS: ItemSlot[] = ['helmet', 'armor', 'cloak', 'boots', 'accessory']
+const GEAR_SLOT_KEYS: readonly ItemSlot[] = ITEM_SLOTS
 const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 const ZERO: AbilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
 
-/** The worn gear whose effects apply passively (the 5 single-item slots). Quick
- *  Access holds consumables and weapon effects are per-attack, so neither counts. */
+/** The worn gear whose effects apply passively (the eight single-item slots).
+ *  Weapon effects are per-attack, and a container grants storage rather than
+ *  stats, so neither counts here. */
 export function wornGear(character: CharacterRow): EquippedItem[] {
   const eq = (character.equipped ?? {}) as Record<string, EquippedItem | null>
   return GEAR_SLOT_KEYS.map(k => eq[k]).filter((i): i is EquippedItem => !!i)

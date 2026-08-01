@@ -7,10 +7,13 @@
  * (gear slots, weapons, quick-access pouch, the G.U.I.D.E. shard) — equipping an
  * item doesn't make it weightless. Capacity is the SRD rule: STR × 15 lb, read
  * off the EFFECTIVE STR so a Belt of Giant Strength raises what you can haul too.
+ *
+ * Since the Inventory Refactor this is the ONLY capacity system: encumbrance slows
+ * the character, it never blocks a pickup. There is no slot cap to run out of.
  */
 
 import type { CharacterRow, EquippedItem, EquippedGear, InventoryItem } from './database.types'
-import { getGear, getInventory, getWeapons, getQuickAccess } from './equip'
+import { ITEM_SLOTS, getGear, getInventory, getWeapons, getContainers } from './equip'
 import { effectiveSheet } from './effects'
 
 /** Per-stack weight: per-unit weight × quantity (both default sensibly). */
@@ -18,16 +21,37 @@ export function itemWeight(item: { weight?: number; qty?: number }): number {
   return (item.weight ?? 0) * (item.qty ?? 1)
 }
 
-/** Every weighable item the character has on them — carried + equipped. */
+/** Every weighable item the character has on them — carried + equipped.
+ *
+ *  Containers make this less obvious than it was. A container's OWN weight always
+ *  counts (a bag of holding is 15 lb of bag), but the contents of a `weightless`
+ *  container do not — that's the whole point of owning one. So the inventory is
+ *  filtered by which container each item is in, rather than summed wholesale. */
 function allHeldItems(character: CharacterRow): (EquippedItem | InventoryItem)[] {
   const gear: EquippedGear = getGear(character)
-  const items: (EquippedItem | InventoryItem)[] = [...getInventory(character)]
-  for (const k of ['helmet', 'armor', 'cloak', 'boots', 'accessory'] as const) {
+  const containers = getContainers(gear)
+  const inventory = getInventory(character)
+
+  /** Ids of every weightless container, whether it is worn or sitting in the bag
+   *  itself. Weightlessness belongs to the container, not to its equipped state —
+   *  unequipping a bag of holding must not make its 200 ft of chain suddenly weigh
+   *  100 lb. */
+  const weightlessIds = new Set(
+    [...containers, ...inventory]
+      .filter(c => c.container?.weightless)
+      .map(c => c.id)
+      .filter((id): id is string => !!id),
+  )
+
+  const items: (EquippedItem | InventoryItem)[] =
+    inventory.filter(it => !weightlessIds.has(it.containerId))
+
+  for (const k of ITEM_SLOTS) {
     const it = gear[k]
     if (it) items.push(it)
   }
   items.push(...getWeapons(gear))
-  for (const q of getQuickAccess(gear)) if (q) items.push(q)
+  items.push(...containers)          // the bags themselves always weigh
   if (gear.guideShard) items.push(gear.guideShard)
   return items
 }

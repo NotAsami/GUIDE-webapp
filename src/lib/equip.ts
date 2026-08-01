@@ -10,8 +10,8 @@
  */
 
 import type {
-  CharacterRow, CharacterSection, EquippedGear, EquippedItem, EquippedWeapon,
-  InventoryItem, ItemSlot, Json, WeaponHand,
+  CharacterRow, CharacterSection, ContainerKind, EquippedGear, EquippedItem,
+  EquippedWeapon, InventoryItem, ItemSlot, Json, WeaponHand,
 } from './database.types'
 
 type Patch = Partial<Pick<CharacterRow, CharacterSection>>
@@ -27,17 +27,53 @@ export function getInventory(character: CharacterRow): InventoryItem[] {
 export function getWeapons(gear: EquippedGear): EquippedWeapon[] {
   return gear.weapons ?? []
 }
-export function getQuickAccess(gear: EquippedGear): (EquippedItem | null)[] {
-  return [gear.quickAccess?.[0] ?? null, gear.quickAccess?.[1] ?? null]
+/** Equipped containers as a flat list, in tab order. Keyed by `container.kind` in
+ *  the JSONB — one per kind, which is what enforces "1 backpack, 1 bag of holding,
+ *  1 sack, 1 quiver" without a slot enum to police. */
+export function getContainers(gear: EquippedGear): EquippedItem[] {
+  const byKind = gear.containers ?? {}
+  return CONTAINER_KIND_ORDER
+    .map(kind => byKind[kind])
+    .filter((c): c is EquippedItem => !!c)
 }
+
+/** Every container kind, in the order they appear as rows in the storage sidebar.
+ *  Includes the quiver — the sidebar lists ALL equipped containers. */
+export const CONTAINER_KIND_ORDER: readonly ContainerKind[] = [
+  'sack', 'backpack', 'bagOfHolding', 'quiver',
+] as const
+
+/** The kinds that claim a TAB on the Inventory screen, after ON PERSON. Fixed and
+ *  deliberate: the bar shows one tab per SLOT, not per owned item, so a kind with
+ *  nothing equipped renders locked rather than vanishing.
+ *
+ *  The quiver is deliberately ABSENT — it is an `inline` container whose contents
+ *  are drawn by the weapon's ammo picker, never browsed as a page. Do not "fix"
+ *  this by reusing CONTAINER_KIND_ORDER. See Inventory Refactor spec §3. */
+export const TAB_KIND_ORDER: readonly ContainerKind[] = [
+  'sack', 'backpack', 'bagOfHolding',
+] as const
+
+/** The on-person grid, which is a container id everywhere else in the app. */
+export const PERSON = 'person'
+
+/** The eight worn gear slots, in gear-grid order (4 across, 2 down). Every place
+ *  that walks the worn slots reads THIS — burden, effects, features and the
+ *  Equipment grid each used to carry their own copy, which is why widening the
+ *  enum broke four files at once. */
+export const ITEM_SLOTS: readonly ItemSlot[] = [
+  'helmet', 'armor', 'cloak', 'boots',
+  'gloves', 'neck', 'ring1', 'ring2',
+] as const
 
 /* ---------- shape conversions ---------- */
 
-/** Drop only the grid POSITION when an item moves into an equipped slot — the
- *  footprint (w/h) is intrinsic and rides along so it's preserved when the item
- *  later returns to the bag (a 2×2 Chain Mail stays 2×2). */
+/** Drop only the PLACEMENT when an item moves into an equipped slot — which
+ *  container it was in and where in that container. The footprint (w/h) is
+ *  intrinsic and rides along, so it's preserved when the item later returns to
+ *  the bag (a 2×2 Chain Mail stays 2×2). */
 function toEquipped(item: InventoryItem): EquippedItem {
-  const { col: _c, row: _r, ...rest } = item
+  const { containerId: _ct, col: _c, row: _r, ...rest } = item
   return rest as EquippedItem
 }
 
@@ -46,14 +82,19 @@ export function freshItemId(): string {
   return `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
 }
 
-/** A displaced/unequipped item re-enters the bag with no grid position, so the
- *  Inventory grid auto-packs it into the first free cells. If the bag already
- *  holds an item with the same id (possible after a seed re-run restocked the
- *  bag while this copy sat equipped), the returning copy is re-keyed — every
- *  inventory operation (move/drop/use) targets items by id, so an id collision
- *  makes two tiles move and drop as one. */
+/** A displaced/unequipped item re-enters the bag ON PERSON with no position, so
+ *  the grid auto-packs it into the first free cells. If the bag already holds an
+ *  item with the same id (possible after a seed re-run restocked the bag while
+ *  this copy sat equipped), the returning copy is re-keyed — every inventory
+ *  operation (move/drop/use) targets items by id, so an id collision makes two
+ *  tiles move and drop as one.
+ *
+ *  NOTE (slice 2): this lands everything on person unconditionally. The routing
+ *  chain from spec §7 — matching container, then on person, then bag of holding
+ *  or backpack — belongs here and arrives with the Inventory screen, which is
+ *  what will make "the grid is full" a non-event. */
 function toCarried(item: EquippedItem, bag: InventoryItem[]): InventoryItem {
-  const carried = item as InventoryItem
+  const carried = { ...item, containerId: PERSON } as InventoryItem
   if (carried.id && bag.some(i => i.id === carried.id)) {
     return { ...carried, id: freshItemId() }
   }
@@ -118,26 +159,48 @@ export function unequipWeaponPatch(
   return patch(nextGear, [...inventory, toCarried(w, inventory)])
 }
 
-/* ---------- quick-access pouch (consumables) ---------- */
+/* ---------- containers ---------- */
 
-/** Move a carried consumable into a quick-access sub-slot (0 or 1). */
-export function addQuickPatch(
-  item: InventoryItem, index: number, gear: EquippedGear, inventory: InventoryItem[],
-): Patch {
-  const qa = getQuickAccess(gear)
-  qa[index] = toEquipped(item)
+/** Equip a carried container into its kind's slot; a container already occupying
+ *  that kind is displaced back to the bag.
+ *
+ *  CONTENTS ARE NOT TOUCHED, and that is the whole trick: an item's `containerId`
+ *  points at the container's id whether the container is worn or not, so contents
+ *  travel with it for free. Unequipping a backpack makes its 13 items unreachable
+ *  (the tab locks) without moving a single one of them; re-equip and they are all
+ *  exactly where they were. */
+export function equipContainerPatch(
+  item: InventoryItem, gear: EquippedGear, inventory: InventoryItem[],
+): Patch | null {
+  const kind = item.container?.kind
+  if (!kind) return null
+  const byKind = { ...(gear.containers ?? {}) }
+  const displaced = byKind[kind] ?? null
+  byKind[kind] = toEquipped(item)
   const nextInv = inventory.filter(i => i.id !== item.id)
-  return patch({ ...gear, quickAccess: qa }, nextInv)
+  if (displaced) nextInv.push(toCarried(displaced, nextInv))
+  return patch({ ...gear, containers: byKind }, nextInv)
 }
 
-export function unequipQuickPatch(
-  index: number, gear: EquippedGear, inventory: InventoryItem[],
+/** Unequip the container occupying a kind. Its contents stay put in `inventory`
+ *  under its id — they are in the bag, and the bag is now in your hands. */
+export function unequipContainerPatch(
+  kind: ContainerKind, gear: EquippedGear, inventory: InventoryItem[],
 ): Patch | null {
-  const qa = getQuickAccess(gear)
-  const item = qa[index]
+  const byKind = { ...(gear.containers ?? {}) }
+  const item = byKind[kind]
   if (!item) return null
-  qa[index] = null
-  return patch({ ...gear, quickAccess: qa }, [...inventory, toCarried(item, inventory)])
+  delete byKind[kind]
+  return patch({ ...gear, containers: byKind }, [...inventory, toCarried(item, inventory)])
+}
+
+/** How many items are inside a container — the count its row and tab display, and
+ *  what a non-empty-unequip confirmation asks about. */
+export function containerContents(
+  containerId: string | undefined, inventory: InventoryItem[],
+): InventoryItem[] {
+  if (!containerId) return []
+  return inventory.filter(i => i.containerId === containerId)
 }
 
 /* ---------- equip-target resolution (Inventory's single "Equip" button) ---------- */
@@ -145,13 +208,16 @@ export function unequipQuickPatch(
 export type EquipTarget =
   | { kind: 'gear'; slot: ItemSlot }
   | { kind: 'weapon'; hand: WeaponHand }
-  | { kind: 'quick'; index: number }
+  | { kind: 'container'; containerKind: ContainerKind }
   | { kind: 'none'; reason: string }
 
 /** Decide where a carried item equips, given the current loadout. Equipment's
  *  modal asks the player which slot/hand; Inventory equips in one tap, so it
- *  needs to resolve the destination itself: gear → its declared slot; weapon →
- *  first free hand (else main, displacing); consumable → first free quick slot. */
+ *  needs to resolve the destination itself: weapon → first free hand (else main,
+ *  displacing); container → its kind's slot; gear → its declared slot.
+ *
+ *  Consumables are no longer an equip target at all — the quick-access pouch is
+ *  gone and a potion is used from wherever it sits. */
 export function resolveEquipTarget(item: InventoryItem, gear: EquippedGear): EquipTarget {
   const isWeapon = item.category === 'weapon' || !!item.damageDice || !!item.hand
   if (isWeapon) {
@@ -161,13 +227,7 @@ export function resolveEquipTarget(item: InventoryItem, gear: EquippedGear): Equ
     const hand: WeaponHand = !hasMain ? 'main' : !hasOff ? 'off' : 'main'
     return { kind: 'weapon', hand }
   }
-  if (item.category === 'consumable') {
-    const qa = getQuickAccess(gear)
-    const index = qa[0] == null ? 0 : qa[1] == null ? 1 : -1
-    return index < 0
-      ? { kind: 'none', reason: 'Quick-access pouch is full' }
-      : { kind: 'quick', index }
-  }
+  if (item.container) return { kind: 'container', containerKind: item.container.kind }
   if (item.slot) return { kind: 'gear', slot: item.slot }
   return { kind: 'none', reason: 'This item can’t be equipped' }
 }
@@ -177,9 +237,9 @@ export function equipTargetPatch(
   item: InventoryItem, target: EquipTarget, gear: EquippedGear, inventory: InventoryItem[],
 ): Patch | null {
   switch (target.kind) {
-    case 'gear':   return equipGearPatch(item, target.slot, gear, inventory)
-    case 'weapon': return equipWeaponPatch(item, target.hand, gear, inventory)
-    case 'quick':  return addQuickPatch(item, target.index, gear, inventory)
-    case 'none':   return null
+    case 'gear':      return equipGearPatch(item, target.slot, gear, inventory)
+    case 'weapon':    return equipWeaponPatch(item, target.hand, gear, inventory)
+    case 'container': return equipContainerPatch(item, gear, inventory)
+    case 'none':      return null
   }
 }

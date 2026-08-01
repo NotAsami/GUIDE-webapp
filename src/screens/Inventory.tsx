@@ -84,12 +84,16 @@ function packItems(items: InventoryItem[]): Placed[] {
 /** Map our item category onto a corner glyph (mirrors the handoff CAT table). */
 const CAT_CORNER: Record<ItemCategory, string> = {
   weapon: 'fa-khanda',
-  gear: 'fa-shield-halved',
+  ammo: 'fa-location-arrow',
+  armor: 'fa-shield-halved',
   consumable: 'fa-flask-vial',
+  tool: 'fa-screwdriver-wrench',
+  quest: 'fa-scroll',
   misc: 'fa-circle-dot',
 }
 const CAT_LABEL: Record<ItemCategory, string> = {
-  weapon: 'Weapon', gear: 'Gear', consumable: 'Consumable', misc: 'Misc',
+  weapon: 'Weapon', ammo: 'Ammunition', armor: 'Armor', consumable: 'Consumable',
+  tool: 'Tool', quest: 'Quest', misc: 'Misc',
 }
 
 function fpClass(w: number, h: number): string {
@@ -529,10 +533,10 @@ function ItemTile({ p, dragging, selected, onPointerDown, onEnter, onActivate }:
 /** Per-equip-target label for the Equip button. */
 function equipLabel(target: EquipTarget): string {
   switch (target.kind) {
-    case 'gear':   return 'Equip'
-    case 'weapon': return target.hand === 'main' ? 'Equip · Main' : 'Equip · Off'
-    case 'quick':  return 'Stow · Quick'
-    case 'none':   return target.reason
+    case 'gear':      return 'Equip'
+    case 'weapon':    return target.hand === 'main' ? 'Equip · Main' : 'Equip · Off'
+    case 'container': return 'Equip · Carry'
+    case 'none':      return target.reason
   }
 }
 

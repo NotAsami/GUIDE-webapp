@@ -8,11 +8,9 @@ import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { formatMod } from '../lib/dnd'
 import {
-  addQuickPatch, equipGearPatch, equipWeaponPatch,
-  unequipGearPatch, unequipQuickPatch, unequipWeaponPatch,
+  equipGearPatch, equipWeaponPatch, unequipGearPatch, unequipWeaponPatch,
 } from '../lib/equip'
 import { activeEffects, effectiveSheet, summarizeEffects } from '../lib/effects'
-import { consumeEffect } from '../lib/consume'
 import {
   handLabel, rollWeaponAttack, weaponAttackBonus, weaponDamageString,
 } from '../lib/weapons'
@@ -37,7 +35,6 @@ export function Equipment() {
   const weapons = gear.weapons ?? []
   const inventory = (character.inventory as unknown as InventoryItem[]) ?? []
   const effects = activeEffects(character)
-  const quickAccess = (gear.quickAccess ?? []) as (QuickItem | null)[]
   const { tooltip, bind } = useItemTooltip()
   const { addRoll } = useRollLog()
 
@@ -47,22 +44,18 @@ export function Equipment() {
   const [manageWeapon, setManageWeapon] = useState<WeaponHand | null>(null)
   /** Which hand the weapon picker is equipping into (null = closed). */
   const [weaponPicker, setWeaponPicker] = useState<WeaponHand | null>(null)
-  /** Which quick-access index's consumable "use" modal is open (null = none). */
-  const [useSlot, setUseSlot] = useState<number | null>(null)
-  /** Which empty quick-access index's "add consumable" picker is open (null = none). */
-  const [quickPicker, setQuickPicker] = useState<number | null>(null)
   /** Whether the Active Effects sidebar is expanded. */
   const [effectsOpen, setEffectsOpen] = useState(false)
 
   // Close any open modal / the sidebar on Escape.
   const overlayOpen = openSlot !== null || manageWeapon !== null || weaponPicker !== null
-    || useSlot !== null || quickPicker !== null || effectsOpen
+    || effectsOpen
   useEffect(() => {
     if (!overlayOpen) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       setOpenSlot(null); setManageWeapon(null); setWeaponPicker(null)
-      setUseSlot(null); setQuickPicker(null); setEffectsOpen(false)
+      setEffectsOpen(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -116,38 +109,6 @@ export function Equipment() {
     })
   }
 
-  /** Use a quick-access consumable: heal real HP and/or apply a temporary status
-   *  effect, then spend one (removed at qty 0). One atomic write across sheet
-   *  (HP) + resources (active effects) + equipped (the quick-access stack). The HP
-   *  patch is built from `character.sheet` (base), NEVER the effective `sheet` —
-   *  writing the layered scores back would corrupt canon. Modal closes before the
-   *  toast fires so the toast (z120) isn't buried under the overlay (z300). */
-  async function useConsumable(index: number) {
-    const item = quickAccess[index]
-    if (!item) return
-    const outcome = consumeEffect(item, character)
-    setUseSlot(null)
-
-    // Pure heal at full HP — surface "no effect" and don't spend the charge.
-    if (outcome.wasted) {
-      addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
-      return
-    }
-
-    // Fold the consume's sheet/resources changes together with this screen's own
-    // container update (decrement the quick-access stack) into one atomic write.
-    const patch: Partial<Pick<CharacterRow, CharacterSection>> = {}
-    if (outcome.sheet) patch.sheet = outcome.sheet
-    if (outcome.resources) patch.resources = outcome.resources
-    const nextQty = (item.qty ?? 1) - 1
-    const nextItem = nextQty > 0 ? { ...item, qty: nextQty } : null
-    const nextQA = quickAccess.map((it, i) => (i === index ? nextItem : it))
-    patch.equipped = { ...gear, quickAccess: nextQA } as unknown as CharacterRow['equipped']
-
-    await updateSections(patch)
-    addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
-  }
-
   /** Manually end an active status effect (atomic). Rest will later clear all. */
   async function removeEffect(id: string) {
     await updateSections({
@@ -155,21 +116,6 @@ export function Equipment() {
         ...character.resources, activeEffects: effects.filter(e => e.id !== id),
       } as unknown as CharacterRow['resources'],
     })
-  }
-
-  /** Move an inventory consumable into a quick-access sub-slot (atomic), like the
-   *  gear/weapon equip flow — the item lives in exactly one place. */
-  async function addQuickItem(item: InventoryItem, index: number) {
-    setQuickPicker(null)
-    await updateSections(addQuickPatch(item, index, gear, inventory))
-  }
-
-  /** Move a quick-access consumable back to the inventory unused (atomic). */
-  async function unequipQuick(index: number) {
-    const p = unequipQuickPatch(index, gear, inventory)
-    if (!p) return
-    setUseSlot(null)
-    await updateSections(p)
   }
 
   const meta = (
@@ -180,7 +126,7 @@ export function Equipment() {
       <span className="dim">·</span>
       <span>Loadout 02</span>
       <span className="dim">·</span>
-      <span>Slots <span className="acc">{equippedCount(gear)} / 7</span></span>
+      <span>Slots <span className="acc">{equippedCount(gear)} / 8</span></span>
     </>
   )
 
@@ -254,10 +200,6 @@ export function Equipment() {
                 onOpen={() => setOpenSlot(s.key)}
               />
             ))}
-            <QuickAccessSlot
-              items={quickAccess} bind={bind}
-              onUse={i => setUseSlot(i)} onPick={i => setQuickPicker(i)}
-            />
           </div>
 
           <ShardBar guideShard={gear.guideShard ?? null} bind={bind} />
@@ -303,23 +245,6 @@ export function Equipment() {
         />
       )}
 
-      {useSlot !== null && quickAccess[useSlot] && (
-        <ConsumableModal
-          item={quickAccess[useSlot]!}
-          onUse={() => void useConsumable(useSlot)}
-          onUnequip={() => void unequipQuick(useSlot)}
-          onClose={() => setUseSlot(null)}
-        />
-      )}
-
-      {quickPicker !== null && (
-        <QuickPickerModal
-          candidates={inventory.filter(i => i.category === 'consumable')}
-          onPick={item => void addQuickItem(item, quickPicker)}
-          onClose={() => setQuickPicker(null)}
-        />
-      )}
-
       {effectsOpen && (
         <div className={styles.sidebarScrim} onClick={() => setEffectsOpen(false)} aria-hidden="true" />
       )}
@@ -333,12 +258,6 @@ export function Equipment() {
 
 /* ---------- equipped gear shape (local view onto `equipped`) ---------- */
 
-/** A quick-access consumable (potion/scroll/usable). EquippedItem already carries
- *  qty + heal + effects + duration, so no extra fields are needed. (`EquippedGear`
- *  — the typed view onto `equipped` — is shared from database.types now that
- *  Inventory equips into the same slots.) */
-type QuickItem = EquippedItem
-
 type SlotConfig = { key: ItemSlot; label: string; icon: string; type: string }
 
 const GEAR_SLOTS: SlotConfig[] = [
@@ -346,7 +265,10 @@ const GEAR_SLOTS: SlotConfig[] = [
   { key: 'armor',     label: 'Armor',     icon: 'fa-shield-halved', type: 'Body' },
   { key: 'cloak',     label: 'Cloak',     icon: 'fa-user-tie',      type: 'Back' },
   { key: 'boots',     label: 'Boots',     icon: 'fa-shoe-prints',   type: 'Feet' },
-  { key: 'accessory', label: 'Accessory', icon: 'fa-ring',          type: 'Trinket' },
+  { key: 'gloves',    label: 'Gloves',    icon: 'fa-mitten',        type: 'Hands' },
+  { key: 'neck',      label: 'Neck',      icon: 'fa-gem',           type: 'Amulet' },
+  { key: 'ring1',     label: 'Ring I',    icon: 'fa-ring',          type: 'Ring' },
+  { key: 'ring2',     label: 'Ring II',   icon: 'fa-ring',          type: 'Ring' },
 ]
 
 /** The two weapon hands rendered as fixed slots (mirrors the gear-slot model). */
@@ -359,11 +281,12 @@ function weaponHandLabel(hand: WeaponHand): string {
   return hand === 'main' ? 'Main Weapon' : 'Side Weapon'
 }
 
+/** How many of the EIGHT worn slots are filled. The G.U.I.D.E. shard is not one
+ *  of them (it has its own panel), so counting it here made the readout able to
+ *  show 9 / 8. Slice 3 replaces this with ATTUNED n / 3 anyway. */
 function equippedCount(gear: EquippedGear): number {
   let n = 0
   for (const s of GEAR_SLOTS) if (gear[s.key]) n++
-  if (gear.guideShard) n++
-  if ((gear.quickAccess ?? []).some(Boolean)) n++
   return n
 }
 
@@ -497,52 +420,6 @@ function GearSlot({ slot, item, bind, onOpen }: {
   )
 }
 
-function QuickAccessSlot({ items, bind, onUse, onPick }: {
-  items: (QuickItem | null)[] | null; bind: Bind
-  onUse: (index: number) => void; onPick: (index: number) => void
-}) {
-  const subs = [items?.[0] ?? null, items?.[1] ?? null]
-  const tt: TooltipData = {
-    name: 'Quick Access',
-    sub: '2 sub-slots',
-    rows: [
-      ['Slot 1', subs[0] ? `${subs[0].name}${subs[0].qty ? ` × ${subs[0].qty}` : ''}` : 'Empty'],
-      ['Slot 2', subs[1] ? `${subs[1].name}${subs[1].qty ? ` × ${subs[1].qty}` : ''}` : 'Empty'],
-    ],
-    flavor: 'Hot-keyed pouch. Filled slots are usable — click to use.',
-    rarity: 'common',
-  }
-  return (
-    <div className={`${styles.slot} ${styles.quick}`} data-rarity="common" {...bind(tt)} tabIndex={0}>
-      <span className={styles.sFrame} />
-      <span className={styles.sInner}>
-        <span className={styles.sLabel}>Quick Access</span>
-        <div className={styles.quickSubs}>
-          {subs.map((it, i) => (
-            it ? (
-              <button
-                key={i} className={`${styles.qsub} ${styles.usable}`}
-                onClick={() => onUse(i)}
-                aria-label={`Use ${it.name}${it.qty && it.qty > 1 ? ` (× ${it.qty})` : ''}`}
-              >
-                <i className={`fa-solid ${it.icon ?? 'fa-flask'}`} />
-                {it.qty && it.qty > 1 && <span className={styles.qBadge}>{it.qty}</span>}
-              </button>
-            ) : (
-              <button
-                key={i} className={`${styles.qsub} ${styles.empty} ${styles.usable}`}
-                onClick={() => onPick(i)} aria-label="Add a consumable"
-              >
-                <i className="fa-solid fa-plus" />
-              </button>
-            )
-          ))}
-        </div>
-      </span>
-      <span className={styles.rarityDot} />
-    </div>
-  )
-}
 
 /** The shard bar — a wide row spanning the gear grid, split by dividers into 3
  *  shard sub-slots (slot 0 = the G.U.I.D.E. shard, 2 more open slots). It's a
@@ -796,121 +673,7 @@ function WeaponPickerModal({ hand, candidates, onEquip, onClose }: {
   )
 }
 
-/* ---------- consumable use modal ---------- */
 
-/** Detail + Use for a quick-access consumable. Use closes the modal first (the
- *  parent does the write + toast) so the toast isn't hidden under the overlay. */
-function ConsumableModal({ item, onUse, onUnequip, onClose }: {
-  item: QuickItem; onUse: () => void; onUnequip: () => void; onClose: () => void
-}) {
-  const rarity = item.rarity ?? 'common'
-  const hasEffects = !!item.effects && Object.keys(item.effects).length > 0
-  return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div
-        className={styles.modal} role="dialog" aria-modal="true" aria-label={item.name}
-        onClick={e => e.stopPropagation()}
-      >
-        <span className={styles.modalFrame} data-rarity={rarity} />
-        <div className={styles.modalInner}>
-          <header className={styles.modalHead}>
-            <span className={styles.mhIcon}><i className={`fa-solid ${item.icon ?? 'fa-flask'}`} /></span>
-            <div className={styles.mhTitles}>
-              <span className={styles.mhKicker}>Consumable{item.qty && item.qty > 1 ? ` · × ${item.qty}` : ''}</span>
-              <span className={styles.mhName}>{item.name}</span>
-            </div>
-            <button className={styles.modalClose} onClick={onClose} aria-label="Close">
-              <i className="fa-solid fa-xmark" />
-            </button>
-          </header>
-
-          <div className={styles.modalBody}>
-            <div className={styles.detailSub}>{rarityLabel(rarity)}</div>
-            {item.heal !== undefined && (
-              <div className={styles.detailRow}><span className={styles.k}>Restores</span><span className={styles.v}>{item.heal} HP</span></div>
-            )}
-            {hasEffects && (
-              <div className={styles.detailRow}><span className={styles.k}>Effect</span><span className={styles.v}>{summarizeEffects(item.effects!)}</span></div>
-            )}
-            {item.duration && (
-              <div className={styles.detailRow}><span className={styles.k}>Duration</span><span className={styles.v}>{item.duration}</span></div>
-            )}
-            {(item.rows ?? []).map(([k, v], i) => (
-              <div key={i} className={styles.detailRow}><span className={styles.k}>{k}</span><span className={styles.v}>{v}</span></div>
-            ))}
-            {item.flavor && <div className={styles.detailFlavor}>{item.flavor}</div>}
-          </div>
-
-          <footer className={styles.modalFoot}>
-            <div className={styles.modalActions}>
-              <button className={styles.useBtn} onClick={onUse}>
-                <span className={styles.ubFrame} />
-                <span className={styles.ubInner}><i className="fa-solid fa-flask" /> Use</span>
-              </button>
-              <button className={styles.unequipBtn} onClick={onUnequip}>
-                <span className={styles.ubFrame} />
-                <span className={styles.ubInner}><i className="fa-solid fa-circle-minus" /> Unequip</span>
-              </button>
-            </div>
-          </footer>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ---------- quick-access picker (add a consumable from inventory) ---------- */
-
-function QuickPickerModal({ candidates, onPick, onClose }: {
-  candidates: InventoryItem[]; onPick: (item: InventoryItem) => void; onClose: () => void
-}) {
-  return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div
-        className={styles.modal} role="dialog" aria-modal="true" aria-label="Add a consumable"
-        onClick={e => e.stopPropagation()}
-      >
-        <span className={styles.modalFrame} />
-        <div className={styles.modalInner}>
-          <header className={styles.modalHead}>
-            <span className={styles.mhIcon}><i className="fa-solid fa-flask" /></span>
-            <div className={styles.mhTitles}>
-              <span className={styles.mhKicker}>Quick Access</span>
-              <span className={styles.mhName}>Consumables</span>
-            </div>
-            <button className={styles.modalClose} onClick={onClose} aria-label="Close">
-              <i className="fa-solid fa-xmark" />
-            </button>
-          </header>
-
-          <div className={styles.modalBody}>
-            {candidates.length === 0 ? (
-              <div className={styles.selectorEmpty}>
-                No consumables in your inventory
-                <span className={styles.em}>Potions and scrolls the DM grants you appear here</span>
-              </div>
-            ) : (
-              <div className={styles.selectorList}>
-                {candidates.map(it => (
-                  <div key={it.id ?? it.name} className={styles.pickRow} data-rarity={it.rarity ?? 'common'}>
-                    <span className={styles.pkIcon}><i className={`fa-solid ${it.icon ?? 'fa-flask'}`} /></span>
-                    <span className={styles.pkBody}>
-                      <span className={styles.pkName}>{it.name}</span>
-                      <span className={styles.pkMeta}>
-                        {[rarityLabel(it.rarity ?? 'common'), it.qty && it.qty > 1 ? `× ${it.qty}` : null].filter(Boolean).join(' · ')}
-                      </span>
-                    </span>
-                    <button className={styles.pkBtn} onClick={() => onPick(it)}>Add</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /* ---------- active effects sidebar (slides over the gear column) ---------- */
 
