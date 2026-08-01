@@ -11,8 +11,10 @@ import type {
   CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity,
   ItemEffects, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
   Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, CatalogFeatureData,
+  EquippedGear,
 } from '../lib/database.types'
 import { ITEM_SLOTS, PERSON } from '../lib/equip'
+import { place, routeItem } from '../lib/placement'
 import styles from './OperatorConsole.module.css'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -649,20 +651,22 @@ function firstName(name: string) { return name.split(' ')[0] }
 /** Build a fresh inventory instance from a catalog template: a self-describing
  *  snapshot of the template `data` + a unique instance id + the `item_id` back-ref.
  *  Stackables (consumable/misc) get qty 1 so the grid renders a count badge. */
-function grantSnapshot(item: CatalogItemRow): InventoryItem {
+function grantSnapshot(
+  item: CatalogItemRow, gear: EquippedGear, inventory: InventoryItem[],
+): InventoryItem {
   const inst = `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
   const data = item.data ?? ({} as CatalogItemData)
   const stackable = data.category === 'consumable' || data.category === 'misc'
-  return {
+  const fresh = {
     ...data, id: inst, item_id: item.id,
-    // A granted item MUST declare where it landed — an item with no containerId
-    // belongs to no container, so it renders in no tab and is invisible to the
-    // player. Lands on person with no col/row, so the grid auto-packs it.
-    // (Slice 2: the spec §7 routing chain replaces this, which is also what
-    // retired the DM's grant-destination picker.)
     containerId: PERSON,
     ...(stackable ? { qty: 1 } : {}),
   } as InventoryItem
+  // Granted items go through the SAME routing chain as anything else picked up:
+  // arrows fall into the quiver, everything else takes the first free cell on
+  // person and overflows to a bag. This is what retired the grant-destination
+  // picker — the DM never has to choose a container.
+  return place(fresh, routeItem(fresh, gear, inventory))
 }
 
 /** Grant Item: search the catalog, pick a template, snapshot it into this PC's
@@ -691,7 +695,8 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
     if (!selected) return
     setBusy(true)
     const inv = ((row.inventory as unknown as InventoryItem[]) ?? [])
-    const ok = await onUpdate({ inventory: [...inv, grantSnapshot(selected)] as unknown as Json[] })
+    const gear = (row.equipped ?? {}) as EquippedGear
+    const ok = await onUpdate({ inventory: [...inv, grantSnapshot(selected, gear, inv)] as unknown as Json[] })
     setBusy(false)
     if (!ok) return
     const d = selected.data
