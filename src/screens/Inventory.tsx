@@ -559,8 +559,9 @@ interface DragState {
 /** Facts-only hover card for a tile or row. Never prose, never buttons. */
 export function itemTooltipData(item: (InventoryItem | EquippedItem) & Partial<WeaponData>) {
   const cat = item.category ?? 'misc'
+  // Category and rarity already ride in the sub line — repeating category as a
+  // row just makes the card taller for no information.
   const rows: [string, string][] = [
-    ['Category', CAT_LABEL[cat]],
     ['Weight', item.weight != null ? `${itemWeight(item)} lb` : '—'],
   ]
   const keyStat = item.damage ?? item.damageDice ?? item.rows?.[0]?.[1]
