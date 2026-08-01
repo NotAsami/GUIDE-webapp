@@ -759,85 +759,6 @@
   box-shadow: 0 0 10px rgba(185, 58, 58, 0.4);
 }
 
-/* ============================================================
-   TOOLTIP (shared, positioned by JS)
-   ============================================================ */
-.tt {
-  position: fixed;
-  min-width: 260px; max-width: 320px;
-  padding: 14px 16px;
-  background: rgba(8, 8, 8, 0.97);
-  border: 1px solid var(--beige);
-  box-shadow:
-    0 0 0 1px rgba(212, 191, 125, 0.15),
-    0 14px 28px rgba(0, 0, 0, 0.6),
-    0 0 22px rgba(0, 166, 214, 0.22);
-  font-family: var(--font-mono);
-  color: var(--text);
-  font-size: 11px;
-  line-height: 1.6;
-  letter-spacing: 0.04em;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(-4px);
-  transition: opacity 160ms ease, transform 160ms ease;
-  z-index: 200;
-  clip-path: polygon(10px 0, 100% 0,
-    100% calc(100% - 10px), calc(100% - 10px) 100%,
-    0 100%, 0 10px);
-}
-.tt.show { opacity: 1; transform: translateY(0); }
-.ttName {
-  font-family: var(--font-display);
-  font-weight: 600;
-  color: var(--cyan-hot);
-  font-size: 15px;
-  letter-spacing: 0.1em;
-  line-height: 1.1;
-  margin-bottom: 4px;
-  text-transform: uppercase;
-}
-.tt[data-rarity="common"] .ttName { color: var(--text); }
-.tt[data-rarity="rare"] .ttName { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(77, 214, 255, 0.4); }
-.ttSub {
-  color: var(--beige);
-  font-size: 9.5px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px dashed rgba(212, 191, 125, 0.25);
-}
-.ttRow { display: flex; gap: 8px; margin: 4px 0; align-items: baseline; }
-.ttRow .k {
-  color: var(--beige);
-  font-size: 9.5px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  min-width: 84px;
-}
-.ttRow .v { color: var(--text); }
-.ttFlavor {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(212, 191, 125, 0.25);
-  font-family: var(--font-prose);
-  font-style: italic;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--muted);
-  letter-spacing: 0.01em;
-  text-transform: none;
-}
-.ttAttune {
-  margin-top: 6px;
-  font-size: 9.5px;
-  letter-spacing: 0.22em;
-  color: var(--cyan);
-  text-transform: uppercase;
-}
-.ttAttune.no { color: var(--muted); }
-
 /* clickable gear slots (open the equip/unequip modal) */
 .clickable { cursor: pointer; }
 
@@ -1144,17 +1065,4 @@
   .portraitWrap { min-height: 360px; }
 }
 
-/* Cut-corner border fix (see OperatorConsole.module.css): redraw the border
-   segments that clip-path slices off along the tooltip's 45° corners. */
-.tt {
-  --cut: 10px;
-  --bc: var(--beige);
-  border-color: var(--bc);
-  background-image:
-    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
-    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
-  background-repeat: no-repeat;
-  background-origin: border-box;
-  background-position: top left, bottom right;
-  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
-}
+
