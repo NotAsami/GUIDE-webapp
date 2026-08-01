@@ -60,3 +60,6 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - `src/screens/Codex.tsx` — wired end-to-end (reads `progress.stories[]`). The other eight screens are `Stub`s that dump their owning JSONB section as JSON; visual ports are Phase 1+ work.
 - `src/styles/tokens.css` + `global.css` — design tokens (CSS vars) shared by all screens.
 - `supabase/migrations/0001_init.sql` + `supabase/seed.sql` — paste-and-run via the Supabase SQL editor.
+
+## Other guides
+- Inventory refactor spec: docs/GUIDE_Codex_Inventory_Refactor.md

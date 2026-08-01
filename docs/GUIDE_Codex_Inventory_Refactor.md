@@ -1,0 +1,535 @@
+# G.U.I.D.E. Codex — Inventory Refactor (Master Spec)
+
+Supersedes `GUIDE_Codex_Inventory_Redesign.md` (deleted). Companion to
+`GUIDE_Codex_Build_Handoff.md` and `GUIDE_Codex_DM_View_Handoff.md`.
+Branch: `inventory-refactor`.
+
+**The refactor in one line:** the spatial grid becomes a small tactical loadout, bulk
+storage moves into containers, weight becomes the only capacity limit, and containers
+gain presentation modes instead of one uniform list view.
+
+---
+
+## 0. How to read this doc
+
+**The codebase wins every conflict with the design.** The design agent (`G.U.I.D.E.
+Redesign Components.html`, `G.U.I.D.E. Equipment.html` in `~/Downloads`) has no
+knowledge of our code. Copy its *pixels*; implement our *behaviour*. Where its
+demo JS and our data model disagree, §9 records which is authoritative — the design's
+version is a mockup convenience, not a decision.
+
+**The current dev database is fully disposable.** There is no production data and no
+migration to write. Everything below that would be a "migration" on a live app is
+instead a rewrite of `supabase/migrations/` + `supabase/seed.sql`. This is the single
+biggest scope reduction in the refactor — do not write fallback/migration code for
+data shapes that no longer exist.
+
+---
+
+## 1. Open decisions
+
+| # | Decision | Notes |
+|---|---|---|
+| 1 | ~~QUICK ACCESS slot~~ | **RESOLVED — removed.** The on-person grid replaces it. Existing `equipped.quickAccess` items are deleted, not migrated (dev environment). |
+| 1b | ~~Does `abstract` mode survive?~~ | **RESOLVED — cut.** Modes are `page` and `inline` only. Delete the third branch wherever the design still carries it. |
+| 1c | **Where does the component pouch live?** | Options: a `COMPONENTS · READY` indicator on the Spellbook near the casting controls (recommended — it's where the fact matters, and can go red when absent), or an ordinary inventory item with no special treatment. Not a blocker. |
+| 2 | **Bonus-action-from-belt rule — adopt?** | Potion on belt = bonus action; from a container = action. Makes the 20 cells a real decision. Rules choice, not a build blocker. |
+| 3 | **Party view placement** | Nav-engaged overlay (recommended), persistent frame, or its own screen. |
+| 4 | **Party view with 3 players** | Dormant 4th slot (recommended) or re-center to three. |
+| 5 | **Nav in the party-view centre** | Radial cluster, or the existing bar in the gap? |
+| 6 | **Haversack / efficient quiver compartments** | Ignore compartments and treat as one weightless container (recommended), or model sub-compartments (= nesting). |
+| 7 | **Ros's canonical ability array** | Long-standing. Mockups conflict; DM-view mockup seeds STR 17. Needed before real seeding. |
+
+**Decisions 3–5 are party view, which is its own slice.** They are parked here so they
+are not forgotten; nothing in this refactor resolves or depends on them.
+
+---
+
+## 2. Container display modes
+
+The core new concept. **Authored per container, not inferred.** How contents are *used*
+decides the mode:
+
+| Mode | Use case | Presentation | Containers |
+|---|---|---|---|
+| `page` | Many arbitrary items — needs browsing, sorting, filtering | Own tab in the inventory panel, full list view | Backpack, sack, bag of holding |
+| `inline` | Few stacks of one category — needs visibility at a glance | Expandable row in the storage sidebar. No tab. | Quiver, bolt case, scroll case |
+
+**`abstract` is cut** (decision 1b). It existed for the component pouch, which isn't
+really a container — 5e abstracts its contents entirely, so it has nothing to browse,
+no capacity to fill, and nothing to select. It's a passive prerequisite, not storage.
+
+**The storage sidebar holds only containers with browsable contents.** That's the
+definition.
+
+### `inline` expansion is capped
+
+Expansion must be **bounded**, or the panel below shifts by an unpredictable amount.
+Expand to a maximum of **3 rows**; beyond that, show the top 3 and a `+N MORE →` line
+that opens the **item popup** with the full list (the popup already has max-height and
+internal scrolling, so it's the right home for the long tail).
+
+```
+QUIVER · 34 / 40
+   ARROWS                ×20
+   SILVERED ARROWS       ×10
+   ARROWS +1             ×4
+   +6 MORE →
+```
+
+Most characters carry 1–3 ammo types; ten is the tail. Design the inline view for the
+common case, hand the tail to a surface built for length.
+
+**The sidebar row only answers "what do I have."** Selection happens at the weapon's
+ammo picker (§5), which is why 3–4 visible rows is sufficient.
+
+---
+
+## 3. Container slots — a fixed set of four
+
+Containers are **not** worn in body slots. The `Back` / `Belt` / `Hand` / `Accessory`
+labels in the design data are flavour text only and are **not enforced**. Instead each
+container kind has its own slot with a hard cap:
+
+| Kind | Cap | Mode | Tab |
+|---|---|---|---|
+| `backpack` | 1 | `page` | Yes |
+| `bagOfHolding` | 1 | `page` | Yes |
+| `sack` | 1 | `page` | Yes |
+| `quiver` | 1 | `inline` | **No** |
+
+`container.kind` lives on the catalog item (§9). A second container of the same kind
+cannot be equipped.
+
+**`kind` is an open set; the tab bar is not.** The four above are what ships. New
+`inline` kinds — bolt case, scroll case — cost nothing: they claim no tab, so the DM
+can author them in the catalog whenever they like, and they default to a cap of 1.
+A new **`page`** kind is different: it would become a fifth tab and reopen the `MORE ▾`
+overflow question this section exists to close. Adding one is a deliberate change to
+§3, not a catalog entry.
+
+### The tab bar is one tab per SLOT, not per owned item
+
+```
+ON PERSON  ·  SACK  ·  BACKPACK  ·  BAG OF HOLDING
+```
+
+Exactly four, always in that order, always in the same position. A slot with nothing
+equipped renders **locked** — dimmed, hatched, with a padlock and a deny-shake on click
+(`.seg-btn.locked` / `.deny` in the design). A locked tab reads as a slot to fill, not
+a hidden feature.
+
+This is why the cap is one sack rather than two, and it means the `MORE ▾` overflow
+case from earlier drafts **never happens** and must not be built.
+
+The quiver has no tab at all — it is `inline`, and its contents are drawn by the ammo
+picker rather than browsed.
+
+---
+
+## 4. Inventory screen
+
+**Remove:** the 80-cell cap; the `n / 80 SLOTS` and `FREE` readouts; the right-column
+`ITEM DETAIL` panel.
+
+**Change:** grid shrinks to **5 wide × 4 tall = 20 cells**, fixed on every platform
+(see §10); section renames to `ON PERSON`; burden manifest becomes the only capacity
+system, keeping the ENC / HEAVY tiers — they slow the character, never block a pickup;
+stack limits raised or removed on consumables and ammunition.
+
+**Keep:** multi-cell footprints. Items retain `w`/`h` and the grid stays a placement
+system, not a list. At 20 cells a 2×1 crossbow costs 10% of reach — that is the point.
+
+**Add:** the fixed four-tab bar (§3), which changes only the left pane — the switcher,
+header line and utility bar are all fixed-height so switching tabs never moves a pixel
+of surrounding chrome; container views are lists with sort and category-filter chips;
+a header line per view (`BACKPACK · 24 ITEMS · 41.5 lb`).
+
+---
+
+## 5. Equipment screen
+
+**Worn slots — eight**, laid out 4×2: helmet, armor, cloak, boots, **gloves**, **neck**,
+**ring**, **ring**. The existing `accessory` slot becomes the first ring rather than a
+third accessory.
+
+**Remove the QUICK ACCESS slot.** The on-person grid means "what you can reach without
+digging," which is what quick-access meant. One concept, one control.
+
+**Shield does NOT go in the gear grid.** In 5e a shield occupies a hand — it competes
+with an off-hand weapon and is incompatible with a two-hander. It belongs in the
+existing OFF HAND weapon slot. A gear-grid shield would permit greatsword-plus-shield.
+
+**Weapons stay at two hand slots.** Bow in main hand, claymore in off-hand. No "ranged"
+slot.
+
+**Add an `ATTUNED n / 3` readout** in the gear section header, replacing `6 SLOTS`.
+More slots doesn't mean more magic items — rings and amulets are the attunement-hungry
+category, and 3 is the real cap. Tint red at `3 / 3`; attuned slots carry a cyan ◈ pip.
+
+### The STORAGE CONTAINERS button + sidebar
+
+**Placement: between the gear grid and the shard widget.** A full-column-width button,
+clearly labelled as storage containers, opening a slide-over sidebar that houses the
+container module.
+
+This reuses the pattern already built for Active Effects — `ActionBtn` at
+`Equipment.tsx:265` and `EffectsSidebar` at `Equipment.tsx:323`, with `.sidebar` /
+`.sidebarScrim` / `.open` in `Equipment.module.css:1127`. Same slide-over, same scrim,
+same Escape handling.
+
+- **The two sidebars share the space over the gear column, so they are mutually
+  exclusive.** Opening one closes the other.
+- The button carries a count of equipped containers, like Effects carries its count.
+- One row per equipped container, presented per its display mode (§2); `inline` rows
+  expand in place, capped.
+- **Equip / unequip lives here**, not on the inventory screen. Tabs unlock and lock as
+  a consequence. One mental model: gear is managed where gear lives.
+- **A `STOWED` row** for unequipped-but-owned containers, with an EQUIP action, so
+  "where did my backpack go" always has an answer.
+- An `EQUIP A CONTAINER` empty-slot row that reads as an invitation, not a blank.
+
+**Do NOT print the shards/containers rationale as footer text.** The design still
+renders `Containers extend storage · shards extend capability`. Cut it — and with the
+module behind a button it isn't even structurally true any more.
+
+### Ammo picker on weapon cards
+
+Which arrow is nocked is a property of the attack, not of the quiver. A small selector
+sits beside the ATTACK button showing the active type and remaining count
+(`ARROWS ×20 ▾`), switchable to any stack in the equipped quiver.
+
+- Ranged weapons only. Melee cards never get one.
+- **Absent entirely** — not empty — if no quiver is equipped.
+- The menu must render to a **fixed layer outside the card**: the weapon card is
+  clip-pathed and would crop it.
+
+---
+
+## 6. Item detail — tooltip + popup
+
+**Remove** the persistent detail panel. Both surfaces are designed and live in the
+components file.
+
+**Hover tooltip (fine pointer only):** name, category, rarity, weight, one key stat.
+**No prose, no buttons** — it exists for scanning.
+
+**Item popup — click any item, anywhere.** Same frame as the shard-upgrade modal:
+four-layer clip, corner ticks, max-height with internal body scrolling. Contents: facts
+grid, flavour, granted effects and features. Actions are context-dependent:
+
+| Context | Actions |
+|---|---|
+| Ordinary item, on person | `EQUIP` (if slotted) · `STOW` · `DROP` |
+| Ordinary item, in a container | `EQUIP` (if slotted) · `RETRIEVE` · `DROP` |
+| Container item, equipped | `OPEN <container>` · `UNEQUIP` |
+| Container item, unequipped | `EQUIP <container>` |
+| Quest item | Drop suppressed |
+
+- **Manual STOW gets a destination picker** when more than one equipped container
+  accepts the item. This is deliberate movement and is not the same thing as the
+  automatic routing in §7.
+- **Manual RETRIEVE refuses when ON PERSON is full**, with an inline
+  `// No reachable space — free a cell on person first` warning. The split is the rule:
+  *automatic routing never blocks; manual moves can.*
+
+**Platform split:** fine pointer = hover → tooltip → click → popup. Coarse = tap →
+popup, **no tooltip**. On coarse the popup renders as a bottom sheet with a grab
+handle, swipe-to-dismiss and 52px targets. Gate on
+`@media (hover: hover) and (pointer: fine)` — never on width.
+
+---
+
+## 7. Automatic routing — pickups never fail
+
+```
+1. First equipped container whose allowedCategories match   (arrows → quiver)
+2. ON PERSON, if a footprint-sized space is free
+3. BAG OF HOLDING if equipped, otherwise BACKPACK
+```
+
+Each step falls through when it cannot take the item: a container at `capacity` fails
+step 1, a grid with no footprint-sized space free fails step 2. Step 3 is unbounded, so
+**a pickup can never fail** — the character simply takes the weight. This removes
+"inventory full" as a state entirely.
+
+**Consequences, both deliberate:**
+- The grant-destination picker on the DM's Grant Item is **removed**. Granted items
+  route themselves; the DM never picks a container.
+- With a bag of holding equipped, overflow lands somewhere weightless, so
+  **encumbrance effectively stops applying to newly acquired items**. This is an
+  accepted quality-of-life trade, not an oversight.
+- The sack receives nothing automatically — it is manual-stow storage only.
+
+**Equipping a quiver pulls in loose on-person arrows.**
+
+---
+
+## 8. Locking & confiscation (DM view)
+
+Two distinct mechanics with deliberately different fictions.
+
+### Locked — visible and useless
+
+A per-item flag. The item keeps its place, shows a lock icon, and cannot be used,
+equipped, or consumed. **It still counts toward carry weight and still occupies its
+cell** — it is in your pack, it is simply refusing you. Cursed, sealed, or
+`ACCESS REVOKED`. A system that decides you may no longer use something is exactly the
+menace G.U.I.D.E. should develop late-campaign, and it can happen without narration.
+
+### Confiscated — gone without a trace
+
+**The item disappears from the player's view entirely.** No pseudo-container, no
+greyed-out row, no weight, no count. From the player's side it is simply not there.
+The DM holds it in a DM-side store and can restore it.
+
+*(This replaces the earlier `HELD` pseudo-container design, which left confiscated
+items visible-but-unretrievable. Full disappearance is the stronger fiction and the
+one we're building.)*
+
+**Restore returns the item to where it was taken from.** Confiscation snapshots the
+item's placement object verbatim — nothing special, it is the same
+`{containerId, col, row}` the item already carried, and `col`/`row` are already null
+for anything that was in a container. Two fallbacks, both rare:
+
+- the original cell is now occupied → fall through to the §7 routing chain
+- the original container is gone (unequipped, lost, confiscated itself) → same
+
+**Required new surface:** a per-character **INVENTORY tab** in the DM console
+(alongside Actions and Lore), listing the character's items with lock / unlock /
+confiscate / restore. Confiscation is impossible without a way to browse their
+inventory, which the console currently lacks.
+
+---
+
+## 9. Data model
+
+### Item placement
+
+```ts
+// before
+{ col?: number, row?: number }
+// after
+{ containerId: string, col?: number, row?: number }
+```
+
+`containerId` is `'person'` or a container item's id. On-person items carry real
+`col`/`row` (1-indexed, top-left cell); container items leave them absent — lists have
+no geometry. Sort order is a view preference, never stored state.
+
+**Footprint is intrinsic and survives every move.** `w`/`h` live on the item and are
+preserved through equip, unequip, stow and retrieve; only the *position* is dropped and
+re-derived. The design's demo JS deletes `w`/`h` on stow and forces `1×1` on retrieve —
+**that is wrong for us** and would break a 2×1 crossbow. Reuse the footprint-aware
+placement search already in `Inventory.tsx`; do not port the design's `freeCell()`,
+which only ever finds a single cell.
+
+### Container definition (on the catalog item)
+
+```ts
+container?: {
+  /** Open set — see §3. Shipping kinds: backpack | bagOfHolding | sack | quiver.
+   *  New `inline` kinds are free; a new `page` kind changes the tab bar. */
+  kind: string;
+  mode: 'page' | 'inline';
+  weightless: boolean;
+  allowedCategories?: ItemCategory[];   // empty = anything
+  capacity?: number;                    // e.g. quiver 20, scroll case 10
+}
+```
+
+### Per-item flags
+
+```ts
+locked?: boolean;   // carried but unusable (§8)
+```
+
+### Confiscated items
+
+Confiscated items leave the character row entirely — that is what makes them invisible
+to the player, and it means RLS does the enforcement rather than a client-side filter.
+They live in a DM-only store keyed by character, each row carrying the item plus the
+placement it was taken from:
+
+```ts
+{
+  item: InventoryItem;              // the item verbatim, footprint included
+  from: { containerId: string; col?: number; row?: number };
+  takenAt: string;                  // ISO timestamp, for the DM's own ordering
+  note?: string;                    // DM-authored: why it was taken
+}
+```
+
+`from` is the placement object copied as-is (§8) — no transformation, and `col`/`row`
+are simply absent when the item came out of a container. Restore reads `from`, and
+falls through to the §7 chain when that placement is no longer valid.
+
+### Category enum expands
+
+```ts
+// before
+type ItemCategory = 'gear' | 'weapon' | 'consumable' | 'misc'
+// after
+type ItemCategory = 'weapon' | 'ammo' | 'armor' | 'consumable' | 'tool' | 'quest' | 'misc'
+```
+
+`ammo` is **required** — an ammunition-only quiver is impossible without it. The rest
+make the filter chips worth having. Existing `gear` items are reclassified as `armor`
+or `tool` when the seed is regenerated.
+
+### Slot enum expands
+
+```ts
+// before
+type ItemSlot = 'helmet' | 'armor' | 'cloak' | 'boots' | 'accessory'
+// after
+type ItemSlot = 'helmet' | 'armor' | 'cloak' | 'boots' | 'gloves' | 'neck' | 'ring1' | 'ring2'
+```
+
+`accessory` becomes `ring1`. `equipped.quickAccess` is deleted outright.
+
+### Derived — never store
+
+- **Carry weight** = on-person + all non-weightless container contents. A container's
+  **own** weight always counts; `weightless` exempts only its *contents*. Confiscated
+  items are excluded (they don't exist to the player).
+- **Encumbrance tier** = derived from carry weight vs STR thresholds.
+- **Tab lock state** = derived from which container kinds are equipped.
+- **Ammo counts** = derived from quiver contents.
+
+---
+
+## 10. Containers are equippable, never permanent
+
+Permanence would make containers the one exception in an all-items system, and would
+foreclose confiscation — guards taking the pack is a better scene than guards taking
+everything except the pack.
+
+**Contents travel with the container.** Unequip the backpack and its contents go with
+it, because they are in the backpack. Makes confiscation trivial and losing your pack a
+real stake rather than a bookkeeping event.
+
+Two guardrails so it never reads as data loss: confirm before unequipping a non-empty
+container, and keep unequipped containers listed in the storage sidebar so the player
+can see the thing exists and their items are inside it.
+
+**No nesting.** Containers cannot go inside containers. Kills recursion and the
+weightless-inside-weightless exploit; 5e supplies the in-fiction justification.
+
+**An equipped container is not in the inventory.** Like all equipped items, it leaves
+the grid. An *unequipped* quiver appears as an ordinary grid item — with its contents
+count rendered in the cell — and vanishes from the grid the moment it is equipped.
+
+### Locked platform dimension
+
+**On-person grid is 5 × 4 on every platform.** Placements are coordinates; a grid 10
+wide on desktop and 5 on mobile strands items at columns that don't exist. Touch
+targets need ~44px, which at 412px allows five columns — so five columns everywhere.
+
+---
+
+## 11. Catalog manager (DM view) — item form additions
+
+- The expanded slot select (§9), including the two ring slots.
+- The expanded category select (§9), including `ammo`.
+- A `CONTAINER` sub-section (styled like `EFFECTS GRANTED`), shown when the item is a
+  container: **kind** select, **display mode** select (`page` / `inline`),
+  **weightless** toggle, **allowed categories** multi-select, **capacity** number.
+- A **locked** toggle for the §8 flag.
+
+**Removed:** the grant-destination picker. Routing (§7) handles it.
+
+---
+
+## 12. Angled borders — use the existing fix
+
+A CSS `border` follows the rectangular box; `clip-path` then slices the corners off,
+border included, so every 45° edge loses its line. Three techniques already exist in
+the codebase — **use them, do not re-solve this**:
+
+| Technique | When | Reference |
+|---|---|---|
+| Two-layer frame | Anywhere you can nest an element | `Features.module.css:109` |
+| Corner-anchored gradient stripes | Inputs, selects, single-element buttons | `OperatorConsole.module.css:1074` (recipe at `:1116`), live at `SystemToasts.module.css:19` |
+| Two-layer, always | Hexagons / rhombi — nearly every edge is angled | `SystemToasts.module.css:53` |
+
+Shapes declare `--cut` (corner size) and `--bc` (border colour). **States recolour by
+setting `--bc`, never `border-color`** — the stripes read `--bc` too.
+
+**In the new design specifically:** `.slot`, `.seg-btn`, `.region`, `.wc-atk` and
+`.im-panel` already use the two-layer pattern correctly. These five use plain
+`border` + `clip-path` and **will render with broken diagonals** — they need the stripe
+recipe: **`.chip`, `.c-act`, `.ammo-btn`, `.ammo-menu`, `.ctr-line .unequip`**.
+
+---
+
+## 13. Mobile (Phase 4)
+
+Most of this refactor is already mobile-shaped: lists are the most touch-friendly
+pattern there is, the popup already becomes a bottom sheet, and a segmented control is
+a native touch idiom. What needs redesign is the three-column layout — which dies on
+every screen, not just this one.
+
+Phase 4 work (capture, don't build yet): three columns reflow to one; drag-and-drop
+does not port — replace with tap-to-place (tap item → `MOVE` → tap destination cell),
+which is more reliable than touch dragging and reuses the sheet; sticky summary bar so
+weight and gold survive scrolling.
+
+---
+
+## 14. Optional rules payoff
+
+If the on-person grid is what the character can reach, it can carry real tactical
+weight: a potion on the belt is a **bonus action**; a potion in the backpack costs an
+**action** to dig out. This makes the 20 cells a genuine per-session decision while
+leaving the hoard unlimited — which is the whole point.
+
+Not required to build any of the above. Worth deciding before players get used to
+either behaviour (decision 2).
+
+---
+
+## 15. Design vs. code
+
+**Design it** if a human has to look at something and decide. **Leave it to code** if
+it's behavior with no new pixels.
+
+| Design (has a mockup) | Code (no new UI) |
+|---|---|
+| Container tab bar + list views | Routing a picked-up item through the §7 chain |
+| Storage sidebar, incl. expandable `inline` rows | Attack consuming ammo from the active stack |
+| Ammo picker on weapon cards | Carry-weight and encumbrance derivation |
+| Item popup + tooltip | Tab lock state derived from equipped containers |
+| DM per-character INVENTORY tab | Contents travelling with an unequipped container |
+| Catalog CONTAINER sub-section | Weight exclusion for weightless and confiscated |
+| Gear grid at 8 slots + ATTUNED readout | Placement + footprint preservation |
+| — | Lock flag blocking use |
+| — | Confiscation snapshot + restore fallbacks |
+
+---
+
+## 16. Design status
+
+| Surface | Status |
+|---|---|
+| Storage sidebar (rows, stowed, empty target) | **Delivered** — as an inline module; re-host it in the sidebar |
+| Ammo picker | **Delivered** |
+| Inventory — tab bar, grid, list views | **Delivered** |
+| Item popup + hover tooltip, fine & coarse | **Delivered** |
+| Equipment — 8 gear slots, ATTUNED | **Delivered** |
+| DM per-character INVENTORY tab, catalog CONTAINER sub-section | **Not yet prompted** |
+| Component pouch treatment | Blocked on decision 1c |
+
+### Corrections to apply when porting
+
+1. **Re-host the storage module** in a sidebar behind a full-width button between the
+   gear grid and the shard widget (§5). The design places it inline.
+2. **Cap `inline` expansion** at 3 rows with `+N MORE →` opening the item popup. The
+   design renders all contents.
+3. **Cut the footer line** spelling out the shards/containers rationale.
+4. **Delete the `abstract` branch** still present in `carryRowHtml`.
+5. **Preserve `w`/`h` on stow/retrieve** and use our footprint-aware placement search
+   (§9). The design's `freeCell()` is 1×1 only.
+6. **Container `slot` labels are flavour** — do not implement body slots for
+   containers (§3).
+7. **Apply the angled-border fix** to the five elements listed in §12.
