@@ -1,16 +1,16 @@
-/* Inventory screen — ported from G.U.I.D.E. Inventory.html.
-   Shared chrome (topbar, dock nav, tickers, side-rails, bottombar) lives in
-   Layout / Nav / Deco; this module owns only the two-region body: a left Cargo
-   Grid (10x8 spatial inventory) and a right column of Item Detail + Load/Coin.
+/* Inventory screen. Shared chrome (topbar, dock nav, tickers, side-rails,
+   bottombar) lives in Layout / Nav / Deco; this module owns the two-column body:
+   a left CARRIED region (container switcher over either the 5x4 on-person grid
+   or a container list) and a right LOAD / COIN column.
 
    Layout model matches Equipment: a position:fixed, non-scrolling body filling
    the space between the dock nav and the bottombar (it escapes .main's overflow,
-   like the fixed Deco/Nav do). The grid cells are fractional (1fr) so the grid
-   fills its framed region; items span cells by footprint.
+   like the fixed Deco/Nav do).
 
-   Drag-to-rearrange is an enhancement over the static mockup: tiles keep their
-   grid cells, a translucent preview marks the drop target, and a click (no move)
-   pins the detail panel. Pointer->cell math measures the live grid rect. */
+   Drag-to-rearrange: tiles keep their grid cells, a translucent preview marks
+   the drop target, and a click (no move) opens the item popup. Pointer->cell
+   math measures the live grid rect, and coordinates are 1-indexed throughout to
+   match CSS grid and the stored placements. */
 
 .inv {
   position: fixed;
@@ -78,7 +78,11 @@
   flex: 1 1 auto;
   min-height: 0;
 }
-.region.load { flex: 0 0 auto; }
+/* The right column holds exactly one region now (the detail panel is gone), so
+   it absorbs all the slack. NEVER give a .region `flex: 0 0 auto`: .rInner is
+   position:absolute, so the region has no intrinsic height and would collapse
+   to nothing. Slack routing per the standing layout convention. */
+.region.load { flex: 1 1 auto; }
 .rFrame {
   position: absolute; inset: 0;
   background: var(--beige);
@@ -139,16 +143,22 @@
 }
 
 /* ON PERSON — a fixed 5x4 loadout. It never grows and never scrolls; that small
-   deliberate space is the point of the refactor. Cells are sized in px rather
-   than fractions of the region so a 2x1 crossbow reads the same everywhere. */
+   deliberate space is the point of the refactor.
+
+   .gridWrap is the named slack absorber for this pane. The grid sizes off the
+   HEIGHT it is actually given (not off vw, which can't know how much room the
+   region has after the switcher, header line and utility bar have taken theirs)
+   and derives its width from aspect-ratio, so cells stay ~1.2:1 and the whole
+   grid always fits without clipping. */
 .gridWrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
 .opGrid {
-  --cell-w: clamp(64px, 6.6vw, 116px);
-  --cell-h: clamp(56px, 5.6vw, 96px);
   display: grid;
-  grid-template-columns: repeat(5, var(--cell-w));
-  grid-template-rows: repeat(4, var(--cell-h));
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(4, 1fr);
   gap: 6px;
+  height: 100%;
+  aspect-ratio: 3 / 2;
+  max-width: 100%;
   touch-action: none;
 }
 
