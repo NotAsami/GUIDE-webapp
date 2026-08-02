@@ -85,7 +85,18 @@
   position: fixed; top: var(--op-top-h); bottom: var(--op-bottom-h); left: 0; right: 0;
   z-index: 10; display: grid;
   grid-template-columns: 25.5% 1fr 23%;
+  /* A floor, then scroll — the console's three regions were pinned to whatever
+     height the viewport had, so on a laptop the region frames were cut off at
+     the bottom rather than the content scrolling. */
+  grid-template-rows: minmax(var(--screen-min-h), 1fr);
   gap: 12px; padding: 12px;
+  overflow-y: auto; overflow-x: hidden; scrollbar-width: thin;
+}
+.console::-webkit-scrollbar { width: 8px; }
+.console::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); }
+.console::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--amber-dim, rgba(226,176,33,0.5)), rgba(212,191,125,0.5));
+  border: 2px solid #111;
 }
 .region { position: relative; min-height: 0; min-width: 0; }
 .rFrame {
@@ -657,7 +668,8 @@
 .gmHead .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--amber-hot); }
 .gmHead .s { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber-dim); }
 .gmNotes {
-  width: 100%; min-height: 132px; resize: vertical;
+  width: 100%; min-height: 132px; max-height: 40vh; overflow-y: auto;
+  overscroll-behavior: contain; resize: vertical;
   background: var(--amber-deep); border: 1px solid rgba(226,176,33,0.45);
   color: var(--amber-hot); font-family: var(--font-mono); font-size: 12.5px; line-height: 1.62; letter-spacing: 0.02em;
   padding: 12px 14px; margin-bottom: 14px; text-shadow: 0 0 6px rgba(226,176,33,0.22);
@@ -762,7 +774,8 @@
   border: 1px solid var(--bc); background-color: rgba(0,166,214,0.07);
 }
 .qPlayerDesc {
-  width: 100%; min-height: 140px; resize: vertical;
+  width: 100%; min-height: 140px; max-height: 40vh; overflow-y: auto;
+  overscroll-behavior: contain; resize: vertical;
   background: rgba(0,40,52,0.16); border: 1px solid rgba(0,166,214,0.4); border-left: 2px solid var(--cyan);
   color: var(--text); font-family: var(--font-prose); font-size: 15px; line-height: 1.62; padding: 13px 15px; margin-bottom: 13px;
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
@@ -813,7 +826,8 @@
 .sessForm { display: flex; flex-direction: column; }
 .sessGrid2 { display: grid; grid-template-columns: 120px 1fr; gap: 12px; }
 .sessRecap {
-  width: 100%; min-height: 170px; resize: vertical; background: rgba(0,0,0,0.5);
+  width: 100%; min-height: 170px; max-height: 40vh; overflow-y: auto;
+  overscroll-behavior: contain; resize: vertical; background: rgba(0,0,0,0.5);
   border: 1px solid rgba(212,191,125,0.32); color: var(--text);
   font-family: var(--font-prose); font-size: 15px; line-height: 1.62; padding: 13px 15px; margin-bottom: 12px;
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
@@ -975,8 +989,13 @@
 .catTog .tgLab .t { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); }
 .catTog .tgLab .s { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.06em; color: var(--muted); }
 
+/* max-height + overscroll-behavior: without a ceiling the box grows with its
+   content and never develops an internal scrollbar, so the wheel goes straight
+   to the page; `contain` then stops the scroll chaining to the page once the
+   box IS at its limit. Applies to every prose field in the console. */
 .catProse {
-  width: 100%; min-height: 96px; resize: vertical;
+  width: 100%; min-height: 96px; max-height: 40vh; overflow-y: auto;
+  overscroll-behavior: contain; resize: vertical;
   background: rgba(0,0,0,0.4); border: 1px solid rgba(212,191,125,0.32); border-left: 2px solid var(--beige-dim);
   color: var(--text); font-family: var(--font-prose); font-size: 15px; line-height: 1.6; padding: 12px 14px; margin-bottom: 13px;
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);

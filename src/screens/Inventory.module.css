@@ -39,12 +39,12 @@
   border: 2px solid #111;
 }
 
-.col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.left { min-height: 460px; }
+.col { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.left { min-height: var(--screen-min-h); }
 /* Match .left exactly — a taller min-height makes the right column overflow the
    shared grid row, dropping the Load/Coin panel's bottom border below the
    inventory widget's (and scrolling the screen on shorter viewports). */
-.right { gap: 0; min-height: 460px; }
+.right { gap: 0; min-height: var(--screen-min-h); }
 
 /* --- Column-level chrome --- */
 .colHeader {
@@ -150,15 +150,29 @@
    region has after the switcher, header line and utility bar have taken theirs)
    and derives its width from aspect-ratio, so cells stay ~1.2:1 and the whole
    grid always fits without clipping. */
-.gridWrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+/* Takes the slack so the grid can fill it, but min-height:0 lets the rows
+   compress toward their floor before the screen has to scroll. */
+.gridWrap { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
 .opGrid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(4, 1fr);
+  /* Cells have a FLOOR. Previously the rows were plain 1fr inside a height:100%
+     box, so on a short viewport they shrank without limit — 90x75 on a laptop at
+     110% zoom, with the grid still overflowing its container. A minimum means
+     the grid stops compressing and the screen scrolls instead, which is the
+     whole point: the viewport is a minimum, not a maximum. */
+  /* Rows FILL the space available and shrink as it runs out — but only to
+     --cell-min-h. Past that the grid keeps its size and the screen scrolls.
+     Columns are clamped rather than fluid so cells never stretch wide and flat. */
+  grid-template-columns: repeat(5, clamp(var(--cell-min-w), 7.4vw, var(--cell-max-w)));
+  grid-template-rows: repeat(4, minmax(var(--cell-min-h), 1fr));
   gap: 6px;
+  /* height fills the space that IS available; min-height stops the fill from
+     crushing the rows past their floor when it isn't. Without the second, an
+     explicit height overrides the rows' own minimums and cells shrink below
+     --cell-min-h anyway. Past this point the grid overflows and the screen
+     scrolls, which is the intended behaviour. */
   height: 100%;
-  aspect-ratio: 3 / 2;
-  max-width: 100%;
+  min-height: min-content;
   touch-action: none;
 }
 

@@ -6,6 +6,11 @@
    non-scrolling 3-col grid filling the space between the dock nav and the
    bottombar (it escapes .main's overflow, like the fixed Deco/Nav do). */
 
+/* The viewport is a MINIMUM, not a maximum. This used to pin its columns to the
+   space between the bars with no overflow rule at all, so on a short screen the
+   panel actions simply vanished below the bottombar. Now the columns keep a
+   usable floor and the body scrolls when the viewport can't hold them — the
+   chrome stays pinned, only this moves. */
 .eq {
   position: fixed;
   top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 50px);
@@ -13,9 +18,19 @@
   left: 0; right: 0;
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(440px, 1.55fr) minmax(280px, 1fr);
+  grid-template-rows: minmax(var(--screen-min-h), 1fr);
   gap: 28px;
   padding: 0 36px;
   z-index: 10;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.eq::-webkit-scrollbar { width: 8px; }
+.eq::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15); }
+.eq::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  border: 2px solid #111;
 }
 
 /* --- Column-level chrome --- */
