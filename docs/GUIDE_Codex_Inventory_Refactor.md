@@ -648,6 +648,56 @@ Balance Eternal's *per-creature-per-short-rest* are genuinely unmodellable. Leav
 both as prose with a use counter rather than building an entity model to serve
 two features.
 
+### Three more kinds, and where each actually lands
+
+**Features that modify other features** ("your Rage now grants +3"). Do NOT model
+this as data. A modifier graph pointing features at other features is precisely
+the computation graph this brief refuses to build, and it buys almost nothing
+here. Two cheaper valves cover it:
+- *permanent upgrades* — the DM edits the target feature's text and numbers when
+  the upgrade is granted. One source of truth: the feature as it currently reads.
+  The cost is losing the "base + improvement" history, which for one table is
+  nothing.
+- *conditional or temporary* — prose, plus the state flag from category 5.
+
+**Features that grant spells** (Sanctuary Blade's "cast Sanctuary at will").
+Legitimate and worth structuring — the spellbook is app-owned data, like
+`hp.temp`. **But it is blocked:** the Spellbook screen is still a `Stub` and
+`CharacterRow.spellbook` is an untyped `Record<string, Json>`. There is no shape
+to write into. Design feature-granted spells as *part of* the Spellbook slice
+rather than bolting a field on now; when it happens, follow the item precedent —
+snapshot the spell into the spellbook carrying a `feature_id` back-ref, so
+removing the feature can remove its spells.
+
+**Auto-success features** ("your next saving throw automatically succeeds").
+Not a new category — this is category 4 pointed at a different roll. The lesson
+is that the **armed-modifier queue must be keyed by roll KIND** (attack, save,
+check, damage), not attack-only. Build it that way from the start.
+**Partly blocked:** saves are currently *displayed* on the Stat Panel
+(`saveTotal`) but never rolled, so there is no roll for an armed modifier to
+modify. Either such features stay prose, or the Stat Panel gains save rolling
+first — a small slice, and independently worth having.
+
+### Is a combat tracker needed? No.
+
+The features that would need one are Condemnation's *marked creatures*, Balance
+Eternal's *per-creature* limit, "for 1 minute" durations, and Execution's
+on-kill trigger. A tracker would mean initiative order, enemy HP, targets and
+rounds — at which point the app is a VTT, every future feature starts *expecting*
+that model, and the DM is running combat in the app instead of at the table.
+That is a different product, and a much larger one.
+
+What replaces it, cheaply:
+- **"Next roll" needs no notion of turns.** The armed-modifier queue already
+  gives the timing that most features actually care about.
+- **Durations are already manual** — active effects from potions carry a
+  free-text duration and are cleared by hand or by a rest. Feature durations
+  behave the same way, so this is consistent rather than a new gap.
+
+The real cost of no tracker is that durations live in the player's memory. That
+is already true today, so it is not a regression — just a limit to state out loud
+rather than discover.
+
 ### The escape hatch that keeps this from becoming a slog
 
 **The structured part is opt-in per feature.** Every feature can always be pure
