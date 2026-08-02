@@ -220,6 +220,7 @@ export function Equipment() {
       <Nav variant="dock" meta={meta} />
 
       <div className={styles.eq}>
+        <div className={styles.eqGrid}>
         {/* ---------- LEFT: Weapons + Stats ---------- */}
         <section className={styles.col} aria-label="Weapons and stats">
           <ColHeader num="01" title="Weapons" meta="Loadout 02" />
@@ -319,6 +320,7 @@ export function Equipment() {
             <ActionBtn to="/features" icon="fa-medal" label="Features" />
           </div>
         </section>
+        </div>
       </div>
 
       {tooltip}
