@@ -650,15 +650,41 @@ two features.
 
 ### Three more kinds, and where each actually lands
 
-**Features that modify other features** ("your Rage now grants +3"). Do NOT model
-this as data. A modifier graph pointing features at other features is precisely
-the computation graph this brief refuses to build, and it buys almost nothing
-here. Two cheaper valves cover it:
-- *permanent upgrades* — the DM edits the target feature's text and numbers when
-  the upgrade is granted. One source of truth: the feature as it currently reads.
-  The cost is losing the "base + improvement" history, which for one table is
-  nothing.
-- *conditional or temporary* — prose, plus the state flag from category 5.
+**Features that modify other features.** Split by whether the bonus is a flat
+number or a die, and whether it is permanent or conditional.
+
+- *Permanent and flat* ("your Rage now grants +3") — the DM edits the target
+  feature when the upgrade is granted. One source of truth: the feature as it
+  currently reads. The cost is losing the "base + improvement" history, which for
+  one table is nothing.
+- *Permanent and a die* ("Sanctity now deals +1d4") — same edit: the roll
+  expression becomes `2d8 + 1d4 + 4`. Still one field.
+- *Conditional, either kind* ("+1d4 while raging", "+2 against judged
+  creatures") — **this is the case that needs real machinery**, and neither
+  valve above covers it: baking it into the base roll would apply it always, and
+  `ItemEffects` models flat numbers only, so a `+1d4` has nowhere to live.
+
+For that last case, add **roll contributions**: a feature may declare an addend
+to a named roll, with a label and an optional gating condition. At roll time the
+roller collects every contribution from currently-active features and sums them,
+showing each source in the breakdown the toast already renders:
+
+```
+Sanctity  →  2d8(11) + 1d4(3) + 4  =  18
+             +1d4 radiant — Radiant Empowerment
+```
+
+**This is a list, not a graph.** Resolution is a FILTER over active features, not
+a dependency traversal, and the rule that keeps it that way is:
+
+> **Contributions target rolls, and a contribution is never itself modifiable.
+> One level deep. No chaining, no recursion.**
+
+That single constraint is the whole difference between this and the computation
+engine the brief refuses to build. It also composes with the mechanisms already
+here — a conditional gates on the same `active` state flag category 5 needs, and
+a one-shot contribution is just the armed-modifier queue with a different
+lifetime.
 
 **Features that grant spells** (Sanctuary Blade's "cast Sanctuary at will").
 Legitimate and worth structuring — the spellbook is app-owned data, like
