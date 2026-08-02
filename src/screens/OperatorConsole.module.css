@@ -38,10 +38,15 @@
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
   filter: drop-shadow(0 0 10px rgba(226,176,33,0.4));
 }
+/* A uniform inset does NOT inset a hexagon uniformly: near the top and bottom
+   points, a 1px perpendicular gap corresponds to a much larger gap along the
+   vertical axis, so the amber base bleeds through as a heavy band at the lower
+   vertex — very visible at 110% zoom. Pull the inner polygon's vertical points
+   in to compensate, rather than relying on inset alone. */
 .opSigil::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1;
+  content: ""; position: absolute; inset: 1.5px; z-index: -1;
   background: radial-gradient(120% 90% at 50% 35%, rgba(226,176,33,0.2), transparent 65%), #14110a;
-  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  clip-path: polygon(50% 3%, 100% 26%, 100% 74%, 50% 97%, 0% 74%, 0% 26%);
 }
 .opId { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 4px; }
 .opTitle {
@@ -131,8 +136,12 @@
   display: flex; align-items: center; gap: 11px;
   transition: background 160ms ease, filter 160ms ease;
 }
+/* inset 1.5px, not 1px: the outer beige is only visible as that ring, and at a
+   fractional browser zoom (110%) a 1px ring rounds away along the bottom edge,
+   so the entry renders with no bottom line. 1.5px survives the rounding and
+   matches the two-layer convention used elsewhere. */
 .ovEntry::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1;
+  content: ""; position: absolute; inset: 1.5px; z-index: -1;
   background: linear-gradient(180deg, #1a1814, #131210);
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
   transition: background 160ms ease, box-shadow 160ms ease;
@@ -672,8 +681,14 @@
 }
 .sessIn:focus { outline: none; --bc: var(--amber); }
 .sessIn::placeholder { color: var(--beige-dim); }
+/* The bottom border sits exactly on the clip-path boundary, so at a fractional
+   browser zoom (110%) the final device row rounds away and the control renders
+   open at the bottom. A <select> can't carry a nested frame element, so the
+   border is ALSO painted as an inset ring one pixel inside the clip, where
+   rounding can't reach it. */
 .selIn {
   width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(212,191,125,0.32); color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--bc, rgba(212,191,125,0.32));
   font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; padding: 8px 10px; margin-bottom: 10px; cursor: pointer;
   clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
   appearance: none; -webkit-appearance: none;
@@ -727,12 +742,25 @@
 .qSegOpt.sel { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226,176,33,0.1); }
 
 .qLabRow { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+/* Was missing the cut-corner border fix entirely, so both 45° edges rendered
+   bare — the one badge in the item form without its angled lines. */
 .qFacing {
+  --cut: 3px; --bc: rgba(212,191,125,0.4);
   display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono);
   font-size: 7px; letter-spacing: 0.16em; text-transform: uppercase; padding: 2px 7px;
-  clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
-.qFacing.player { color: var(--cyan-hot); border: 1px solid rgba(0,166,214,0.45); background: rgba(0,166,214,0.07); }
+.qFacing.player {
+  color: var(--cyan-hot); --bc: rgba(0,166,214,0.45);
+  border: 1px solid var(--bc); background-color: rgba(0,166,214,0.07);
+}
 .qPlayerDesc {
   width: 100%; min-height: 140px; resize: vertical;
   background: rgba(0,40,52,0.16); border: 1px solid rgba(0,166,214,0.4); border-left: 2px solid var(--cyan);

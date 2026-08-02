@@ -17,6 +17,8 @@ import { useState } from 'react'
 import type { ContainerKind, EquippedItem, InventoryItem } from '../lib/database.types'
 import { fmtWeight, itemWeight } from '../lib/burden'
 import { containerContents } from '../lib/equip'
+import { CAT_LABEL, rarityLabel } from '../lib/items'
+import type { Bind } from '../components/ItemTooltip'
 
 /** How many contents rows an `inline` container shows before deferring to the
  *  popup. Expansion has to be BOUNDED or the panel below shifts by an
@@ -27,12 +29,15 @@ const INLINE_ROWS = 3
 type Styles = Record<string, string>
 
 export function CarrySidebar({
-  open, containers, stowed, inventory, styles, onEquip, onUnequip, onClose,
+  open, containers, stowed, inventory, styles, bind, onEquip, onUnequip, onClose,
 }: {
   open: boolean
   containers: EquippedItem[]
   stowed: InventoryItem[]
   inventory: InventoryItem[]
+  /** The shared tooltip binder, so an expanded ammunition row can say what the
+   *  arrow actually is without opening anything. */
+  bind: Bind
   /** Equipment.module.css, passed in so both sidebars share one stylesheet and
    *  the slide-over chrome is defined exactly once. */
   styles: Styles
@@ -64,7 +69,7 @@ export function CarrySidebar({
             <>
               {containers.map(c => (
                 <ContainerRow
-                  key={c.id} container={c} inventory={inventory} styles={styles}
+                  key={c.id} container={c} inventory={inventory} styles={styles} bind={bind}
                   onUnequip={() => c.container && onUnequip(c.container.kind)}
                 />
               ))}
@@ -100,8 +105,9 @@ export function CarrySidebar({
   )
 }
 
-function ContainerRow({ container, inventory, styles, onUnequip }: {
-  container: EquippedItem; inventory: InventoryItem[]; styles: Styles; onUnequip: () => void
+function ContainerRow({ container, inventory, styles, bind, onUnequip }: {
+  container: EquippedItem; inventory: InventoryItem[]; styles: Styles
+  bind: Bind; onUnequip: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [confirm, setConfirm] = useState(false)
@@ -160,7 +166,20 @@ function ContainerRow({ container, inventory, styles, onUnequip }: {
       {inline && expanded && (
         <div className={styles.crBody}>
           {shown.map(a => (
-            <div key={a.id} className={styles.crLine}>
+            <div
+              key={a.id} className={styles.crLine} tabIndex={0}
+              {...bind({
+                name: a.name,
+                sub: `${rarityLabel(a.rarity ?? 'common')} · ${CAT_LABEL[a.category ?? 'misc']}`,
+                rows: [
+                  ['Quantity', `×${a.qty ?? 1}`],
+                  ['Weight', `${fmtWeight(itemWeight(a))} lb`],
+                  ...(a.rows ?? []),
+                ],
+                flavor: a.flavor,
+                rarity: a.rarity ?? 'common',
+              })}
+            >
               <span>{a.name}</span>
               <span className={styles.q}>×{a.qty ?? 1}</span>
             </div>

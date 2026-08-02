@@ -171,6 +171,19 @@
   border-radius: 1px;
 }
 
+/* Item cells sit 6px apart, and that gap used to break the hover: sweeping
+   across the grid dropped the tooltip on every gap and re-showed it on the next
+   tile, so a slow drag over four items flickered four times. Each tile gets a
+   transparent hit area extending halfway into the surrounding gap, so hover
+   passes straight from one tile to the next with no dead zone. Behind the
+   content (z-index 0) so the glyph, corner and stack badge still take clicks. */
+.cellItem::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  z-index: 0;
+}
+
 /* item cell */
 .cellItem {
   position: relative;

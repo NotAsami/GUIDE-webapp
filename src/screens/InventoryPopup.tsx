@@ -23,9 +23,27 @@ import { PERSON, freeCellFor } from '../lib/placement'
 import { CAT_LABEL, rarityLabel } from '../lib/items'
 import styles from './InventoryPopup.module.css'
 
-/** Where a manual STOW can send this item: every equipped container that accepts
- *  its category and has room. Deliberate movement, so unlike routing it offers a
- *  choice rather than picking for you. */
+/** Every place this item can be moved to: ON PERSON when a footprint-sized space
+ *  is free, plus every equipped container that accepts its category and has room.
+ *  Deliberate movement, so unlike routing it offers a choice rather than picking.
+ *
+ *  Containers are included regardless of where the item currently IS — moving
+ *  backpack -> bag of holding used to require a round trip through the grid
+ *  (retrieve, then stow), which is two writes and a lot of clicking to express
+ *  one intent. */
+export function moveTargets(
+  item: InventoryItem, gear: EquippedGear, inventory: InventoryItem[],
+): { id: string; name: string }[] {
+  const out: { id: string; name: string }[] = []
+  if (item.containerId !== PERSON && freeCellFor(inventory, item)) {
+    out.push({ id: PERSON, name: 'On Person' })
+  }
+  for (const c of stowTargets(item, gear, inventory)) {
+    if (c.id) out.push({ id: c.id, name: c.name })
+  }
+  return out
+}
+
 function stowTargets(
   item: InventoryItem, gear: EquippedGear, inventory: InventoryItem[],
 ): EquippedItem[] {
@@ -67,11 +85,11 @@ export function ItemPopup({
   onClose: () => void
 }) {
   const [confirmDrop, setConfirmDrop] = useState(false)
-  const dests = stowTargets(item, gear, inventory)
-  const [stowTo, setStowTo] = useState<string>(dests[0]?.id ?? '')
+  const dests = moveTargets(item, gear, inventory)
+  const [moveTo, setMoveTo] = useState<string>(dests[0]?.id ?? '')
 
   useEffect(() => { setConfirmDrop(false) }, [item.id])
-  useEffect(() => { setStowTo(prev => (dests.some(d => d.id === prev) ? prev : dests[0]?.id ?? '')) }, [dests])
+  useEffect(() => { setMoveTo(prev => (dests.some(d => d.id === prev) ? prev : dests[0]?.id ?? '')) }, [dests])
 
   const cat = item.category ?? 'misc'
   const rarity = item.rarity ?? 'common'
@@ -180,9 +198,10 @@ export function ItemPopup({
             )}
           </div>
 
-          {!canRetrieve && !onPerson && (
+          {!onPerson && !canRetrieve && (
             <div className={`${styles.imWarn} ${styles.footWarn}`}>
-              // No reachable space — free a cell on person first
+              // No reachable space on person — free a cell to retrieve
+              {dests.length > 0 && ', or move it to another container'}
             </div>
           )}
 
@@ -216,35 +235,31 @@ export function ItemPopup({
               </button>
             )}
 
-            {onPerson ? (
-              dests.length > 0 && (
-                <>
-                  {dests.length > 1 && (
-                    <select
-                      className={styles.stowPick} value={stowTo}
-                      onChange={e => setStowTo(e.target.value)}
-                      aria-label="Stow destination"
-                    >
-                      {dests.map(d => <option key={d.id} value={d.id!}>To {d.name}</option>)}
-                    </select>
-                  )}
-                  <button
-                    type="button" className={`${styles.ia} ${styles.ghost}`}
-                    onClick={() => onMove(stowTo || dests[0].id!)} disabled={busy || !stowTo}
+            {/* One control for every move. Retrieve and Stow were separate
+                because the destination was implied; with any-to-any moves the
+                destination is chosen, so the verb follows it. */}
+            {dests.length > 0 && (
+              <>
+                {dests.length > 1 && (
+                  <select
+                    className={styles.stowPick} value={moveTo}
+                    onChange={e => setMoveTo(e.target.value)}
+                    aria-label="Move destination"
                   >
-                    <span className={styles.af} />
-                    <span className={styles.ai}><i className="fa-solid fa-box-archive" />Stow</span>
-                  </button>
-                </>
-              )
-            ) : (
-              <button
-                type="button" className={`${styles.ia} ${styles.ghost}`}
-                onClick={() => onMove(PERSON)} disabled={busy || !canRetrieve}
-              >
-                <span className={styles.af} />
-                <span className={styles.ai}><i className="fa-solid fa-hand" />Retrieve</span>
-              </button>
+                    {dests.map(d => <option key={d.id} value={d.id}>To {d.name}</option>)}
+                  </select>
+                )}
+                <button
+                  type="button" className={`${styles.ia} ${styles.ghost}`}
+                  onClick={() => onMove(moveTo || dests[0].id)} disabled={busy || !moveTo}
+                >
+                  <span className={styles.af} />
+                  <span className={styles.ai}>
+                    <i className={`fa-solid ${moveTo === PERSON ? 'fa-hand' : 'fa-box-archive'}`} />
+                    {moveTo === PERSON ? 'Retrieve' : 'Stow'}
+                  </span>
+                </button>
+              </>
             )}
 
             {/* Quest items are the campaign's, not yours — no dropping them. */}
