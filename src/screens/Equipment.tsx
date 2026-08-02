@@ -10,7 +10,7 @@ import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { formatMod } from '../lib/dnd'
 import {
-  ATTUNEMENT_CAP, attunedCount, consumesAttunement, containerContents,
+  attunedCount, attunementCap, consumesAttunement, containerContents,
   equipContainerPatch, equipGearPatch, equipWeaponPatch, getContainers,
   stowedContainers, unequipContainerPatch, unequipGearPatch, unequipWeaponPatch,
 } from '../lib/equip'
@@ -175,6 +175,7 @@ export function Equipment() {
   const activeAmmo = ammoStacks.find(a => a.id === nocked) ?? ammoStacks[0] ?? null
 
   const attuned = attunedCount(gear)
+  const attCap = attunementCap(character)
   const stowed = stowedContainers(inventory)
 
   const meta = (
@@ -187,7 +188,7 @@ export function Equipment() {
       <span className="dim">·</span>
       <span>Slots <span className="acc">{equippedCount(gear)} / 8</span></span>
       <span className="dim">·</span>
-      <span>Attuned <span className={attuned >= ATTUNEMENT_CAP ? styles.attMaxed : 'acc'}>{attuned} / {ATTUNEMENT_CAP}</span></span>
+      <span>Attuned <span className={attuned >= attCap ? styles.attMaxed : 'acc'}>{attuned} / {attCap}</span></span>
     </>
   )
 
@@ -258,7 +259,7 @@ export function Equipment() {
         <section className={styles.col} aria-label="Gear slots">
           <ColHeader
             num="04" title="Gear"
-            meta={<>Attuned <span className={attuned >= ATTUNEMENT_CAP ? styles.attMaxed : 'acc'}>{attuned} / {ATTUNEMENT_CAP}</span></>}
+            meta={<>Attuned <span className={attuned >= attCap ? styles.attMaxed : 'acc'}>{attuned} / {attCap}</span></>}
           />
           <div className={styles.gearGrid}>
             {GEAR_SLOTS.map(s => (

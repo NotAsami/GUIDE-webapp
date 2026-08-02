@@ -208,9 +208,20 @@ export function attunedCount(gear: EquippedGear): number {
   return ITEM_SLOTS.reduce((n, k) => n + (consumesAttunement(gear[k]) ? 1 : 0), 0)
 }
 
-/** The 5e attunement cap. Three, and it is the constraint that actually bites at
- *  eight worn slots — rings and amulets are the attunement-hungry category. */
-export const ATTUNEMENT_CAP = 3
+/** SRD default when a character row doesn't say otherwise. */
+export const ATTUNEMENT_CAP_DEFAULT = 3
+
+/** How many items this character may attune to.
+ *
+ *  Read from `resources.attunement.capacity`, which the schema has carried since
+ *  Phase 0 and nothing was using — a hardcoded 3 duplicated a value the database
+ *  already owned. Reading it here means the DM can raise a single character's cap
+ *  (a boon, a shard, an artifact) by editing one field, with no code change. */
+export function attunementCap(character: CharacterRow): number {
+  const att = (character.resources as { attunement?: { capacity?: number } } | undefined)?.attunement
+  const cap = att?.capacity
+  return typeof cap === 'number' && cap > 0 ? cap : ATTUNEMENT_CAP_DEFAULT
+}
 
 /** Containers the character owns but isn't wearing. They sit in the inventory
  *  like any other item; the sidebar lists them so "where did my backpack go" is
