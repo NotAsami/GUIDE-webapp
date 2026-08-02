@@ -529,34 +529,9 @@ against real data.
   itself is now read from `resources.attunement.capacity`, so raising it per
   character is already a one-field DM edit.)*
 
-- **MAJOR SLICE — features that actually do something.** Features are currently
-  descriptive only: prose, usage text, an optional roll. They cannot grant an
-  ability boost, heal, or modify an attack. The hard part is that the space of
-  effects is open-ended and resists enumeration — compare *Judgement's Edge*
-  ("when you hit a creature affected by your Arbiter's Judgement, deal +1d4
-  radiant or necrotic") against *Final Strike* ("your next attack against them is
-  an automatic critical hit, and they make death saves with disadvantage if
-  reduced to 0"). A fixed list of effect types covers neither well.
+- **MAJOR SLICE — features that actually do something.** Design brief below;
+  nothing built. See "Features engine — design brief" at the end of this doc.
 
-  Worth noting before designing it: items already solved a *narrow* version of
-  this. `ItemEffects` models only the numeric, always-on modifiers the engine can
-  compute (ability deltas, AC, saves, speed) and deliberately leaves advantage,
-  resistances and charges as prose — the rule being "never pretend advantage is a
-  flat number." A features engine probably wants the same split, plus a third
-  category items don't have: **conditional, triggered effects** ("when you hit
-  X", "your next attack"), which need a trigger vocabulary and somewhere to hold
-  pending state between rolls. Likely shape: numeric effects reuse `ItemEffects`,
-  triggered ones become authored *prompts* that surface at the right moment and
-  let the player apply them, rather than the engine resolving them silently.
-  That keeps homebrew expressible without an interpreter.
-- **Component pouch** — blocked on decision 1c.
-- **Party view** — decisions 3–5, its own slice.
-- **Vertical slack routing** — the Equipment left column has no slack absorber:
-  every child is `flex: 0 1 auto` with nothing compressible, so it needed 483 of
-  its 485 available px before the refactor touched it, and anything added to that
-  column clips the panel actions off the bottom. The fix is naming a child that
-  takes the slack (the stats panel, `flex: 1 1 auto` + `min-height: 0`), per the
-  standing layout convention. Deferred deliberately.
 - **MAJOR SLICE — small-screen layout.** The three-column grid has a
   `minmax(280px, 1fr)` floor, so below roughly 1100×760 the page scrolls
   horizontally rather than reflowing, and the vertical budget runs out first.
@@ -589,3 +564,93 @@ against real data.
 6. Container `slot` labels treated as flavour — no body slots for containers.
 7. Angled-border fix applied to the chips, tags, close button, container-row
    actions, ammo picker and DM row actions.
+
+---
+
+## 17. Features engine — design brief
+
+Features today are descriptive: prose, a usage tag, an optional dice roll. They
+can't grant a bonus, heal, or modify an attack. This is the brief for making them
+act, written after cataloguing a real spread of homebrew.
+
+### What already exists (more than it looks like)
+
+`Feature` already carries `uses: {current, max}` and `recharge`, the Features
+screen already has a **Use** button that spends a use and rolls `roll`,
+`rollTone: 'heal'` already writes real HP, and Rest already recharges everything.
+**Activation and resource tracking are done.** The gap is what a use *does*
+beyond printing a number.
+
+### The principle: the engine never infers a trigger
+
+There is no combat simulation, no targets, no initiative, and there should not
+be. The app will never know that the player "reduced a judged creature to 0 hit
+points" — but the player knows. So a feature is a **button pressed at the moment
+the fiction says so**, and the app does the bookkeeping.
+
+That single inversion removes the entire "impossible" category. It is also how
+attacks already work: the app rolls and shows, the player applies.
+
+**The exception that proves it:** some triggers fire on state the app *does* own
+— chiefly the character's own HP. Those don't need inverting; the app can offer
+them (§ Reactive below). The test is simply "is this a write the app performs?"
+
+### Five categories, in order of how much machinery they need
+
+| # | Category | Example | Machinery |
+|---|---|---|---|
+| 1 | **Prose + a use counter** | Sanctuary Blade · Unblemished Grace · Unshakeable · Mercy's Final Judgment · Balance Eternal | **None — works today** |
+| 2 | **Passive numeric** | Relentless Pursuit (+10 speed) | Reuse `ItemEffects` |
+| 3 | **Activated outcome** | Radiant Edge (temp HP = level + WIS) | Formula eval + write `hp.temp` |
+| 4 | **Armed next-roll modifier** | Final Strike (auto-crit) · Radiant Edge (+2×prof radiant) · Healing Edge (damage→healing) | A pending-modifier queue |
+| 5 | **Reactive** | Too Angry to Fall (at 0 HP, drop to 1 instead) | Feature state + an HP-write hook |
+
+Category 1 is the **largest group**, and treating prose as a legitimate outcome
+rather than a failure is most of why this stays tractable. Immunities, advantage,
+"cast Sanctuary at will", mass save-or-friendly — the DM adjudicates, the app
+spends the use.
+
+Category 2 reuses the existing item split verbatim: numeric always-on modifiers
+go in `ItemEffects`, and advantage/resistance/immunity stay prose. The rule that
+governs items — *never pretend advantage is a flat number* — governs features too.
+
+### What to build
+
+1. **A tiny formula evaluator.** A whitelist of `level`, `prof` and ability
+   modifiers plus arithmetic — roughly thirty lines. NOT an expression language.
+2. **Activation outcomes** beside the existing `roll`: `tempHp`, `heal`,
+   `effect` (an `ItemEffects` bundle with a duration, i.e. an ActiveEffect).
+3. **An armed-modifier queue** in `resources`, consumed by the next attack roll
+   and shown as a badge on the weapon card — so it is visible that you are
+   holding a crit, and it can be cleared without spending it.
+4. **Feature state.** "While raging" means Rage is a feature that is currently
+   ON. Today nothing models that: a feature has uses, not a state. Add an
+   `active` flag, gate other features on it, and let an effect end it
+   (`Too Angry to Fall` ends Rage).
+5. **Reactive prompts on app-owned events.** Start with exactly one: HP about to
+   reach 0. When it fires and an armed reactive feature is available, ASK — never
+   auto-apply. The player may want to save it, and the app may be wrong about the
+   gating state. The set of app-owned events is small and closed (HP writes,
+   rests, death saves), which is precisely why this is feasible where general
+   triggers are not.
+
+### What NOT to build
+
+**Not an interpreter.** Dicecloud is a computation graph with variables, inline
+calculations and dependency resolution, because it serves arbitrary homebrew for
+strangers who will never speak to its authors. This is one DM authoring for three
+players who are in the room. An interpreter buys automation of *adjudication* —
+the one thing that must stay human, because the moment the app decides whether a
+creature counts as "judged" is the moment it is wrong with no override.
+
+**Not a target registry.** No targets means Condemnation's *marked creatures* and
+Balance Eternal's *per-creature-per-short-rest* are genuinely unmodellable. Leave
+both as prose with a use counter rather than building an entity model to serve
+two features.
+
+### The escape hatch that keeps this from becoming a slog
+
+**The structured part is opt-in per feature.** Every feature can always be pure
+prose. The DM adds an effect block only when there is a number worth the app
+carrying. The catalog form should make the effect block collapsed-by-default,
+exactly like the item form's CONTAINER sub-section.
