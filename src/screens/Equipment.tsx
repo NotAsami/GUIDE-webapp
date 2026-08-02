@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useOutletContext } from 'react-router-dom'
 import type {
   ActiveEffect, CharacterRow, CharacterSection, CharacterSheet, ContainerKind,
@@ -503,25 +504,52 @@ function buildWeaponRows(w: EquippedWeapon, sheet: CharacterSheet): [string, str
 
 /** The nocked-ammunition selector. Sits beside ATTACK because which arrow is
  *  fired is a property of the attack; the quiver only answers "what do I have".
- *  Rendered inline (not a portal) — the weapon card is clip-pathed, so the menu
- *  is positioned above the button and allowed to overflow the card's padding
- *  box rather than being clipped by it. */
+ *
+ *  The menu is PORTALLED to a fixed layer on document.body, not rendered as a
+ *  child of the button. The weapon card is clip-pathed, and clip-path clips
+ *  descendants regardless of z-index or overflow — an in-card menu is silently
+ *  sliced off along the card's 45° corner as soon as it has more than a row or
+ *  two. It opens upward, flipping below when the button is too near the top. */
 function AmmoPicker({ stacks, active, onNock }: {
   stacks: InventoryItem[]; active: InventoryItem; onNock: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current || !menuRef.current) return
+    const b = btnRef.current.getBoundingClientRect()
+    const m = menuRef.current
+    const gap = 6
+    // Right-align to the button so the control and its menu share an edge.
+    let left = b.right - m.offsetWidth
+    left = Math.max(12, Math.min(left, window.innerWidth - m.offsetWidth - 12))
+    let top = b.top - m.offsetHeight - gap
+    if (top < 12) top = b.bottom + gap          // not enough room above — flip down
+    setPos({ left, top })
+  }, [open, stacks.length])
+
   useEffect(() => {
     if (!open) return
     const close = () => setOpen(false)
     window.addEventListener('click', close)
-    return () => window.removeEventListener('click', close)
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
   }, [open])
 
   return (
     <span className={`${styles.ammo}${open ? ' ' + styles.open : ''}`}>
       <button
+        ref={btnRef}
         type="button" className={styles.ammoBtn}
-        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        onClick={e => { e.stopPropagation(); setOpen(o => !o); setPos(null) }}
         aria-haspopup="listbox" aria-expanded={open}
         aria-label={`Nocked: ${active.name}, ${active.qty ?? 1} left`}
       >
@@ -530,18 +558,27 @@ function AmmoPicker({ stacks, active, onNock }: {
         <span className={styles.amCt}>×{active.qty ?? 1}</span>
         <i className={`fa-solid fa-chevron-down ${styles.amChev}`} aria-hidden="true" />
       </button>
-      {open && (
-        <span className={styles.ammoMenu} role="listbox">
+
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          className={styles.ammoMenu}
+          role="listbox"
+          style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
+          onClick={e => e.stopPropagation()}
+        >
           {stacks.map(a => (
             <button
               key={a.id} type="button" role="option" aria-selected={a.id === active.id}
               className={`${styles.amOpt}${a.id === active.id ? ' ' + styles.on : ''}`}
-              onClick={e => { e.stopPropagation(); onNock(a.id!); setOpen(false) }}
+              onClick={() => { onNock(a.id!); setOpen(false) }}
             >
-              <span>{a.name}</span><span className={styles.q}>×{a.qty ?? 1}</span>
+              <span className={styles.amOptName}>{a.name}</span>
+              <span className={styles.q}>×{a.qty ?? 1}</span>
             </button>
           ))}
-        </span>
+        </div>,
+        document.body,
       )}
     </span>
   )
