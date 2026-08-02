@@ -529,6 +529,18 @@ against real data.
   decision (see also decision 2).
 - **Component pouch** — blocked on decision 1c.
 - **Party view** — decisions 3–5, its own slice.
+- **Vertical slack routing** — the Equipment left column has no slack absorber:
+  every child is `flex: 0 1 auto` with nothing compressible, so it needed 483 of
+  its 485 available px before the refactor touched it, and anything added to that
+  column clips the panel actions off the bottom. The fix is naming a child that
+  takes the slack (the stats panel, `flex: 1 1 auto` + `min-height: 0`), per the
+  standing layout convention. Deferred deliberately.
+- **Scaling and placement below ~1100px wide / ~760px tall** — the three-column
+  grid has a `minmax(280px, 1fr)` floor, so below that the page scrolls
+  horizontally rather than reflowing, and the vertical budget above runs out
+  first. Related to but distinct from the mobile port: this is the *desktop*
+  small-window case, which Phase 4's single-column reflow doesn't automatically
+  solve. Deferred deliberately.
 - **Mobile (§13)** — Phase 4, captured but not built.
 
 ### Corrections that were applied while porting
