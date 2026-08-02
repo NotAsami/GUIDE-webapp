@@ -729,10 +729,18 @@ removing the feature can remove its spells.
 Not a new category — this is category 4 pointed at a different roll. The lesson
 is that the **armed-modifier queue must be keyed by roll KIND** (attack, save,
 check, damage), not attack-only. Build it that way from the start.
-**Partly blocked:** saves are currently *displayed* on the Stat Panel
-(`saveTotal`) but never rolled, so there is no roll for an armed modifier to
-modify. Either such features stay prose, or the Stat Panel gains save rolling
-first — a small slice, and independently worth having.
+**Blocked on the Character screen.** Saves and skill checks are *displayed*
+today (the Stat Panel renders `saveTotal`) but nothing rolls them. **Rolling
+lives on the Character screen** — saves plus skills like Acrobatics and
+Investigation — which is still a `Stub` in the router, though its design is
+done. Until that slice lands there is no save or check roll for an armed
+modifier to attach to, so auto-success features stay prose.
+
+This is also what makes the roll-kind keying pay off: once the Character screen
+rolls, `check` and `save` become real targets alongside `attack` and `damage`,
+and roll context (§ above) applies to them unchanged — a feature that reads
+"advantage on Investigation" can surface beside that roll without any new
+machinery.
 
 ### Is a combat tracker needed? No.
 
