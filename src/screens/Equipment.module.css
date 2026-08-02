@@ -1244,19 +1244,27 @@
   background-repeat: no-repeat; background-origin: border-box;
   background-position: top left, bottom right;
   background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+
+  /* FIXED width. The control sits beside ATTACK in a row whose size is part of
+     the card's composition — letting it grow with the ammunition's name means
+     "Arrow of Slaying" shoves the layout around and "Arrows" leaves a gap. The
+     name ellipsizes instead; the full text is one click away in the menu. */
+  width: 168px;
 }
-.ammoBtn > i:first-child { font-size: 9px; color: var(--beige-dim); }
-.amName { max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ammoBtn > i:first-child { flex: 0 0 auto; font-size: 9px; color: var(--beige-dim); }
+.amName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.amCt, .amChev { flex: 0 0 auto; }
 .amCt { color: var(--cyan); }
 .amChev { font-size: 8px; color: var(--beige-dim); }
 .ammoBtn:hover { color: var(--text); --bc: rgba(0, 166, 214, 0.5); }
 .ammo.open .ammoBtn { --bc: var(--cyan); color: var(--text); }
 
-/* opens UPWARD and out of the weapon card: the card is clip-pathed, so a menu
-   dropping downward inside it would be sliced off at the corner cut */
+/* Portalled to document.body and positioned by JS. It CANNOT be a child of the
+   card: clip-path clips descendants regardless of z-index or overflow, so an
+   in-card menu gets sliced along the card's 45° corner as soon as it grows. */
 .ammoMenu {
-  position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 60;
-  min-width: 190px; padding: 5px;
+  position: fixed; z-index: 300;
+  min-width: 210px; max-width: 280px; padding: 5px;
   background: rgba(8, 8, 8, 0.97); border: 1px solid var(--beige);
   box-shadow: 0 12px 26px rgba(0, 0, 0, 0.6), 0 0 16px rgba(0, 166, 214, 0.18);
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
@@ -1269,6 +1277,7 @@
   font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--muted);
 }
+.amOptName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .amOpt:hover { color: var(--text); background: rgba(0, 166, 214, 0.09); }
 .amOpt.on { color: var(--cyan-hot); }
 .amOpt .q { color: var(--beige); }
