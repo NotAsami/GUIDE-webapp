@@ -4,10 +4,13 @@
 </div>
 <br>
 
-An in-world D&D character codex with a fantasy-cyberpunk terminal UI, built for a
-private 3–4 player campaign. Players view and manage their own character; the DM
-authors content and grants items and levels. It's online-first — every screen
-renders from a single character data object stored in Supabase.
+The GUIDE is a web-app that can help online D&D **players** and **dungeon masters** be more immersed in their campaign.
+It's a in-world D&D character codex with a fantasy-cyberpunk terminal UI, built for a3–4 player campaigns, though more players should not be an issue. The codex features everything you would need for a D&D campaign and more. 
+Current features include:
+- **Campaign progression home:** It features 3 widgets that can display current area, main quest line and other progression, authored by the DM.
+- **Equipment overview screen:** See what items and gear you have equipped, and roll attacks with your main and off-hand weapon.
+- **Stat-panel:** Have a look at all your stats at a glance, stuff from proficiency bonus display, to Hit-die counter and exhaustion tracker.
+- **Inventory management:** DMs can limit their players inventories to a grid like
 
 ## Stack
 
