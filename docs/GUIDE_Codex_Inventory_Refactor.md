@@ -674,6 +674,20 @@ Sanctity  →  2d8(11) + 1d4(3) + 4  =  18
              +1d4 radiant — Radiant Empowerment
 ```
 
+**Features can also arm a bonus on ANOTHER feature's roll.** Activating "Boost
+Judgment's Cut" spends its use and writes a pending `+1d6` targeting the
+`judgments-cut` roll; the next activation of Judgment's Cut collects it, rolls it
+in, and consumes it. This is the category-4 armed queue with a feature as the
+key rather than an attack — nothing new is required.
+
+Two things it needs, both cheap:
+- **a lifetime** — pending entries clear on a rest (alongside use recharge) and
+  can be dismissed by hand, or the player accumulates ghosts from past sessions;
+- **visibility** — the target feature's card must show that it is armed, exactly
+  as the weapon card shows a held crit. An invisible pending bonus is worse than
+  none, because the player rolls without it and never learns why the number was
+  low.
+
 **This is a list, not a graph.** Resolution is a FILTER over active features, not
 a dependency traversal, and the rule that keeps it that way is:
 
@@ -685,6 +699,22 @@ engine the brief refuses to build. It also composes with the mechanisms already
 here — a conditional gates on the same `active` state flag category 5 needs, and
 a one-shot contribution is just the armed-modifier queue with a different
 lifetime.
+
+### What is actually off the table
+
+Not "one feature referencing another" — that is fine, and two of the cases above
+do it. What is refused is **continuous re-derivation**: a web of references that
+recalculates downstream values whenever anything upstream changes. That is what
+needs a dependency engine, and it is the thing that makes homebrew authoring
+require a manual.
+
+The useful test is **when the reference resolves**:
+
+| Resolves | Example | Verdict |
+|---|---|---|
+| At **write** time (activation) | Boost arms +1d6 on Judgment's Cut | Safest — a concrete value in a queue |
+| At **read** time (each roll) | "+1d4 while raging" | Fine — a filter over active features, one level deep |
+| **Continuously**, across a reference web | Dicecloud-style variables | Refused |
 
 **Features that grant spells** (Sanctuary Blade's "cast Sanctuary at will").
 Legitimate and worth structuring — the spellbook is app-owned data, like
