@@ -15,7 +15,7 @@
 
 import { useState } from 'react'
 import type { ContainerKind, EquippedItem, InventoryItem } from '../lib/database.types'
-import { itemWeight } from '../lib/burden'
+import { fmtWeight, itemWeight } from '../lib/burden'
 import { containerContents } from '../lib/equip'
 
 /** How many contents rows an `inline` container shows before deferring to the
@@ -116,7 +116,7 @@ function ContainerRow({ container, inventory, styles, onUnequip }: {
    *  number that decides whether you can keep shooting. */
   const readout = inline
     ? <><span className={styles.cap}>{held}{def?.capacity ? ` / ${def.capacity}` : ''}</span> held</>
-    : <>{contents.length} · {def?.weightless ? 'Weightless' : `${Math.round(weight * 10) / 10} lb`}</>
+    : <>{contents.length} · {def?.weightless ? 'Weightless' : `${fmtWeight(weight)} lb`}</>
 
   const shown = contents.slice(0, INLINE_ROWS)
   const more = contents.length - shown.length

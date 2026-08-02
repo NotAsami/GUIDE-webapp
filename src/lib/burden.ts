@@ -21,6 +21,13 @@ export function itemWeight(item: { weight?: number; qty?: number }): number {
   return (item.weight ?? 0) * (item.qty ?? 1)
 }
 
+/** Weight as a string, rounded to one decimal. Float dust is not hypothetical:
+ *  twelve 0.05 lb arrows sum to 0.6000000000000001, which a raw render happily
+ *  prints in full. Every surface that shows a weight goes through this. */
+export function fmtWeight(lb: number): string {
+  return (Math.round(lb * 10) / 10).toString()
+}
+
 /** Every weighable item the character has on them — carried + equipped.
  *
  *  Containers make this less obvious than it was. A container's OWN weight always

@@ -17,7 +17,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { EquippedGear, EquippedItem, InventoryItem } from '../lib/database.types'
-import { itemWeight } from '../lib/burden'
+import { fmtWeight, itemWeight } from '../lib/burden'
 import { getContainers, type EquipTarget } from '../lib/equip'
 import { PERSON, freeCellFor } from '../lib/placement'
 import { CAT_LABEL, rarityLabel } from '../lib/items'
@@ -87,7 +87,7 @@ export function ItemPopup({
     .some(c => c?.id === item.containerId && c?.container?.weightless)
 
   const facts: [string, string][] = [
-    ['Weight', weightlessHome ? '— cached' : item.weight != null ? `${itemWeight(item)} lb` : '—'],
+    ['Weight', weightlessHome ? '— cached' : item.weight != null ? `${fmtWeight(itemWeight(item))} lb` : '—'],
     ['Value', item.value ? `${item.value.toLocaleString()} gp` : '—'],
     [cat === 'weapon' ? 'Damage' : cat === 'armor' ? 'Armor' : 'Key Stat',
       item.damage ?? item.damageDice ?? item.rows?.[0]?.[1] ?? '—'],

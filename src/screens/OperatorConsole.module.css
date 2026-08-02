@@ -1258,7 +1258,6 @@
 .irAct.danger { color: var(--danger-hot); --bc: var(--danger); }
 
 /* --- catalog CONTAINER sub-section (styled like EFFECTS GRANTED) --- */
-.catCtrHead { margin-top: 14px; }
 .catCtr {
   display: flex; flex-direction: column; gap: 10px;
   margin-top: 8px; padding: 12px 13px;
@@ -1267,7 +1266,8 @@
     radial-gradient(120% 90% at 50% 0%, rgba(0, 166, 214, 0.06), transparent 60%),
     rgba(0, 0, 0, 0.28);
 }
-.ctrTog { align-self: end; padding-bottom: 7px; }
+/* the weightless switch shares a row with Capacity — kill the stacked margin */
+.ctrTog { margin-bottom: 0; align-self: stretch; }
 .catCtrCats { display: flex; flex-wrap: wrap; gap: 6px; }
 .catCtrNote {
   font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em;
