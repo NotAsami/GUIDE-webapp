@@ -508,28 +508,38 @@ it's behavior with no new pixels.
 
 ---
 
-## 16. Design status
+## 16. Build status
 
-| Surface | Status |
-|---|---|
-| Storage sidebar (rows, stowed, empty target) | **Delivered** — as an inline module; re-host it in the sidebar |
-| Ammo picker | **Delivered** |
-| Inventory — tab bar, grid, list views | **Delivered** |
-| Item popup + hover tooltip, fine & coarse | **Delivered** |
-| Equipment — 8 gear slots, ATTUNED | **Delivered** |
-| DM per-character INVENTORY tab, catalog CONTAINER sub-section | **Not yet prompted** |
-| Component pouch treatment | Blocked on decision 1c |
+All four slices are built, applied to the dev DB, and verified in the browser
+against real data.
 
-### Corrections to apply when porting
+| Slice | Contents | State |
+|---|---|---|
+| 1 — Data layer | Both enums widened, `containerId`, `ContainerDef`, `locked`, migration 0006, seeds regenerated | **Done** |
+| 2a — Placement | Routing chain + footprint-aware search, 1-indexed coordinates | **Done** |
+| 2 — Inventory screen | Fixed four-tab bar, 5x4 on-person grid, container lists, item popup, shared tooltip | **Done** |
+| 3 — Equipment | 8 worn slots, `ATTUNED n / 3`, storage sidebar, ammo picker | **Done** |
+| 4 — DM console | Per-character INVENTORY tab (lock / confiscate / return), catalog CONTAINER sub-section | **Done** |
 
-1. **Re-host the storage module** in a sidebar behind a full-width button between the
-   gear grid and the shard widget (§5). The design places it inline.
-2. **Cap `inline` expansion** at 3 rows with `+N MORE →` opening the item popup. The
-   design renders all contents.
-3. **Cut the footer line** spelling out the shards/containers rationale.
-4. **Delete the `abstract` branch** still present in `carryRowHtml`.
-5. **Preserve `w`/`h` on stow/retrieve** and use our footprint-aware placement search
-   (§9). The design's `freeCell()` is 1×1 only.
-6. **Container `slot` labels are flavour** — do not implement body slots for
-   containers (§3).
-7. **Apply the angled-border fix** to the five elements listed in §12.
+### Still open
+
+- **The attunement cap is displayed, not enforced.** `ATTUNED n / 3` tints red
+  past three, but nothing refuses the equip — the seed currently sits at 5 / 3.
+  Whether to block, or to prompt for which attunement to break, is a rules
+  decision (see also decision 2).
+- **Component pouch** — blocked on decision 1c.
+- **Party view** — decisions 3–5, its own slice.
+- **Mobile (§13)** — Phase 4, captured but not built.
+
+### Corrections that were applied while porting
+
+1. Storage module re-hosted in a sidebar behind a full-width button between the
+   gear grid and the shard widget.
+2. `inline` expansion capped at 3 rows with a `+N more` line.
+3. Footer rationale line cut.
+4. `abstract` branch deleted.
+5. `w`/`h` preserved on stow/retrieve; the design's 1x1-only `freeCell()` was
+   replaced with the footprint-aware search.
+6. Container `slot` labels treated as flavour — no body slots for containers.
+7. Angled-border fix applied to the chips, tags, close button, container-row
+   actions, ammo picker and DM row actions.
