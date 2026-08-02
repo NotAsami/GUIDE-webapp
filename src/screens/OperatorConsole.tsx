@@ -1260,11 +1260,16 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
         </div>
       )}
 
-      <div className={styles.catCtrHead}>
-        <label className={styles.catTog}>
-          <input type="checkbox" checked={isContainer} onChange={e => setIsContainer(e.target.checked)} />
-          <span>This item is a container</span>
-        </label>
+      <div
+        className={cx(styles.catTog, isContainer && styles.on)}
+        onClick={() => setIsContainer(v => !v)}
+        role="switch" aria-checked={isContainer}
+      >
+        <span className={styles.tgSw} />
+        <span className={styles.tgLab}>
+          <span className={styles.t}>This Item Is A Container</span>
+          <span className={styles.s}>Holds other items — gets a tab or a carry row</span>
+        </span>
       </div>
 
       {isContainer && (
@@ -1303,10 +1308,17 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
                 onChange={e => setCtrCap(e.target.value)} placeholder="unlimited"
               />
             </div>
-            <label className={cx(styles.catTog, styles.ctrTog)}>
-              <input type="checkbox" checked={ctrWeightless} onChange={e => setCtrWeightless(e.target.checked)} />
-              <span>Weightless — contents don't count toward Burden</span>
-            </label>
+            <div
+              className={cx(styles.catTog, styles.ctrTog, ctrWeightless && styles.on)}
+              onClick={() => setCtrWeightless(v => !v)}
+              role="switch" aria-checked={ctrWeightless}
+            >
+              <span className={styles.tgSw} />
+              <span className={styles.tgLab}>
+                <span className={styles.t}>Weightless</span>
+                <span className={styles.s}>Contents excluded from Burden (the bag itself still weighs)</span>
+              </span>
+            </div>
           </div>
 
           <span className={styles.fieldLab}>Accepts (empty = anything)</span>

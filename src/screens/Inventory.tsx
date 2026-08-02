@@ -7,7 +7,7 @@ import type {
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { useItemTooltip } from '../components/ItemTooltip'
-import { burden, itemWeight } from '../lib/burden'
+import { burden, fmtWeight, itemWeight } from '../lib/burden'
 import { consumeEffect } from '../lib/consume'
 import {
   TAB_KIND_ORDER, equipTargetPatch, freshItemId, getGear, getInventory,
@@ -54,8 +54,6 @@ function fpClass(w: number, h: number): string {
   if (area >= 2) return styles.fpM
   return styles.fpS
 }
-
-const fmtWeight = (lb: number) => (Math.round(lb * 10) / 10).toString()
 
 /**
  * Inventory — the carried manifest.
@@ -562,7 +560,7 @@ export function itemTooltipData(item: (InventoryItem | EquippedItem) & Partial<W
   // Category and rarity already ride in the sub line — repeating category as a
   // row just makes the card taller for no information.
   const rows: [string, string][] = [
-    ['Weight', item.weight != null ? `${itemWeight(item)} lb` : '—'],
+    ['Weight', item.weight != null ? `${fmtWeight(itemWeight(item))} lb` : '—'],
   ]
   const keyStat = item.damage ?? item.damageDice ?? item.rows?.[0]?.[1]
   if (keyStat) rows.push([item.category === 'weapon' ? 'Damage' : 'Detail', String(keyStat)])

@@ -26,7 +26,7 @@ import type {
 import { getGear, getInventory } from '../lib/equip'
 import { PERSON, freeCellFor, place, routeItem } from '../lib/placement'
 import { CAT_LABEL } from '../lib/items'
-import { itemWeight } from '../lib/burden'
+import { fmtWeight, itemWeight } from '../lib/burden'
 import type { DmConfiscatedState } from '../lib/dm'
 import styles from './OperatorConsole.module.css'
 
@@ -146,7 +146,7 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
                 </span>
                 <span className={styles.irWhere}>{locationLabel(item, row)}</span>
                 <span className={styles.irCat}>{CAT_LABEL[item.category ?? 'misc']}</span>
-                <span className={styles.irWt}>{itemWeight(item) || '—'}{itemWeight(item) ? ' lb' : ''}</span>
+                <span className={styles.irWt}>{itemWeight(item) ? `${fmtWeight(itemWeight(item))} lb` : '—'}</span>
 
                 <button
                   className={cx(styles.irAct, item.locked && styles.on)}
