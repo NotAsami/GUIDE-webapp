@@ -52,11 +52,17 @@
 
 .weaponCard {
   --cut: 14px;
+  /* The action column is a FIXED width and the card a FIXED min-height, so a
+     bow and a dagger are the same box. Otherwise the ammo picker — which only
+     ranged weapons have — makes their card both wider (a content-sized column)
+     and taller (a third stacked control), and the two cards visibly disagree.
+     Melee cards simply leave the picker's space empty. */
+  --slot-w: clamp(126px, 40%, 168px);
   position: relative;
   cursor: pointer;
   transition: transform 200ms cubic-bezier(.2, .7, .2, 1);
   width: 100%;
-  min-height: 84px;
+  min-height: 104px;
   display: flex;
   text-align: left;
 }
@@ -144,10 +150,12 @@
 .wcSlot {
   grid-row: 1 / span 2;
   grid-column: 3;
+  width: var(--slot-w);
   text-align: right;
   display: flex; flex-direction: column;
-  gap: 4px; align-items: flex-end;
+  gap: 5px; align-items: stretch;
 }
+.wcSlot .label { text-align: right; }
 .wcSlot .label {
   font-family: var(--font-mono);
   font-size: 8.5px;
@@ -168,7 +176,8 @@
 /* Inline Attack button (rolls attack + damage → toast). Lives on the card, not
    in the manage modal, so the toast isn't buried under a modal overlay. */
 .wcAttack {
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%;
   padding: 6px 12px;
   font-family: var(--font-mono);
   font-size: 8.5px;
@@ -192,7 +201,7 @@
 .weaponSlotEmpty {
   --cut: 14px;
   width: 100%;
-  min-height: 84px;
+  min-height: 104px;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   padding: 14px 20px;
@@ -1245,11 +1254,11 @@
   background-position: top left, bottom right;
   background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 
-  /* FIXED width. The control sits beside ATTACK in a row whose size is part of
-     the card's composition — letting it grow with the ammunition's name means
-     "Arrow of Slaying" shoves the layout around and "Arrows" leaves a gap. The
-     name ellipsizes instead; the full text is one click away in the menu. */
-  width: 168px;
+  /* Fills the card's fixed action column rather than sizing to its own text —
+     letting it grow with the ammunition's name means "Arrow of Slaying" shoves
+     the layout around and "Arrows" leaves a gap. The name ellipsizes; the full
+     text is one click away in the menu, which is built for length. */
+  width: 100%;
 }
 .ammoBtn > i:first-child { flex: 0 0 auto; font-size: 9px; color: var(--beige-dim); }
 .amName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
