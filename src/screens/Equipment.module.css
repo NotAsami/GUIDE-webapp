@@ -16,15 +16,25 @@
   top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 50px);
   bottom: calc(var(--bar-bottom-h) + 22px);
   left: 0; right: 0;
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(440px, 1.55fr) minmax(280px, 1fr);
-  grid-template-rows: minmax(var(--screen-min-h), 1fr);
-  gap: 28px;
-  padding: 0 36px;
   z-index: 10;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
+}
+/* The SCROLL CONTAINER and the GRID have to be different elements. A fixed box
+   with both top and bottom set has a definite height, and a grid row inside a
+   definite-height container is stretched to it — so the row never grew to fit
+   the content, both columns overflowed it by different amounts, and the two
+   action rows refused to line up no matter what align-* was applied. The inner
+   grid has no definite height, so its row sizes to the tallest column and
+   `align-items: stretch` makes both columns exactly that tall. */
+.eqGrid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(440px, 1.55fr) minmax(280px, 1fr);
+  align-items: stretch;
+  gap: 28px;
+  padding: 0 36px;
+  min-height: 100%;
 }
 .eq::-webkit-scrollbar { width: 8px; }
 .eq::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15); }
@@ -35,6 +45,7 @@
 
 /* --- Column-level chrome --- */
 .col {
+  min-height: var(--screen-min-h);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -587,17 +598,20 @@
 .gearGrid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  /* A floor, so a slot is a readable object rather than whatever height was
+     left over. The column grows past the viewport if it has to — that's what
+     the screen scroll is for. */
+  grid-template-rows: repeat(2, minmax(var(--gear-min-h), 1fr));
   gap: 8px;
-  flex: 2;
-  min-height: 0;
+  flex: 2 1 auto;
+  min-height: min-content;
 }
 /* At 8 slots the labels have half the width they had at 6 — step the type down
    rather than letting names wrap to three lines. */
-.gearGrid .sLabel { font-size: 8px; letter-spacing: 0.16em; }
-.gearGrid .sName { font-size: 8.5px; letter-spacing: 0.08em; }
-.gearGrid .sInner { padding: 6px 6px 7px; }
-.gearGrid .sIcon { font-size: clamp(15px, 2.1vh, 22px); }
+.gearGrid .sLabel { font-size: 8.5px; letter-spacing: 0.18em; }
+.gearGrid .sName { font-size: 9px; letter-spacing: 0.1em; }
+.gearGrid .sInner { padding: 8px 7px 9px; }
+.gearGrid .sIcon { font-size: clamp(19px, 2.6vh, 27px); }
 
 /* attunement pip — only on slots that actually consume one of the three */
 .sAtt {

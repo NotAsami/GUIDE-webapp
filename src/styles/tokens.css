@@ -62,4 +62,6 @@
   --cell-min-h: 66px;
   --cell-max-w: 104px;
   --cell-max-h: 96px;
+  /* Worn gear slots on Equipment — a floor so they read as objects. */
+  --gear-min-h: 116px;
 }
