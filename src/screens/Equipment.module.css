@@ -48,7 +48,11 @@
 /* ============================================================
    LEFT COLUMN — Weapons + Stats
    ============================================================ */
-.weaponList { display: flex; flex-direction: column; gap: 12px; }
+/* The left column has almost no vertical slack at short viewports — every child
+   is flex:0 1 auto with nothing to compress, so a few px added to the weapon
+   cards pushes the panel actions off the bottom. These two gaps are where the
+   room comes from. */
+.weaponList { display: flex; flex-direction: column; gap: 8px; }
 
 .weaponCard {
   --cut: 14px;
@@ -57,12 +61,12 @@
      ranged weapons have — makes their card both wider (a content-sized column)
      and taller (a third stacked control), and the two cards visibly disagree.
      Melee cards simply leave the picker's space empty. */
-  --slot-w: clamp(126px, 40%, 168px);
+  --slot-w: 148px;
   position: relative;
   cursor: pointer;
   transition: transform 200ms cubic-bezier(.2, .7, .2, 1);
   width: 100%;
-  min-height: 104px;
+  min-height: 90px;
   display: flex;
   text-align: left;
 }
@@ -89,10 +93,13 @@
     calc(100% - var(--cut) + 1px) 0, calc(100% - 1px) calc(var(--cut) - 1px),
     calc(100% - 1px) calc(100% - 1px),
     calc(var(--cut) - 1px) calc(100% - 1px), 0 calc(100% - var(--cut) + 1px));
-  padding: 14px 16px 12px 22px;
+  padding: 10px 14px 10px 20px;
   position: relative;
   display: grid;
-  grid-template-columns: 44px 1fr auto;
+  /* The action column is a sized TRACK, not a width on the item: the item's
+     track was `auto`, which is indefinite, so a width on the item resolved
+     against the wrong box and spilled the buttons outside the card's clip. */
+  grid-template-columns: 44px minmax(0, 1fr) var(--slot-w);
   grid-template-rows: auto auto;
   column-gap: 14px;
   row-gap: 4px;
@@ -150,10 +157,10 @@
 .wcSlot {
   grid-row: 1 / span 2;
   grid-column: 3;
-  width: var(--slot-w);
+  min-width: 0;
   text-align: right;
   display: flex; flex-direction: column;
-  gap: 5px; align-items: stretch;
+  gap: 4px; align-items: stretch;
 }
 .wcSlot .label { text-align: right; }
 .wcSlot .label {
@@ -178,7 +185,7 @@
 .wcAttack {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%;
-  padding: 6px 12px;
+  padding: 5px 12px;
   font-family: var(--font-mono);
   font-size: 8.5px;
   letter-spacing: 0.24em;
@@ -201,7 +208,7 @@
 .weaponSlotEmpty {
   --cut: 14px;
   width: 100%;
-  min-height: 104px;
+  min-height: 90px;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   padding: 14px 20px;
@@ -255,7 +262,7 @@
 }
 
 /* --- Stats panel --- */
-.statsPanel { margin-top: 22px; display: flex; flex-direction: column; }
+.statsPanel { margin-top: 14px; display: flex; flex-direction: column; }
 .statList {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1240,7 +1247,7 @@
 .ammoBtn {
   --cut: 5px; --bc: rgba(212, 191, 125, 0.32);
   display: flex; align-items: center; gap: 7px;
-  height: 26px; padding: 0 9px;
+  height: 24px; padding: 0 9px;
   background-color: rgba(0, 0, 0, 0.4); border: 1px solid var(--bc);
   color: var(--beige);
   font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em;
