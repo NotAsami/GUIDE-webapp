@@ -214,9 +214,14 @@ export const ATTUNEMENT_CAP = 3
 
 /** Containers the character owns but isn't wearing. They sit in the inventory
  *  like any other item; the sidebar lists them so "where did my backpack go" is
- *  never a question. */
+ *  never a question.
+ *
+ *  Only ON-PERSON containers count. A container found inside another container
+ *  would mean nesting, which §10 forbids — if one ever appears (bad seed, a DM
+ *  hand-edit), listing it as equippable would quietly bless the illegal state
+ *  instead of leaving it visible as the anomaly it is. */
 export function stowedContainers(inventory: InventoryItem[]): InventoryItem[] {
-  return inventory.filter(i => !!i.container)
+  return inventory.filter(i => !!i.container && i.containerId === PERSON)
 }
 
 /** How many items are inside a container — the count its row and tab display, and
