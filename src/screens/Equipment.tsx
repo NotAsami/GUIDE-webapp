@@ -1,22 +1,26 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useOutletContext } from 'react-router-dom'
 import type {
-  ActiveEffect, CharacterRow, CharacterSection, CharacterSheet, EquippedGear,
-  EquippedItem, EquippedWeapon, InventoryItem, ItemRarity, ItemSlot, WeaponHand,
+  ActiveEffect, CharacterRow, CharacterSection, CharacterSheet, ContainerKind,
+  EquippedGear, EquippedItem, EquippedWeapon, InventoryItem, ItemRarity, ItemSlot,
+  Json, WeaponHand,
 } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { formatMod } from '../lib/dnd'
 import {
-  addQuickPatch, equipGearPatch, equipWeaponPatch,
-  unequipGearPatch, unequipQuickPatch, unequipWeaponPatch,
+  attunedCount, attunementCap, consumesAttunement, containerContents,
+  equipContainerPatch, equipGearPatch, equipWeaponPatch, getContainers,
+  stowedContainers, unequipContainerPatch, unequipGearPatch, unequipWeaponPatch,
 } from '../lib/equip'
+import { CarrySidebar } from './EquipmentCarry'
 import { activeEffects, effectiveSheet, summarizeEffects } from '../lib/effects'
-import { consumeEffect } from '../lib/consume'
 import {
   handLabel, rollWeaponAttack, weaponAttackBonus, weaponDamageString,
 } from '../lib/weapons'
 import { useRollLog } from '../lib/rolls'
+import { useItemTooltip, type Bind, type TooltipData } from '../components/ItemTooltip'
 import styles from './Equipment.module.css'
 
 interface RouteContext {
@@ -31,13 +35,12 @@ interface RouteContext {
  *  equipped yet, and there's no item catalog to pull from). No mutation this
  *  pass: editing HP stays in the Stat Panel; equipping needs Inventory first. */
 export function Equipment() {
-  const { character, updateSections } = useOutletContext<RouteContext>()
+  const { character, updateSection, updateSections } = useOutletContext<RouteContext>()
   const sheet = effectiveSheet(character)
   const gear = (character.equipped ?? {}) as EquippedGear
   const weapons = gear.weapons ?? []
   const inventory = (character.inventory as unknown as InventoryItem[]) ?? []
   const effects = activeEffects(character)
-  const quickAccess = (gear.quickAccess ?? []) as (QuickItem | null)[]
   const { tooltip, bind } = useItemTooltip()
   const { addRoll } = useRollLog()
 
@@ -47,22 +50,27 @@ export function Equipment() {
   const [manageWeapon, setManageWeapon] = useState<WeaponHand | null>(null)
   /** Which hand the weapon picker is equipping into (null = closed). */
   const [weaponPicker, setWeaponPicker] = useState<WeaponHand | null>(null)
-  /** Which quick-access index's consumable "use" modal is open (null = none). */
-  const [useSlot, setUseSlot] = useState<number | null>(null)
-  /** Which empty quick-access index's "add consumable" picker is open (null = none). */
-  const [quickPicker, setQuickPicker] = useState<number | null>(null)
-  /** Whether the Active Effects sidebar is expanded. */
-  const [effectsOpen, setEffectsOpen] = useState(false)
+  /** Which slide-over is open. The Effects and Storage panels occupy the SAME
+   *  space over the gear column, so they are mutually exclusive by construction
+   *  rather than by remembering to close one before opening the other. */
+  const [drawer, setDrawer] = useState<'effects' | 'carry' | null>(null)
+  const effectsOpen = drawer === 'effects'
+  const carryOpen = drawer === 'carry'
+
+  /** Which ammunition stack is nocked. Deliberately NOT persisted: which arrow
+   *  you are firing is a property of the attack, not state the character carries
+   *  between sessions. */
+  const [nocked, setNocked] = useState<string | null>(null)
 
   // Close any open modal / the sidebar on Escape.
   const overlayOpen = openSlot !== null || manageWeapon !== null || weaponPicker !== null
-    || useSlot !== null || quickPicker !== null || effectsOpen
+    || drawer !== null
   useEffect(() => {
     if (!overlayOpen) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       setOpenSlot(null); setManageWeapon(null); setWeaponPicker(null)
-      setUseSlot(null); setQuickPicker(null); setEffectsOpen(false)
+      setDrawer(null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -106,46 +114,47 @@ export function Equipment() {
    *  modal whose overlay would bury the toast). */
   function attack(weapon: EquippedWeapon) {
     const { attack: atk, damage } = rollWeaponAttack(weapon, sheet)
+    const stack = isRanged(weapon) ? activeAmmo : null
     addRoll({
       kind: 'weapon',
       title: weapon.name,
-      subtitle: `${handLabel(weapon.hand)} · Attack`,
+      subtitle: stack
+        ? `${handLabel(weapon.hand)} · ${stack.name}`
+        : `${handLabel(weapon.hand)} · Attack`,
       icon: weapon.icon ?? 'fa-khanda',
       attack: atk,
       damage,
     })
+    // Firing spends a shaft. The count is derived from quiver contents, so this
+    // is an ordinary inventory write — no separate ammo counter to drift.
+    if (stack) void spendAmmo(stack)
   }
 
-  /** Use a quick-access consumable: heal real HP and/or apply a temporary status
-   *  effect, then spend one (removed at qty 0). One atomic write across sheet
-   *  (HP) + resources (active effects) + equipped (the quick-access stack). The HP
-   *  patch is built from `character.sheet` (base), NEVER the effective `sheet` —
-   *  writing the layered scores back would corrupt canon. Modal closes before the
-   *  toast fires so the toast (z120) isn't buried under the overlay (z300). */
-  async function useConsumable(index: number) {
-    const item = quickAccess[index]
-    if (!item) return
-    const outcome = consumeEffect(item, character)
-    setUseSlot(null)
+  /** Decrement (and remove at zero) the nocked ammunition stack. */
+  async function spendAmmo(stack: InventoryItem) {
+    const left = (stack.qty ?? 1) - 1
+    const next = left > 0
+      ? inventory.map(i => (i.id === stack.id ? { ...i, qty: left } : i))
+      : inventory.filter(i => i.id !== stack.id)
+    await updateSection('inventory', next as unknown as Json[])
+  }
 
-    // Pure heal at full HP — surface "no effect" and don't spend the charge.
-    if (outcome.wasted) {
-      addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
-      return
-    }
+  /** Equip a carried container into its kind's slot. Its CONTENTS don't move —
+   *  they point at the container's id either way — so the Inventory tab simply
+   *  unlocks with everything already inside it. */
+  async function equipContainer(item: InventoryItem) {
+    const p = equipContainerPatch(item, gear, inventory)
+    if (!p) return
+    await updateSections(p)
+  }
 
-    // Fold the consume's sheet/resources changes together with this screen's own
-    // container update (decrement the quick-access stack) into one atomic write.
-    const patch: Partial<Pick<CharacterRow, CharacterSection>> = {}
-    if (outcome.sheet) patch.sheet = outcome.sheet
-    if (outcome.resources) patch.resources = outcome.resources
-    const nextQty = (item.qty ?? 1) - 1
-    const nextItem = nextQty > 0 ? { ...item, qty: nextQty } : null
-    const nextQA = quickAccess.map((it, i) => (i === index ? nextItem : it))
-    patch.equipped = { ...gear, quickAccess: nextQA } as unknown as CharacterRow['equipped']
-
-    await updateSections(patch)
-    addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
+  /** Unequip a container. Contents travel with it: they stay in `inventory`
+   *  under its id and become unreachable until it is worn again, which is what
+   *  makes losing your pack a real stake rather than a bookkeeping event. */
+  async function unequipContainer(kind: ContainerKind) {
+    const p = unequipContainerPatch(kind, gear, inventory)
+    if (!p) return
+    await updateSections(p)
   }
 
   /** Manually end an active status effect (atomic). Rest will later clear all. */
@@ -157,20 +166,17 @@ export function Equipment() {
     })
   }
 
-  /** Move an inventory consumable into a quick-access sub-slot (atomic), like the
-   *  gear/weapon equip flow — the item lives in exactly one place. */
-  async function addQuickItem(item: InventoryItem, index: number) {
-    setQuickPicker(null)
-    await updateSections(addQuickPatch(item, index, gear, inventory))
-  }
+  /** Ammunition available to a ranged attack, derived from the equipped quiver.
+   *  No quiver equipped -> no stacks -> the picker is absent entirely rather
+   *  than rendering an empty control. */
+  const containers = getContainers(gear)
+  const quiver = containers.find(c => c.container?.mode === 'inline')
+  const ammoStacks = containerContents(quiver?.id, inventory)
+  const activeAmmo = ammoStacks.find(a => a.id === nocked) ?? ammoStacks[0] ?? null
 
-  /** Move a quick-access consumable back to the inventory unused (atomic). */
-  async function unequipQuick(index: number) {
-    const p = unequipQuickPatch(index, gear, inventory)
-    if (!p) return
-    setUseSlot(null)
-    await updateSections(p)
-  }
+  const attuned = attunedCount(gear)
+  const attCap = attunementCap(character)
+  const stowed = stowedContainers(inventory)
 
   const meta = (
     <>
@@ -180,7 +186,9 @@ export function Equipment() {
       <span className="dim">·</span>
       <span>Loadout 02</span>
       <span className="dim">·</span>
-      <span>Slots <span className="acc">{equippedCount(gear)} / 7</span></span>
+      <span>Slots <span className="acc">{equippedCount(gear)} / 8</span></span>
+      <span className="dim">·</span>
+      <span>Attuned <span className={attuned >= attCap ? styles.attMaxed : 'acc'}>{attuned} / {attCap}</span></span>
     </>
   )
 
@@ -203,6 +211,9 @@ export function Equipment() {
               return w ? (
                 <WeaponCard
                   key={hand} weapon={w} sheet={sheet} bind={bind}
+                  ammo={isRanged(w) ? ammoStacks : null}
+                  active={activeAmmo}
+                  onNock={setNocked}
                   onAttack={() => attack(w)} onManage={() => setManageWeapon(hand)}
                 />
               ) : (
@@ -246,7 +257,10 @@ export function Equipment() {
 
         {/* ---------- RIGHT: Gear grid + shards + actions ---------- */}
         <section className={styles.col} aria-label="Gear slots">
-          <ColHeader num="04" title="Gear" meta="6 slots" />
+          <ColHeader
+            num="04" title="Gear"
+            meta={<>Attuned <span className={attuned >= attCap ? styles.attMaxed : 'acc'}>{attuned} / {attCap}</span></>}
+          />
           <div className={styles.gearGrid}>
             {GEAR_SLOTS.map(s => (
               <GearSlot
@@ -254,18 +268,33 @@ export function Equipment() {
                 onOpen={() => setOpenSlot(s.key)}
               />
             ))}
-            <QuickAccessSlot
-              items={quickAccess} bind={bind}
-              onUse={i => setUseSlot(i)} onPick={i => setQuickPicker(i)}
-            />
           </div>
+
+          {/* Containers extend what Ros can HOLD, shards extend what Ros can DO.
+              The button sits between them because that is the boundary it
+              straddles — and the panel itself is a slide-over rather than a
+              third block, so the gear column keeps its shape. */}
+          <button
+            type="button"
+            className={`${styles.carryBtn}${carryOpen ? ' ' + styles.on : ''}`}
+            onClick={() => setDrawer(d => (d === 'carry' ? null : 'carry'))}
+            aria-expanded={carryOpen}
+          >
+            <span className={styles.cbFrame} />
+            <span className={styles.cbInner}>
+              <i className="fa-solid fa-boxes-stacked" aria-hidden="true" />
+              <span className={styles.cbLabel}>Storage Containers</span>
+              <span className={styles.cbCount}>{containers.length}</span>
+              <i className={`fa-solid fa-chevron-${carryOpen ? 'right' : 'left'} ${styles.cbChev}`} aria-hidden="true" />
+            </span>
+          </button>
 
           <ShardBar guideShard={gear.guideShard ?? null} bind={bind} />
 
           <div className={styles.panelActions}>
             <ActionBtn
               icon="fa-bolt" label="Effects" count={effects.length}
-              active={effectsOpen} onClick={() => setEffectsOpen(o => !o)}
+              active={effectsOpen} onClick={() => setDrawer(d => (d === 'effects' ? null : 'effects'))}
             />
             <ActionBtn to="/features" icon="fa-medal" label="Features" />
           </div>
@@ -303,41 +332,28 @@ export function Equipment() {
         />
       )}
 
-      {useSlot !== null && quickAccess[useSlot] && (
-        <ConsumableModal
-          item={quickAccess[useSlot]!}
-          onUse={() => void useConsumable(useSlot)}
-          onUnequip={() => void unequipQuick(useSlot)}
-          onClose={() => setUseSlot(null)}
-        />
-      )}
-
-      {quickPicker !== null && (
-        <QuickPickerModal
-          candidates={inventory.filter(i => i.category === 'consumable')}
-          onPick={item => void addQuickItem(item, quickPicker)}
-          onClose={() => setQuickPicker(null)}
-        />
-      )}
-
-      {effectsOpen && (
-        <div className={styles.sidebarScrim} onClick={() => setEffectsOpen(false)} aria-hidden="true" />
+      {drawer && (
+        <div className={styles.sidebarScrim} onClick={() => setDrawer(null)} aria-hidden="true" />
       )}
       <EffectsSidebar
         open={effectsOpen} effects={effects}
-        onRemove={id => void removeEffect(id)} onClose={() => setEffectsOpen(false)}
+        onRemove={id => void removeEffect(id)} onClose={() => setDrawer(null)}
+      />
+      <CarrySidebar
+        open={carryOpen}
+        containers={containers}
+        stowed={stowed}
+        inventory={inventory}
+        styles={styles}
+        onUnequip={unequipContainer}
+        onEquip={equipContainer}
+        onClose={() => setDrawer(null)}
       />
     </>
   )
 }
 
 /* ---------- equipped gear shape (local view onto `equipped`) ---------- */
-
-/** A quick-access consumable (potion/scroll/usable). EquippedItem already carries
- *  qty + heal + effects + duration, so no extra fields are needed. (`EquippedGear`
- *  — the typed view onto `equipped` — is shared from database.types now that
- *  Inventory equips into the same slots.) */
-type QuickItem = EquippedItem
 
 type SlotConfig = { key: ItemSlot; label: string; icon: string; type: string }
 
@@ -346,7 +362,10 @@ const GEAR_SLOTS: SlotConfig[] = [
   { key: 'armor',     label: 'Armor',     icon: 'fa-shield-halved', type: 'Body' },
   { key: 'cloak',     label: 'Cloak',     icon: 'fa-user-tie',      type: 'Back' },
   { key: 'boots',     label: 'Boots',     icon: 'fa-shoe-prints',   type: 'Feet' },
-  { key: 'accessory', label: 'Accessory', icon: 'fa-ring',          type: 'Trinket' },
+  { key: 'gloves',    label: 'Gloves',    icon: 'fa-mitten',        type: 'Hands' },
+  { key: 'neck',      label: 'Neck',      icon: 'fa-gem',           type: 'Amulet' },
+  { key: 'ring1',     label: 'Ring I',    icon: 'fa-ring',          type: 'Ring' },
+  { key: 'ring2',     label: 'Ring II',   icon: 'fa-ring',          type: 'Ring' },
 ]
 
 /** The two weapon hands rendered as fixed slots (mirrors the gear-slot model). */
@@ -359,17 +378,18 @@ function weaponHandLabel(hand: WeaponHand): string {
   return hand === 'main' ? 'Main Weapon' : 'Side Weapon'
 }
 
+/** How many of the EIGHT worn slots are filled. The G.U.I.D.E. shard is not one
+ *  of them (it has its own panel), so counting it here made the readout able to
+ *  show 9 / 8. Slice 3 replaces this with ATTUNED n / 3 anyway. */
 function equippedCount(gear: EquippedGear): number {
   let n = 0
   for (const s of GEAR_SLOTS) if (gear[s.key]) n++
-  if (gear.guideShard) n++
-  if ((gear.quickAccess ?? []).some(Boolean)) n++
   return n
 }
 
 /* ---------- small chrome helpers ---------- */
 
-function ColHeader({ num, title, meta }: { num: string; title: string; meta: string }) {
+function ColHeader({ num, title, meta }: { num: string; title: string; meta: ReactNode }) {
   return (
     <div className={styles.colHeader}>
       <span className={styles.chNum}>{num}</span>
@@ -414,8 +434,12 @@ function ActionBtn({ to, onClick, icon, label, active, count, soon }: {
 
 /* ---------- weapon card ---------- */
 
-function WeaponCard({ weapon, sheet, bind, onAttack, onManage }: {
+function WeaponCard({ weapon, sheet, bind, ammo, active, onNock, onAttack, onManage }: {
   weapon: EquippedWeapon; sheet: CharacterSheet; bind: Bind
+  /** Stacks the quiver offers, or null when this weapon takes no ammunition. */
+  ammo: InventoryItem[] | null
+  active: InventoryItem | null
+  onNock: (id: string) => void
   onAttack: () => void; onManage: () => void
 }) {
   const rarity = weapon.rarity ?? 'common'
@@ -453,10 +477,22 @@ function WeaponCard({ weapon, sheet, bind, onAttack, onManage }: {
           >
             <i className="fa-solid fa-dice-d20" /> Attack
           </button>
+          {/* Which arrow is nocked belongs to the ATTACK, not to the quiver —
+              so the selector lives here. Absent, not empty, when nothing is
+              equipped to draw from. */}
+          {ammo && ammo.length > 0 && active && (
+            <AmmoPicker stacks={ammo} active={active} onNock={onNock} />
+          )}
         </div>
       </div></div>
     </div>
   )
+}
+
+/** A weapon draws from the quiver if it takes ammunition. Read off the SRD
+ *  `properties` the DM already authors, so no new field is needed. */
+function isRanged(w: EquippedWeapon): boolean {
+  return (w.properties ?? []).some(p => /ammunition/i.test(p))
 }
 
 function buildWeaponRows(w: EquippedWeapon, sheet: CharacterSheet): [string, string][] {
@@ -465,6 +501,88 @@ function buildWeaponRows(w: EquippedWeapon, sheet: CharacterSheet): [string, str
   rows.push(['Damage', `${weaponDamageString(w, sheet)}${w.type ? ` ${w.type.toLowerCase()}` : ''}`])
   if (w.hand) rows.push(['Slot', handLabel(w.hand)])
   return rows
+}
+
+/** The nocked-ammunition selector. Sits beside ATTACK because which arrow is
+ *  fired is a property of the attack; the quiver only answers "what do I have".
+ *
+ *  The menu is PORTALLED to a fixed layer on document.body, not rendered as a
+ *  child of the button. The weapon card is clip-pathed, and clip-path clips
+ *  descendants regardless of z-index or overflow — an in-card menu is silently
+ *  sliced off along the card's 45° corner as soon as it has more than a row or
+ *  two. It opens upward, flipping below when the button is too near the top. */
+function AmmoPicker({ stacks, active, onNock }: {
+  stacks: InventoryItem[]; active: InventoryItem; onNock: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current || !menuRef.current) return
+    const b = btnRef.current.getBoundingClientRect()
+    const m = menuRef.current
+    const gap = 6
+    // Right-align to the button so the control and its menu share an edge.
+    let left = b.right - m.offsetWidth
+    left = Math.max(12, Math.min(left, window.innerWidth - m.offsetWidth - 12))
+    let top = b.top - m.offsetHeight - gap
+    if (top < 12) top = b.bottom + gap          // not enough room above — flip down
+    setPos({ left, top })
+  }, [open, stacks.length])
+
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('click', close)
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [open])
+
+  return (
+    <span className={`${styles.ammo}${open ? ' ' + styles.open : ''}`}>
+      <button
+        ref={btnRef}
+        type="button" className={styles.ammoBtn}
+        onClick={e => { e.stopPropagation(); setOpen(o => !o); setPos(null) }}
+        aria-haspopup="listbox" aria-expanded={open}
+        aria-label={`Nocked: ${active.name}, ${active.qty ?? 1} left`}
+      >
+        <i className="fa-solid fa-location-arrow" aria-hidden="true" />
+        <span className={styles.amName}>{active.name}</span>
+        <span className={styles.amCt}>×{active.qty ?? 1}</span>
+        <i className={`fa-solid fa-chevron-down ${styles.amChev}`} aria-hidden="true" />
+      </button>
+
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          className={styles.ammoMenu}
+          role="listbox"
+          style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
+          onClick={e => e.stopPropagation()}
+        >
+          {stacks.map(a => (
+            <button
+              key={a.id} type="button" role="option" aria-selected={a.id === active.id}
+              className={`${styles.amOpt}${a.id === active.id ? ' ' + styles.on : ''}`}
+              onClick={() => { onNock(a.id!); setOpen(false) }}
+            >
+              <span className={styles.amOptName}>{a.name}</span>
+              <span className={styles.q}>×{a.qty ?? 1}</span>
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </span>
+  )
 }
 
 /* ---------- gear slots ---------- */
@@ -492,57 +610,14 @@ function GearSlot({ slot, item, bind, onOpen }: {
         <span className={styles.sIcon}><i className={`fa-solid ${item?.icon ?? slot.icon}`} /></span>
         <span className={styles.sName}>{item ? item.name : '— Empty —'}</span>
       </span>
+      {/* Only slots actually spending one of the three attunement slots get the
+          pip — so the gear grid and the ATTUNED readout can't disagree. */}
+      {consumesAttunement(item) && <span className={styles.sAtt} aria-hidden="true">◈</span>}
       <span className={styles.rarityDot} />
     </button>
   )
 }
 
-function QuickAccessSlot({ items, bind, onUse, onPick }: {
-  items: (QuickItem | null)[] | null; bind: Bind
-  onUse: (index: number) => void; onPick: (index: number) => void
-}) {
-  const subs = [items?.[0] ?? null, items?.[1] ?? null]
-  const tt: TooltipData = {
-    name: 'Quick Access',
-    sub: '2 sub-slots',
-    rows: [
-      ['Slot 1', subs[0] ? `${subs[0].name}${subs[0].qty ? ` × ${subs[0].qty}` : ''}` : 'Empty'],
-      ['Slot 2', subs[1] ? `${subs[1].name}${subs[1].qty ? ` × ${subs[1].qty}` : ''}` : 'Empty'],
-    ],
-    flavor: 'Hot-keyed pouch. Filled slots are usable — click to use.',
-    rarity: 'common',
-  }
-  return (
-    <div className={`${styles.slot} ${styles.quick}`} data-rarity="common" {...bind(tt)} tabIndex={0}>
-      <span className={styles.sFrame} />
-      <span className={styles.sInner}>
-        <span className={styles.sLabel}>Quick Access</span>
-        <div className={styles.quickSubs}>
-          {subs.map((it, i) => (
-            it ? (
-              <button
-                key={i} className={`${styles.qsub} ${styles.usable}`}
-                onClick={() => onUse(i)}
-                aria-label={`Use ${it.name}${it.qty && it.qty > 1 ? ` (× ${it.qty})` : ''}`}
-              >
-                <i className={`fa-solid ${it.icon ?? 'fa-flask'}`} />
-                {it.qty && it.qty > 1 && <span className={styles.qBadge}>{it.qty}</span>}
-              </button>
-            ) : (
-              <button
-                key={i} className={`${styles.qsub} ${styles.empty} ${styles.usable}`}
-                onClick={() => onPick(i)} aria-label="Add a consumable"
-              >
-                <i className="fa-solid fa-plus" />
-              </button>
-            )
-          ))}
-        </div>
-      </span>
-      <span className={styles.rarityDot} />
-    </div>
-  )
-}
 
 /** The shard bar — a wide row spanning the gear grid, split by dividers into 3
  *  shard sub-slots (slot 0 = the G.U.I.D.E. shard, 2 more open slots). It's a
@@ -796,121 +871,7 @@ function WeaponPickerModal({ hand, candidates, onEquip, onClose }: {
   )
 }
 
-/* ---------- consumable use modal ---------- */
 
-/** Detail + Use for a quick-access consumable. Use closes the modal first (the
- *  parent does the write + toast) so the toast isn't hidden under the overlay. */
-function ConsumableModal({ item, onUse, onUnequip, onClose }: {
-  item: QuickItem; onUse: () => void; onUnequip: () => void; onClose: () => void
-}) {
-  const rarity = item.rarity ?? 'common'
-  const hasEffects = !!item.effects && Object.keys(item.effects).length > 0
-  return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div
-        className={styles.modal} role="dialog" aria-modal="true" aria-label={item.name}
-        onClick={e => e.stopPropagation()}
-      >
-        <span className={styles.modalFrame} data-rarity={rarity} />
-        <div className={styles.modalInner}>
-          <header className={styles.modalHead}>
-            <span className={styles.mhIcon}><i className={`fa-solid ${item.icon ?? 'fa-flask'}`} /></span>
-            <div className={styles.mhTitles}>
-              <span className={styles.mhKicker}>Consumable{item.qty && item.qty > 1 ? ` · × ${item.qty}` : ''}</span>
-              <span className={styles.mhName}>{item.name}</span>
-            </div>
-            <button className={styles.modalClose} onClick={onClose} aria-label="Close">
-              <i className="fa-solid fa-xmark" />
-            </button>
-          </header>
-
-          <div className={styles.modalBody}>
-            <div className={styles.detailSub}>{rarityLabel(rarity)}</div>
-            {item.heal !== undefined && (
-              <div className={styles.detailRow}><span className={styles.k}>Restores</span><span className={styles.v}>{item.heal} HP</span></div>
-            )}
-            {hasEffects && (
-              <div className={styles.detailRow}><span className={styles.k}>Effect</span><span className={styles.v}>{summarizeEffects(item.effects!)}</span></div>
-            )}
-            {item.duration && (
-              <div className={styles.detailRow}><span className={styles.k}>Duration</span><span className={styles.v}>{item.duration}</span></div>
-            )}
-            {(item.rows ?? []).map(([k, v], i) => (
-              <div key={i} className={styles.detailRow}><span className={styles.k}>{k}</span><span className={styles.v}>{v}</span></div>
-            ))}
-            {item.flavor && <div className={styles.detailFlavor}>{item.flavor}</div>}
-          </div>
-
-          <footer className={styles.modalFoot}>
-            <div className={styles.modalActions}>
-              <button className={styles.useBtn} onClick={onUse}>
-                <span className={styles.ubFrame} />
-                <span className={styles.ubInner}><i className="fa-solid fa-flask" /> Use</span>
-              </button>
-              <button className={styles.unequipBtn} onClick={onUnequip}>
-                <span className={styles.ubFrame} />
-                <span className={styles.ubInner}><i className="fa-solid fa-circle-minus" /> Unequip</span>
-              </button>
-            </div>
-          </footer>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ---------- quick-access picker (add a consumable from inventory) ---------- */
-
-function QuickPickerModal({ candidates, onPick, onClose }: {
-  candidates: InventoryItem[]; onPick: (item: InventoryItem) => void; onClose: () => void
-}) {
-  return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div
-        className={styles.modal} role="dialog" aria-modal="true" aria-label="Add a consumable"
-        onClick={e => e.stopPropagation()}
-      >
-        <span className={styles.modalFrame} />
-        <div className={styles.modalInner}>
-          <header className={styles.modalHead}>
-            <span className={styles.mhIcon}><i className="fa-solid fa-flask" /></span>
-            <div className={styles.mhTitles}>
-              <span className={styles.mhKicker}>Quick Access</span>
-              <span className={styles.mhName}>Consumables</span>
-            </div>
-            <button className={styles.modalClose} onClick={onClose} aria-label="Close">
-              <i className="fa-solid fa-xmark" />
-            </button>
-          </header>
-
-          <div className={styles.modalBody}>
-            {candidates.length === 0 ? (
-              <div className={styles.selectorEmpty}>
-                No consumables in your inventory
-                <span className={styles.em}>Potions and scrolls the DM grants you appear here</span>
-              </div>
-            ) : (
-              <div className={styles.selectorList}>
-                {candidates.map(it => (
-                  <div key={it.id ?? it.name} className={styles.pickRow} data-rarity={it.rarity ?? 'common'}>
-                    <span className={styles.pkIcon}><i className={`fa-solid ${it.icon ?? 'fa-flask'}`} /></span>
-                    <span className={styles.pkBody}>
-                      <span className={styles.pkName}>{it.name}</span>
-                      <span className={styles.pkMeta}>
-                        {[rarityLabel(it.rarity ?? 'common'), it.qty && it.qty > 1 ? `× ${it.qty}` : null].filter(Boolean).join(' · ')}
-                      </span>
-                    </span>
-                    <button className={styles.pkBtn} onClick={() => onPick(it)}>Add</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /* ---------- active effects sidebar (slides over the gear column) ---------- */
 
@@ -1050,93 +1011,7 @@ function Loader() {
   )
 }
 
-/* ---------- tooltip (ported positioning from the mockup) ---------- */
-
-type TooltipData = {
-  name: string
-  sub?: string
-  rows?: [string, string][]
-  flavor?: string
-  attune?: string
-  rarity?: ItemRarity | 'empty'
-}
-type Bind = (data: TooltipData) => {
-  onMouseEnter: () => void
-  onMouseLeave: () => void
-  onFocus: () => void
-  onBlur: () => void
-}
-
+/** Capitalised rarity for display ("uncommon" -> "Uncommon"). */
 function rarityLabel(r: ItemRarity | 'empty'): string {
   return r.charAt(0).toUpperCase() + r.slice(1)
-}
-
-/** Shared hover/focus tooltip. Renders a single fixed element positioned to the
- *  right of the anchor (flips left when it would overflow), vertically centred
- *  and clamped to the viewport — same logic as the mockup's vanilla JS. */
-function useItemTooltip() {
-  const [data, setData] = useState<TooltipData | null>(null)
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
-  const anchorRef = useRef<DOMRect | null>(null)
-  const ttRef = useRef<HTMLDivElement>(null)
-
-  useLayoutEffect(() => {
-    if (!data || !anchorRef.current || !ttRef.current) return
-    const r = anchorRef.current
-    const { offsetWidth: w, offsetHeight: h } = ttRef.current
-    const margin = 12
-    let left = r.right + margin
-    if (left + w > window.innerWidth - 12) left = r.left - w - margin
-    left = Math.max(12, Math.min(left, window.innerWidth - w - 12))
-    // Keep the tooltip clear of the fixed top/bottom bars: it lives inside
-    // .main's z-index:10 stacking context, so it can't paint over the bottombar
-    // (z-index:50) — clamp it into the band between the bars instead.
-    const cs = getComputedStyle(document.documentElement)
-    const barTop = parseInt(cs.getPropertyValue('--bar-top-h')) || 62
-    const barBottom = parseInt(cs.getPropertyValue('--bar-bottom-h')) || 50
-    let top = r.top + r.height / 2 - h / 2
-    top = Math.max(barTop + margin, Math.min(top, window.innerHeight - barBottom - h - margin))
-    setPos({ left, top })
-  }, [data])
-
-  const bind = useCallback<Bind>(d => {
-    const show = (e: { currentTarget: Element }) => {
-      anchorRef.current = e.currentTarget.getBoundingClientRect()
-      setPos(null)
-      setData(d)
-    }
-    return {
-      onMouseEnter: show as unknown as () => void,
-      onMouseLeave: () => setData(null),
-      onFocus: show as unknown as () => void,
-      onBlur: () => setData(null),
-    }
-  }, [])
-
-  const tooltip = (
-    <div
-      ref={ttRef}
-      className={`${styles.tt}${data && pos ? ' ' + styles.show : ''}`}
-      data-rarity={data?.rarity ?? 'common'}
-      role="tooltip"
-      aria-hidden={!data}
-      style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
-    >
-      {data && (
-        <>
-          <div className={styles.ttName}>{data.name}</div>
-          {data.sub && <div className={styles.ttSub}>{data.sub}</div>}
-          {(data.rows ?? []).map(([k, v], i) => (
-            <div key={i} className={styles.ttRow}><span className={styles.k}>{k}</span><span className={styles.v}>{v}</span></div>
-          ))}
-          {data.flavor && <div className={styles.ttFlavor}>{data.flavor}</div>}
-          {data.attune && (
-            <div className={`${styles.ttAttune}${/^not|^none/i.test(data.attune) ? ' ' + styles.no : ''}`}>Attuned: {data.attune}</div>
-          )}
-        </>
-      )}
-    </div>
-  )
-
-  return { tooltip, bind }
 }

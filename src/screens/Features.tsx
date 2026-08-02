@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, EquippedGear, EquippedItem, Feature, FeatureCategory } from '../lib/database.types'
+import { ITEM_SLOTS } from '../lib/equip'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { rollHeal } from '../lib/dice'
@@ -38,7 +39,7 @@ function isUsable(f: Feature): boolean {
 function gearFeatures(character: CharacterRow): Feature[] {
   const eq = (character.equipped ?? {}) as EquippedGear
   const slots: (EquippedItem | null | undefined)[] = [
-    eq.helmet, eq.armor, eq.cloak, eq.boots, eq.accessory,
+    ...ITEM_SLOTS.map(k => eq[k]),
     ...(eq.weapons ?? []), eq.guideShard,
   ]
   return slots

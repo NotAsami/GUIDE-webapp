@@ -160,12 +160,50 @@ export type EffectiveSheet = CharacterSheet & { readonly __effective: true }
 
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'legendary'
 
-/** The five single-item gear slots an item can occupy. (Quick Access holds
- *  consumables and the G.U.I.D.E. Shard is managed on the Shard screen — neither
- *  is filled from the inventory equip flow.) */
-export type ItemSlot = 'helmet' | 'armor' | 'cloak' | 'boots' | 'accessory'
+/** The eight worn gear slots an item can occupy, laid out 4x2 on the Equipment
+ *  screen. (The G.U.I.D.E. Shard is managed on the Shard screen and is not filled
+ *  from the inventory equip flow. Quick Access is GONE — the on-person grid replaced
+ *  it; see the Inventory Refactor spec §5.)
+ *
+ *  Rings are two distinct slots rather than a count, so each can hold a different
+ *  band and `EquippedGear` stays one-item-per-key. Attunement is capped at 3 across
+ *  all slots and is DERIVED by counting equipped items with an `attune` value —
+ *  never stored. */
+export type ItemSlot =
+  | 'helmet' | 'armor' | 'cloak' | 'boots'
+  | 'gloves' | 'neck'  | 'ring1' | 'ring2'
 
-export type ItemCategory = 'gear' | 'weapon' | 'consumable' | 'misc'
+/** `ammo` is load-bearing, not cosmetic: an ammunition-only quiver is expressible
+ *  only if ammunition is its own category (see `ContainerDef.allowedCategories`). */
+export type ItemCategory =
+  | 'weapon' | 'ammo' | 'armor' | 'consumable' | 'tool' | 'quest' | 'misc'
+
+/** Container kinds that ship today. Left OPEN on purpose: a new `inline` kind (bolt
+ *  case, scroll case) claims no tab and costs nothing, so the DM can author one in
+ *  the catalog freely. A new `page` kind is NOT free — it would become a fifth tab
+ *  and reopen the overflow problem the fixed tab bar exists to close. See the
+ *  Inventory Refactor spec §3. */
+export type ContainerKind =
+  | 'backpack' | 'bagOfHolding' | 'sack' | 'quiver'
+  | (string & {})
+
+/** Present on an item that IS a container. How its contents are *used* decides
+ *  `mode`, and mode is authored, never inferred:
+ *    page   — many arbitrary items; owns a tab in the Inventory panel, browsed as a list
+ *    inline — few stacks of one category; expands in the storage sidebar, never a tab */
+export type ContainerDef = {
+  kind: ContainerKind
+  mode: 'page' | 'inline'
+  /** Contents excluded from carry weight (bag of holding). The container's OWN
+   *  weight always counts — `weightless` exempts only what's inside it. */
+  weightless: boolean
+  /** Category filter. Absent/empty = accepts anything. A quiver sets `['ammo']`,
+   *  which is also what makes picked-up arrows route to it automatically. */
+  allowedCategories?: ItemCategory[]
+  /** Hard item cap (quiver 20, scroll case 10). A container at capacity is SKIPPED
+   *  by the routing chain, never an error — a pickup can't fail. Absent = unlimited. */
+  capacity?: number
+}
 
 export type WeaponHand = 'main' | 'off'
 /** Which ability drives a weapon's attack/damage. 'finesse' = the better of STR/DEX. */
@@ -249,6 +287,13 @@ export type EquippedItem = {
   /** Consumable: free-text duration reminder ("10 rounds", "1 minute") carried onto
    *  the resulting status effect. NOT auto-counted — there's no round tracker. */
   duration?: string
+  /** Present iff this item IS a container. Equipping it unlocks its tab (`page`) or
+   *  its sidebar row (`inline`); unequipping takes the CONTENTS with it. */
+  container?: ContainerDef
+  /** DM-set: the item is carried but unusable — can't be equipped, used or consumed.
+   *  It keeps its cell and still counts toward carry weight; it is in your pack and
+   *  simply refusing you. Distinct from confiscation, which removes it outright. */
+  locked?: boolean
 }
 
 /** A temporary, player-applied effect (drank a potion, etc.). Layered over the
@@ -291,20 +336,34 @@ export type WeaponData = {
  *  Read by the Stat Panel's Attacks widget AND the Equipment weapon list/roller. */
 export type EquippedWeapon = EquippedItem & WeaponData & { category?: 'weapon' }
 
-/** A carried (un-equipped) item. Adds the inventory-grid POSITION (`col`,`row` =
- *  top-left cell); footprint (`w`,`h`) is intrinsic and lives on EquippedItem so it
- *  survives equip/unequip. May carry weapon data when `category === 'weapon'`.
- *  Position is absent until placed — the grid auto-packs unplaced items. */
+/** A carried (un-equipped) item. Adds WHERE it is carried.
+ *
+ *  `containerId` is `'person'` for the 5x4 on-person grid, otherwise the id of the
+ *  container item holding it. On-person items carry real `col`/`row` (1-indexed,
+ *  top-left cell); items inside a container leave them ABSENT — a list has no
+ *  geometry, and sort order is a view preference, never stored state.
+ *
+ *  Footprint (`w`,`h`) is intrinsic and lives on EquippedItem, so it survives every
+ *  move — equip, unequip, stow and retrieve all preserve it and drop only the
+ *  POSITION. (A 2x1 crossbow is still 2x1 when it comes back out of the backpack.)
+ *  May carry weapon data when `category === 'weapon'`. */
 export type InventoryItem = EquippedItem & Partial<WeaponData> & {
+  containerId: string
   col?: number; row?: number
 }
 
-/** Typed view onto the `equipped` JSONB: the five single-item gear slots plus the
- *  weapon list, the 2-slot quick-access pouch, and the locked G.U.I.D.E. shard.
- *  Shared by Equipment (the loadout view) and Inventory (equip-in-place). */
+/** Typed view onto the `equipped` JSONB: the eight worn gear slots plus the weapon
+ *  list, the equipped containers, and the locked G.U.I.D.E. shard. Shared by
+ *  Equipment (the loadout view) and Inventory (equip-in-place).
+ *
+ *  An equipped container is NOT in the inventory — like every equipped item it
+ *  leaves the grid. An *unequipped* quiver is an ordinary grid item that renders its
+ *  contents count in the cell, and it vanishes from the grid the moment it's worn. */
 export type EquippedGear = {
   weapons?: EquippedWeapon[]
-  quickAccess?: (EquippedItem | null)[] | null
+  /** Equipped containers, keyed by `container.kind` — one per kind, which is what
+   *  enforces "1 backpack, 1 bag of holding, 1 sack, 1 quiver" without a slot enum. */
+  containers?: Partial<Record<ContainerKind, EquippedItem | null>>
   guideShard?: EquippedItem | null
 } & { [K in ItemSlot]?: EquippedItem | null }
 
@@ -404,10 +463,38 @@ export type SessionUpdate = Partial<Omit<SessionRow, 'id'>>
 //    policy), so the catalog never reaches a player client. ──
 /** A catalog template's `data`: a full item definition MINUS per-instance state
  *  (id / qty / grid position), which Grant Item stamps on at grant time. */
-export type CatalogItemData = Omit<InventoryItem, 'id' | 'col' | 'row' | 'qty'>
+export type CatalogItemData = Omit<InventoryItem, 'id' | 'containerId' | 'col' | 'row' | 'qty'>
 export type CatalogItemRow = { id: string; data: CatalogItemData; updated_at: string }
 export type CatalogItemInsert = { id?: string; data: CatalogItemData }
 export type CatalogItemUpdate = { data?: CatalogItemData }
+
+// ── Confiscated items (migration 0006): the DM-side store for items taken off a
+//    character. DM-only RLS with NO player policy — that absence is what makes a
+//    confiscated item invisible, rather than a client-side filter the player's
+//    browser could be talked out of. ──
+/** Where an item was when it was taken. The item's placement object copied verbatim
+ *  — no transformation, and `col`/`row` are simply absent when it came out of a
+ *  container. Restore reads this; when the placement is no longer valid (cell taken,
+ *  container gone) it falls through to the normal routing chain. */
+export type ConfiscatedFrom = { containerId: string; col?: number; row?: number }
+
+export type ConfiscatedItemRow = {
+  id: string
+  character_id: string
+  /** The item verbatim, footprint included, exactly as it will be restored. */
+  item: InventoryItem
+  from: ConfiscatedFrom
+  /** DM-authored: why it was taken. Never shown to the player. */
+  note: string
+  taken_at: string
+}
+export type ConfiscatedItemInsert = {
+  id?: string
+  character_id: string
+  item: InventoryItem
+  from: ConfiscatedFrom
+  note?: string
+}
 
 // ── Feature catalog (migration 0005): the DM's feature-authoring library.
 //    Same snapshot pattern as item_catalog — items embed feature copies via the
@@ -468,6 +555,12 @@ export type Database = {
         Row: QuestSecret
         Insert: QuestSecretInsert
         Update: QuestSecretUpdate
+        Relationships: []
+      }
+      confiscated_items: {
+        Row: ConfiscatedItemRow
+        Insert: ConfiscatedItemInsert
+        Update: Partial<Omit<ConfiscatedItemRow, 'id'>>
         Relationships: []
       }
     }

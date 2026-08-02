@@ -1,0 +1,263 @@
+/* Item popup — the surface that replaced the persistent detail panel.
+   Same four-layer frame recipe as .region (frame / gap / line / inner), scaled
+   up: clip-path can't carry a border along its 45° cuts, so the "border" is the
+   beige layer showing through from underneath rather than a border property. */
+
+.imodal {
+  position: fixed; inset: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+  padding: 34px;
+}
+.imScrim {
+  position: absolute; inset: 0;
+  background: rgba(10, 10, 10, 0.78);
+  backdrop-filter: blur(2px);
+  animation: imFade 200ms ease forwards;
+}
+@keyframes imFade { from { opacity: 0; } to { opacity: 1; } }
+
+.imPanel {
+  --cut: 22px;
+  position: relative;
+  width: min(560px, 100%);
+  max-height: min(560px, 100%);
+  display: flex;
+  transform: translateY(10px) scale(0.985);
+  opacity: 0;
+  animation: imIn 300ms cubic-bezier(0.2, 0.7, 0.2, 1) 30ms forwards;
+}
+@keyframes imIn { to { transform: translateY(0) scale(1); opacity: 1; } }
+
+/* layer 1 — the frame colour */
+.imPanel::before {
+  content: ""; position: absolute; inset: 0;
+  background: var(--beige);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  filter: drop-shadow(0 22px 50px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 34px rgba(0, 166, 214, 0.2));
+}
+/* layer 2 — the dark gap that turns layer 1 into a thin outline */
+.pnGap {
+  position: absolute; inset: 2px;
+  background: #0a0a0a;
+  clip-path: polygon(calc(var(--cut) - 2px) 0, 100% 0, 100% calc(100% - var(--cut) + 2px), calc(100% - var(--cut) + 2px) 100%, 0 100%, 0 calc(var(--cut) - 2px));
+}
+/* layer 3 — the inner hairline of the double-line frame */
+.pnLine {
+  position: absolute; inset: 5px;
+  background: var(--beige); opacity: 0.45;
+  clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0, 100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%, 0 100%, 0 calc(var(--cut) - 5px));
+}
+/* layer 4 — the content surface */
+.imInner {
+  position: relative; flex: 1; min-width: 0;
+  margin: 6.5px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 55%),
+    linear-gradient(180deg, #151515, #0d0d0d);
+  clip-path: polygon(calc(var(--cut) - 6px) 0, 100% 0, 100% calc(100% - var(--cut) + 6px), calc(100% - var(--cut) + 6px) 100%, 0 100%, 0 calc(var(--cut) - 6px));
+  box-shadow: inset 0 0 50px rgba(0, 166, 214, 0.06);
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+}
+.imInner::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: repeating-linear-gradient(to bottom, rgba(0, 166, 214, 0.03) 0 1px, transparent 1px 4px);
+  mix-blend-mode: screen; opacity: 0.6;
+}
+.imCorner { position: absolute; width: 16px; height: 16px; border-color: var(--cyan); opacity: 0.75; z-index: 6; pointer-events: none; }
+.imCorner.tl { top: 12px; left: 12px; border-top: 1px solid; border-left: 1px solid; }
+.imCorner.br { bottom: 12px; right: 12px; border-bottom: 1px solid; border-right: 1px solid; }
+
+/* --- head --- */
+.imHead {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.32);
+}
+.imHead::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: rgba(0, 166, 214, 0.35); box-shadow: 0 0 9px rgba(0, 166, 214, 0.3);
+}
+/* hexagon: nearly every edge is angled, so a border would vanish — the shape is
+   a filled clip with the icon centred, no border attempted. */
+.imCrystal {
+  flex: 0 0 auto; width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--cyan-hot); font-size: 21px;
+  background:
+    radial-gradient(120% 90% at 50% 40%, rgba(0, 166, 214, 0.28), transparent 65%),
+    rgba(0, 166, 214, 0.45);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  filter: drop-shadow(0 0 9px rgba(0, 166, 214, 0.4));
+}
+.imTitles { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.imName {
+  font-family: var(--font-display); font-weight: 600; font-size: 20px;
+  letter-spacing: 0.1em; color: var(--text); text-transform: uppercase; line-height: 1.05;
+}
+.imPanel[data-rar="uncommon"] .imName,
+.imPanel[data-rar="rare"] .imName { color: var(--cyan-hot); text-shadow: 0 0 14px rgba(0, 166, 214, 0.25); }
+.imPanel[data-rar="legendary"] .imName { color: var(--gold-rare); text-shadow: 0 0 14px rgba(226, 176, 33, 0.3); }
+
+.imTags { display: flex; flex-wrap: wrap; gap: 6px; }
+.imTag {
+  --cut: 4px; --bc: rgba(212, 191, 125, 0.45);
+  font-family: var(--font-mono); font-size: 8.5px;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--beige); border: 1px solid var(--bc); padding: 3px 8px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat; background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
+.imTag.acc { color: var(--cyan); --bc: rgba(0, 166, 214, 0.5); }
+.imTag.danger { color: var(--danger-hot); --bc: rgba(185, 58, 58, 0.6); }
+
+.imClose {
+  --cut: 6px; --bc: rgba(212, 191, 125, 0.4);
+  margin-left: auto; flex: 0 0 auto; width: 34px; height: 34px;
+  background-color: rgba(0, 0, 0, 0.4); border: 1px solid var(--bc);
+  color: var(--beige); font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: color 150ms ease, box-shadow 150ms ease;
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat; background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
+.imClose:hover { color: var(--cyan-hot); --bc: var(--cyan); box-shadow: 0 0 12px rgba(0, 166, 214, 0.3); }
+
+/* --- body: max height with internal scrolling, so a dense item scrolls in place --- */
+.imBody {
+  position: relative; z-index: 2; flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; padding: 16px 18px; scrollbar-width: thin;
+}
+.imBody::-webkit-scrollbar { width: 6px; }
+.imBody::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
+.imBody::-webkit-scrollbar-thumb { background: rgba(0, 166, 214, 0.4); }
+
+.imFacts {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px 20px;
+  padding-bottom: 13px; border-bottom: 1px dashed rgba(212, 191, 125, 0.25);
+}
+.imFacts .f { display: flex; justify-content: space-between; gap: 12px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; }
+.imFacts .k { color: var(--beige-dim); font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; }
+.imFacts .v { color: var(--text); text-align: right; }
+
+.imDesc {
+  margin-top: 13px;
+  font-family: var(--font-prose); font-style: italic; font-size: 15.5px;
+  line-height: 1.55; color: var(--muted); text-wrap: pretty;
+}
+
+.imSec { margin-top: 16px; }
+.imSecH {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.26em;
+  color: var(--cyan); text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px; padding-bottom: 7px;
+}
+.imSecH::after { content: ""; flex: 1; height: 1px; background: rgba(0, 166, 214, 0.22); }
+.imFx { display: flex; flex-direction: column; gap: 5px; }
+.imFx .row {
+  display: flex; align-items: baseline; gap: 10px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--text);
+  background: rgba(0, 0, 0, 0.28); border-left: 2px solid var(--cyan); padding: 7px 10px;
+}
+.imFx .row .k {
+  color: var(--beige); font-size: 9px; letter-spacing: 0.18em;
+  text-transform: uppercase; min-width: 84px; flex: 0 0 auto;
+}
+
+.imWarn {
+  margin-top: 14px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--danger-hot);
+}
+.footWarn {
+  margin: 0; padding: 0 18px 10px;
+  position: relative; z-index: 3; flex: 0 0 auto;
+}
+
+/* --- actions --- */
+.imActions {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  display: flex; gap: 9px; padding: 13px 18px 16px;
+  border-top: 1px solid rgba(212, 191, 125, 0.28);
+}
+.ia {
+  --cut: 8px;
+  position: relative; flex: 1; height: 40px;
+  background: transparent; border: 0; padding: 0; cursor: pointer;
+  font-family: var(--font-mono);
+}
+.af {
+  position: absolute; inset: 0; background: var(--cyan);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.ai {
+  position: absolute; inset: 1.5px;
+  background: linear-gradient(180deg, #141a1d, #0e1316);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: var(--cyan-hot); font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase;
+  transition: box-shadow 160ms ease, color 160ms ease;
+}
+.ia:hover:not(:disabled) .ai { color: #fff; box-shadow: inset 0 0 20px rgba(0, 166, 214, 0.3), 0 0 15px rgba(0, 166, 214, 0.4); }
+.ia.ghost .af { background: rgba(212, 191, 125, 0.45); }
+.ia.ghost .ai { color: var(--beige); }
+.ia.ghost:hover:not(:disabled) .ai { color: var(--text); box-shadow: inset 0 0 18px rgba(212, 191, 125, 0.14); }
+.ia.drop { flex: 0 0 104px; }
+.ia.drop .af { background: rgba(185, 58, 58, 0.55); }
+.ia.drop .ai { color: var(--danger); letter-spacing: 0.18em; }
+.ia.drop:hover:not(:disabled) .ai { color: var(--danger-hot); box-shadow: inset 0 0 18px rgba(185, 58, 58, 0.22), 0 0 12px rgba(185, 58, 58, 0.3); }
+.ia.confirm .af { background: var(--danger); }
+.ia.confirm .ai { color: var(--danger-hot); }
+.ia:disabled { cursor: not-allowed; opacity: 0.42; }
+
+.stowPick {
+  flex: 0 0 132px; height: 40px;
+  background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(212, 191, 125, 0.35);
+  color: var(--text); font-family: var(--font-mono); font-size: 8.5px;
+  letter-spacing: 0.14em; text-transform: uppercase; padding: 0 8px;
+  cursor: pointer; outline: none;
+}
+.stowPick:focus { border-color: var(--cyan); }
+
+/* --- touch: the same component becomes a bottom sheet ---
+   Gated on pointer CAPABILITY, never width, so a touchscreen laptop with a mouse
+   keeps the centred dialog. Targets grow to 52px in the thumb zone. */
+@media not all and (hover: hover) and (pointer: fine) {
+  .imodal { align-items: flex-end; padding: 0; }
+  .imPanel {
+    --cut: 18px;
+    width: 100%; max-height: 76vh;
+    animation: sheetIn 300ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+  @keyframes sheetIn {
+    from { transform: translateY(60px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  /* square off the bottom — a sheet is anchored to the screen edge */
+  .imPanel::before {
+    clip-path: polygon(var(--cut) 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%, 0 var(--cut));
+  }
+  .pnGap {
+    clip-path: polygon(calc(var(--cut) - 2px) 0, calc(100% - var(--cut) + 2px) 0, 100% calc(var(--cut) - 2px), 100% 100%, 0 100%, 0 calc(var(--cut) - 2px));
+  }
+  .pnLine {
+    clip-path: polygon(calc(var(--cut) - 5px) 0, calc(100% - var(--cut) + 5px) 0, 100% calc(var(--cut) - 5px), 100% 100%, 0 100%, 0 calc(var(--cut) - 5px));
+  }
+  .imInner {
+    clip-path: polygon(calc(var(--cut) - 6px) 0, calc(100% - var(--cut) + 6px) 0, 100% calc(var(--cut) - 6px), 100% 100%, 0 100%, 0 calc(var(--cut) - 6px));
+  }
+  .imActions { padding: 14px 18px 26px; flex-wrap: wrap; }
+  .ia { height: 52px; flex: 1 1 140px; }
+  .ia.drop { flex: 1 1 140px; }
+  .stowPick { flex: 1 1 100%; height: 46px; }
+}

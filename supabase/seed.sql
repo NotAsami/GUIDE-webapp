@@ -58,10 +58,14 @@ select
     'exhaustion',   0
   ),
   '[]'::jsonb,
+  -- Eight worn slots (Inventory Refactor). `containers` is the equipped-container
+  -- map keyed by kind; `quickAccess` is gone — the on-person grid replaced it.
   jsonb_build_object(
     'helmet', null, 'armor', null, 'cloak', null, 'boots', null,
-    'accessory', null, 'quickAccess', null, 'guideShard', null,
-    'weapons', '[]'::jsonb
+    'gloves', null, 'neck', null, 'ring1', null, 'ring2', null,
+    'guideShard', null,
+    'weapons', '[]'::jsonb,
+    'containers', '{}'::jsonb
   ),
   jsonb_build_object(
     'slot1', jsonb_build_object('shardId', 'guide', 'locked', true,  'attuned', '[]'::jsonb),
