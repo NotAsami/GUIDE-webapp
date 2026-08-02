@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmFeatures, type DmCampaignState, type DmCatalogState, type DmFeaturesState } from '../lib/dm'
+import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, type DmCampaignState, type DmCatalogState, type DmFeaturesState } from '../lib/dm'
 import { longRestPatch } from '../lib/rest'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/voice'
 import { usePartyPresence } from '../lib/presence'
@@ -11,7 +11,11 @@ import type {
   CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity,
   ItemEffects, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
   Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, CatalogFeatureData,
+  EquippedGear,
 } from '../lib/database.types'
+import { ITEM_SLOTS, PERSON } from '../lib/equip'
+import { place, routeItem } from '../lib/placement'
+import { OperatorInventory } from './OperatorInventory'
 import styles from './OperatorConsole.module.css'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -92,7 +96,7 @@ const hpClassOf = (p: PartyMember): '' | 'warn' | 'crit' => {
 const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hpMax) * 100)) : 0)
 
 type View = 'overview' | 'character' | 'quests' | 'sessions' | 'catalog'
-type CharTab = 'actions' | 'lore'
+type CharTab = 'actions' | 'inventory' | 'lore'
 
 export function OperatorConsole() {
   const { session, loading: authLoading } = useAuth()
@@ -101,6 +105,7 @@ export function OperatorConsole() {
   const campaign = useDmCampaign()
   const catalog = useDmCatalog()
   const featureLib = useDmFeatures()
+  const confiscated = useDmConfiscated()
   const onlineIds = usePartyPresence()
 
   const [view, setView] = useState<View>('overview')
@@ -267,6 +272,13 @@ export function OperatorConsole() {
                   Oversee
                 </div>
                 <div
+                  className={cx(styles.wtab, charTab === 'inventory' && styles.active)}
+                  onClick={() => setCharTab('inventory')}
+                  title="Browse, lock and confiscate carried items"
+                >
+                  Inventory
+                </div>
+                <div
                   className={cx(styles.wtab, charTab === 'lore' && styles.active)}
                   onClick={() => setCharTab('lore')}
                   title="Lore & corruption (DM-only)"
@@ -292,6 +304,13 @@ export function OperatorConsole() {
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
+                ) : charTab === 'inventory' ? (
+                  <OperatorInventory
+                    key={selectedRow.id} row={selectedRow} member={selected}
+                    confiscated={confiscated}
+                    onUpdate={patch => updateCharacter(selectedRow.id, patch)}
+                    log={log}
+                  />
                 ) : (
                   <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
                 )
@@ -607,13 +626,23 @@ function ActionsTab({ row, member, catalog, featureLib, onUpdate, onVoice, log }
 // ============================================================
 
 /** App-aligned item taxonomy (NOT the mockup's — the engine reads these). */
-const CAT_ORDER: ItemCategory[] = ['weapon', 'gear', 'consumable', 'misc']
+const CAT_ORDER: ItemCategory[] = [
+  'weapon', 'ammo', 'armor', 'consumable', 'tool', 'quest', 'misc',
+]
 const CAT_DEF: Record<ItemCategory, { label: string; corner: string }> = {
   weapon: { label: 'Weapon', corner: 'fa-gavel' },
-  gear: { label: 'Gear', corner: 'fa-shield-halved' },
+  ammo: { label: 'Ammunition', corner: 'fa-location-arrow' },
+  armor: { label: 'Armor', corner: 'fa-shield-halved' },
   consumable: { label: 'Consumable', corner: 'fa-flask' },
+  tool: { label: 'Tool', corner: 'fa-screwdriver-wrench' },
+  quest: { label: 'Quest', corner: 'fa-scroll' },
   misc: { label: 'Misc', corner: 'fa-box' },
 }
+/** Categories that occupy a worn gear slot, and so get the Equip Slot picker.
+ *  In the expanded taxonomy that is `armor` alone — weapons go to hands and
+ *  containers to the carry sidebar, so neither needs a slot. */
+const isSlotted = (c: ItemCategory) => c === 'armor'
+
 const RAR_ORDER: ItemRarity[] = ['common', 'uncommon', 'rare', 'legendary']
 const RAR_DEF: Record<ItemRarity, { label: string; token: string }> = {
   common: { label: 'Common', token: 'var(--rar-common)' },
@@ -621,7 +650,7 @@ const RAR_DEF: Record<ItemRarity, { label: string; token: string }> = {
   rare: { label: 'Rare', token: 'var(--rar-rare)' },
   legendary: { label: 'Legendary', token: 'var(--rar-legend)' },
 }
-const GEAR_SLOTS: ItemSlot[] = ['helmet', 'armor', 'cloak', 'boots', 'accessory']
+const GEAR_SLOTS: readonly ItemSlot[] = ITEM_SLOTS
 const WEAPON_ABILITIES: WeaponAbility[] = ['str', 'dex', 'finesse']
 const ITEM_ICONS = [
   'fa-khanda', 'fa-hammer', 'fa-bullseye', 'fa-gavel', 'fa-wand-sparkles', 'fa-staff-snake',
@@ -638,11 +667,22 @@ function firstName(name: string) { return name.split(' ')[0] }
 /** Build a fresh inventory instance from a catalog template: a self-describing
  *  snapshot of the template `data` + a unique instance id + the `item_id` back-ref.
  *  Stackables (consumable/misc) get qty 1 so the grid renders a count badge. */
-function grantSnapshot(item: CatalogItemRow): InventoryItem {
+function grantSnapshot(
+  item: CatalogItemRow, gear: EquippedGear, inventory: InventoryItem[],
+): InventoryItem {
   const inst = `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
   const data = item.data ?? ({} as CatalogItemData)
   const stackable = data.category === 'consumable' || data.category === 'misc'
-  return { ...data, id: inst, item_id: item.id, ...(stackable ? { qty: 1 } : {}) } as InventoryItem
+  const fresh = {
+    ...data, id: inst, item_id: item.id,
+    containerId: PERSON,
+    ...(stackable ? { qty: 1 } : {}),
+  } as InventoryItem
+  // Granted items go through the SAME routing chain as anything else picked up:
+  // arrows fall into the quiver, everything else takes the first free cell on
+  // person and overflows to a bag. This is what retired the grant-destination
+  // picker — the DM never has to choose a container.
+  return place(fresh, routeItem(fresh, gear, inventory))
 }
 
 /** Grant Item: search the catalog, pick a template, snapshot it into this PC's
@@ -671,7 +711,8 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
     if (!selected) return
     setBusy(true)
     const inv = ((row.inventory as unknown as InventoryItem[]) ?? [])
-    const ok = await onUpdate({ inventory: [...inv, grantSnapshot(selected)] as unknown as Json[] })
+    const gear = (row.equipped ?? {}) as EquippedGear
+    const ok = await onUpdate({ inventory: [...inv, grantSnapshot(selected, gear, inv)] as unknown as Json[] })
     setBusy(false)
     if (!ok) return
     const d = selected.data
@@ -1062,8 +1103,17 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
   const [h, setH] = useState(d?.h ?? 1)
   const [weight, setWeight] = useState(String(d?.weight ?? ''))
   const [value, setValue] = useState(d?.value != null ? String(d.value) : '')
+  // Container authoring. `isContainer` is its own toggle rather than being
+  // inferred from the category: a backpack and a crowbar are both tools, and
+  // only one of them holds things.
+  const [isContainer, setIsContainer] = useState(!!d?.container)
+  const [ctrKind, setCtrKind] = useState<string>(d?.container?.kind ?? 'backpack')
+  const [ctrMode, setCtrMode] = useState<'page' | 'inline'>(d?.container?.mode ?? 'page')
+  const [ctrWeightless, setCtrWeightless] = useState(!!d?.container?.weightless)
+  const [ctrCats, setCtrCats] = useState<ItemCategory[]>(d?.container?.allowedCategories ?? [])
+  const [ctrCap, setCtrCap] = useState(d?.container?.capacity != null ? String(d.container.capacity) : '')
   const [icon, setIcon] = useState(d?.icon ?? 'fa-box')
-  const [slot, setSlot] = useState<ItemSlot>((d?.slot as ItemSlot) ?? 'accessory')
+  const [slot, setSlot] = useState<ItemSlot>((d?.slot as ItemSlot) ?? 'ring1')
   const [attune, setAttune] = useState(!!d?.attune)
   const [flavor, setFlavor] = useState(d?.flavor ?? '')
   const [ability, setAbility] = useState<WeaponAbility>((d?.ability as WeaponAbility) ?? 'str')
@@ -1088,7 +1138,16 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
       name: name.trim(), category, rarity, icon, w, h,
       ...(Number.isFinite(weightNum) ? { weight: weightNum } : {}),
       ...(Number.isFinite(valueNum) ? { value: valueNum } : {}),
-      ...(category === 'gear' ? { slot } : {}),
+      ...(isSlotted(category) ? { slot } : {}),
+      ...(isContainer ? {
+        container: {
+          kind: ctrKind.trim() || 'backpack',
+          mode: ctrMode,
+          weightless: ctrWeightless,
+          ...(ctrCats.length ? { allowedCategories: ctrCats } : {}),
+          ...(Number.isFinite(parseInt(ctrCap, 10)) ? { capacity: parseInt(ctrCap, 10) } : {}),
+        },
+      } : {}),
       ...(attune ? { attune: name.trim() } : {}),
       ...(flavor.trim() ? { flavor: flavor.trim() } : {}),
       ...(category === 'weapon'
@@ -1134,7 +1193,7 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
           <span className={styles.pvMeta}>
             <span>{def.label}</span><span className={styles.rar} style={{ color: rd.token }}>{rd.label}</span>
             <span>{w}×{h} cells</span>
-            {category === 'gear' && <span>{slot}</span>}
+            {isSlotted(category) && <span>{slot}</span>}
             {attune && <span>attunement</span>}
           </span>
         </span>
@@ -1201,7 +1260,87 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
         </div>
       )}
 
-      {category === 'gear' && (
+      <div
+        className={cx(styles.catTog, isContainer && styles.on)}
+        onClick={() => setIsContainer(v => !v)}
+        role="switch" aria-checked={isContainer}
+      >
+        <span className={styles.tgSw} />
+        <span className={styles.tgLab}>
+          <span className={styles.t}>This Item Is A Container</span>
+          <span className={styles.s}>Holds other items — gets a tab or a carry row</span>
+        </span>
+      </div>
+
+      {isContainer && (
+        <div className={styles.catCtr}>
+          <div className={styles.catGrid2}>
+            <div>
+              <span className={styles.fieldLab}>Kind</span>
+              {/* Kind is what enforces the caps — one backpack, one bag of
+                  holding, one sack, one quiver. Free text so a bolt case or a
+                  scroll case can be authored without a code change; a NEW `page`
+                  kind, though, would become a fifth Inventory tab. */}
+              <input
+                className={styles.sessIn} value={ctrKind}
+                onChange={e => setCtrKind(e.target.value)}
+                list="container-kinds" placeholder="backpack"
+              />
+              <datalist id="container-kinds">
+                {['backpack', 'bagOfHolding', 'sack', 'quiver', 'boltCase', 'scrollCase']
+                  .map(k => <option key={k} value={k} />)}
+              </datalist>
+            </div>
+            <div>
+              <span className={styles.fieldLab}>Display Mode</span>
+              <select className={styles.selIn} value={ctrMode} onChange={e => setCtrMode(e.target.value as 'page' | 'inline')}>
+                <option value="page">Page — owns an Inventory tab</option>
+                <option value="inline">Inline — expands in the carry panel</option>
+              </select>
+            </div>
+          </div>
+
+          <div className={styles.catGrid2}>
+            <div>
+              <span className={styles.fieldLab}>Capacity</span>
+              <input
+                className={styles.numIn} type="number" min={0} value={ctrCap}
+                onChange={e => setCtrCap(e.target.value)} placeholder="unlimited"
+              />
+            </div>
+            <div
+              className={cx(styles.catTog, styles.ctrTog, ctrWeightless && styles.on)}
+              onClick={() => setCtrWeightless(v => !v)}
+              role="switch" aria-checked={ctrWeightless}
+            >
+              <span className={styles.tgSw} />
+              <span className={styles.tgLab}>
+                <span className={styles.t}>Weightless</span>
+                <span className={styles.s}>Contents excluded from Burden (the bag itself still weighs)</span>
+              </span>
+            </div>
+          </div>
+
+          <span className={styles.fieldLab}>Accepts (empty = anything)</span>
+          <div className={styles.catCtrCats}>
+            {CAT_ORDER.map(c => (
+              <button
+                key={c} type="button"
+                className={cx(styles.qTag, ctrCats.includes(c) && styles.sel)}
+                onClick={() => setCtrCats(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])}
+              >
+                {CAT_DEF[c].label}
+              </button>
+            ))}
+          </div>
+          <div className={styles.catCtrNote}>
+            An ammunition-only container auto-collects what it accepts: picked-up
+            arrows route themselves into a quiver before anything else.
+          </div>
+        </div>
+      )}
+
+      {isSlotted(category) && (
         <>
           <span className={styles.fieldLab}>Equip Slot</span>
           <select className={cx(styles.selIn, styles.slotSel)} value={slot} onChange={e => setSlot(e.target.value as ItemSlot)}>
