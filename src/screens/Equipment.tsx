@@ -19,6 +19,7 @@ import { activeEffects, effectiveSheet, summarizeEffects } from '../lib/effects'
 import {
   handLabel, rollWeaponAttack, weaponAttackBonus, weaponDamageString,
 } from '../lib/weapons'
+import { PERSON } from '../lib/placement'
 import { useRollLog } from '../lib/rolls'
 import { useItemTooltip, type Bind, type TooltipData } from '../components/ItemTooltip'
 import styles from './Equipment.module.css'
@@ -113,6 +114,17 @@ export function Equipment() {
    *  it stays visible — which is exactly why Attack lives on the card, not in a
    *  modal whose overlay would bury the toast). */
   function attack(weapon: EquippedWeapon) {
+    // A bow with an empty quiver and empty pockets has nothing to loose. Refuse
+    // rather than roll — the alternative silently produces a damage number the
+    // player has no way to deliver.
+    if (isRanged(weapon) && !activeAmmo) {
+      addRoll({
+        kind: 'custom', title: weapon.name, subtitle: 'No ammunition',
+        icon: weapon.icon ?? 'fa-bullseye',
+        lines: [{ label: 'Cannot fire', total: '—', breakdown: 'Nothing in the quiver or on person' }],
+      })
+      return
+    }
     const { attack: atk, damage } = rollWeaponAttack(weapon, sheet)
     const stack = isRanged(weapon) ? activeAmmo : null
     addRoll({
@@ -166,12 +178,18 @@ export function Equipment() {
     })
   }
 
-  /** Ammunition available to a ranged attack, derived from the equipped quiver.
-   *  No quiver equipped -> no stacks -> the picker is absent entirely rather
-   *  than rendering an empty control. */
+  /** Ammunition available to a ranged attack.
+   *
+   *  Drawn from the quiver AND from what's on person — a quiver is a convenience,
+   *  not a prerequisite. Twenty arrows in your pack are still arrows, and reading
+   *  only the quiver meant a character without one could never fire at all.
+   *  Quiver stacks lead, since that is the one you would actually reach for. */
   const containers = getContainers(gear)
   const quiver = containers.find(c => c.container?.mode === 'inline')
-  const ammoStacks = containerContents(quiver?.id, inventory)
+  const ammoStacks = [
+    ...containerContents(quiver?.id, inventory),
+    ...inventory.filter(i => i.containerId === PERSON && i.category === 'ammo'),
+  ]
   const activeAmmo = ammoStacks.find(a => a.id === nocked) ?? ammoStacks[0] ?? null
 
   const attuned = attunedCount(gear)
@@ -211,6 +229,7 @@ export function Equipment() {
               return w ? (
                 <WeaponCard
                   key={hand} weapon={w} sheet={sheet} bind={bind}
+                  dry={isRanged(w) && !activeAmmo}
                   ammo={isRanged(w) ? ammoStacks : null}
                   active={activeAmmo}
                   onNock={setNocked}
@@ -345,6 +364,7 @@ export function Equipment() {
         stowed={stowed}
         inventory={inventory}
         styles={styles}
+        bind={bind}
         onUnequip={unequipContainer}
         onEquip={equipContainer}
         onClose={() => setDrawer(null)}
@@ -434,9 +454,11 @@ function ActionBtn({ to, onClick, icon, label, active, count, soon }: {
 
 /* ---------- weapon card ---------- */
 
-function WeaponCard({ weapon, sheet, bind, ammo, active, onNock, onAttack, onManage }: {
+function WeaponCard({ weapon, sheet, bind, dry, ammo, active, onNock, onAttack, onManage }: {
   weapon: EquippedWeapon; sheet: CharacterSheet; bind: Bind
-  /** Stacks the quiver offers, or null when this weapon takes no ammunition. */
+  /** Ranged, with nothing left to fire. */
+  dry: boolean
+  /** Stacks available to this weapon, or null when it takes no ammunition. */
   ammo: InventoryItem[] | null
   active: InventoryItem | null
   onNock: (id: string) => void
@@ -471,18 +493,19 @@ function WeaponCard({ weapon, sheet, bind, ammo, active, onNock, onAttack, onMan
         <div className={styles.wcSlot}>
           <span className={styles.label}>{handLabel(weapon.hand)}</span>
           <button
-            className={styles.wcAttack}
+            className={`${styles.wcAttack}${dry ? ' ' + styles.dry : ''}`}
             onClick={e => { e.stopPropagation(); onAttack() }}
+            title={dry ? 'No ammunition — nothing to fire' : undefined}
             aria-label={`Roll attack with ${weapon.name}`}
           >
-            <i className="fa-solid fa-dice-d20" /> Attack
+            <i className={`fa-solid ${dry ? 'fa-ban' : 'fa-dice-d20'}`} /> Attack
           </button>
           {/* Which arrow is nocked belongs to the ATTACK, not to the quiver —
               so the selector lives here. Absent, not empty, when nothing is
               equipped to draw from. */}
-          {ammo && ammo.length > 0 && active && (
-            <AmmoPicker stacks={ammo} active={active} onNock={onNock} />
-          )}
+          {ammo && (active
+            ? <AmmoPicker stacks={ammo} active={active} onNock={onNock} />
+            : <span className={styles.ammoNone}>No ammunition</span>)}
         </div>
       </div></div>
     </div>
