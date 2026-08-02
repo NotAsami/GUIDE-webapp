@@ -174,6 +174,8 @@ function ContainerRow({ container, inventory, styles, bind, onUnequip }: {
                 rows: [
                   ['Quantity', `×${a.qty ?? 1}`],
                   ['Weight', `${fmtWeight(itemWeight(a))} lb`],
+                  // The whole reason to hover an arrow: does it hit harder?
+                  ...(a.effects?.damage ? [['Damage', `+${a.effects.damage}`] as [string, string]] : []),
                   ...(a.rows ?? []),
                 ],
                 flavor: a.flavor,

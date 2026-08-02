@@ -18,6 +18,7 @@ import { CarrySidebar } from './EquipmentCarry'
 import { activeEffects, effectiveSheet, summarizeEffects } from '../lib/effects'
 import {
   handLabel, rollWeaponAttack, weaponAttackBonus, weaponDamageString,
+  type AmmoBonus,
 } from '../lib/weapons'
 import { PERSON } from '../lib/placement'
 import { useRollLog } from '../lib/rolls'
@@ -125,8 +126,8 @@ export function Equipment() {
       })
       return
     }
-    const { attack: atk, damage } = rollWeaponAttack(weapon, sheet)
     const stack = isRanged(weapon) ? activeAmmo : null
+    const { attack: atk, damage } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack))
     addRoll({
       kind: 'weapon',
       title: weapon.name,
@@ -512,6 +513,14 @@ function WeaponCard({ weapon, sheet, bind, dry, ammo, active, onNock, onAttack, 
   )
 }
 
+/** An ammunition stack's flat damage contribution, or null when it grants none.
+ *  Reuses `effects.damage` — the same field a magic weapon uses — so authoring an
+ *  arrow that hits harder needs no new concept in the catalog. */
+export function ammoBonusOf(stack: InventoryItem | null): AmmoBonus | null {
+  const d = stack?.effects?.damage
+  return d ? { damage: d, label: stack!.name } : null
+}
+
 /** A weapon draws from the quiver if it takes ammunition. Read off the SRD
  *  `properties` the DM already authors, so no new field is needed. */
 function isRanged(w: EquippedWeapon): boolean {
@@ -579,6 +588,7 @@ function AmmoPicker({ stacks, active, onNock }: {
       >
         <i className="fa-solid fa-location-arrow" aria-hidden="true" />
         <span className={styles.amName}>{active.name}</span>
+        {ammoBonusOf(active) && <span className={styles.amDmg}>+{ammoBonusOf(active)!.damage}</span>}
         <span className={styles.amCt}>×{active.qty ?? 1}</span>
         <i className={`fa-solid fa-chevron-down ${styles.amChev}`} aria-hidden="true" />
       </button>
@@ -598,6 +608,7 @@ function AmmoPicker({ stacks, active, onNock }: {
               onClick={() => { onNock(a.id!); setOpen(false) }}
             >
               <span className={styles.amOptName}>{a.name}</span>
+              {ammoBonusOf(a) && <span className={styles.amDmg}>+{ammoBonusOf(a)!.damage}</span>}
               <span className={styles.q}>×{a.qty ?? 1}</span>
             </button>
           ))}

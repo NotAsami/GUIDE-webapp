@@ -317,6 +317,10 @@ update characters set
       'id', 'inv-arrows-silvered', 'name', 'Silvered Arrows', 'category', 'ammo',
       'containerId', 'ctr-quiver', 'w', 1, 'h', 1,
       'rarity', 'uncommon', 'icon', 'fa-location-arrow', 'weight', 0.05, 'qty', 4, 'value', 25,
+      -- Ammunition contributes a FLAT damage bonus via the same `effects.damage`
+      -- a magic weapon uses. Dice-valued and conditional ammunition waits for the
+      -- features engine's roll contributions (refactor doc §17).
+      'effects', jsonb_build_object('damage', 1),
       'rows', jsonb_build_array(jsonb_build_array('Ammunition', 'Bow · silvered')),
       'flavor', 'Silver-washed heads for the things that shrug off plain steel.'
     )

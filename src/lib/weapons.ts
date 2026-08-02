@@ -71,11 +71,16 @@ export type DamageRoll = {
   breakdown: string
 }
 
+/** A nocked ammunition stack's contribution to one attack. Flat only, by
+ *  design — see the note in rollWeaponAttack. */
+export type AmmoBonus = { damage: number; label: string }
+
 /** Roll a weapon's attack AND damage together. A natural 20 doubles the damage
- *  DICE (not the modifier); a natural 1 flags a fumble. Damage is floored at 0. */
-export function rollWeaponAttack(weapon: EquippedWeapon, sheet: CharacterSheet): {
-  attack: AttackRoll; damage: DamageRoll
-} {
+ *  DICE (not the modifier); a natural 1 flags a fumble. Damage is floored at 0.
+ *  Nocked ammunition adds a flat, named bonus to the damage. */
+export function rollWeaponAttack(
+  weapon: EquippedWeapon, sheet: CharacterSheet, ammo?: AmmoBonus | null,
+): { attack: AttackRoll; damage: DamageRoll } {
   const atkBonus = weaponAttackBonus(weapon, sheet)
   const d20 = rollDie(20)
   const crit = d20 === 20
@@ -95,9 +100,18 @@ export function rollWeaponAttack(weapon: EquippedWeapon, sheet: CharacterSheet):
     diceExpr = `${count}d${parsed.sides}`
   }
   const diceSum = dice.reduce((a, b) => a + b, 0)
+
+  // Ammunition contributes a FLAT damage bonus, named in the breakdown so the
+  // number stays checkable — "+1 (Silvered Arrows)" rather than a total that
+  // silently disagrees with the weapon's printed damage. Dice-valued and
+  // conditional ammunition is deliberately out of scope; that is the features
+  // engine's roll-contribution mechanism (see the refactor doc §17).
+  const ammoBonus = ammo?.damage ?? 0
+  const total = Math.max(0, diceSum + dmgBonus + ammoBonus)
   const damage: DamageRoll = {
-    diceExpr, dice, bonus: dmgBonus, total: Math.max(0, diceSum + dmgBonus), type: weapon.type, crit,
-    breakdown: `${diceExpr}(${dice.join(' + ') || 0}) ${formatMod(dmgBonus)}`,
+    diceExpr, dice, bonus: dmgBonus + ammoBonus, total, type: weapon.type, crit,
+    breakdown: `${diceExpr}(${dice.join(' + ') || 0}) ${formatMod(dmgBonus)}`
+      + (ammoBonus ? ` ${formatMod(ammoBonus)} (${ammo!.label})` : ''),
   }
   return { attack, damage }
 }
