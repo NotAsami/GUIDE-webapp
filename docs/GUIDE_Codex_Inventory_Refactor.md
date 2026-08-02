@@ -523,10 +523,32 @@ against real data.
 
 ### Still open
 
-- **The attunement cap is displayed, not enforced.** `ATTUNED n / 3` tints red
-  past three, but nothing refuses the equip — the seed currently sits at 5 / 3.
-  Whether to block, or to prompt for which attunement to break, is a rules
-  decision (see also decision 2).
+- **The attunement cap is displayed, not enforced.** The readout tints red at the
+  cap but nothing refuses the equip. Whether to block, or to prompt for which
+  attunement to break, is a rules decision (see also decision 2). *(The cap value
+  itself is now read from `resources.attunement.capacity`, so raising it per
+  character is already a one-field DM edit.)*
+
+- **MAJOR SLICE — features that actually do something.** Features are currently
+  descriptive only: prose, usage text, an optional roll. They cannot grant an
+  ability boost, heal, or modify an attack. The hard part is that the space of
+  effects is open-ended and resists enumeration — compare *Judgement's Edge*
+  ("when you hit a creature affected by your Arbiter's Judgement, deal +1d4
+  radiant or necrotic") against *Final Strike* ("your next attack against them is
+  an automatic critical hit, and they make death saves with disadvantage if
+  reduced to 0"). A fixed list of effect types covers neither well.
+
+  Worth noting before designing it: items already solved a *narrow* version of
+  this. `ItemEffects` models only the numeric, always-on modifiers the engine can
+  compute (ability deltas, AC, saves, speed) and deliberately leaves advantage,
+  resistances and charges as prose — the rule being "never pretend advantage is a
+  flat number." A features engine probably wants the same split, plus a third
+  category items don't have: **conditional, triggered effects** ("when you hit
+  X", "your next attack"), which need a trigger vocabulary and somewhere to hold
+  pending state between rolls. Likely shape: numeric effects reuse `ItemEffects`,
+  triggered ones become authored *prompts* that surface at the right moment and
+  let the player apply them, rather than the engine resolving them silently.
+  That keeps homebrew expressible without an interpreter.
 - **Component pouch** — blocked on decision 1c.
 - **Party view** — decisions 3–5, its own slice.
 - **Vertical slack routing** — the Equipment left column has no slack absorber:
@@ -535,12 +557,24 @@ against real data.
   column clips the panel actions off the bottom. The fix is naming a child that
   takes the slack (the stats panel, `flex: 1 1 auto` + `min-height: 0`), per the
   standing layout convention. Deferred deliberately.
-- **Scaling and placement below ~1100px wide / ~760px tall** — the three-column
-  grid has a `minmax(280px, 1fr)` floor, so below that the page scrolls
-  horizontally rather than reflowing, and the vertical budget above runs out
-  first. Related to but distinct from the mobile port: this is the *desktop*
-  small-window case, which Phase 4's single-column reflow doesn't automatically
-  solve. Deferred deliberately.
+- **MAJOR SLICE — small-screen layout.** The three-column grid has a
+  `minmax(280px, 1fr)` floor, so below roughly 1100×760 the page scrolls
+  horizontally rather than reflowing, and the vertical budget runs out first.
+  Two symptoms observed on real laptops, both of which are the SAME underlying
+  problem and must not be chased individually:
+  - the weapon card's ATTACK button crowds the weapon name and damage line
+  - the bottom of the Equipment column nearly collides with the bottombar
+
+  Explicitly **not** to be addressed with per-element tweaks (scaling the attack
+  button, shrinking the bottombar). Those trade one cramped element for another
+  and leave the sides empty. What's needed is a deliberate layout strategy for
+  the laptop range — the columns reflowing, or a density mode, or the panels
+  becoming independently scrollable regions. Related to but distinct from Phase 4
+  mobile: this is the *desktop small-window* case, which a single-column phone
+  reflow does not automatically solve.
+
+  Prerequisite: the vertical slack routing item above — the columns can't degrade
+  gracefully while nothing absorbs slack.
 - **Mobile (§13)** — Phase 4, captured but not built.
 
 ### Corrections that were applied while porting
