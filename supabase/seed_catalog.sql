@@ -108,6 +108,7 @@ insert into item_catalog (id, data) values
   ('cat-arrows-silvered', jsonb_build_object(
     'name', 'Silvered Arrows', 'category', 'ammo', 'rarity', 'uncommon', 'icon', 'fa-location-arrow',
     'weight', 0.05, 'w', 1, 'h', 1,
+    'effects', jsonb_build_object('damage', 1),
     'rows', jsonb_build_array(jsonb_build_array('Ammunition', 'Bow · silvered')),
     'flavor', 'Silver-washed heads for the things that shrug off plain steel.')),
 
