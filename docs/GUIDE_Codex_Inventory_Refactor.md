@@ -781,6 +781,29 @@ This is worth building **regardless** of any later decision about a computation
 engine, and it is most of what makes Dicecloud feel complete. The two are
 separable: what is admired there is usually the presentation, not the graph.
 
+#### Should the context panel pre-roll its numbers?
+
+Mostly yes — rolling and discarding costs nothing, and it saves an interaction.
+But split it by whether the contribution is gated:
+
+- **Unconditional** → pre-roll and show the value. There is no decision to
+  influence, so it is pure convenience.
+- **Conditional** ("if the target is judged", "while raging") → show the
+  FORMULA with a one-tap *roll it* that appends to the same toast. The player
+  decides whether the condition applies, and only then sees the number.
+
+The reason is ordering, not entropy. A pre-rolled `1d6 [6]` shown before the
+player decides whether the creature was judged puts a thumb on that decision —
+and with several gated features pre-rolled at once, the temptation is to apply
+the ones that rolled well. Small stakes at a table where the DM confirms these
+things out loud, but free to avoid.
+
+The distinction needs no new data: a contribution either declares a gating
+condition or it does not. The UI just reads that flag.
+
+**This extends the brief's core principle one step:** the engine never infers a
+trigger — *and it never front-runs the player's decision either.*
+
 It also does the work the DM would otherwise do from memory — "does anything
 trigger off this hit?" — which is the single most common thing to forget at a
 table.
