@@ -29,6 +29,13 @@ import styles from './InventoryPopup.module.css'
 function stowTargets(
   item: InventoryItem, gear: EquippedGear, inventory: InventoryItem[],
 ): EquippedItem[] {
+  // NO NESTING (spec §10). A container can't go inside a container — that's what
+  // kills recursion and the weightless-inside-weightless exploit, and 5e supplies
+  // the in-fiction justification. Without this the popup happily offers to stow a
+  // sack into the backpack, and it then reappears in the carry sidebar's STOWED
+  // strip as equippable-from-inside-a-bag.
+  if (item.container) return []
+
   return getContainers(gear).filter(c => {
     if (!c.id || c.id === item.containerId) return false
     const def = c.container
