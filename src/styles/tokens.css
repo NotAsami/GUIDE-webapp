@@ -42,3 +42,24 @@
   --font-prose:   "EB Garamond", serif;
   --font-mono:    "JetBrains Mono", ui-monospace, monospace;
 }
+
+/* ============================================================
+   LAYOUT FLOOR — the viewport is a MINIMUM, not a maximum
+   Screens used to pin their content to the space between the bars and let it
+   compress or clip when that space ran out, which on a laptop at 110% zoom
+   squeezed the on-person grid to 90x75 cells while still overflowing. These are
+   the floors below which content stops shrinking and the screen scrolls instead.
+   ============================================================ */
+:root {
+  /* Usable height for a screen's columns before the body starts scrolling.
+     Derived, not guessed: the on-person grid's four rows at their floor (66px)
+     plus gaps, plus the switcher / header line / utility bar above them. Set it
+     higher and a laptop scrolls even when a slightly smaller grid would have
+     fitted; set it lower and the grid crushes before the scroll kicks in. */
+  --screen-min-h: 440px;
+  /* On-person grid cells. Below this a 2x1 footprint stops reading as an item. */
+  --cell-min-w: 78px;
+  --cell-min-h: 66px;
+  --cell-max-w: 104px;
+  --cell-max-h: 96px;
+}
