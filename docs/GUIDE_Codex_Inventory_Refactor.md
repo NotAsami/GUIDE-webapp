@@ -754,6 +754,71 @@ The real cost of no tracker is that durations live in the player's memory. That
 is already true today, so it is not a regression — just a limit to state out loud
 rather than discover.
 
+### Roll context — surface the relevant features beside the result
+
+Borrowed from Dicecloud, and **it needs no computation engine.** When a roll
+happens, show the breakdown *and* every active feature relevant to that roll,
+with its rule text and any derived number:
+
+```
+SANCTITY
+  To Hit    1d20 [9] + 7            = 16
+  Damage    1d8 [6] + 2             = 8 slashing
+
+  ── relevant ──────────────────────────────────
+  Judgement's Edge      +1d6 radiant or necrotic vs a judged creature
+  Restoration…          heal an ally within 60 ft for half the damage
+  Condemning Strike     WIS save or frightened   ·   DC 14 (8 + 3 prof + 3 WIS)
+```
+
+Note what is happening: only the first two lines are *computed*. The rest are
+**reminders attached to the roll** — prose the player applies, exactly as they
+already do for attacks. A feature declares which rolls it is relevant to, and the
+roller filters active features for matches. Same one-level filter as roll
+contributions; no derivation, no graph.
+
+This is worth building **regardless** of any later decision about a computation
+engine, and it is most of what makes Dicecloud feel complete. The two are
+separable: what is admired there is usually the presentation, not the graph.
+
+It also does the work the DM would otherwise do from memory — "does anything
+trigger off this hit?" — which is the single most common thing to forget at a
+table.
+
+### When to revisit the computation-engine decision
+
+The flat design is a **"not yet", not a permanent architectural commitment.** Roll
+contributions are a strict subset of what a graph would do — same data, less
+resolution — so a graph can be added on top later and the existing data migrates
+into it. Choosing flat now forecloses nothing.
+
+**The trigger to reopen it:** when keeping numbers correct requires editing more
+than a handful of features per session. That is the point at which manual
+maintenance costs more than dependency resolution would.
+
+Until then the arguments against it hold, in this order:
+
+1. **Debugging inverts.** A wrong number in a flat system has one place to look;
+   in a graph it is the end of a chain that must be traced backwards — mid
+   session, with players waiting, by the person who is also the DM.
+2. **Authoring becomes programming.** Expressions with variable names, scope and
+   syntax that can be wrong, whose failure mode is a silently different number
+   rather than an error.
+3. **Edits break at a distance.** Rename or delete something and unrelated values
+   downstream quietly change with no error.
+4. **Checkability** — *weaker than it first appears.* A graph that shows its work
+   stays checkable; what actually degrades is DEPTH. One level (`DC 14 = 8 + 3
+   + 3`) is glanceable, three levels is a tree. The flat design stays at one
+   level by construction.
+
+What is NOT an argument against it: "it automates adjudication." A graph computes;
+it does not decide whether a creature counts as judged. That concern belongs to
+triggers, not derivation.
+
+The conditions that justify a graph — many characters, many authors who never
+speak, rules changing often enough to need propagation — describe Dicecloud's
+users, not one DM authoring for three players in the same room.
+
 ### The escape hatch that keeps this from becoming a slog
 
 **The structured part is opt-in per feature.** Every feature can always be pure
