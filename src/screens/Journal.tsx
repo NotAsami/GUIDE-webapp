@@ -25,9 +25,12 @@ export function Journal() {
   const [tab, setTab] = useState<'quests' | 'sessions'>('quests')
   const [selected, setSelected] = useState<Selection>(null)
 
-  const active = quests.filter(q => q.status === 'active')
-  const completed = quests.filter(q => q.status === 'completed')
-  const failed = quests.filter(q => q.status === 'failed')
+  // Main quests lead, side quests follow — within that, useCampaign()'s
+  // created_at order holds (stable sort), so edits never reshuffle the list.
+  const byType = (a: QuestRow, b: QuestRow) => (a.type === b.type ? 0 : a.type === 'main' ? -1 : 1)
+  const active = quests.filter(q => q.status === 'active').sort(byType)
+  const completed = quests.filter(q => q.status === 'completed').sort(byType)
+  const failed = quests.filter(q => q.status === 'failed').sort(byType)
 
   // Auto-select the first entry of whichever tab is showing, so the list
   // highlight and the reading panel can never disagree (the mockup's global
