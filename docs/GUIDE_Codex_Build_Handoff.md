@@ -135,9 +135,9 @@ exact placeholder values and layout; this is the mapping.
   (available/spent). Mutates attuned-node set and attunement on attune. **Already data-driven.**
 - **Lore:** reads `lore` (backstory prose, personality trait/ideal/bond/flaw, relations list
   with attitude, memory-fidelity note). Read-only for players; DM-authored.
-- **Journal:** reads `progress` quests (`{id, status, type, glyph, title, location, giver,
-  description, objectives:[{text,done}], related}`) + sessions (`{id, no, title, date, recap,
-  keyEvents}`). Mutates objective done-flags; quest/session content is DM-authored.
+- **Journal:** reads the campaign-wide `quests` and `sessions` tables (migration 0003), NOT
+  `progress` — a character row has no quest data. Read-only for players (migration 0007);
+  objective done-flags are DM-authored in the Operator Console, same as everything else here.
 - **Spellbook:** reads `spellbook` (caster profile: class, ability, saveDC, attackBonus,
   prepared used/max, slots[{level,total,expended}]) + known/prepared spell ids → resolved
   against `spell_catalog`. Mutates expended slots (cast / pip toggle) and prepared flags.
@@ -160,7 +160,7 @@ Each stateful value has exactly one owner in the data model. Screens are *views*
 | Gold + coin purse | `sheet.coins` (or `resources`) | top chrome, Inventory |
 | Burden (current/max) | derived from `inventory` weights | top chrome, Inventory |
 | Equipped vs carried | one flag per item | Equipment ↔ Inventory |
-| Quest / objective progress | `progress.quests` | Journal |
+| Quest / objective progress | `quests` table (campaign-wide, not on the character row) | Journal |
 
 Storing the character as one row means, e.g., current HP lives at exactly one address
 (`sheet.hp.current`). The Stat Panel and Character screens stop each "owning" HP — they both
