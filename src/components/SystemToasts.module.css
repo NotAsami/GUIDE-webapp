@@ -18,18 +18,22 @@
 .toast {
   /* cut-corner border fix: the 1px border is clipped away along the 45° cuts,
      so corner-anchored gradient stripes redraw the diagonals (layered on top
-     of the fill gradient). States recolor via --bc. */
+     of the fill gradient). States recolor via --bc.
+     1.5px, not 1px, throughout — fractional-zoom rounding fix (see CLAUDE.md):
+     a strict 1px border can round away on one edge at 110% zoom, and the
+     gradient stripe width has to match the border width or the straight and
+     diagonal edges visibly disagree at the corner. */
   --cut: 9px;
   --bc: rgba(0, 166, 214, 0.5);
   background-image:
-    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
-    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1.5px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1.5px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1.5px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1.5px), transparent 0),
     linear-gradient(180deg, #131a1e, #0d1215);
   background-repeat: no-repeat;
   background-origin: border-box;
   background-position: top left, bottom right, 0 0;
-  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px), auto;
-  border: 1px solid var(--bc);
+  background-size: calc(var(--cut) + 1.5px) calc(var(--cut) + 1.5px), calc(var(--cut) + 1.5px) calc(var(--cut) + 1.5px), auto;
+  border: 1.5px solid var(--bc);
   box-shadow: 0 0 0 1px rgba(0, 166, 214, 0.15), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 166, 214, 0.18);
   clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
   padding: 13px 16px 14px;

@@ -882,7 +882,11 @@
 /* margin-top:auto pins the button to the card's bottom (the card stretches to the
    grid-row height) WITHOUT the list driving the card's height — the list stays
    capped + scrollable, so a short search result no longer pushes the button up. */
-.grantAction { display: flex; flex: 0 0 auto; margin-top: auto; padding-top: 10px; }
+.grantAction { display: flex; flex: 0 0 auto; gap: 8px; margin-top: auto; padding-top: 10px; }
+/* .numIn is `flex: 1; width: 100%` for its usual dedicated stepper row —
+   override both so it sits as a narrow quantity field beside the Grant Btn
+   instead of splitting the row with it. */
+.grantQty { flex: 0 0 52px; width: 52px; margin-bottom: 0; }
 /* New Item button — same flex-column squish guard as the grant button (12 seeded
    rows below it would otherwise collapse it to nothing). */
 .catNew { display: flex; flex: 0 0 auto; }

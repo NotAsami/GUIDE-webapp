@@ -110,12 +110,28 @@ function patch(equipped: EquippedGear, inventory: InventoryItem[]): Patch {
 /* ---------- gear slots ---------- */
 
 /** Equip a carried item into a single-item gear slot. Any current occupant is
- *  displaced back to the bag so the slot never holds two. */
+ *  displaced back to the bag so the slot never holds two.
+ *
+ *  Attunement is enforced HERE, not in each caller — Equipment and Inventory
+ *  both reach a gear slot through this one function, and a check placed in
+ *  only one of them (as this used to be, in Equipment's local `equip()`) is a
+ *  bypass waiting to be found: Inventory's one-tap equip called
+ *  `equipTargetPatch` → this function directly and skipped it entirely.
+ *  Refusing here means every caller is guarded by construction.
+ *
+ *  Checked against the RESULTING gear, not "is this slot empty" — Inventory's
+ *  one-tap equip can target an already-occupied slot (swap a worn item for a
+ *  carried one) where the occupant itself may or may not have been consuming
+ *  attunement. Simulating the swap and counting is the only way that's
+ *  right for a net add, a like-for-like swap, and a swap that pushes the
+ *  count up (e.g. plain boots -> an attuning pair) alike. */
 export function equipGearPatch(
   item: InventoryItem, slot: ItemSlot, gear: EquippedGear, inventory: InventoryItem[],
-): Patch {
+  character: CharacterRow,
+): Patch | null {
   const occupant = gear[slot] ?? null
   const nextGear = { ...gear, [slot]: toEquipped(item) }
+  if (attunedCount(nextGear) > attunementCap(character)) return null
   const nextInv = inventory.filter(i => i.id !== item.id)
   if (occupant) nextInv.push(toCarried(occupant, nextInv, gear))
   return patch(nextGear, nextInv)
@@ -252,10 +268,23 @@ export type EquipTarget =
   | { kind: 'container'; containerKind: ContainerKind }
   | { kind: 'none'; reason: string }
 
+/** Rings are the one gear category with two interchangeable slots — same
+ *  mechanical effect regardless of which finger wears it (no `type` or logic
+ *  distinguishes ring1 from ring2 anywhere). Every caller that needs to treat
+ *  them as one pool — equip resolution, Equipment's per-slot picker, carried-
+ *  item labels — checks this instead of comparing against a specific key. */
+export function isRingSlot(slot: ItemSlot): boolean {
+  return slot === 'ring1' || slot === 'ring2'
+}
+
 /** Decide where a carried item equips, given the current loadout. Equipment's
  *  modal asks the player which slot/hand; Inventory equips in one tap, so it
  *  needs to resolve the destination itself: weapon → first free hand (else main,
- *  displacing); container → its kind's slot; gear → its declared slot.
+ *  displacing); container → its kind's slot; gear → its declared slot — except
+ *  a ring, which prefers whichever of the two ring slots is free rather than
+ *  committing to the specific one it happened to be catalogued under (an item
+ *  tagged ring1 must still be equippable into an empty Ring II, or a player
+ *  wearing something in ring1 alone could never equip a "ring1" item at all).
  *
  *  Consumables are no longer an equip target at all — the quick-access pouch is
  *  gone and a potion is used from wherever it sits. */
@@ -269,6 +298,10 @@ export function resolveEquipTarget(item: InventoryItem, gear: EquippedGear): Equ
     return { kind: 'weapon', hand }
   }
   if (item.container) return { kind: 'container', containerKind: item.container.kind }
+  if (item.slot && isRingSlot(item.slot)) {
+    const free = (['ring1', 'ring2'] as const).find(k => !gear[k])
+    return { kind: 'gear', slot: free ?? item.slot }
+  }
   if (item.slot) return { kind: 'gear', slot: item.slot }
   return { kind: 'none', reason: 'This item can’t be equipped' }
 }
@@ -276,9 +309,10 @@ export function resolveEquipTarget(item: InventoryItem, gear: EquippedGear): Equ
 /** Build the patch for a resolved equip target (used by Inventory's one-tap equip). */
 export function equipTargetPatch(
   item: InventoryItem, target: EquipTarget, gear: EquippedGear, inventory: InventoryItem[],
+  character: CharacterRow,
 ): Patch | null {
   switch (target.kind) {
-    case 'gear':      return equipGearPatch(item, target.slot, gear, inventory)
+    case 'gear':      return equipGearPatch(item, target.slot, gear, inventory, character)
     case 'weapon':    return equipWeaponPatch(item, target.hand, gear, inventory)
     case 'container': return equipContainerPatch(item, gear, inventory)
     case 'none':      return null
