@@ -22,7 +22,7 @@ insert into quests (title, type, status, location, given_by, description, object
     jsonb_build_object('text', 'Find a witness who can place you off the road', 'done', false),
     jsonb_build_object('text', 'Recover the courier''s missing satchel', 'done', false)
   ),
-  jsonb_build_array('Magistrate Voss', 'Brettany', 'The Crown')
+  jsonb_build_array(jsonb_build_object('name', 'Magistrate Voss'), jsonb_build_object('name', 'Brettany'), jsonb_build_object('name', 'The Crown'))
 ),
 (
   'The Stolen Tome', 'main', 'active', 'Davelguay', 'The Lady',
@@ -31,27 +31,27 @@ insert into quests (title, type, status, location, given_by, description, object
     jsonb_build_object('text', 'Recover the stolen tome', 'done', true),
     jsonb_build_object('text', 'Learn who took it and why', 'done', false)
   ),
-  jsonb_build_array('The Lady', 'Davelguay')
+  jsonb_build_array(jsonb_build_object('name', 'The Lady'), jsonb_build_object('name', 'Davelguay'))
 ),
 (
   'Whispers in Castella', 'side', 'active', 'Castella', '',
   'Rumors move faster than truth in Castella''s markets. Something is stirring beneath the noise.',
-  '[]'::jsonb, jsonb_build_array('Castella')
+  '[]'::jsonb, jsonb_build_array(jsonb_build_object('name', 'Castella'))
 ),
 (
   'The Thicket Path', 'side', 'active', 'Davelguay', '',
   'An overgrown trail near Davelguay has claimed more than one traveler this season.',
-  '[]'::jsonb, jsonb_build_array('Davelguay')
+  '[]'::jsonb, jsonb_build_array(jsonb_build_object('name', 'Davelguay'))
 ),
 (
   'Arrival in Brettany', 'main', 'completed', 'Brettany', '',
   'The party first set foot in Brettany, seeking work and shelter.',
-  '[]'::jsonb, jsonb_build_array('Brettany')
+  '[]'::jsonb, jsonb_build_array(jsonb_build_object('name', 'Brettany'))
 ),
 (
   'The Mayor''s Welcome', 'side', 'completed', 'Castella', 'The Mayor',
   'A formal welcome from Castella''s mayor, and a modest reward for services rendered.',
-  '[]'::jsonb, jsonb_build_array('Castella', 'The Mayor')
+  '[]'::jsonb, jsonb_build_array(jsonb_build_object('name', 'Castella'), jsonb_build_object('name', 'The Mayor'))
 );
 
 insert into sessions (num, title, date, recap, events) values

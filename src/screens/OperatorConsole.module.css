@@ -115,10 +115,6 @@
     rgba(226,176,33,0.02) 0px, rgba(226,176,33,0.02) 1px, transparent 1px, transparent 4px);
   mix-blend-mode: screen;
 }
-.rCorner { position: absolute; width: 12px; height: 12px; border-color: var(--amber); opacity: 0.7; z-index: 6; pointer-events: none; }
-.rCorner.tl { top: 7px; left: 7px; border-top: 1px solid; border-left: 1px solid; }
-.rCorner.br { bottom: 7px; right: 7px; border-bottom: 1px solid; border-right: 1px solid; }
-
 .rHead {
   position: relative; z-index: 3; flex: 0 0 auto;
   display: flex; align-items: baseline; gap: 10px;
@@ -182,7 +178,7 @@
   transition: background 160ms ease, transform 140ms ease, filter 160ms ease;
 }
 .pcCard::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1;
+  content: ""; position: absolute; inset: 1.5px; z-index: -1;
   background: linear-gradient(180deg, #191714, #110f0d);
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
   transition: background 160ms ease, box-shadow 160ms ease;
@@ -202,7 +198,7 @@
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 .pcPortrait::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1; background: #111;
+  content: ""; position: absolute; inset: 1.5px; z-index: -1; background: #111;
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 .pcCard.active .pcPortrait { color: var(--amber-hot); background: var(--amber); }
@@ -289,7 +285,7 @@
   display: grid; grid-template-columns: minmax(0, 1fr) 136px; gap: 10px 14px; align-items: center;
 }
 .dashRow::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1;
+  content: ""; position: absolute; inset: 1.5px; z-index: -1;
   background: linear-gradient(180deg, #191714, #110f0d);
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
   transition: background 150ms ease, box-shadow 150ms ease;
@@ -388,7 +384,7 @@
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 .selPortrait::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1;
+  content: ""; position: absolute; inset: 1.5px; z-index: -1;
   background: radial-gradient(120% 90% at 50% 35%, rgba(226,176,33,0.16), transparent 65%), #14110a;
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
@@ -412,14 +408,11 @@
   display: flex; flex-direction: column; min-width: 0;
 }
 .actCard::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1;
+  content: ""; position: absolute; inset: 1.5px; z-index: -1;
   background: linear-gradient(180deg, #17150f, #100f0c);
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
 }
 .actCard.wide { grid-column: 1 / -1; }
-.acCorner { position: absolute; width: 9px; height: 9px; border-color: rgba(226,176,33,0.55); }
-.acCorner.tl { top: 5px; left: 5px; border-top: 1px solid; border-left: 1px solid; }
-.acCorner.br { bottom: 5px; right: 5px; border-bottom: 1px solid; border-right: 1px solid; }
 .acTitle { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; }
 .acTitle .num { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; color: var(--amber); }
 .acTitle .t { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.28em; color: var(--beige); text-transform: uppercase; }
@@ -670,7 +663,10 @@
 .gmNotes {
   width: 100%; min-height: 132px; max-height: 40vh; overflow-y: auto;
   overscroll-behavior: contain; resize: vertical;
-  background: var(--amber-deep); border: 1px solid rgba(226,176,33,0.45);
+  /* 1.5px, not 1px — same fractional-zoom rounding fix as .actCard etc:
+     a strict 1px border can round away on its bottom edge at 110% zoom,
+     depending on the page's scroll offset. */
+  background: var(--amber-deep); border: 1.5px solid rgba(226,176,33,0.45);
   color: var(--amber-hot); font-family: var(--font-mono); font-size: 12.5px; line-height: 1.62; letter-spacing: 0.02em;
   padding: 12px 14px; margin-bottom: 14px; text-shadow: 0 0 6px rgba(226,176,33,0.22);
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
@@ -712,7 +708,11 @@
 
 .questLayout { display: grid; grid-template-columns: 232px 1fr; gap: 18px; align-items: start; }
 
-/* left — grouped index */
+/* left — grouped index. If you ever add a lone Btn as a direct child of this
+   COLUMN flex container, it needs a `flex: 0 0 auto` row wrapper or it
+   collapses to 0px tall — see CLAUDE.md, "Recurring bug: Btn collapses to 0
+   height in a flex-COLUMN container" (.grantAction / .catNew / .btnMount /
+   .qActions are the existing guards). */
 .qIndex { display: flex; flex-direction: column; gap: 14px; }
 .qGroup { --accent: var(--beige-dim); }
 .qGroup.active { --accent: var(--cyan); }
@@ -740,6 +740,12 @@
 
 /* right — edit form */
 .qForm { display: flex; flex-direction: column; min-width: 0; }
+/* Title + New Quest share a row, same box model as .sessPick: label sits
+   above the input, so align-items: flex-end lines the button up with the
+   input's baseline rather than the label's. No margin-bottom here — .sessIn
+   already carries its own 10px, same rhythm as every other field. */
+.qTitleRow { display: flex; gap: 10px; align-items: flex-end; }
+.qTitleField { flex: 1; min-width: 0; }
 .qGrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .qSeg { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
 .qSegOpt {
@@ -771,12 +777,13 @@
 }
 .qFacing.player {
   color: var(--cyan-hot); --bc: rgba(0,166,214,0.45);
-  border: 1px solid var(--bc); background-color: rgba(0,166,214,0.07);
+  border: 1.5px solid var(--bc); background-color: rgba(0,166,214,0.07);
 }
 .qPlayerDesc {
   width: 100%; min-height: 140px; max-height: 40vh; overflow-y: auto;
   overscroll-behavior: contain; resize: vertical;
-  background: rgba(0,40,52,0.16); border: 1px solid rgba(0,166,214,0.4); border-left: 2px solid var(--cyan);
+  /* 1.5px, not 1px — same fractional-zoom rounding fix as .actCard etc. */
+  background: rgba(0,40,52,0.16); border: 1.5px solid rgba(0,166,214,0.4); border-left: 2px solid var(--cyan);
   color: var(--text); font-family: var(--font-prose); font-size: 15px; line-height: 1.62; padding: 13px 15px; margin-bottom: 13px;
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
 }
@@ -887,7 +894,7 @@
   transition: background 140ms ease;
 }
 .catItem::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1; background: #14130e;
+  content: ""; position: absolute; inset: 1.5px; z-index: -1; background: #14130e;
   clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
   transition: background 140ms ease, box-shadow 140ms ease;
 }

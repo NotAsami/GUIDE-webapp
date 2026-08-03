@@ -136,7 +136,7 @@ interface Quest {
   givenBy: string;
   description: string;                    // player-facing
   objectives: { text: string; done: boolean }[];
-  related: string[];                      // tag names
+  related: { name: string; url?: string }[]; // tag + optional link, opens in a new tab
   gmNotes: string;                        // DM-ONLY — never sent to player
 }
 ```

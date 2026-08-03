@@ -60,7 +60,7 @@
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 .tgIc::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1;
+  content: ""; position: absolute; inset: 1.5px; z-index: -1;
   background: #11252d; /* toast bg + the old rgba(0,166,214,0.08) wash, flattened */
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }

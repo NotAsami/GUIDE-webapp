@@ -51,7 +51,13 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - `src/styles/tokens.css` + `global.css` — design tokens (CSS vars) shared by all screens.
 - `supabase/migrations/0001_init.sql` + `supabase/seed.sql` — paste-and-run via the Supabase SQL editor.
 
-## Recurring bug: chamfered clip-path corners lose their border
+## Subagent Usage
+- Always delegate file searches and grep operations to subagents
+- Use subagents for independent implementation tasks that don't need shared context
+- Prefer parallel subagents over sequential work in the main context
+- Subagents should return concise summaries, not raw file contents
+
+### Recurring bug: chamfered clip-path corners lose their border
 Any element with a chamfered `clip-path` (the `polygon(Npx 0, 100% 0, 100% calc(100% - Npx), ...)`
 cut-corner shape used everywhere in this UI) that also styles its edge with a plain CSS `border`
 will render **bare 45° corners** — the border draws fine on the straight edges, but clip-path
@@ -86,11 +92,60 @@ to `none` and the fix disappears again). Existing examples: `.qFacing` in
 `Inventory.module.css`, `Equipment.module.css`, `Stats.module.css`, `Codex.module.css` — grep
 `0.7071` for the full list before writing a new chamfered+bordered element from scratch.
 
+### Recurring bug: `Btn` collapses to 0 height in a flex-COLUMN container
+The shared `Btn` component (`OperatorConsole.tsx`) is styled `.btn { height: 36px; flex: 1; ... }`
+(`.sm`/`.lg` override the height). `flex: 1` is shorthand for `flex-grow:1; flex-shrink:1;
+flex-basis:0%`, and flex-basis substitutes for the size on the flex container's MAIN axis —
+which is only *width* when the parent is `flex-direction: row` (the assumed context: a row of
+buttons sharing space equally). Drop a bare `<Btn>` directly into a `display:flex;
+flex-direction: column` parent and the main axis becomes *height*, so `flex-basis: 0%` overrides
+the explicit `height: 36px` and the button renders at 0px tall — present in the DOM, fully
+functional (clickable if you knew where to click), completely invisible. This is exactly what
+happened to the Quest Log's "New Quest" button: correct code, zero visible pixels.
+
+The codebase already had the guard for this in two places (`.grantAction`, `.catNew` in
+`OperatorConsole.module.css`, both `display: flex; flex: 0 0 auto;`) before the Quest Log's
+button shipped without it — check for the wrapper any time you add a lone `Btn` as a direct
+child of a column flex container, don't just eyeball the JSX and assume it renders:
+```css
+.myNew { display: flex; flex: 0 0 auto; }
+```
+```tsx
+<div className={styles.myNew}>
+  <Btn tone="cyan" icon="fa-plus" label="New Thing" onClick={...} />
+</div>
+```
+The wrapper's own `flex: 0 0 auto` stops it from stretching/shrinking on the column's main axis,
+and it re-establishes a row context (`display: flex`'s default `flex-direction` is `row`) so
+`Btn`'s `flex: 1` basis only zeroes out *width* again, leaving `height: 36px` intact. Multiple
+`Btn`s that should already share a row (`.qActions`, `.btnRow`) don't need this — the bug is
+specific to a single `Btn` alone in a column parent. Before adding a new lone `Btn`, check whether
+its immediate parent is `flex-direction: column`; if so, wrap it.
+
+### Recurring bug: 1px hairline borders vanish at fractional browser zoom
+At 110% zoom (what the user runs), a box whose only visible edge is exactly `1px` — either a real
+`border: 1px solid` or a `::before` pseudo-element frame at `inset: 1px` — can round away on one
+side, most often the bottom, and which side depends on the page's current SCROLL offset (fractional
+zoom shifts the box's device-pixel alignment as it scrolls, so a line that's fine at the top of the
+page can vanish once you scroll it elsewhere, then reappear on the next re-render). First diagnosed
+and fixed in `ab9a53c` (`.opSigil::before`, `.ovEntry::before`), then found unfixed on six more
+identical `::before` frames (`.pcCard`, `.pcPortrait`, `.dashRow`, `.selPortrait`, `.actCard` — the
+Vitals/Currency/Status cards — `.catItem`, plus `SystemToasts.module.css`'s `.tgIc`), and again as a
+plain `border: 1px solid` on `.qPlayerDesc` (Player Description) and `.gmNotes` (GM Notes).
+
+**The fix is always the same number: `1px` → `1.5px`.** For a `::before` frame: bump `inset`. For a
+real border: bump the width (`border: 1.5px solid ...`; keep any `border-left`/other accent width
+as-authored, only the vanishing 1px edge needs it). 1.5px still rounds to a visible line at every
+zoom level this app is used at; 1px doesn't. If the element also participates in the chamfered
+cut-corner-border-fix recipe above, set `--bw: 1.5px` alongside the border-width bump so the
+diagonal stripe matches (see `.catPrev` for the paired example) — a straight 1.5px edge next to a
+1px-tuned diagonal stripe is a visible seam.
+
+Before adding any new bordered/framed box, grep for the vulnerable pattern rather than trusting a
+1px value will render:
+```
+grep -n 'inset: 1px\|border: 1px solid' src/screens/*.module.css src/components/*.module.css
+```
+
 ## Other guides
 - Inventory refactor spec: docs/GUIDE_Codex_Inventory_Refactor.md
-
-## Subagent Usage
-- Always delegate file searches and grep operations to subagents
-- Use subagents for independent implementation tasks that don't need shared context
-- Prefer parallel subagents over sequential work in the main context
-- Subagents should return concise summaries, not raw file contents

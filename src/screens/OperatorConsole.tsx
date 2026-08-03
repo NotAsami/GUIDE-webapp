@@ -7,7 +7,7 @@ import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/
 import { usePartyPresence } from '../lib/presence'
 import type {
   CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json,
-  QuestRow, QuestStatus, QuestType, QuestObjective, SessionRow,
+  QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow,
   CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity,
   ItemEffects, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
   Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, CatalogFeatureData,
@@ -180,7 +180,6 @@ export function OperatorConsole() {
         <section className={styles.region} aria-label="Party roster">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
-            <span className={cx(styles.rCorner, styles.tl)} /><span className={cx(styles.rCorner, styles.br)} />
             <div className={styles.rHead}>
               <span className={styles.rhNum}>01</span>
               <span className={styles.rhTitle}>Party Roster</span>
@@ -259,7 +258,6 @@ export function OperatorConsole() {
         <section className={styles.region} aria-label="Work area">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
-            <span className={cx(styles.rCorner, styles.tl)} /><span className={cx(styles.rCorner, styles.br)} />
             {/* Per-character tabs — campaign surfaces (overview / quests /
                 sessions / catalog) have no tab modes, so no bar at all. */}
             {view === 'character' && (
@@ -325,7 +323,6 @@ export function OperatorConsole() {
         <section className={styles.region} aria-label="Broadcast and system log">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
-            <span className={cx(styles.rCorner, styles.tl)} /><span className={cx(styles.rCorner, styles.br)} />
             <div className={styles.rHead}>
               <span className={styles.rhNum}>03</span>
               <span className={styles.rhTitle}>Broadcast</span>
@@ -515,7 +512,6 @@ function ActionsTab({ row, member, catalog, featureLib, onUpdate, onVoice, log }
       <div className={styles.actGrid}>
         {/* A — VITALS */}
         <div className={styles.actCard}>
-          <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
           <div className={styles.acTitle}><i className="fa-solid fa-heart-pulse lead" /><span className={styles.num}>A</span><span className={styles.t}>Vitals</span></div>
           <div className={cx(styles.vitRead, hc && styles[hc])}>
             <span className={styles.hpnum}>{hpCur}</span><span className={styles.hpmax}>/ {hpMax} HP</span>
@@ -547,7 +543,6 @@ function ActionsTab({ row, member, catalog, featureLib, onUpdate, onVoice, log }
 
         {/* D — CURRENCY */}
         <div className={styles.actCard}>
-          <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
           <div className={styles.acTitle}><i className="fa-solid fa-coins lead" /><span className={styles.num}>D</span><span className={styles.t}>Currency</span></div>
           <div className={styles.coinDisplay}><span className={styles.gp}>{gold.toLocaleString()}</span><span className={styles.gl}>Gold Coins</span></div>
           {/* the cells double as the award/deduct target selector */}
@@ -574,7 +569,6 @@ function ActionsTab({ row, member, catalog, featureLib, onUpdate, onVoice, log }
 
         {/* E — STATUS: death saves + exhaustion (wide) */}
         <div className={cx(styles.actCard, styles.wide)}>
-          <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
           <div className={styles.acTitle}><i className="fa-solid fa-heart-crack lead" /><span className={styles.num}>E</span><span className={styles.t}>Status</span></div>
           <div className={styles.statusSplit}>
             {/* death saves */}
@@ -727,7 +721,6 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
 
   return (
     <div className={styles.actCard}>
-      <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
       <div className={styles.acTitle}><i className="fa-solid fa-box-open lead" /><span className={styles.num}>B</span><span className={styles.t}>Grant Item</span></div>
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
@@ -823,7 +816,6 @@ function ApplyEffectCard({ member, row, onUpdate, onVoice, log }: {
 
   return (
     <div className={styles.actCard}>
-      <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
       <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>C</span><span className={styles.t}>Apply Effect</span></div>
 
       <span className={styles.fieldLab}>Effect</span>
@@ -1521,7 +1513,6 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
       <div className={styles.acTitle}><i className="fa-solid fa-star lead" /><span className={styles.num}>F</span><span className={styles.t}>Grant Feature</span></div>
       <div className={styles.featGrantSplit}>
         <div className={styles.fgCol}>
@@ -1820,7 +1811,6 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
       {/* digitization + memory fidelity side by side */}
       <div className={styles.loreGrid}>
         <div className={styles.actCard}>
-          <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
           <div className={styles.acTitle}><i className="fa-solid fa-radiation lead" /><span className={styles.t}>Digitization</span></div>
           <div className={cx(styles.digRead, digClass && styles[digClass])}>
             <span className={styles.digNum}>{dig}</span><span className={styles.digPct}>%</span>
@@ -1839,7 +1829,6 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
         </div>
 
         <div className={styles.actCard}>
-          <span className={cx(styles.acCorner, styles.tl)} /><span className={cx(styles.acCorner, styles.br)} />
           <div className={styles.acTitle}><i className="fa-solid fa-wave-square lead" /><span className={styles.t}>Memory Fidelity</span></div>
           <select className={styles.memSelect} value={mem} onChange={e => setMem(e.target.value)} aria-label="Memory fidelity">
             {MEM_LEVELS.map(m => <option key={m} value={m}>{m}</option>)}
@@ -1899,6 +1888,12 @@ const Q_STATUS: { key: QuestStatus; label: string }[] = [
 ]
 const questGlyph = (t: QuestType) => (t === 'main' ? '◈' : '◇')
 
+/** Rows written before Related tags carried a `url` are plain strings —
+ *  normalize on read so the form only ever handles the object shape. */
+function toRelatedTag(r: RelatedTag | string): RelatedTag {
+  return typeof r === 'string' ? { name: r } : r
+}
+
 type QuestFields = Omit<QuestRow, 'id' | 'created_at' | 'updated_at'>
 
 /** Quest Log: grouped index (left) + create/edit form (right) — the authoring
@@ -1946,7 +1941,6 @@ function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
         <div className={styles.questLayout}>
           {/* index */}
           <div className={styles.qIndex}>
-            <Btn tone="cyan" sm icon="fa-plus" label="New Quest" onClick={() => { setCreating(true); setSelId(null) }} />
             {Q_STATUS.map(st => {
               const items = quests.filter(q => q.status === st.key)
               return (
@@ -1976,6 +1970,7 @@ function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
               gmNotes={selected ? (questSecrets[selected.id]?.gm_notes ?? '') : ''}
               onSubmit={handleSubmit}
               onDelete={selected ? handleDelete : undefined}
+              onNew={() => { setCreating(true); setSelId(null) }}
             />
           </div>
         </div>
@@ -1984,11 +1979,12 @@ function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
   )
 }
 
-function QuestForm({ quest, gmNotes, onSubmit, onDelete }: {
+function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
   quest: QuestRow | null
   gmNotes: string
   onSubmit: (fields: QuestFields, gmNotes: string) => Promise<void>
   onDelete?: () => void
+  onNew: () => void
 }) {
   const [title, setTitle] = useState(quest?.title ?? '')
   const [type, setType] = useState<QuestType>(quest?.type ?? 'side')
@@ -1997,10 +1993,11 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete }: {
   const [givenBy, setGivenBy] = useState(quest?.given_by ?? '')
   const [description, setDescription] = useState(quest?.description ?? '')
   const [objectives, setObjectives] = useState<QuestObjective[]>(quest?.objectives ?? [])
-  const [related, setRelated] = useState<string[]>(quest?.related ?? [])
+  const [related, setRelated] = useState<RelatedTag[]>((quest?.related ?? []).map(toRelatedTag))
   const [gm, setGm] = useState(gmNotes)
   const [objInput, setObjInput] = useState('')
   const [tagInput, setTagInput] = useState('')
+  const [tagUrlInput, setTagUrlInput] = useState('')
   const [busy, setBusy] = useState(false)
 
   function addObjective() {
@@ -2010,10 +2007,12 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete }: {
     setObjInput('')
   }
   function addTag() {
-    const t = tagInput.trim()
-    if (!t || related.includes(t)) { setTagInput(''); return }
-    setRelated(r => [...r, t])
+    const name = tagInput.trim()
+    if (!name || related.some(r => r.name === name)) { setTagInput(''); setTagUrlInput(''); return }
+    const url = tagUrlInput.trim()
+    setRelated(r => [...r, url ? { name, url } : { name }])
     setTagInput('')
+    setTagUrlInput('')
   }
   async function submit() {
     setBusy(true)
@@ -2023,8 +2022,13 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete }: {
 
   return (
     <>
-      <span className={styles.fieldLab}>Title</span>
-      <input className={styles.sessIn} value={title} onChange={e => setTitle(e.target.value)} placeholder="Name the quest…" />
+      <div className={styles.qTitleRow}>
+        <div className={styles.qTitleField}>
+          <span className={styles.fieldLab}>Title</span>
+          <input className={styles.sessIn} value={title} onChange={e => setTitle(e.target.value)} placeholder="Name the quest…" />
+        </div>
+        <Btn tone="cyan" sm icon="fa-plus" label="New Quest" onClick={onNew} />
+      </div>
 
       <div className={styles.qGrid2}>
         <div>
@@ -2071,12 +2075,17 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete }: {
 
       <span className={styles.fieldLab}>Related</span>
       <div className={styles.qTags}>
-        {related.length ? related.map((t, i) => (
-          <span key={i} className={styles.qTag}>{t}<span className={styles.qTx2} onClick={() => setRelated(r => r.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span></span>
+        {related.length ? related.map((r, i) => (
+          <span key={i} className={styles.qTag}>
+            {r.url && <i className="fa-solid fa-link" aria-hidden="true" />}
+            {r.name}
+            <span className={styles.qTx2} onClick={() => setRelated(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
+          </span>
         )) : <span className={styles.qTagNone}>No related tags</span>}
       </div>
       <div className={styles.qTagAdd}>
         <input className={styles.sessIn} value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTag()} placeholder="Add a related NPC or place…" />
+        <input className={styles.sessIn} value={tagUrlInput} onChange={e => setTagUrlInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTag()} placeholder="Link (optional) — https://…" />
         <Btn tone="ghost" sm icon="fa-plus" label="Add" onClick={addTag} />
       </div>
 

@@ -362,10 +362,15 @@
 .chip {
   font-family: var(--font-mono); font-size: 11px;
   letter-spacing: 0.08em; color: var(--cyan);
+  text-decoration: none;
   padding: 1px 0 2px;
   border-bottom: 1px solid rgba(0, 166, 214, 0.4);
+  transition: color 150ms ease, border-color 150ms ease;
 }
+/* Only <a> chips (a real url) are interactive; inert <span> chips ignore hover. */
+a.chip:hover { color: var(--cyan-hot); border-bottom-color: var(--cyan-hot); }
 .cG { color: var(--beige-dim); margin-right: 5px; }
+.cLink { font-size: 8px; margin-left: 6px; opacity: 0.75; }
 
 .events { display: flex; flex-direction: column; gap: 10px; }
 .eventRow {

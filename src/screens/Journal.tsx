@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { useCampaign } from '../lib/campaign'
-import type { QuestRow, QuestStatus, QuestType, SessionRow } from '../lib/database.types'
+import type { QuestRow, QuestStatus, QuestType, RelatedTag, SessionRow } from '../lib/database.types'
 import styles from './Journal.module.css'
 
 const TYPE_LABEL: Record<QuestType, string> = { main: 'Main Quest', side: 'Side Quest' }
@@ -10,6 +10,21 @@ const STATUS_LABEL: Record<QuestStatus, string> = { active: 'Active', completed:
 /** Same rule the DM console's authoring twin uses (OperatorConsole.tsx questGlyph) —
  *  there is no `glyph` column, it's derived from `type` on both sides. */
 const questGlyph = (t: QuestType) => (t === 'main' ? '◈' : '◇')
+
+/** Rows written before Related tags carried a `url` are plain strings —
+ *  normalize on read so rendering only ever handles the object shape. */
+function toRelatedTag(r: RelatedTag | string): RelatedTag {
+  return typeof r === 'string' ? { name: r } : r
+}
+
+/** Only ever render an http(s) URL as a real link. The DM form nudges toward
+ *  a URL but writes free text, and this is the actual security boundary — a
+ *  `javascript:` or other scheme in a related tag renders as inert text, not
+ *  a clickable href, however the value got into the row. */
+function safeHref(url: string | undefined): string | null {
+  if (!url) return null
+  return /^https?:\/\//i.test(url) ? url : null
+}
 
 /** The DM writes one textarea; split on blank lines into paragraphs, falling
  *  back to the whole string as one paragraph when there's no blank line. */
@@ -258,9 +273,16 @@ function QuestEntry({ q }: { q: QuestRow }) {
         <>
           <div className={styles.subLabel}>Related</div>
           <div className={styles.related}>
-            {q.related.map(r => (
-              <span key={r} className={styles.chip}><span className={styles.cG}>◇</span>{r}</span>
-            ))}
+            {q.related.map(toRelatedTag).map((tag, i) => {
+              const href = safeHref(tag.url)
+              return href ? (
+                <a key={i} className={styles.chip} href={href} target="_blank" rel="noopener noreferrer">
+                  {tag.name}<i className={`fa-solid fa-arrow-up-right-from-square ${styles.cLink}`} aria-hidden="true" />
+                </a>
+              ) : (
+                <span key={i} className={styles.chip}><span className={styles.cG}>◇</span>{tag.name}</span>
+              )
+            })}
           </div>
         </>
       )}
