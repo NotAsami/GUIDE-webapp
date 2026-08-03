@@ -39,16 +39,6 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - `npm run typecheck` — `tsc -b --noEmit`
 - `npm run preview` — serve the production build locally
 
-## Supabase setup (one-time, done by the human)
-1. Create a Supabase project at supabase.com; add `http://localhost:5173/auth/callback`
-   to Authentication → URL Configuration → Redirect URLs. Enable Email auth (magic link).
-2. Copy `.env.example` to `.env.local` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
-   from Settings → API.
-3. Apply the schema: open Supabase SQL editor, paste `supabase/migrations/0001_init.sql`, Run.
-4. Sign in once via `/login` so an `auth.users` row exists for the player email.
-5. Apply `supabase/seed.sql` (it joins `auth.users` by email) to insert the canonical character.
-6. To grant DM access, log the DM in once, then in SQL: `insert into dm_users (user_id) select id from auth.users where email = 'DM_EMAIL';`
-
 ## Phase 0 smoke test (proves the loop)
 - Login → land on `/` → topbar shows HP 52/52 and the three story cards render from `progress.stories`.
 - Topbar HP `−` / `+` writes through to `characters.sheet.hp.current`; reload preserves the new value.
@@ -57,9 +47,50 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 ## Project layout
 - `src/lib/` — `supabase.ts` (client), `auth.tsx` (session + magic link), `character.ts` (row hook + section update), `database.types.ts` (hand-written types, replace with `supabase gen types` later).
 - `src/components/Layout.tsx` + `Topbar.tsx` (HP pill = Phase 0 write surface) + `Bottombar.tsx` + `Nav.tsx` — the shared chrome from the Codex mockup, identical across routes.
-- `src/screens/Codex.tsx` — wired end-to-end (reads `progress.stories[]`). The other eight screens are `Stub`s that dump their owning JSONB section as JSON; visual ports are Phase 1+ work.
+- `src/screens/Codex.tsx`, `Stats.tsx`, `Equipment.tsx`, `Inventory.tsx`, `Features.tsx`, `Journal.tsx` are wired end-to-end. The remaining four screens (`character`, `shard`, `lore`, `spellbook`) are `Stub`s that dump their owning JSONB section as JSON; visual ports are Phase 1+ work.
 - `src/styles/tokens.css` + `global.css` — design tokens (CSS vars) shared by all screens.
 - `supabase/migrations/0001_init.sql` + `supabase/seed.sql` — paste-and-run via the Supabase SQL editor.
 
+## Recurring bug: chamfered clip-path corners lose their border
+Any element with a chamfered `clip-path` (the `polygon(Npx 0, 100% 0, 100% calc(100% - Npx), ...)`
+cut-corner shape used everywhere in this UI) that also styles its edge with a plain CSS `border`
+will render **bare 45° corners** — the border draws fine on the straight edges, but clip-path
+slices the diagonal corner off with no border pixels on it at all. This has been fixed
+independently at least twice (`ab9a53c`, and again on the Journal screen's `.badge`) because it's
+easy to write the plain-border version first and only notice the missing diagonal at real zoom.
+
+**The fix, applied via CSS variables, never `border-color` + shorthand `background`:**
+```css
+.thing {
+  --cut: 5px;                        /* must match the clip-path chamfer size */
+  --bc: rgba(212, 191, 125, 0.55);   /* the "border" color */
+  border: 1px solid var(--bc);       /* still needed for the straight edges */
+  clip-path: polygon(var(--cut) 0, 100% 0,
+    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+    0 100%, 0 var(--cut));
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
+```
+The two gradients paint the diagonal stroke that a straight-line `border` physically cannot draw
+along an oblique clip-path edge (`0.7071` ≈ 1/√2, the perpendicular offset of a 45° line). Variants
+must override `--bc` and `background-color` — never `border-color` (the base rule already keys
+`border` off `--bc`) and never the `background` shorthand (it silently resets `background-image`
+to `none` and the fix disappears again). Existing examples: `.qFacing` in
+`OperatorConsole.module.css`, `.panel`/`.cHead` in `Features.module.css`, and others across
+`Inventory.module.css`, `Equipment.module.css`, `Stats.module.css`, `Codex.module.css` — grep
+`0.7071` for the full list before writing a new chamfered+bordered element from scratch.
+
 ## Other guides
 - Inventory refactor spec: docs/GUIDE_Codex_Inventory_Refactor.md
+
+## Subagent Usage
+- Always delegate file searches and grep operations to subagents
+- Use subagents for independent implementation tasks that don't need shared context
+- Prefer parallel subagents over sequential work in the main context
+- Subagents should return concise summaries, not raw file contents

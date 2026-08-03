@@ -8,6 +8,7 @@ import { Stats } from './screens/Stats'
 import { Equipment } from './screens/Equipment'
 import { Features } from './screens/Features'
 import { Inventory } from './screens/Inventory'
+import { Journal } from './screens/Journal'
 import { OperatorConsole } from './screens/OperatorConsole'
 
 export const router = createBrowserRouter([
@@ -32,8 +33,7 @@ export const router = createBrowserRouter([
           blurb="3 shard slots: G.U.I.D.E. (locked), Vigor (active), empty. Opens the Shard Tree modal — already a data-driven template." /> },
       { path: 'lore', element: <Stub title="Lore" section="lore"
           blurb="Backstory prose, personality (TIBF), relations. Read-only for players; DM-authored." /> },
-      { path: 'journal', element: <Stub title="Journal" section="progress"
-          blurb="Quests and sessions. Mutates objective done-flags; content is DM-authored." /> },
+      { path: 'journal', element: <Journal /> },
       { path: 'spellbook', element: <Stub title="Spellbook" section="spellbook"
           blurb="Caster profile + known/prepared spells + slot state. Empty-state path when spellcasting:false." /> },
       { path: '*', element: <Navigate to="/" replace /> },
