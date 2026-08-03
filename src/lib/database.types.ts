@@ -423,6 +423,10 @@ export type CharacterSecretUpdate = Partial<Omit<CharacterSecret, 'character_id'
 export type QuestType = 'main' | 'side'
 export type QuestStatus = 'active' | 'completed' | 'failed'
 export type QuestObjective = { text: string; done: boolean }
+/** `url`, when present, opens in a new tab from the player Journal — e.g. a
+ *  link into the DM's own world database. Optional so a tag can be a bare
+ *  name with nothing to link to. */
+export type RelatedTag = { name: string; url?: string }
 
 export type QuestRow = {
   id: string
@@ -433,7 +437,9 @@ export type QuestRow = {
   given_by: string
   description: string        // player-facing
   objectives: QuestObjective[]
-  related: string[]          // tag names
+  /** Rows written before this field existed are plain strings — every reader
+   *  must accept `RelatedTag | string`, never assume the object shape. */
+  related: RelatedTag[]
   created_at: string         // stable list order
   updated_at: string
 }

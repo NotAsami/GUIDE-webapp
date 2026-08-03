@@ -80,8 +80,15 @@ export function Equipment() {
 
   /** Move an inventory item into a gear slot — single atomic write so the item
    *  is never in both places (or neither) on a partial failure. The move math is
-   *  shared with Inventory (lib/equip) so there's one owner of the operation. */
+   *  shared with Inventory (lib/equip) so there's one owner of the operation.
+   *
+   *  Attunement is enforced HERE, not just as a picker hint: a slot is always
+   *  empty when this fires (the modal shows the picker only for an empty slot),
+   *  so equipping is always a net +1 to attunedCount. Refuse rather than write
+   *  past the cap — the readout would otherwise show "4 / 3" with nothing that
+   *  ever brought it back down, since there's no over-cap unattune prompt. */
   async function equip(slot: ItemSlot, item: InventoryItem) {
+    if (consumesAttunement(item) && attunedCount(gear) >= attunementCap(character)) return
     setOpenSlot(null)
     await updateSections(equipGearPatch(item, slot, gear, inventory))
   }
@@ -330,6 +337,8 @@ export function Equipment() {
           slot={GEAR_SLOTS.find(s => s.key === openSlot)!}
           item={gear[openSlot] ?? null}
           candidates={inventory.filter(i => i.slot === openSlot)}
+          attuned={attuned}
+          attCap={attCap}
           onEquip={item => void equip(openSlot, item)}
           onUnequip={() => void unequip(openSlot)}
           onClose={() => setOpenSlot(null)}
@@ -697,10 +706,12 @@ function ShardBar({ guideShard, bind }: { guideShard: EquippedItem | null; bind:
 
 /* ---------- equip / unequip modal ---------- */
 
-function EquipModal({ slot, item, candidates, onEquip, onUnequip, onClose }: {
+function EquipModal({ slot, item, candidates, attuned, attCap, onEquip, onUnequip, onClose }: {
   slot: SlotConfig
   item: EquippedItem | null
   candidates: InventoryItem[]
+  attuned: number
+  attCap: number
   onEquip: (item: InventoryItem) => void
   onUnequip: () => void
   onClose: () => void
@@ -730,7 +741,7 @@ function EquipModal({ slot, item, candidates, onEquip, onUnequip, onClose }: {
             {item ? (
               <DetailBody item={item} slot={slot} />
             ) : (
-              <SelectorBody slot={slot} candidates={candidates} onEquip={onEquip} />
+              <SelectorBody slot={slot} candidates={candidates} attuned={attuned} attCap={attCap} onEquip={onEquip} />
             )}
           </div>
 
@@ -766,8 +777,8 @@ function DetailBody({ item, slot }: { item: EquippedItem; slot: SlotConfig }) {
 }
 
 /** Inventory picker for an empty slot. */
-function SelectorBody({ slot, candidates, onEquip }: {
-  slot: SlotConfig; candidates: InventoryItem[]; onEquip: (item: InventoryItem) => void
+function SelectorBody({ slot, candidates, attuned, attCap, onEquip }: {
+  slot: SlotConfig; candidates: InventoryItem[]; attuned: number; attCap: number; onEquip: (item: InventoryItem) => void
 }) {
   if (candidates.length === 0) {
     return (
@@ -777,18 +788,27 @@ function SelectorBody({ slot, candidates, onEquip }: {
       </div>
     )
   }
+  const attunementFull = attuned >= attCap
   return (
     <div className={styles.selectorList}>
-      {candidates.map(it => (
-        <div key={it.id ?? it.name} className={styles.pickRow} data-rarity={it.rarity ?? 'common'}>
-          <span className={styles.pkIcon}><i className={`fa-solid ${it.icon ?? slot.icon}`} /></span>
-          <span className={styles.pkBody}>
-            <span className={styles.pkName}>{it.name}</span>
-            <span className={styles.pkMeta}>{rarityLabel(it.rarity ?? 'common')}{it.qty && it.qty > 1 ? ` · × ${it.qty}` : ''}</span>
-          </span>
-          <button className={styles.pkBtn} onClick={() => onEquip(it)}>Equip</button>
-        </div>
-      ))}
+      {candidates.map(it => {
+        // A slot picked from here is always currently empty, so equipping is
+        // always a net +1 — block only the items that would actually spend a
+        // slot, not the whole list, when attunement is already at cap.
+        const locked = attunementFull && consumesAttunement(it)
+        return (
+          <div key={it.id ?? it.name} className={`${styles.pickRow}${locked ? ' ' + styles.locked : ''}`} data-rarity={it.rarity ?? 'common'}>
+            <span className={styles.pkIcon}><i className={`fa-solid ${it.icon ?? slot.icon}`} /></span>
+            <span className={styles.pkBody}>
+              <span className={styles.pkName}>{it.name}</span>
+              <span className={styles.pkMeta}>
+                {locked ? `Attunement full · ${attuned} / ${attCap}` : `${rarityLabel(it.rarity ?? 'common')}${it.qty && it.qty > 1 ? ` · × ${it.qty}` : ''}`}
+              </span>
+            </span>
+            <button className={styles.pkBtn} onClick={() => onEquip(it)} disabled={locked}>Equip</button>
+          </div>
+        )
+      })}
     </div>
   )
 }
