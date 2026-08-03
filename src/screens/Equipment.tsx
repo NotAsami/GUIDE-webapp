@@ -11,7 +11,7 @@ import { Deco } from '../components/Deco'
 import { formatMod } from '../lib/dnd'
 import {
   attunedCount, attunementCap, consumesAttunement, containerContents,
-  equipContainerPatch, equipGearPatch, equipWeaponPatch, getContainers,
+  equipContainerPatch, equipGearPatch, equipWeaponPatch, getContainers, isRingSlot,
   stowedContainers, unequipContainerPatch, unequipGearPatch, unequipWeaponPatch,
 } from '../lib/equip'
 import { CarrySidebar } from './EquipmentCarry'
@@ -80,17 +80,14 @@ export function Equipment() {
 
   /** Move an inventory item into a gear slot — single atomic write so the item
    *  is never in both places (or neither) on a partial failure. The move math is
-   *  shared with Inventory (lib/equip) so there's one owner of the operation.
-   *
-   *  Attunement is enforced HERE, not just as a picker hint: a slot is always
-   *  empty when this fires (the modal shows the picker only for an empty slot),
-   *  so equipping is always a net +1 to attunedCount. Refuse rather than write
-   *  past the cap — the readout would otherwise show "4 / 3" with nothing that
-   *  ever brought it back down, since there's no over-cap unattune prompt. */
+   *  shared with Inventory (lib/equip) so there's one owner of the operation —
+   *  including the attunement cap check, enforced inside equipGearPatch itself
+   *  so Inventory's one-tap equip can't bypass it. */
   async function equip(slot: ItemSlot, item: InventoryItem) {
-    if (consumesAttunement(item) && attunedCount(gear) >= attunementCap(character)) return
+    const p = equipGearPatch(item, slot, gear, inventory, character)
+    if (!p) return
     setOpenSlot(null)
-    await updateSections(equipGearPatch(item, slot, gear, inventory))
+    await updateSections(p)
   }
 
   /** Move the equipped item in a slot back to the inventory (atomic). */
@@ -336,7 +333,9 @@ export function Equipment() {
         <EquipModal
           slot={GEAR_SLOTS.find(s => s.key === openSlot)!}
           item={gear[openSlot] ?? null}
-          candidates={inventory.filter(i => i.slot === openSlot)}
+          candidates={inventory.filter(i => (
+            isRingSlot(openSlot) ? (i.slot && isRingSlot(i.slot)) : i.slot === openSlot
+          ))}
           attuned={attuned}
           attCap={attCap}
           onEquip={item => void equip(openSlot, item)}

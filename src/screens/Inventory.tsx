@@ -10,7 +10,7 @@ import { useItemTooltip } from '../components/ItemTooltip'
 import { burden, fmtWeight, itemWeight } from '../lib/burden'
 import { consumeEffect } from '../lib/consume'
 import {
-  TAB_KIND_ORDER, equipTargetPatch, freshItemId, getGear, getInventory,
+  TAB_KIND_ORDER, attunedCount, attunementCap, equipTargetPatch, freshItemId, getGear, getInventory,
   resolveEquipTarget,
 } from '../lib/equip'
 import {
@@ -234,8 +234,19 @@ export function Inventory() {
     if (busy) return
     const target = resolveEquipTarget(item, gear)
     if (target.kind === 'none') return
-    const p = equipTargetPatch(item, target, gear, inventory)
-    if (!p) return
+    const p = equipTargetPatch(item, target, gear, inventory, character)
+    if (!p) {
+      // The only reason equipTargetPatch refuses a 'gear' target is the
+      // attunement cap (lib/equip.ts) — say so, rather than a silent no-op.
+      if (target.kind === 'gear') {
+        addRoll({
+          kind: 'custom', title: item.name, subtitle: 'Attunement full',
+          icon: item.icon ?? 'fa-ring',
+          lines: [{ label: 'Cannot equip', total: '—', breakdown: `Already attuned to ${attunedCount(gear)} / ${attunementCap(character)} items` }],
+        })
+      }
+      return
+    }
     setBusy(true); setPopupId(null)
     await updateSections(p)
     setBusy(false)

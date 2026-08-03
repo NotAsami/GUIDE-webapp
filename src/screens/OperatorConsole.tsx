@@ -13,7 +13,7 @@ import type {
   Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, CatalogFeatureData,
   EquippedGear,
 } from '../lib/database.types'
-import { ITEM_SLOTS, PERSON } from '../lib/equip'
+import { ITEM_SLOTS, PERSON, isRingSlot } from '../lib/equip'
 import { place, routeItem } from '../lib/placement'
 import { OperatorInventory } from './OperatorInventory'
 import styles from './OperatorConsole.module.css'
@@ -645,6 +645,15 @@ const RAR_DEF: Record<ItemRarity, { label: string; token: string }> = {
   legendary: { label: 'Legendary', token: 'var(--rar-legend)' },
 }
 const GEAR_SLOTS: readonly ItemSlot[] = ITEM_SLOTS
+/** Ring I and Ring II are mechanically identical (lib/equip.ts isRingSlot) —
+ *  the catalog offers ONE "Ring" choice rather than making the DM pre-commit
+ *  an item to a specific finger. Equip-time resolution picks whichever ring
+ *  slot is actually free. */
+const SLOT_OPTIONS: readonly ItemSlot[] = GEAR_SLOTS.filter(s => s !== 'ring2')
+const SLOT_LABEL: Record<ItemSlot, string> = {
+  helmet: 'Helmet', armor: 'Armor', cloak: 'Cloak', boots: 'Boots',
+  gloves: 'Gloves', neck: 'Neck', ring1: 'Ring', ring2: 'Ring',
+}
 const WEAPON_ABILITIES: WeaponAbility[] = ['str', 'dex', 'finesse']
 const ITEM_ICONS = [
   'fa-khanda', 'fa-hammer', 'fa-bullseye', 'fa-gavel', 'fa-wand-sparkles', 'fa-staff-snake',
@@ -658,25 +667,83 @@ const catDef = (c?: ItemCategory) => CAT_DEF[c ?? 'misc'] ?? CAT_DEF.misc
 
 function firstName(name: string) { return name.split(' ')[0] }
 
+/** Ammo/consumable/misc are fungible stacks — 20 arrows are one "Arrows ×20"
+ *  entry, not 20 rows. Gear and weapons are always distinct instances even
+ *  sharing a name (a granted "Dagger" doesn't merge with another Dagger). */
+function isStackable(category?: ItemCategory): boolean {
+  return category === 'ammo' || category === 'consumable' || category === 'misc'
+}
+
 /** Build a fresh inventory instance from a catalog template: a self-describing
- *  snapshot of the template `data` + a unique instance id + the `item_id` back-ref.
- *  Stackables (consumable/misc) get qty 1 so the grid renders a count badge. */
+ *  snapshot of the template `data` + a unique instance id + the `item_id`
+ *  back-ref, routed to its destination. Stackable categories carry `qty`;
+ *  everything else is always exactly one unit. */
 function grantSnapshot(
-  item: CatalogItemRow, gear: EquippedGear, inventory: InventoryItem[],
+  item: CatalogItemRow, qty: number, gear: EquippedGear, inventory: InventoryItem[],
 ): InventoryItem {
   const inst = `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
   const data = item.data ?? ({} as CatalogItemData)
-  const stackable = data.category === 'consumable' || data.category === 'misc'
   const fresh = {
     ...data, id: inst, item_id: item.id,
     containerId: PERSON,
-    ...(stackable ? { qty: 1 } : {}),
+    ...(isStackable(data.category) ? { qty } : {}),
   } as InventoryItem
   // Granted items go through the SAME routing chain as anything else picked up:
   // arrows fall into the quiver, everything else takes the first free cell on
   // person and overflows to a bag. This is what retired the grant-destination
   // picker — the DM never has to choose a container.
   return place(fresh, routeItem(fresh, gear, inventory))
+}
+
+/** Grant `qty` copies of a catalog template in ONE inventory write. Stackable
+ *  categories merge into a matching stack already sitting in the routed
+ *  destination — same name, same category, same container, not locked —
+ *  instead of adding a second row: granting 20 arrows into a quiver that
+ *  already holds 12 produces one "Arrows ×32" stack. Gear and weapons are
+ *  always distinct instances: qty copies route one at a time (routing sees
+ *  each previous copy already placed), the same result as clicking Grant qty
+ *  times, just one DB write instead of qty round trips. */
+/** The numeric capacity of the equipped container with this id, or null for
+ *  an uncapped one (bag of holding, backpack) — mirrors the lookup routeItem
+ *  does internally, needed here to know how many units still fit before a
+ *  merge would silently push a capped container (a quiver) over its cap. */
+function containerCapacity(gear: EquippedGear, containerId: string): number | null {
+  for (const c of Object.values(gear.containers ?? {})) {
+    if (c?.id === containerId) return c.container?.capacity ?? null
+  }
+  return null
+}
+
+function grantSnapshots(
+  item: CatalogItemRow, qty: number, gear: EquippedGear, inventory: InventoryItem[],
+): InventoryItem[] {
+  const data = item.data ?? ({} as CatalogItemData)
+  if (!isStackable(data.category)) {
+    let next = inventory
+    for (let i = 0; i < qty; i++) next = [...next, grantSnapshot(item, 1, gear, next)]
+    return next
+  }
+  // Route and merge in BATCHES per destination, not per unit — a batch that
+  // fills a capped container (the quiver) short of the full qty falls
+  // through to the next chain step for the remainder, exactly like N solo
+  // grants would, but in as many iterations as there are destinations
+  // (typically 1, at most a handful), never qty of them.
+  let next = inventory
+  let remaining = qty
+  while (remaining > 0) {
+    const probe = grantSnapshot(item, remaining, gear, next)
+    const dest = probe.containerId
+    const cap = containerCapacity(gear, dest)
+    const already = cap != null ? next.filter(i => i.containerId === dest).reduce((n, i) => n + (i.qty ?? 1), 0) : 0
+    const take = cap != null ? Math.max(1, Math.min(remaining, cap - already)) : remaining
+    const existing = next.find(i =>
+      i.containerId === dest && i.name === probe.name && i.category === probe.category && !i.locked)
+    next = existing
+      ? next.map(i => (i === existing ? { ...i, qty: (i.qty ?? 1) + take } : i))
+      : [...next, { ...probe, qty: take }]
+    remaining -= take
+  }
+  return next
 }
 
 /** Grant Item: search the catalog, pick a template, snapshot it into this PC's
@@ -694,6 +761,7 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
 }) {
   const [query, setQuery] = useState('')
   const [selId, setSelId] = useState<string | null>(null)
+  const [qty, setQty] = useState(1)
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState('')
 
@@ -706,16 +774,18 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
     setBusy(true)
     const inv = ((row.inventory as unknown as InventoryItem[]) ?? [])
     const gear = (row.equipped ?? {}) as EquippedGear
-    const ok = await onUpdate({ inventory: [...inv, grantSnapshot(selected, gear, inv)] as unknown as Json[] })
+    const ok = await onUpdate({ inventory: grantSnapshots(selected, qty, gear, inv) as unknown as Json[] })
     setBusy(false)
     if (!ok) return
     const d = selected.data
-    // Realtime ping → the player's ITEM ACQUIRED toast; the item itself already
-    // landed via the inventory write (and streams in through live read-sync).
-    void onVoice({ kind: 'item', target: member.id, name: d?.name ?? 'Item', icon: d?.icon, rarity: d?.rarity })
-    log(<>Granted <span className={styles.obj}>{d?.name ?? 'item'}</span> to <span className={styles.who}>{firstName(member.name)}</span></>, 'cyan')
-    setFlash(`Granted ${d?.name ?? 'item'}`)
+    const name = d?.name ?? 'Item'
+    // One toast/log line per grant action, not per copy — a stack of 10
+    // wouldn't need 10 separate ITEM ACQUIRED pings on the player's screen.
+    void onVoice({ kind: 'item', target: member.id, name: qty > 1 ? `${name} ×${qty}` : name, icon: d?.icon, rarity: d?.rarity })
+    log(<>Granted <span className={styles.obj}>{qty > 1 ? `${name} ×${qty}` : name}</span> to <span className={styles.who}>{firstName(member.name)}</span></>, 'cyan')
+    setFlash(`Granted ${qty > 1 ? `×${qty} ` : ''}${name}`)
     setSelId(null)
+    setQty(1)
     setTimeout(() => setFlash(''), 2400)
   }
 
@@ -746,8 +816,13 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
         })}
       </div>
       <div className={styles.grantAction}>
+        <input
+          className={cx(styles.numIn, styles.grantQty)} type="number" min={1} max={99}
+          value={qty} onChange={e => setQty(Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)))}
+          aria-label="Quantity to grant"
+        />
         <Btn tone="amber" icon="fa-arrow-right-to-bracket"
-          label={flash || (busy ? 'Granting…' : `Grant to ${firstName(member.name)}`)}
+          label={flash || (busy ? 'Granting…' : qty > 1 ? `Grant ×${qty} to ${firstName(member.name)}` : `Grant to ${firstName(member.name)}`)}
           onClick={() => void grant()} disabled={!selected || busy} />
       </div>
     </div>
@@ -1335,8 +1410,12 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
       {isSlotted(category) && (
         <>
           <span className={styles.fieldLab}>Equip Slot</span>
-          <select className={cx(styles.selIn, styles.slotSel)} value={slot} onChange={e => setSlot(e.target.value as ItemSlot)}>
-            {GEAR_SLOTS.map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+          <select
+            className={cx(styles.selIn, styles.slotSel)}
+            value={isRingSlot(slot) ? 'ring1' : slot}
+            onChange={e => setSlot(e.target.value as ItemSlot)}
+          >
+            {SLOT_OPTIONS.map(s => <option key={s} value={s}>{SLOT_LABEL[s]}</option>)}
           </select>
         </>
       )}

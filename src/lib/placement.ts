@@ -131,9 +131,13 @@ function containerOf(gear: EquippedGear, kind: string): EquippedItem | undefined
   return gear.containers?.[kind] ?? undefined
 }
 
+/** Units held, not row count — a merged "Arrows ×20" stack is ONE inventory
+ *  entry but fills 20 of a quiver's capacity, same as 20 separate qty:1
+ *  entries would. Counting `.length` here would let a stack grow unbounded
+ *  the moment two grants merge into one row instead of two. */
 function contentCount(inventory: InventoryItem[], containerId: string | undefined): number {
   if (!containerId) return 0
-  return inventory.filter(i => i.containerId === containerId).length
+  return inventory.filter(i => i.containerId === containerId).reduce((n, i) => n + (i.qty ?? 1), 0)
 }
 
 /**

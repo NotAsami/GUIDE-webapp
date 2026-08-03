@@ -18,7 +18,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { EquippedGear, EquippedItem, InventoryItem } from '../lib/database.types'
 import { fmtWeight, itemWeight } from '../lib/burden'
-import { getContainers, type EquipTarget } from '../lib/equip'
+import { getContainers, isRingSlot, type EquipTarget } from '../lib/equip'
 import { PERSON, freeCellFor } from '../lib/placement'
 import { CAT_LABEL, rarityLabel } from '../lib/items'
 import styles from './InventoryPopup.module.css'
@@ -61,7 +61,10 @@ function stowTargets(
     const allowed = def.allowedCategories
     if (allowed?.length && !(item.category && allowed.includes(item.category))) return false
     if (def.capacity != null) {
-      const held = inventory.filter(i => i.containerId === c.id).length
+      // Units held, not row count — a merged stack (one entry, qty > 1)
+      // still fills that many units of capacity. See lib/placement.ts
+      // contentCount for the same rule.
+      const held = inventory.filter(i => i.containerId === c.id).reduce((n, i) => n + (i.qty ?? 1), 0)
       if (held >= def.capacity) return false
     }
     return true
@@ -116,11 +119,19 @@ export function ItemPopup({
     ['Value', item.value ? `${item.value.toLocaleString()} gp` : '—'],
     [cat === 'weapon' ? 'Damage' : cat === 'armor' ? 'Armor' : 'Key Stat',
       item.damage ?? item.damageDice ?? item.rows?.[0]?.[1] ?? '—'],
-    ['Slot', item.slot ? item.slot.replace(/^\w/, c => c.toUpperCase()) : asContainer ? 'Carry' : 'Not equippable'],
+    ['Slot', item.slot
+      ? isRingSlot(item.slot) ? 'Ring' : item.slot.replace(/^\w/, c => c.toUpperCase())
+      : asContainer ? 'Carry' : 'Not equippable'],
   ]
   if (item.attune) facts.push(['Attunement', item.attune])
   if (asContainer) {
-    const held = inventory.filter(i => i.containerId === item.id).length
+    const contents = inventory.filter(i => i.containerId === item.id)
+    // A capacity-limited container (a quiver) reads in units — a merged
+    // "Arrows ×20" stack still fills 20 of 20. An uncapped bag reads in
+    // distinct items instead: how many different things are in here.
+    const held = asContainer.capacity != null
+      ? contents.reduce((n, i) => n + (i.qty ?? 1), 0)
+      : contents.length
     facts.push(['Holds', `${held}${asContainer.capacity ? ` / ${asContainer.capacity}` : ''} items`])
     facts.push(['Access', asContainer.mode === 'inline'
       ? 'Drawn automatically'

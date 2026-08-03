@@ -24,8 +24,11 @@
   animation: toastIn 220ms cubic-bezier(.2, .7, .2, 1);
 }
 .toast::before {
+  /* 1.5px, not 1px — the fractional-zoom rounding fix (see CLAUDE.md): this
+     inset is the whole visible border (the fill showing through), and a
+     strict 1px ring can round away on one edge at 110% zoom. */
   content: "";
-  position: absolute; inset: 1px;
+  position: absolute; inset: 1.5px;
   background: rgba(8, 8, 8, 0.97);
   clip-path: polygon(11px 0, 100% 0,
     100% calc(100% - 11px), calc(100% - 11px) 100%,

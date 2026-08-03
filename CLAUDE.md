@@ -130,8 +130,10 @@ zoom shifts the box's device-pixel alignment as it scrolls, so a line that's fin
 page can vanish once you scroll it elsewhere, then reappear on the next re-render). First diagnosed
 and fixed in `ab9a53c` (`.opSigil::before`, `.ovEntry::before`), then found unfixed on six more
 identical `::before` frames (`.pcCard`, `.pcPortrait`, `.dashRow`, `.selPortrait`, `.actCard` — the
-Vitals/Currency/Status cards — `.catItem`, plus `SystemToasts.module.css`'s `.tgIc`), and again as a
-plain `border: 1px solid` on `.qPlayerDesc` (Player Description) and `.gmNotes` (GM Notes).
+Vitals/Currency/Status cards — `.catItem`), plus `SystemToasts.module.css`'s `.tgIc::before` and
+`RollToast.module.css`'s `.toast::before` (the dice-roll popup), and again as a plain
+`border: 1px solid` on `.qPlayerDesc` (Player Description), `.gmNotes` (GM Notes), and
+`SystemToasts.module.css`'s `.toast` (the DM broadcast popup).
 
 **The fix is always the same number: `1px` → `1.5px`.** For a `::before` frame: bump `inset`. For a
 real border: bump the width (`border: 1.5px solid ...`; keep any `border-left`/other accent width
