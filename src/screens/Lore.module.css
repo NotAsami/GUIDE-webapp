@@ -1,0 +1,395 @@
+/* Lore screen. Shared chrome (topbar, dock nav, tickers, side-rails, bottombar)
+   lives in Layout / Nav / Deco; this module owns the two-column body: a left
+   DOSSIER region (portrait + identity vitals, non-scrolling frame around a
+   scrolling vitals list) and a right RECORD region (one scrolling reading
+   panel: Backstory / Nature / Relations).
+
+   Layout model matches Journal: position:fixed body between the dock nav and
+   the bottombar, with a row floor so a short viewport scrolls instead of
+   crushing the panels. Both regions are elastic (.rInner stays
+   position:absolute) — do NOT switch to the in-flow .rInner variant, it
+   breaks the `flex:1; min-height:0; overflow:auto` children below it. */
+
+.lore {
+  position: fixed;
+  top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
+  bottom: calc(var(--bar-bottom-h) + 18px);
+  left: 0; right: 0;
+  display: grid;
+  grid-template-columns: 34fr 66fr;
+  grid-template-rows: minmax(var(--screen-min-h), 1fr);
+  gap: 22px;
+  padding: 0 34px;
+  z-index: 10;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.lore::-webkit-scrollbar { width: 8px; }
+.lore::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15);
+}
+.lore::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  border: 2px solid #111;
+}
+
+.col { position: relative; display: flex; flex-direction: column; min-width: 0; }
+
+/* --- Column-level chrome (identical to Journal/Equipment) --- */
+.colHeader {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 10px;
+  padding: 0 2px 7px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
+  flex: 0 0 auto;
+}
+.chNum {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+}
+.chTitle {
+  font-family: var(--font-mono); font-size: 12px;
+  letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
+}
+.chMeta {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+}
+.chMeta :global(.acc) { color: var(--cyan); }
+.chMeta :global(.dim) { color: var(--beige-dim); }
+
+/* ----- Framed region: angular clip + beige double-line ----- */
+.region {
+  --cut: 16px;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.rFrame {
+  position: absolute; inset: 0;
+  background: var(--beige);
+  clip-path: polygon(var(--cut) 0, 100% 0,
+    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+    0 100%, 0 var(--cut));
+}
+.rGap {
+  position: absolute; inset: 1.5px;
+  background: var(--bg);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+    100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+    0 100%, 0 calc(var(--cut) - 1px));
+}
+.rLine {
+  position: absolute; inset: 4px;
+  background: var(--beige); opacity: 0.42;
+  clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
+    100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
+    0 100%, 0 calc(var(--cut) - 4px));
+}
+.rInner {
+  position: absolute; inset: 5.5px;
+  background:
+    radial-gradient(130% 100% at 50% 0%, rgba(0, 166, 214, 0.05), transparent 60%),
+    linear-gradient(180deg, #151515, #0e0e0e);
+  clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0,
+    100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%,
+    0 100%, 0 calc(var(--cut) - 5px));
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.rInner::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: repeating-linear-gradient(to bottom,
+    rgba(0, 166, 214, 0.035) 0px, rgba(0, 166, 214, 0.035) 1px,
+    transparent 1px, transparent 4px);
+  mix-blend-mode: screen; opacity: 0.6;
+}
+/* 1.5px, not 1px — bare border-top/border-left rounds away at fractional zoom. */
+.rCorner {
+  position: absolute; width: 14px; height: 14px;
+  border-color: var(--cyan); opacity: 0.7; z-index: 5; pointer-events: none;
+}
+.rCorner.tl { top: 9px; left: 9px; border-top: 1.5px solid; border-left: 1.5px solid; }
+.rCorner.br { bottom: 9px; right: 9px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
+
+/* shared thin scrollbar */
+.scrollY {
+  overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent;
+}
+.scrollY::-webkit-scrollbar { width: 7px; }
+.scrollY::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
+.scrollY::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.45));
+  border: 2px solid #111;
+}
+
+/* ============================================================
+   01  DOSSIER — portrait + identity vitals
+   ============================================================ */
+.dossierPad {
+  position: relative; z-index: 1;
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  padding: 16px 16px 14px;
+}
+
+/* --- Portrait frame --- */
+.bioPortrait {
+  --cut: 20px;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 190px;
+  cursor: default;
+}
+.bioPortrait::before {
+  content: ""; position: absolute; inset: 0;
+  background: var(--beige);
+  clip-path: polygon(var(--cut) 0, 100% 0,
+    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+    0 100%, 0 var(--cut));
+}
+.bpLine {
+  position: absolute; inset: 4px;
+  background: var(--beige); opacity: 0.5;
+  clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
+    100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
+    0 100%, 0 calc(var(--cut) - 4px));
+}
+.bpInner {
+  position: absolute; inset: 6px;
+  background:
+    radial-gradient(120% 90% at 50% 50%, rgba(0, 166, 214, 0.10), transparent 65%),
+    linear-gradient(180deg, #161616, #0d0d0d);
+  clip-path: polygon(calc(var(--cut) - 6px) 0, 100% 0,
+    100% calc(100% - var(--cut) + 6px), calc(100% - var(--cut) + 6px) 100%,
+    0 100%, 0 calc(var(--cut) - 6px));
+  box-shadow: inset 0 0 44px rgba(0, 166, 214, 0.10), inset 0 0 1px rgba(212, 191, 125, 0.25);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.bpInner::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+  background: repeating-linear-gradient(to bottom,
+    rgba(0, 166, 214, 0.07) 0px, rgba(0, 166, 214, 0.07) 1px,
+    transparent 1px, transparent 4px);
+  mix-blend-mode: screen; opacity: 0.7;
+}
+.bpGrid {
+  position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background-image:
+    linear-gradient(rgba(0, 166, 214, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 166, 214, 0.06) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(120% 100% at 50% 40%, #000 55%, transparent 100%);
+}
+.bpArt { position: relative; z-index: 1; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.bpFigure { font-size: clamp(90px, 16vh, 200px); color: var(--beige); opacity: 0.42; filter: drop-shadow(0 0 18px rgba(212, 191, 125, 0.2)); }
+.bpImg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center top;
+  z-index: 0;
+  filter: saturate(1.05) contrast(1.02);
+}
+.bpCorner { position: absolute; width: 18px; height: 18px; border-color: var(--cyan); opacity: 0.85; z-index: 3; pointer-events: none; }
+.bpCorner.tl { top: 11px; left: 11px; border-top: 1.5px solid; border-left: 1.5px solid; }
+.bpCorner.tr { top: 11px; right: 11px; border-top: 1.5px solid; border-right: 1.5px solid; }
+.bpCorner.bl { bottom: 11px; left: 11px; border-bottom: 1.5px solid; border-left: 1.5px solid; }
+.bpCorner.br { bottom: 11px; right: 11px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
+.bpIdx {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.24em;
+  color: var(--cyan); opacity: 0.7; z-index: 3;
+}
+.bpTag {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--beige);
+  z-index: 3;
+}
+.lockDot { width: 5px; height: 5px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+
+/* --- Nameplate + vitals --- */
+.nameplate { margin-top: 16px; text-align: center; flex: 0 0 auto; }
+.npName {
+  font-family: var(--font-display); font-weight: 600; font-size: 22px;
+  letter-spacing: 0.1em; color: var(--beige); text-transform: uppercase;
+}
+.npSub {
+  margin-top: 4px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.22em;
+  color: var(--cyan); text-transform: uppercase;
+}
+.sep { color: var(--beige-dim); }
+
+.vitalsRule { margin-top: 16px; height: 1px; background: rgba(212, 191, 125, 0.25); flex: 0 0 auto; }
+.vitalsLabel {
+  margin-top: 10px; margin-bottom: 6px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em;
+  color: var(--muted); text-transform: uppercase; flex: 0 0 auto;
+}
+.vitalsLabel :global(.acc) { color: var(--cyan); }
+.vitals { flex: 1 1 auto; min-height: 60px; display: flex; flex-direction: column; gap: 2px; }
+.vital {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 6px 2px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.1);
+  font-family: var(--font-mono); font-size: 11px;
+}
+.vK { color: var(--beige-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+.vV { color: var(--text); }
+.vV.muted { color: var(--muted); }
+
+/* ============================================================
+   02  RECORD — the reading panel
+   ============================================================ */
+.readPad { position: relative; z-index: 1; flex: 1; min-height: 0; }
+.readInner { max-width: 700px; margin: 0 auto; padding: 36px 48px 44px; }
+
+.dossierSec + .dossierSec { margin-top: 46px; }
+.secLabel {
+  display: flex; align-items: baseline; gap: 8px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.3em;
+  color: var(--beige); text-transform: uppercase;
+  padding-bottom: 8px; margin-bottom: 16px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.2);
+}
+.secLabel .num { color: var(--cyan); }
+
+.stateSub {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.14em;
+  color: var(--muted); text-transform: uppercase;
+}
+
+/* --- Backstory prose --- */
+.prose { font-family: var(--font-prose); font-size: 16.5px; line-height: 1.8; color: var(--text); }
+.prose p { margin: 0 0 1em; text-wrap: pretty; }
+.prose p:last-child { margin-bottom: 0; }
+.prose p:first-of-type strong {
+  font-family: var(--font-display); font-size: 15px; color: var(--cyan-hot);
+  letter-spacing: 0.04em; font-weight: 600;
+}
+.prose h1, .prose h2, .prose h3 {
+  font-family: var(--font-display); color: var(--beige); text-transform: uppercase;
+  letter-spacing: 0.08em; margin: 1.2em 0 0.6em;
+}
+.prose h1 { font-size: 20px; }
+.prose h2 { font-size: 16px; }
+.prose h3 { font-size: 13px; }
+.prose a, .natCard a, .relDesc a { color: var(--cyan); text-decoration: underline; text-decoration-color: rgba(0, 166, 214, 0.4); }
+.prose a:hover, .natCard a:hover, .relDesc a:hover { color: var(--cyan-hot); }
+
+.memNote {
+  display: inline-flex; flex-direction: column; gap: 2px;
+  margin: 26px 0 2px;
+  padding: 11px 14px;
+  border: 1.5px solid rgba(212, 191, 125, 0.22);
+  border-left: 2px solid rgba(0, 166, 214, 0.4);
+  background: rgba(0, 0, 0, 0.28);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em;
+}
+.mnRow .k { color: var(--beige); }
+.mnRow .v { color: var(--cyan); opacity: 0.85; }
+
+/* --- Nature cards --- */
+.natureGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.natCard { --cut: 11px; --bc: rgba(212, 191, 125, 0.5); position: relative; min-height: 92px; }
+.ncFrame {
+  position: absolute; inset: 0;
+  background: var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0,
+    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+    0 100%, 0 var(--cut));
+  opacity: 0.5;
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+.natCard:hover .ncFrame { background: var(--cyan); opacity: 0.9; box-shadow: 0 0 16px rgba(0, 166, 214, 0.32); }
+.ncInner {
+  position: relative; z-index: 1; margin: 1.5px;
+  height: calc(100% - 3px);
+  background: linear-gradient(180deg, #171717, #101010);
+  clip-path: polygon(calc(var(--cut) - 1.5px) 0, 100% 0,
+    100% calc(100% - var(--cut) + 1.5px), calc(100% - var(--cut) + 1.5px) 100%,
+    0 100%, 0 calc(var(--cut) - 1.5px));
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.ncKey {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em;
+  color: var(--beige-dim); text-transform: uppercase;
+  display: flex; align-items: center; gap: 6px;
+}
+.ncKey i { color: var(--cyan); font-size: 9px; opacity: 0.8; }
+.ncVal { font-family: var(--font-prose); font-size: 13.5px; line-height: 1.45; color: var(--text); }
+
+/* --- Relations --- */
+.relations { display: flex; flex-direction: column; }
+.relRow {
+  display: grid; grid-template-columns: 1fr auto; column-gap: 14px; row-gap: 6px;
+  grid-template-areas: "name attitude" "desc desc";
+  padding: 14px 4px;
+  border-bottom: 1.5px solid rgba(212, 191, 125, 0.12);
+  border-left: 2px solid transparent;
+  padding-left: 10px;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.relRow:last-child { border-bottom: 0; }
+.relHead { grid-area: name; display: flex; align-items: center; gap: 10px; }
+.relName {
+  font-family: var(--font-display); font-size: 15px; letter-spacing: 0.03em;
+  color: var(--cyan); border-bottom: 1px solid rgba(0, 166, 214, 0.35);
+}
+.relTag {
+  --cut: 5px; --bc: rgba(212, 191, 125, 0.55);
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--beige);
+  padding: 4px 10px;
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0,
+    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+    0 100%, 0 var(--cut));
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1.5px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1.5px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1.5px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1.5px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1.5px) calc(var(--cut) + 1.5px);
+  white-space: nowrap;
+}
+.relDesc { grid-area: desc; font-family: var(--font-prose); font-size: 15px; line-height: 1.55; color: var(--muted); }
+
+.attitude { grid-area: attitude; display: flex; align-items: center; gap: 10px; justify-self: end; }
+.attBars { display: flex; gap: 3px; }
+.attSeg { width: 14px; height: 6px; background: rgba(170, 170, 170, 0.16); border: 1px solid rgba(170, 170, 170, 0.25); }
+.attLabel {
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--muted); min-width: 56px; text-align: right;
+}
+.attitude[data-att="friendly"] .attSeg { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.5); }
+.attitude[data-att="friendly"] .attLabel { color: var(--cyan); }
+.attitude[data-att="neutral"] .attSeg:nth-child(-n+2) { background: var(--beige); border-color: var(--beige); }
+.attitude[data-att="neutral"] .attLabel { color: var(--beige); }
+.attitude[data-att="wary"] .attSeg:nth-child(1) { background: var(--muted); border-color: var(--muted); }
+.attitude[data-att="wary"] .attLabel { color: var(--muted); }
+.attitude[data-att="undefined"] .attSeg { background: transparent; border-style: dashed; border-color: rgba(226, 176, 33, 0.4); }
+.attitude[data-att="undefined"] .attLabel { color: var(--gold-rare); opacity: 0.85; }
+/* hostile — 0 lit segments too, but dashed muted (not amber) so it reads distinct from
+   "unknown" at a glance while staying inside this screen's "no red" rule. */
+.attitude[data-att="hostile"] .attSeg { background: transparent; border-style: dashed; border-color: rgba(170, 170, 170, 0.4); }
+.attitude[data-att="hostile"] .attLabel { color: var(--muted); }
+
+/* G.U.I.D.E. relation — the one sanctioned amber row on this screen. */
+.relRow.guide { border-bottom-color: rgba(226, 176, 33, 0.18); }
+.relRow.guide .relName { color: var(--gold-rare); border-bottom-color: rgba(226, 176, 33, 0.4); }
+.relRow.guide .relTag { --bc: rgba(226, 176, 33, 0.5); color: var(--gold-rare); }
+
+@media (max-width: 1180px) {
+  .lore { grid-template-columns: 38fr 62fr; }
+  .readInner { padding: 28px 32px 34px; }
+  .natureGrid { grid-template-columns: 1fr; }
+}

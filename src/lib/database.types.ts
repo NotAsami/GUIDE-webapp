@@ -382,6 +382,27 @@ export type CharacterProgress = {
   stories?: ProgressStory[]
 }
 
+export type Relation = {
+  name: string
+  /** Free text — "Ally"/"Mentor"/"Rival"/"Enigma"/etc. "System · Bonded" is the
+   *  one value that gets the amber G.U.I.D.E. styling on the Lore screen. */
+  type: string
+  /** Absent/null → dashed amber segments + "—" label ("undefined" attitude), independent of
+   *  `type`. "hostile" renders 0 lit segments too, but dashed muted (not amber) + "Hostile" —
+   *  stays inside the screen's "no red" rule while staying visually distinct from "unknown". */
+  attitude?: 'friendly' | 'neutral' | 'wary' | 'hostile' | null
+  desc: string // markdown
+}
+
+export type CharacterLore = {
+  backstory?: string // markdown, blank-line paragraphs
+  personality?: { trait?: string; ideal?: string; bond?: string; flaw?: string } // markdown
+  relations?: Relation[]
+  /** Only fields NOT already on `identity` — race/class/archetype/background live there. */
+  identity?: { alignment?: string; age?: string; height?: string; deity?: string; homeland?: string }
+  memoryFidelity?: string
+}
+
 export type CharacterRow = {
   id: string
   owner: string
@@ -393,7 +414,7 @@ export type CharacterRow = {
   equipped: Record<string, Json>
   shards: Record<string, Json>
   spellbook: Record<string, Json> & { spellcasting?: boolean }
-  lore: Record<string, Json>
+  lore: CharacterLore
   progress: CharacterProgress
   updated_at: string
 }

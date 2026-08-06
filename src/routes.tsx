@@ -9,6 +9,7 @@ import { Equipment } from './screens/Equipment'
 import { Features } from './screens/Features'
 import { Inventory } from './screens/Inventory'
 import { Journal } from './screens/Journal'
+import { Lore } from './screens/Lore'
 import { OperatorConsole } from './screens/OperatorConsole'
 
 export const router = createBrowserRouter([
@@ -31,8 +32,7 @@ export const router = createBrowserRouter([
           blurb="Ability scores + skill/save proficiencies → d20 rolls. Rolling is ephemeral (a log), not persisted state." /> },
       { path: 'shard', element: <Stub title="Shard Interface" section="shards"
           blurb="3 shard slots: G.U.I.D.E. (locked), Vigor (active), empty. Opens the Shard Tree modal — already a data-driven template." /> },
-      { path: 'lore', element: <Stub title="Lore" section="lore"
-          blurb="Backstory prose, personality (TIBF), relations. Read-only for players; DM-authored." /> },
+      { path: 'lore', element: <Lore /> },
       { path: 'journal', element: <Journal /> },
       { path: 'spellbook', element: <Stub title="Spellbook" section="spellbook"
           blurb="Caster profile + known/prepared spells + slot state. Empty-state path when spellcasting:false." /> },
