@@ -6,9 +6,10 @@ it will automaticall give them the item they purchased, the DM will be able to m
 they already created from some categories (they can't sell relics) and the dm will also be able to make their own custom one and save that as a preset
 so they can randomly generate a for example potion seller that will sell the potions from the potions list that is in the database 
   - Problems: Need to sync very fast so that when a player purchases something it will be out of stock for the other players already (FIXED BY SERVER SIDE CHECK OF ITEM PURCHASE, FIRST ONE WINS, OTHER GETS OUT OF STOCK POPUP). Increased complexity (maybe performance issues?)
-- AN already premade list of items in dnd, not sure where to get it, but this would be for sake of easy use so that the dm doesn't have to create every single item from scratch, like health potions of giant's strength, daggers, swords, pikes and other weapons and armor.
-- FIXES
+- An already premade list of items in dnd, not sure where to get it, but this would be for sake of easy use so that the dm doesn't have to create every single item from scratch, like health potions of giant's strength, daggers, swords, pikes and other weapons and armor.
+- FIXES TO BE MADE
   - The detail text in DM-view → catalog → features editor isn't scrollable, it instead scrolls the actual screen, it should scroll the textbox first and then the screen.
+  - While doing the 110% zoom fix, the inventory view is squished on zen laptop like pretty bad, you can't see the bottom of the screen anyway, I'm very frustrated on this. Should we implement a scrollbar? This needs to be fixed now. The next slice is that. We need a permanent solution for this.
 # ISSUES
 - Current state of features is that they are only descriptive, they can't grant wisdom boost, effects like healing or anything, question is how to implement a way to actually use these features
 Like we would need a list of a lot of things the feature could do, but you also need specific ones for specific ones, like you can't make a list of everything a feature would want. Difficult. Like we have features ranging from Judgment’s Edge: When you hit a creature affected by your Arbiter’s Judgment, deal +1d4  radiant or  necrotic damage (your choice), to Final Strike: You declare a creature’s final judgment. Your next attack against them is an automatic critical hit, and they make death saves with disadvantage if reduced to 0 hit points
