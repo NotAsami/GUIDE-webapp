@@ -12,3 +12,6 @@
 - The Lore Screen needs some way to center the screen on the face of the character.
 - Return widget on inventory management in DM-view is missing the last half of the button, render issue.
 - When adding arrows to the quiver using the stow function, it doesn't merge the arrows that are the same type. If you have 15 arrows in the quiver and add 5 from inventory, it should become 20 but it is 15 and 5.
+- Add search bar to holding bag and backpack
+- Display dis / adv on stat-panel
+- Being burdened doesn't update the movement and disadvantage on checks in stat-panel
