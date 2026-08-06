@@ -13,7 +13,7 @@ const PRIMARY: NavItem[] = [
   { to: '/equipment', label: 'Equipment', marker: '01 ◇', icon: 'fa-khanda' },
   { to: '/lore',      label: 'Lore',      marker: '02 ◇', icon: 'fa-book-open' },
   { to: '/spellbook', label: 'Spellbook', marker: '03 ◇', icon: 'fa-scroll' },
-  { to: '/character', label: 'Character', marker: '04 ◇', icon: 'fa-user-shield' },
+  { to: '/character', label: 'Rolls',     marker: '04 ◇', icon: 'fa-user-shield' },
   { to: '/journal',   label: 'Journal',   marker: '05 ◇', icon: 'fa-clipboard' },
 ]
 

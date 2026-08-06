@@ -16,7 +16,8 @@ import type {
   EquippedGear, CharacterLore, Relation,
 } from '../lib/database.types'
 import { ITEM_SLOTS, PERSON, isRingSlot } from '../lib/equip'
-import { place, routeItem } from '../lib/placement'
+import { SKILLS, ABILITY_ORDER, ABILITY_ABBR } from '../lib/dnd'
+import { isStackable, place, routeItem } from '../lib/placement'
 import { OperatorInventory } from './OperatorInventory'
 import styles from './OperatorConsole.module.css'
 
@@ -652,6 +653,12 @@ function ActionsTab({ row, member, catalog, featureLib, onUpdate, onVoice, log }
         {/* F — GRANT FEATURE (wide): roleplay boons straight onto the sheet;
             item-borne features travel with their item instead (Grant Item). */}
         <GrantFeatureCard member={member} row={row} featureLib={featureLib} onUpdate={onUpdate} onVoice={onVoice} log={log} />
+
+        {/* G — PROFICIENCIES (wide): saving throws (binary) + skills (none →
+            proficient → expertise). Character-build data, so it's DM-authored
+            here rather than player-editable — see Character.tsx / lib/dnd.ts,
+            which already read these three sheet arrays for the Rolls screen. */}
+        <ProficienciesCard member={member} row={row} onUpdate={onUpdate} log={log} />
       </div>
 
     </>
@@ -709,13 +716,6 @@ const rarColor = (r?: ItemRarity) => RAR_DEF[r ?? 'common']?.token ?? 'var(--mut
 const catDef = (c?: ItemCategory) => CAT_DEF[c ?? 'misc'] ?? CAT_DEF.misc
 
 function firstName(name: string) { return name.split(' ')[0] }
-
-/** Ammo/consumable/misc are fungible stacks — 20 arrows are one "Arrows ×20"
- *  entry, not 20 rows. Gear and weapons are always distinct instances even
- *  sharing a name (a granted "Dagger" doesn't merge with another Dagger). */
-function isStackable(category?: ItemCategory): boolean {
-  return category === 'ammo' || category === 'consumable' || category === 'misc'
-}
 
 /** Build a fresh inventory instance from a catalog template: a self-describing
  *  snapshot of the template `data` + a unique instance id + the `item_id`
@@ -1674,6 +1674,96 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
   )
 }
 
+/** Grant Feature (Actions card F) writes immediately per click, same as every
+ *  other card on this tab — Proficiencies (G) follows suit rather than
+ *  introducing a dirty/Save form for what's just two fixed toggle sets.
+ *  Skills cycle none → proficient → expertise → none in one click; saves are
+ *  a plain on/off. Both write straight to `sheet`, spread so siblings (hp,
+ *  abilities, …) survive — lib/dnd.ts's saveTotal/skillTotal already read
+ *  these three arrays, so nothing downstream needs to change. */
+function ProficienciesCard({ member, row, onUpdate, log }: {
+  member: PartyMember
+  row: CharacterRow
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const sheet = row.sheet ?? {}
+  const saveProfs = sheet.saveProficiencies ?? []
+  const skillProfs = sheet.skillProficiencies ?? []
+  const skillExp = sheet.skillExpertise ?? []
+  const first = firstName(member.name)
+
+  async function toggleSave(key: AbilityKey) {
+    const granting = !saveProfs.includes(key)
+    const next = granting ? [...saveProfs, key] : saveProfs.filter(k => k !== key)
+    const ok = await onUpdate({ sheet: { ...sheet, saveProficiencies: next } })
+    if (ok) log(<>{granting ? 'Granted' : 'Removed'} <span className={styles.obj}>{ABILITY_ABBR[key].toUpperCase()} save proficiency</span> for <span className={styles.who}>{first}</span></>)
+  }
+
+  async function cycleSkill(key: string, label: string) {
+    const isExp = skillExp.includes(key)
+    const isProf = skillProfs.includes(key)
+    const [nextProf, nextExp, stateLabel] =
+      !isProf && !isExp ? [[...skillProfs, key], skillExp, 'proficient']
+      : isProf && !isExp ? [skillProfs, [...skillExp, key], 'expertise']
+      : [skillProfs.filter(k => k !== key), skillExp.filter(k => k !== key), 'untrained']
+    const ok = await onUpdate({ sheet: { ...sheet, skillProficiencies: nextProf, skillExpertise: nextExp } })
+    if (ok) log(<>Set <span className={styles.obj}>{label}</span> to <span className={styles.obj}>{stateLabel}</span> for <span className={styles.who}>{first}</span></>)
+  }
+
+  return (
+    <div className={cx(styles.actCard, styles.wide)}>
+      <div className={styles.acTitle}><i className="fa-solid fa-graduation-cap lead" /><span className={styles.num}>G</span><span className={styles.t}>Proficiencies</span></div>
+
+      <div className={styles.profRow}>
+        <span className={styles.profLab}>Saving Throws</span>
+        <div className={styles.profGrid}>
+          {ABILITY_ORDER.map(key => {
+            const on = saveProfs.includes(key)
+            return (
+              <button
+                key={key} type="button"
+                className={cx(styles.profChip, on && styles.on)}
+                onClick={() => void toggleSave(key)}
+                aria-pressed={on}
+              >
+                {on && <span className={styles.profDots}><span className={styles.profDot} /></span>}
+                {ABILITY_ABBR[key].toUpperCase()}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className={styles.profRow}>
+        <span className={styles.profLab}>Skills · click cycles none → proficient → expertise</span>
+        <div className={styles.profGrid}>
+          {SKILLS.map(skill => {
+            const isExp = skillExp.includes(skill.key)
+            const isProf = skillProfs.includes(skill.key)
+            return (
+              <button
+                key={skill.key} type="button"
+                className={cx(styles.profChip, isProf && styles.on, isExp && styles.exp)}
+                onClick={() => void cycleSkill(skill.key, skill.name)}
+                title={isExp ? 'Expertise (×2 proficiency) — click to clear' : isProf ? 'Proficient — click for expertise' : 'Click to grant proficiency'}
+              >
+                {isProf && (
+                  <span className={styles.profDots}>
+                    <span className={styles.profDot} />
+                    {isExp && <span className={styles.profDot} />}
+                  </span>
+                )}
+                {skill.name} <span className={styles.ab}>{ABILITY_ABBR[skill.ability].toUpperCase()}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** The Features tab of the Catalog: author-once library of feats/perks/boons.
  *  Same index+form pattern as the Items tab; grants/embeds are snapshots. */
 function FeatureLibrarySurface({ lib }: { lib: DmFeaturesState }) {
@@ -1907,6 +1997,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
   const savedMem = row.lore?.memoryFidelity ?? 'INTACT'
   const savedIcon = row.identity?.icon ?? 'fa-user'
   const savedPortrait = row.identity?.portrait ?? ''
+  const savedFocus = row.identity?.portraitFocus ?? 'center top'
   const savedBackstory = row.lore?.backstory ?? ''
   const savedPersonality = row.lore?.personality ?? {}
   const savedRelations = row.lore?.relations ?? []
@@ -1918,6 +2009,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
   const [icon, setIcon] = useState(savedIcon)
   const [portrait, setPortrait] = useState(savedPortrait)
   const [portraitFailed, setPortraitFailed] = useState(false)
+  const [focus, setFocus] = useState(savedFocus)
   const [backstory, setBackstory] = useState(savedBackstory)
   const [trait, setTrait] = useState(savedPersonality.trait ?? '')
   const [ideal, setIdeal] = useState(savedPersonality.ideal ?? '')
@@ -1934,7 +2026,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
   const secretDirty = dig !== savedDig || lore !== savedLore
   const personality = { trait, ideal, bond, flaw }
   const identityLore = { alignment, age, height, deity, homeland }
-  const charDirty = mem !== savedMem || icon !== savedIcon || portrait !== savedPortrait
+  const charDirty = mem !== savedMem || icon !== savedIcon || portrait !== savedPortrait || focus !== savedFocus
     || backstory !== savedBackstory
     || JSON.stringify(personality) !== JSON.stringify({ trait: savedPersonality.trait ?? '', ideal: savedPersonality.ideal ?? '', bond: savedPersonality.bond ?? '', flaw: savedPersonality.flaw ?? '' })
     || JSON.stringify(relations) !== JSON.stringify(savedRelations)
@@ -1960,7 +2052,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
         identity: identityLore,
       }
       patch.lore = nextLore
-      const nextIdentity = { ...row.identity, icon, portrait: portrait.trim() || null }
+      const nextIdentity = { ...row.identity, icon, portrait: portrait.trim() || null, portraitFocus: focus }
       patch.identity = nextIdentity
       jobs.push(onUpdateChar(patch))
     }
@@ -2058,7 +2150,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
       <div className={styles.loreGrid}>
         <div className={styles.portraitPrev}>
           {portrait && !portraitFailed ? (
-            <img src={portrait} alt="" onError={() => setPortraitFailed(true)} />
+            <img src={portrait} alt="" style={{ objectPosition: focus }} onError={() => setPortraitFailed(true)} />
           ) : (
             <i className={`fa-solid ${icon}`} />
           )}
@@ -2074,6 +2166,22 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
           <p className={styles.acHint}>Paste the public URL of a file already uploaded to the Storage "portraits" bucket. Absent/failed → the menu glyph below is shown instead.</p>
         </div>
       </div>
+      <div className={styles.glyphRow}>
+        <span className={styles.glyphLab}>Face Focus</span>
+        <div className={styles.glyphBtns}>
+          {(['center top', 'center center', 'center bottom'] as const).map(f => (
+            <button
+              key={f} type="button"
+              className={cx(styles.durOpt, focus === f && styles.sel)}
+              onClick={() => setFocus(f)}
+              aria-pressed={focus === f}
+            >
+              {f === 'center top' ? 'Top' : f === 'center center' ? 'Center' : 'Bottom'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className={styles.acHint}>Keeps the face in frame when the source image is tall or off-center — applies everywhere this portrait renders (Lore, Equipment).</p>
       <div className={styles.glyphRow}>
         <span className={styles.glyphLab}>Menu Glyph</span>
         <div className={styles.glyphBtns}>

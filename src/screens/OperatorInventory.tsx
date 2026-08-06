@@ -208,7 +208,7 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
         ) : (
           <div className={styles.invList}>
             {held.map(rec => (
-              <div key={rec.id} className={styles.invRow}>
+              <div key={rec.id} className={cx(styles.invRow, styles.held)}>
                 <span className={styles.irIcon}><i className={`fa-solid ${rec.item.icon ?? 'fa-cube'}`} /></span>
                 <span className={styles.irName}>
                   {rec.item.name}

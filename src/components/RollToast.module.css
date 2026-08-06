@@ -96,6 +96,10 @@
 .line.fumble .total { color: var(--danger-hot); text-shadow: 0 0 14px rgba(255, 84, 84, 0.5); }
 .line.fumble .lab { color: var(--danger-hot); }
 
+/* adv / dis tag on the d20 line */
+.adv { color: #4dd07d; }
+.dis { color: #e07a3a; }
+
 /* heal / buff accents (consumables) */
 .line.heal .total { color: #6fdc8c; text-shadow: 0 0 14px rgba(111, 220, 140, 0.55); }
 .line.heal .lab { color: #6fdc8c; }

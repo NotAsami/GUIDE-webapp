@@ -7,15 +7,15 @@ import type {
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { useItemTooltip } from '../components/ItemTooltip'
-import { burden, fmtWeight, itemWeight } from '../lib/burden'
+import { burden, burdenTier, fmtWeight, itemWeight } from '../lib/burden'
 import { consumeEffect } from '../lib/consume'
 import {
   TAB_KIND_ORDER, attunedCount, attunementCap, equipTargetPatch, freshItemId, getGear, getInventory,
   resolveEquipTarget,
 } from '../lib/equip'
 import {
-  GRID_CELLS, GRID_COLS, GRID_ROWS, PERSON, emptyCells, freeCellFor,
-  packPerson, place, type Placed,
+  GRID_CELLS, GRID_COLS, GRID_ROWS, PERSON, emptyCells, freeCellFor, isStackable,
+  packPerson, placeMerging, type Placed,
 } from '../lib/placement'
 import { CAT_CORNER, CAT_LABEL, CAT_ORDER, rarityLabel } from '../lib/items'
 import { useRollLog } from '../lib/rolls'
@@ -97,6 +97,7 @@ export function Inventory() {
 
   const [activeId, setActiveId] = useState<string>(PERSON)
   const [filter, setFilter] = useState<ItemCategory | 'all'>('all')
+  const [query, setQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('name')
   const [popupId, setPopupId] = useState<string | null>(null)
   const [denyKind, setDenyKind] = useState<string | null>(null)
@@ -156,6 +157,7 @@ export function Inventory() {
     if (t.id === activeId) return
     setActiveId(t.id)
     setFilter('all')
+    setQuery('')
   }
 
   /* ---------- ON PERSON drag-to-rearrange ---------- */
@@ -273,21 +275,26 @@ export function Inventory() {
   }
 
   /** Move an item between ON PERSON and a container. Both directions are the same
-   *  write, which is why no dragging across a tab switch is ever needed. */
+   *  write, which is why no dragging across a tab switch is ever needed.
+   *  Stackable categories (ammo/consumable/misc) merge into a matching stack
+   *  already sitting at the destination instead of landing as a second row —
+   *  so a free on-person cell is only required when there's nothing to merge
+   *  into there. */
   async function moveTo(item: InventoryItem, destId: string) {
     if (busy) return
-    const dest = destId === PERSON
+    const containerId = destId === PERSON ? PERSON : destId
+    const mergeable = isStackable(item.category) && inventory.some(i =>
+      i.id !== item.id && i.containerId === containerId && i.name === item.name
+      && i.category === item.category && !i.locked)
+    const dest = destId === PERSON && !mergeable
       ? (() => {
           const cell = freeCellFor(inventory.filter(i => i.id !== item.id), item)
           return cell ? { containerId: PERSON, ...cell } : null
         })()
-      : { containerId: destId }
+      : { containerId }
     if (!dest) return           // no reachable space — the popup blocks this itself
     setBusy(true); setPopupId(null)
-    await updateSection(
-      'inventory',
-      inventory.map(i => (i.id === item.id ? place(i, dest) : i)) as unknown as Json[],
-    )
+    await updateSection('inventory', placeMerging(inventory, item, dest) as unknown as Json[])
     setBusy(false)
   }
 
@@ -304,9 +311,12 @@ export function Inventory() {
   const overBurdened = load.ratio > 1
   const fillPct = Math.min(100, load.ratio * 100)
   // SRD thresholds: encumbered at 5xSTR, heavy at 10xSTR, max at 15xSTR — so the
-  // ticks sit at 1/3 and 2/3 of the bar.
+  // ticks sit at 1/3 and 2/3 of the bar. Tier classification itself comes from
+  // lib/burden.ts's burdenTier (shared with effects.ts's speed penalty and the
+  // Stat Panel's disadvantage readout) — these two are just the tick labels.
   const encAt = Math.round((load.max / 3) * 10) / 10
   const heavyAt = Math.round((load.max * 2 / 3) * 10) / 10
+  const tier = burdenTier(load.current, load.max)
 
   const weightless = !!active.container?.container?.weightless
   const viewWeight = contents.reduce((n, i) => n + itemWeight(i), 0)
@@ -415,8 +425,8 @@ export function Inventory() {
                     </>
                   ) : (
                     <ListUtilBar
-                      items={contents} filter={filter} sortBy={sortBy}
-                      onFilter={setFilter} onSort={setSortBy}
+                      items={contents} filter={filter} sortBy={sortBy} query={query}
+                      onFilter={setFilter} onSort={setSortBy} onQuery={setQuery}
                     />
                   )}
                 </div>
@@ -462,7 +472,7 @@ export function Inventory() {
                   </div>
                 ) : (
                   <ContainerList
-                    items={contents} filter={filter} sortBy={sortBy} weightless={weightless}
+                    items={contents} filter={filter} sortBy={sortBy} query={query} weightless={weightless}
                     bind={bind}
                     onPick={id => { hideTooltip(); setPopupId(id) }}
                   />
@@ -512,9 +522,9 @@ export function Inventory() {
                   {/* Weight is the ONLY capacity system now: these tiers slow the
                       character, they never block a pickup. */}
                   <div className={styles.encNote}>
-                    {load.current > heavyAt
+                    {tier === 'heavy'
                       ? <span className={styles.warn}>// Heavily encumbered — speed −20 ft, disadv. on STR/DEX/CON checks</span>
-                      : load.current > encAt
+                      : tier === 'encumbered'
                         ? <span className={styles.warn}>// Encumbered — speed −10 ft</span>
                         : <span>// Unencumbered</span>}
                   </div>
@@ -614,12 +624,14 @@ function ItemTile({ p, dragging, bind, onPointerDown, onActivate }: {
 
 /** Category chips + sort. The main navigation tool once a container holds 100+
  *  items, which is exactly the case the grid could never handle. */
-function ListUtilBar({ items, filter, sortBy, onFilter, onSort }: {
+function ListUtilBar({ items, filter, sortBy, query, onFilter, onSort, onQuery }: {
   items: InventoryItem[]
   filter: ItemCategory | 'all'
   sortBy: SortKey
+  query: string
   onFilter: (f: ItemCategory | 'all') => void
   onSort: (s: SortKey) => void
+  onQuery: (q: string) => void
 }) {
   const counts = new Map<ItemCategory, number>()
   for (const i of items) {
@@ -637,6 +649,14 @@ function ListUtilBar({ items, filter, sortBy, onFilter, onSort }: {
   )
   return (
     <>
+      <span className={styles.searchWrap}>
+        <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+        <input
+          className={styles.searchIn} value={query}
+          onChange={e => onQuery(e.target.value)}
+          placeholder="Search…" aria-label="Search this container"
+        />
+      </span>
       {chip('all', 'All', items.length)}
       {CAT_ORDER.filter(c => counts.has(c)).map(c => chip(c, CAT_LABEL[c], counts.get(c)!))}
       <span className={styles.sortWrap}>
@@ -658,16 +678,19 @@ function ListUtilBar({ items, filter, sortBy, onFilter, onSort }: {
 
 /** A container view: an unlimited, sortable, filterable list. No geometry — sort
  *  order is a view preference, never stored state. */
-function ContainerList({ items, filter, sortBy, weightless, bind, onPick }: {
+function ContainerList({ items, filter, sortBy, query, weightless, bind, onPick }: {
   items: InventoryItem[]
   filter: ItemCategory | 'all'
   sortBy: SortKey
+  query: string
   weightless: boolean
   bind: ReturnType<typeof useItemTooltip>['bind']
   onPick: (id: string) => void
 }) {
   const rows = useMemo(() => {
-    const list = filter === 'all' ? items.slice() : items.filter(i => (i.category ?? 'misc') === filter)
+    let list = filter === 'all' ? items.slice() : items.filter(i => (i.category ?? 'misc') === filter)
+    const q = query.trim().toLowerCase()
+    if (q) list = list.filter(i => i.name.toLowerCase().includes(q))
     return list.sort((a, b) => {
       if (sortBy === 'weight') return itemWeight(b) - itemWeight(a) || a.name.localeCompare(b.name)
       if (sortBy === 'value') return (b.value ?? 0) * (b.qty ?? 1) - (a.value ?? 0) * (a.qty ?? 1) || a.name.localeCompare(b.name)
@@ -677,14 +700,16 @@ function ContainerList({ items, filter, sortBy, weightless, bind, onPick }: {
       }
       return a.name.localeCompare(b.name)
     })
-  }, [items, filter, sortBy])
+  }, [items, filter, sortBy, query])
 
   if (rows.length === 0) {
     return (
       <div className={styles.listNone}>
         <div className={styles.p}>Nothing Here</div>
         <div className={styles.h}>
-          {items.length > 0 ? '// No items of that category in this container' : '// Empty — stow something from ON PERSON'}
+          {query.trim() ? '// No items match your search'
+            : items.length > 0 ? '// No items of that category in this container'
+              : '// Empty — stow something from ON PERSON'}
         </div>
       </div>
     )

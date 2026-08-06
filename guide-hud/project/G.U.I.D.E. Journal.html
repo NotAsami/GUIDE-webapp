@@ -1,0 +1,1436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — JOURNAL // ROS CHRISSTONE</title>
+<!--
+  PHASE 8 — Journal screen (top-level, sibling to Equipment / Character).
+
+  The codex's first reading-forward screen. A classic master-detail layout:
+  a tighter LOG INDEX sidebar (master list) on the left, an airy ENTRY
+  reading panel (detail view) on the right. The contrast between the two —
+  dense index vs. breathing prose panel — is the point of this screen.
+
+  Shared chrome (top bar, tickers, side labels, navbar + Equipment
+  hover-expand, nav-meta subheader, bottom bar, scanlines, vignette, sweep)
+  is kept verbatim with phases 1-5 and 9. The JOURNAL navbar button is
+  active. Equipment is NOT highlighted but its hover-expand sub-buttons
+  (Inventory / Stat Panel) still exist as a behavior.
+
+  Deviations / notes:
+
+  1.  Quest state is NOT authoritatively tracked here. Clicking an objective
+      checkbox toggles its VISUAL done/pending state and emits a console.log
+      hook only. Claude Code will own real quest progression — see the
+      toggleObjective() handler.
+
+  2.  The reading panel uses a constrained measure (~680px / ~62ch) and a
+      tall line-height (1.75) so prose actually reads comfortably, unlike
+      the dense stat dashboards. Generous padding inside the framed region.
+
+  3.  Cross-screen continuity: "The Stolen Tome" shows "Recover the stolen
+      tome" as a COMPLETED objective (the tome lives in the Inventory grid)
+      and "Return it to The Lady" as pending.
+
+  4.  Quest notes use a warmer player-facing voice; session recaps use a
+      drier, third-person observational register (the G.U.I.D.E. AUTO-LOG
+      stamp + the single [LOG SEGMENT UNAVAILABLE] gap in Session 02 are
+      deliberate, low-key tonal seeds — routine-looking, never alarming).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  /* ============================================================
+     SHARED CHROME  (kept verbatim with prior phases)
+     ============================================================ */
+  :root {
+    --bg:        #1d1d1d;
+    --bg-2:      #161616;
+    --beige:     #d4bf7d;
+    --beige-dim: #8a7a4a;
+    --cyan:      #00a6d6;
+    --cyan-dim:  #0d6e8c;
+    --cyan-hot:  #4dd6ff;
+    --gold-rare: #e2b021;
+    --text:      #dedede;
+    --muted:     #aaaaaa;
+    --danger:    #b93a3a;
+
+    --bar-top-h:    62px;
+    --bar-bottom-h: 50px;
+    --nav-h:        72px;
+    --nav-top-gap:  26px;
+
+    --font-display: "Cinzel", serif;
+    --font-prose:   "EB Garamond", serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-prose);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .stage {
+    position: fixed; inset: 0;
+    background:
+      url("https://www.transparenttextures.com/patterns/dark-leather.png"),
+      radial-gradient(120% 90% at 50% 50%, #232220 0%, #1a1a1a 60%, #0e0e0e 100%);
+    background-blend-mode: overlay, normal;
+  }
+  .scanlines {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 90;
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+      transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 91;
+    background: radial-gradient(120% 110% at 50% 50%,
+      transparent 55%, rgba(0,0,0,0.55) 95%, rgba(0,0,0,0.85) 100%);
+  }
+  .sweep {
+    pointer-events: none;
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 2px; z-index: 95;
+    background: linear-gradient(to bottom,
+      transparent, rgba(0,166,214,0.55) 50%, transparent);
+    box-shadow: 0 0 24px rgba(0,166,214,0.45);
+    opacity: 0;
+  }
+  .sweep.run { animation: sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards; }
+  @keyframes sweep-run {
+    0%   { opacity: 0; transform: translateY(-20px); }
+    8%   { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(100vh); }
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- Top Bar ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--bar-top-h); z-index: 50;
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; padding: 0 36px;
+    background: linear-gradient(to bottom,
+      rgba(15,15,15,0.95) 0%, rgba(22,22,22,0.92) 100%);
+    border-bottom: 1px solid var(--beige);
+    box-shadow: 0 1px 0 rgba(212,191,125,0.15),
+                0 8px 24px -8px rgba(0,0,0,0.6);
+  }
+  .topbar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .topbar::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 1px; background: var(--beige);
+    box-shadow: 0 0 8px rgba(212,191,125,0.4);
+  }
+  .top-left, .top-right {
+    display: flex; align-items: center; gap: 28px;
+    position: relative; z-index: 1;
+  }
+  .top-right { justify-content: flex-end; }
+  .stat-block { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+  .stat-row { display: flex; align-items: baseline; gap: 8px; }
+  .stat-num {
+    font-family: var(--font-display); font-weight: 600;
+    color: var(--beige); font-size: 22px; line-height: 1; letter-spacing: 0.04em;
+  }
+  .stat-label {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--cyan); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .bar {
+    height: 3px; width: 110px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5); position: relative; overflow: hidden;
+  }
+  .bar > i {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    box-shadow: 0 0 6px rgba(0,166,214,0.6); display: block;
+  }
+  .top-center { text-align: center; position: relative; z-index: 1; padding: 0 24px; }
+  .char-name {
+    font-family: var(--font-display); font-weight: 600; font-size: 18px;
+    letter-spacing: 0.4em; color: var(--text); text-transform: uppercase; line-height: 1;
+  }
+  .char-name .cursor {
+    display: inline-block; color: var(--cyan); transform: translateY(-1px);
+    margin-left: 4px; animation: blink 1s steps(2, end) infinite;
+  }
+  .char-sub {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+    color: var(--muted); margin-top: 4px; text-transform: uppercase;
+  }
+  .char-sub .sep { color: var(--beige-dim); margin: 0 8px; }
+  .gold-block, .weight-block { display: flex; align-items: baseline; gap: 10px; }
+  .gold-block .ic, .weight-block .ic {
+    font-family: var(--font-display); color: var(--beige); font-size: 20px; line-height: 1;
+  }
+  .gold-block .val, .weight-block .val {
+    font-family: var(--font-display); color: var(--beige); font-size: 18px;
+    letter-spacing: 0.06em; line-height: 1;
+  }
+  .gold-block .lab, .weight-block .lab {
+    font-family: var(--font-mono); color: var(--cyan); font-size: 9px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .ticker {
+    position: fixed; left: 0; right: 0; height: 12px; z-index: 51;
+    display: flex; align-items: center; padding: 0 24px;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+    color: rgba(0,166,214,0.55); pointer-events: none;
+    overflow: hidden; white-space: nowrap;
+  }
+  .ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
+  .ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212,191,125,0.45); }
+  .ticker .gap { width: 32px; display: inline-block; }
+  .ticker .dim { color: rgba(170,170,170,0.4); }
+
+  /* ---------- Bottom Bar ---------- */
+  .bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--bar-bottom-h); z-index: 50;
+    display: flex; align-items: center; padding: 0 32px;
+    background: linear-gradient(to top,
+      rgba(15,15,15,0.96) 0%, rgba(22,22,22,0.92) 100%);
+    border-top: 1px solid var(--beige);
+    box-shadow: 0 -1px 0 rgba(212,191,125,0.15), 0 -8px 24px -8px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .bottombar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .bb-line {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; width: 100%; color: var(--muted);
+    position: relative; z-index: 1;
+  }
+  .bb-line .lab  { color: var(--beige); }
+  .bb-line .val  { color: var(--cyan); }
+  .bb-line .dim  { color: var(--muted); }
+  .bb-line .sep  { color: var(--beige-dim); margin: 0 4px; }
+  .bb-line .dot  {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px rgba(0,166,214,0.7);
+    display: inline-block;
+  }
+  .bb-line .save-cursor {
+    color: var(--cyan); animation: blink 1s steps(2, end) infinite; margin-left: 2px;
+  }
+  .bb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  /* ---------- NAVBAR ---------- */
+  .navbar {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap));
+    left: 50%; transform: translateX(-50%);
+    display: flex; gap: 14px;
+    z-index: 45;
+  }
+  .nav-slot { position: relative; width: 156px; display: flex; justify-content: center; }
+  .nav-slot.equipment { padding: 60px 0; margin: -60px 0; }
+
+  .nav-btn {
+    --w: 156px; --h: var(--nav-h); --cut: 11px;
+    width: var(--w); height: var(--h);
+    background: transparent; border: 0; padding: 0;
+    color: var(--text); font-family: var(--font-mono);
+    cursor: pointer; position: relative;
+    transition: transform 180ms ease;
+  }
+  .nav-btn .nb-frame {
+    position: absolute; inset: 0; background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 180ms ease;
+  }
+  .nav-btn .nb-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(212,191,125,0.04), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #141414);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 6px;
+    transition: box-shadow 180ms ease, background 180ms ease;
+  }
+  .nav-btn .nb-icon {
+    color: var(--beige); font-size: 20px; line-height: 1;
+    transition: color 180ms ease, text-shadow 180ms ease;
+  }
+  .nav-btn .nb-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.26em; color: var(--text); text-transform: uppercase;
+  }
+  .nav-btn .nb-marker {
+    position: absolute; top: 6px; left: 12px;
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.2em; color: var(--cyan); opacity: 0.7;
+  }
+  .nav-btn:hover { transform: translateY(-2px); }
+  .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.18),
+                0 0 18px rgba(0,166,214,0.35);
+  }
+  .nav-btn:hover .nb-icon {
+    color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.7);
+  }
+
+  /* Active state */
+  .nav-btn.is-active .nb-frame { background: var(--cyan); }
+  .nav-btn.is-active .nb-inner {
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.18), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 28px rgba(0,166,214,0.30),
+                0 0 22px rgba(0,166,214,0.55);
+  }
+  .nav-btn.is-active .nb-icon { color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.9); }
+  .nav-btn.is-active .nb-label { color: var(--cyan-hot); }
+  .nav-btn.is-active .nb-marker { color: var(--beige); opacity: 1; }
+  .nav-btn.is-active::after {
+    content: ""; position: absolute;
+    top: -6px; left: 14%; right: 14%; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 20px rgba(0,166,214,0.6);
+    z-index: 2;
+  }
+
+  /* Sub-buttons (Inventory above, Stat Panel below) */
+  .nav-sub {
+    position: absolute; left: 50%;
+    transform: translate(-50%, 0) scale(0.95);
+    opacity: 0; pointer-events: none;
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
+    z-index: 1;
+  }
+  .nav-sub.above { bottom: calc(50% + 44px); }
+  .nav-sub.below { top:    calc(50% + 44px); }
+  .nav-sub .nav-btn {
+    --w: 122px; --h: 56px; --cut: 9px;
+  }
+  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
+  .nav-sub .nav-btn .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
+                linear-gradient(180deg, #141a1d, #0e1316);
+  }
+  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
+  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
+  .nav-sub .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
+  .nav-slot.equipment:hover .nav-sub,
+  .nav-slot.equipment:focus-within .nav-sub {
+    opacity: 1; pointer-events: auto;
+  }
+  .nav-slot.equipment:hover .nav-sub.above { transform: translate(-50%, -8px) scale(1); }
+  .nav-slot.equipment:hover .nav-sub.below { transform: translate(-50%, 8px) scale(1); }
+
+  /* breadcrumb / subheader under navbar */
+  .nav-meta {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 8px);
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.32em; color: var(--muted);
+    text-transform: uppercase; z-index: 44;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .nav-meta .acc  { color: var(--cyan); }
+  .nav-meta .dim  { color: var(--beige-dim); }
+
+  /* edge labels */
+  .side-label {
+    position: fixed;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.3em; color: var(--muted);
+    text-transform: uppercase; pointer-events: none; z-index: 12;
+  }
+  .side-label.left  { left: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: rotate(180deg) translateY(50%); }
+  .side-label.right { right: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: translateY(-50%); }
+  .side-label .acc  { color: var(--cyan); }
+
+  /* ============================================================
+     JOURNAL MAIN — two regions side by side
+     ============================================================ */
+  main.journal {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
+    bottom: calc(var(--bar-bottom-h) + 18px);
+    left: 0; right: 0;
+    display: grid;
+    grid-template-columns: 32fr 68fr;
+    gap: 22px;
+    padding: 0 34px;
+    z-index: 10;
+  }
+  .col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+  .col-header {
+    display: flex; align-items: baseline; gap: 14px;
+    margin-bottom: 10px;
+    padding: 0 2px 7px;
+    border-bottom: 1px solid rgba(212,191,125,0.35);
+    flex: 0 0 auto;
+  }
+  .col-header .ch-num {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+  }
+  .col-header .ch-title {
+    font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
+  }
+  .col-header .ch-meta {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+  }
+  .col-header .ch-meta .acc { color: var(--cyan); }
+  .col-header .ch-meta .dim { color: var(--beige-dim); }
+
+  /* ----- Framed region: angular clip + beige double-line ----- */
+  .region {
+    --cut: 16px;
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .region .r-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .region .r-gap {
+    position: absolute; inset: 1.5px;
+    background: var(--bg);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+  }
+  .region .r-line {
+    position: absolute; inset: 4px;
+    background: var(--beige); opacity: 0.42;
+    clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
+      0 100%, 0 calc(var(--cut) - 4px));
+  }
+  .region .r-inner {
+    position: absolute; inset: 5.5px;
+    background:
+      radial-gradient(130% 100% at 50% 0%, rgba(0,166,214,0.05), transparent 60%),
+      linear-gradient(180deg, #151515, #0e0e0e);
+    clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%,
+      0 100%, 0 calc(var(--cut) - 5px));
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .region .r-inner::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,166,214,0.035) 0px, rgba(0,166,214,0.035) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: screen; opacity: 0.6;
+  }
+  .region .r-corner {
+    position: absolute; width: 14px; height: 14px;
+    border-color: var(--cyan); opacity: 0.7; z-index: 5; pointer-events: none;
+  }
+  .region .r-corner.tl { top: 9px; left: 9px; border-top: 1px solid; border-left: 1px solid; }
+  .region .r-corner.br { bottom: 9px; right: 9px; border-bottom: 1px solid; border-right: 1px solid; }
+
+  /* shared thin scrollbar */
+  .scroll-y { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent; }
+  .scroll-y::-webkit-scrollbar { width: 7px; }
+  .scroll-y::-webkit-scrollbar-track { background: rgba(0,0,0,0.4); }
+  .scroll-y::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--cyan-dim), rgba(212,191,125,0.45));
+    border: 2px solid #111;
+  }
+
+  /* ============================================================
+     01  LOG INDEX  (left sidebar — the master list)
+     ============================================================ */
+  .index-pad {
+    position: relative; z-index: 1;
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
+    padding: 14px 12px 8px;
+  }
+
+  /* category toggle */
+  .tab-bar {
+    display: flex; flex: 0 0 auto;
+    border-bottom: 1px solid rgba(212,191,125,0.25);
+    margin-bottom: 6px;
+  }
+  .tab {
+    flex: 1;
+    position: relative;
+    background: transparent; border: 0; cursor: pointer;
+    padding: 9px 4px 11px;
+    font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--muted); text-align: center;
+    transition: color 160ms ease;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--cyan-hot); }
+  .tab.active::after {
+    content: ""; position: absolute;
+    bottom: -1px; left: 12%; right: 12%; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 18px rgba(0,166,214,0.5);
+  }
+  .tab .t-count {
+    font-size: 8.5px; letter-spacing: 0.12em;
+    color: var(--beige-dim); margin-left: 6px;
+  }
+  .tab.active .t-count { color: var(--cyan); }
+
+  .index-scroll {
+    flex: 1; min-height: 0;
+    padding: 8px 6px 6px 2px;
+    display: flex; flex-direction: column;
+  }
+
+  .group-head {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.26em; text-transform: uppercase;
+    color: var(--beige); opacity: 0.9;
+    margin: 16px 4px 8px;
+  }
+  .group-head:first-child { margin-top: 2px; }
+  .group-head::after {
+    content: ""; flex: 1; height: 1px;
+    background: rgba(212,191,125,0.18);
+  }
+  .group-head .g-n { color: var(--beige-dim); }
+  .group-head.grp-active { color: var(--cyan); }
+  .group-head.grp-failed { color: var(--danger); }
+
+  /* index row (quest or session) */
+  .idx-row {
+    position: relative; display: block; width: 100%;
+    text-align: left; background: transparent; border: 0;
+    cursor: pointer;
+    padding: 9px 12px 9px 13px;
+    border-left: 2px solid transparent;
+    transition: background 150ms ease, border-color 150ms ease;
+  }
+  .idx-row:hover { background: rgba(0,166,214,0.06); }
+  .idx-row.selected {
+    background: linear-gradient(90deg, rgba(0,166,214,0.13), transparent 82%);
+    border-left-color: var(--cyan);
+  }
+  .idx-row + .idx-row { border-top: 1px dashed rgba(212,191,125,0.10); }
+
+  .ir-top { display: flex; align-items: baseline; gap: 9px; }
+  .ir-glyph {
+    flex: 0 0 auto;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--cyan); line-height: 1.3;
+  }
+  .ir-title {
+    font-family: var(--font-prose); font-size: 15.5px;
+    color: var(--text); line-height: 1.25; letter-spacing: 0.01em;
+  }
+  .ir-check { margin-left: auto; flex: 0 0 auto; color: var(--muted); font-size: 10px; }
+  .ir-meta {
+    display: block;
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.18em; color: var(--muted); text-transform: uppercase;
+    margin-top: 5px; padding-left: 21px;
+  }
+  .ir-meta .sep { color: var(--beige-dim); margin: 0 5px; }
+
+  /* status coloring */
+  .idx-row.st-active   .ir-glyph { color: var(--cyan); }
+  .idx-row.st-active   .ir-title { color: var(--text); }
+  .idx-row.st-completed .ir-glyph,
+  .idx-row.st-completed .ir-title,
+  .idx-row.st-completed .ir-meta { color: var(--muted); }
+  .idx-row.st-failed   .ir-glyph,
+  .idx-row.st-failed   .ir-title { color: var(--danger); }
+
+  /* session row variant */
+  .idx-row.session .ir-no {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.16em; color: var(--cyan); text-transform: uppercase;
+    flex: 0 0 auto;
+  }
+
+  /* ============================================================
+     02  ENTRY  (right reading panel — the detail view)
+     ============================================================ */
+  .read-pad {
+    position: relative; z-index: 1;
+    flex: 1; min-height: 0;
+    padding: 36px 48px 40px;
+  }
+  .read-inner {
+    max-width: 680px;
+    transition: opacity 150ms ease;
+  }
+  .read-inner.fading { opacity: 0; }
+
+  /* badges / pill tags */
+  .badges { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 22px; }
+  .badge {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    padding: 5px 12px;
+    border: 1px solid currentColor;
+    clip-path: polygon(5px 0, 100% 0,
+      100% calc(100% - 5px), calc(100% - 5px) 100%,
+      0 100%, 0 5px);
+  }
+  .badge.b-active    { color: var(--cyan-hot); background: rgba(0,166,214,0.12); border-color: var(--cyan); }
+  .badge.b-completed { color: var(--muted);    background: rgba(170,170,170,0.07); border-color: rgba(170,170,170,0.5); }
+  .badge.b-failed    { color: var(--danger);   background: rgba(185,58,58,0.12); }
+  .badge.b-type      { color: var(--beige);    background: transparent; border-color: rgba(212,191,125,0.55); }
+  .badge.b-log       { color: var(--beige-dim); background: transparent; border-color: rgba(138,122,74,0.5); }
+
+  /* title */
+  .entry-title {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 26px; letter-spacing: 0.04em; line-height: 1.18;
+    color: var(--text); margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .entry.st-active   .entry-title { color: var(--cyan-hot); text-shadow: 0 0 16px rgba(0,166,214,0.28); }
+  .entry.st-completed .entry-title { color: var(--muted); }
+  .entry.st-failed   .entry-title { color: var(--danger); }
+
+  /* meta line */
+  .entry-meta {
+    font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase;
+    line-height: 1.7;
+  }
+  .entry-meta .k { color: var(--beige); }
+  .entry-meta .v { color: var(--text); }
+  .entry-meta .sep { color: var(--beige-dim); margin: 0 8px; }
+
+  /* session auto-log attribution — deliberately routine-looking */
+  .attrib {
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.24em; color: var(--beige-dim); text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  .entry-rule {
+    height: 1px; margin: 22px 0 26px;
+    background: repeating-linear-gradient(to right,
+      rgba(212,191,125,0.3) 0, rgba(212,191,125,0.3) 6px,
+      transparent 6px, transparent 12px);
+  }
+
+  /* prose */
+  .prose p {
+    font-family: var(--font-prose); font-size: 16.5px;
+    line-height: 1.78; color: var(--text);
+    margin: 0 0 18px; letter-spacing: 0.005em;
+    text-wrap: pretty;
+  }
+  .prose p:last-child { margin-bottom: 0; }
+  .prose .first-letter::first-letter,
+  .prose p.lede::first-letter {
+    /* subtle — no drop cap, keep it clean reading */
+  }
+
+  /* the single unavailable-segment gap — subtle, routine system stamp */
+  .log-gap {
+    font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 0.22em; color: var(--muted); opacity: 0.62;
+    text-align: center; margin: 6px 0 20px; padding: 12px 0;
+    border-top: 1px dashed rgba(170,170,170,0.16);
+    border-bottom: 1px dashed rgba(170,170,170,0.16);
+  }
+
+  /* subsection labels */
+  .sub-label {
+    display: flex; align-items: center; gap: 12px;
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--beige); margin: 32px 0 16px;
+  }
+  .sub-label::after {
+    content: ""; flex: 1; height: 1px;
+    background: rgba(212,191,125,0.18);
+  }
+  .sub-label .acc { color: var(--cyan); }
+
+  /* objectives checklist */
+  .obj-list { display: flex; flex-direction: column; gap: 4px; }
+  .obj-row {
+    display: flex; align-items: baseline; gap: 13px;
+    padding: 7px 6px; cursor: pointer;
+    border-radius: 1px;
+    transition: background 150ms ease;
+  }
+  .obj-row:hover { background: rgba(0,166,214,0.05); }
+  .obj-box {
+    flex: 0 0 auto; width: 17px; text-align: center;
+    color: var(--muted); font-size: 14px; line-height: 1.5;
+    transition: color 150ms ease;
+  }
+  .obj-row.done .obj-box { color: var(--cyan); }
+  .obj-text {
+    font-family: var(--font-prose); font-size: 16px;
+    line-height: 1.5; color: var(--text); letter-spacing: 0.005em;
+  }
+  .obj-row.done .obj-text {
+    color: var(--muted);
+  }
+
+  /* related link chips */
+  .related { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
+  .chip {
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.08em; color: var(--cyan);
+    background: transparent; border: 0; cursor: pointer;
+    padding: 1px 0 2px;
+    border-bottom: 1px solid rgba(0,166,214,0.4);
+    transition: color 150ms ease, border-color 150ms ease;
+  }
+  .chip:hover { color: var(--cyan-hot); border-bottom-color: var(--cyan-hot); }
+  .chip .c-g { color: var(--beige-dim); margin-right: 5px; }
+
+  /* key events */
+  .events { display: flex; flex-direction: column; gap: 10px; }
+  .event-row {
+    display: flex; align-items: baseline; gap: 13px;
+    font-family: var(--font-prose); font-size: 15.5px;
+    line-height: 1.5; color: var(--text); letter-spacing: 0.005em;
+  }
+  .event-row .ev-mark {
+    flex: 0 0 auto; color: var(--cyan); font-size: 9px;
+    transform: translateY(-1px);
+  }
+
+  @media (max-width: 1100px) {
+    main.journal { grid-template-columns: 38fr 62fr; }
+    .read-pad { padding: 28px 32px 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="sweep" id="sweep"></div>
+
+<!-- ====================== TOP BAR ====================== -->
+<header class="topbar" role="banner">
+  <div class="top-left">
+    <div class="stat-block" aria-label="Level">
+      <div class="stat-row"><span class="stat-num">08</span><span class="stat-label">Level</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:62%"></i></div>
+    </div>
+    <div class="stat-block" aria-label="Reputation">
+      <div class="stat-row"><span class="stat-num">35</span><span class="stat-label">Reputation</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:48%"></i></div>
+    </div>
+  </div>
+
+  <div class="top-center">
+    <div class="char-name">Ros Chrisstone<span class="cursor">█</span></div>
+    <div class="char-sub">
+      <span>Human · Fighter</span>
+      <span class="sep">/</span>
+      <span>Champion Archetype</span>
+      <span class="sep">/</span>
+      <span>Brettany Reclamation</span>
+    </div>
+  </div>
+
+  <div class="top-right">
+    <div class="weight-block">
+      <span class="ic">⚖</span><span class="val">45 / 120</span><span class="lab">Burden</span>
+    </div>
+    <div class="gold-block">
+      <span class="ic">⊙</span><span class="val">1,247</span><span class="lab">Gold</span>
+    </div>
+  </div>
+</header>
+
+<div class="ticker above" aria-hidden="true">
+  <span>TASK_MANAGER_SD11S</span><span class="gap"></span>
+  <span class="dim">// AURUM_LEDGER_OK</span><span class="gap"></span>
+  <span>PROTOCOL: 6920-A44</span><span class="gap"></span>
+  <span class="dim">0001 0110 1001 0011 1100</span>
+</div>
+<div class="ticker below" aria-hidden="true">
+  <span>FRAME 06 // JOURNAL.LOG</span><span class="gap"></span>
+  <span class="dim">LOG.OK</span><span class="gap"></span>
+  <span>SOULBOND 0x4F1A</span><span class="gap"></span>
+  <span class="dim">INDEX_SYNCED</span>
+</div>
+
+<!-- side labels -->
+<div class="side-label left">
+  <span class="acc">JOURNAL</span> &nbsp;//&nbsp; LOG_INDEX &nbsp;//&nbsp; SYNC OK
+</div>
+<div class="side-label right">
+  Session 04F1A &nbsp;//&nbsp; <span class="acc">ENTRIES :: 4</span> &nbsp;//&nbsp; Auto-Log
+</div>
+
+<!-- ====================== NAVBAR ====================== -->
+<nav class="navbar" aria-label="Primary">
+
+  <!-- Equipment — NOT active here, but its hover-expand still works -->
+  <div class="nav-slot equipment">
+    <button class="nav-btn" data-nav="equipment">
+      <span class="nb-frame"></span>
+      <span class="nb-marker">01 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-khanda"></i></span>
+        <span class="nb-label">Equipment</span>
+      </span>
+    </button>
+    <div class="nav-sub above" aria-hidden="false">
+      <button class="nav-btn" data-nav="inventory">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-bag-shopping"></i></span>
+          <span class="nb-label">Inventory</span>
+        </span>
+      </button>
+    </div>
+    <div class="nav-sub below" aria-hidden="false">
+      <button class="nav-btn" data-nav="stat-panel">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-chart-simple"></i></span>
+          <span class="nb-label">Stat Panel</span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="lore">
+      <span class="nb-frame"></span><span class="nb-marker">02 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-book-open"></i></span>
+        <span class="nb-label">Lore</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="spellbook">
+      <span class="nb-frame"></span><span class="nb-marker">03 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-scroll"></i></span>
+        <span class="nb-label">Spellbook</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="character">
+      <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-user-shield"></i></span>
+        <span class="nb-label">Character</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn is-active" data-nav="journal" aria-current="page">
+      <span class="nb-frame"></span><span class="nb-marker">05 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-clipboard"></i></span>
+        <span class="nb-label">Journal</span>
+      </span>
+    </button>
+  </div>
+</nav>
+
+<div class="nav-meta">
+  <span class="dim">◇</span>
+  <span>Section</span>
+  <span class="acc">/ Journal</span>
+  <span class="dim">·</span>
+  <span>Log Index</span>
+  <span class="dim">·</span>
+  <span>Entries <span class="acc">::</span> <span id="meta-active">4</span> Active</span>
+  <span class="dim">//</span>
+  <span class="stamp">ROS.CHRISSTONE</span>
+</div>
+
+<!-- ====================== MAIN ====================== -->
+<main class="journal">
+
+  <!-- ============ 01  LOG INDEX (master) ============ -->
+  <section class="col" aria-label="Log index">
+    <div class="col-header">
+      <span class="ch-num">01</span>
+      <span class="ch-title">Log Index</span>
+      <span class="ch-meta" id="index-meta"><span class="acc">4</span> Active <span class="dim">·</span> 2 Done</span>
+    </div>
+    <div class="region">
+      <div class="r-frame"></div>
+      <div class="r-gap"></div>
+      <div class="r-line"></div>
+      <div class="r-inner">
+        <span class="r-corner tl"></span>
+        <span class="r-corner br"></span>
+        <div class="index-pad">
+          <div class="tab-bar" role="tablist">
+            <button class="tab active" id="tab-quests" data-tab="quests" role="tab" aria-selected="true">
+              Quests<span class="t-count">04</span>
+            </button>
+            <button class="tab" id="tab-sessions" data-tab="sessions" role="tab" aria-selected="false">
+              Sessions<span class="t-count">04</span>
+            </button>
+          </div>
+          <div class="index-scroll scroll-y" id="index-scroll"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 02  ENTRY (detail) ============ -->
+  <section class="col" aria-label="Entry">
+    <div class="col-header">
+      <span class="ch-num">02</span>
+      <span class="ch-title">Entry</span>
+      <span class="ch-meta" id="entry-meta">Active · Main Quest</span>
+    </div>
+    <div class="region">
+      <div class="r-frame"></div>
+      <div class="r-gap"></div>
+      <div class="r-line"></div>
+      <div class="r-inner">
+        <span class="r-corner tl"></span>
+        <span class="r-corner br"></span>
+        <div class="read-pad scroll-y" id="read-pad">
+          <div class="read-inner" id="read-inner"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ====================== BOTTOM BAR ====================== -->
+<footer class="bottombar" role="contentinfo">
+  <div class="bb-line">
+    <span class="dot"></span>
+    <span class="lab">Neural Link:</span><span class="val">Stable</span>
+    <span class="sep">|</span>
+    <span class="lab">Shard Integrity:</span><span class="val">98.2%</span>
+    <span class="sep">|</span>
+    <span class="lab">Last Sync:</span><span class="val">0.07 ms</span>
+    <span class="sep">|</span>
+    <span class="lab">Castella-08:</span><span class="dim">Clear · Wind NNW 4kt</span>
+    <span class="sep">|</span>
+    <span class="lab">Tide:</span><span class="dim">Low @ 03:47</span>
+
+    <div class="bb-right">
+      <span class="lab">Codex</span><span class="val">v 2.4.7</span>
+      <span class="sep">|</span>
+      <span class="dot"></span><span class="val">DM Online</span>
+      <span class="sep">|</span>
+      <span class="lab" id="save-auto">SAVE · 00:44</span><span class="save-cursor">█</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ============================================================
+  // JOURNAL DATA  — all PLAYER-FACING placeholder copy.
+  //
+  // NOTE: quest progress is NOT authoritatively tracked on this screen.
+  // Objective done/pending flags below seed the INITIAL visual state only;
+  // clicking a checkbox toggles the visual state + console.log hook.
+  // Claude Code will own real quest state / persistence.
+  // ============================================================
+
+  const QUESTS = [
+    // ---------- ACTIVE ----------
+    {
+      id: 'clear-name', status: 'active', type: 'main', glyph: '◈',
+      title: 'Clear Your Name', region: 'BRETTANY',
+      givenBy: 'Magistrate Voss', location: 'Brettany',
+      desc: [
+        "The party stands accused. A Crown courier was found dead on the Brettany road, and the magistrate's writ names you among the suspects — wrong place, wrong hour, and no one yet willing to speak for you.",
+        "Until your name is cleared, the city gates keep watch on you and the garrison's patience runs thin. Find who set the blame at your feet, or find the proof that lifts it.",
+        "Magistrate Voss has granted you the freedom of the lower wards to make your case — but only until the next assize is called."
+      ],
+      objectives: [
+        { text: 'Speak with Magistrate Voss in the Brettany court', done: true },
+        { text: 'Find a witness who can place you off the road', done: false },
+        { text: "Recover the courier's missing satchel", done: false }
+      ],
+      related: ['Magistrate Voss', 'Brettany', 'The Crown']
+    },
+    {
+      id: 'stolen-tome', status: 'active', type: 'main', glyph: '◈',
+      title: 'The Stolen Tome', region: 'DAVELGUAY',
+      givenBy: 'The Lady', location: 'Davelguay',
+      desc: [
+        "A book was taken from The Lady of Davelguay — slim, water-stained, bound in grey hide — and she wants it back before anyone reads what it holds. She will say only that it is hers, and that its loss is your concern now.",
+        "You have the tome. It sits in your pack, heavier than its size should allow. What remains is the harder part: carrying it back to her, and learning what she truly asks in return.",
+        "She did not name a price. With The Lady, that is rarely a kindness."
+      ],
+      // cross-screen continuity: the tome is in the Inventory grid → recovery is DONE.
+      objectives: [
+        { text: 'Recover the stolen tome', done: true },
+        { text: 'Return it to The Lady // learn what she asks', done: false }
+      ],
+      related: ['The Lady', 'Castella', 'Davelguay Thicket']
+    },
+    {
+      id: 'whispers', status: 'active', type: 'side', glyph: '◇',
+      title: 'Whispers in Castella', region: 'CASTELLA',
+      givenBy: 'Castella Villagers', location: 'Castella',
+      desc: [
+        "The villagers of Castella speak in low voices of strange happenings — lights out on the water, a tide that runs the wrong way, doors found open at dawn that were barred at dusk.",
+        "No one will say much to an outsider. A few coins, or a few favours, might loosen a tongue or two."
+      ],
+      objectives: [
+        { text: 'Ask after the rumours along the Castella waterfront', done: false },
+        { text: 'Find someone willing to speak plainly', done: false }
+      ],
+      related: ['Castella', 'The Waterfront']
+    },
+    {
+      id: 'thicket-path', status: 'active', type: 'side', glyph: '◇',
+      title: 'The Thicket Path', region: 'DAVELGUAY',
+      givenBy: 'Davelguay Wardens', location: 'Davelguay',
+      desc: [
+        "The Davelguay thicket swallows the old road for three miles, and the safe way through shifts with the season. A guide is wanted — or a map, or the nerve to mark the path yourself.",
+        "Travellers have gone in and not come out the far side. Most simply turned back at the treeline. Most."
+      ],
+      objectives: [
+        { text: 'Find a safe route through the Davelguay thicket', done: false },
+        { text: "Mark the path for the party's return", done: false }
+      ],
+      related: ['Davelguay Thicket', 'The Old Road']
+    },
+    // ---------- COMPLETED ----------
+    {
+      id: 'arrival', status: 'completed', type: 'main', glyph: '◈',
+      title: 'Arrival in Brettany', region: 'BRETTANY',
+      givenBy: 'The Reclamation', location: 'Brettany',
+      desc: [
+        "The road from the coast ended at the Brettany gate, and with it the first leg of the journey. The party arrived footsore and unannounced, and the city took its time deciding what to make of them.",
+        "Lodging was found in the lower ward, introductions were made, and the work of the Reclamation began in earnest."
+      ],
+      objectives: [
+        { text: 'Reach the city of Brettany', done: true },
+        { text: 'Secure lodging in the lower ward', done: true }
+      ],
+      related: ['Brettany', 'The Reclamation']
+    },
+    {
+      id: 'mayors-welcome', status: 'completed', type: 'side', glyph: '◇',
+      title: "The Mayor's Welcome", region: 'CASTELLA',
+      givenBy: 'Mayor of Castella', location: 'Castella',
+      desc: [
+        "Castella's mayor insisted on a welcome the party never asked for — a long supper, longer speeches, and a request dressed up as a courtesy.",
+        "The meal was good. The favour owed afterward was the true price of it."
+      ],
+      objectives: [
+        { text: "Attend the mayor's supper", done: true },
+        { text: "Hear out the mayor's request", done: true }
+      ],
+      related: ['Castella', 'Mayor of Castella']
+    }
+    // ---------- FAILED ----------
+    // (none yet — the FAILED group styling is built and ready; it stays
+    //  hidden while no quest carries status 'failed'.)
+  ];
+
+  const SESSIONS = [
+    {
+      id: 's04', no: '04', title: 'The Gates of Castella',
+      date: '21st of Hammerfall · 1247 PR',
+      recap: [
+        "The subject and party proceeded toward Castella along the coast road, arriving at the western gate shortly after midday. Entry was granted without incident. Local sentiment toward outsiders was recorded as guarded but not hostile.",
+        "Over the following hours the party made contact with several residents and established a temporary base of operations near the waterfront. No combat was observed. Resource expenditure was minimal.",
+        "The session concluded with the party at rest. All members accounted for. Status nominal."
+      ],
+      events: [
+        "Party reached Castella's western gate at midday",
+        'Temporary base established near the waterfront',
+        'First contact made with local residents',
+        'No casualties recorded'
+      ]
+    },
+    {
+      id: 's03', no: '03', title: 'Into the Thicket',
+      date: '18th of Hammerfall · 1247 PR',
+      recap: [
+        "The party entered the Davelguay thicket from the northern verge at first light. Movement through dense undergrowth reduced the day's progress by an estimated forty percent. Visibility remained poor throughout.",
+        "A disused waystation was located near the thicket's heart and searched. One item of interest was recovered and added to the party inventory. The party withdrew before nightfall and made camp at the treeline.",
+        "No hostile contact was confirmed. Two party members reported unease; no cause was identified."
+      ],
+      events: [
+        'Entered the Davelguay thicket at the northern verge',
+        'Disused waystation located and searched',
+        'One item of interest recovered',
+        'Camp made at the treeline'
+      ]
+    },
+    {
+      id: 's02', no: '02', title: "The Mayor's Welcome",
+      date: '11th of Hammerfall · 1247 PR',
+      // the single, deliberate prose gap — routine-looking, never alarming.
+      recap: [
+        "The party accepted an invitation to the residence of the Castella mayor. The evening proceeded as a formal supper. The subject was seated at the host's right and engaged in extended conversation, the content of which is summarised below.",
+        { gap: true },
+        "The party departed the residence before midnight. A request was extended by the host and provisionally accepted. No further activity was recorded for the session."
+      ],
+      events: [
+        'Attended the mayor\u2019s supper at Castella',
+        'Subject seated at the host\u2019s right',
+        'Host\u2019s request provisionally accepted'
+      ]
+    },
+    {
+      id: 's01', no: '01', title: 'Arrival in Brettany',
+      date: '04th of Hammerfall · 1247 PR',
+      recap: [
+        "Initial session. The party assembled at the Brettany gate and was formally registered with the city watch. Member roles and equipment were catalogued. The subject was identified as the party's principal combatant.",
+        "Lodging was secured in the lower ward. The party rested without incident. Baseline status was established for all members.",
+        "The Reclamation assignment was accepted and logged. Session concluded."
+      ],
+      events: [
+        'Party assembled and registered at the Brettany gate',
+        'Lodging secured in the lower ward',
+        'Reclamation assignment accepted',
+        'Baseline status established'
+      ]
+    }
+  ];
+
+  const TYPE_LABEL = { main: 'Main Quest', side: 'Side Quest' };
+  const STATUS_LABEL = { active: 'Active', completed: 'Completed', failed: 'Failed' };
+
+  // ============================================================
+  // STATE
+  // ============================================================
+  const indexScroll = document.getElementById('index-scroll');
+  const readInner    = document.getElementById('read-inner');
+  const readPad      = document.getElementById('read-pad');
+  const entryMeta    = document.getElementById('entry-meta');
+  const tabQuests    = document.getElementById('tab-quests');
+  const tabSessions  = document.getElementById('tab-sessions');
+
+  let currentTab = 'quests';
+  let sessionsVisited = false;
+  let selectedId = null;   // id of the entry shown in the reading panel
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+
+  // ============================================================
+  // RENDER — INDEX (master list)
+  // ============================================================
+  function questRow(q) {
+    const check = q.status === 'completed'
+      ? '<span class="ir-check"><i class="fa-solid fa-check"></i></span>' : '';
+    return `
+      <button class="idx-row quest st-${q.status}" data-kind="quest" data-id="${q.id}"
+              role="tab" aria-selected="false">
+        <span class="ir-top">
+          <span class="ir-glyph">${q.glyph}</span>
+          <span class="ir-title">${esc(q.title)}</span>
+          ${check}
+        </span>
+        <span class="ir-meta">${q.type.toUpperCase()}<span class="sep">·</span>${esc(q.region)}</span>
+      </button>`;
+  }
+
+  function sessionRow(s) {
+    return `
+      <button class="idx-row session" data-kind="session" data-id="${s.id}"
+              role="tab" aria-selected="false">
+        <span class="ir-top">
+          <span class="ir-no">SESSION ${s.no}</span>
+        </span>
+        <span class="ir-top" style="margin-top:4px;">
+          <span class="ir-title">${esc(s.title)}</span>
+        </span>
+        <span class="ir-meta" style="padding-left:0;">${esc(s.date)}</span>
+      </button>`;
+  }
+
+  function groupHead(label, cls, n) {
+    return `<div class="group-head ${cls}">${label}<span class="g-n">${n}</span></div>`;
+  }
+
+  function renderIndex() {
+    if (currentTab === 'quests') {
+      const active = QUESTS.filter(q => q.status === 'active');
+      const done   = QUESTS.filter(q => q.status === 'completed');
+      const failed = QUESTS.filter(q => q.status === 'failed');
+      let html = '';
+      if (active.length) {
+        html += groupHead('Active', 'grp-active', active.length);
+        html += active.map(questRow).join('');
+      }
+      if (done.length) {
+        html += groupHead('Completed', 'grp-completed', done.length);
+        html += done.map(questRow).join('');
+      }
+      // FAILED group — only rendered when failed quests exist (styling is ready).
+      if (failed.length) {
+        html += groupHead('Failed', 'grp-failed', failed.length);
+        html += failed.map(questRow).join('');
+      }
+      indexScroll.innerHTML = html;
+    } else {
+      indexScroll.innerHTML = SESSIONS.map(sessionRow).join('');
+    }
+    // restore selection highlight if the selected entry is in this list
+    markSelected();
+    wireRows();
+  }
+
+  function markSelected() {
+    indexScroll.querySelectorAll('.idx-row').forEach(r => {
+      const on = r.dataset.id === selectedId;
+      r.classList.toggle('selected', on);
+      r.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+  }
+
+  // ============================================================
+  // RENDER — ENTRY (detail / reading panel)
+  // ============================================================
+  function renderQuest(q) {
+    const statusBadge =
+      q.status === 'active'    ? '<span class="badge b-active">Active</span>' :
+      q.status === 'completed' ? '<span class="badge b-completed">Completed</span>' :
+                                 '<span class="badge b-failed">Failed</span>';
+    const typeBadge = `<span class="badge b-type">${TYPE_LABEL[q.type]}</span>`;
+
+    const desc = q.desc.map(p => `<p>${esc(p)}</p>`).join('');
+
+    const objs = q.objectives.map((o, i) => `
+      <div class="obj-row ${o.done ? 'done' : ''}" data-obj="${i}">
+        <span class="obj-box">${o.done
+          ? '<i class="fa-solid fa-circle-check"></i>'
+          : '<i class="fa-regular fa-circle"></i>'}</span>
+        <span class="obj-text">${esc(o.text)}</span>
+      </div>`).join('');
+
+    const related = (q.related && q.related.length)
+      ? `<div class="sub-label">Related</div>
+         <div class="related">
+           ${q.related.map(r => `<button class="chip" data-link="${esc(r)}"><span class="c-g">◇</span>${esc(r)}</button>`).join('')}
+         </div>`
+      : '';
+
+    return {
+      cls: `entry st-${q.status}`,
+      meta: `<span style="color:var(--cyan)">${STATUS_LABEL[q.status]}</span> · ${TYPE_LABEL[q.type]}`,
+      html: `
+        <div class="badges">${statusBadge}${typeBadge}</div>
+        <h1 class="entry-title">${esc(q.title)}</h1>
+        <div class="entry-meta">
+          <span class="k">Given By:</span> <span class="v">${esc(q.givenBy)}</span>
+          <span class="sep">·</span>
+          <span class="k">Location:</span> <span class="v">${esc(q.location)}</span>
+        </div>
+        <div class="entry-rule"></div>
+        <div class="prose">${desc}</div>
+        <div class="sub-label">Objectives <span class="acc">::</span> ${q.objectives.filter(o=>o.done).length} / ${q.objectives.length}</div>
+        <div class="obj-list">${objs}</div>
+        ${related}
+      `
+    };
+  }
+
+  function renderSession(s) {
+    const recap = s.recap.map(p =>
+      (p && p.gap)
+        ? `<div class="log-gap">[ LOG SEGMENT UNAVAILABLE ]</div>`
+        : `<p>${esc(p)}</p>`
+    ).join('');
+
+    const events = s.events.map(e => `
+      <div class="event-row"><span class="ev-mark">◆</span><span>${esc(e)}</span></div>`).join('');
+
+    return {
+      cls: 'entry session',
+      meta: `Session ${s.no} · Auto-Log`,
+      html: `
+        <div class="badges">
+          <span class="badge b-log">Session Log</span>
+          <span class="badge b-type">Session ${s.no}</span>
+        </div>
+        <div class="entry-meta">
+          <span class="k">Session ${s.no}</span> <span class="sep">·</span> <span class="v">${esc(s.date)}</span>
+        </div>
+        <h1 class="entry-title">${esc(s.title)}</h1>
+        <div class="attrib">Recorded by G.U.I.D.E. &nbsp;//&nbsp; Auto-Log</div>
+        <div class="entry-rule"></div>
+        <div class="prose">${recap}</div>
+        <div class="sub-label">Key Events</div>
+        <div class="events">${events}</div>
+      `
+    };
+  }
+
+  // load an entry into the reading panel with a ~150ms content fade
+  function loadEntry(kind, id, opts) {
+    opts = opts || {};
+    const data = kind === 'quest'
+      ? renderQuest(QUESTS.find(q => q.id === id))
+      : renderSession(SESSIONS.find(s => s.id === id));
+    if (!data) return;
+
+    selectedId = id;
+    markSelected();
+
+    const apply = () => {
+      readInner.className = 'read-inner ' + data.cls;
+      readInner.innerHTML = data.html;
+      entryMeta.innerHTML = data.meta;
+      readPad.scrollTop = 0;
+      wireEntry(kind);
+      // fade back in
+      requestAnimationFrame(() => readInner.classList.remove('fading'));
+    };
+
+    if (opts.instant) {
+      apply();
+    } else {
+      readInner.classList.add('fading');
+      setTimeout(apply, 150);
+    }
+  }
+
+  // ============================================================
+  // WIRING
+  // ============================================================
+  function wireRows() {
+    indexScroll.querySelectorAll('.idx-row').forEach(row => {
+      row.addEventListener('click', () => {
+        loadEntry(row.dataset.kind, row.dataset.id);
+      });
+    });
+  }
+
+  function wireEntry(kind) {
+    // Objective toggle — MOCKUP ONLY. Toggles visual state + console.log hook.
+    // Real quest progression is owned by Claude Code, not this screen.
+    readInner.querySelectorAll('.obj-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const nowDone = !row.classList.contains('done');
+        row.classList.toggle('done', nowDone);
+        const box = row.querySelector('.obj-box');
+        box.innerHTML = nowDone
+          ? '<i class="fa-solid fa-circle-check"></i>'
+          : '<i class="fa-regular fa-circle"></i>';
+        const label = row.querySelector('.obj-text').textContent;
+        console.log(`Objective toggled: "${label}" -> ${nowDone ? 'done' : 'pending'} [visual only — not persisted]`);
+      });
+    });
+
+    // Related link chips — console.log placeholder navigation hook.
+    readInner.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        console.log(`Navigate to: ${chip.dataset.link}`);
+      });
+    });
+  }
+
+  // category tabs
+  function setTab(tab) {
+    if (tab === currentTab) return;
+    currentTab = tab;
+    tabQuests.classList.toggle('active', tab === 'quests');
+    tabQuests.setAttribute('aria-selected', tab === 'quests' ? 'true' : 'false');
+    tabSessions.classList.toggle('active', tab === 'sessions');
+    tabSessions.setAttribute('aria-selected', tab === 'sessions' ? 'true' : 'false');
+    renderIndex();
+
+    // First switch to SESSIONS auto-selects the top session; the reading
+    // panel otherwise keeps its current entry until a new row is clicked.
+    if (tab === 'sessions' && !sessionsVisited) {
+      sessionsVisited = true;
+      loadEntry('session', SESSIONS[0].id);
+    }
+  }
+  tabQuests.addEventListener('click', () => setTab('quests'));
+  tabSessions.addEventListener('click', () => setTab('sessions'));
+
+  // ============================================================
+  // INIT — render index, auto-select top ACTIVE quest
+  // ============================================================
+  renderIndex();
+  loadEntry('quest', 'clear-name', { instant: true });
+
+  // ============================================================
+  // SHARED CHROME BEHAVIORS (verbatim with other phases)
+  // ============================================================
+  document.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.getAttribute('data-nav');
+      const label = (btn.querySelector('.nb-label')?.textContent || t).trim();
+      console.log(`Navigating to ${label}... [data-nav="${t}"]`);
+    });
+  });
+
+  (function sweepLoop() {
+    const sweep = document.getElementById('sweep');
+    function trigger() { sweep.classList.remove('run'); void sweep.offsetWidth; sweep.classList.add('run'); }
+    function schedule() { const delay = 7000 + Math.random() * 4000; setTimeout(() => { trigger(); schedule(); }, delay); }
+    setTimeout(() => { trigger(); schedule(); }, 2500);
+  })();
+
+  (function liveCounter() {
+    const el = document.getElementById('save-auto');
+    if (!el) return;
+    let t = 44;
+    setInterval(() => { t = (t + 1) % 60; el.textContent = `SAVE · 00:${t.toString().padStart(2,'0')}`; }, 700);
+  })();
+</script>
+
+</body>
+</html>

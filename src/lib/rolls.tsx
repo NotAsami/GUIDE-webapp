@@ -10,6 +10,19 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import type { ReactNode } from 'react'
 import type { AttackRoll, DamageRoll } from './weapons'
 
+/** A d20 roll behind an ability check, saving throw, or skill check — rolled on
+ *  the Character screen. `rolls` holds one entry normally, two under adv/dis. */
+export type CheckRoll = {
+  mode: 'normal' | 'adv' | 'dis'
+  rolls: number[]
+  pick: number
+  /** e.g. "14 + 2 DEX + 3 PROF" — everything except the trailing "= total". */
+  breakdown: string
+  total: number
+  crit: boolean
+  fumble: boolean
+}
+
 export type RollEntry = {
   id: string
   at: number
@@ -19,9 +32,11 @@ export type RollEntry = {
   /** Secondary line, e.g. "Main Hand · Attack". */
   subtitle?: string
   icon?: string
-  /** Weapon rolls carry both; future check/save rolls will add their own shapes. */
+  /** Weapon rolls carry both. */
   attack?: AttackRoll
   damage?: DamageRoll
+  /** Ability check / saving throw / skill check rolls (Character screen). */
+  check?: CheckRoll
   /** Generic result lines (heal, buff applied, …) for non-weapon rolls. */
   lines?: RollLine[]
 }

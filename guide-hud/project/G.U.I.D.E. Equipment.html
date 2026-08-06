@@ -1,0 +1,1599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — EQUIPMENT // ROS CHRISSTONE</title>
+<!--
+  PHASE 2 — Equipment screen.
+
+  Deviations from spec + reasoning:
+
+  1.  Navbar position: spec says "moves to top, just below the top UI bar."
+      I gave it a 22px gap from the top divider so the Equipment hover-expand
+      can still reveal a sub-button ABOVE the active button without clipping
+      into the top bar. The "below" sub-button drops below as before. The
+      mechanic is identical to Phase 1; the geometry just needed breathing
+      room.
+
+  2.  Active state on Equipment: the cyan accent reads through three
+      simultaneous cues — a 2px cyan top edge marker, a cyan-tinted inner
+      glow, and the icon/label in cyan. The frame still uses beige so the
+      button reads as part of the same hardware set, not a different
+      component.
+
+  3.  Right-column gear grid is 3×3 with G.U.I.D.E. SHARD as the
+      center-of-the-bottom-row slot (a deliberate placement — it visually
+      echoes the home-screen glyph centerpiece). The "Quick Access" cell
+      is split into two horizontal sub-slots inside one card, as spec'd.
+
+  4.  Main/Off-Hand "sync" indicator: shown as a small "↔ SYNC" tag in
+      the top-right corner of those gear-grid cells AND as a thin cyan
+      line connecting them visually. They show the SAME weapon names,
+      same rarity strip, but in compact form.
+
+  5.  Portrait loading bar fills and resets in a clean 6s loop with a
+      brief 250ms pause at 100% to feel like an actual handshake protocol,
+      not just a CSS slider.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  /* ============================================================
+     PHASE-1 BASE  (kept verbatim so the two screens share DNA)
+     ============================================================ */
+  :root {
+    --bg:        #1d1d1d;
+    --bg-2:      #161616;
+    --beige:     #d4bf7d;
+    --beige-dim: #8a7a4a;
+    --cyan:      #00a6d6;
+    --cyan-dim:  #0d6e8c;
+    --cyan-hot:  #4dd6ff;
+    --gold-rare: #e2b021;
+    --text:      #dedede;
+    --muted:     #aaaaaa;
+    --danger:    #b93a3a;
+
+    --bar-top-h:    62px;
+    --bar-bottom-h: 50px;
+    --nav-h:        72px;
+    --nav-top-gap:  26px;
+
+    --font-display: "Cinzel", serif;
+    --font-prose:   "EB Garamond", serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-prose);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .stage {
+    position: fixed; inset: 0;
+    background:
+      url("https://www.transparenttextures.com/patterns/dark-leather.png"),
+      radial-gradient(120% 90% at 50% 50%, #232220 0%, #1a1a1a 60%, #0e0e0e 100%);
+    background-blend-mode: overlay, normal;
+  }
+  .scanlines {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 90;
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+      transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 91;
+    background: radial-gradient(120% 110% at 50% 50%,
+      transparent 55%, rgba(0,0,0,0.55) 95%, rgba(0,0,0,0.85) 100%);
+  }
+  .sweep {
+    pointer-events: none;
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 2px; z-index: 95;
+    background: linear-gradient(to bottom,
+      transparent, rgba(0,166,214,0.55) 50%, transparent);
+    box-shadow: 0 0 24px rgba(0,166,214,0.45);
+    opacity: 0;
+  }
+  .sweep.run { animation: sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards; }
+  @keyframes sweep-run {
+    0%   { opacity: 0; transform: translateY(-20px); }
+    8%   { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(100vh); }
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- Top Bar (identical to Phase 1) ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--bar-top-h); z-index: 50;
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; padding: 0 36px;
+    background: linear-gradient(to bottom,
+      rgba(15,15,15,0.95) 0%, rgba(22,22,22,0.92) 100%);
+    border-bottom: 1px solid var(--beige);
+    box-shadow: 0 1px 0 rgba(212,191,125,0.15),
+                0 8px 24px -8px rgba(0,0,0,0.6);
+  }
+  .topbar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .topbar::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 1px; background: var(--beige);
+    box-shadow: 0 0 8px rgba(212,191,125,0.4);
+  }
+  .top-left, .top-right {
+    display: flex; align-items: center; gap: 28px;
+    position: relative; z-index: 1;
+  }
+  .top-right { justify-content: flex-end; }
+  .stat-block { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+  .stat-row { display: flex; align-items: baseline; gap: 8px; }
+  .stat-num {
+    font-family: var(--font-display); font-weight: 600;
+    color: var(--beige); font-size: 22px; line-height: 1; letter-spacing: 0.04em;
+  }
+  .stat-label {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--cyan); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .bar {
+    height: 3px; width: 110px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5); position: relative; overflow: hidden;
+  }
+  .bar > i {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    box-shadow: 0 0 6px rgba(0,166,214,0.6); display: block;
+  }
+  .top-center { text-align: center; position: relative; z-index: 1; padding: 0 24px; }
+  .char-name {
+    font-family: var(--font-display); font-weight: 600; font-size: 18px;
+    letter-spacing: 0.4em; color: var(--text); text-transform: uppercase; line-height: 1;
+  }
+  .char-name .cursor {
+    display: inline-block; color: var(--cyan); transform: translateY(-1px);
+    margin-left: 4px; animation: blink 1s steps(2, end) infinite;
+  }
+  .char-sub {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+    color: var(--muted); margin-top: 4px; text-transform: uppercase;
+  }
+  .char-sub .sep { color: var(--beige-dim); margin: 0 8px; }
+  .gold-block, .weight-block { display: flex; align-items: baseline; gap: 10px; }
+  .gold-block .ic, .weight-block .ic {
+    font-family: var(--font-display); color: var(--beige); font-size: 20px; line-height: 1;
+  }
+  .gold-block .val, .weight-block .val {
+    font-family: var(--font-display); color: var(--beige); font-size: 18px;
+    letter-spacing: 0.06em; line-height: 1;
+  }
+  .gold-block .lab, .weight-block .lab {
+    font-family: var(--font-mono); color: var(--cyan); font-size: 9px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .ticker {
+    position: fixed; left: 0; right: 0; height: 12px; z-index: 51;
+    display: flex; align-items: center; padding: 0 24px;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+    color: rgba(0,166,214,0.55); pointer-events: none;
+    overflow: hidden; white-space: nowrap;
+  }
+  .ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
+  .ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212,191,125,0.45); }
+  .ticker .gap { width: 32px; display: inline-block; }
+  .ticker .dim { color: rgba(170,170,170,0.4); }
+
+  /* ---------- Bottom Bar (identical to Phase 1) ---------- */
+  .bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--bar-bottom-h); z-index: 50;
+    display: flex; align-items: center; padding: 0 32px;
+    background: linear-gradient(to top,
+      rgba(15,15,15,0.96) 0%, rgba(22,22,22,0.92) 100%);
+    border-top: 1px solid var(--beige);
+    box-shadow: 0 -1px 0 rgba(212,191,125,0.15), 0 -8px 24px -8px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .bottombar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .bb-line {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; width: 100%; color: var(--muted);
+    position: relative; z-index: 1;
+  }
+  .bb-line .lab  { color: var(--beige); }
+  .bb-line .val  { color: var(--cyan); }
+  .bb-line .dim  { color: var(--muted); }
+  .bb-line .sep  { color: var(--beige-dim); margin: 0 4px; }
+  .bb-line .dot  {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px rgba(0,166,214,0.7);
+    display: inline-block;
+  }
+  .bb-line .save-cursor {
+    color: var(--cyan); animation: blink 1s steps(2, end) infinite; margin-left: 2px;
+  }
+  .bb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  /* ============================================================
+     NAVBAR — repositioned at top, smaller, horizontal
+     ============================================================ */
+  .navbar {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap));
+    left: 50%; transform: translateX(-50%);
+    display: flex; gap: 14px;
+    z-index: 45;
+  }
+  .nav-slot { position: relative; width: 156px; display: flex; justify-content: center; }
+  .nav-slot.equipment { padding: 60px 0; margin: -60px 0; }
+
+  .nav-btn {
+    --w: 156px; --h: var(--nav-h); --cut: 11px;
+    width: var(--w); height: var(--h);
+    background: transparent; border: 0; padding: 0;
+    color: var(--text); font-family: var(--font-mono);
+    cursor: pointer; position: relative;
+    transition: transform 180ms ease;
+  }
+  .nav-btn .nb-frame {
+    position: absolute; inset: 0; background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 180ms ease;
+  }
+  .nav-btn .nb-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(212,191,125,0.04), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #141414);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 6px;
+    transition: box-shadow 180ms ease, background 180ms ease;
+  }
+  .nav-btn .nb-icon {
+    color: var(--beige); font-size: 20px; line-height: 1;
+    transition: color 180ms ease, text-shadow 180ms ease;
+  }
+  .nav-btn .nb-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.26em; color: var(--text); text-transform: uppercase;
+  }
+  .nav-btn .nb-marker {
+    position: absolute; top: 6px; left: 12px;
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.2em; color: var(--cyan); opacity: 0.7;
+  }
+  .nav-btn:hover { transform: translateY(-2px); }
+  .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.18),
+                0 0 18px rgba(0,166,214,0.35);
+  }
+  .nav-btn:hover .nb-icon {
+    color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.7);
+  }
+
+  /* Active state — Equipment */
+  .nav-btn.is-active .nb-frame { background: var(--cyan); }
+  .nav-btn.is-active .nb-inner {
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.18), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 28px rgba(0,166,214,0.30),
+                0 0 22px rgba(0,166,214,0.55);
+  }
+  .nav-btn.is-active .nb-icon { color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.9); }
+  .nav-btn.is-active .nb-label { color: var(--cyan-hot); }
+  .nav-btn.is-active .nb-marker { color: var(--beige); opacity: 1; }
+  .nav-btn.is-active::after {
+    content: ""; position: absolute;
+    top: -6px; left: 14%; right: 14%; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 20px rgba(0,166,214,0.6);
+    z-index: 2;
+  }
+
+  /* Sub-buttons (Inventory above, Stat Panel below) */
+  .nav-sub {
+    position: absolute; left: 50%;
+    transform: translate(-50%, 0) scale(0.95);
+    opacity: 0; pointer-events: none;
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
+    z-index: 1;
+  }
+  .nav-sub.above { bottom: calc(50% + 44px); }
+  .nav-sub.below { top:    calc(50% + 44px); }
+  .nav-sub .nav-btn {
+    --w: 122px; --h: 56px; --cut: 9px;
+  }
+  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
+  .nav-sub .nav-btn .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
+                linear-gradient(180deg, #141a1d, #0e1316);
+  }
+  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
+  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
+  .nav-sub .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
+  .nav-slot.equipment:hover .nav-sub,
+  .nav-slot.equipment:focus-within .nav-sub {
+    opacity: 1; pointer-events: auto;
+  }
+  .nav-slot.equipment:hover .nav-sub.above { transform: translate(-50%, -8px) scale(1); }
+  .nav-slot.equipment:hover .nav-sub.below { transform: translate(-50%, 8px) scale(1); }
+
+  /* breadcrumb under navbar */
+  .nav-meta {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 8px);
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.32em; color: var(--muted);
+    text-transform: uppercase; z-index: 44;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .nav-meta .acc  { color: var(--cyan); }
+  .nav-meta .dim  { color: var(--beige-dim); }
+
+  /* ============================================================
+     EQUIPMENT MAIN AREA
+     ============================================================ */
+  main.eq {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 50px);
+    bottom: calc(var(--bar-bottom-h) + 22px);
+    left: 0; right: 0;
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(440px, 1.55fr) minmax(280px, 1fr);
+    gap: 28px;
+    padding: 0 36px;
+    z-index: 10;
+  }
+
+  /* corner brackets, scoped to main */
+  main.eq::before, main.eq::after {
+    content: ""; position: absolute;
+    border-color: var(--beige); pointer-events: none; opacity: 0.55;
+  }
+
+  /* --- Column-level chrome --- */
+  .col {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .col-header {
+    display: flex; align-items: baseline; gap: 14px;
+    margin-bottom: 12px;
+    padding: 0 4px 8px;
+    border-bottom: 1px solid rgba(212,191,125,0.35);
+  }
+  .col-header .ch-num {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+  }
+  .col-header .ch-title {
+    font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
+  }
+  .col-header .ch-meta {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+  }
+
+  /* ============================================================
+     LEFT COLUMN — Weapons + Stats
+     ============================================================ */
+
+  .weapon-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .weapon-card {
+    --cut: 14px;
+    position: relative;
+    cursor: pointer;
+    transition: transform 200ms cubic-bezier(.2,.7,.2,1);
+  }
+  .weapon-card:hover { transform: translateX(2px); }
+
+  .weapon-card .wc-frame {
+    position: relative;
+    background: var(--beige);
+    clip-path: polygon(0 0,
+      calc(100% - var(--cut)) 0, 100% var(--cut),
+      100% 100%,
+      var(--cut) 100%, 0 calc(100% - var(--cut)));
+    padding: 1.5px;
+    transition: background 180ms ease;
+  }
+  .weapon-card .wc-inner {
+    background:
+      radial-gradient(160% 110% at 0% 50%, rgba(0,166,214,0.08), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #141414);
+    clip-path: polygon(0 0,
+      calc(100% - var(--cut) + 1px) 0, calc(100% - 1px) calc(var(--cut) - 1px),
+      calc(100% - 1px) calc(100% - 1px),
+      calc(var(--cut) - 1px) calc(100% - 1px), 0 calc(100% - var(--cut) + 1px));
+    padding: 14px 16px 12px 22px;
+    position: relative;
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 14px;
+    row-gap: 4px;
+    align-items: center;
+    transition: box-shadow 200ms ease;
+  }
+  .weapon-card .wc-inner::before {
+    /* rarity strip — left edge accent */
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0; width: 4px;
+    background: var(--strip, var(--beige));
+    box-shadow: 0 0 10px rgba(0,166,214,0.0);
+  }
+  .weapon-card[data-rarity="uncommon"] .wc-inner::before {
+    background: var(--cyan);
+    box-shadow: 0 0 12px rgba(0,166,214,0.45);
+  }
+  .weapon-card[data-rarity="common"] .wc-inner::before { background: var(--beige); opacity: 0.5; }
+  .weapon-card[data-rarity="rare"] .wc-inner::before {
+    background: var(--cyan-hot);
+    box-shadow: 0 0 14px rgba(77,214,255,0.6);
+  }
+
+  .weapon-card:hover .wc-inner {
+    box-shadow: inset 0 0 26px rgba(0,166,214,0.15),
+                0 0 22px rgba(0,166,214,0.25);
+  }
+
+  .weapon-card .wc-icon {
+    grid-row: 1 / span 2;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--beige);
+    font-size: 22px;
+    border: 1px solid rgba(212,191,125,0.4);
+    background: rgba(0,0,0,0.4);
+  }
+  .weapon-card .wc-name {
+    font-family: var(--font-display);
+    color: var(--cyan-hot);
+    font-size: 16px;
+    letter-spacing: 0.06em;
+    line-height: 1.1;
+  }
+  .weapon-card[data-rarity="common"] .wc-name { color: var(--text); }
+  .weapon-card .wc-dmg {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    text-transform: uppercase;
+    grid-column: 2;
+  }
+  .weapon-card .wc-dmg .v { color: var(--text); }
+  .weapon-card .wc-slot {
+    grid-row: 1 / span 2;
+    grid-column: 3;
+    text-align: right;
+    display: flex; flex-direction: column;
+    gap: 4px; align-items: flex-end;
+  }
+  .weapon-card .wc-slot .label {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.26em;
+    color: var(--beige);
+    text-transform: uppercase;
+  }
+  .weapon-card .wc-slot .rarity {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.22em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+  .weapon-card[data-rarity="common"] .wc-slot .rarity { color: var(--beige-dim); }
+
+  /* --- Stats panel --- */
+  .stats-panel {
+    margin-top: 22px;
+    display: flex; flex-direction: column;
+  }
+  .stat-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 22px;
+    padding: 14px 4px 8px;
+  }
+  .stat-line {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px dashed rgba(212,191,125,0.18);
+    padding: 6px 4px;
+  }
+  .stat-line .sl-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: var(--beige);
+    text-transform: uppercase;
+  }
+  .stat-line .sl-value {
+    font-family: var(--font-display);
+    font-size: 18px;
+    color: var(--cyan-hot);
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+  .stat-line .sl-value .unit {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--cyan);
+    margin-left: 4px;
+  }
+  .stat-line.hp .sl-value { color: var(--cyan-hot); }
+  .stat-line.full-row { grid-column: 1 / -1; }
+
+  .panel-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+  }
+  .pa-btn {
+    flex: 1;
+    --cut: 9px;
+    background: transparent;
+    border: 0; padding: 0;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    position: relative;
+    height: 44px;
+  }
+  .pa-btn .pa-frame {
+    position: absolute; inset: 0;
+    background: var(--cyan);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .pa-btn .pa-inner {
+    position: absolute; inset: 1.5px;
+    background: linear-gradient(180deg, #141a1d, #0e1316);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px;
+    color: var(--cyan-hot);
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    transition: box-shadow 180ms ease, color 180ms ease;
+  }
+  .pa-btn:hover .pa-inner {
+    color: #fff;
+    box-shadow: inset 0 0 22px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .pa-btn .pa-inner i { font-size: 11px; opacity: 0.85; }
+
+  /* ============================================================
+     CENTER COLUMN — Portrait
+     ============================================================ */
+  .portrait-col {
+    display: flex; flex-direction: column;
+    align-items: stretch;
+    min-width: 0;
+  }
+  .portrait-wrap {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    position: relative;
+    min-height: 0;
+  }
+  .portrait {
+    --cut: 28px;
+    width: 100%;
+    max-width: 540px;
+    margin: 0 auto;
+    position: relative;
+    flex: 1;
+    display: flex;
+    transition: filter 220ms ease;
+  }
+  .portrait::before {
+    /* outer double-line frame: beige */
+    content: "";
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .portrait::after {
+    /* secondary frame line (inner) */
+    content: "";
+    position: absolute; inset: 7px;
+    background: var(--bg);
+    clip-path: polygon(calc(var(--cut) - 6px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 6px), calc(100% - var(--cut) + 6px) 100%,
+      0 100%, 0 calc(var(--cut) - 6px));
+  }
+  .portrait .p-frame {
+    /* second beige line */
+    position: absolute; inset: 5px;
+    background: var(--beige);
+    opacity: 0.5;
+    clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
+      0 100%, 0 calc(var(--cut) - 4px));
+  }
+  .portrait .p-inner {
+    position: relative;
+    z-index: 2;
+    margin: 12px;
+    flex: 1;
+    background:
+      radial-gradient(120% 90% at 50% 50%, rgba(0,166,214,0.10), transparent 65%),
+      linear-gradient(180deg, #161616, #0d0d0d);
+    clip-path: polygon(calc(var(--cut) - 10px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 10px), calc(100% - var(--cut) + 10px) 100%,
+      0 100%, 0 calc(var(--cut) - 10px));
+    box-shadow:
+      inset 0 0 40px rgba(0,166,214,0.10),
+      inset 0 0 1px rgba(212,191,125,0.2);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 36px 28px;
+    overflow: hidden;
+  }
+  .portrait .p-inner::before {
+    /* scanline overlay inside portrait */
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,166,214,0.06) 0px, rgba(0,166,214,0.06) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: screen;
+    opacity: 0.7;
+  }
+  .portrait .p-corner {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: var(--cyan);
+    opacity: 0.85;
+    z-index: 3;
+  }
+  .portrait .p-corner.tl { top: 14px; left: 14px;
+    border-top: 1px solid; border-left: 1px solid; }
+  .portrait .p-corner.tr { top: 14px; right: 14px;
+    border-top: 1px solid; border-right: 1px solid; }
+  .portrait .p-corner.bl { bottom: 14px; left: 14px;
+    border-bottom: 1px solid; border-left: 1px solid; }
+  .portrait .p-corner.br { bottom: 14px; right: 14px;
+    border-bottom: 1px solid; border-right: 1px solid; }
+
+  .portrait .pf-feed {
+    font-family: var(--font-mono);
+    color: var(--cyan);
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-align: center;
+    line-height: 1.9;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(0,166,214,0.35);
+    position: relative;
+    z-index: 2;
+  }
+  .portrait .pf-feed .dim { color: var(--muted); }
+  .portrait .pf-feed .strong {
+    color: var(--cyan-hot);
+    font-size: 13px;
+    letter-spacing: 0.36em;
+    display: block;
+    margin: 14px 0 8px;
+  }
+  .portrait .pf-feed .meta-line { display: block; }
+  .portrait .pf-feed .meta-line .k { color: var(--beige); }
+
+  .portrait .loader {
+    margin-top: 22px;
+    display: flex;
+    flex-direction: column; align-items: center; gap: 6px;
+    width: 70%;
+    position: relative; z-index: 2;
+  }
+  .portrait .loader .bar-wrap {
+    width: 100%; height: 8px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5);
+    position: relative; overflow: hidden;
+  }
+  .portrait .loader .bar-fill {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 0%;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan-hot));
+    box-shadow: 0 0 10px rgba(0,166,214,0.6);
+    animation: loadbar 6s cubic-bezier(.4,.0,.6,1) infinite;
+  }
+  @keyframes loadbar {
+    0%   { width: 0%; }
+    85%  { width: 100%; }
+    92%  { width: 100%; }
+    100% { width: 0%; }
+  }
+  .portrait .loader .pct-txt {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--cyan-hot);
+    letter-spacing: 0.32em;
+  }
+
+  .portrait:hover { filter: brightness(1.08); }
+  .portrait:hover .p-inner {
+    animation: portraitPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes portraitPulse {
+    0%, 100% { box-shadow: inset 0 0 40px rgba(0,166,214,0.10),
+                           inset 0 0 1px rgba(212,191,125,0.2); }
+    50%      { box-shadow: inset 0 0 60px rgba(0,166,214,0.28),
+                           inset 0 0 1px rgba(212,191,125,0.3),
+                           0 0 24px rgba(0,166,214,0.3); }
+  }
+
+  .char-info {
+    margin-top: 18px;
+    text-align: center;
+  }
+  .char-info .ci-name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 32px;
+    letter-spacing: 0.16em;
+    color: var(--beige);
+    text-transform: uppercase;
+    line-height: 1;
+    text-shadow: 0 0 14px rgba(212,191,125,0.2);
+  }
+  .char-info .ci-tagline {
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.36em;
+    color: var(--cyan);
+    text-transform: uppercase;
+  }
+  .char-info .ci-tagline .sep { color: var(--beige-dim); margin: 0 6px; }
+  .char-info .ci-arch {
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.32em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .char-info .ci-arch .sep { color: var(--beige-dim); margin: 0 6px; }
+
+  /* ============================================================
+     RIGHT COLUMN — Gear Grid 3x3
+     ============================================================ */
+  .gear-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-auto-rows: 1fr;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .slot {
+    --cut: 11px;
+    position: relative;
+    cursor: pointer;
+    transition: transform 180ms ease;
+  }
+  .slot:hover { transform: translateY(-2px); }
+  .slot .s-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 200ms ease;
+  }
+  .slot .s-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.05), transparent 60%),
+      linear-gradient(180deg, #1a1a1a, #111);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between;
+    padding: 8px 10px;
+    transition: box-shadow 200ms ease;
+  }
+  .slot .s-label {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.24em;
+    color: var(--beige);
+    text-transform: uppercase;
+    align-self: stretch;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .slot .s-label .sync {
+    color: var(--cyan); opacity: 0.85; letter-spacing: 0.18em; font-size: 8px;
+  }
+  .slot .s-icon {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--beige);
+    font-size: 26px;
+    filter: drop-shadow(0 0 6px rgba(212,191,125,0.2));
+    transition: color 200ms ease, filter 200ms ease;
+  }
+  .slot .s-name {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--cyan-hot);
+    text-transform: uppercase;
+    text-align: center;
+    line-height: 1.25;
+    align-self: stretch;
+    word-break: break-word;
+  }
+  .slot[data-rarity="empty"] .s-name { color: var(--muted); }
+  .slot[data-rarity="common"] .s-name { color: var(--text); }
+  .slot[data-rarity="empty"] .s-icon { color: var(--beige-dim); opacity: 0.6; }
+  .slot[data-rarity="rare"]  .s-name { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(0,166,214,0.3); }
+
+  .slot .rarity-dot {
+    position: absolute;
+    top: 7px; right: 8px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--beige);
+    z-index: 3;
+  }
+  .slot[data-rarity="uncommon"] .rarity-dot { background: var(--cyan); box-shadow: 0 0 6px rgba(0,166,214,0.6); }
+  .slot[data-rarity="rare"]     .rarity-dot { background: var(--cyan-hot); box-shadow: 0 0 8px rgba(77,214,255,0.7); }
+  .slot[data-rarity="empty"]    .rarity-dot { background: transparent; border: 1px dashed var(--beige-dim); }
+
+  .slot:hover .s-inner {
+    box-shadow: inset 0 0 22px rgba(0,166,214,0.18),
+                0 0 18px rgba(0,166,214,0.32);
+  }
+  .slot:hover .s-icon { color: #fff; filter: drop-shadow(0 0 8px rgba(0,166,214,0.55)); }
+
+  .slot.special .s-frame { background: var(--cyan); }
+  .slot.special .s-inner {
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.16), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+  }
+  .slot.special .s-icon { color: var(--cyan-hot); }
+
+  /* Wide feature slot — spans full row, horizontal layout */
+  .slot.wide { grid-column: 1 / -1; }
+  .slot.wide .s-inner {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 16px;
+    gap: 14px;
+  }
+  .slot.wide .s-label {
+    align-self: center;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    display: flex;
+    gap: 2px;
+  }
+  .slot.wide .s-icon { flex: 0 0 auto; font-size: 24px; }
+  .slot.wide .s-name { flex: 1; text-align: left; }
+
+  /* Quick Access split sub-slots */
+  .slot.quick .s-inner { padding: 8px 8px 10px; }
+  .slot.quick .quick-subs {
+    flex: 1; width: 100%;
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .slot.quick .qsub {
+    position: relative;
+    border: 1px solid rgba(212,191,125,0.4);
+    background: rgba(0,0,0,0.35);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 2px;
+    gap: 2px;
+  }
+  .slot.quick .qsub i {
+    font-size: 16px; color: var(--cyan-hot);
+    filter: drop-shadow(0 0 4px rgba(0,166,214,0.4));
+  }
+  .slot.quick .qsub .qct {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    color: var(--beige);
+    letter-spacing: 0.16em;
+  }
+  .slot.quick .qsub.empty i { color: var(--beige-dim); opacity: 0.5; }
+  .slot.quick .qsub.empty .qct { color: var(--muted); opacity: 0.7; }
+
+  /* ============================================================
+     TOOLTIPS (shared)
+     ============================================================ */
+  .tt {
+    position: absolute;
+    min-width: 260px; max-width: 320px;
+    padding: 14px 16px;
+    background: rgba(8,8,8,0.97);
+    border: 1px solid var(--beige);
+    box-shadow:
+      0 0 0 1px rgba(212,191,125,0.15),
+      0 14px 28px rgba(0,0,0,0.6),
+      0 0 22px rgba(0,166,214,0.22);
+    font-family: var(--font-mono);
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1.6;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 160ms ease, transform 160ms ease;
+    z-index: 200;
+    clip-path: polygon(10px 0, 100% 0,
+      100% calc(100% - 10px), calc(100% - 10px) 100%,
+      0 100%, 0 10px);
+  }
+  .tt.show { opacity: 1; transform: translateY(0); }
+  .tt .tt-name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: var(--cyan-hot);
+    font-size: 15px;
+    letter-spacing: 0.1em;
+    line-height: 1.1;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .tt[data-rarity="common"] .tt-name { color: var(--text); }
+  .tt[data-rarity="rare"] .tt-name { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(77,214,255,0.4); }
+  .tt .tt-sub {
+    color: var(--beige);
+    font-size: 9.5px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(212,191,125,0.25);
+  }
+  .tt .tt-row {
+    display: flex; gap: 8px;
+    margin: 4px 0;
+    align-items: baseline;
+  }
+  .tt .tt-row .k {
+    color: var(--beige);
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    min-width: 84px;
+  }
+  .tt .tt-row .v { color: var(--text); }
+  .tt .tt-flavor {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(212,191,125,0.25);
+    font-family: var(--font-prose);
+    font-style: italic;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--muted);
+    letter-spacing: 0.01em;
+    text-transform: none;
+  }
+  .tt .tt-attune {
+    margin-top: 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    color: var(--cyan);
+    text-transform: uppercase;
+  }
+  .tt .tt-attune.no { color: var(--muted); }
+
+  /* edge labels */
+  .side-label {
+    position: fixed;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.3em; color: var(--muted);
+    text-transform: uppercase; pointer-events: none; z-index: 12;
+  }
+  .side-label.left  { left: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: rotate(180deg) translateY(50%); }
+  .side-label.right { right: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: translateY(-50%); }
+  .side-label .acc  { color: var(--cyan); }
+</style>
+</head>
+<body>
+
+<div class="stage"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="sweep" id="sweep"></div>
+
+<!-- ====================== TOP BAR ====================== -->
+<header class="topbar" role="banner">
+  <div class="top-left">
+    <div class="stat-block" aria-label="Level">
+      <div class="stat-row"><span class="stat-num">08</span><span class="stat-label">Level</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:62%"></i></div>
+    </div>
+    <div class="stat-block" aria-label="Reputation">
+      <div class="stat-row"><span class="stat-num">35</span><span class="stat-label">Reputation</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:48%"></i></div>
+    </div>
+  </div>
+
+  <div class="top-center">
+    <div class="char-name">Ros Chrisstone<span class="cursor">█</span></div>
+    <div class="char-sub">
+      <span>Human · Fighter</span>
+      <span class="sep">/</span>
+      <span>Champion Archetype</span>
+      <span class="sep">/</span>
+      <span>Brettany Reclamation</span>
+    </div>
+  </div>
+
+  <div class="top-right">
+    <div class="weight-block">
+      <span class="ic">⚖</span><span class="val">45 / 120</span><span class="lab">Burden</span>
+    </div>
+    <div class="gold-block">
+      <span class="ic">⊙</span><span class="val">1,247</span><span class="lab">Gold</span>
+    </div>
+  </div>
+</header>
+
+<div class="ticker above" aria-hidden="true">
+  <span>TASK_MANAGER_SD11S</span><span class="gap"></span>
+  <span class="dim">// AURUM_LEDGER_OK</span><span class="gap"></span>
+  <span>PROTOCOL: 6920-A44</span><span class="gap"></span>
+  <span class="dim">0001 0110 1001 0011 1100</span>
+</div>
+<div class="ticker below" aria-hidden="true">
+  <span>FRAME 04 // SECTOR 12</span><span class="gap"></span>
+  <span class="dim">PARTY.OK</span><span class="gap"></span>
+  <span>SOULBOND 0x4F1A</span><span class="gap"></span>
+  <span class="dim">CHANNEL 1F-Δ</span>
+</div>
+
+<!-- side labels -->
+<div class="side-label left">
+  <span class="acc">EQUIPMENT</span> &nbsp;//&nbsp; LOADOUT 02 &nbsp;//&nbsp; SYNC OK
+</div>
+<div class="side-label right">
+  Brettany Theater &nbsp;//&nbsp; <span class="acc">SHARD: VACANT</span> &nbsp;//&nbsp; Loadout 02
+</div>
+
+<!-- ====================== NAVBAR ====================== -->
+<nav class="navbar" aria-label="Primary">
+
+  <!-- 1. Equipment (ACTIVE) -->
+  <div class="nav-slot">
+    <button class="nav-btn is-active" data-nav="equipment" aria-current="page">
+      <span class="nb-frame"></span>
+      <span class="nb-marker">01 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-khanda"></i></span>
+        <span class="nb-label">Equipment</span>
+      </span>
+    </button>
+  </div>
+
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="lore">
+      <span class="nb-frame"></span><span class="nb-marker">02 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-book-open"></i></span>
+        <span class="nb-label">Lore</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="spellbook">
+      <span class="nb-frame"></span><span class="nb-marker">03 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-scroll"></i></span>
+        <span class="nb-label">Spellbook</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="character">
+      <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-user-shield"></i></span>
+        <span class="nb-label">Character</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="journal">
+      <span class="nb-frame"></span><span class="nb-marker">05 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-clipboard"></i></span>
+        <span class="nb-label">Journal</span>
+      </span>
+    </button>
+  </div>
+</nav>
+
+<div class="nav-meta">
+  <span class="dim">◇</span>
+  <span>Section</span>
+  <span class="acc">/ Equipment</span>
+  <span class="dim">·</span>
+  <span>Loadout 02 // Castellan</span>
+  <span class="dim">·</span>
+  <span>Encumbrance <span class="acc">45 / 120</span></span>
+</div>
+
+<!-- ====================== MAIN ====================== -->
+<main class="eq">
+
+  <!-- ===================== LEFT COLUMN ===================== -->
+  <section class="col left-col" aria-label="Weapons and stats">
+
+    <div class="col-header">
+      <span class="ch-num">01</span>
+      <span class="ch-title">Weapons</span>
+      <span class="ch-meta">Loadout 02</span>
+    </div>
+
+    <div class="weapon-list">
+
+      <button class="weapon-card" data-rarity="uncommon"
+              data-tt='{"name":"Castellan Claymore","sub":"Uncommon · Heavy Greatsword","rows":[["Damage","2d6 + 4 slashing"],["Properties","Heavy, Two-Handed (waived: Dual Wielder)"],["Weight","6 lbs."],["Reach","5 ft."]],"flavor":"Forged for the Castellan Guard, this weapon\u2019s weight makes it nearly impossible to wield with one hand. Ros wields two.","attune":"Not required","rarity":"uncommon"}'>
+        <div class="wc-frame"><div class="wc-inner">
+          <div class="wc-icon"><i class="fa-solid fa-khanda"></i></div>
+          <div class="wc-name">Castellan Claymore</div>
+          <div class="wc-dmg"><span class="v">2d6 + 4</span> · Slashing</div>
+          <div class="wc-slot">
+            <span class="label">Main Hand</span>
+            <span class="rarity">Uncommon</span>
+          </div>
+        </div></div>
+      </button>
+
+      <button class="weapon-card" data-rarity="uncommon"
+              data-tt='{"name":"Castellan Claymore","sub":"Uncommon · Heavy Greatsword","rows":[["Damage","2d6 + 2 slashing"],["Properties","Heavy, Two-Handed (waived: Dual Wielder)"],["Weight","6 lbs."],["Note","Off-hand penalty applied"]],"flavor":"A twin to the main blade, balanced for the off-hand. Few outside the Castellan Guard would attempt this stance.","attune":"Not required","rarity":"uncommon"}'>
+        <div class="wc-frame"><div class="wc-inner">
+          <div class="wc-icon"><i class="fa-solid fa-khanda" style="transform:scaleX(-1);"></i></div>
+          <div class="wc-name">Castellan Claymore</div>
+          <div class="wc-dmg"><span class="v">2d6 + 2</span> · Slashing</div>
+          <div class="wc-slot">
+            <span class="label">Off Hand</span>
+            <span class="rarity">Uncommon</span>
+          </div>
+        </div></div>
+      </button>
+
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-panel">
+      <div class="col-header" style="margin-top:18px;">
+        <span class="ch-num">02</span>
+        <span class="ch-title">Stats</span>
+        <span class="ch-meta">Quick View</span>
+      </div>
+
+      <div class="stat-list">
+        <div class="stat-line hp">
+          <span class="sl-label">HP</span>
+          <span class="sl-value">64<span class="unit">/ 64</span></span>
+        </div>
+        <div class="stat-line">
+          <span class="sl-label">AC</span>
+          <span class="sl-value">18</span>
+        </div>
+        <div class="stat-line">
+          <span class="sl-label">Speed</span>
+          <span class="sl-value">30<span class="unit">ft</span></span>
+        </div>
+        <div class="stat-line">
+          <span class="sl-label">Init</span>
+          <span class="sl-value">+2</span>
+        </div>
+        <div class="stat-line">
+          <span class="sl-label">Prof</span>
+          <span class="sl-value">+3</span>
+        </div>
+        <div class="stat-line">
+          <span class="sl-label">Hit Dice</span>
+          <span class="sl-value">8d10</span>
+        </div>
+      </div>
+
+      <div class="panel-actions">
+        <button class="pa-btn" data-nav="stat-panel">
+          <span class="pa-frame"></span>
+          <span class="pa-inner">
+            <i class="fa-solid fa-chart-simple"></i>
+            Stat Panel
+          </span>
+        </button>
+        <button class="pa-btn" data-nav="inventory">
+          <span class="pa-frame"></span>
+          <span class="pa-inner">
+            <i class="fa-solid fa-bag-shopping"></i>
+            Inventory
+          </span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CENTER COLUMN ===================== -->
+  <section class="col portrait-col" aria-label="Character portrait">
+    <div class="col-header">
+      <span class="ch-num">03</span>
+      <span class="ch-title">Operator</span>
+      <span class="ch-meta">Signature // 0x4F1A</span>
+    </div>
+
+    <div class="portrait-wrap">
+      <div class="portrait" tabindex="0">
+        <div class="p-frame"></div>
+        <div class="p-inner">
+          <span class="p-corner tl"></span>
+          <span class="p-corner tr"></span>
+          <span class="p-corner bl"></span>
+          <span class="p-corner br"></span>
+
+          <div class="pf-feed">
+            <span class="dim">PORTRAIT_FEED</span><br>
+            AWAITING SIGNAL
+            <span class="strong">Loading ROS.CHRISSTONE</span>
+            <span class="meta-line"><span class="k">Identity</span> :: HUMAN.FIGHTER</span>
+            <span class="meta-line"><span class="k">Variant</span> :: DUAL_WIELDER</span>
+            <span class="meta-line"><span class="k">Origin</span> :: CASTELLA-08</span>
+          </div>
+
+          <div class="loader">
+            <div class="bar-wrap"><div class="bar-fill"></div></div>
+            <div class="pct-txt"><span id="loadPct">76</span>%  ·  HANDSHAKE</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="char-info">
+      <div class="ci-name">Ros Chrisstone</div>
+      <div class="ci-tagline">
+        Human <span class="sep">·</span>
+        Fighter <span class="sep">·</span>
+        Level 8
+      </div>
+      <div class="ci-arch">
+        Champion Archetype <span class="sep">/</span> Dual Wielder
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== RIGHT COLUMN ===================== -->
+  <section class="col right-col" aria-label="Gear slots">
+    <div class="col-header">
+      <span class="ch-num">04</span>
+      <span class="ch-title">Gear</span>
+      <span class="ch-meta">7 slots</span>
+    </div>
+
+    <div class="gear-grid">
+
+      <!-- Row 1 -->
+      <button class="slot" data-rarity="empty"
+              data-tt='{"name":"Helmet","sub":"Empty slot","rows":[["Status","Unequipped"],["Type","Head"]],"flavor":"Ros prefers an open helm; current loadout has no head piece equipped.","attune":"None","rarity":"empty"}'>
+        <span class="s-frame"></span>
+        <span class="s-inner">
+          <span class="s-label">Helmet</span>
+          <span class="s-icon"><i class="fa-solid fa-helmet-safety"></i></span>
+          <span class="s-name">— Empty —</span>
+        </span>
+        <span class="rarity-dot"></span>
+      </button>
+
+      <button class="slot" data-rarity="rare"
+              data-tt='{"name":"Brettany Plate","sub":"Rare · Heavy Armor","rows":[["AC","18"],["Type","Plate, reinforced"],["Stealth","Disadvantage"],["Weight","65 lbs."]],"flavor":"Forged in the foundry-vaults of Brettany before the city fell. The sigil on the breastplate is now worn smooth.","attune":"Not required","rarity":"rare"}'>
+        <span class="s-frame"></span>
+        <span class="s-inner">
+          <span class="s-label">Armor</span>
+          <span class="s-icon"><i class="fa-solid fa-shield-halved"></i></span>
+          <span class="s-name">Brettany Plate</span>
+        </span>
+        <span class="rarity-dot"></span>
+      </button>
+
+      <button class="slot" data-rarity="uncommon"
+              data-tt='{"name":"Mantle of the Coastline","sub":"Uncommon · Cloak","rows":[["Bonus","+1 to saves vs. cold"],["Type","Wool / oilskin"],["Weight","3 lbs."]],"flavor":"Woven by the seafarers of Castella. Sheds rain like a duck and smells of salt no matter how often you wash it.","attune":"Not required","rarity":"uncommon"}'>
+        <span class="s-frame"></span>
+        <span class="s-inner">
+          <span class="s-label">Cloak</span>
+          <span class="s-icon"><i class="fa-solid fa-user-tie"></i></span>
+          <span class="s-name">Coastline Mantle</span>
+        </span>
+        <span class="rarity-dot"></span>
+      </button>
+
+      <!-- Row 2 -->
+      <button class="slot" data-rarity="common"
+              data-tt='{"name":"Soldier\u2019s Boots","sub":"Common · Boots","rows":[["Bonus","Standard issue"],["Type","Hardened leather"],["Weight","2 lbs."]],"flavor":"Worn, polished, and re-soled twice. They have walked through three regions and one siege.","attune":"None","rarity":"common"}'>
+        <span class="s-frame"></span>
+        <span class="s-inner">
+          <span class="s-label">Boots</span>
+          <span class="s-icon"><i class="fa-solid fa-shoe-prints"></i></span>
+          <span class="s-name">Soldier's Boots</span>
+        </span>
+        <span class="rarity-dot"></span>
+      </button>
+
+      <!-- Row 3 -->
+      <button class="slot" data-rarity="uncommon"
+              data-tt='{"name":"Ring of Ember","sub":"Uncommon · Ring","rows":[["Charges","3 / day"],["Effect","Touch ignites a candle / torch"],["Type","Brass + ruby"]],"flavor":"A small comfort on the cold roads east of Castella. The ruby glows faintly when Ros is angry.","attune":"Required","rarity":"uncommon"}'>
+        <span class="s-frame"></span>
+        <span class="s-inner">
+          <span class="s-label">Accessory</span>
+          <span class="s-icon"><i class="fa-solid fa-ring"></i></span>
+          <span class="s-name">Ring of Ember</span>
+        </span>
+        <span class="rarity-dot"></span>
+      </button>
+
+      <button class="slot quick" data-rarity="common"
+              data-tt='{"name":"Quick Access","sub":"2 sub-slots","rows":[["Slot 1","Potion of Healing × 3"],["Slot 2","Empty"]],"flavor":"Hot-keyed pouch. Items here are usable as a bonus action.","attune":"None","rarity":"common"}'>
+        <span class="s-frame"></span>
+        <span class="s-inner">
+          <span class="s-label">Quick Access</span>
+          <div class="quick-subs">
+            <div class="qsub">
+              <i class="fa-solid fa-flask"></i>
+              <span class="qct">×3</span>
+            </div>
+            <div class="qsub empty">
+              <i class="fa-solid fa-plus"></i>
+              <span class="qct">Empty</span>
+            </div>
+          </div>
+        </span>
+        <span class="rarity-dot"></span>
+      </button>
+
+      <!-- Featured slot — spans full bottom row -->
+      <button class="slot special wide" data-rarity="empty" data-nav="shard"
+              data-tt='{"name":"G.U.I.D.E. Shard","sub":"Codex Module · Vacant","rows":[["Status","No shard installed"],["Type","Class IV slot"],["Capacity","1 / 1"]],"flavor":"The interface socket awaits a soulbound shard. Visit the Shard interface to install or remove.","attune":"Shard-bound","rarity":"empty"}'>
+        <span class="s-frame"></span>
+        <span class="s-inner">
+          <span class="s-label">G.U.I.D.E. Shard</span>
+          <span class="s-icon"><i class="fa-solid fa-gem"></i></span>
+          <span class="s-name">— Empty Slot —</span>
+        </span>
+        <span class="rarity-dot"></span>
+      </button>
+
+    </div>
+  </section>
+
+</main>
+
+<!-- ====================== BOTTOM BAR ====================== -->
+<footer class="bottombar" role="contentinfo">
+  <div class="bb-line">
+    <span class="dot"></span>
+    <span class="lab">Neural Link:</span><span class="val">Stable</span>
+    <span class="sep">|</span>
+    <span class="lab">Shard Integrity:</span><span class="val">98.2%</span>
+    <span class="sep">|</span>
+    <span class="lab">Last Sync:</span><span class="val">0.07 ms</span>
+    <span class="sep">|</span>
+    <span class="lab">Castella-08:</span><span class="dim">Clear · Wind NNW 4kt</span>
+    <span class="sep">|</span>
+    <span class="lab">Tide:</span><span class="dim">Low @ 03:47</span>
+
+    <div class="bb-right">
+      <span class="lab">Codex</span><span class="val">v 2.4.7</span>
+      <span class="sep">|</span>
+      <span class="dot"></span><span class="val">DM Online</span>
+      <span class="sep">|</span>
+      <span class="lab" id="save-auto">SAVE · 00:44</span><span class="save-cursor">█</span>
+    </div>
+  </div>
+</footer>
+
+<!-- shared tooltip element, positioned by JS -->
+<div class="tt" id="tooltip" role="tooltip" aria-hidden="true"></div>
+
+<script>
+  // ----- Navbar / button click handlers -----
+  document.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.getAttribute('data-nav');
+      if (t === 'shard') { console.log('Opening Shard interface...'); return; }
+      const label = (btn.querySelector('.nb-label, .pa-inner, .s-name, .s-label')?.textContent || t).trim();
+      console.log(`Navigating to ${label}... [data-nav="${t}"]`);
+    });
+  });
+
+  // ----- Periodic cyan scan sweep -----
+  (function sweepLoop() {
+    const sweep = document.getElementById('sweep');
+    function trigger() {
+      sweep.classList.remove('run'); void sweep.offsetWidth;
+      sweep.classList.add('run');
+    }
+    function schedule() {
+      const delay = 7000 + Math.random() * 4000;
+      setTimeout(() => { trigger(); schedule(); }, delay);
+    }
+    setTimeout(() => { trigger(); schedule(); }, 2500);
+  })();
+
+  // ----- Save counter -----
+  (function liveCounter() {
+    const el = document.getElementById('save-auto');
+    if (!el) return;
+    let t = 44;
+    setInterval(() => {
+      t = (t + 1) % 60;
+      const s = t.toString().padStart(2, '0');
+      el.textContent = `SAVE · 00:${s}`;
+    }, 700);
+  })();
+
+  // ----- Portrait loader pct text, synced loosely to the bar's CSS anim -----
+  (function loadPctTick() {
+    const el = document.getElementById('loadPct');
+    if (!el) return;
+    const start = performance.now();
+    const dur = 6000;
+    function frame(now) {
+      const t = ((now - start) % dur) / dur;
+      let pct;
+      if (t < 0.85)      pct = Math.round((t / 0.85) * 100);
+      else if (t < 0.92) pct = 100;
+      else               pct = 0;
+      el.textContent = pct;
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
+
+  // ----- Tooltips for weapons + slots -----
+  (function tooltips() {
+    const tt = document.getElementById('tooltip');
+    const targets = document.querySelectorAll('[data-tt]');
+
+    function build(d) {
+      const rows = (d.rows || [])
+        .map(([k, v]) => `<div class="tt-row"><span class="k">${k}</span><span class="v">${v}</span></div>`)
+        .join('');
+      const flavor = d.flavor ? `<div class="tt-flavor">${d.flavor}</div>` : '';
+      const attune = d.attune
+        ? `<div class="tt-attune ${/^not|^none/i.test(d.attune) ? 'no' : ''}">Attuned: ${d.attune}</div>`
+        : '';
+      return `
+        <div class="tt-name">${d.name}</div>
+        <div class="tt-sub">${d.sub || ''}</div>
+        ${rows}
+        ${flavor}
+        ${attune}
+      `;
+    }
+
+    function position(target) {
+      const r = target.getBoundingClientRect();
+      const ttW = tt.offsetWidth;
+      const ttH = tt.offsetHeight;
+      const margin = 12;
+      // Decide side: prefer to the right; fall back to left if off-screen
+      let left = r.right + margin;
+      if (left + ttW > window.innerWidth - 12) {
+        left = r.left - ttW - margin;
+      }
+      // Clamp left
+      left = Math.max(12, Math.min(left, window.innerWidth - ttW - 12));
+      // Vertically align centered to the target, clamped to viewport
+      let top = r.top + r.height / 2 - ttH / 2;
+      top = Math.max(12, Math.min(top, window.innerHeight - ttH - 12));
+      tt.style.left = left + 'px';
+      tt.style.top  = top + 'px';
+    }
+
+    let active = null;
+
+    targets.forEach(target => {
+      const enter = () => {
+        try {
+          const d = JSON.parse(target.getAttribute('data-tt'));
+          tt.innerHTML = build(d);
+          tt.setAttribute('data-rarity', d.rarity || 'common');
+          tt.classList.add('show');
+          active = target;
+          // force layout so offsetWidth/Height are correct
+          requestAnimationFrame(() => position(target));
+        } catch (e) {
+          console.warn('Bad tooltip data', e, target);
+        }
+      };
+      const leave = () => {
+        tt.classList.remove('show');
+        active = null;
+      };
+      target.addEventListener('mouseenter', enter);
+      target.addEventListener('mouseleave', leave);
+      target.addEventListener('focus', enter);
+      target.addEventListener('blur', leave);
+    });
+
+    window.addEventListener('scroll', () => {
+      if (active) position(active);
+    }, true);
+    window.addEventListener('resize', () => {
+      if (active) position(active);
+    });
+  })();
+</script>
+
+</body>
+</html>

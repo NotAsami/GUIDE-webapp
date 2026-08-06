@@ -1,0 +1,1328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — LORE // ROS CHRISSTONE</title>
+<!--
+  PHASE 6 — Lore screen (top-level, sibling to Equipment / Character / Journal).
+
+  The character DOSSIER: who Ros is, not what their stats are. A reading-forward
+  screen built around the resolved character portrait. Shares the Journal's
+  comfortable reading treatment (generous line-height, constrained measure, real
+  whitespace) and all the chrome of phases 1-5 / 8 / 9, kept verbatim.
+
+  Layout — two regions side by side, between navbar and bottom bar:
+    LEFT  (~34%): Portrait + identity vitals. A PERSISTENT column — the portrait
+                  stays visible; the column itself does not scroll with the dossier.
+    RIGHT (~62%): A single internally-scrolling dossier panel stacking
+                  02 BACKSTORY · 03 NATURE · 04 RELATIONS.
+
+  Continuity / tonal seeds (both deliberately routine-looking, never menacing):
+
+  1.  The portrait is the RESOLVED version of Equipment's "AWAITING SIGNAL"
+      placeholder. Same frame chrome; here it is locked in. Real character art
+      drops into .p-art at handoff — the beige line-art silhouette is an
+      intentional bio-portrait display, not a broken image. Micro-label
+      "BIO-SCAN: LOCKED" (cyan) ties it to Equipment's awaiting state.
+
+  2.  A single tiny telemetry note beside the backstory —
+      "MEMORY FIDELITY: PARTIAL // EARLY RECORDS RECONSTRUCTED" — styled exactly
+      like the dry screen-edge telemetry. Reads as system flavor; a careful
+      reader might wonder why a person's memories are "reconstructed."
+
+  3.  The G.U.I.D.E. relationship entry is the ONE sanctioned amber (#e2b021)
+      use on this screen, matching the shard's treatment. Attitude is shown as
+      "—" (undefined). It is listed plainly among the relations and is NOT made
+      visually dominant; the amber + undefined attitude are the only tells.
+
+  No red (#b93a3a) appears anywhere on this screen — "wary/hostile" attitude is
+  rendered in muted tone, never red.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  /* ============================================================
+     SHARED CHROME  (kept verbatim with prior phases)
+     ============================================================ */
+  :root {
+    --bg:        #1d1d1d;
+    --bg-2:      #161616;
+    --beige:     #d4bf7d;
+    --beige-dim: #8a7a4a;
+    --cyan:      #00a6d6;
+    --cyan-dim:  #0d6e8c;
+    --cyan-hot:  #4dd6ff;
+    --gold-rare: #e2b021;
+    --text:      #dedede;
+    --muted:     #aaaaaa;
+    --danger:    #b93a3a;
+
+    --bar-top-h:    62px;
+    --bar-bottom-h: 50px;
+    --nav-h:        72px;
+    --nav-top-gap:  26px;
+
+    --font-display: "Cinzel", serif;
+    --font-prose:   "EB Garamond", serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-prose);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .stage {
+    position: fixed; inset: 0;
+    background:
+      url("https://www.transparenttextures.com/patterns/dark-leather.png"),
+      radial-gradient(120% 90% at 50% 50%, #232220 0%, #1a1a1a 60%, #0e0e0e 100%);
+    background-blend-mode: overlay, normal;
+  }
+  .scanlines {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 90;
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+      transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 91;
+    background: radial-gradient(120% 110% at 50% 50%,
+      transparent 55%, rgba(0,0,0,0.55) 95%, rgba(0,0,0,0.85) 100%);
+  }
+  .sweep {
+    pointer-events: none;
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 2px; z-index: 95;
+    background: linear-gradient(to bottom,
+      transparent, rgba(0,166,214,0.55) 50%, transparent);
+    box-shadow: 0 0 24px rgba(0,166,214,0.45);
+    opacity: 0;
+  }
+  .sweep.run { animation: sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards; }
+  @keyframes sweep-run {
+    0%   { opacity: 0; transform: translateY(-20px); }
+    8%   { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(100vh); }
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- Top Bar ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--bar-top-h); z-index: 50;
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; padding: 0 36px;
+    background: linear-gradient(to bottom,
+      rgba(15,15,15,0.95) 0%, rgba(22,22,22,0.92) 100%);
+    border-bottom: 1px solid var(--beige);
+    box-shadow: 0 1px 0 rgba(212,191,125,0.15),
+                0 8px 24px -8px rgba(0,0,0,0.6);
+  }
+  .topbar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .topbar::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 1px; background: var(--beige);
+    box-shadow: 0 0 8px rgba(212,191,125,0.4);
+  }
+  .top-left, .top-right {
+    display: flex; align-items: center; gap: 28px;
+    position: relative; z-index: 1;
+  }
+  .top-right { justify-content: flex-end; }
+  .stat-block { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+  .stat-row { display: flex; align-items: baseline; gap: 8px; }
+  .stat-num {
+    font-family: var(--font-display); font-weight: 600;
+    color: var(--beige); font-size: 22px; line-height: 1; letter-spacing: 0.04em;
+  }
+  .stat-label {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--cyan); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .bar {
+    height: 3px; width: 110px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5); position: relative; overflow: hidden;
+  }
+  .bar > i {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    box-shadow: 0 0 6px rgba(0,166,214,0.6); display: block;
+  }
+  .top-center { text-align: center; position: relative; z-index: 1; padding: 0 24px; }
+  .char-name {
+    font-family: var(--font-display); font-weight: 600; font-size: 18px;
+    letter-spacing: 0.4em; color: var(--text); text-transform: uppercase; line-height: 1;
+  }
+  .char-name .cursor {
+    display: inline-block; color: var(--cyan); transform: translateY(-1px);
+    margin-left: 4px; animation: blink 1s steps(2, end) infinite;
+  }
+  .char-sub {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+    color: var(--muted); margin-top: 4px; text-transform: uppercase;
+  }
+  .char-sub .sep { color: var(--beige-dim); margin: 0 8px; }
+  .gold-block, .weight-block { display: flex; align-items: baseline; gap: 10px; }
+  .gold-block .ic, .weight-block .ic {
+    font-family: var(--font-display); color: var(--beige); font-size: 20px; line-height: 1;
+  }
+  .gold-block .val, .weight-block .val {
+    font-family: var(--font-display); color: var(--beige); font-size: 18px;
+    letter-spacing: 0.06em; line-height: 1;
+  }
+  .gold-block .lab, .weight-block .lab {
+    font-family: var(--font-mono); color: var(--cyan); font-size: 9px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .ticker {
+    position: fixed; left: 0; right: 0; height: 12px; z-index: 51;
+    display: flex; align-items: center; padding: 0 24px;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+    color: rgba(0,166,214,0.55); pointer-events: none;
+    overflow: hidden; white-space: nowrap;
+  }
+  .ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
+  .ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212,191,125,0.45); }
+  .ticker .gap { width: 32px; display: inline-block; }
+  .ticker .dim { color: rgba(170,170,170,0.4); }
+
+  /* ---------- Bottom Bar ---------- */
+  .bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--bar-bottom-h); z-index: 50;
+    display: flex; align-items: center; padding: 0 32px;
+    background: linear-gradient(to top,
+      rgba(15,15,15,0.96) 0%, rgba(22,22,22,0.92) 100%);
+    border-top: 1px solid var(--beige);
+    box-shadow: 0 -1px 0 rgba(212,191,125,0.15), 0 -8px 24px -8px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .bottombar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .bb-line {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; width: 100%; color: var(--muted);
+    position: relative; z-index: 1;
+  }
+  .bb-line .lab  { color: var(--beige); }
+  .bb-line .val  { color: var(--cyan); }
+  .bb-line .dim  { color: var(--muted); }
+  .bb-line .sep  { color: var(--beige-dim); margin: 0 4px; }
+  .bb-line .dot  {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px rgba(0,166,214,0.7);
+    display: inline-block;
+  }
+  .bb-line .save-cursor {
+    color: var(--cyan); animation: blink 1s steps(2, end) infinite; margin-left: 2px;
+  }
+  .bb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  /* ---------- NAVBAR ---------- */
+  .navbar {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap));
+    left: 50%; transform: translateX(-50%);
+    display: flex; gap: 14px;
+    z-index: 45;
+  }
+  .nav-slot { position: relative; width: 156px; display: flex; justify-content: center; }
+  .nav-slot.equipment { padding: 60px 0; margin: -60px 0; }
+
+  .nav-btn {
+    --w: 156px; --h: var(--nav-h); --cut: 11px;
+    width: var(--w); height: var(--h);
+    background: transparent; border: 0; padding: 0;
+    color: var(--text); font-family: var(--font-mono);
+    cursor: pointer; position: relative;
+    transition: transform 180ms ease;
+  }
+  .nav-btn .nb-frame {
+    position: absolute; inset: 0; background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 180ms ease;
+  }
+  .nav-btn .nb-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(212,191,125,0.04), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #141414);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 6px;
+    transition: box-shadow 180ms ease, background 180ms ease;
+  }
+  .nav-btn .nb-icon {
+    color: var(--beige); font-size: 20px; line-height: 1;
+    transition: color 180ms ease, text-shadow 180ms ease;
+  }
+  .nav-btn .nb-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.26em; color: var(--text); text-transform: uppercase;
+  }
+  .nav-btn .nb-marker {
+    position: absolute; top: 6px; left: 12px;
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.2em; color: var(--cyan); opacity: 0.7;
+  }
+  .nav-btn:hover { transform: translateY(-2px); }
+  .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.18),
+                0 0 18px rgba(0,166,214,0.35);
+  }
+  .nav-btn:hover .nb-icon {
+    color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.7);
+  }
+
+  /* Active state */
+  .nav-btn.is-active .nb-frame { background: var(--cyan); }
+  .nav-btn.is-active .nb-inner {
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.18), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 28px rgba(0,166,214,0.30),
+                0 0 22px rgba(0,166,214,0.55);
+  }
+  .nav-btn.is-active .nb-icon { color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.9); }
+  .nav-btn.is-active .nb-label { color: var(--cyan-hot); }
+  .nav-btn.is-active .nb-marker { color: var(--beige); opacity: 1; }
+  .nav-btn.is-active::after {
+    content: ""; position: absolute;
+    top: -6px; left: 14%; right: 14%; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 20px rgba(0,166,214,0.6);
+    z-index: 2;
+  }
+
+  /* Sub-buttons (Inventory above, Stat Panel below) */
+  .nav-sub {
+    position: absolute; left: 50%;
+    transform: translate(-50%, 0) scale(0.95);
+    opacity: 0; pointer-events: none;
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
+    z-index: 1;
+  }
+  .nav-sub.above { bottom: calc(50% + 44px); }
+  .nav-sub.below { top:    calc(50% + 44px); }
+  .nav-sub .nav-btn {
+    --w: 122px; --h: 56px; --cut: 9px;
+  }
+  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
+  .nav-sub .nav-btn .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
+                linear-gradient(180deg, #141a1d, #0e1316);
+  }
+  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
+  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
+  .nav-sub .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
+  .nav-slot.equipment:hover .nav-sub,
+  .nav-slot.equipment:focus-within .nav-sub {
+    opacity: 1; pointer-events: auto;
+  }
+  .nav-slot.equipment:hover .nav-sub.above { transform: translate(-50%, -8px) scale(1); }
+  .nav-slot.equipment:hover .nav-sub.below { transform: translate(-50%, 8px) scale(1); }
+
+  /* breadcrumb / subheader under navbar */
+  .nav-meta {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 8px);
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.32em; color: var(--muted);
+    text-transform: uppercase; z-index: 44;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .nav-meta .acc  { color: var(--cyan); }
+  .nav-meta .dim  { color: var(--beige-dim); }
+
+  /* edge labels */
+  .side-label {
+    position: fixed;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.3em; color: var(--muted);
+    text-transform: uppercase; pointer-events: none; z-index: 12;
+  }
+  .side-label.left  { left: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: rotate(180deg) translateY(50%); }
+  .side-label.right { right: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: translateY(-50%); }
+  .side-label .acc  { color: var(--cyan); }
+
+  /* ============================================================
+     LORE MAIN — two regions side by side
+     ============================================================ */
+  main.lore {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
+    bottom: calc(var(--bar-bottom-h) + 18px);
+    left: 0; right: 0;
+    display: grid;
+    grid-template-columns: 34fr 66fr;
+    gap: 22px;
+    padding: 0 34px;
+    z-index: 10;
+  }
+  .col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+  .col-header {
+    display: flex; align-items: baseline; gap: 14px;
+    margin-bottom: 10px;
+    padding: 0 2px 7px;
+    border-bottom: 1px solid rgba(212,191,125,0.35);
+    flex: 0 0 auto;
+  }
+  .col-header .ch-num {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+  }
+  .col-header .ch-title {
+    font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
+  }
+  .col-header .ch-meta {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+  }
+  .col-header .ch-meta .acc { color: var(--cyan); }
+  .col-header .ch-meta .dim { color: var(--beige-dim); }
+
+  /* ----- Framed region: angular clip + beige double-line ----- */
+  .region {
+    --cut: 16px;
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .region .r-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .region .r-gap {
+    position: absolute; inset: 1.5px;
+    background: var(--bg);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+  }
+  .region .r-line {
+    position: absolute; inset: 4px;
+    background: var(--beige); opacity: 0.42;
+    clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
+      0 100%, 0 calc(var(--cut) - 4px));
+  }
+  .region .r-inner {
+    position: absolute; inset: 5.5px;
+    background:
+      radial-gradient(130% 100% at 50% 0%, rgba(0,166,214,0.05), transparent 60%),
+      linear-gradient(180deg, #151515, #0e0e0e);
+    clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%,
+      0 100%, 0 calc(var(--cut) - 5px));
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .region .r-inner::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,166,214,0.035) 0px, rgba(0,166,214,0.035) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: screen; opacity: 0.6;
+  }
+  .region .r-corner {
+    position: absolute; width: 14px; height: 14px;
+    border-color: var(--cyan); opacity: 0.7; z-index: 5; pointer-events: none;
+  }
+  .region .r-corner.tl { top: 9px; left: 9px; border-top: 1px solid; border-left: 1px solid; }
+  .region .r-corner.br { bottom: 9px; right: 9px; border-bottom: 1px solid; border-right: 1px solid; }
+
+  /* shared thin scrollbar */
+  .scroll-y { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent; }
+  .scroll-y::-webkit-scrollbar { width: 7px; }
+  .scroll-y::-webkit-scrollbar-track { background: rgba(0,0,0,0.4); }
+  .scroll-y::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--cyan-dim), rgba(212,191,125,0.45));
+    border: 2px solid #111;
+  }
+
+  /* ============================================================
+     01  DOSSIER  (left column — portrait + identity vitals)
+     ============================================================ */
+  .dossier-pad {
+    position: relative; z-index: 1;
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
+    padding: 16px 16px 14px;
+  }
+
+  /* --- Portrait frame: the RESOLVED bio-portrait display --- */
+  .bio-portrait {
+    --cut: 20px;
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 190px;
+    cursor: default;
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1), filter 220ms ease;
+  }
+  .bio-portrait::before {
+    content: ""; position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .bio-portrait .bp-line {
+    position: absolute; inset: 4px;
+    background: var(--beige); opacity: 0.5;
+    clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
+      0 100%, 0 calc(var(--cut) - 4px));
+  }
+  .bio-portrait .bp-inner {
+    position: absolute; inset: 6px;
+    background:
+      radial-gradient(120% 90% at 50% 42%, rgba(0,166,214,0.12), transparent 62%),
+      linear-gradient(180deg, #161616, #0c0c0c);
+    clip-path: polygon(calc(var(--cut) - 6px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 6px), calc(100% - var(--cut) + 6px) 100%,
+      0 100%, 0 calc(var(--cut) - 6px));
+    box-shadow:
+      inset 0 0 44px rgba(0,166,214,0.10),
+      inset 0 0 1px rgba(212,191,125,0.25);
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    transition: box-shadow 220ms ease;
+  }
+  .bio-portrait .bp-inner::before {
+    /* scanline pass inside the portrait */
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,166,214,0.07) 0px, rgba(0,166,214,0.07) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: screen; opacity: 0.75;
+  }
+  .bio-portrait .bp-inner::after {
+    /* subtle CRT vignette inside the portrait */
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+    background: radial-gradient(120% 110% at 50% 45%,
+      transparent 52%, rgba(0,0,0,0.55) 100%);
+  }
+  /* the line-art figure silhouette — a DELIBERATE bio-portrait, not a broken image.
+     Real character art drops into .bp-art at handoff. */
+  .bio-portrait .bp-art {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end;
+    height: 100%; width: 100%;
+  }
+  .bio-portrait .bp-figure {
+    color: var(--beige);
+    opacity: 0.42;
+    font-size: clamp(130px, 19vh, 240px);
+    line-height: 0.9;
+    filter: drop-shadow(0 0 18px rgba(212,191,125,0.18));
+    transform: translateY(8%);
+    transition: opacity 220ms ease, color 220ms ease;
+  }
+  .bio-portrait .bp-grid {
+    /* faint registration grid behind the figure — reads as a scan display */
+    position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(212,191,125,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(212,191,125,0.05) 1px, transparent 1px);
+    background-size: 26px 26px;
+    mask-image: radial-gradient(120% 100% at 50% 45%, #000 35%, transparent 80%);
+    -webkit-mask-image: radial-gradient(120% 100% at 50% 45%, #000 35%, transparent 80%);
+  }
+  .bio-portrait .bp-corner {
+    position: absolute; width: 18px; height: 18px;
+    border-color: var(--cyan); opacity: 0.85; z-index: 4; pointer-events: none;
+  }
+  .bio-portrait .bp-corner.tl { top: 11px; left: 11px; border-top: 1px solid; border-left: 1px solid; }
+  .bio-portrait .bp-corner.tr { top: 11px; right: 11px; border-top: 1px solid; border-right: 1px solid; }
+  .bio-portrait .bp-corner.bl { bottom: 11px; left: 11px; border-bottom: 1px solid; border-left: 1px solid; }
+  .bio-portrait .bp-corner.br { bottom: 11px; right: 11px; border-bottom: 1px solid; border-right: 1px solid; }
+  .bio-portrait .bp-tag {
+    position: absolute; bottom: 13px; left: 13px; z-index: 5;
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.26em; text-transform: uppercase;
+    color: var(--cyan); opacity: 0.92;
+    display: flex; align-items: center; gap: 6px;
+    text-shadow: 0 0 8px rgba(0,166,214,0.4);
+  }
+  .bio-portrait .bp-tag .lk { font-size: 8px; }
+  .bio-portrait .bp-tag .lock-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 6px rgba(0,166,214,0.8);
+  }
+  .bio-portrait .bp-idx {
+    position: absolute; top: 13px; right: 14px; z-index: 5;
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.22em; color: var(--beige); opacity: 0.7;
+    text-transform: uppercase;
+  }
+  /* hover: very subtle scale + faint glow, consistent with established feel */
+  .bio-portrait:hover { transform: scale(1.01); }
+  .bio-portrait:hover .bp-inner {
+    box-shadow:
+      inset 0 0 60px rgba(0,166,214,0.22),
+      inset 0 0 1px rgba(212,191,125,0.3),
+      0 0 26px rgba(0,166,214,0.28);
+  }
+  .bio-portrait:hover .bp-figure { opacity: 0.5; }
+
+  /* --- Nameplate beneath portrait --- */
+  .nameplate {
+    flex: 0 0 auto;
+    text-align: center;
+    margin: 16px 0 4px;
+  }
+  .nameplate .np-name {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 25px; letter-spacing: 0.12em;
+    color: var(--beige); text-transform: uppercase; line-height: 1;
+    text-shadow: 0 0 14px rgba(212,191,125,0.18);
+  }
+  .nameplate .np-sub {
+    margin-top: 8px;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.3em; color: var(--muted); text-transform: uppercase;
+  }
+  .nameplate .np-sub .sep { color: var(--beige-dim); margin: 0 7px; }
+
+  .vitals-rule {
+    flex: 0 0 auto;
+    height: 1px; margin: 16px 2px 12px;
+    background: repeating-linear-gradient(to right,
+      rgba(212,191,125,0.3) 0, rgba(212,191,125,0.3) 6px,
+      transparent 6px, transparent 12px);
+  }
+  .vitals-label {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 12px;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--beige); margin: 0 2px 10px;
+  }
+  .vitals-label .acc { color: var(--cyan); }
+  .vitals-label::after {
+    content: ""; flex: 1; height: 1px; background: rgba(212,191,125,0.18);
+  }
+
+  /* identity vitals — clean stat list */
+  .vitals {
+    flex: 0 1 auto; min-height: 0;
+    display: grid; grid-template-columns: 1fr;
+    padding: 0 2px;
+    overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent;
+  }
+  .vital {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 14px; padding: 7px 4px;
+    border-bottom: 1px dashed rgba(212,191,125,0.14);
+  }
+  .vital:last-child { border-bottom: 0; }
+  .vital .v-k {
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase;
+  }
+  .vital .v-v {
+    font-family: var(--font-prose); font-size: 15px;
+    color: var(--text); letter-spacing: 0.01em; text-align: right;
+  }
+  .vital .v-v.muted { color: var(--muted); }
+
+  /* ============================================================
+     DOSSIER PANEL  (right column — scrolling reading panel)
+     ============================================================ */
+  .read-pad {
+    position: relative; z-index: 1;
+    flex: 1; min-height: 0;
+    padding: 36px 48px 44px;
+  }
+  .read-inner { max-width: 700px; }
+
+  /* section labels (02 / 03 / 04) */
+  .sec-label {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.34em; text-transform: uppercase;
+    color: var(--beige); margin: 0 0 20px;
+  }
+  .sec-label .num { color: var(--cyan); }
+  .sec-label::after {
+    content: ""; flex: 1; height: 1px; background: rgba(212,191,125,0.2);
+  }
+  .dossier-sec + .dossier-sec { margin-top: 46px; }
+
+  /* --- 02 Backstory prose --- */
+  .prose p {
+    font-family: var(--font-prose); font-size: 16.5px;
+    line-height: 1.8; color: var(--text);
+    margin: 0 0 18px; letter-spacing: 0.005em;
+    text-wrap: pretty;
+  }
+  .prose p:last-child { margin-bottom: 0; }
+  .prose p .lead-cap {
+    font-family: var(--font-display);
+    font-size: 15px; color: var(--cyan-hot); letter-spacing: 0.04em;
+  }
+
+  /* memory-fidelity telemetry seed — dry, routine, screen-edge tone */
+  .mem-note {
+    margin: 26px 0 2px;
+    padding: 11px 14px;
+    border: 1px solid rgba(212,191,125,0.22);
+    border-left: 2px solid rgba(0,166,214,0.4);
+    background: rgba(0,0,0,0.28);
+    display: inline-flex; flex-direction: column; gap: 3px;
+    max-width: 100%;
+  }
+  .mem-note .mn-row {
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.24em; text-transform: uppercase; color: var(--muted);
+  }
+  .mem-note .mn-row .k { color: var(--beige); }
+  .mem-note .mn-row .v { color: var(--cyan); opacity: 0.85; }
+  .mem-note .mn-sub {
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted); opacity: 0.5;
+  }
+
+  /* --- 03 Nature: 2x2 grid of mini-cards --- */
+  .nature-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .nat-card {
+    --cut: 11px;
+    position: relative;
+    transition: transform 180ms ease;
+  }
+  .nat-card .nc-frame {
+    position: absolute; inset: 0;
+    background: rgba(212,191,125,0.5);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 200ms ease, box-shadow 200ms ease;
+  }
+  .nat-card .nc-inner {
+    position: relative;
+    margin: 1.5px;
+    background:
+      radial-gradient(140% 100% at 0% 0%, rgba(0,166,214,0.05), transparent 60%),
+      linear-gradient(180deg, #1a1a1a, #121212);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    padding: 13px 15px 15px;
+    min-height: 92px;
+    display: flex; flex-direction: column; gap: 9px;
+  }
+  .nat-card .nc-key {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.24em; text-transform: uppercase; color: var(--beige);
+  }
+  .nat-card .nc-key i { color: var(--cyan); font-size: 9px; opacity: 0.8; }
+  .nat-card .nc-val {
+    font-family: var(--font-prose); font-size: 16px;
+    line-height: 1.5; color: var(--text); letter-spacing: 0.005em;
+    text-wrap: pretty;
+  }
+  /* hover: subtle border-glow only */
+  .nat-card:hover .nc-frame {
+    background: var(--cyan);
+    box-shadow: 0 0 16px rgba(0,166,214,0.32);
+  }
+
+  /* --- 04 Relations list --- */
+  .relations { display: flex; flex-direction: column; gap: 2px; }
+  .rel-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "name    attitude"
+      "desc    desc";
+    column-gap: 16px; row-gap: 7px;
+    align-items: center;
+    padding: 15px 14px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    border-bottom: 1px dashed rgba(212,191,125,0.12);
+    transition: background 160ms ease, border-color 160ms ease;
+  }
+  .rel-row:last-child { border-bottom: 0; }
+  .rel-row:hover {
+    background: rgba(0,166,214,0.06);
+    border-left-color: var(--cyan);
+  }
+  .rel-head {
+    grid-area: name;
+    display: flex; align-items: baseline; gap: 13px; flex-wrap: wrap;
+  }
+  .rel-name {
+    font-family: var(--font-prose); font-size: 18px;
+    color: var(--cyan); letter-spacing: 0.01em; line-height: 1.2;
+    border-bottom: 1px solid rgba(0,166,214,0.35);
+    transition: color 160ms ease, border-color 160ms ease;
+  }
+  .rel-row:hover .rel-name { color: var(--cyan-hot); border-bottom-color: var(--cyan-hot); }
+  .rel-tag {
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige);
+    padding: 4px 10px;
+    border: 1px solid rgba(212,191,125,0.55);
+    clip-path: polygon(5px 0, 100% 0,
+      100% calc(100% - 5px), calc(100% - 5px) 100%,
+      0 100%, 0 5px);
+    white-space: nowrap;
+  }
+  .rel-desc {
+    grid-area: desc;
+    font-family: var(--font-prose); font-size: 15px;
+    line-height: 1.55; color: var(--muted); letter-spacing: 0.005em;
+    text-wrap: pretty;
+  }
+
+  /* attitude indicator — 3-segment bar + label. cyan / beige / muted. NO red. */
+  .attitude {
+    grid-area: attitude;
+    display: flex; align-items: center; gap: 10px;
+    justify-self: end;
+  }
+  .att-bars { display: flex; gap: 3px; }
+  .att-seg {
+    width: 14px; height: 6px;
+    background: rgba(170,170,170,0.16);
+    border: 1px solid rgba(170,170,170,0.25);
+  }
+  .att-label {
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+    min-width: 56px; text-align: right;
+  }
+  /* friendly — 3 cyan segments */
+  .attitude[data-att="friendly"] .att-seg {
+    background: var(--cyan); border-color: var(--cyan);
+    box-shadow: 0 0 6px rgba(0,166,214,0.5);
+  }
+  .attitude[data-att="friendly"] .att-label { color: var(--cyan); }
+  /* neutral — 2 beige segments */
+  .attitude[data-att="neutral"] .att-seg:nth-child(-n+2) {
+    background: var(--beige); border-color: var(--beige);
+  }
+  .attitude[data-att="neutral"] .att-label { color: var(--beige); }
+  /* wary — 1 muted segment (no red) */
+  .attitude[data-att="wary"] .att-seg:nth-child(1) {
+    background: var(--muted); border-color: var(--muted);
+  }
+  .attitude[data-att="wary"] .att-label { color: var(--muted); }
+  /* undefined — empty segments, em-dash label */
+  .attitude[data-att="undefined"] .att-seg {
+    background: transparent; border-style: dashed; border-color: rgba(226,176,33,0.4);
+  }
+  .attitude[data-att="undefined"] .att-label { color: var(--gold-rare); opacity: 0.85; }
+
+  /* G.U.I.D.E. relation — the ONE sanctioned amber use. Understated. */
+  .rel-row.guide { border-bottom-color: rgba(226,176,33,0.18); }
+  .rel-row.guide .rel-name {
+    color: var(--gold-rare);
+    border-bottom-color: rgba(226,176,33,0.4);
+  }
+  .rel-row.guide:hover {
+    background: rgba(226,176,33,0.05);
+    border-left-color: var(--gold-rare);
+  }
+  .rel-row.guide:hover .rel-name { color: #f2c64a; border-bottom-color: rgba(226,176,33,0.7); }
+  .rel-row.guide .rel-tag {
+    color: var(--gold-rare); border-color: rgba(226,176,33,0.5);
+  }
+
+  @media (max-width: 1180px) {
+    main.lore { grid-template-columns: 38fr 62fr; }
+    .read-pad { padding: 28px 32px 34px; }
+    .nature-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="sweep" id="sweep"></div>
+
+<!-- ====================== TOP BAR ====================== -->
+<header class="topbar" role="banner">
+  <div class="top-left">
+    <div class="stat-block" aria-label="Level">
+      <div class="stat-row"><span class="stat-num">08</span><span class="stat-label">Level</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:62%"></i></div>
+    </div>
+    <div class="stat-block" aria-label="Reputation">
+      <div class="stat-row"><span class="stat-num">35</span><span class="stat-label">Reputation</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:48%"></i></div>
+    </div>
+  </div>
+
+  <div class="top-center">
+    <div class="char-name">Ros Chrisstone<span class="cursor">█</span></div>
+    <div class="char-sub">
+      <span>Human · Fighter</span>
+      <span class="sep">/</span>
+      <span>Champion Archetype</span>
+      <span class="sep">/</span>
+      <span>Brettany Reclamation</span>
+    </div>
+  </div>
+
+  <div class="top-right">
+    <div class="weight-block">
+      <span class="ic">⚖</span><span class="val">45 / 120</span><span class="lab">Burden</span>
+    </div>
+    <div class="gold-block">
+      <span class="ic">⊙</span><span class="val">1,247</span><span class="lab">Gold</span>
+    </div>
+  </div>
+</header>
+
+<div class="ticker above" aria-hidden="true">
+  <span>TASK_MANAGER_SD11S</span><span class="gap"></span>
+  <span class="dim">// AURUM_LEDGER_OK</span><span class="gap"></span>
+  <span>PROTOCOL: 6920-A44</span><span class="gap"></span>
+  <span class="dim">0001 0110 1001 0011 1100</span>
+</div>
+<div class="ticker below" aria-hidden="true">
+  <span>FRAME 06 // DOSSIER.BIO</span><span class="gap"></span>
+  <span class="dim">BIO.OK</span><span class="gap"></span>
+  <span>SOULBOND 0x4F1A</span><span class="gap"></span>
+  <span class="dim">RECORD_SYNCED</span>
+</div>
+
+<!-- side labels -->
+<div class="side-label left">
+  <span class="acc">LORE</span> &nbsp;//&nbsp; DOSSIER &nbsp;//&nbsp; SYNC OK
+</div>
+<div class="side-label right">
+  Record 4F1A &nbsp;//&nbsp; <span class="acc">BIO :: LOCKED</span> &nbsp;//&nbsp; Auto-Sync
+</div>
+
+<!-- ====================== NAVBAR ====================== -->
+<nav class="navbar" aria-label="Primary">
+
+  <!-- Equipment — NOT active here, but its hover-expand still works -->
+  <div class="nav-slot equipment">
+    <button class="nav-btn" data-nav="equipment">
+      <span class="nb-frame"></span>
+      <span class="nb-marker">01 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-khanda"></i></span>
+        <span class="nb-label">Equipment</span>
+      </span>
+    </button>
+    <div class="nav-sub above" aria-hidden="false">
+      <button class="nav-btn" data-nav="inventory">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-bag-shopping"></i></span>
+          <span class="nb-label">Inventory</span>
+        </span>
+      </button>
+    </div>
+    <div class="nav-sub below" aria-hidden="false">
+      <button class="nav-btn" data-nav="stat-panel">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-chart-simple"></i></span>
+          <span class="nb-label">Stat Panel</span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <div class="nav-slot">
+    <button class="nav-btn is-active" data-nav="lore" aria-current="page">
+      <span class="nb-frame"></span><span class="nb-marker">02 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-book-open"></i></span>
+        <span class="nb-label">Lore</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="spellbook">
+      <span class="nb-frame"></span><span class="nb-marker">03 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-scroll"></i></span>
+        <span class="nb-label">Spellbook</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="character">
+      <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-user-shield"></i></span>
+        <span class="nb-label">Character</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="journal">
+      <span class="nb-frame"></span><span class="nb-marker">05 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-clipboard"></i></span>
+        <span class="nb-label">Journal</span>
+      </span>
+    </button>
+  </div>
+</nav>
+
+<div class="nav-meta">
+  <span class="dim">◇</span>
+  <span>Section</span>
+  <span class="acc">/ Lore</span>
+  <span class="dim">·</span>
+  <span>Character Dossier</span>
+  <span class="dim">·</span>
+  <span>Bio <span class="acc">::</span> Synced</span>
+  <span class="dim">//</span>
+  <span class="stamp">ROS.CHRISSTONE</span>
+</div>
+
+<!-- ====================== MAIN ====================== -->
+<main class="lore">
+
+  <!-- ============ 01  DOSSIER (left — portrait + vitals) ============ -->
+  <section class="col" aria-label="Dossier">
+    <div class="col-header">
+      <span class="ch-num">01</span>
+      <span class="ch-title">Dossier</span>
+      <span class="ch-meta"><span class="acc">Bio</span> · Locked</span>
+    </div>
+    <div class="region">
+      <div class="r-frame"></div>
+      <div class="r-gap"></div>
+      <div class="r-line"></div>
+      <div class="r-inner">
+        <span class="r-corner tl"></span>
+        <span class="r-corner br"></span>
+        <div class="dossier-pad">
+
+          <!-- Portrait — RESOLVED bio-portrait display -->
+          <div class="bio-portrait" tabindex="0" aria-label="Bio-portrait of Ros Chrisstone">
+            <div class="bp-line"></div>
+            <div class="bp-inner">
+              <span class="bp-corner tl"></span>
+              <span class="bp-corner tr"></span>
+              <span class="bp-corner bl"></span>
+              <span class="bp-corner br"></span>
+              <span class="bp-grid"></span>
+              <!-- Real character art drops into .bp-art at handoff -->
+              <div class="bp-art">
+                <i class="bp-figure fa-solid fa-user"></i>
+              </div>
+              <span class="bp-idx">REC · 0x4F1A</span>
+              <span class="bp-tag">
+                <span class="lock-dot"></span>
+                <span class="lk">Bio-Scan: Locked</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Nameplate -->
+          <div class="nameplate">
+            <div class="np-name">Ros Chrisstone</div>
+            <div class="np-sub">
+              Human Fighter <span class="sep">·</span> Champion
+            </div>
+          </div>
+
+          <div class="vitals-rule"></div>
+          <div class="vitals-label">
+            <span class="acc">◇</span> Identity <span class="acc">::</span> Vitals
+          </div>
+
+          <!-- Identity vitals -->
+          <div class="vitals scroll-y">
+            <div class="vital"><span class="v-k">Race</span><span class="v-v">Human</span></div>
+            <div class="vital"><span class="v-k">Class</span><span class="v-v">Fighter</span></div>
+            <div class="vital"><span class="v-k">Archetype</span><span class="v-v">Champion</span></div>
+            <div class="vital"><span class="v-k">Background</span><span class="v-v">Soldier</span></div>
+            <div class="vital"><span class="v-k">Alignment</span><span class="v-v">Lawful Neutral</span></div>
+            <div class="vital"><span class="v-k">Age</span><span class="v-v">34</span></div>
+            <div class="vital"><span class="v-k">Height</span><span class="v-v">6&#39;1&quot;</span></div>
+            <div class="vital"><span class="v-k">Deity</span><span class="v-v muted">—</span></div>
+            <div class="vital"><span class="v-k">Homeland</span><span class="v-v">Castella, Brettany</span></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DOSSIER PANEL (right — scrolling) ============ -->
+  <section class="col" aria-label="Character record">
+    <div class="col-header">
+      <span class="ch-num">02</span>
+      <span class="ch-title">Record</span>
+      <span class="ch-meta">Backstory <span class="dim">·</span> Nature <span class="dim">·</span> Relations</span>
+    </div>
+    <div class="region">
+      <div class="r-frame"></div>
+      <div class="r-gap"></div>
+      <div class="r-line"></div>
+      <div class="r-inner">
+        <span class="r-corner tl"></span>
+        <span class="r-corner br"></span>
+        <div class="read-pad scroll-y">
+          <div class="read-inner">
+
+            <!-- ===== 02  BACKSTORY ===== -->
+            <section class="dossier-sec" aria-label="Backstory">
+              <div class="sec-label"><span class="num">02</span> Backstory</div>
+              <div class="prose">
+                <p><span class="lead-cap">Ros Chrisstone</span> was born in Castella, a grey fishing town on the western reach of Brettany, where the harbour bells kept better time than any clock and the salt got into everything — the bread, the ledgers, the lungs of old men. The Chrisstones mended nets and sailed when the weather allowed, and Ros grew up expecting the sea to be the whole of a life.</p>
+                <p>It was the levy that took them inland. When Brettany called its coastal towns to muster, Castella sent its sons by the cartload, and Ros went among them — broad in the shoulder before they were grown, and steadier under a sergeant's voice than most twice their age. The drill yard suited them in a way the boats never had. They learned the long blade, then learned to carry two, and the garrison stopped laughing about it by the second winter.</p>
+                <p>Eleven years under the Crown's banner wore the coast out of their accent and put a soldier's plainness in its place. Ros served garrison rotations from the Brettany wall to the Davelguay marches, made few friends and fewer enemies, and earned a reputation for being exactly where they were posted and nothing more — which, in a faltering kingdom, was worth more than cleverness.</p>
+                <p>The Reclamation found them between commissions, with a debt to settle and no lord left to settle it to. Ros took the assignment for the coin and the work, and followed the road back toward Castella — toward a stolen tome, a magistrate's writ, and a woman who would not give her name.</p>
+              </div>
+
+              <!-- memory-fidelity telemetry seed — routine system flavor -->
+              <div class="mem-note" aria-hidden="true">
+                <div class="mn-row"><span class="k">Memory Fidelity:</span> <span class="v">Partial</span></div>
+                <div class="mn-sub">// Early records reconstructed</div>
+              </div>
+            </section>
+
+            <!-- ===== 03  NATURE ===== -->
+            <section class="dossier-sec" aria-label="Nature">
+              <div class="sec-label"><span class="num">03</span> Nature</div>
+              <div class="nature-grid">
+                <div class="nat-card">
+                  <div class="nc-frame"></div>
+                  <div class="nc-inner">
+                    <div class="nc-key"><i class="fa-solid fa-circle-dot"></i> Personality Trait</div>
+                    <div class="nc-val">Speaks plainly; distrusts clever words and the people who use them.</div>
+                  </div>
+                </div>
+                <div class="nat-card">
+                  <div class="nc-frame"></div>
+                  <div class="nc-inner">
+                    <div class="nc-key"><i class="fa-solid fa-circle-dot"></i> Ideal</div>
+                    <div class="nc-val">A debt unpaid is a debt that festers. Settle it, whatever it costs.</div>
+                  </div>
+                </div>
+                <div class="nat-card">
+                  <div class="nc-frame"></div>
+                  <div class="nc-inner">
+                    <div class="nc-key"><i class="fa-solid fa-circle-dot"></i> Bond</div>
+                    <div class="nc-val">Castella's people are mine to answer for, even the ones who forgot me.</div>
+                  </div>
+                </div>
+                <div class="nat-card">
+                  <div class="nc-frame"></div>
+                  <div class="nc-inner">
+                    <div class="nc-key"><i class="fa-solid fa-circle-dot"></i> Flaw</div>
+                    <div class="nc-val">Mistakes patience for weakness in others, and says so out loud.</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- ===== 04  RELATIONS ===== -->
+            <section class="dossier-sec" aria-label="Relations">
+              <div class="sec-label"><span class="num">04</span> Relations</div>
+              <div class="relations">
+
+                <div class="rel-row" data-relation="The Lady" role="button" tabindex="0">
+                  <div class="rel-head">
+                    <span class="rel-name">The Lady</span>
+                    <span class="rel-tag">Enigma</span>
+                  </div>
+                  <div class="attitude" data-att="wary">
+                    <span class="att-bars"><span class="att-seg"></span><span class="att-seg"></span><span class="att-seg"></span></span>
+                    <span class="att-label">Wary</span>
+                  </div>
+                  <div class="rel-desc">Keeper of the stolen tome. Wants something she will not name.</div>
+                </div>
+
+                <div class="rel-row" data-relation="Sergeant Halvard Dunne" role="button" tabindex="0">
+                  <div class="rel-head">
+                    <span class="rel-name">Sergeant Halvard Dunne</span>
+                    <span class="rel-tag">Mentor</span>
+                  </div>
+                  <div class="attitude" data-att="friendly">
+                    <span class="att-bars"><span class="att-seg"></span><span class="att-seg"></span><span class="att-seg"></span></span>
+                    <span class="att-label">Friendly</span>
+                  </div>
+                  <div class="rel-desc">Drilled the blade into Ros at the Brettany wall. Old now, and still owed a letter.</div>
+                </div>
+
+                <div class="rel-row" data-relation="Maren of the Waterfront" role="button" tabindex="0">
+                  <div class="rel-head">
+                    <span class="rel-name">Maren of the Waterfront</span>
+                    <span class="rel-tag">Ally</span>
+                  </div>
+                  <div class="attitude" data-att="friendly">
+                    <span class="att-bars"><span class="att-seg"></span><span class="att-seg"></span><span class="att-seg"></span></span>
+                    <span class="att-label">Friendly</span>
+                  </div>
+                  <div class="rel-desc">Castella dockhand who vouches for Ros when the watch comes asking.</div>
+                </div>
+
+                <div class="rel-row" data-relation="Captain Aldric Vane" role="button" tabindex="0">
+                  <div class="rel-head">
+                    <span class="rel-name">Captain Aldric Vane</span>
+                    <span class="rel-tag">Rival</span>
+                  </div>
+                  <div class="attitude" data-att="wary">
+                    <span class="att-bars"><span class="att-seg"></span><span class="att-seg"></span><span class="att-seg"></span></span>
+                    <span class="att-label">Wary</span>
+                  </div>
+                  <div class="rel-desc">Rose through the garrison on a name, not a blade. Has not forgiven Ros for noticing.</div>
+                </div>
+
+                <div class="rel-row guide" data-relation="G.U.I.D.E." role="button" tabindex="0">
+                  <div class="rel-head">
+                    <span class="rel-name">G.U.I.D.E.</span>
+                    <span class="rel-tag">System · Bonded</span>
+                  </div>
+                  <div class="attitude" data-att="undefined">
+                    <span class="att-bars"><span class="att-seg"></span><span class="att-seg"></span><span class="att-seg"></span></span>
+                    <span class="att-label">—</span>
+                  </div>
+                  <div class="rel-desc">Neural guidance interface. Always present.</div>
+                </div>
+
+              </div>
+            </section>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ====================== BOTTOM BAR ====================== -->
+<footer class="bottombar" role="contentinfo">
+  <div class="bb-line">
+    <span class="dot"></span>
+    <span class="lab">Neural Link:</span><span class="val">Stable</span>
+    <span class="sep">|</span>
+    <span class="lab">Shard Integrity:</span><span class="val">98.2%</span>
+    <span class="sep">|</span>
+    <span class="lab">Last Sync:</span><span class="val">0.07 ms</span>
+    <span class="sep">|</span>
+    <span class="lab">Castella-08:</span><span class="dim">Clear · Wind NNW 4kt</span>
+    <span class="sep">|</span>
+    <span class="lab">Tide:</span><span class="dim">Low @ 03:47</span>
+
+    <div class="bb-right">
+      <span class="lab">Codex</span><span class="val">v 2.4.7</span>
+      <span class="sep">|</span>
+      <span class="dot"></span><span class="val">DM Online</span>
+      <span class="sep">|</span>
+      <span class="lab" id="save-auto">SAVE · 00:44</span><span class="save-cursor">█</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ============================================================
+  //  Sweep on load — shared with prior phases.
+  // ============================================================
+  window.addEventListener('load', () => {
+    const sweep = document.getElementById('sweep');
+    if (sweep) {
+      sweep.classList.add('run');
+      sweep.addEventListener('animationend', () => sweep.classList.remove('run'), { once: true });
+    }
+  });
+
+  // ============================================================
+  //  Bottom-bar SAVE countdown — cosmetic, matches prior phases.
+  // ============================================================
+  (function () {
+    const el = document.getElementById('save-auto');
+    if (!el) return;
+    let t = 44;
+    setInterval(() => {
+      t = (t <= 0) ? 60 : t - 1;
+      const m = String(Math.floor(t / 60)).padStart(2, '0');
+      const s = String(t % 60).padStart(2, '0');
+      el.textContent = `SAVE · ${m}:${s}`;
+    }, 1000);
+  })();
+
+  // ============================================================
+  //  RELATIONS — click / keyboard hook.
+  //  console.log placeholder; future hook to each entity's lore.
+  // ============================================================
+  document.querySelectorAll('.rel-row').forEach(row => {
+    const go = () => console.log('Navigate to relation: ' + row.dataset.relation);
+    row.addEventListener('click', go);
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+    });
+  });
+
+  // ============================================================
+  //  NAVBAR — placeholder hooks (real routing owned by Claude Code).
+  // ============================================================
+  document.querySelectorAll('.nav-btn[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dest = btn.dataset.nav;
+      if (btn.classList.contains('is-active')) return;
+      console.log('Navigate to screen: ' + dest);
+    });
+  });
+</script>
+</body>
+</html>

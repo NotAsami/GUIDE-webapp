@@ -1,0 +1,2040 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — SPELLBOOK // ROS CHRISSTONE</title>
+<!--
+  PHASE 7 — SPELLBOOK screen (top-level, full chrome returns; sibling to
+  Equipment / Lore / Character / Journal). The final and mechanically
+  heaviest screen of the codex.
+
+  Architecture note (same principle as the Shard Upgrade Tree, Phase 5.5):
+  the ENTIRE screen renders FROM the SPELLBOOK data object near the top of
+  <script>. Caster profile, spell-slot tracker, grimoire list and detail
+  panel all derive from that object. The renderer handles two cases from
+  data alone:
+    • POPULATED (caster.spellcasting === true, spells non-empty) → full grimoire
+    • EMPTY     (caster.spellcasting === false / no spells)       → empty state
+  Swapping in a different character later = swapping that object (future:
+  per-character JSON, e.g. characters/ros.json). See "JSON-SWAP POINT".
+
+  Note on the character mismatch (intentional): the chrome reads Ros (a
+  Fighter), but the sample spell DATA is a caster's, shown so the full
+  layout is visible and testable. At handoff the spellbook reads the actual
+  character's spellcasting — empty for Ros, full for a caster. The chrome is
+  left as Ros on purpose; do not reconcile it.
+
+  Spell descriptions are ORIGINAL placeholder flavor — not rulebook/SRD text.
+  Mechanical fields (range, components, casting time) are facts.
+
+  Palette is strict and shared with prior phases:
+    #1d1d1d base · #d4bf7d beige · #00a6d6 cyan · #dedede text · #aaaaaa muted.
+    #e2b021 amber is reserved for G.U.I.D.E. only and does NOT appear here.
+    #b93a3a red does NOT appear here. School differentiation = icon + label,
+    not loud color.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  /* ============================================================
+     SHARED CHROME  (kept verbatim with prior phases)
+     ============================================================ */
+  :root {
+    --bg:        #1d1d1d;
+    --bg-2:      #161616;
+    --beige:     #d4bf7d;
+    --beige-dim: #8a7a4a;
+    --cyan:      #00a6d6;
+    --cyan-dim:  #0d6e8c;
+    --cyan-hot:  #4dd6ff;
+    --gold-rare: #e2b021;
+    --text:      #dedede;
+    --muted:     #aaaaaa;
+    --danger:    #b93a3a;
+
+    --bar-top-h:    62px;
+    --bar-bottom-h: 50px;
+    --nav-h:        72px;
+    --nav-top-gap:  26px;
+
+    --font-display: "Cinzel", serif;
+    --font-prose:   "EB Garamond", serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-prose);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .stage {
+    position: fixed; inset: 0;
+    background:
+      url("https://www.transparenttextures.com/patterns/dark-leather.png"),
+      radial-gradient(120% 90% at 50% 50%, #232220 0%, #1a1a1a 60%, #0e0e0e 100%);
+    background-blend-mode: overlay, normal;
+  }
+  .scanlines {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 90;
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+      transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 91;
+    background: radial-gradient(120% 110% at 50% 50%,
+      transparent 55%, rgba(0,0,0,0.55) 95%, rgba(0,0,0,0.85) 100%);
+  }
+  .sweep {
+    pointer-events: none;
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 2px; z-index: 95;
+    background: linear-gradient(to bottom,
+      transparent, rgba(0,166,214,0.55) 50%, transparent);
+    box-shadow: 0 0 24px rgba(0,166,214,0.45);
+    opacity: 0;
+  }
+  .sweep.run { animation: sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards; }
+  @keyframes sweep-run {
+    0%   { opacity: 0; transform: translateY(-20px); }
+    8%   { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(100vh); }
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---- shake (denied) — verbatim from the Shard screens ---- */
+  @keyframes deniedShakeX {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-3px); }
+    40% { transform: translateX(3px); }
+    60% { transform: translateX(-2px); }
+    80% { transform: translateX(2px); }
+  }
+
+  /* ---------- Top Bar ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--bar-top-h); z-index: 50;
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; padding: 0 36px;
+    background: linear-gradient(to bottom,
+      rgba(15,15,15,0.95) 0%, rgba(22,22,22,0.92) 100%);
+    border-bottom: 1px solid var(--beige);
+    box-shadow: 0 1px 0 rgba(212,191,125,0.15),
+                0 8px 24px -8px rgba(0,0,0,0.6);
+  }
+  .topbar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .topbar::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 1px; background: var(--beige);
+    box-shadow: 0 0 8px rgba(212,191,125,0.4);
+  }
+  .top-left, .top-right {
+    display: flex; align-items: center; gap: 28px;
+    position: relative; z-index: 1;
+  }
+  .top-right { justify-content: flex-end; }
+  .stat-block { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+  .stat-row { display: flex; align-items: baseline; gap: 8px; }
+  .stat-num {
+    font-family: var(--font-display); font-weight: 600;
+    color: var(--beige); font-size: 22px; line-height: 1; letter-spacing: 0.04em;
+  }
+  .stat-label {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--cyan); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .bar {
+    height: 3px; width: 110px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5); position: relative; overflow: hidden;
+  }
+  .bar > i {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    box-shadow: 0 0 6px rgba(0,166,214,0.6); display: block;
+  }
+  .top-center { text-align: center; position: relative; z-index: 1; padding: 0 24px; }
+  .char-name {
+    font-family: var(--font-display); font-weight: 600; font-size: 18px;
+    letter-spacing: 0.4em; color: var(--text); text-transform: uppercase; line-height: 1;
+  }
+  .char-name .cursor {
+    display: inline-block; color: var(--cyan); transform: translateY(-1px);
+    margin-left: 4px; animation: blink 1s steps(2, end) infinite;
+  }
+  .char-sub {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+    color: var(--muted); margin-top: 4px; text-transform: uppercase;
+  }
+  .char-sub .sep { color: var(--beige-dim); margin: 0 8px; }
+  .gold-block, .weight-block { display: flex; align-items: baseline; gap: 10px; }
+  .gold-block .ic, .weight-block .ic {
+    font-family: var(--font-display); color: var(--beige); font-size: 20px; line-height: 1;
+  }
+  .gold-block .val, .weight-block .val {
+    font-family: var(--font-display); color: var(--beige); font-size: 18px;
+    letter-spacing: 0.06em; line-height: 1;
+  }
+  .gold-block .lab, .weight-block .lab {
+    font-family: var(--font-mono); color: var(--cyan); font-size: 9px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .ticker {
+    position: fixed; left: 0; right: 0; height: 12px; z-index: 51;
+    display: flex; align-items: center; padding: 0 24px;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+    color: rgba(0,166,214,0.55); pointer-events: none;
+    overflow: hidden; white-space: nowrap;
+  }
+  .ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
+  .ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212,191,125,0.45); }
+  .ticker .gap { width: 32px; display: inline-block; }
+  .ticker .dim { color: rgba(170,170,170,0.4); }
+
+  /* ---------- Bottom Bar ---------- */
+  .bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--bar-bottom-h); z-index: 50;
+    display: flex; align-items: center; padding: 0 32px;
+    background: linear-gradient(to top,
+      rgba(15,15,15,0.96) 0%, rgba(22,22,22,0.92) 100%);
+    border-top: 1px solid var(--beige);
+    box-shadow: 0 -1px 0 rgba(212,191,125,0.15), 0 -8px 24px -8px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .bottombar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .bb-line {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; width: 100%; color: var(--muted);
+    position: relative; z-index: 1;
+  }
+  .bb-line .lab  { color: var(--beige); }
+  .bb-line .val  { color: var(--cyan); }
+  .bb-line .dim  { color: var(--muted); }
+  .bb-line .sep  { color: var(--beige-dim); margin: 0 4px; }
+  .bb-line .dot  {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px rgba(0,166,214,0.7);
+    display: inline-block;
+  }
+  .bb-line .save-cursor {
+    color: var(--cyan); animation: blink 1s steps(2, end) infinite; margin-left: 2px;
+  }
+  .bb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  /* ---------- NAVBAR ---------- */
+  .navbar {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap));
+    left: 50%; transform: translateX(-50%);
+    display: flex; gap: 14px;
+    z-index: 45;
+  }
+  .nav-slot { position: relative; width: 156px; display: flex; justify-content: center; }
+  .nav-slot.equipment { padding: 60px 0; margin: -60px 0; }
+
+  .nav-btn {
+    --w: 156px; --h: var(--nav-h); --cut: 11px;
+    width: var(--w); height: var(--h);
+    background: transparent; border: 0; padding: 0;
+    color: var(--text); font-family: var(--font-mono);
+    cursor: pointer; position: relative;
+    transition: transform 180ms ease;
+  }
+  .nav-btn .nb-frame {
+    position: absolute; inset: 0; background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 180ms ease;
+  }
+  .nav-btn .nb-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(212,191,125,0.04), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #141414);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 6px;
+    transition: box-shadow 180ms ease, background 180ms ease;
+  }
+  .nav-btn .nb-icon {
+    color: var(--beige); font-size: 20px; line-height: 1;
+    transition: color 180ms ease, text-shadow 180ms ease;
+  }
+  .nav-btn .nb-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.26em; color: var(--text); text-transform: uppercase;
+  }
+  .nav-btn .nb-marker {
+    position: absolute; top: 6px; left: 12px;
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.2em; color: var(--cyan); opacity: 0.7;
+  }
+  .nav-btn:hover { transform: translateY(-2px); }
+  .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.18),
+                0 0 18px rgba(0,166,214,0.35);
+  }
+  .nav-btn:hover .nb-icon {
+    color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.7);
+  }
+
+  /* Active state */
+  .nav-btn.is-active .nb-frame { background: var(--cyan); }
+  .nav-btn.is-active .nb-inner {
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.18), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 28px rgba(0,166,214,0.30),
+                0 0 22px rgba(0,166,214,0.55);
+  }
+  .nav-btn.is-active .nb-icon { color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.9); }
+  .nav-btn.is-active .nb-label { color: var(--cyan-hot); }
+  .nav-btn.is-active .nb-marker { color: var(--beige); opacity: 1; }
+  .nav-btn.is-active::after {
+    content: ""; position: absolute;
+    top: -6px; left: 14%; right: 14%; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 20px rgba(0,166,214,0.6);
+    z-index: 2;
+  }
+
+  /* Sub-buttons (Inventory above, Stat Panel below) */
+  .nav-sub {
+    position: absolute; left: 50%;
+    transform: translate(-50%, 0) scale(0.95);
+    opacity: 0; pointer-events: none;
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
+    z-index: 1;
+  }
+  .nav-sub.above { bottom: calc(50% + 44px); }
+  .nav-sub.below { top:    calc(50% + 44px); }
+  .nav-sub .nav-btn {
+    --w: 122px; --h: 56px; --cut: 9px;
+  }
+  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
+  .nav-sub .nav-btn .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
+                linear-gradient(180deg, #141a1d, #0e1316);
+  }
+  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
+  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
+  .nav-sub .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
+  .nav-slot.equipment:hover .nav-sub,
+  .nav-slot.equipment:focus-within .nav-sub {
+    opacity: 1; pointer-events: auto;
+  }
+  .nav-slot.equipment:hover .nav-sub.above { transform: translate(-50%, -8px) scale(1); }
+  .nav-slot.equipment:hover .nav-sub.below { transform: translate(-50%, 8px) scale(1); }
+
+  /* breadcrumb / subheader under navbar */
+  .nav-meta {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 8px);
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.32em; color: var(--muted);
+    text-transform: uppercase; z-index: 44;
+    display: flex; align-items: center; gap: 12px;
+    white-space: nowrap;
+  }
+  .nav-meta .acc  { color: var(--cyan); }
+  .nav-meta .dim  { color: var(--beige-dim); }
+
+  /* edge labels */
+  .side-label {
+    position: fixed;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.3em; color: var(--muted);
+    text-transform: uppercase; pointer-events: none; z-index: 12;
+  }
+  .side-label.left  { left: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: rotate(180deg) translateY(50%); }
+  .side-label.right { right: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: translateY(-50%); }
+  .side-label .acc  { color: var(--cyan); }
+
+  /* ============================================================
+     SPELLBOOK MAIN — top band + two columns
+     ============================================================ */
+  main.spellbook {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
+    bottom: calc(var(--bar-bottom-h) + 18px);
+    left: 0; right: 0;
+    display: flex; flex-direction: column;
+    gap: 18px;
+    padding: 0 34px;
+    z-index: 10;
+  }
+  .col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+  .col-header {
+    display: flex; align-items: baseline; gap: 14px;
+    margin-bottom: 9px;
+    padding: 0 2px 7px;
+    border-bottom: 1px solid rgba(212,191,125,0.35);
+    flex: 0 0 auto;
+  }
+  .col-header .ch-num {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+  }
+  .col-header .ch-title {
+    font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
+  }
+  .col-header .ch-meta {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+  }
+  .col-header .ch-meta .acc { color: var(--cyan); }
+  .col-header .ch-meta .dim { color: var(--beige-dim); }
+
+  /* ----- Framed region: angular clip + beige double-line ----- */
+  .region {
+    --cut: 16px;
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .region .r-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .region .r-gap {
+    position: absolute; inset: 1.5px;
+    background: var(--bg);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+  }
+  .region .r-line {
+    position: absolute; inset: 4px;
+    background: var(--beige); opacity: 0.42;
+    clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
+      0 100%, 0 calc(var(--cut) - 4px));
+  }
+  .region .r-inner {
+    position: absolute; inset: 5.5px;
+    background:
+      radial-gradient(130% 100% at 50% 0%, rgba(0,166,214,0.05), transparent 60%),
+      linear-gradient(180deg, #151515, #0e0e0e);
+    clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%,
+      0 100%, 0 calc(var(--cut) - 5px));
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .region .r-inner::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,166,214,0.035) 0px, rgba(0,166,214,0.035) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: screen; opacity: 0.6;
+  }
+  .region .r-corner {
+    position: absolute; width: 14px; height: 14px;
+    border-color: var(--cyan); opacity: 0.7; z-index: 5; pointer-events: none;
+  }
+  .region .r-corner.tl { top: 9px; left: 9px; border-top: 1px solid; border-left: 1px solid; }
+  .region .r-corner.br { bottom: 9px; right: 9px; border-bottom: 1px solid; border-right: 1px solid; }
+
+  /* shared thin scrollbar */
+  .scroll-y { overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent; }
+  .scroll-y::-webkit-scrollbar { width: 7px; }
+  .scroll-y::-webkit-scrollbar-track { background: rgba(0,0,0,0.4); }
+  .scroll-y::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--cyan-dim), rgba(212,191,125,0.45));
+    border: 2px solid #111;
+  }
+
+  /* ---- the body grid (grimoire + detail) ---- */
+  /* fixed-height top band — its region's inner fill is absolutely positioned,
+     so the band must carry an explicit height for the region to size to. */
+  .sb-band { flex: 0 0 auto; height: 196px; }
+  .sb-body {
+    flex: 1 1 auto; min-height: 0;
+    display: grid;
+    grid-template-columns: 55fr 42fr;
+    gap: 22px;
+  }
+
+  /* ============================================================
+     01  CASTER PROFILE  (top band)
+     ============================================================ */
+  .profile-pad {
+    position: relative; z-index: 1;
+    padding: 13px 20px 15px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+
+  /* spellcasting stat row */
+  .cast-stats {
+    display: flex; align-items: stretch; flex-wrap: wrap;
+    gap: 0;
+  }
+  .cs-item {
+    display: flex; flex-direction: column; gap: 5px;
+    padding: 0 22px;
+    border-right: 1px dashed rgba(212,191,125,0.2);
+  }
+  .cs-item:first-child { padding-left: 2px; }
+  .cs-item:last-child { border-right: 0; }
+  .cs-k {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.24em; color: var(--cyan); text-transform: uppercase;
+  }
+  .cs-v {
+    font-family: var(--font-display); font-weight: 600; font-size: 19px;
+    letter-spacing: 0.04em; color: var(--beige); line-height: 1;
+  }
+  .cs-v .unit {
+    font-family: var(--font-mono); font-size: 10px; font-weight: 400;
+    letter-spacing: 0.16em; color: var(--muted); margin-left: 4px;
+  }
+  .cs-v.text { font-size: 16px; }
+  .cs-v.prepared.full { color: var(--cyan-hot); }
+
+  .profile-rule {
+    height: 1px;
+    background: repeating-linear-gradient(to right,
+      rgba(212,191,125,0.28) 0, rgba(212,191,125,0.28) 6px,
+      transparent 6px, transparent 12px);
+  }
+
+  /* spell-slot tracker */
+  .slot-track {
+    display: flex; align-items: stretch; gap: 8px;
+  }
+  .slot-label {
+    flex: 0 0 auto;
+    align-self: center;
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.24em; color: var(--beige); text-transform: uppercase;
+    writing-mode: horizontal-tb;
+    padding-right: 6px;
+  }
+  .slot-cells {
+    display: flex; gap: 7px; flex: 1 1 auto; flex-wrap: nowrap;
+  }
+  .slot-cell {
+    --cut: 7px;
+    flex: 1 1 0; min-width: 0;
+    position: relative;
+    padding: 8px 6px 9px;
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    background:
+      linear-gradient(180deg, rgba(0,166,214,0.04), transparent 70%),
+      #131313;
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    box-shadow: inset 0 0 0 1px rgba(212,191,125,0.28);
+  }
+  .slot-cell.cantrip {
+    background:
+      linear-gradient(180deg, rgba(0,166,214,0.08), transparent 70%),
+      #131313;
+    box-shadow: inset 0 0 0 1px rgba(0,166,214,0.4);
+  }
+  .slot-cell.inert {
+    background: #101010;
+    box-shadow: inset 0 0 0 1px rgba(212,191,125,0.1);
+  }
+  .sc-lvl {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.16em; color: var(--beige); text-transform: uppercase;
+  }
+  .slot-cell.cantrip .sc-lvl { color: var(--cyan); }
+  .slot-cell.inert .sc-lvl { color: var(--beige-dim); opacity: 0.6; }
+  .sc-pips { display: flex; gap: 4px; align-items: center; min-height: 13px; }
+  .pip {
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    border: 1px solid var(--cyan);
+    background: transparent;
+    cursor: pointer;
+    transition: background 140ms ease, box-shadow 140ms ease, transform 120ms ease;
+  }
+  .pip.filled {
+    background: var(--cyan);
+    box-shadow: 0 0 7px rgba(0,166,214,0.6);
+  }
+  .pip.spent {
+    background: transparent;
+    border-color: var(--beige-dim);
+    box-shadow: none;
+  }
+  .pip:hover { transform: scale(1.18); }
+  .pip.filled:hover { box-shadow: 0 0 11px rgba(0,166,214,0.85); }
+  .sc-inf {
+    font-family: var(--font-display); font-size: 18px;
+    color: var(--cyan-hot); line-height: 0.8;
+    text-shadow: 0 0 10px rgba(0,166,214,0.5);
+  }
+  .sc-none {
+    font-family: var(--font-mono); font-size: 13px;
+    color: var(--beige-dim); opacity: 0.55; line-height: 0.9;
+  }
+  .sc-count {
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.1em; color: var(--muted);
+  }
+  .slot-cell.cantrip .sc-count { color: var(--cyan); opacity: 0.8; }
+  .slot-cell.inert .sc-count { opacity: 0.4; }
+
+  /* ============================================================
+     02  GRIMOIRE  (left column — the spell list)
+     ============================================================ */
+  .grim-pad {
+    position: relative; z-index: 1;
+    flex: 1; min-height: 0;
+    padding: 6px 8px 10px 4px;
+  }
+  .grim-scroll {
+    height: 100%;
+    padding: 6px 8px 6px 4px;
+    display: flex; flex-direction: column;
+  }
+  .lvl-head {
+    display: flex; align-items: center; gap: 11px;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.26em; text-transform: uppercase;
+    color: var(--beige); opacity: 0.9;
+    margin: 17px 6px 7px;
+  }
+  .lvl-head:first-child { margin-top: 4px; }
+  .lvl-head.cantrip-head { color: var(--cyan); }
+  .lvl-head::after {
+    content: ""; flex: 1; height: 1px; background: rgba(212,191,125,0.18);
+  }
+  .lvl-head .lh-slots {
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.1em; color: var(--muted);
+  }
+
+  /* spell row */
+  .spell-row {
+    position: relative; display: flex; align-items: center; gap: 12px;
+    width: 100%; text-align: left;
+    background: transparent; border: 0; cursor: pointer;
+    padding: 10px 13px 10px 12px;
+    border-left: 2px solid transparent;
+    transition: background 150ms ease, border-color 150ms ease;
+  }
+  .spell-row + .spell-row { border-top: 1px dashed rgba(212,191,125,0.1); }
+  .spell-row:hover { background: rgba(0,166,214,0.06); }
+  .spell-row.selected {
+    background: linear-gradient(90deg, rgba(0,166,214,0.13), transparent 82%);
+    border-left-color: var(--cyan);
+  }
+
+  /* prepared indicator */
+  .prep-dot {
+    flex: 0 0 auto;
+    width: 13px; height: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .prep-dot .dot {
+    width: 11px; height: 11px; border-radius: 50%;
+    border: 1px solid var(--cyan);
+  }
+  .prep-dot.prep .dot {
+    background: var(--cyan); box-shadow: 0 0 7px rgba(0,166,214,0.6);
+  }
+  .prep-dot.unprep .dot {
+    background: transparent; border-color: var(--beige-dim);
+  }
+  .prep-dot.cantrip {
+    font-family: var(--font-display); font-size: 15px;
+    color: var(--cyan-hot); line-height: 1;
+  }
+
+  .spell-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .spell-name {
+    font-family: var(--font-prose); font-size: 16.5px;
+    color: var(--text); letter-spacing: 0.01em; line-height: 1.15;
+  }
+  .spell-row.selected .spell-name { color: var(--cyan-hot); }
+  .spell-row.unprepared .spell-name { color: var(--muted); }
+  .spell-sub {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+  }
+  .spell-sub .school { display: inline-flex; align-items: center; gap: 5px; color: var(--beige); }
+  .spell-sub .school i { color: var(--cyan); font-size: 9px; opacity: 0.85; }
+
+  .spell-tags { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; }
+  .tag-chip {
+    font-family: var(--font-mono); font-size: 8px; font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--cyan);
+    border: 1px solid rgba(0,166,214,0.45);
+    background: rgba(0,166,214,0.06);
+    width: 17px; height: 17px;
+    display: flex; align-items: center; justify-content: center;
+    clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+  }
+  .tag-chip.txt { width: auto; padding: 0 6px; letter-spacing: 0.14em; }
+  .tag-chip i { font-size: 8.5px; }
+
+  /* ============================================================
+     03  SPELL DETAIL  (right column)
+     ============================================================ */
+  .detail-pad {
+    position: relative; z-index: 1;
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
+  }
+  .detail-empty {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 11px;
+  }
+  .detail-empty .prompt {
+    font-family: var(--font-mono); font-size: 13px;
+    letter-spacing: 0.42em; color: var(--muted); text-transform: uppercase;
+  }
+  .detail-empty .cur {
+    font-family: var(--font-mono); font-size: 16px; color: var(--cyan);
+    animation: blink 1.1s steps(2, end) infinite;
+  }
+  .detail-empty .hint {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.26em; color: var(--beige-dim); text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .detail-active { flex: 1; display: none; flex-direction: column; min-height: 0; overflow: hidden; }
+  .detail-pad.has-spell .detail-empty  { display: none; }
+  .detail-pad.has-spell .detail-active { display: flex; }
+
+  .da-head { flex: 0 0 auto; padding: 22px 26px 16px; }
+  .da-name {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 27px; letter-spacing: 0.03em; line-height: 1.1;
+    color: var(--text);
+    text-shadow: 0 0 16px rgba(0,166,214,0.12);
+  }
+  .da-line {
+    margin-top: 9px;
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.26em; text-transform: uppercase; color: var(--cyan);
+    display: flex; align-items: center; gap: 9px;
+  }
+  .da-line .school { color: var(--beige); display: inline-flex; align-items: center; gap: 6px; }
+  .da-line .sep { color: var(--beige-dim); }
+
+  /* mechanical stats grid — this is the scroll region; the action footer
+     below stays pinned so CAST / PREPARE never overlap the grid. */
+  .da-body { flex: 1 1 auto; min-height: 0; padding: 0 26px 14px; overflow-y: auto; }
+  .da-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    border-top: 1px solid rgba(212,191,125,0.22);
+    border-left: 1px solid rgba(212,191,125,0.22);
+  }
+  .da-cell {
+    padding: 11px 14px;
+    border-right: 1px solid rgba(212,191,125,0.22);
+    border-bottom: 1px solid rgba(212,191,125,0.22);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .da-cell.span2 { grid-column: 1 / -1; }
+  .da-cell .dc-k {
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.24em; color: var(--cyan); text-transform: uppercase;
+  }
+  .da-cell .dc-v {
+    font-family: var(--font-mono); font-size: 13px;
+    letter-spacing: 0.05em; color: var(--text);
+  }
+  .da-cell .dc-v .mat {
+    display: block; margin-top: 4px;
+    font-family: var(--font-prose); font-size: 13px; font-style: italic;
+    letter-spacing: 0; color: var(--muted); text-transform: none;
+  }
+  .comp-set { display: flex; gap: 6px; }
+  .comp {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+    width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(212,191,125,0.3);
+    color: var(--beige-dim);
+    clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+  }
+  .comp.on { color: var(--cyan); border-color: rgba(0,166,214,0.55); background: rgba(0,166,214,0.08); }
+
+  .da-flags { display: flex; gap: 8px; margin-top: 13px; flex-wrap: wrap; }
+  .da-flag {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan);
+    border: 1px solid rgba(0,166,214,0.45);
+    padding: 5px 11px;
+    clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  }
+  .da-flag i { font-size: 9px; }
+
+  /* description */
+  .da-desc-label {
+    display: block; margin: 18px 0 9px;
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.28em; color: var(--cyan); text-transform: uppercase;
+  }
+  .da-desc {
+    font-family: var(--font-prose); font-size: 16px;
+    line-height: 1.72; color: var(--text); letter-spacing: 0.005em;
+    text-wrap: pretty;
+  }
+
+  /* ---- damage roller (upcast stepper + rolled-result card) ---- */
+  .dd-control {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    margin: 2px 0 12px;
+  }
+  .dd-clab {
+    font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.24em;
+    color: var(--beige); text-transform: uppercase;
+  }
+  .dd-stepper { display: flex; align-items: stretch; }
+  .dd-step {
+    width: 26px; height: 26px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(10,12,14,0.9);
+    border: 1px solid rgba(0,166,214,0.5);
+    color: var(--cyan); font-size: 9px; cursor: pointer;
+    transition: color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  }
+  .dd-step:hover:not(:disabled) {
+    color: #fff; background: rgba(0,166,214,0.18);
+    box-shadow: 0 0 12px rgba(0,166,214,0.4);
+  }
+  .dd-step:disabled { color: var(--beige-dim); border-color: rgba(212,191,125,0.25); cursor: not-allowed; opacity: 0.55; }
+  .dd-lvl {
+    min-width: 60px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em;
+    color: var(--cyan-hot); text-transform: uppercase;
+    border-top: 1px solid rgba(0,166,214,0.5);
+    border-bottom: 1px solid rgba(0,166,214,0.5);
+    background: rgba(0,166,214,0.05);
+  }
+  .dd-expr {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-family: var(--font-mono); font-size: 14px; letter-spacing: 0.06em;
+    color: var(--cyan-hot);
+  }
+  .dd-expr i { font-size: 12px; color: var(--cyan); opacity: 0.85; }
+  .dd-type {
+    font-size: 8.5px; letter-spacing: 0.2em; color: var(--beige); text-transform: uppercase;
+    border: 1px solid rgba(212,191,125,0.4); padding: 3px 7px;
+    clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+  }
+  .dd-up {
+    font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em;
+    color: var(--cyan); text-transform: uppercase; opacity: 0.85;
+  }
+
+  /* rolled-result card — echoes the Character tab's ROLL_LOG card */
+  .dmg-roll { --cut: 10px; position: relative; margin-top: 4px; }
+  .dmg-roll.fresh { animation: drFresh 900ms ease-out; }
+  @keyframes drFresh {
+    0%   { opacity: 0; transform: translateY(10px); }
+    24%  { opacity: 1; transform: translateY(0); }
+  }
+  .dmg-roll .dr-frame {
+    position: absolute; inset: 0; background: var(--cyan); opacity: 0.9;
+    box-shadow: 0 0 14px rgba(0,166,214,0.4);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .dmg-roll .dr-inner {
+    position: relative; margin: 1.5px;
+    background: linear-gradient(180deg, #16252b, #0e1316);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    padding: 11px 15px 12px;
+    display: grid; grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto auto;
+    column-gap: 14px; row-gap: 3px; align-items: baseline;
+  }
+  .dr-name {
+    grid-column: 1; font-family: var(--font-display); font-weight: 500;
+    font-size: 12px; letter-spacing: 0.18em; color: var(--beige);
+    text-transform: uppercase; line-height: 1.1;
+  }
+  .dr-total {
+    grid-column: 2; grid-row: 1 / span 2; align-self: center;
+    font-family: var(--font-display); font-weight: 600; font-size: 33px;
+    color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.5); line-height: 1;
+  }
+  .dr-dice { grid-column: 1; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+  .dr-dice .die {
+    font-family: var(--font-mono); font-size: 10px; color: var(--text);
+    min-width: 18px; height: 18px; padding: 0 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(212,191,125,0.3); background: rgba(0,0,0,0.3);
+    clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+  }
+  .dr-dice .die.max { color: var(--cyan-hot); border-color: rgba(0,166,214,0.6); box-shadow: 0 0 7px rgba(0,166,214,0.4); }
+  .dr-break {
+    grid-column: 1; font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.1em; color: var(--beige); text-transform: uppercase; opacity: 0.85;
+  }
+  .dr-break .eq { color: var(--cyan); }
+  .dr-stamp {
+    grid-column: 2; grid-row: 3; justify-self: end; align-self: end;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em;
+    color: var(--beige-dim); text-transform: uppercase;
+  }
+
+  /* action footer */
+  .da-foot {
+    flex: 0 0 auto;
+    padding: 7px 26px 16px;
+    border-top: 1px solid rgba(212,191,125,0.2);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .da-note {
+    min-height: 11px;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--muted);
+    opacity: 0; transition: opacity 140ms ease;
+  }
+  .da-note.show { opacity: 1; }
+  .da-note.flash { animation: noteFlash 2.2s ease-out; }
+  @keyframes noteFlash { 0%, 64% { opacity: 1; } 100% { opacity: 0; } }
+
+  .da-actions { display: flex; gap: 10px; }
+  .act-btn {
+    --cut: 9px;
+    position: relative;
+    background: transparent; border: 0; padding: 0;
+    height: 46px; cursor: pointer; font-family: var(--font-mono);
+    flex: 1 1 auto;
+  }
+  .act-btn .ab-frame {
+    position: absolute; inset: 0; background: var(--cyan);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .act-btn .ab-inner {
+    position: absolute; inset: 1.5px;
+    background: linear-gradient(180deg, #16252b, #0e1316);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    color: var(--cyan-hot); font-size: 11px;
+    letter-spacing: 0.24em; text-transform: uppercase;
+    transition: box-shadow 170ms ease, color 170ms ease;
+  }
+  .act-btn .ab-inner i { font-size: 12px; opacity: 0.9; }
+  .act-btn:not(:disabled):hover .ab-inner {
+    color: #fff;
+    box-shadow: inset 0 0 22px rgba(0,166,214,0.35), 0 0 18px rgba(0,166,214,0.5);
+  }
+  .act-btn:disabled { cursor: not-allowed; }
+  .act-btn:disabled .ab-frame { background: var(--beige-dim); opacity: 0.5; }
+  .act-btn:disabled .ab-inner { color: var(--muted); background: linear-gradient(180deg, #161616, #101010); }
+
+  /* secondary (prepare) variant — beige outline */
+  .act-btn.secondary { flex: 0 0 auto; width: 188px; }
+  .act-btn.secondary .ab-frame { background: var(--beige); opacity: 0.85; }
+  .act-btn.secondary .ab-inner {
+    background: linear-gradient(180deg, #1a1813, #100f0c);
+    color: var(--beige);
+  }
+  .act-btn.secondary:not(:disabled):hover .ab-inner {
+    color: #fff;
+    box-shadow: inset 0 0 22px rgba(212,191,125,0.22), 0 0 16px rgba(212,191,125,0.32);
+  }
+
+  .da-flash { animation: castFlash 620ms ease-out; }
+  @keyframes castFlash {
+    0%   { box-shadow: inset 0 0 0 rgba(0,166,214,0); }
+    25%  { box-shadow: inset 0 0 50px rgba(0,166,214,0.4); }
+    100% { box-shadow: inset 0 0 0 rgba(0,166,214,0); }
+  }
+
+  /* ============================================================
+     EMPTY STATE  (the Ros reality — no spellcasting)
+     ============================================================ */
+  .empty-state {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px;
+    padding: 40px;
+  }
+  .empty-state .es-glyph {
+    font-size: 46px; color: var(--beige-dim); opacity: 0.5;
+    margin-bottom: 4px;
+  }
+  .empty-state .es-title {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 26px; letter-spacing: 0.18em; color: var(--beige);
+    text-transform: uppercase; text-align: center;
+    text-shadow: 0 0 18px rgba(212,191,125,0.12);
+  }
+  .empty-state .es-sub {
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.26em; color: var(--muted); text-transform: uppercase;
+  }
+  .empty-state .es-line {
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase;
+    margin-top: 6px;
+  }
+  .empty-state .es-cur {
+    color: var(--cyan); animation: blink 1.1s steps(2, end) infinite;
+  }
+
+  /* ============================================================
+     DEV TOGGLE  —  DEV-ONLY control. REMOVE AT HANDOFF.
+     Swaps the live caster object (populated <-> empty) and re-renders
+     so both data-driven states can be exercised / screenshotted.
+     ============================================================ */
+  .dev-toggle {
+    position: fixed; left: 34px; bottom: calc(var(--bar-bottom-h) + 24px);
+    z-index: 60;
+    display: flex; align-items: center; gap: 0;
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    border: 1px dashed rgba(212,191,125,0.35);
+    background: rgba(8,8,8,0.78);
+    opacity: 0.62; transition: opacity 160ms ease;
+  }
+  .dev-toggle:hover { opacity: 1; }
+  .dev-toggle .dt-lab {
+    color: var(--beige-dim); padding: 0 9px; align-self: center;
+  }
+  .dev-toggle button {
+    background: transparent; border: 0; cursor: pointer;
+    font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 7px 12px;
+    transition: color 140ms ease, background 140ms ease;
+  }
+  .dev-toggle button:hover { color: var(--text); }
+  .dev-toggle button.on { color: #0c1316; background: var(--cyan); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sweep, .pip, .da-flash, .da-note { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="sweep" id="sweep"></div>
+
+<!-- ====================== TOP BAR ====================== -->
+<header class="topbar" role="banner">
+  <div class="top-left">
+    <div class="stat-block" aria-label="Level">
+      <div class="stat-row"><span class="stat-num">08</span><span class="stat-label">Level</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:62%"></i></div>
+    </div>
+    <div class="stat-block" aria-label="Reputation">
+      <div class="stat-row"><span class="stat-num">35</span><span class="stat-label">Reputation</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:48%"></i></div>
+    </div>
+  </div>
+
+  <div class="top-center">
+    <div class="char-name">Ros Chrisstone<span class="cursor">█</span></div>
+    <div class="char-sub">
+      <span>Human · Fighter</span>
+      <span class="sep">/</span>
+      <span>Champion Archetype</span>
+      <span class="sep">/</span>
+      <span>Brettany Reclamation</span>
+    </div>
+  </div>
+
+  <div class="top-right">
+    <div class="weight-block">
+      <span class="ic">⚖</span><span class="val">45 / 120</span><span class="lab">Burden</span>
+    </div>
+    <div class="gold-block">
+      <span class="ic">⊙</span><span class="val">1,247</span><span class="lab">Gold</span>
+    </div>
+  </div>
+</header>
+
+<div class="ticker above" aria-hidden="true">
+  <span>TASK_MANAGER_SD11S</span><span class="gap"></span>
+  <span class="dim">// AURUM_LEDGER_OK</span><span class="gap"></span>
+  <span>PROTOCOL: 6920-A44</span><span class="gap"></span>
+  <span class="dim">0001 0110 1001 0011 1100</span>
+</div>
+<div class="ticker below" aria-hidden="true">
+  <span>FRAME 07 // GRIMOIRE.ARC</span><span class="gap"></span>
+  <span class="dim">ARC.OK</span><span class="gap"></span>
+  <span>WEAVE 0x4F1A</span><span class="gap"></span>
+  <span class="dim">SLOTS_SYNCED</span>
+</div>
+
+<!-- side labels -->
+<div class="side-label left">
+  <span class="acc">SPELLBOOK</span> &nbsp;//&nbsp; GRIMOIRE &nbsp;//&nbsp; WEAVE OK
+</div>
+<div class="side-label right">
+  Weave 4F1A &nbsp;//&nbsp; <span class="acc">ARC :: BOUND</span> &nbsp;//&nbsp; Auto-Sync
+</div>
+
+<!-- ====================== NAVBAR ====================== -->
+<nav class="navbar" aria-label="Primary">
+
+  <!-- Equipment — NOT active here, but its hover-expand still works -->
+  <div class="nav-slot equipment">
+    <button class="nav-btn" data-nav="equipment">
+      <span class="nb-frame"></span>
+      <span class="nb-marker">01 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-khanda"></i></span>
+        <span class="nb-label">Equipment</span>
+      </span>
+    </button>
+    <div class="nav-sub above" aria-hidden="false">
+      <button class="nav-btn" data-nav="inventory">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-bag-shopping"></i></span>
+          <span class="nb-label">Inventory</span>
+        </span>
+      </button>
+    </div>
+    <div class="nav-sub below" aria-hidden="false">
+      <button class="nav-btn" data-nav="stat-panel">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-chart-simple"></i></span>
+          <span class="nb-label">Stat Panel</span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="lore">
+      <span class="nb-frame"></span><span class="nb-marker">02 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-book-open"></i></span>
+        <span class="nb-label">Lore</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn is-active" data-nav="spellbook" aria-current="page">
+      <span class="nb-frame"></span><span class="nb-marker">03 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-scroll"></i></span>
+        <span class="nb-label">Spellbook</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="character">
+      <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-user-shield"></i></span>
+        <span class="nb-label">Character</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="journal">
+      <span class="nb-frame"></span><span class="nb-marker">05 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-clipboard"></i></span>
+        <span class="nb-label">Journal</span>
+      </span>
+    </button>
+  </div>
+</nav>
+
+<div class="nav-meta">
+  <span class="dim">◇</span>
+  <span>Section</span>
+  <span class="acc">/ Spellbook</span>
+  <span class="dim">·</span>
+  <span>Grimoire</span>
+  <span class="dim">·</span>
+  <span>Prepared <span class="acc">::</span> <span id="meta-prepared">9/12</span></span>
+  <span class="dim">//</span>
+  <span class="stamp">ROS.CHRISSTONE</span>
+</div>
+
+<!-- ====================== MAIN ====================== -->
+<main class="spellbook" data-screen-label="Spellbook">
+
+  <!-- ============ 01  CASTER PROFILE (top band) ============ -->
+  <section class="col sb-band" aria-label="Caster profile">
+    <div class="col-header">
+      <span class="ch-num">01</span>
+      <span class="ch-title">Caster Profile</span>
+      <span class="ch-meta" id="profileMeta"><span class="acc">Arcane</span> · Bound</span>
+    </div>
+    <div class="region">
+      <div class="r-frame"></div>
+      <div class="r-gap"></div>
+      <div class="r-line"></div>
+      <div class="r-inner">
+        <span class="r-corner tl"></span>
+        <span class="r-corner br"></span>
+        <div class="profile-pad" id="profilePad">
+          <!-- rendered from data -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BODY: 02 GRIMOIRE + 03 SPELL DETAIL ============ -->
+  <div class="sb-body" id="sbBody">
+
+    <!-- 02 GRIMOIRE -->
+    <section class="col" aria-label="Grimoire">
+      <div class="col-header">
+        <span class="ch-num">02</span>
+        <span class="ch-title">Grimoire</span>
+        <span class="ch-meta" id="grimMeta"><span class="acc">18</span> Spells Inscribed</span>
+      </div>
+      <div class="region">
+        <div class="r-frame"></div>
+        <div class="r-gap"></div>
+        <div class="r-line"></div>
+        <div class="r-inner">
+          <span class="r-corner tl"></span>
+          <span class="r-corner br"></span>
+          <div class="grim-pad">
+            <div class="grim-scroll scroll-y" id="grimScroll">
+              <!-- rendered from data -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 SPELL DETAIL -->
+    <section class="col" aria-label="Spell detail">
+      <div class="col-header">
+        <span class="ch-num">03</span>
+        <span class="ch-title">Spell Detail</span>
+        <span class="ch-meta" id="detailMeta">No Selection</span>
+      </div>
+      <div class="region">
+        <div class="r-frame"></div>
+        <div class="r-gap"></div>
+        <div class="r-line"></div>
+        <div class="r-inner">
+          <span class="r-corner tl"></span>
+          <span class="r-corner br"></span>
+          <div class="detail-pad" id="detailPad">
+            <div class="detail-empty">
+              <div class="prompt">Select Spell</div>
+              <div class="cur">&#9608;</div>
+              <div class="hint">// Choose any spell from the grimoire</div>
+            </div>
+            <div class="detail-active" id="detailActive"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- DEV-ONLY toggle — REMOVE AT HANDOFF. Proves the data-driven empty-state path. -->
+<div class="dev-toggle" id="devToggle" aria-label="Developer caster-state toggle">
+  <span class="dt-lab">DEV ::</span>
+  <button type="button" data-caster="full" class="on">Caster</button>
+  <button type="button" data-caster="empty">Empty</button>
+</div>
+
+<!-- ====================== BOTTOM BAR ====================== -->
+<footer class="bottombar" role="contentinfo">
+  <div class="bb-line">
+    <span class="dot"></span>
+    <span class="lab">Neural Link:</span><span class="val">Stable</span>
+    <span class="sep">|</span>
+    <span class="lab">Shard Integrity:</span><span class="val">98.2%</span>
+    <span class="sep">|</span>
+    <span class="lab">Weave Sync:</span><span class="val">0.07 ms</span>
+    <span class="sep">|</span>
+    <span class="lab">Castella-08:</span><span class="dim">Clear · Wind NNW 4kt</span>
+    <span class="sep">|</span>
+    <span class="lab">Tide:</span><span class="dim">Low @ 03:47</span>
+
+    <div class="bb-right">
+      <span class="lab">Codex</span><span class="val">v 2.4.7</span>
+      <span class="sep">|</span>
+      <span class="dot"></span><span class="val">DM Online</span>
+      <span class="sep">|</span>
+      <span class="lab" id="save-auto">SAVE · 00:44</span><span class="save-cursor">█</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ============================================================================
+   JSON-SWAP POINT  ▸▸▸  SPELLBOOK
+   ----------------------------------------------------------------------------
+   The entire screen renders FROM this object. To load a different character's
+   spellbook later, replace `SPELLBOOK` (eventually fetched per-character, e.g.
+   characters/<id>.json). Nothing below hard-codes this caster — the profile,
+   slot tracker, grimoire groups and detail panel all derive from the object.
+   The renderer handles BOTH cases from data alone:
+       caster.spellcasting === true  + spells[]  → full grimoire
+       caster.spellcasting === false / no spells → empty state
+   This is the one place to swap. (The DEV toggle below swaps between this
+   populated sample caster and SPELLBOOK_EMPTY — Ros's real "no spells" state.)
+   ============================================================================ */
+const SPELLBOOK = {
+  caster: {
+    spellcasting: true,
+    class: "Wizard", ability: "INT",
+    saveDC: 15, attackBonus: 7,
+    prepared: { used: 9, max: 12 },
+    // index 0..8 → spell levels 1..9
+    slots: [
+      { level: 1, total: 4, expended: 1 },
+      { level: 2, total: 3, expended: 0 },
+      { level: 3, total: 3, expended: 1 },
+      { level: 4, total: 2, expended: 0 },
+      { level: 5, total: 0, expended: 0 },
+      { level: 6, total: 0, expended: 0 },
+      { level: 7, total: 0, expended: 0 },
+      { level: 8, total: 0, expended: 0 },
+      { level: 9, total: 0, expended: 0 }
+    ]
+  },
+  spells: [
+    /* ---- level 0 = cantrip (at-will, always prepared, no slot cost) ----
+       OPTIONAL `damage` field drives the in-panel dice roller + upcast:
+         damage: { base:{n,d,mod?}, perLevel:{n,d,mod?}, type, baseLevel }
+       base = dice at baseLevel; perLevel = dice added per level cast above it.
+       Spells without `damage` simply cast with no roll. */
+    { name:"Fire Bolt", level:0, school:"Evocation", castingTime:"1 Action", range:"120 ft",
+      components:{v:true,s:true,m:false}, duration:"Instantaneous", concentration:false, ritual:false,
+      damage:{ base:{n:1,d:10}, perLevel:{n:1,d:10}, type:"Fire", baseLevel:1 },
+      prepared:true, description:"A mote of fire leaps from the fingertips and burns true to a single target. The strike grows fiercer as the caster's command of the weave deepens." },
+    { name:"Mage Hand", level:0, school:"Conjuration", castingTime:"1 Action", range:"30 ft",
+      components:{v:true,s:true,m:false}, duration:"1 Minute", concentration:false, ritual:false,
+      prepared:true, description:"A spectral hand flickers into being and answers the caster's will, nudging, lifting, and carrying small things from a careful distance." },
+    { name:"Prestidigitation", level:0, school:"Transmutation", castingTime:"1 Action", range:"10 ft",
+      components:{v:true,s:true,m:false}, duration:"Up to 1 Hour", concentration:false, ritual:false,
+      prepared:true, description:"A handful of harmless tricks — a guttering flame, a clean coat, a chiming note — the small change of a working mage's day." },
+    { name:"Minor Illusion", level:0, school:"Illusion", castingTime:"1 Action", range:"30 ft",
+      components:{v:false,s:true,m:true,material:"a bit of fleece"}, duration:"1 Minute", concentration:false, ritual:false,
+      prepared:true, description:"A single sound or a still image takes shape where the caster wishes, convincing only until a doubter reaches through it." },
+
+    /* ---- 1st level ---- */
+    { name:"Shield", level:1, school:"Abjuration", castingTime:"1 Reaction", range:"Self",
+      components:{v:true,s:true,m:false}, duration:"1 Round", concentration:false, ritual:false,
+      prepared:true, description:"An instant lattice of force snaps up between the caster and an incoming blow, turning aside the strike that prompted it." },
+    { name:"Magic Missile", level:1, school:"Evocation", castingTime:"1 Action", range:"120 ft",
+      components:{v:true,s:true,m:false}, duration:"Instantaneous", concentration:false, ritual:false,
+      damage:{ base:{n:3,d:4,mod:3}, perLevel:{n:1,d:4,mod:1}, type:"Force", baseLevel:1 },
+      prepared:true, description:"Darts of pure force streak unerringly to their marks, never missing what the caster's eye has chosen." },
+    { name:"Mage Armor", level:1, school:"Abjuration", castingTime:"1 Action", range:"Touch",
+      components:{v:true,s:true,m:true,material:"a piece of cured leather"}, duration:"8 Hours", concentration:false, ritual:false,
+      prepared:true, description:"A sheath of woven force settles over an unarmored ally, hardening the air around them into a quiet, constant guard." },
+    { name:"Detect Magic", level:1, school:"Divination", castingTime:"1 Action", range:"Self (30 ft)",
+      components:{v:true,s:true,m:false}, duration:"Up to 10 Minutes", concentration:true, ritual:true,
+      prepared:false, description:"The caster's senses open to the weave, and nearby enchantments glow with the faint colour of their school for those who know how to look." },
+
+    /* ---- 2nd level ---- */
+    { name:"Misty Step", level:2, school:"Conjuration", castingTime:"1 Bonus Action", range:"Self",
+      components:{v:true,s:false,m:false}, duration:"Instantaneous", concentration:false, ritual:false,
+      prepared:true, description:"The caster dissolves into a wisp of silver mist and reappears a short stride away, slipping past walls, gaps, and grasping hands." },
+    { name:"Web", level:2, school:"Conjuration", castingTime:"1 Action", range:"60 ft",
+      components:{v:true,s:true,m:true,material:"a bit of spider silk"}, duration:"Up to 1 Hour", concentration:true, ritual:false,
+      prepared:true, description:"Thick strands of conjured silk fill a space from floor to ceiling, snaring whatever blunders into the clinging mass." },
+    { name:"Mirror Image", level:2, school:"Illusion", castingTime:"1 Action", range:"Self",
+      components:{v:true,s:true,m:false}, duration:"1 Minute", concentration:false, ritual:false,
+      prepared:false, description:"Three flickering duplicates step out of the caster, each mirroring every motion, so an attacker can never be sure which shape is flesh." },
+    { name:"Hold Person", level:2, school:"Enchantment", castingTime:"1 Action", range:"60 ft",
+      components:{v:true,s:true,m:true,material:"a straight bit of iron"}, duration:"Up to 1 Minute", concentration:true, ritual:false,
+      prepared:false, description:"The caster's word locks a humanoid's muscles rigid, holding them paralysed and helpless until their own will finally claws back control." },
+
+    /* ---- 3rd level ---- */
+    { name:"Counterspell", level:3, school:"Abjuration", castingTime:"1 Reaction", range:"60 ft",
+      components:{v:false,s:true,m:false}, duration:"Instantaneous", concentration:false, ritual:false,
+      prepared:true, description:"The caster seizes a rival's working as it forms and unravels it mid-cast, snuffing the spell before it can ever take hold." },
+    { name:"Fireball", level:3, school:"Evocation", castingTime:"1 Action", range:"150 ft",
+      components:{v:true,s:true,m:true,material:"a pinch of sulphur and bat guano"}, duration:"Instantaneous", concentration:false, ritual:false,
+      damage:{ base:{n:8,d:6}, perLevel:{n:1,d:6}, type:"Fire", baseLevel:3 },
+      prepared:true, description:"A bead of flame streaks to a chosen point and blooms into a roaring sphere of fire that scours everything within its reach." },
+    { name:"Fly", level:3, school:"Transmutation", castingTime:"1 Action", range:"Touch",
+      components:{v:true,s:true,m:true,material:"a wing feather"}, duration:"Up to 10 Minutes", concentration:true, ritual:false,
+      prepared:false, description:"The weave lifts a willing creature off the ground, granting it free and certain flight for as long as the caster holds the thread." },
+    { name:"Haste", level:3, school:"Transmutation", castingTime:"1 Action", range:"30 ft",
+      components:{v:true,s:true,m:true,material:"a shaving of licorice root"}, duration:"Up to 1 Minute", concentration:true, ritual:false,
+      prepared:false, description:"Time loosens around a willing ally, who moves and strikes at a blurring pace until the spell ends and the sudden stillness leaves them wrung out." },
+
+    /* ---- 4th level ---- */
+    { name:"Polymorph", level:4, school:"Transmutation", castingTime:"1 Action", range:"60 ft",
+      components:{v:true,s:true,m:true,material:"a caterpillar's cocoon"}, duration:"Up to 1 Hour", concentration:true, ritual:false,
+      prepared:true, description:"A creature's shape runs like wax and reforms into a beast of the caster's choosing, its old mind dimmed beneath the borrowed body." },
+    { name:"Greater Invisibility", level:4, school:"Illusion", castingTime:"1 Action", range:"Touch",
+      components:{v:true,s:true,m:false}, duration:"Up to 1 Minute", concentration:true, ritual:false,
+      prepared:true, description:"A touched creature fades wholly from sight and stays unseen even as it strikes, opens doors, and works its will in plain view." }
+  ]
+};
+
+/* The bearer's REAL state. Ros is a Fighter — no spellcasting. The dev toggle
+   swaps this in to exercise the empty-state render path. */
+const SPELLBOOK_EMPTY = {
+  caster: { spellcasting: false },
+  spells: []
+};
+
+/* ============================================================================
+   RENDER + LOGIC  (operates on the active data object, never DOM scraping)
+   ============================================================================ */
+(function spellbook() {
+  const profilePad   = document.getElementById('profilePad');
+  const profileMeta  = document.getElementById('profileMeta');
+  const grimScroll   = document.getElementById('grimScroll');
+  const grimMeta     = document.getElementById('grimMeta');
+  const detailPad    = document.getElementById('detailPad');
+  const detailActive = document.getElementById('detailActive');
+  const detailMeta   = document.getElementById('detailMeta');
+  const metaPrepared = document.getElementById('meta-prepared');
+  const devToggle    = document.getElementById('devToggle');
+
+  // live reference to whichever caster object is active (swapped by dev toggle)
+  let DATA = SPELLBOOK;
+  let selectedIdx = null;   // index into DATA.spells, or null
+  const castLevelByIdx = {}; // idx → selected upcast level (damage spells)
+  const lastRollByIdx  = {}; // idx → last rolled damage result (persists across re-renders)
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+
+  /* ---- static lookups ---- */
+  const ORDINAL = ['Cantrip','1st','2nd','3rd','4th','5th','6th','7th','8th','9th'];
+  const GROUP_LABEL = ['Cantrips','1st Level','2nd Level','3rd Level','4th Level',
+                       '5th Level','6th Level','7th Level','8th Level','9th Level'];
+  const SCHOOL_ICON = {
+    Evocation:     'fa-fire-flame-curved',
+    Conjuration:   'fa-hand-sparkles',
+    Transmutation: 'fa-arrows-spin',
+    Illusion:      'fa-ghost',
+    Abjuration:    'fa-shield-halved',
+    Divination:    'fa-eye',
+    Necromancy:    'fa-skull',
+    Enchantment:   'fa-wand-magic-sparkles'
+  };
+
+  /* ---- derived helpers (pure reads of DATA) ---- */
+  const isCaster   = () => DATA.caster && DATA.caster.spellcasting === true && DATA.spells.length > 0;
+  const slotFor    = (lvl) => DATA.caster.slots[lvl - 1];
+  const preparedUsed = () => DATA.spells.filter(s => s.level > 0 && s.prepared).length;
+  const reaction   = (t) => /reaction/i.test(t);
+
+  /* ---- damage roller helpers (drive the in-panel roll + upcast) ---- */
+  // lowest level a spell can be cast at: its own level (cantrips use damage.baseLevel, default 1)
+  const minCastLevel = (sp) => sp.level > 0 ? sp.level : (sp.damage ? (sp.damage.baseLevel || 1) : 1);
+  // highest spell level the caster actually owns slots for (you can't upcast past your slots)
+  function maxSlotLevel() {
+    let m = 0;
+    DATA.caster.slots.forEach(s => { if (s.total > 0) m = Math.max(m, s.level); });
+    return m;
+  }
+  // upcast ceiling for a spell: capped by owned slots, never below its own minimum
+  const maxCastLevel = (sp) => Math.max(minCastLevel(sp), maxSlotLevel());
+  // currently selected cast level for the spell at selectedIdx, clamped to [min..max]
+  function getCastLevel(sp) {
+    const min = minCastLevel(sp), max = maxCastLevel(sp);
+    let l = castLevelByIdx[selectedIdx];
+    if (l == null) l = min;
+    return Math.max(min, Math.min(max, l));
+  }
+  function fmtDice(n, sides, flat) {
+    return n + 'd' + sides + (flat > 0 ? ' + ' + flat : flat < 0 ? ' - ' + Math.abs(flat) : '');
+  }
+  // dice expression for a damage spell cast at a given level (applies per-level scaling)
+  function damageAt(sp, lvl) {
+    const dmg = sp.damage, base = dmg.base, per = dmg.perLevel || {};
+    const extra = Math.max(0, lvl - (dmg.baseLevel || sp.level || 1));
+    const n     = base.n + (per.n || 0) * extra;
+    const sides = base.d;
+    const flat  = (base.mod || 0) + (per.mod || 0) * extra;
+    return { n, sides, flat, type: dmg.type, expr: fmtDice(n, sides, flat) };
+  }
+  function rollDamage(sp, lvl) {
+    const info = damageAt(sp, lvl);
+    const rolls = []; let sum = 0;
+    for (let i = 0; i < info.n; i++) {
+      const r = 1 + Math.floor(Math.random() * info.sides);
+      rolls.push(r); sum += r;
+    }
+    return { rolls, sides: info.sides, flat: info.flat, total: sum + info.flat,
+             expr: info.expr, type: info.type, level: lvl,
+             cantrip: sp.level === 0, stamp: nowStamp() };
+  }
+  function nowStamp() {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+
+  /* ========================================================================
+     PROFILE BAND
+     ======================================================================== */
+  function renderProfile() {
+    if (!isCaster()) {
+      profileMeta.innerHTML = '<span class="acc">None</span> · Inert';
+      profilePad.innerHTML =
+        '<div class="cast-stats">' +
+          '<div class="cs-item"><span class="cs-k">Spellcasting</span>' +
+            '<span class="cs-v text" style="color:var(--muted)">None</span></div>' +
+          '<div class="cs-item"><span class="cs-k">Source</span>' +
+            '<span class="cs-v text" style="color:var(--beige-dim)">&mdash;</span></div>' +
+        '</div>';
+      return;
+    }
+
+    const c = DATA.caster;
+    const used = preparedUsed();
+    const max  = c.prepared.max;
+    profileMeta.innerHTML = '<span class="acc">Arcane</span> · Bound';
+
+    // stat row
+    let stats =
+      '<div class="cast-stats">' +
+        '<div class="cs-item"><span class="cs-k">Spellcasting</span>' +
+          '<span class="cs-v text">' + esc(c.class) + ' <span class="unit">(' + esc(c.ability) + ')</span></span></div>' +
+        '<div class="cs-item"><span class="cs-k">Save DC</span>' +
+          '<span class="cs-v">' + c.saveDC + '</span></div>' +
+        '<div class="cs-item"><span class="cs-k">Spell Atk</span>' +
+          '<span class="cs-v">+' + c.attackBonus + '</span></div>' +
+        '<div class="cs-item"><span class="cs-k">Prepared</span>' +
+          '<span class="cs-v prepared' + (used >= max ? ' full' : '') + '">' + used +
+          ' <span class="unit">/ ' + max + '</span></span></div>' +
+      '</div>';
+
+    // slot tracker — cantrip cell + nine level cells
+    let cells = '<div class="slot-cell cantrip"><span class="sc-lvl">Cant</span>' +
+                '<span class="sc-inf">&infin;</span><span class="sc-count">At-Will</span></div>';
+
+    c.slots.forEach(slot => {
+      const lbl = ORDINAL[slot.level].toUpperCase();
+      if (slot.total === 0) {
+        cells += '<div class="slot-cell inert"><span class="sc-lvl">' + lbl + '</span>' +
+                 '<span class="sc-none">&mdash;</span><span class="sc-count">No Slots</span></div>';
+        return;
+      }
+      const avail = slot.total - slot.expended;
+      let pips = '';
+      for (let i = 0; i < slot.total; i++) {
+        const filled = i < avail;
+        pips += '<button type="button" class="pip ' + (filled ? 'filled' : 'spent') +
+                '" data-level="' + slot.level + '" data-pip="' + i +
+                '" aria-label="Level ' + slot.level + ' slot ' + (i + 1) +
+                (filled ? ' available' : ' expended') + '"></button>';
+      }
+      cells += '<div class="slot-cell"><span class="sc-lvl">' + lbl + '</span>' +
+               '<span class="sc-pips">' + pips + '</span>' +
+               '<span class="sc-count">' + avail + '/' + slot.total + '</span></div>';
+    });
+
+    profilePad.innerHTML =
+      stats +
+      '<div class="profile-rule"></div>' +
+      '<div class="slot-track">' +
+        '<span class="slot-label">Spell<br>Slots</span>' +
+        '<div class="slot-cells">' + cells + '</div>' +
+      '</div>';
+
+    // wire pip toggles
+    profilePad.querySelectorAll('.pip').forEach(pip => {
+      pip.addEventListener('click', () => {
+        const lvl = +pip.dataset.level, idx = +pip.dataset.pip;
+        togglePip(lvl, idx);
+      });
+    });
+  }
+
+  /* ---- slot pip toggle: clicking pip i sets the available/expended boundary ---- */
+  function togglePip(level, i) {
+    const slot = slotFor(level);
+    const avail = slot.total - slot.expended;
+    if (i < avail) {
+      // currently filled → expend down to (and including) this pip
+      slot.expended = slot.total - i;
+    } else {
+      // currently spent → restore up to (and including) this pip
+      slot.expended = slot.total - (i + 1);
+    }
+    slot.expended = Math.max(0, Math.min(slot.total, slot.expended));
+    renderProfile();
+    // keep detail's CAST affordance honest if it targets this level
+    if (selectedIdx !== null) renderDetail(true);
+    console.log('Slot toggled · L' + level + ' → ' + (slot.total - slot.expended) +
+      '/' + slot.total + ' available');
+  }
+
+  /* ========================================================================
+     GRIMOIRE  (grouped by level; only groups with spells show)
+     ======================================================================== */
+  function renderGrimoire() {
+    grimMeta.innerHTML = '<span class="acc">' + DATA.spells.length + '</span> Spells Inscribed';
+
+    // bucket by level
+    const byLevel = {};
+    DATA.spells.forEach((sp, idx) => {
+      (byLevel[sp.level] = byLevel[sp.level] || []).push(idx);
+    });
+
+    let html = '';
+    Object.keys(byLevel).map(Number).sort((a, b) => a - b).forEach(lvl => {
+      const slot = lvl > 0 ? slotFor(lvl) : null;
+      const slotNote = slot
+        ? '<span class="lh-slots">' + (slot.total - slot.expended) + '/' + slot.total + ' Slots</span>'
+        : '<span class="lh-slots">At-Will</span>';
+      html += '<div class="lvl-head' + (lvl === 0 ? ' cantrip-head' : '') + '">' +
+        GROUP_LABEL[lvl] + slotNote + '</div>';
+      byLevel[lvl].forEach(idx => { html += spellRow(DATA.spells[idx], idx); });
+    });
+
+    grimScroll.innerHTML = html;
+
+    grimScroll.querySelectorAll('.spell-row').forEach(row => {
+      row.addEventListener('click', () => selectSpell(+row.dataset.idx));
+    });
+  }
+
+  function spellRow(sp, idx) {
+    const cantrip = sp.level === 0;
+    const prep = cantrip
+      ? '<span class="prep-dot cantrip" title="Always prepared">&infin;</span>'
+      : '<span class="prep-dot ' + (sp.prepared ? 'prep' : 'unprep') +
+        '" title="' + (sp.prepared ? 'Prepared' : 'Known · not prepared') + '"><span class="dot"></span></span>';
+
+    // compact tag glyphs
+    let tags = '';
+    if (sp.concentration) tags += '<span class="tag-chip" title="Concentration"><i class="fa-solid fa-eye"></i></span>';
+    if (sp.ritual)        tags += '<span class="tag-chip txt" title="Ritual">R</span>';
+    if (reaction(sp.castingTime)) tags += '<span class="tag-chip txt" title="Reaction"><i class="fa-solid fa-bolt"></i></span>';
+
+    const ic = SCHOOL_ICON[sp.school] || 'fa-star';
+    const sel = idx === selectedIdx ? ' selected' : '';
+    const unprep = (!cantrip && !sp.prepared) ? ' unprepared' : '';
+
+    return '<button type="button" class="spell-row' + sel + unprep + '" data-idx="' + idx + '">' +
+      prep +
+      '<span class="spell-main">' +
+        '<span class="spell-name">' + esc(sp.name) + '</span>' +
+        '<span class="spell-sub">' +
+          '<span class="school"><i class="fa-solid ' + ic + '"></i>' + esc(sp.school) + '</span>' +
+        '</span>' +
+      '</span>' +
+      '<span class="spell-tags">' + tags + '</span>' +
+    '</button>';
+  }
+
+  function markSelected() {
+    grimScroll.querySelectorAll('.spell-row').forEach(r => {
+      r.classList.toggle('selected', +r.dataset.idx === selectedIdx);
+    });
+  }
+
+  /* ========================================================================
+     SPELL DETAIL  (right column)
+     ======================================================================== */
+  function selectSpell(idx) {
+    selectedIdx = idx;
+    markSelected();
+    renderDetail();
+  }
+
+  function renderDetail(preserveScroll) {
+    // preserve the body's scroll position across in-place re-renders (cast / upcast
+    // / prepare) so the panel doesn't jump back to the top after each click
+    const prevBody = detailActive.querySelector('.da-body');
+    const keepScroll = (preserveScroll && prevBody) ? prevBody.scrollTop : 0;
+    if (selectedIdx === null || !DATA.spells[selectedIdx]) {
+      detailPad.classList.remove('has-spell');
+      detailMeta.textContent = 'No Selection';
+      return;
+    }
+    const sp = DATA.spells[selectedIdx];
+    const cantrip = sp.level === 0;
+    detailPad.classList.add('has-spell');
+    detailMeta.innerHTML = '<span class="acc">' + esc(sp.school) + '</span>';
+
+    const ic = SCHOOL_ICON[sp.school] || 'fa-star';
+    const lvlLine = cantrip ? 'Cantrip' : 'Level ' + sp.level;
+
+    // components row
+    const comp = sp.components || {};
+    const compSet =
+      '<span class="comp-set">' +
+        '<span class="comp' + (comp.v ? ' on' : '') + '" title="Verbal">V</span>' +
+        '<span class="comp' + (comp.s ? ' on' : '') + '" title="Somatic">S</span>' +
+        '<span class="comp' + (comp.m ? ' on' : '') + '" title="Material">M</span>' +
+      '</span>';
+    const matLine = (comp.m && comp.material)
+      ? '<span class="mat">' + esc(comp.material) + '</span>' : '';
+
+    // flags
+    let flags = '';
+    if (sp.concentration) flags += '<span class="da-flag"><i class="fa-solid fa-eye"></i> Concentration</span>';
+    if (sp.ritual)        flags += '<span class="da-flag"><i class="fa-solid fa-hourglass-half"></i> Ritual</span>';
+    const flagsRow = flags ? '<div class="da-flags">' + flags + '</div>' : '';
+
+    // ---- cast level + damage (upcast-aware) ----
+    const min        = minCastLevel(sp);
+    const max        = maxCastLevel(sp);
+    const castLvl    = getCastLevel(sp);
+    const hasDamage  = !!sp.damage;
+    const slot       = cantrip ? null : slotFor(castLvl);
+    const slotAvail  = cantrip ? Infinity : (slot ? slot.total - slot.expended : 0);
+    const canCast    = cantrip || slotAvail > 0;
+    const castLabel  = cantrip
+      ? '<i class="fa-solid fa-wand-sparkles"></i> Cast · At-Will'
+      : '<i class="fa-solid fa-wand-sparkles"></i> Cast · L' + castLvl + ' Slot';
+
+    // damage block: upcast stepper + live dice expression + last rolled result
+    let damageBlock = '';
+    if (hasDamage) {
+      const di = damageAt(sp, castLvl);
+      const upcast = castLvl > min
+        ? ' <span class="dd-up">&#9650; Upcast +' + (castLvl - min) + '</span>' : '';
+      const control =
+        '<div class="dd-control">' +
+          '<span class="dd-clab">Cast At</span>' +
+          '<div class="dd-stepper">' +
+            '<button type="button" class="dd-step" data-step="-1"' + (castLvl <= min ? ' disabled' : '') +
+              ' aria-label="Lower cast level"><i class="fa-solid fa-minus"></i></button>' +
+            '<span class="dd-lvl">' + (cantrip ? 'Lvl ' + castLvl : 'Level ' + castLvl) + '</span>' +
+            '<button type="button" class="dd-step" data-step="1"' + (castLvl >= max ? ' disabled' : '') +
+              ' aria-label="Raise cast level"><i class="fa-solid fa-plus"></i></button>' +
+          '</div>' +
+          '<span class="dd-expr"><i class="fa-solid fa-dice-d6"></i> ' + di.expr +
+            ' <span class="dd-type">' + esc(di.type) + '</span></span>' + upcast +
+        '</div>';
+      const last = lastRollByIdx[selectedIdx];
+      let card = '';
+      if (last) {
+        const dice = last.rolls.map(v =>
+          '<span class="die' + (v === last.sides ? ' max' : '') + '">' + v + '</span>').join('');
+        card =
+          '<div class="dmg-roll' + (last.fresh ? ' fresh' : '') + '">' +
+            '<span class="dr-frame"></span>' +
+            '<div class="dr-inner">' +
+              '<span class="dr-name">' + esc(sp.name) + ' &middot; ' +
+                (last.cantrip ? 'Lvl ' + last.level : 'L' + last.level) + '</span>' +
+              '<span class="dr-total">' + last.total + '</span>' +
+              '<span class="dr-dice">' + dice + '</span>' +
+              '<span class="dr-break">' + last.expr + ' <span class="eq">= ' + last.total + '</span> ' +
+                esc(last.type) + '</span>' +
+              '<span class="dr-stamp">' + last.stamp + '</span>' +
+            '</div>' +
+          '</div>';
+      }
+      damageBlock =
+        '<span class="da-desc-label" style="margin-top:18px">// Damage</span>' +
+        control + card;
+    }
+
+    let prepBtn = '';
+    if (!cantrip) {
+      prepBtn =
+        '<button type="button" class="act-btn secondary" id="prepBtn">' +
+          '<span class="ab-frame"></span><span class="ab-inner">' +
+            (sp.prepared
+              ? '<i class="fa-solid fa-bookmark"></i> Unprepare'
+              : '<i class="fa-regular fa-bookmark"></i> Prepare') +
+          '</span></button>';
+    }
+
+    detailActive.innerHTML =
+      '<div class="da-head">' +
+        '<div class="da-name">' + esc(sp.name) + '</div>' +
+        '<div class="da-line">' + lvlLine +
+          '<span class="sep">·</span>' +
+          '<span class="school"><i class="fa-solid ' + ic + '"></i>' + esc(sp.school) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="da-body scroll-y">' +
+        '<div class="da-grid">' +
+          '<div class="da-cell"><span class="dc-k">Casting Time</span><span class="dc-v">' + esc(sp.castingTime) + '</span></div>' +
+          '<div class="da-cell"><span class="dc-k">Range</span><span class="dc-v">' + esc(sp.range) + '</span></div>' +
+          '<div class="da-cell"><span class="dc-k">Components</span><span class="dc-v">' + compSet + matLine + '</span></div>' +
+          '<div class="da-cell"><span class="dc-k">Duration</span><span class="dc-v">' + esc(sp.duration) + '</span></div>' +
+        '</div>' +
+        flagsRow +
+        '<span class="da-desc-label">// Effect</span>' +
+        '<div class="da-desc">' + sp.description + '</div>' +
+        damageBlock +
+      '</div>' +
+      '<div class="da-foot">' +
+        '<div class="da-note" id="daNote"></div>' +
+        '<div class="da-actions">' +
+          '<button type="button" class="act-btn" id="castBtn"' + (canCast ? '' : ' disabled') + '>' +
+            '<span class="ab-frame"></span><span class="ab-inner">' + castLabel + '</span></button>' +
+          prepBtn +
+        '</div>' +
+      '</div>';
+
+    // restore preserved scroll position onto the freshly-built body
+    const newBody = detailActive.querySelector('.da-body');
+    if (newBody && keepScroll) newBody.scrollTop = keepScroll;
+
+    // a persistent note when out of slots at the selected level
+    if (!cantrip && !canCast) setNote('// No L' + castLvl + ' Slots Remaining', false);
+
+    // wire actions
+    const castBtn = document.getElementById('castBtn');
+    if (castBtn) castBtn.addEventListener('click', () => castSpell());
+    const prepEl = document.getElementById('prepBtn');
+    if (prepEl) prepEl.addEventListener('click', () => togglePrepare());
+    // wire upcast stepper
+    detailActive.querySelectorAll('.dd-step').forEach(b => {
+      b.addEventListener('click', () => {
+        const s = DATA.spells[selectedIdx];
+        const lo = minCastLevel(s), hi = maxCastLevel(s);
+        castLevelByIdx[selectedIdx] =
+          Math.max(lo, Math.min(hi, getCastLevel(s) + (+b.dataset.step)));
+        renderDetail(true);
+      });
+    });
+  }
+
+  function setNote(msg, flash) {
+    const note = document.getElementById('daNote');
+    if (!note) return;
+    note.textContent = msg;
+    note.classList.add('show');
+    note.classList.remove('flash');
+    if (flash) { void note.offsetWidth; note.classList.add('flash'); }
+  }
+
+  /* ---- CAST: expend one slot of the SELECTED cast level (cantrips free),
+     and roll damage if the spell deals it (scaled for upcast). ---- */
+  function castSpell() {
+    const sp = DATA.spells[selectedIdx];
+    if (!sp) return;
+    const cantrip = sp.level === 0;
+    const lvl = getCastLevel(sp);
+
+    // slot check / spend (cantrips are free at any level)
+    if (!cantrip) {
+      const slot = slotFor(lvl);
+      if (!slot || slot.total - slot.expended <= 0) {
+        setNote('// No L' + lvl + ' Slots Remaining', true);
+        console.log('Cast denied: ' + sp.name + ' — no L' + lvl + ' slots');
+        return;
+      }
+      slot.expended += 1;
+    }
+
+    // roll damage if applicable
+    let noteMsg;
+    if (sp.damage) {
+      const roll = rollDamage(sp, lvl);
+      roll.fresh = true;
+      lastRollByIdx[selectedIdx] = roll;
+      noteMsg = '// ' + sp.name + ' — ' + roll.total + ' ' + roll.type + ' damage (' + roll.expr + ')';
+      // one-shot entrance: clear the fresh flag so later re-renders don't replay it
+      setTimeout(() => { roll.fresh = false; }, 950);
+      console.log('Cast: ' + sp.name + ' @ L' + lvl + ' → rolled ' + roll.expr +
+        ' = ' + roll.total + ' ' + roll.type +
+        (cantrip ? '' : ' (slot expended)'));
+    } else {
+      noteMsg = cantrip
+        ? '// ' + sp.name + ' cast · at-will'
+        : '// ' + sp.name + ' cast · L' + lvl + ' slot expended';
+      console.log('Cast: ' + sp.name + (cantrip ? ' (no slot)' : ' @ L' + lvl + ' (slot expended)'));
+    }
+
+    renderProfile();
+    renderDetail(true);
+    flashDetail();
+    setNote(noteMsg, true);
+  }
+
+  /* ---- PREPARE / UNPREPARE: toggle prepared, respecting prepared.max ---- */
+  function togglePrepare() {
+    const sp = DATA.spells[selectedIdx];
+    if (!sp || sp.level === 0) return;
+
+    if (!sp.prepared) {
+      if (preparedUsed() >= DATA.caster.prepared.max) {
+        setNote('// Prepared Limit Reached', true);
+        console.log('Prepare denied: ' + sp.name + ' — at prepared cap (' +
+          DATA.caster.prepared.max + ')');
+        return;
+      }
+      sp.prepared = true;
+      console.log('Prepared: ' + sp.name + ' (' + preparedUsed() + '/' +
+        DATA.caster.prepared.max + ')');
+    } else {
+      sp.prepared = false;
+      console.log('Unprepared: ' + sp.name + ' (' + preparedUsed() + '/' +
+        DATA.caster.prepared.max + ')');
+    }
+    renderProfile();
+    renderGrimoire();
+    markSelected();
+    renderDetail(true);
+    updatePreparedMeta();
+    setNote(sp.prepared ? '// Prepared' : '// Unprepared', true);
+  }
+
+  function flashDetail() {
+    detailActive.classList.remove('da-flash');
+    void detailActive.offsetWidth;
+    detailActive.classList.add('da-flash');
+  }
+
+  function updatePreparedMeta() {
+    if (isCaster()) {
+      metaPrepared.textContent = preparedUsed() + '/' + DATA.caster.prepared.max;
+    } else {
+      metaPrepared.textContent = '0/0';
+    }
+  }
+
+  /* ========================================================================
+     TOP-LEVEL RENDER — routes populated vs. empty from data alone
+     ======================================================================== */
+  function render() {
+    renderProfile();
+    updatePreparedMeta();
+
+    if (!isCaster()) {
+      // EMPTY STATE — the Ros reality. Deliberate, on-theme, not broken.
+      selectedIdx = null;
+      grimMeta.innerHTML = '<span class="acc">0</span> Spells Inscribed';
+      grimScroll.innerHTML =
+        '<div class="empty-state">' +
+          '<i class="es-glyph fa-solid fa-book-skull"></i>' +
+          '<div class="es-title">No Arcane Current Detected</div>' +
+          '<div class="es-sub">Spellcasting :: None</div>' +
+          '<div class="es-line">// This bearer channels no spells<span class="es-cur">█</span></div>' +
+        '</div>';
+      detailPad.classList.remove('has-spell');
+      detailMeta.textContent = 'Inert';
+      // overwrite the default empty-prompt with an on-theme inert line
+      detailPad.querySelector('.detail-empty').innerHTML =
+        '<div class="prompt" style="color:var(--beige-dim)">Weave Silent</div>' +
+        '<div class="hint">// No spells to inspect</div>';
+      return;
+    }
+
+    // POPULATED — restore the standard select prompt, then render the grimoire
+    detailPad.querySelector('.detail-empty').innerHTML =
+      '<div class="prompt">Select Spell</div>' +
+      '<div class="cur">&#9608;</div>' +
+      '<div class="hint">// Choose any spell from the grimoire</div>';
+    renderGrimoire();
+    renderDetail();
+  }
+
+  /* ========================================================================
+     DEV TOGGLE — DEV-ONLY. Swaps the live caster object and re-renders,
+     proving the data-driven empty-state path. REMOVE AT HANDOFF.
+     ======================================================================== */
+  devToggle.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.caster;
+      DATA = (mode === 'empty') ? SPELLBOOK_EMPTY : SPELLBOOK;
+      selectedIdx = null;
+      // clear per-spell roller state (indices map to a different array)
+      Object.keys(castLevelByIdx).forEach(k => delete castLevelByIdx[k]);
+      Object.keys(lastRollByIdx).forEach(k => delete lastRollByIdx[k]);
+      devToggle.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
+      render();
+      console.log('[DEV] caster swapped → ' + mode);
+    });
+  });
+
+  /* ---- initial paint: auto-select the first spell for an immediate read ---- */
+  render();
+  if (isCaster() && DATA.spells.length) selectSpell(0);
+})();
+
+/* ============================================================================
+   SHARED CHROME BEHAVIORS  (verbatim with prior phases)
+   ============================================================================ */
+window.addEventListener('load', () => {
+  const sweep = document.getElementById('sweep');
+  if (sweep) {
+    sweep.classList.add('run');
+    sweep.addEventListener('animationend', () => sweep.classList.remove('run'), { once: true });
+  }
+});
+
+(function () {
+  const el = document.getElementById('save-auto');
+  if (!el) return;
+  let t = 44;
+  setInterval(() => {
+    t = (t <= 0) ? 60 : t - 1;
+    const m = String(Math.floor(t / 60)).padStart(2, '0');
+    const s = String(t % 60).padStart(2, '0');
+    el.textContent = `SAVE · ${m}:${s}`;
+  }, 1000);
+})();
+
+document.querySelectorAll('.nav-btn[data-nav]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const dest = btn.dataset.nav;
+    if (btn.classList.contains('is-active')) return;
+    console.log('Navigate to screen: ' + dest);
+  });
+});
+</script>
+</body>
+</html>

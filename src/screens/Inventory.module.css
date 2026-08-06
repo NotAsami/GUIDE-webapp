@@ -504,6 +504,20 @@
 
 /* --- utility bar: chips + sort (lists) / reach readout (grid) --- */
 .utilBar { flex: 0 0 auto; height: 26px; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.searchWrap { position: relative; flex: 0 1 140px; min-width: 64px; }
+.searchWrap i {
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  color: var(--beige-dim); font-size: 9px; pointer-events: none;
+}
+.searchIn {
+  width: 100%; height: 24px; background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(212, 191, 125, 0.3);
+  color: var(--text); font-family: var(--font-mono); font-size: 8.5px;
+  letter-spacing: 0.08em; padding: 0 8px 0 22px;
+  outline: none;
+}
+.searchIn:focus { border-color: var(--cyan); }
+.searchIn::placeholder { color: var(--beige-dim); letter-spacing: 0.12em; text-transform: uppercase; }
 .chip {
   --cut: 5px; --bc: rgba(212, 191, 125, 0.28);
   position: relative; height: 24px; padding: 0 11px;

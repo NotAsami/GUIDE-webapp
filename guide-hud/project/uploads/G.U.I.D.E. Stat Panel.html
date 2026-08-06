@@ -1,0 +1,1930 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — STAT PANEL // ROS CHRISSTONE</title>
+<!--
+  STAT PANEL — sub-screen of Equipment.
+
+  Design notes / deviations from spec:
+
+  1.  Layout is a 12-col grid that resolves to a clear 3-column rhythm
+      at wide widths, collapses to 2 then 1 at narrower widths.
+      Group sizing was tuned for visual rhythm and content density:
+
+       Row 1:  COMBAT (5)  ·  HIT POINTS (4)  ·  HIT DICE (3)
+       Row 2:  SAVING THROWS (4)  ·  DEATH SAVES (4)  ·  EXHAUSTION (4)
+       Row 3:  PROFICIENCIES (6)  ·  CARRYING (3)  ·  SENSES (3)
+
+      Each group sits in its own clip-cornered sub-panel with a beige
+      double-line border and a mono header — same chassis used by the
+      gear slots over in Equipment, so screens feel like one device.
+
+  2.  Editable HP / Temp HP — single click on the number swaps to an
+      inline numeric input; Enter / blur commits. The plus and minus
+      steppers also commit immediately. When current HP drops below
+      25% of max, the number and bar both switch to danger red.
+
+  3.  Hit dice pips use the same clip-corner geometry as the nav buttons
+      so they read as "physical" sockets you can drain. A single RESET
+      glyph in the panel header restores all.
+
+  4.  Death saves dots cycle empty -> filled -> empty on click. Three
+      successes lock in a steady cyan STABILIZED banner; three failures
+      lock in a red, slowly-pulsing STABILIZE FAILED banner — both
+      states freeze the row so you can see the result without an
+      undo destroying the moment.
+
+  5.  Exhaustion track tints from beige (1) toward red (6). Click the
+      current level again to step back down — a small affordance for
+      "I rolled it back" without needing a separate undo button.
+
+  6.  All interactive state is in-memory JS. No storage APIs are used.
+
+  7.  Placeholder values: Level 5, Reputation "Renowned", Burden "Light",
+      Gold 340 (per spec for this screen — they differ from Equipment's
+      level 8 / 1,247 gold values; treated as Phase-3 stat readout).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  /* ============================================================
+     BASE  (shared with Equipment / Shard / Codex)
+     ============================================================ */
+  :root {
+    --bg:        #1d1d1d;
+    --bg-2:      #161616;
+    --beige:     #d4bf7d;
+    --beige-dim: #8a7a4a;
+    --cyan:      #00a6d6;
+    --cyan-dim:  #0d6e8c;
+    --cyan-hot:  #4dd6ff;
+    --text:      #dedede;
+    --muted:     #aaaaaa;
+    --danger:    #b93a3a;
+    --danger-hot:#ff5454;
+    /* Amber #e2b021 is intentionally NOT defined here — reserved
+       for the Shard screen and must not appear on Stat Panel. */
+
+    --bar-top-h:    62px;
+    --bar-bottom-h: 50px;
+    --nav-h:        72px;
+    --nav-top-gap:  26px;
+
+    --font-display: "Cinzel", serif;
+    --font-prose:   "EB Garamond", serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-prose);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .stage {
+    position: fixed; inset: 0;
+    background:
+      url("https://www.transparenttextures.com/patterns/dark-leather.png"),
+      radial-gradient(120% 90% at 50% 50%, #232220 0%, #1a1a1a 60%, #0e0e0e 100%);
+    background-blend-mode: overlay, normal;
+  }
+  .scanlines {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 90;
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+      transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 91;
+    background: radial-gradient(120% 110% at 50% 50%,
+      transparent 55%, rgba(0,0,0,0.55) 95%, rgba(0,0,0,0.85) 100%);
+  }
+  .sweep {
+    pointer-events: none;
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 2px; z-index: 95;
+    background: linear-gradient(to bottom,
+      transparent, rgba(0,166,214,0.55) 50%, transparent);
+    box-shadow: 0 0 24px rgba(0,166,214,0.45);
+    opacity: 0;
+  }
+  .sweep.run { animation: sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards; }
+  @keyframes sweep-run {
+    0%   { opacity: 0; transform: translateY(-20px); }
+    8%   { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(100vh); }
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- Top Bar ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--bar-top-h); z-index: 50;
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; padding: 0 36px;
+    background: linear-gradient(to bottom,
+      rgba(15,15,15,0.95) 0%, rgba(22,22,22,0.92) 100%);
+    border-bottom: 1px solid var(--beige);
+    box-shadow: 0 1px 0 rgba(212,191,125,0.15),
+                0 8px 24px -8px rgba(0,0,0,0.6);
+  }
+  .topbar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .topbar::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 1px; background: var(--beige);
+    box-shadow: 0 0 8px rgba(212,191,125,0.4);
+  }
+  .top-left, .top-right {
+    display: flex; align-items: center; gap: 26px;
+    position: relative; z-index: 1;
+  }
+  .top-right { justify-content: flex-end; }
+  .stat-block { display: flex; flex-direction: column; gap: 4px; min-width: 88px; }
+  .stat-block.wide { min-width: 130px; }
+  .stat-row { display: flex; align-items: baseline; gap: 8px; }
+  .stat-num {
+    font-family: var(--font-display); font-weight: 600;
+    color: var(--beige); font-size: 22px; line-height: 1; letter-spacing: 0.04em;
+  }
+  .stat-num.txt { font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; }
+  .stat-label {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--cyan); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .bar {
+    height: 3px; width: 110px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5); position: relative; overflow: hidden;
+  }
+  .bar > i {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    box-shadow: 0 0 6px rgba(0,166,214,0.6); display: block;
+  }
+  .top-center { text-align: center; position: relative; z-index: 1; padding: 0 24px; }
+  .char-name {
+    font-family: var(--font-display); font-weight: 600; font-size: 18px;
+    letter-spacing: 0.4em; color: var(--text); text-transform: uppercase; line-height: 1;
+  }
+  .char-name .cursor {
+    display: inline-block; color: var(--cyan); transform: translateY(-1px);
+    margin-left: 4px; animation: blink 1s steps(2, end) infinite;
+  }
+  .char-sub {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+    color: var(--muted); margin-top: 4px; text-transform: uppercase;
+  }
+  .char-sub .sep { color: var(--beige-dim); margin: 0 8px; }
+
+  .ticker {
+    position: fixed; left: 0; right: 0; height: 12px; z-index: 51;
+    display: flex; align-items: center; padding: 0 24px;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+    color: rgba(0,166,214,0.55); pointer-events: none;
+    overflow: hidden; white-space: nowrap;
+  }
+  .ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
+  .ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212,191,125,0.45); }
+  .ticker .gap { width: 32px; display: inline-block; }
+  .ticker .dim { color: rgba(170,170,170,0.4); }
+
+  /* ---------- Bottom Bar ---------- */
+  .bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--bar-bottom-h); z-index: 50;
+    display: flex; align-items: center; padding: 0 32px;
+    background: linear-gradient(to top,
+      rgba(15,15,15,0.96) 0%, rgba(22,22,22,0.92) 100%);
+    border-top: 1px solid var(--beige);
+    box-shadow: 0 -1px 0 rgba(212,191,125,0.15), 0 -8px 24px -8px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .bottombar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .bb-line {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; width: 100%; color: var(--muted);
+    position: relative; z-index: 1;
+  }
+  .bb-line .lab  { color: var(--beige); }
+  .bb-line .val  { color: var(--cyan); }
+  .bb-line .dim  { color: var(--muted); }
+  .bb-line .sep  { color: var(--beige-dim); margin: 0 4px; }
+  .bb-line .dot  {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px rgba(0,166,214,0.7);
+    display: inline-block;
+  }
+  .bb-line .save-cursor {
+    color: var(--cyan); animation: blink 1s steps(2, end) infinite; margin-left: 2px;
+  }
+  .bb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  /* ============================================================
+     NAVBAR — top, horizontal (same as Equipment)
+     ============================================================ */
+  .navbar {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap));
+    left: 50%; transform: translateX(-50%);
+    display: flex; gap: 14px;
+    z-index: 45;
+  }
+  .nav-slot { position: relative; width: 156px; display: flex; justify-content: center; }
+  .nav-slot.equipment { padding: 60px 0; margin: -60px 0; }
+
+  .nav-btn {
+    --w: 156px; --h: var(--nav-h); --cut: 11px;
+    width: var(--w); height: var(--h);
+    background: transparent; border: 0; padding: 0;
+    color: var(--text); font-family: var(--font-mono);
+    cursor: pointer; position: relative;
+    transition: transform 180ms ease;
+  }
+  .nav-btn .nb-frame {
+    position: absolute; inset: 0; background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 180ms ease;
+  }
+  .nav-btn .nb-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(212,191,125,0.04), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #141414);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 6px;
+    transition: box-shadow 180ms ease, background 180ms ease;
+  }
+  .nav-btn .nb-icon {
+    color: var(--beige); font-size: 20px; line-height: 1;
+    transition: color 180ms ease, text-shadow 180ms ease;
+  }
+  .nav-btn .nb-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.26em; color: var(--text); text-transform: uppercase;
+  }
+  .nav-btn .nb-marker {
+    position: absolute; top: 6px; left: 12px;
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.2em; color: var(--cyan); opacity: 0.7;
+  }
+  .nav-btn:hover { transform: translateY(-2px); }
+  .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.18),
+                0 0 18px rgba(0,166,214,0.35);
+  }
+  .nav-btn:hover .nb-icon {
+    color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.7);
+  }
+
+  /* Active state — Equipment */
+  .nav-btn.is-active .nb-frame { background: var(--cyan); }
+  .nav-btn.is-active .nb-inner {
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.18), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 28px rgba(0,166,214,0.30),
+                0 0 22px rgba(0,166,214,0.55);
+  }
+  .nav-btn.is-active .nb-icon { color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.9); }
+  .nav-btn.is-active .nb-label { color: var(--cyan-hot); }
+  .nav-btn.is-active .nb-marker { color: var(--beige); opacity: 1; }
+  .nav-btn.is-active::after {
+    content: ""; position: absolute;
+    top: -6px; left: 14%; right: 14%; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 20px rgba(0,166,214,0.6);
+    z-index: 2;
+  }
+
+  /* breadcrumb under navbar */
+  .nav-meta {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 8px);
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.32em; color: var(--muted);
+    text-transform: uppercase; z-index: 44;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .nav-meta .acc  { color: var(--cyan); }
+  .nav-meta .dim  { color: var(--beige-dim); }
+
+  /* edge labels */
+  .side-label {
+    position: fixed;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.3em; color: var(--muted);
+    text-transform: uppercase; pointer-events: none; z-index: 12;
+  }
+  .side-label.left  { left: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: rotate(180deg) translateY(50%); }
+  .side-label.right { right: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: translateY(-50%); }
+  .side-label .acc  { color: var(--cyan); }
+
+  /* ============================================================
+     MAIN — STAT PANEL
+     ============================================================ */
+  main.stat {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 50px);
+    bottom: calc(var(--bar-bottom-h) + 22px);
+    left: 0; right: 0;
+    padding: 0 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    z-index: 10;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--beige-dim) transparent;
+  }
+  main.stat::-webkit-scrollbar { width: 6px; }
+  main.stat::-webkit-scrollbar-thumb { background: var(--beige-dim); }
+  main.stat::-webkit-scrollbar-track { background: transparent; }
+
+  /* Section header — "09 STAT PANEL" */
+  .section-head {
+    display: flex; align-items: baseline; gap: 18px;
+    padding: 0 2px 12px;
+    border-bottom: 1px solid rgba(212,191,125,0.35);
+    flex-shrink: 0;
+  }
+  .section-head .sh-num {
+    font-family: var(--font-mono); font-size: 18px;
+    color: var(--cyan); letter-spacing: 0.18em; line-height: 1;
+    text-shadow: 0 0 12px rgba(0,166,214,0.4);
+  }
+  .section-head .sh-title {
+    font-family: var(--font-display); font-weight: 600; font-size: 22px;
+    color: var(--beige); letter-spacing: 0.32em; text-transform: uppercase;
+    line-height: 1;
+  }
+  .section-head .sh-meta {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.28em;
+    color: var(--muted); text-transform: uppercase;
+    display: flex; gap: 14px; align-items: center;
+  }
+  .section-head .sh-meta .dim { color: var(--beige-dim); }
+  .section-head .sh-meta .acc { color: var(--cyan); }
+
+  /* 12-column grid for sub-panels */
+  .panel-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 14px;
+    flex: 1;
+    align-content: start;
+    padding-bottom: 6px;
+  }
+  .span-3 { grid-column: span 3; }
+  .span-4 { grid-column: span 4; }
+  .span-5 { grid-column: span 5; }
+  .span-6 { grid-column: span 6; }
+  .span-12 { grid-column: span 12; }
+
+  @media (max-width: 1280px) {
+    .span-3, .span-4, .span-5 { grid-column: span 6; }
+    .span-6 { grid-column: span 12; }
+  }
+  @media (max-width: 760px) {
+    .span-3, .span-4, .span-5, .span-6 { grid-column: span 12; }
+  }
+
+  /* ----- Sub-panel chassis (clip-corner + beige double border) ----- */
+  .panel {
+    --cut: 14px;
+    position: relative;
+    min-height: 0;
+  }
+  .panel .p-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  /* Second beige line (double-line illusion) */
+  .panel .p-frame2 {
+    position: absolute; inset: 3px;
+    background: var(--bg);
+    clip-path: polygon(calc(var(--cut) - 2px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 2px), calc(100% - var(--cut) + 2px) 100%,
+      0 100%, 0 calc(var(--cut) - 2px));
+  }
+  .panel .p-frame3 {
+    position: absolute; inset: 4px;
+    background: var(--beige);
+    opacity: 0.45;
+    clip-path: polygon(calc(var(--cut) - 3px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 3px), calc(100% - var(--cut) + 3px) 100%,
+      0 100%, 0 calc(var(--cut) - 3px));
+  }
+  .panel .p-inner {
+    position: relative;
+    margin: 6px;
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(0,166,214,0.04), transparent 55%),
+      linear-gradient(180deg, #1a1a1a, #121212);
+    clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%,
+      0 100%, 0 calc(var(--cut) - 5px));
+    padding: 14px 16px 14px 18px;
+    box-shadow: inset 0 0 30px rgba(0,0,0,0.55);
+    height: 100%;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .panel .p-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(212,191,125,0.25);
+  }
+  .panel .p-head .ph-num {
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--cyan); letter-spacing: 0.24em;
+  }
+  .panel .p-head .ph-title {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--beige); letter-spacing: 0.32em; text-transform: uppercase;
+  }
+  .panel .p-head .ph-meta {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--muted); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .panel .p-head .ph-meta button {
+    background: transparent; border: 1px solid rgba(212,191,125,0.35);
+    color: var(--beige);
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.24em; text-transform: uppercase;
+    padding: 3px 8px; cursor: pointer;
+    transition: all 160ms ease;
+  }
+  .panel .p-head .ph-meta button:hover {
+    color: var(--cyan-hot); border-color: var(--cyan);
+    box-shadow: 0 0 10px rgba(0,166,214,0.4);
+  }
+
+  /* corner ticks on every panel */
+  .panel .p-tick {
+    position: absolute; width: 8px; height: 8px;
+    border-color: var(--cyan); opacity: 0.7;
+    z-index: 3; pointer-events: none;
+  }
+  .panel .p-tick.tl { top: 8px; left: 8px;
+    border-top: 1px solid; border-left: 1px solid; }
+  .panel .p-tick.tr { top: 8px; right: 8px;
+    border-top: 1px solid; border-right: 1px solid; }
+  .panel .p-tick.bl { bottom: 8px; left: 8px;
+    border-bottom: 1px solid; border-left: 1px solid; }
+  .panel .p-tick.br { bottom: 8px; right: 8px;
+    border-bottom: 1px solid; border-right: 1px solid; }
+
+  /* cyan flash on edit */
+  @keyframes cyanFlash {
+    0%   { box-shadow: inset 0 0 30px rgba(0,0,0,0.55); }
+    30%  { box-shadow: inset 0 0 32px rgba(0,166,214,0.32),
+                       0 0 18px rgba(0,166,214,0.4); }
+    100% { box-shadow: inset 0 0 30px rgba(0,0,0,0.55); }
+  }
+  .panel.flash .p-inner { animation: cyanFlash 600ms ease-out; }
+
+  /* ============================================================
+     COMBAT — small stat cells
+     ============================================================ */
+  .combat-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    flex: 1;
+    align-content: center;
+  }
+  .stat-cell {
+    --cut: 8px;
+    position: relative;
+    padding: 12px 6px 10px;
+    text-align: center;
+    background:
+      radial-gradient(120% 100% at 50% 0%, rgba(0,166,214,0.05), transparent 70%),
+      rgba(0,0,0,0.35);
+    border: 1px solid rgba(212,191,125,0.3);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .stat-cell .sc-val {
+    font-family: var(--font-mono); font-weight: 500;
+    color: var(--cyan-hot);
+    font-size: 26px; line-height: 1; letter-spacing: 0.02em;
+    text-shadow: 0 0 10px rgba(0,166,214,0.35);
+  }
+  .stat-cell .sc-val .unit {
+    font-family: var(--font-mono); font-weight: 400;
+    color: var(--cyan); font-size: 10px;
+    letter-spacing: 0.16em; margin-left: 2px;
+  }
+  .stat-cell .sc-label {
+    font-family: var(--font-mono); font-size: 8.5px;
+    color: var(--beige); letter-spacing: 0.24em;
+    text-transform: uppercase;
+  }
+  .stat-cell .sc-sub {
+    font-family: var(--font-mono); font-size: 7.5px;
+    color: var(--muted); letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* ============================================================
+     HIT POINTS — large editable readout
+     ============================================================ */
+  .hp-body {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: stretch;
+    flex: 1;
+  }
+  .hp-main {
+    display: flex; flex-direction: column;
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .hp-current-row {
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  .hp-current {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 52px; line-height: 1; letter-spacing: 0.01em;
+    color: var(--cyan-hot);
+    text-shadow: 0 0 18px rgba(0,166,214,0.5);
+    cursor: pointer;
+    padding: 2px 6px;
+    border: 1px dashed transparent;
+    transition: border-color 160ms ease, color 200ms ease;
+    min-width: 80px;
+    text-align: right;
+  }
+  .hp-current:hover { border-color: rgba(0,166,214,0.4); }
+  .hp-current.danger {
+    color: var(--danger-hot);
+    text-shadow: 0 0 18px rgba(185,58,58,0.5);
+  }
+  .hp-current input {
+    width: 80px; background: rgba(0,166,214,0.08);
+    border: 1px solid var(--cyan); color: var(--cyan-hot);
+    font: inherit; padding: 2px 6px; outline: 0;
+    text-align: right;
+  }
+  .hp-slash {
+    font-family: var(--font-mono); color: var(--beige-dim);
+    font-size: 30px; line-height: 1;
+  }
+  .hp-max {
+    font-family: var(--font-mono);
+    font-size: 28px; color: var(--beige);
+    letter-spacing: 0.02em; line-height: 1;
+  }
+  .hp-meta {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 6px;
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--muted); letter-spacing: 0.2em; text-transform: uppercase;
+  }
+  .hp-meta .pct { color: var(--cyan); }
+  .hp-meta .pct.danger { color: var(--danger-hot); }
+
+  .hp-bar {
+    margin-top: 12px;
+    height: 6px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5);
+    position: relative;
+    overflow: hidden;
+  }
+  .hp-bar .fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan-hot));
+    box-shadow: 0 0 8px rgba(0,166,214,0.5);
+    transition: width 280ms cubic-bezier(.4,0,.2,1), background 280ms ease;
+  }
+  .hp-bar .fill.danger {
+    background: linear-gradient(90deg, #6b1f1f, var(--danger-hot));
+    box-shadow: 0 0 10px rgba(185,58,58,0.6);
+  }
+  .hp-bar .notch {
+    position: absolute; top: 0; bottom: 0;
+    left: 25%; width: 1px; background: rgba(212,191,125,0.4);
+  }
+
+  /* HP side column (steppers + temp HP) */
+  .hp-side {
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    gap: 10px;
+    border-left: 1px dashed rgba(212,191,125,0.2);
+    padding-left: 14px;
+    min-width: 120px;
+  }
+  .hp-steppers {
+    display: flex; gap: 6px;
+  }
+  .hp-step {
+    --cut: 6px;
+    flex: 1;
+    background: rgba(0,166,214,0.08);
+    border: 1px solid var(--cyan-dim);
+    color: var(--cyan-hot);
+    font-family: var(--font-mono); font-size: 14px;
+    letter-spacing: 0.04em;
+    padding: 6px 0;
+    cursor: pointer;
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 160ms ease, color 160ms ease;
+  }
+  .hp-step:hover {
+    background: rgba(0,166,214,0.22);
+    color: #fff;
+    box-shadow: 0 0 12px rgba(0,166,214,0.45);
+  }
+  .hp-step .delta {
+    display: block;
+    font-size: 8px; letter-spacing: 0.2em;
+    color: var(--cyan); opacity: 0.8;
+  }
+
+  .temp-hp-row {
+    display: flex; flex-direction: column; gap: 4px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(212,191,125,0.2);
+  }
+  .temp-hp-row .lab {
+    font-family: var(--font-mono); font-size: 8.5px;
+    color: var(--beige); letter-spacing: 0.24em; text-transform: uppercase;
+  }
+  .temp-hp-row .val-wrap { display: flex; align-items: baseline; gap: 6px; }
+  .temp-hp {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 22px; color: var(--cyan-hot);
+    cursor: pointer; padding: 1px 6px;
+    border: 1px dashed transparent;
+    line-height: 1; min-width: 36px; text-align: right;
+    transition: border-color 160ms ease;
+  }
+  .temp-hp:hover { border-color: rgba(0,166,214,0.4); }
+  .temp-hp.zero { color: var(--beige-dim); }
+  .temp-hp input {
+    width: 56px;
+    background: rgba(0,166,214,0.08);
+    border: 1px solid var(--cyan); color: var(--cyan-hot);
+    font: inherit; padding: 1px 6px; outline: 0; text-align: right;
+  }
+  .temp-hp-row .hint {
+    font-family: var(--font-mono); font-size: 7.5px;
+    color: var(--muted); letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  /* ============================================================
+     HIT DICE — pip row
+     ============================================================ */
+  .hd-summary {
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .hd-summary .v {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 30px; color: var(--cyan-hot);
+    text-shadow: 0 0 10px rgba(0,166,214,0.35);
+    line-height: 1;
+  }
+  .hd-summary .lab {
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--beige); letter-spacing: 0.24em; text-transform: uppercase;
+  }
+  .hd-summary .rem {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--muted); letter-spacing: 0.2em; text-transform: uppercase;
+  }
+  .hd-summary .rem .acc { color: var(--cyan); }
+
+  .hd-pips {
+    display: flex; gap: 8px;
+    flex: 1; align-items: center;
+    margin-top: 4px;
+  }
+  .hd-pip {
+    --cut: 8px;
+    flex: 1;
+    aspect-ratio: 1.2 / 1;
+    max-width: 56px;
+    min-height: 40px;
+    position: relative;
+    background: transparent;
+    border: 0; padding: 0; cursor: pointer;
+    transition: transform 160ms ease;
+  }
+  .hd-pip:hover { transform: translateY(-2px); }
+  .hd-pip .hp-frame {
+    position: absolute; inset: 0;
+    background: var(--cyan);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 200ms ease, opacity 200ms ease;
+  }
+  .hd-pip .hp-inner {
+    position: absolute; inset: 1.5px;
+    background: linear-gradient(180deg, #16252b, #0d1417);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 1px;
+    transition: background 200ms ease;
+  }
+  .hd-pip .hp-inner .num {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 14px; color: var(--cyan-hot);
+    line-height: 1; text-shadow: 0 0 8px rgba(0,166,214,0.5);
+  }
+  .hd-pip .hp-inner .lab {
+    font-family: var(--font-mono); font-size: 7px;
+    color: var(--cyan); letter-spacing: 0.2em;
+  }
+  .hd-pip:hover .hp-inner {
+    box-shadow: inset 0 0 18px rgba(0,166,214,0.3),
+                0 0 14px rgba(0,166,214,0.4);
+  }
+  .hd-pip.spent .hp-frame { background: var(--beige-dim); opacity: 0.55; }
+  .hd-pip.spent .hp-inner {
+    background: linear-gradient(180deg, #181613, #100f0d);
+  }
+  .hd-pip.spent .hp-inner .num { color: var(--beige-dim); text-shadow: none; }
+  .hd-pip.spent .hp-inner .lab { color: var(--beige-dim); }
+  .hd-pip.spent:hover .hp-inner { box-shadow: none; }
+  .hd-pip.spent::after {
+    content: ""; position: absolute;
+    top: 50%; left: 14%; right: 14%; height: 1px;
+    background: var(--beige-dim);
+    transform: rotate(-22deg);
+    pointer-events: none;
+  }
+
+  /* ============================================================
+     DEATH SAVES
+     ============================================================ */
+  .death-rows { display: flex; flex-direction: column; gap: 8px; }
+  .death-row {
+    display: grid; grid-template-columns: 90px 1fr;
+    align-items: center; gap: 12px;
+  }
+  .death-row .lab {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--beige); letter-spacing: 0.26em; text-transform: uppercase;
+  }
+  .death-row.fails .lab { color: var(--beige); }
+  .death-dots { display: flex; gap: 10px; }
+  .death-dot {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: transparent;
+    border: 1.5px solid var(--beige);
+    cursor: pointer; padding: 0;
+    position: relative;
+    transition: all 200ms ease;
+  }
+  .death-dot:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 10px rgba(0,166,214,0.4);
+  }
+  .death-row.successes .death-dot.on {
+    background: var(--cyan);
+    border-color: var(--cyan-hot);
+    box-shadow: 0 0 12px rgba(0,166,214,0.7),
+                inset 0 0 6px rgba(255,255,255,0.25);
+  }
+  .death-row.fails .death-dot.on {
+    background: var(--danger);
+    border-color: var(--danger-hot);
+    box-shadow: 0 0 12px rgba(185,58,58,0.7),
+                inset 0 0 6px rgba(255,255,255,0.2);
+  }
+  .death-dot.on::after {
+    content: ""; position: absolute;
+    inset: 4px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.45), transparent 70%);
+  }
+
+  .death-banner {
+    margin-top: 8px;
+    padding: 8px 12px;
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.3em; text-transform: uppercase;
+    text-align: center;
+    border: 1px solid transparent;
+    background: rgba(0,0,0,0.4);
+    color: var(--muted);
+    transition: all 220ms ease;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px),
+      calc(100% - 8px) 100%, 0 100%, 0 8px);
+  }
+  .death-banner::before { content: "// "; opacity: 0.6; }
+  .death-banner.stable {
+    border-color: var(--cyan);
+    background: rgba(0,166,214,0.10);
+    color: var(--cyan-hot);
+    box-shadow: 0 0 14px rgba(0,166,214,0.3);
+    text-shadow: 0 0 8px rgba(0,166,214,0.5);
+  }
+  .death-banner.failed {
+    border-color: var(--danger);
+    background: rgba(185,58,58,0.12);
+    color: var(--danger-hot);
+    box-shadow: 0 0 16px rgba(185,58,58,0.45);
+    text-shadow: 0 0 8px rgba(185,58,58,0.6);
+    animation: failPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes failPulse {
+    0%, 100% { box-shadow: 0 0 16px rgba(185,58,58,0.45); }
+    50%      { box-shadow: 0 0 26px rgba(185,58,58,0.75); }
+  }
+
+  /* ============================================================
+     EXHAUSTION
+     ============================================================ */
+  .exh-track {
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    flex: 1; align-content: center;
+  }
+  .exh-cell {
+    --cut: 6px;
+    aspect-ratio: 1 / 1.05;
+    max-height: 56px;
+    background: transparent;
+    border: 0; padding: 0; cursor: pointer;
+    position: relative;
+    transition: transform 160ms ease;
+  }
+  .exh-cell:hover { transform: translateY(-2px); }
+  .exh-cell .ex-frame {
+    position: absolute; inset: 0;
+    background: rgba(212,191,125,0.35);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 220ms ease;
+  }
+  .exh-cell .ex-inner {
+    position: absolute; inset: 1.5px;
+    background: linear-gradient(180deg, #1c1c1c, #131313);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 500;
+    color: var(--beige-dim);
+    font-size: 16px;
+    transition: color 220ms ease, background 220ms ease;
+  }
+  /* Filled states — progressively tinted toward red */
+  .exh-cell.on[data-lvl="1"] .ex-frame { background: #d4bf7d; }
+  .exh-cell.on[data-lvl="2"] .ex-frame { background: #c9a25a; }
+  .exh-cell.on[data-lvl="3"] .ex-frame { background: #b8854a; }
+  .exh-cell.on[data-lvl="4"] .ex-frame { background: #a86340; }
+  .exh-cell.on[data-lvl="5"] .ex-frame { background: #b03d3a; }
+  .exh-cell.on[data-lvl="6"] .ex-frame { background: var(--danger-hot); box-shadow: 0 0 14px rgba(255,84,84,0.45); }
+  .exh-cell.on .ex-inner {
+    background: linear-gradient(180deg, rgba(212,191,125,0.18), rgba(185,58,58,0.12));
+    color: var(--text);
+  }
+  .exh-cell.on[data-lvl="5"] .ex-inner,
+  .exh-cell.on[data-lvl="6"] .ex-inner {
+    color: var(--danger-hot);
+    text-shadow: 0 0 8px rgba(255,84,84,0.5);
+  }
+
+  .exh-readout {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--muted); letter-spacing: 0.22em; text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .exh-readout .level { color: var(--cyan); }
+  .exh-readout .effect { color: var(--beige); text-align: right; }
+  .exh-readout .effect.danger { color: var(--danger-hot); }
+
+  /* ============================================================
+     SAVING THROWS
+     ============================================================ */
+  .save-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    flex: 1; align-content: center;
+  }
+  .save-cell {
+    --cut: 8px;
+    position: relative;
+    padding: 10px 10px 10px 12px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(212,191,125,0.3);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    display: grid;
+    grid-template-columns: 12px 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 2px 8px;
+    align-items: center;
+  }
+  .save-cell.prof { background: rgba(0,166,214,0.07); border-color: rgba(0,166,214,0.4); }
+  .save-cell .prof-dot {
+    grid-row: 1 / span 2;
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1.5px solid var(--beige-dim);
+    background: transparent;
+    align-self: center;
+  }
+  .save-cell.prof .prof-dot {
+    background: var(--cyan); border-color: var(--cyan-hot);
+    box-shadow: 0 0 8px rgba(0,166,214,0.6);
+  }
+  .save-cell .name {
+    font-family: var(--font-mono); font-size: 9.5px;
+    color: var(--beige); letter-spacing: 0.24em; text-transform: uppercase;
+  }
+  .save-cell.prof .name { color: var(--cyan); }
+  .save-cell .mod {
+    grid-column: 3; grid-row: 1 / span 2;
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 22px; color: var(--cyan-hot);
+    text-shadow: 0 0 8px rgba(0,166,214,0.3);
+    line-height: 1; letter-spacing: 0.02em;
+  }
+  .save-cell .sub {
+    font-family: var(--font-mono); font-size: 7.5px;
+    color: var(--muted); letter-spacing: 0.2em; text-transform: uppercase;
+  }
+  .save-cell.prof .sub { color: var(--beige); }
+
+  /* ============================================================
+     PROFICIENCIES & TRAINING
+     ============================================================ */
+  .prof-list {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 10px 22px;
+    flex: 1; align-content: start;
+  }
+  .prof-group {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .prof-group .pg-head {
+    display: flex; align-items: baseline; gap: 8px;
+    border-bottom: 1px dashed rgba(212,191,125,0.2);
+    padding-bottom: 4px;
+  }
+  .prof-group .pg-head .lab {
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--beige); letter-spacing: 0.26em; text-transform: uppercase;
+  }
+  .prof-group .pg-head .ct {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 8px;
+    color: var(--muted); letter-spacing: 0.2em;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    --cut: 5px;
+    padding: 4px 9px;
+    font-family: var(--font-mono); font-size: 9.5px;
+    color: var(--text); letter-spacing: 0.12em;
+    background: rgba(0,166,214,0.08);
+    border: 1px solid rgba(0,166,214,0.35);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    text-transform: uppercase;
+    transition: all 160ms ease;
+    cursor: default;
+  }
+  .chip:hover {
+    color: var(--cyan-hot);
+    border-color: var(--cyan);
+    background: rgba(0,166,214,0.18);
+    box-shadow: 0 0 10px rgba(0,166,214,0.3);
+  }
+  .chip.beige {
+    background: rgba(212,191,125,0.08);
+    border-color: rgba(212,191,125,0.35);
+    color: var(--beige);
+  }
+  .chip.beige:hover {
+    color: var(--text); border-color: var(--beige);
+    box-shadow: 0 0 10px rgba(212,191,125,0.3);
+  }
+  .chip.muted {
+    background: rgba(0,0,0,0.3);
+    border-color: rgba(170,170,170,0.25);
+    color: var(--muted);
+  }
+
+  /* ============================================================
+     CARRYING CAPACITY
+     ============================================================ */
+  .cap-main {
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .cap-main .v {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 26px; color: var(--cyan-hot);
+    line-height: 1; text-shadow: 0 0 8px rgba(0,166,214,0.3);
+  }
+  .cap-main .sep { color: var(--beige-dim); font-family: var(--font-mono); font-size: 22px; }
+  .cap-main .max {
+    font-family: var(--font-mono);
+    font-size: 18px; color: var(--beige); line-height: 1;
+  }
+  .cap-main .unit {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--cyan); letter-spacing: 0.18em; text-transform: uppercase;
+    margin-left: 2px;
+  }
+  .cap-bar {
+    height: 5px; border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5); position: relative; overflow: hidden;
+    margin-top: 4px;
+  }
+  .cap-bar .fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    box-shadow: 0 0 6px rgba(0,166,214,0.5);
+  }
+  .cap-bar .heavy-mark {
+    position: absolute; top: -2px; bottom: -2px;
+    width: 1px; background: var(--beige-dim);
+  }
+  .cap-rows {
+    display: grid; grid-template-columns: auto 1fr;
+    gap: 4px 12px;
+    margin-top: 8px;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.18em; text-transform: uppercase;
+  }
+  .cap-rows .k { color: var(--beige); }
+  .cap-rows .v { color: var(--text); }
+  .cap-rows .v .acc { color: var(--cyan); }
+  .cap-rows .v.stable { color: var(--cyan-hot); }
+
+  /* ============================================================
+     SENSES & RESISTANCES
+     ============================================================ */
+  .senses-list {
+    display: flex; flex-direction: column;
+    gap: 8px; flex: 1;
+  }
+  .sense-row {
+    display: grid; grid-template-columns: 110px 1fr;
+    align-items: baseline; gap: 10px;
+    padding: 4px 0;
+    border-bottom: 1px dashed rgba(212,191,125,0.15);
+  }
+  .sense-row:last-child { border-bottom: 0; }
+  .sense-row .k {
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--beige); letter-spacing: 0.24em; text-transform: uppercase;
+  }
+  .sense-row .v {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text); letter-spacing: 0.08em;
+  }
+  .sense-row .v.muted { color: var(--muted); font-style: italic; }
+  .sense-row .v .acc { color: var(--cyan-hot); }
+  .sense-row .v .pp {
+    font-family: var(--font-mono); font-weight: 500;
+    color: var(--cyan-hot); font-size: 14px; margin-right: 6px;
+    text-shadow: 0 0 6px rgba(0,166,214,0.3);
+  }
+</style>
+</head>
+<body>
+
+<div class="stage"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="sweep" id="sweep"></div>
+
+<!-- ====================== TOP BAR ====================== -->
+<header class="topbar" role="banner">
+  <div class="top-left">
+    <div class="stat-block" aria-label="Level">
+      <div class="stat-row"><span class="stat-num">05</span><span class="stat-label">Level</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:38%"></i></div>
+    </div>
+    <div class="stat-block wide" aria-label="Reputation">
+      <div class="stat-row"><span class="stat-num txt">Renowned</span><span class="stat-label">Rep</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:74%"></i></div>
+    </div>
+    <div class="stat-block" aria-label="Burden">
+      <div class="stat-row"><span class="stat-num txt">Light</span><span class="stat-label">Burden</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:24%"></i></div>
+    </div>
+  </div>
+
+  <div class="top-center">
+    <div class="char-name">Ros Chrisstone<span class="cursor">█</span></div>
+    <div class="char-sub">
+      <span>Human · Fighter</span>
+      <span class="sep">/</span>
+      <span>Champion Archetype</span>
+      <span class="sep">/</span>
+      <span>Stat Panel · 09</span>
+    </div>
+  </div>
+
+  <div class="top-right">
+    <div class="stat-block" aria-label="Gold" style="min-width:auto;">
+      <div class="stat-row"><span class="stat-num">340</span><span class="stat-label">Gold</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:34%"></i></div>
+    </div>
+  </div>
+</header>
+
+<div class="ticker above" aria-hidden="true">
+  <span>SYS://STAT.READOUT</span><span class="gap"></span>
+  <span class="dim">// 0xFF2A</span><span class="gap"></span>
+  <span>LINK_STABLE</span><span class="gap"></span>
+  <span class="dim">CHAN 1F-Δ</span>
+</div>
+<div class="ticker below" aria-hidden="true">
+  <span>FRAME 09 // STAT.PANEL</span><span class="gap"></span>
+  <span class="dim">PARTY.OK</span><span class="gap"></span>
+  <span>SOULBOND 0x4F1A</span><span class="gap"></span>
+  <span class="dim">VITALS_NOMINAL</span>
+</div>
+
+<!-- side labels -->
+<div class="side-label left">
+  <span class="acc">STAT PANEL</span> &nbsp;//&nbsp; READOUT 09 &nbsp;//&nbsp; VITALS OK
+</div>
+<div class="side-label right">
+  Brettany Theater &nbsp;//&nbsp; <span class="acc">SHARD: VACANT</span> &nbsp;//&nbsp; Stat Readout
+</div>
+
+<!-- ====================== NAVBAR ====================== -->
+<nav class="navbar" aria-label="Primary">
+  <div class="nav-slot">
+    <button class="nav-btn is-active" data-nav="equipment" aria-current="page">
+      <span class="nb-frame"></span>
+      <span class="nb-marker">01 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-khanda"></i></span>
+        <span class="nb-label">Equipment</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="lore">
+      <span class="nb-frame"></span><span class="nb-marker">02 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-book-open"></i></span>
+        <span class="nb-label">Lore</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="spellbook">
+      <span class="nb-frame"></span><span class="nb-marker">03 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-scroll"></i></span>
+        <span class="nb-label">Spellbook</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="character">
+      <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-user-shield"></i></span>
+        <span class="nb-label">Character</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="journal">
+      <span class="nb-frame"></span><span class="nb-marker">05 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-clipboard"></i></span>
+        <span class="nb-label">Journal</span>
+      </span>
+    </button>
+  </div>
+</nav>
+
+<div class="nav-meta">
+  <span class="dim">◇</span>
+  <span>Section</span>
+  <span class="acc">/ Equipment</span>
+  <span class="dim">·</span>
+  <span class="acc">/ Stat Panel</span>
+  <span class="dim">·</span>
+  <span>Readout 09 // Vitals</span>
+</div>
+
+<!-- ====================== MAIN — STAT PANEL ====================== -->
+<main class="stat">
+
+  <!-- Section header -->
+  <div class="section-head">
+    <span class="sh-num">09</span>
+    <span class="sh-title">Stat Panel</span>
+    <span class="sh-meta">
+      <span><span class="dim">Combat &amp; reference readout</span></span>
+      <span class="dim">·</span>
+      <span>Auto-Sync <span class="acc">ON</span></span>
+    </span>
+  </div>
+
+  <div class="panel-grid">
+
+    <!-- ============ COMBAT ============ -->
+    <section class="panel span-5" data-panel="combat">
+      <div class="p-frame"></div><div class="p-frame2"></div><div class="p-frame3"></div>
+      <span class="p-tick tl"></span><span class="p-tick tr"></span>
+      <span class="p-tick bl"></span><span class="p-tick br"></span>
+      <div class="p-inner">
+        <div class="p-head">
+          <span class="ph-num">01</span>
+          <span class="ph-title">Combat</span>
+          <span class="ph-meta">Quick stats</span>
+        </div>
+        <div class="combat-grid">
+          <div class="stat-cell">
+            <div class="sc-val">16</div>
+            <div class="sc-label">AC</div>
+            <div class="sc-sub">Armor Class</div>
+          </div>
+          <div class="stat-cell">
+            <div class="sc-val">+2</div>
+            <div class="sc-label">Init</div>
+            <div class="sc-sub">Initiative</div>
+          </div>
+          <div class="stat-cell">
+            <div class="sc-val">30<span class="unit">ft</span></div>
+            <div class="sc-label">Speed</div>
+            <div class="sc-sub">Walk</div>
+          </div>
+          <div class="stat-cell">
+            <div class="sc-val">+3</div>
+            <div class="sc-label">Prof</div>
+            <div class="sc-sub">Bonus</div>
+          </div>
+          <div class="stat-cell">
+            <div class="sc-val">13</div>
+            <div class="sc-label">Perc</div>
+            <div class="sc-sub">Passive</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HIT POINTS ============ -->
+    <section class="panel span-4" data-panel="hp">
+      <div class="p-frame"></div><div class="p-frame2"></div><div class="p-frame3"></div>
+      <span class="p-tick tl"></span><span class="p-tick tr"></span>
+      <span class="p-tick bl"></span><span class="p-tick br"></span>
+      <div class="p-inner">
+        <div class="p-head">
+          <span class="ph-num">02</span>
+          <span class="ph-title">Hit Points</span>
+          <span class="ph-meta"><span id="hp-pct-tag" class="dim">90%</span></span>
+        </div>
+        <div class="hp-body">
+          <div class="hp-main">
+            <div class="hp-current-row">
+              <span class="hp-current" id="hp-current" title="Click to edit">44</span>
+              <span class="hp-slash">/</span>
+              <span class="hp-max" id="hp-max">49</span>
+            </div>
+            <div class="hp-meta">
+              <span class="lab">Current</span>
+              <span>·</span>
+              <span class="pct" id="hp-pct">90% Vitals</span>
+            </div>
+            <div class="hp-bar" aria-hidden="true">
+              <div class="fill" id="hp-fill" style="width:90%"></div>
+              <div class="notch" title="25% danger threshold"></div>
+            </div>
+          </div>
+
+          <div class="hp-side">
+            <div class="hp-steppers">
+              <button class="hp-step" data-hp-step="-1">−<span class="delta">1</span></button>
+              <button class="hp-step" data-hp-step="-5">−<span class="delta">5</span></button>
+              <button class="hp-step" data-hp-step="+1">+<span class="delta">1</span></button>
+              <button class="hp-step" data-hp-step="+5">+<span class="delta">5</span></button>
+            </div>
+            <div class="temp-hp-row">
+              <div class="lab">Temporary HP</div>
+              <div class="val-wrap">
+                <span class="temp-hp zero" id="temp-hp" title="Click to edit">0</span>
+                <span class="hint">absorbs first</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HIT DICE ============ -->
+    <section class="panel span-3" data-panel="hd">
+      <div class="p-frame"></div><div class="p-frame2"></div><div class="p-frame3"></div>
+      <span class="p-tick tl"></span><span class="p-tick tr"></span>
+      <span class="p-tick bl"></span><span class="p-tick br"></span>
+      <div class="p-inner">
+        <div class="p-head">
+          <span class="ph-num">03</span>
+          <span class="ph-title">Hit Dice</span>
+          <span class="ph-meta"><button id="hd-reset" title="Restore all on long rest">Reset</button></span>
+        </div>
+        <div class="hd-summary">
+          <span class="v">5d10</span>
+          <span class="lab">Pool</span>
+          <span class="rem"><span class="acc" id="hd-remaining">5</span> / 5 left</span>
+        </div>
+        <div class="hd-pips" id="hd-pips">
+          <button class="hd-pip" data-idx="0">
+            <span class="hp-frame"></span>
+            <span class="hp-inner"><span class="num">d10</span><span class="lab">01</span></span>
+          </button>
+          <button class="hd-pip" data-idx="1">
+            <span class="hp-frame"></span>
+            <span class="hp-inner"><span class="num">d10</span><span class="lab">02</span></span>
+          </button>
+          <button class="hd-pip" data-idx="2">
+            <span class="hp-frame"></span>
+            <span class="hp-inner"><span class="num">d10</span><span class="lab">03</span></span>
+          </button>
+          <button class="hd-pip" data-idx="3">
+            <span class="hp-frame"></span>
+            <span class="hp-inner"><span class="num">d10</span><span class="lab">04</span></span>
+          </button>
+          <button class="hd-pip" data-idx="4">
+            <span class="hp-frame"></span>
+            <span class="hp-inner"><span class="num">d10</span><span class="lab">05</span></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SAVING THROWS ============ -->
+    <section class="panel span-4" data-panel="saves">
+      <div class="p-frame"></div><div class="p-frame2"></div><div class="p-frame3"></div>
+      <span class="p-tick tl"></span><span class="p-tick tr"></span>
+      <span class="p-tick bl"></span><span class="p-tick br"></span>
+      <div class="p-inner">
+        <div class="p-head">
+          <span class="ph-num">04</span>
+          <span class="ph-title">Saving Throws</span>
+          <span class="ph-meta">◆ proficient</span>
+        </div>
+        <div class="save-grid">
+          <div class="save-cell prof">
+            <span class="prof-dot"></span>
+            <span class="name">Str</span>
+            <span class="sub">Strength</span>
+            <span class="mod">+6</span>
+          </div>
+          <div class="save-cell">
+            <span class="prof-dot"></span>
+            <span class="name">Dex</span>
+            <span class="sub">Dexterity</span>
+            <span class="mod">+2</span>
+          </div>
+          <div class="save-cell prof">
+            <span class="prof-dot"></span>
+            <span class="name">Con</span>
+            <span class="sub">Constitution</span>
+            <span class="mod">+6</span>
+          </div>
+          <div class="save-cell">
+            <span class="prof-dot"></span>
+            <span class="name">Int</span>
+            <span class="sub">Intelligence</span>
+            <span class="mod">+0</span>
+          </div>
+          <div class="save-cell">
+            <span class="prof-dot"></span>
+            <span class="name">Wis</span>
+            <span class="sub">Wisdom</span>
+            <span class="mod">+1</span>
+          </div>
+          <div class="save-cell">
+            <span class="prof-dot"></span>
+            <span class="name">Cha</span>
+            <span class="sub">Charisma</span>
+            <span class="mod">+0</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DEATH SAVES ============ -->
+    <section class="panel span-4" data-panel="deaths">
+      <div class="p-frame"></div><div class="p-frame2"></div><div class="p-frame3"></div>
+      <span class="p-tick tl"></span><span class="p-tick tr"></span>
+      <span class="p-tick bl"></span><span class="p-tick br"></span>
+      <div class="p-inner">
+        <div class="p-head">
+          <span class="ph-num">05</span>
+          <span class="ph-title">Death Saves</span>
+          <span class="ph-meta"><button id="ds-reset">Clear</button></span>
+        </div>
+        <div class="death-rows">
+          <div class="death-row successes">
+            <span class="lab">Successes</span>
+            <div class="death-dots" data-row="s">
+              <button class="death-dot" data-i="0" aria-label="Success 1"></button>
+              <button class="death-dot" data-i="1" aria-label="Success 2"></button>
+              <button class="death-dot" data-i="2" aria-label="Success 3"></button>
+            </div>
+          </div>
+          <div class="death-row fails">
+            <span class="lab">Failures</span>
+            <div class="death-dots" data-row="f">
+              <button class="death-dot" data-i="0" aria-label="Failure 1"></button>
+              <button class="death-dot" data-i="1" aria-label="Failure 2"></button>
+              <button class="death-dot" data-i="2" aria-label="Failure 3"></button>
+            </div>
+          </div>
+        </div>
+        <div class="death-banner" id="death-banner">Conscious · Standing</div>
+      </div>
+    </section>
+
+    <!-- ============ EXHAUSTION ============ -->
+    <section class="panel span-4" data-panel="exh">
+      <div class="p-frame"></div><div class="p-frame2"></div><div class="p-frame3"></div>
+      <span class="p-tick tl"></span><span class="p-tick tr"></span>
+      <span class="p-tick bl"></span><span class="p-tick br"></span>
+      <div class="p-inner">
+        <div class="p-head">
+          <span class="ph-num">06</span>
+          <span class="ph-title">Exhaustion</span>
+          <span class="ph-meta">6 levels · death @ 6</span>
+        </div>
+        <div class="exh-track" id="exh-track">
+          <button class="exh-cell" data-lvl="1"><span class="ex-frame"></span><span class="ex-inner">1</span></button>
+          <button class="exh-cell" data-lvl="2"><span class="ex-frame"></span><span class="ex-inner">2</span></button>
+          <button class="exh-cell" data-lvl="3"><span class="ex-frame"></span><span class="ex-inner">3</span></button>
+          <button class="exh-cell" data-lvl="4"><span class="ex-frame"></span><span class="ex-inner">4</span></button>
+          <button class="exh-cell" data-lvl="5"><span class="ex-frame"></span><span class="ex-inner">5</span></button>
+          <button class="exh-cell" data-lvl="6"><span class="ex-frame"></span><span class="ex-inner">6</span></button>
+        </div>
+        <div class="exh-readout">
+          <span>Current: <span class="level" id="exh-level">Level 0</span></span>
+          <span class="effect" id="exh-effect">No effect</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PROFICIENCIES & TRAINING ============ -->
+    <section class="panel span-6" data-panel="prof">
+      <div class="p-frame"></div><div class="p-frame2"></div><div class="p-frame3"></div>
+      <span class="p-tick tl"></span><span class="p-tick tr"></span>
+      <span class="p-tick bl"></span><span class="p-tick br"></span>
+      <div class="p-inner">
+        <div class="p-head">
+          <span class="ph-num">07</span>
+          <span class="ph-title">Proficiencies &amp; Training</span>
+          <span class="ph-meta">11 trained</span>
+        </div>
+        <div class="prof-list">
+
+          <div class="prof-group">
+            <div class="pg-head">
+              <span class="lab"><i class="fa-solid fa-shield" style="font-size:9px;color:var(--beige);opacity:.7;margin-right:6px;"></i>Armor</span>
+              <span class="ct">2 entries</span>
+            </div>
+            <div class="chips">
+              <span class="chip beige">All Armor</span>
+              <span class="chip beige">Shields</span>
+            </div>
+          </div>
+
+          <div class="prof-group">
+            <div class="pg-head">
+              <span class="lab"><i class="fa-solid fa-swords" style="font-size:9px;color:var(--beige);opacity:.7;margin-right:6px;"></i>Weapons</span>
+              <span class="ct">2 entries</span>
+            </div>
+            <div class="chips">
+              <span class="chip">Simple</span>
+              <span class="chip">Martial</span>
+            </div>
+          </div>
+
+          <div class="prof-group">
+            <div class="pg-head">
+              <span class="lab"><i class="fa-solid fa-hammer" style="font-size:9px;color:var(--beige);opacity:.7;margin-right:6px;"></i>Tools</span>
+              <span class="ct">1 entry</span>
+            </div>
+            <div class="chips">
+              <span class="chip">Smith's Tools</span>
+            </div>
+          </div>
+
+          <div class="prof-group">
+            <div class="pg-head">
+              <span class="lab"><i class="fa-solid fa-language" style="font-size:9px;color:var(--beige);opacity:.7;margin-right:6px;"></i>Languages</span>
+              <span class="ct">2 entries</span>
+            </div>
+            <div class="chips">
+              <span class="chip">Common</span>
+              <span class="chip">Dwarvish</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CARRYING CAPACITY ============ -->
+    <section class="panel span-3" data-panel="cap">
+      <div class="p-frame"></div><div class="p-frame2"></div><div class="p-frame3"></div>
+      <span class="p-tick tl"></span><span class="p-tick tr"></span>
+      <span class="p-tick bl"></span><span class="p-tick br"></span>
+      <div class="p-inner">
+        <div class="p-head">
+          <span class="ph-num">08</span>
+          <span class="ph-title">Carrying</span>
+          <span class="ph-meta">Capacity</span>
+        </div>
+        <div class="cap-main">
+          <span class="v">96</span>
+          <span class="sep">/</span>
+          <span class="max">240</span>
+          <span class="unit">lb</span>
+        </div>
+        <div class="cap-bar" aria-hidden="true">
+          <div class="fill" style="width:40%"></div>
+          <div class="heavy-mark" style="left:66.6%"></div>
+        </div>
+        <div class="cap-rows">
+          <span class="k">Status</span>
+          <span class="v stable">Unencumbered</span>
+          <span class="k">Push/Drag/Lift</span>
+          <span class="v">480 <span class="acc">lb</span></span>
+          <span class="k">Heavy @</span>
+          <span class="v">160 <span class="acc">lb</span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SENSES & RESISTANCES ============ -->
+    <section class="panel span-3" data-panel="senses">
+      <div class="p-frame"></div><div class="p-frame2"></div><div class="p-frame3"></div>
+      <span class="p-tick tl"></span><span class="p-tick tr"></span>
+      <span class="p-tick bl"></span><span class="p-tick br"></span>
+      <div class="p-inner">
+        <div class="p-head">
+          <span class="ph-num">09</span>
+          <span class="ph-title">Senses</span>
+          <span class="ph-meta">Resist · Cond</span>
+        </div>
+        <div class="senses-list">
+          <div class="sense-row">
+            <span class="k">Passive Perc</span>
+            <span class="v"><span class="pp">13</span></span>
+          </div>
+          <div class="sense-row">
+            <span class="k">Darkvision</span>
+            <span class="v muted">—</span>
+          </div>
+          <div class="sense-row">
+            <span class="k">Resistances</span>
+            <span class="v muted">None</span>
+          </div>
+          <div class="sense-row">
+            <span class="k">Conditions</span>
+            <span class="v muted">None active</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- ====================== BOTTOM BAR ====================== -->
+<footer class="bottombar" role="contentinfo">
+  <div class="bb-line">
+    <span class="dot"></span>
+    <span class="lab">Neural Link:</span><span class="val">Active</span>
+    <span class="sep">|</span>
+    <span class="lab">Shard Integrity:</span><span class="val">98%</span>
+    <span class="sep">|</span>
+    <span class="lab">Sync:</span><span class="val">OK</span>
+    <span class="sep">|</span>
+    <span class="lab">Weather:</span><span class="dim">Overcast</span>
+
+    <div class="bb-right">
+      <span class="lab">Codex</span><span class="val">v 0.9</span>
+      <span class="sep">|</span>
+      <span class="dot"></span><span class="val">DM Online</span>
+      <span class="sep">|</span>
+      <span class="lab" id="save-auto">SAVE · 00:44</span><span class="save-cursor">█</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ----- Generic nav placeholder -----
+  document.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.getAttribute('data-nav');
+      console.log(`Navigating to ${t}...`);
+    });
+  });
+
+  // ----- Periodic cyan scan sweep -----
+  (function sweepLoop() {
+    const sweep = document.getElementById('sweep');
+    function trigger() {
+      sweep.classList.remove('run'); void sweep.offsetWidth;
+      sweep.classList.add('run');
+    }
+    function schedule() {
+      const delay = 7000 + Math.random() * 4000;
+      setTimeout(() => { trigger(); schedule(); }, delay);
+    }
+    setTimeout(() => { trigger(); schedule(); }, 2500);
+  })();
+
+  // ----- Save counter -----
+  (function liveCounter() {
+    const el = document.getElementById('save-auto');
+    if (!el) return;
+    let t = 44;
+    setInterval(() => {
+      t = (t + 1) % 60;
+      const s = t.toString().padStart(2, '0');
+      el.textContent = `SAVE · 00:${s}`;
+    }, 700);
+  })();
+
+  // ========================================================
+  // STATE — in-memory only, no storage APIs
+  // ========================================================
+  const state = {
+    hpCurrent: 44,
+    hpMax: 49,
+    tempHp: 0,
+    hitDice: [false, false, false, false, false], // false = available
+    deathSuccesses: [false, false, false],
+    deathFailures: [false, false, false],
+    exhaustion: 0, // 0..6
+  };
+
+  function flashPanel(name) {
+    const p = document.querySelector(`.panel[data-panel="${name}"]`);
+    if (!p) return;
+    p.classList.remove('flash'); void p.offsetWidth;
+    p.classList.add('flash');
+  }
+
+  // ========================================================
+  // HIT POINTS
+  // ========================================================
+  const hpCurrentEl = document.getElementById('hp-current');
+  const hpMaxEl = document.getElementById('hp-max');
+  const hpFillEl = document.getElementById('hp-fill');
+  const hpPctEl = document.getElementById('hp-pct');
+  const hpPctTagEl = document.getElementById('hp-pct-tag');
+
+  function renderHp() {
+    hpCurrentEl.textContent = state.hpCurrent;
+    hpMaxEl.textContent = state.hpMax;
+    const pct = Math.max(0, Math.min(100, Math.round((state.hpCurrent / state.hpMax) * 100)));
+    hpFillEl.style.width = pct + '%';
+    hpPctEl.textContent = pct + '% Vitals';
+    hpPctTagEl.textContent = pct + '%';
+    const danger = state.hpCurrent / state.hpMax < 0.25;
+    hpCurrentEl.classList.toggle('danger', danger);
+    hpFillEl.classList.toggle('danger', danger);
+    hpPctEl.classList.toggle('danger', danger);
+    hpPctTagEl.style.color = danger ? 'var(--danger-hot)' : '';
+  }
+
+  function setHp(v) {
+    state.hpCurrent = Math.max(0, Math.min(state.hpMax, Math.round(v)));
+    renderHp();
+    flashPanel('hp');
+  }
+
+  // click-to-edit current HP
+  hpCurrentEl.addEventListener('click', () => {
+    if (hpCurrentEl.querySelector('input')) return;
+    const cur = state.hpCurrent;
+    hpCurrentEl.innerHTML = `<input type="number" min="0" max="${state.hpMax}" value="${cur}">`;
+    const input = hpCurrentEl.querySelector('input');
+    input.focus(); input.select();
+    const commit = () => {
+      const v = parseInt(input.value, 10);
+      if (!isNaN(v)) setHp(v); else renderHp();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { renderHp(); }
+    });
+  });
+
+  // steppers
+  document.querySelectorAll('[data-hp-step]').forEach(b => {
+    b.addEventListener('click', () => {
+      const d = parseInt(b.getAttribute('data-hp-step'), 10);
+      setHp(state.hpCurrent + d);
+    });
+  });
+
+  // ----- Temp HP -----
+  const tempHpEl = document.getElementById('temp-hp');
+  function renderTemp() {
+    tempHpEl.textContent = state.tempHp;
+    tempHpEl.classList.toggle('zero', state.tempHp === 0);
+  }
+  tempHpEl.addEventListener('click', () => {
+    if (tempHpEl.querySelector('input')) return;
+    tempHpEl.innerHTML = `<input type="number" min="0" max="99" value="${state.tempHp}">`;
+    const input = tempHpEl.querySelector('input');
+    input.focus(); input.select();
+    const commit = () => {
+      const v = parseInt(input.value, 10);
+      if (!isNaN(v)) {
+        state.tempHp = Math.max(0, Math.min(99, v));
+        flashPanel('hp');
+      }
+      renderTemp();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') renderTemp();
+    });
+  });
+
+  renderHp();
+  renderTemp();
+
+  // ========================================================
+  // HIT DICE
+  // ========================================================
+  const hdRemainingEl = document.getElementById('hd-remaining');
+  const hdPipsEl = document.getElementById('hd-pips');
+  function renderHd() {
+    const pips = hdPipsEl.querySelectorAll('.hd-pip');
+    pips.forEach((pip, i) => {
+      pip.classList.toggle('spent', state.hitDice[i]);
+    });
+    const left = state.hitDice.filter(x => !x).length;
+    hdRemainingEl.textContent = left;
+  }
+  hdPipsEl.addEventListener('click', (e) => {
+    const pip = e.target.closest('.hd-pip');
+    if (!pip) return;
+    const i = parseInt(pip.getAttribute('data-idx'), 10);
+    state.hitDice[i] = !state.hitDice[i];
+    renderHd();
+    flashPanel('hd');
+  });
+  document.getElementById('hd-reset').addEventListener('click', () => {
+    state.hitDice = state.hitDice.map(() => false);
+    renderHd();
+    flashPanel('hd');
+  });
+  renderHd();
+
+  // ========================================================
+  // DEATH SAVES
+  // ========================================================
+  const deathBanner = document.getElementById('death-banner');
+  function renderDeath() {
+    document.querySelectorAll('.death-dots[data-row="s"] .death-dot').forEach((d, i) => {
+      d.classList.toggle('on', state.deathSuccesses[i]);
+    });
+    document.querySelectorAll('.death-dots[data-row="f"] .death-dot').forEach((d, i) => {
+      d.classList.toggle('on', state.deathFailures[i]);
+    });
+    const s = state.deathSuccesses.filter(Boolean).length;
+    const f = state.deathFailures.filter(Boolean).length;
+    deathBanner.classList.remove('stable', 'failed');
+    if (s === 3) {
+      deathBanner.classList.add('stable');
+      deathBanner.textContent = 'Stabilized · Unconscious 1d4 hr';
+    } else if (f === 3) {
+      deathBanner.classList.add('failed');
+      deathBanner.textContent = 'Stabilize Failed · Deceased';
+    } else if (s === 0 && f === 0) {
+      deathBanner.textContent = 'Conscious · Standing';
+    } else {
+      deathBanner.textContent = `Rolling · ${s} success${s===1?'':'es'} · ${f} fail${f===1?'':'s'}`;
+    }
+  }
+  document.querySelectorAll('.death-dots').forEach(row => {
+    row.addEventListener('click', (e) => {
+      const dot = e.target.closest('.death-dot');
+      if (!dot) return;
+      const which = row.getAttribute('data-row');
+      const i = parseInt(dot.getAttribute('data-i'), 10);
+      const arr = which === 's' ? state.deathSuccesses : state.deathFailures;
+      // If already locked (3 of either), block further changes — must Clear.
+      if (state.deathSuccesses.filter(Boolean).length === 3 ||
+          state.deathFailures.filter(Boolean).length === 3) {
+        return;
+      }
+      arr[i] = !arr[i];
+      renderDeath();
+      flashPanel('deaths');
+    });
+  });
+  document.getElementById('ds-reset').addEventListener('click', () => {
+    state.deathSuccesses = [false, false, false];
+    state.deathFailures = [false, false, false];
+    renderDeath();
+    flashPanel('deaths');
+  });
+  renderDeath();
+
+  // ========================================================
+  // EXHAUSTION
+  // ========================================================
+  const EXH_EFFECTS = [
+    'No effect',
+    'Disadvantage on ability checks',
+    'Speed halved',
+    'Disadvantage on attacks &amp; saves',
+    'Hit point max halved',
+    'Speed reduced to 0',
+    'Death',
+  ];
+  const exhLevelEl = document.getElementById('exh-level');
+  const exhEffectEl = document.getElementById('exh-effect');
+  function renderExh() {
+    document.querySelectorAll('.exh-cell').forEach(cell => {
+      const lvl = parseInt(cell.getAttribute('data-lvl'), 10);
+      cell.classList.toggle('on', lvl <= state.exhaustion);
+    });
+    exhLevelEl.textContent = `Level ${state.exhaustion}`;
+    exhEffectEl.innerHTML = EXH_EFFECTS[state.exhaustion];
+    exhEffectEl.classList.toggle('danger', state.exhaustion >= 5);
+  }
+  document.querySelectorAll('.exh-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const lvl = parseInt(cell.getAttribute('data-lvl'), 10);
+      // Click current top level again to step back down
+      if (lvl === state.exhaustion) state.exhaustion = lvl - 1;
+      else state.exhaustion = lvl;
+      renderExh();
+      flashPanel('exh');
+    });
+  });
+  renderExh();
+</script>
+
+</body>
+</html>

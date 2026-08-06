@@ -1,0 +1,1949 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — CHARACTER // ROS CHRISSTONE</title>
+<!--
+  PHASE 3 — Character screen.
+
+  Deviations from spec + reasoning:
+
+  1.  Hex ring geometry: I used a pointy-top hex (50/0, 100/25, 100/75,
+      50/100, 0/75, 0/25). The "oval" arrangement from the spec is built
+      by positioning the four corner hexes inset 120px and the middle
+      two hexes pushed flush to the edge of the ring container so the
+      cluster reads as a wider-than-tall hexagonal lattice with the
+      glyph at its true center.
+
+  2.  Skill-list hover area: the hex AND the slide-out skill list share
+      a single .ability-cluster wrapper that owns the :hover state and
+      the 200ms grace timer. Mouse leaves the cluster -> skills fade
+      after 200ms; re-enter inside that window cancels the dismiss.
+      Keyboard focus on a hex also opens the list (focus-within), so
+      keyboard users aren't stranded.
+
+  3.  Right-column skill lists overlap the ROLL_LOG panel on hover.
+      That's intentional — they have z-index above it and only appear
+      briefly. Putting them on the LEFT of right-column hexes would
+      have crowded the glyph and broken the spec's directional rule.
+
+  4.  Roll-on-hex display: the score number gets a .rolling state that
+      swaps the digits and applies a 2s timer. Score number is wrapped
+      in a span (.hx-score-val) so we don't have to touch the modifier
+      or label during the swap.
+
+  5.  CON has no skills — hovering it still highlights the hex but the
+      skill panel is omitted entirely (no empty card stub).
+
+  6.  Session log entries use a calmer monospace look than the roll
+      cards so the two panels read as different in function: ROLL_LOG
+      is mechanical/transactional, SESSION_LOG is journal/narrative.
+
+  7.  Background glyph behind the hexes is the same SVG from Phase 1
+      but with opacity dropped to 0.12 and scaled to 540px so the
+      hexes remain the visual focal point.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  /* ============================================================
+     PHASE-1 BASE  (kept verbatim so the two screens share DNA)
+     ============================================================ */
+  :root {
+    --bg:        #1d1d1d;
+    --bg-2:      #161616;
+    --beige:     #d4bf7d;
+    --beige-dim: #8a7a4a;
+    --cyan:      #00a6d6;
+    --cyan-dim:  #0d6e8c;
+    --cyan-hot:  #4dd6ff;
+    --gold-rare: #e2b021;
+    --text:      #dedede;
+    --muted:     #aaaaaa;
+    --danger:    #b93a3a;
+
+    --bar-top-h:    62px;
+    --bar-bottom-h: 50px;
+    --nav-h:        72px;
+    --nav-top-gap:  26px;
+
+    --font-display: "Cinzel", serif;
+    --font-prose:   "EB Garamond", serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-prose);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .stage {
+    position: fixed; inset: 0;
+    background:
+      url("https://www.transparenttextures.com/patterns/dark-leather.png"),
+      radial-gradient(120% 90% at 50% 50%, #232220 0%, #1a1a1a 60%, #0e0e0e 100%);
+    background-blend-mode: overlay, normal;
+  }
+  .scanlines {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 90;
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+      transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 91;
+    background: radial-gradient(120% 110% at 50% 50%,
+      transparent 55%, rgba(0,0,0,0.55) 95%, rgba(0,0,0,0.85) 100%);
+  }
+  .sweep {
+    pointer-events: none;
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 2px; z-index: 95;
+    background: linear-gradient(to bottom,
+      transparent, rgba(0,166,214,0.55) 50%, transparent);
+    box-shadow: 0 0 24px rgba(0,166,214,0.45);
+    opacity: 0;
+  }
+  .sweep.run { animation: sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards; }
+  @keyframes sweep-run {
+    0%   { opacity: 0; transform: translateY(-20px); }
+    8%   { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(100vh); }
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- Top Bar (identical to Phase 1) ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--bar-top-h); z-index: 50;
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; padding: 0 36px;
+    background: linear-gradient(to bottom,
+      rgba(15,15,15,0.95) 0%, rgba(22,22,22,0.92) 100%);
+    border-bottom: 1px solid var(--beige);
+    box-shadow: 0 1px 0 rgba(212,191,125,0.15),
+                0 8px 24px -8px rgba(0,0,0,0.6);
+  }
+  .topbar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .topbar::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 1px; background: var(--beige);
+    box-shadow: 0 0 8px rgba(212,191,125,0.4);
+  }
+  .top-left, .top-right {
+    display: flex; align-items: center; gap: 28px;
+    position: relative; z-index: 1;
+  }
+  .top-right { justify-content: flex-end; }
+  .stat-block { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+  .stat-row { display: flex; align-items: baseline; gap: 8px; }
+  .stat-num {
+    font-family: var(--font-display); font-weight: 600;
+    color: var(--beige); font-size: 22px; line-height: 1; letter-spacing: 0.04em;
+  }
+  .stat-label {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--cyan); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .bar {
+    height: 3px; width: 110px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5); position: relative; overflow: hidden;
+  }
+  .bar > i {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    box-shadow: 0 0 6px rgba(0,166,214,0.6); display: block;
+  }
+  .top-center { text-align: center; position: relative; z-index: 1; padding: 0 24px; }
+  .char-name {
+    font-family: var(--font-display); font-weight: 600; font-size: 18px;
+    letter-spacing: 0.4em; color: var(--text); text-transform: uppercase; line-height: 1;
+  }
+  .char-name .cursor {
+    display: inline-block; color: var(--cyan); transform: translateY(-1px);
+    margin-left: 4px; animation: blink 1s steps(2, end) infinite;
+  }
+  .char-sub {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+    color: var(--muted); margin-top: 4px; text-transform: uppercase;
+  }
+  .char-sub .sep { color: var(--beige-dim); margin: 0 8px; }
+  .gold-block, .weight-block { display: flex; align-items: baseline; gap: 10px; }
+  .gold-block .ic, .weight-block .ic {
+    font-family: var(--font-display); color: var(--beige); font-size: 20px; line-height: 1;
+  }
+  .gold-block .val, .weight-block .val {
+    font-family: var(--font-display); color: var(--beige); font-size: 18px;
+    letter-spacing: 0.06em; line-height: 1;
+  }
+  .gold-block .lab, .weight-block .lab {
+    font-family: var(--font-mono); color: var(--cyan); font-size: 9px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .ticker {
+    position: fixed; left: 0; right: 0; height: 12px; z-index: 51;
+    display: flex; align-items: center; padding: 0 24px;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+    color: rgba(0,166,214,0.55); pointer-events: none;
+    overflow: hidden; white-space: nowrap;
+  }
+  .ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
+  .ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212,191,125,0.45); }
+  .ticker .gap { width: 32px; display: inline-block; }
+  .ticker .dim { color: rgba(170,170,170,0.4); }
+
+  /* ---------- Bottom Bar (identical to Phase 1) ---------- */
+  .bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--bar-bottom-h); z-index: 50;
+    display: flex; align-items: center; padding: 0 32px;
+    background: linear-gradient(to top,
+      rgba(15,15,15,0.96) 0%, rgba(22,22,22,0.92) 100%);
+    border-top: 1px solid var(--beige);
+    box-shadow: 0 -1px 0 rgba(212,191,125,0.15), 0 -8px 24px -8px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .bottombar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .bb-line {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; width: 100%; color: var(--muted);
+    position: relative; z-index: 1;
+  }
+  .bb-line .lab  { color: var(--beige); }
+  .bb-line .val  { color: var(--cyan); }
+  .bb-line .dim  { color: var(--muted); }
+  .bb-line .sep  { color: var(--beige-dim); margin: 0 4px; }
+  .bb-line .dot  {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px rgba(0,166,214,0.7);
+    display: inline-block;
+  }
+  .bb-line .save-cursor {
+    color: var(--cyan); animation: blink 1s steps(2, end) infinite; margin-left: 2px;
+  }
+  .bb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  /* ============================================================
+     NAVBAR — repositioned at top, smaller, horizontal
+     ============================================================ */
+  .navbar {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap));
+    left: 50%; transform: translateX(-50%);
+    display: flex; gap: 14px;
+    z-index: 45;
+  }
+  .nav-slot { position: relative; width: 156px; display: flex; justify-content: center; }
+  .nav-slot.equipment { padding: 60px 0; margin: -60px 0; }
+
+  .nav-btn {
+    --w: 156px; --h: var(--nav-h); --cut: 11px;
+    width: var(--w); height: var(--h);
+    background: transparent; border: 0; padding: 0;
+    color: var(--text); font-family: var(--font-mono);
+    cursor: pointer; position: relative;
+    transition: transform 180ms ease;
+  }
+  .nav-btn .nb-frame {
+    position: absolute; inset: 0; background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 180ms ease;
+  }
+  .nav-btn .nb-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(212,191,125,0.04), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #141414);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 6px;
+    transition: box-shadow 180ms ease, background 180ms ease;
+  }
+  .nav-btn .nb-icon {
+    color: var(--beige); font-size: 20px; line-height: 1;
+    transition: color 180ms ease, text-shadow 180ms ease;
+  }
+  .nav-btn .nb-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.26em; color: var(--text); text-transform: uppercase;
+  }
+  .nav-btn .nb-marker {
+    position: absolute; top: 6px; left: 12px;
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.2em; color: var(--cyan); opacity: 0.7;
+  }
+  .nav-btn:hover { transform: translateY(-2px); }
+  .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.18),
+                0 0 18px rgba(0,166,214,0.35);
+  }
+  .nav-btn:hover .nb-icon {
+    color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.7);
+  }
+
+  /* Active state — Equipment */
+  .nav-btn.is-active .nb-frame { background: var(--cyan); }
+  .nav-btn.is-active .nb-inner {
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.18), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 28px rgba(0,166,214,0.30),
+                0 0 22px rgba(0,166,214,0.55);
+  }
+  .nav-btn.is-active .nb-icon { color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.9); }
+  .nav-btn.is-active .nb-label { color: var(--cyan-hot); }
+  .nav-btn.is-active .nb-marker { color: var(--beige); opacity: 1; }
+  .nav-btn.is-active::after {
+    content: ""; position: absolute;
+    top: -6px; left: 14%; right: 14%; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 20px rgba(0,166,214,0.6);
+    z-index: 2;
+  }
+
+  /* Sub-buttons (Inventory above, Stat Panel below) */
+  .nav-sub {
+    position: absolute; left: 50%;
+    transform: translate(-50%, 0) scale(0.95);
+    opacity: 0; pointer-events: none;
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
+    z-index: 1;
+  }
+  .nav-sub.above { bottom: calc(50% + 44px); }
+  .nav-sub.below { top:    calc(50% + 44px); }
+  .nav-sub .nav-btn {
+    --w: 122px; --h: 56px; --cut: 9px;
+  }
+  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
+  .nav-sub .nav-btn .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
+                linear-gradient(180deg, #141a1d, #0e1316);
+  }
+  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
+  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
+  .nav-sub .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
+  .nav-slot.equipment:hover .nav-sub,
+  .nav-slot.equipment:focus-within .nav-sub {
+    opacity: 1; pointer-events: auto;
+  }
+  .nav-slot.equipment:hover .nav-sub.above { transform: translate(-50%, -8px) scale(1); }
+  .nav-slot.equipment:hover .nav-sub.below { transform: translate(-50%, 8px) scale(1); }
+
+  /* breadcrumb under navbar */
+  .nav-meta {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 8px);
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.32em; color: var(--muted);
+    text-transform: uppercase; z-index: 44;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .nav-meta .acc  { color: var(--cyan); }
+  .nav-meta .dim  { color: var(--beige-dim); }
+
+  /* ============================================================
+     CHARACTER MAIN AREA — hex ring + roll + session
+     ============================================================ */
+  main.ch {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 22px);
+    bottom: calc(var(--bar-bottom-h) + 22px);
+    left: 0; right: 0;
+    z-index: 10;
+    overflow: hidden;
+  }
+
+  .ch-section-label {
+    position: absolute;
+    display: flex; align-items: baseline; gap: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(212,191,125,0.35);
+    pointer-events: none;
+  }
+  .ch-section-label .sl-num {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+  }
+  .ch-section-label .sl-title {
+    font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
+  }
+  .ch-section-label .sl-meta {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+  }
+
+  /* ---------- Hex Ring ---------- */
+  .ring-stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 18px;
+    padding-left: 160px;
+    padding-right: 360px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    /* lifted above roll-region so hover-expanded skill panels paint
+       above the (transparent-background) ROLL_LOG / SESSION_LOG content */
+    z-index: 30;
+    /* but stay click-through on its empty padding area so the roll panel
+       (which is now visually below) is still interactive */
+    pointer-events: none;
+  }
+  .ring-label,
+  .hex-ring-scaler { pointer-events: auto; }
+  .ring-label {
+    width: 380px;
+    flex: 0 0 auto;
+    /* override .ch-section-label's `position: absolute` so the label takes
+       part in the ring-stage flex column and the ring sits BELOW it */
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    justify-content: center;
+  }
+
+  .hex-ring-scaler {
+    flex: 1 1 auto;
+    width: calc(540px * var(--ring-scale, 1));
+    height: calc(420px * var(--ring-scale, 1));
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    position: relative;
+  }
+
+  .hex-ring {
+    position: absolute;
+    top: 0; left: 0;
+    width: 540px;
+    height: 420px;
+    transform: scale(var(--ring-scale, 1));
+    transform-origin: top left;
+  }
+
+  /* Background glyph behind the ring */
+  .ring-glyph-wrap {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 420px;
+    height: 420px;
+    pointer-events: none;
+    color: var(--beige);
+    opacity: 0.12;
+    z-index: 0;
+  }
+  .ring-glyph { width: 100%; height: 100%; display: block; }
+  .ring-glyph .rotate-slow {
+    transform-origin: 320px 320px;
+    animation: rot 60s linear infinite;
+  }
+  .ring-glyph .rotate-rev {
+    transform-origin: 320px 320px;
+    animation: rot 90s linear infinite reverse;
+  }
+  @keyframes rot {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .ring-glyph .pulse {
+    transform-origin: 320px 320px;
+    animation: glyphpulse 3s ease-in-out infinite;
+  }
+  @keyframes glyphpulse {
+    0%, 100% { opacity: 0.65; transform: scale(1); }
+    50%      { opacity: 1;    transform: scale(1.18); }
+  }
+
+  /* Ability clusters position the hex AND its skill panel */
+  .ability-cluster {
+    position: absolute;
+    width: 130px;
+    height: 146px;
+    z-index: 2;
+  }
+  /* Top row */
+  .ability-cluster.str { top:  0; left: 100px; }
+  .ability-cluster.con { top:  0; right: 100px; }
+  /* Middle row — pushed outward */
+  .ability-cluster.dex { top: 50%; transform: translateY(-50%); left:   0; }
+  .ability-cluster.wis { top: 50%; transform: translateY(-50%); right:  0; }
+  /* Bottom row */
+  .ability-cluster.int { bottom: 0; left: 100px; }
+  .ability-cluster.cha { bottom: 0; right: 100px; }
+
+  .ability-cluster:hover { z-index: 20; }
+
+  /* ---------- Single Hex ---------- */
+  .hex {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: 0; padding: 0;
+    cursor: pointer;
+    color: inherit;
+    font-family: inherit;
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1);
+  }
+  .hex .h-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    transition: background 200ms ease, filter 200ms ease;
+  }
+  .hex .h-inner {
+    position: absolute; inset: 2px;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    background:
+      radial-gradient(120% 90% at 50% 50%, rgba(0,166,214,0.08), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #131313);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 18px 8px 14px;
+    gap: 2px;
+    transition: box-shadow 220ms ease, background 220ms ease;
+  }
+  .hex .h-name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.34em;
+    color: var(--beige);
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .hex .h-score {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 40px;
+    line-height: 1;
+    color: var(--cyan-hot);
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 14px rgba(0,166,214,0.45);
+    transition: color 200ms ease, transform 220ms ease, text-shadow 200ms ease;
+    margin: 2px 0 0;
+  }
+  .hex .h-mod {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: 0.18em;
+    color: var(--beige);
+    line-height: 1;
+    margin-top: 2px;
+  }
+  .hex .h-sav {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-top: 4px;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .hex .h-sav .prof-shield {
+    width: 7px; height: 7px;
+    background: var(--cyan);
+    transform: rotate(45deg);
+    box-shadow: 0 0 6px rgba(0,166,214,0.7);
+  }
+
+  /* Proficient saving throw: cyan accent on the SAV row (shield icon shown
+     next to the label inline) — the cyan accent line at the hex's bottom
+     edge has been removed per design feedback; the inline shield bullet
+     is the sole indicator now. */
+  .hex.prof-sav .h-sav { color: var(--cyan); }
+
+  /* Hover state */
+  .hex:hover,
+  .ability-cluster:focus-within .hex {
+    transform: scale(1.04);
+  }
+  .hex:hover .h-frame,
+  .ability-cluster:focus-within .hex .h-frame {
+    background: var(--cyan-hot);
+    filter: drop-shadow(0 0 14px rgba(0,166,214,0.55));
+  }
+  .hex:hover .h-inner,
+  .ability-cluster:focus-within .hex .h-inner {
+    background:
+      radial-gradient(120% 90% at 50% 50%, rgba(0,166,214,0.22), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 28px rgba(0,166,214,0.35);
+    animation: hexpulse 1.4s ease-in-out infinite;
+  }
+  @keyframes hexpulse {
+    0%, 100% { box-shadow: inset 0 0 28px rgba(0,166,214,0.35); }
+    50%      { box-shadow: inset 0 0 48px rgba(0,166,214,0.55); }
+  }
+
+  /* Roll-display state on a hex */
+  .hex.rolling .h-score {
+    font-size: 50px;
+    text-shadow: 0 0 22px rgba(0,166,214,0.9);
+    transform: scale(1.05);
+  }
+  .hex.rolling.crit-success .h-score {
+    color: var(--gold-rare);
+    text-shadow: 0 0 26px rgba(226,176,33,0.9);
+    animation: critShine 0.6s ease-out;
+  }
+  .hex.rolling.crit-fail .h-score {
+    color: var(--danger);
+    text-shadow: 0 0 22px rgba(185,58,58,0.9);
+    animation: critFlicker 0.5s steps(6, end);
+  }
+  @keyframes critShine {
+    0%   { transform: scale(0.6); opacity: 0; }
+    35%  { transform: scale(1.25); opacity: 1; filter: brightness(1.6); }
+    100% { transform: scale(1.05); opacity: 1; filter: brightness(1); }
+  }
+  @keyframes critFlicker {
+    0%, 100% { opacity: 1; }
+    20%, 60% { opacity: 0.3; }
+    40%, 80% { opacity: 1; }
+  }
+
+  /* ---------- Skill list (shaped panel that hugs the hex profile) ----------
+     The panel sits to the side of the hex with its INNER edge notched so the
+     hex's leftmost vertex points fit precisely against it. Notch corners are
+     at 25% / 75% vertically (matching the hex's pointy-top vertex Y) and at
+     ~32%/68% horizontally (matching the hex half-width inside the panel
+     width — 70px of 220px). Inside, skill rows live in the wider portion.
+     ----------------------------------------------------------------------- */
+  .skill-list {
+    position: absolute;
+    top: 0;
+    width: 220px;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease,
+                transform 260ms cubic-bezier(.2,.7,.2,1);
+    z-index: -1;
+  }
+  .skill-list .sl-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    opacity: 0.85;
+  }
+  .skill-list .sl-inner {
+    position: absolute; inset: 2px;
+    background:
+      radial-gradient(120% 90% at 0% 50%, rgba(0,166,214,0.08), transparent 60%),
+      linear-gradient(180deg, #1a1a1a, #111);
+    display: flex; flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  /* Left-column hexes (STR / DEX / INT) — panel sits to the LEFT, notch on RIGHT */
+  .ability-cluster.str .skill-list,
+  .ability-cluster.dex .skill-list,
+  .ability-cluster.int .skill-list {
+    right: 65px; /* meets hex top-vertex column */
+  }
+  .ability-cluster.str .skill-list .sl-frame,
+  .ability-cluster.dex .skill-list .sl-frame,
+  .ability-cluster.int .skill-list .sl-frame {
+    clip-path: polygon(
+      0% 0%,
+      100% 0%,
+      70.5% 25%,
+      70.5% 75%,
+      100% 100%,
+      0% 100%
+    );
+  }
+  .ability-cluster.str .skill-list .sl-inner,
+  .ability-cluster.dex .skill-list .sl-inner,
+  .ability-cluster.int .skill-list .sl-inner {
+    clip-path: polygon(
+      0% 0%,
+      100% 0%,
+      70% 25%,
+      70% 75%,
+      100% 100%,
+      0% 100%
+    );
+    padding: 10px 76px 10px 14px;
+    align-items: stretch;
+  }
+
+  /* Right-column hexes (CON / WIS / CHA) — panel sits to the RIGHT, notch on LEFT */
+  .ability-cluster.con .skill-list,
+  .ability-cluster.wis .skill-list,
+  .ability-cluster.cha .skill-list {
+    left: 65px;
+  }
+  .ability-cluster.con .skill-list .sl-frame,
+  .ability-cluster.wis .skill-list .sl-frame,
+  .ability-cluster.cha .skill-list .sl-frame {
+    clip-path: polygon(
+      0% 0%,
+      100% 0%,
+      100% 100%,
+      0% 100%,
+      29.5% 75%,
+      29.5% 25%
+    );
+  }
+  .ability-cluster.con .skill-list .sl-inner,
+  .ability-cluster.wis .skill-list .sl-inner,
+  .ability-cluster.cha .skill-list .sl-inner {
+    clip-path: polygon(
+      0% 0%,
+      100% 0%,
+      100% 100%,
+      0% 100%,
+      30% 75%,
+      30% 25%
+    );
+    padding: 10px 14px 10px 76px;
+    align-items: stretch;
+  }
+
+  .ability-cluster:hover .skill-list,
+  .ability-cluster:focus-within .skill-list,
+  .ability-cluster.hover-hold .skill-list {
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 21;
+  }
+  .ability-cluster.str:hover .skill-list,
+  .ability-cluster.dex:hover .skill-list,
+  .ability-cluster.int:hover .skill-list,
+  .ability-cluster.str.hover-hold .skill-list,
+  .ability-cluster.dex.hover-hold .skill-list,
+  .ability-cluster.int.hover-hold .skill-list {
+    transform: translateX(-10px);
+  }
+  .ability-cluster.con:hover .skill-list,
+  .ability-cluster.wis:hover .skill-list,
+  .ability-cluster.cha:hover .skill-list,
+  .ability-cluster.con.hover-hold .skill-list,
+  .ability-cluster.wis.hover-hold .skill-list,
+  .ability-cluster.cha.hover-hold .skill-list {
+    transform: translateX(10px);
+  }
+
+  /* Skill row — simple, since the panel itself provides the frame */
+  .skill-card {
+    position: relative;
+    background: transparent;
+    border: 0; padding: 5px 4px 5px 8px;
+    text-align: left;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+    transition: background 160ms ease;
+  }
+  .skill-card + .skill-card { border-top: 1px dashed rgba(212,191,125,0.16); }
+  .skill-card .sc-frame { display: none; }
+  .skill-card .sc-inner {
+    position: static;
+    display: contents;
+  }
+  .skill-card .sc-name {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--beige);
+    text-transform: uppercase;
+    transition: color 160ms ease;
+  }
+  .skill-card .sc-mod {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    color: var(--cyan-hot);
+    margin-left: 8px;
+  }
+  /* Proficient skill: small cyan diamond bullet anchored on the LEFT of the
+     row (matches left-column panels) so the indicator placement is
+     consistent regardless of which side the panel slides out from. */
+  .skill-card.prof {
+    background: linear-gradient(90deg, rgba(0,166,214,0.10), transparent 70%);
+  }
+  .skill-card.prof::before {
+    content: "";
+    width: 6px; height: 6px;
+    background: var(--cyan);
+    transform: rotate(45deg);
+    box-shadow: 0 0 6px rgba(0,166,214,0.75);
+    position: absolute;
+    left: -1px; top: 50%;
+    margin-top: -3px;
+  }
+  .skill-card.prof .sc-name { color: #efeacd; }
+  .skill-card:hover { background: rgba(0,166,214,0.14); }
+  .skill-card:hover .sc-name { color: #fff; }
+
+  /* ============================================================
+     ROLL PANEL (bottom-right)
+     ============================================================ */
+  .roll-region {
+    position: absolute;
+    right: 36px;
+    top: 0;
+    bottom: 0;
+    width: 320px;
+    display: flex; flex-direction: column;
+    gap: 14px;
+    z-index: 6;
+  }
+  .roll-block {
+    flex: 1 1 auto;
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .roll-block .ch-section-label {
+    position: relative;
+    margin-bottom: 10px;
+  }
+  .roll-block .ch-section-label .sl-meta {
+    margin-left: auto;
+  }
+
+  /* Advantage / disadvantage toggles */
+  .adv-toggles {
+    display: flex; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .adv-btn {
+    --cut: 8px;
+    flex: 1;
+    height: 36px;
+    position: relative;
+    background: transparent;
+    border: 0; padding: 0;
+    cursor: pointer;
+    font-family: var(--font-mono);
+  }
+  .adv-btn .ab-frame {
+    position: absolute; inset: 0;
+    background: var(--beige-dim);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 180ms ease;
+  }
+  .adv-btn .ab-inner {
+    position: absolute; inset: 1.5px;
+    background: linear-gradient(180deg, #1a1a1a, #111);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    transition: color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  }
+  .adv-btn .ab-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--beige-dim);
+    transition: background 180ms ease, box-shadow 180ms ease;
+  }
+  .adv-btn:hover .ab-inner { color: var(--text); }
+  /* Active ADV */
+  .adv-btn.adv.is-active .ab-frame { background: #4dd07d; }
+  .adv-btn.adv.is-active .ab-inner {
+    color: #c9efce;
+    background: linear-gradient(180deg, #14241a, #0d1812);
+    box-shadow: inset 0 0 18px rgba(77,208,125,0.35),
+                0 0 14px rgba(77,208,125,0.45);
+  }
+  .adv-btn.adv.is-active .ab-dot {
+    background: #4dd07d;
+    box-shadow: 0 0 8px rgba(77,208,125,0.9);
+  }
+  /* Active DIS */
+  .adv-btn.dis.is-active .ab-frame { background: #e07a3a; }
+  .adv-btn.dis.is-active .ab-inner {
+    color: #f0c8a8;
+    background: linear-gradient(180deg, #261812, #1a100b);
+    box-shadow: inset 0 0 18px rgba(224,122,58,0.35),
+                0 0 14px rgba(224,122,58,0.5);
+  }
+  .adv-btn.dis.is-active .ab-dot {
+    background: #e07a3a;
+    box-shadow: 0 0 8px rgba(224,122,58,0.9);
+  }
+
+  /* Roll log container */
+  .roll-log {
+    flex: 1;
+    min-height: 0;
+    display: flex; flex-direction: column;
+    justify-content: flex-end;
+    gap: 8px;
+    overflow: hidden;
+    padding: 4px 2px;
+    position: relative;
+    /* Gentle top fade for overflow; per-entry depth opacity (set in JS) does
+       the main work of making the newest roll read brightest. */
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 12%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 12%);
+  }
+  .roll-log:empty::before {
+    content: "AWAITING ROLL";
+    position: absolute;
+    inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    color: var(--beige-dim);
+    text-align: center;
+  }
+
+  .roll-entry {
+    --cut: 10px;
+    position: relative;
+    flex-shrink: 0;
+    transform: translateY(0);
+    transition: opacity 360ms ease, transform 360ms cubic-bezier(.2,.7,.2,1);
+  }
+  .roll-entry.fresh {
+    animation: rollFresh 1s ease-out forwards;
+  }
+  @keyframes rollFresh {
+    0%   { opacity: 0; transform: translateY(12px); }
+    20%  { opacity: 1; transform: translateY(0); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .roll-entry.fading { opacity: 0; transform: translateY(-6px); }
+
+  .roll-entry .re-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    opacity: 0.5;
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .roll-entry.fresh-glow .re-frame {
+    background: var(--cyan);
+    opacity: 1;
+    box-shadow: 0 0 14px rgba(0,166,214,0.5);
+  }
+  .roll-entry .re-inner {
+    position: relative;
+    margin: 1.5px;
+    background: linear-gradient(180deg, #1a1a1a, #111);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    padding: 10px 14px 12px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto auto;
+    column-gap: 14px;
+    row-gap: 2px;
+    align-items: baseline;
+  }
+  .roll-entry .re-name {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    color: var(--beige);
+    text-transform: uppercase;
+    grid-column: 1;
+    line-height: 1.1;
+  }
+  .roll-entry .re-total {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 30px;
+    color: var(--cyan-hot);
+    text-shadow: 0 0 10px rgba(0,166,214,0.4);
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+  .roll-entry.crit-success .re-total { color: var(--gold-rare); text-shadow: 0 0 12px rgba(226,176,33,0.6); }
+  .roll-entry.crit-fail .re-total { color: var(--danger); text-shadow: 0 0 10px rgba(185,58,58,0.55); }
+
+  .roll-entry .re-d20 {
+    grid-column: 1;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .roll-entry .re-d20 .v { color: var(--text); }
+  .roll-entry .re-d20 .pick { color: var(--cyan); }
+  .roll-entry .re-d20 .mode {
+    margin-left: 6px;
+    font-size: 9px;
+    color: #4dd07d;
+    letter-spacing: 0.22em;
+  }
+  .roll-entry .re-d20 .mode.dis { color: #e07a3a; }
+  .roll-entry .re-break {
+    grid-column: 1;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--beige);
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+  .roll-entry .re-break .eq { color: var(--cyan); }
+  .roll-entry .re-stamp {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: end;
+    align-self: end;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--beige-dim);
+    text-transform: uppercase;
+  }
+  .roll-entry .re-crit {
+    position: absolute;
+    top: -7px; right: 12px;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 0.32em;
+    padding: 2px 6px;
+    background: var(--bg);
+    border: 1px solid var(--gold-rare);
+    color: var(--gold-rare);
+    text-transform: uppercase;
+    box-shadow: 0 0 10px rgba(226,176,33,0.45);
+    z-index: 2;
+  }
+  .roll-entry.crit-fail .re-crit {
+    border-color: var(--danger);
+    color: var(--danger);
+    box-shadow: 0 0 10px rgba(185,58,58,0.45);
+  }
+
+  /* SESSION LOG removed — the ROLL_LOG now fills the full right column. */
+
+
+  /* ============================================================
+     TOOLTIPS (shared)
+     ============================================================ */
+  .tt {
+    position: absolute;
+    min-width: 260px; max-width: 320px;
+    padding: 14px 16px;
+    background: rgba(8,8,8,0.97);
+    border: 1px solid var(--beige);
+    box-shadow:
+      0 0 0 1px rgba(212,191,125,0.15),
+      0 14px 28px rgba(0,0,0,0.6),
+      0 0 22px rgba(0,166,214,0.22);
+    font-family: var(--font-mono);
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1.6;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 160ms ease, transform 160ms ease;
+    z-index: 200;
+    clip-path: polygon(10px 0, 100% 0,
+      100% calc(100% - 10px), calc(100% - 10px) 100%,
+      0 100%, 0 10px);
+  }
+  .tt.show { opacity: 1; transform: translateY(0); }
+  .tt .tt-name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: var(--cyan-hot);
+    font-size: 15px;
+    letter-spacing: 0.1em;
+    line-height: 1.1;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .tt[data-rarity="common"] .tt-name { color: var(--text); }
+  .tt[data-rarity="rare"] .tt-name { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(77,214,255,0.4); }
+  .tt .tt-sub {
+    color: var(--beige);
+    font-size: 9.5px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(212,191,125,0.25);
+  }
+  .tt .tt-row {
+    display: flex; gap: 8px;
+    margin: 4px 0;
+    align-items: baseline;
+  }
+  .tt .tt-row .k {
+    color: var(--beige);
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    min-width: 84px;
+  }
+  .tt .tt-row .v { color: var(--text); }
+  .tt .tt-flavor {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(212,191,125,0.25);
+    font-family: var(--font-prose);
+    font-style: italic;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--muted);
+    letter-spacing: 0.01em;
+    text-transform: none;
+  }
+  .tt .tt-attune {
+    margin-top: 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    color: var(--cyan);
+    text-transform: uppercase;
+  }
+  .tt .tt-attune.no { color: var(--muted); }
+
+  /* edge labels */
+  .side-label {
+    position: fixed;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.3em; color: var(--muted);
+    text-transform: uppercase; pointer-events: none; z-index: 12;
+  }
+  .side-label.left  { left: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: rotate(180deg) translateY(50%); }
+  .side-label.right { right: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: translateY(-50%); }
+  .side-label .acc  { color: var(--cyan); }
+</style>
+</head>
+<body>
+
+<div class="stage"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="sweep" id="sweep"></div>
+
+<!-- ====================== TOP BAR ====================== -->
+<header class="topbar" role="banner">
+  <div class="top-left">
+    <div class="stat-block" aria-label="Level">
+      <div class="stat-row"><span class="stat-num">08</span><span class="stat-label">Level</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:62%"></i></div>
+    </div>
+    <div class="stat-block" aria-label="Reputation">
+      <div class="stat-row"><span class="stat-num">35</span><span class="stat-label">Reputation</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:48%"></i></div>
+    </div>
+  </div>
+
+  <div class="top-center">
+    <div class="char-name">Ros Chrisstone<span class="cursor">█</span></div>
+    <div class="char-sub">
+      <span>Human · Fighter</span>
+      <span class="sep">/</span>
+      <span>Champion Archetype</span>
+      <span class="sep">/</span>
+      <span>Brettany Reclamation</span>
+    </div>
+  </div>
+
+  <div class="top-right">
+    <div class="weight-block">
+      <span class="ic">⚖</span><span class="val">45 / 120</span><span class="lab">Burden</span>
+    </div>
+    <div class="gold-block">
+      <span class="ic">⊙</span><span class="val">1,247</span><span class="lab">Gold</span>
+    </div>
+  </div>
+</header>
+
+<div class="ticker above" aria-hidden="true">
+  <span>TASK_MANAGER_SD11S</span><span class="gap"></span>
+  <span class="dim">// AURUM_LEDGER_OK</span><span class="gap"></span>
+  <span>PROTOCOL: 6920-A44</span><span class="gap"></span>
+  <span class="dim">0001 0110 1001 0011 1100</span>
+</div>
+<div class="ticker below" aria-hidden="true">
+  <span>FRAME 04 // SECTOR 12</span><span class="gap"></span>
+  <span class="dim">PARTY.OK</span><span class="gap"></span>
+  <span>SOULBOND 0x4F1A</span><span class="gap"></span>
+  <span class="dim">CHANNEL 1F-Δ</span>
+</div>
+
+<!-- side labels -->
+<div class="side-label left">
+  <span class="acc">CHARACTER</span> &nbsp;//&nbsp; ABILITY ARRAY &nbsp;//&nbsp; SYNC OK
+</div>
+<div class="side-label right">
+  Session 04F1A &nbsp;//&nbsp; <span class="acc">PROF +3</span> &nbsp;//&nbsp; Castellan Build
+</div>
+
+<!-- ====================== NAVBAR ====================== -->
+<nav class="navbar" aria-label="Primary">
+
+  <!-- 1. Equipment -->
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="equipment">
+      <span class="nb-frame"></span>
+      <span class="nb-marker">01 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-khanda"></i></span>
+        <span class="nb-label">Equipment</span>
+      </span>
+    </button>
+  </div>
+
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="lore">
+      <span class="nb-frame"></span><span class="nb-marker">02 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-book-open"></i></span>
+        <span class="nb-label">Lore</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="spellbook">
+      <span class="nb-frame"></span><span class="nb-marker">03 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-scroll"></i></span>
+        <span class="nb-label">Spellbook</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn is-active" data-nav="character" aria-current="page">
+      <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-user-shield"></i></span>
+        <span class="nb-label">Character</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="journal">
+      <span class="nb-frame"></span><span class="nb-marker">05 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-clipboard"></i></span>
+        <span class="nb-label">Journal</span>
+      </span>
+    </button>
+  </div>
+</nav>
+
+<!-- nav-meta removed; the ABILITY ARRAY section label sits in its place -->
+
+<!-- ====================== MAIN ====================== -->
+<main class="ch">
+
+  <!-- HEX RING -->
+  <div class="ring-stage">
+
+    <!-- ABILITY ARRAY SECTION LABEL -->
+    <div class="ch-section-label ring-label" style="justify-content: center;">
+      <span class="sl-num">01</span>
+      <span class="sl-title">Ability Array</span>
+      <span class="sl-meta">6 / 6 calibrated</span>
+    </div>
+
+    <div class="hex-ring-scaler" id="hexRingScaler">
+      <div class="hex-ring" id="hexRing">
+
+      <!-- Background glyph -->
+      <div class="ring-glyph-wrap" aria-hidden="true">
+        <svg class="ring-glyph" viewBox="0 0 640 640" fill="none" stroke="currentColor" stroke-width="1.2">
+          <g class="rotate-slow">
+            <circle cx="320" cy="320" r="300" stroke-opacity="0.6"/>
+            <circle cx="320" cy="320" r="292" stroke-opacity="0.3"/>
+            <g id="ringTicks"></g>
+            <polygon points="320,80 528,200 528,440 320,560 112,440 112,200" stroke-opacity="0.5"/>
+            <polygon points="320,108 504,214 504,426 320,532 136,426 136,214" stroke-opacity="0.25"/>
+          </g>
+          <g class="rotate-rev">
+            <g stroke-opacity="0.6">
+              <line x1="320" y1="40"  x2="320" y2="600"/>
+              <line x1="40"  y1="320" x2="600" y2="320"/>
+              <line x1="120" y1="120" x2="520" y2="520"/>
+              <line x1="520" y1="120" x2="120" y2="520"/>
+            </g>
+            <circle cx="320" cy="320" r="220" stroke-opacity="0.6" stroke-dasharray="3 6"/>
+            <polygon points="320,140 447,193 500,320 447,447 320,500 193,447 140,320 193,193" stroke-opacity="0.55"/>
+            <polygon points="320,210 430,320 320,430 210,320" stroke-opacity="0.7"/>
+          </g>
+          <g>
+            <circle cx="320" cy="320" r="84" stroke-opacity="0.55"/>
+            <circle cx="320" cy="320" r="60" stroke-opacity="0.4" stroke-dasharray="2 4"/>
+            <polygon points="320,250 380,355 260,355" stroke-opacity="0.8"/>
+            <polygon points="320,390 260,285 380,285" stroke-opacity="0.8"/>
+            <g class="pulse">
+              <circle cx="320" cy="320" r="14" fill="rgba(0,166,214,0.45)" stroke="#00a6d6" stroke-opacity="0.9" stroke-width="0.8"/>
+              <circle cx="320" cy="320" r="4" fill="#00a6d6"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      
+      <div class="ability-cluster str" data-ability="STR">
+        <button class="hex prof-sav"
+                data-ability="STR"
+                data-score="18"
+                data-mod="4"
+                data-sav-prof="1"
+                aria-label="STR ability — score 18, modifier +4, saving throw +7 (proficient)">
+          <span class="h-frame"></span>
+          <span class="h-inner">
+            <span class="h-name">STR</span>
+            <span class="h-score"><span class="h-score-val">18</span></span>
+            <span class="h-mod">+4</span>
+            <span class="h-sav">
+              <span class="prof-shield" aria-hidden="true"></span>
+              SAV +7
+            </span>
+          </span>
+        </button>
+        <div class="skill-list" role="list"></div>
+      </div>
+      
+      <div class="ability-cluster con" data-ability="CON">
+        <button class="hex prof-sav"
+                data-ability="CON"
+                data-score="16"
+                data-mod="3"
+                data-sav-prof="1"
+                aria-label="CON ability — score 16, modifier +3, saving throw +6 (proficient)">
+          <span class="h-frame"></span>
+          <span class="h-inner">
+            <span class="h-name">CON</span>
+            <span class="h-score"><span class="h-score-val">16</span></span>
+            <span class="h-mod">+3</span>
+            <span class="h-sav">
+              <span class="prof-shield" aria-hidden="true"></span>
+              SAV +6
+            </span>
+          </span>
+        </button>
+        <div class="skill-list" role="list"></div>
+      </div>
+      
+      <div class="ability-cluster dex" data-ability="DEX">
+        <button class="hex "
+                data-ability="DEX"
+                data-score="14"
+                data-mod="2"
+                data-sav-prof="0"
+                aria-label="DEX ability — score 14, modifier +2, saving throw +2">
+          <span class="h-frame"></span>
+          <span class="h-inner">
+            <span class="h-name">DEX</span>
+            <span class="h-score"><span class="h-score-val">14</span></span>
+            <span class="h-mod">+2</span>
+            <span class="h-sav">
+              
+              SAV +2
+            </span>
+          </span>
+        </button>
+        <div class="skill-list" role="list"></div>
+      </div>
+      
+      <div class="ability-cluster wis" data-ability="WIS">
+        <button class="hex "
+                data-ability="WIS"
+                data-score="13"
+                data-mod="1"
+                data-sav-prof="0"
+                aria-label="WIS ability — score 13, modifier +1, saving throw +1">
+          <span class="h-frame"></span>
+          <span class="h-inner">
+            <span class="h-name">WIS</span>
+            <span class="h-score"><span class="h-score-val">13</span></span>
+            <span class="h-mod">+1</span>
+            <span class="h-sav">
+              
+              SAV +1
+            </span>
+          </span>
+        </button>
+        <div class="skill-list" role="list"></div>
+      </div>
+      
+      <div class="ability-cluster int" data-ability="INT">
+        <button class="hex "
+                data-ability="INT"
+                data-score="10"
+                data-mod="0"
+                data-sav-prof="0"
+                aria-label="INT ability — score 10, modifier +0, saving throw +0">
+          <span class="h-frame"></span>
+          <span class="h-inner">
+            <span class="h-name">INT</span>
+            <span class="h-score"><span class="h-score-val">10</span></span>
+            <span class="h-mod">+0</span>
+            <span class="h-sav">
+              
+              SAV +0
+            </span>
+          </span>
+        </button>
+        <div class="skill-list" role="list"></div>
+      </div>
+      
+      <div class="ability-cluster cha" data-ability="CHA">
+        <button class="hex "
+                data-ability="CHA"
+                data-score="12"
+                data-mod="1"
+                data-sav-prof="0"
+                aria-label="CHA ability — score 12, modifier +1, saving throw +1">
+          <span class="h-frame"></span>
+          <span class="h-inner">
+            <span class="h-name">CHA</span>
+            <span class="h-score"><span class="h-score-val">12</span></span>
+            <span class="h-mod">+1</span>
+            <span class="h-sav">
+              
+              SAV +1
+            </span>
+          </span>
+        </button>
+        <div class="skill-list" role="list"></div>
+      </div>
+
+    </div>
+    </div>
+  </div>
+
+  <!-- ROLL PANEL + SESSION LOG -->
+  <aside class="roll-region" aria-label="Roll panel and session log">
+
+    <!-- ROLL_LOG -->
+    <div class="roll-block">
+      <div class="ch-section-label">
+        <span class="sl-num">02</span>
+        <span class="sl-title">Roll_Log</span>
+        <span class="sl-meta" id="rollStamp">--:--:--</span>
+      </div>
+
+      <div class="adv-toggles">
+        <button class="adv-btn adv" data-mode="adv" aria-pressed="false">
+          <span class="ab-frame"></span>
+          <span class="ab-inner">
+            <span class="ab-dot"></span>
+            ADV
+          </span>
+        </button>
+        <button class="adv-btn dis" data-mode="dis" aria-pressed="false">
+          <span class="ab-frame"></span>
+          <span class="ab-inner">
+            <span class="ab-dot"></span>
+            DIS
+          </span>
+        </button>
+      </div>
+
+      <div class="roll-log" id="rollLog" aria-live="polite"></div>
+    </div>
+
+  </aside>
+
+</main>
+
+<!-- ====================== BOTTOM BAR ====================== -->
+<footer class="bottombar" role="contentinfo">
+  <div class="bb-line">
+    <span class="dot"></span>
+    <span class="lab">Neural Link:</span><span class="val">Stable</span>
+    <span class="sep">|</span>
+    <span class="lab">Shard Integrity:</span><span class="val">98.2%</span>
+    <span class="sep">|</span>
+    <span class="lab">Last Sync:</span><span class="val">0.07 ms</span>
+    <span class="sep">|</span>
+    <span class="lab">Castella-08:</span><span class="dim">Clear · Wind NNW 4kt</span>
+    <span class="sep">|</span>
+    <span class="lab">Tide:</span><span class="dim">Low @ 03:47</span>
+
+    <div class="bb-right">
+      <span class="lab">Codex</span><span class="val">v 2.4.7</span>
+      <span class="sep">|</span>
+      <span class="dot"></span><span class="val">DM Online</span>
+      <span class="sep">|</span>
+      <span class="lab" id="save-auto">SAVE · 00:44</span><span class="save-cursor">█</span>
+    </div>
+  </div>
+</footer>
+
+<!-- shared tooltip element, positioned by JS -->
+<div class="tt" id="tooltip" role="tooltip" aria-hidden="true"></div>
+
+<script>
+  // ============================================================
+  // Auto-fit the hex ring to available space (handles small viewports)
+  // ============================================================
+  (function autoFitRing() {
+    const scaler = document.getElementById('hexRingScaler');
+    const stage = document.querySelector('.ring-stage');
+    const label = document.querySelector('.ring-label');
+    if (!scaler || !stage) return;
+    const W = 540, H = 420;
+    function fit() {
+      const labelH = label ? label.offsetHeight : 0;
+      const cs = getComputedStyle(stage);
+      const padTop = parseFloat(cs.paddingTop) || 0;
+      const padBot = parseFloat(cs.paddingBottom) || 0;
+      const padRight = parseFloat(cs.paddingRight) || 0;
+      const gap = parseFloat(cs.gap) || 18;
+      const availH = stage.clientHeight - padTop - padBot - labelH - gap;
+      const padLeft = parseFloat(cs.paddingLeft) || 0;
+      const availW = stage.clientWidth - padLeft - padRight - 8;
+      const s = Math.min(1, availH / H, availW / W);
+      scaler.style.setProperty('--ring-scale', s.toFixed(3));
+    }
+    fit();
+    new ResizeObserver(fit).observe(stage);
+  })();
+
+  // ============================================================
+  // Navbar click handlers (passive — these are mock nav targets)
+  // ============================================================
+  document.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      // If the hex (or skill) is also a [data-nav] descendant accidentally,
+      // ignore. Our hex/skill rolling is wired separately.
+      if (btn.closest('.hex') || btn.closest('.skill-card')) return;
+      const t = btn.getAttribute('data-nav');
+      const label = (btn.querySelector('.nb-label, .pa-inner')?.textContent || t).trim();
+      console.log(`Navigating to ${label}... [data-nav="${t}"]`);
+    });
+  });
+
+  // ============================================================
+  // Cyan scan sweep
+  // ============================================================
+  (function sweepLoop() {
+    const sweep = document.getElementById('sweep');
+    if (!sweep) return;
+    function trigger() {
+      sweep.classList.remove('run'); void sweep.offsetWidth;
+      sweep.classList.add('run');
+    }
+    function schedule() {
+      const delay = 7000 + Math.random() * 4000;
+      setTimeout(() => { trigger(); schedule(); }, delay);
+    }
+    setTimeout(() => { trigger(); schedule(); }, 2500);
+  })();
+
+  // ============================================================
+  // Save counter (footer)
+  // ============================================================
+  (function liveCounter() {
+    const el = document.getElementById('save-auto');
+    if (!el) return;
+    let t = 44;
+    setInterval(() => {
+      t = (t + 1) % 60;
+      const s = t.toString().padStart(2, '0');
+      el.textContent = `SAVE · 00:${s}`;
+    }, 700);
+  })();
+
+  // ============================================================
+  // Glyph ticks — same generator as Phase 1, scoped here
+  // ============================================================
+  (function makeRingTicks() {
+    const root = document.getElementById('ringTicks');
+    if (!root) return;
+    const cx = 320, cy = 320;
+    const rOuter = 308, rInnerShort = 300, rInnerLong = 294;
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    for (let i = 0; i < 60; i++) {
+      const angle = (i * 6 - 90) * Math.PI / 180;
+      const long = (i % 5 === 0);
+      const rI = long ? rInnerLong : rInnerShort;
+      const x1 = cx + Math.cos(angle) * rOuter;
+      const y1 = cy + Math.sin(angle) * rOuter;
+      const x2 = cx + Math.cos(angle) * rI;
+      const y2 = cy + Math.sin(angle) * rI;
+      const ln = document.createElementNS(SVG_NS, 'line');
+      ln.setAttribute('x1', x1); ln.setAttribute('y1', y1);
+      ln.setAttribute('x2', x2); ln.setAttribute('y2', y2);
+      ln.setAttribute('stroke-opacity', long ? 0.9 : 0.4);
+      root.appendChild(ln);
+    }
+  })();
+
+  // ============================================================
+  // CHARACTER MODEL — Ros Chrisstone, Fighter, Level 8
+  // ============================================================
+  const PROF_BONUS = 3;
+
+  const ABILITIES = {
+    STR: { score: 18, mod: 4, savProf: true,  skills: ['Athletics'] },
+    DEX: { score: 14, mod: 2, savProf: false, skills: ['Acrobatics', 'Sleight of Hand', 'Stealth'] },
+    CON: { score: 16, mod: 3, savProf: true,  skills: [] },
+    INT: { score: 10, mod: 0, savProf: false, skills: ['Arcana', 'History', 'Investigation', 'Nature', 'Religion'] },
+    WIS: { score: 13, mod: 1, savProf: false, skills: ['Animal Handling', 'Insight', 'Medicine', 'Perception', 'Survival'] },
+    CHA: { score: 12, mod: 1, savProf: false, skills: ['Deception', 'Intimidation', 'Performance', 'Persuasion'] },
+  };
+
+  const SKILL_PROFS = new Set(['Athletics', 'Intimidation', 'Perception', 'Survival']);
+
+  const ABILITY_FULL = {
+    STR: 'Strength', DEX: 'Dexterity', CON: 'Constitution',
+    INT: 'Intelligence', WIS: 'Wisdom', CHA: 'Charisma',
+  };
+
+  // ============================================================
+  // Populate skill lists for each ability cluster
+  // ============================================================
+  (function populateSkills() {
+    document.querySelectorAll('.ability-cluster').forEach(cluster => {
+      const ab = cluster.getAttribute('data-ability');
+      const list = cluster.querySelector('.skill-list');
+      const data = ABILITIES[ab];
+      if (!data || !list) return;
+      if (data.skills.length === 0) {
+        list.remove();
+        return;
+      }
+      // Shaped panel: outer beige frame + inner dark fill that holds the rows
+      const frame = document.createElement('div');
+      frame.className = 'sl-frame';
+      const inner = document.createElement('div');
+      inner.className = 'sl-inner';
+
+      data.skills.forEach(skill => {
+        const prof = SKILL_PROFS.has(skill);
+        const mod = data.mod + (prof ? PROF_BONUS : 0);
+        const card = document.createElement('button');
+        card.className = 'skill-card' + (prof ? ' prof' : '');
+        card.setAttribute('data-skill', skill);
+        card.setAttribute('data-ability', ab);
+        card.setAttribute('data-prof', prof ? '1' : '0');
+        card.innerHTML = `
+          <span class="sc-name">${skill}</span>
+          <span class="sc-mod">${mod >= 0 ? '+' + mod : mod}</span>
+        `;
+        inner.appendChild(card);
+      });
+
+      list.appendChild(frame);
+      list.appendChild(inner);
+    });
+  })();
+
+  // ============================================================
+  // Hover grace period for skill panels
+  // ============================================================
+  (function hoverHold() {
+    document.querySelectorAll('.ability-cluster').forEach(cluster => {
+      let leaveTimer = null;
+      cluster.addEventListener('mouseenter', () => {
+        if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+        cluster.classList.add('hover-hold');
+      });
+      cluster.addEventListener('mouseleave', () => {
+        if (leaveTimer) clearTimeout(leaveTimer);
+        leaveTimer = setTimeout(() => {
+          cluster.classList.remove('hover-hold');
+          leaveTimer = null;
+        }, 200);
+      });
+    });
+  })();
+
+  // ============================================================
+  // Advantage / Disadvantage toggle
+  // ============================================================
+  const advBtn = document.querySelector('.adv-btn.adv');
+  const disBtn = document.querySelector('.adv-btn.dis');
+  let rollMode = null; // null | 'adv' | 'dis'
+
+  function setMode(next) {
+    rollMode = next;
+    advBtn.classList.toggle('is-active', next === 'adv');
+    disBtn.classList.toggle('is-active', next === 'dis');
+    advBtn.setAttribute('aria-pressed', String(next === 'adv'));
+    disBtn.setAttribute('aria-pressed', String(next === 'dis'));
+  }
+  advBtn.addEventListener('click', () => setMode(rollMode === 'adv' ? null : 'adv'));
+  disBtn.addEventListener('click', () => setMode(rollMode === 'dis' ? null : 'dis'));
+
+  // ============================================================
+  // Roll mechanics
+  // ============================================================
+  function d20() { return 1 + Math.floor(Math.random() * 20); }
+
+  function rollDice() {
+    if (rollMode === 'adv') {
+      const a = d20(), b = d20();
+      return { rolls: [a, b], pick: Math.max(a, b), mode: 'adv' };
+    }
+    if (rollMode === 'dis') {
+      const a = d20(), b = d20();
+      return { rolls: [a, b], pick: Math.min(a, b), mode: 'dis' };
+    }
+    const a = d20();
+    return { rolls: [a], pick: a, mode: null };
+  }
+
+  function nowStamp() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  function performRoll(opts) {
+    // opts: { ability, skill?, mod, profBonus, label, hexEl }
+    const dice = rollDice();
+    const total = dice.pick + opts.mod + opts.profBonus;
+    const stamp = nowStamp();
+    const critSuccess = dice.pick === 20;
+    const critFail    = dice.pick === 1;
+
+    showOnHex(opts.hexEl, total, critSuccess, critFail);
+    pushRollEntry({
+      label: opts.label,
+      dice,
+      mod: opts.mod,
+      modLabel: opts.ability,
+      profBonus: opts.profBonus,
+      total,
+      stamp,
+      critSuccess,
+      critFail,
+    });
+  }
+
+  // ---------- On-hex result display ----------
+  const hexResetTimers = new WeakMap();
+  function showOnHex(hexEl, total, critSuccess, critFail) {
+    if (!hexEl) return;
+    const valEl = hexEl.querySelector('.h-score-val');
+    if (!valEl) return;
+    // Cache original score from data-score (so repeat rolls don't stack)
+    const origScore = hexEl.getAttribute('data-score');
+    valEl.textContent = String(total);
+
+    hexEl.classList.remove('rolling', 'crit-success', 'crit-fail');
+    // reflow so animation re-triggers
+    void hexEl.offsetWidth;
+    hexEl.classList.add('rolling');
+    if (critSuccess) hexEl.classList.add('crit-success');
+    if (critFail)    hexEl.classList.add('crit-fail');
+
+    const prev = hexResetTimers.get(hexEl);
+    if (prev) clearTimeout(prev);
+    const t = setTimeout(() => {
+      hexEl.classList.remove('rolling', 'crit-success', 'crit-fail');
+      valEl.textContent = origScore;
+      hexResetTimers.delete(hexEl);
+    }, 2000);
+    hexResetTimers.set(hexEl, t);
+  }
+
+  // ---------- Roll log ----------
+  const rollLogEl = document.getElementById('rollLog');
+  const rollStampEl = document.getElementById('rollStamp');
+  const MAX_ROLLS = 7;
+
+  function pushRollEntry(r) {
+    const entry = document.createElement('div');
+    entry.className = 'roll-entry fresh fresh-glow';
+    if (r.critSuccess) entry.classList.add('crit-success');
+    if (r.critFail)    entry.classList.add('crit-fail');
+
+    // d20 breakdown
+    let diceText;
+    if (r.dice.mode === 'adv' || r.dice.mode === 'dis') {
+      diceText = `d20: ${r.dice.rolls.map(v => v === r.dice.pick
+        ? `<span class="pick">${v}</span>`
+        : `<span class="v">${v}</span>`).join(', ')} → <span class="pick">${r.dice.pick}</span>`
+        + ` <span class="mode ${r.dice.mode}">(${r.dice.mode.toUpperCase()})</span>`;
+    } else {
+      diceText = `d20: <span class="pick">${r.dice.pick}</span>`;
+    }
+
+    // breakdown line
+    const parts = [];
+    parts.push(`${r.dice.pick}`);
+    if (r.mod !== 0) parts.push(`${r.mod >= 0 ? '+ ' + r.mod : '- ' + Math.abs(r.mod)} ${r.modLabel}`);
+    if (r.profBonus > 0) parts.push(`+ ${r.profBonus} PROF`);
+    const breakdown = `${parts.join(' ')} <span class="eq">= ${r.total}</span>`;
+
+    const critBadge = r.critSuccess
+      ? '<span class="re-crit">CRIT</span>'
+      : r.critFail
+      ? '<span class="re-crit">FUMBLE</span>'
+      : '';
+
+    entry.innerHTML = `
+      ${critBadge}
+      <span class="re-frame"></span>
+      <div class="re-inner">
+        <span class="re-name">${r.label}</span>
+        <span class="re-total">${r.total}</span>
+        <span class="re-d20">${diceText}</span>
+        <span class="re-break">${breakdown}</span>
+        <span class="re-stamp">${r.stamp}</span>
+      </div>
+    `;
+
+    rollLogEl.appendChild(entry);
+
+    // Drop the fresh-glow + fresh after the entrance animation, then hand the
+    // entry over to the depth-fade (fresh's forwards-fill would otherwise pin
+    // its opacity at 1 and block the gradient).
+    setTimeout(() => {
+      entry.classList.remove('fresh-glow', 'fresh');
+      applyDepthFade();
+    }, 1000);
+
+    // Trim — fade out oldest above MAX_ROLLS
+    const entries = rollLogEl.querySelectorAll('.roll-entry:not(.fading)');
+    if (entries.length > MAX_ROLLS) {
+      const toRemove = entries.length - MAX_ROLLS;
+      for (let i = 0; i < toRemove; i++) {
+        const el = entries[i];
+        el.classList.add('fading');
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 380);
+      }
+    }
+
+    // Re-grade depth so the newest roll reads brightest and older rolls recede.
+    applyDepthFade();
+
+    // Header stamp
+    if (rollStampEl) rollStampEl.textContent = r.stamp;
+  }
+
+  // Fade each entry by its depth from the newest (bottom-most = brightest).
+  function applyDepthFade() {
+    const list = [...rollLogEl.querySelectorAll('.roll-entry:not(.fading)')];
+    const n = list.length;
+    list.forEach((el, i) => {
+      if (el.classList.contains('fresh')) return; // entrance animation owns it
+      const depth = n - 1 - i;                     // 0 = newest (bottom)
+      el.style.opacity = depth === 0
+        ? '1'
+        : Math.max(0.18, 1 - depth * 0.15).toFixed(2);
+    });
+  }
+
+  // ============================================================
+  // Wire up hex + skill clicks
+  // ============================================================
+  document.querySelectorAll('.hex').forEach(hexEl => {
+    hexEl.addEventListener('click', e => {
+      // Avoid firing if a skill card inside was the actual target
+      if (e.target.closest('.skill-card')) return;
+      const ab = hexEl.getAttribute('data-ability');
+      const mod = parseInt(hexEl.getAttribute('data-mod'), 10);
+      performRoll({
+        ability: ab,
+        mod,
+        profBonus: 0,
+        label: `${ABILITY_FULL[ab].toUpperCase()} CHECK`,
+        hexEl,
+      });
+    });
+  });
+
+  // Skill cards (delegate from hex-ring since they are dynamic)
+  document.getElementById('hexRing').addEventListener('click', e => {
+    const card = e.target.closest('.skill-card');
+    if (!card) return;
+    e.stopPropagation();
+    const ab = card.getAttribute('data-ability');
+    const skill = card.getAttribute('data-skill');
+    const prof = card.getAttribute('data-prof') === '1';
+    const data = ABILITIES[ab];
+    const hexEl = card.closest('.ability-cluster').querySelector('.hex');
+    performRoll({
+      ability: ab,
+      skill,
+      mod: data.mod,
+      profBonus: prof ? PROF_BONUS : 0,
+      label: skill.toUpperCase(),
+      hexEl,
+    });
+    // Blur the card so :focus-within releases on the cluster.
+    // Without this the skill panel would stay pinned open after a roll
+    // until the user clicked somewhere else.
+    card.blur();
+  });
+
+  // Same blur treatment for hex (ability check) clicks — keeps the
+  // hover-hold/focus-within behavior consistent: roll → panel can close.
+  document.querySelectorAll('.hex').forEach(h => {
+    h.addEventListener('click', () => h.blur());
+  });
+
+  // Initialize header stamp
+  if (rollStampEl) rollStampEl.textContent = nowStamp();
+</script>
+
+</body>
+</html>
