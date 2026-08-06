@@ -1,17 +1,19 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, type DmCampaignState, type DmCatalogState, type DmFeaturesState } from '../lib/dm'
 import { longRestPatch } from '../lib/rest'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/voice'
 import { usePartyPresence } from '../lib/presence'
+import { useFullscreen } from '../lib/fullscreen'
 import type {
   CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json,
   QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow,
   CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity,
   ItemEffects, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
   Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, CatalogFeatureData,
-  EquippedGear,
+  EquippedGear, CharacterLore, Relation,
 } from '../lib/database.types'
 import { ITEM_SLOTS, PERSON, isRingSlot } from '../lib/equip'
 import { place, routeItem } from '../lib/placement'
@@ -107,6 +109,7 @@ export function OperatorConsole() {
   const featureLib = useDmFeatures()
   const confiscated = useDmConfiscated()
   const onlineIds = usePartyPresence()
+  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 
   const [view, setView] = useState<View>('overview')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -119,6 +122,40 @@ export function OperatorConsole() {
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
   const log = (node: ReactNode, kind?: LogEntry['kind']) =>
     setLogEntries(prev => [{ id: crypto.randomUUID(), node, kind, time: nowStamp() }, ...prev].slice(0, 24))
+
+  // Notify the DM when a party member's client connects or disconnects — matches the
+  // mockup's own "<who> connection offline" log-line precedent. The presence channel
+  // settles in a couple of sync events right after subscribing (an early sync or two
+  // before every already-connected player shows up), so a 2.5s grace period gates
+  // logging — otherwise everyone already online reads as "just joined" the instant
+  // the DM opens the console.
+  // ponytail: fixed grace window, not a real "initial sync complete" signal from
+  // usePartyPresence — fine for a 3-4 player table, revisit if it ever misses a
+  // same-second reconnect or fires early on a slow connection.
+  const presenceReadyRef = useRef(false)
+  const prevOnlineRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const t = setTimeout(() => { presenceReadyRef.current = true }, 2500)
+    return () => clearTimeout(t)
+  }, [])
+  useEffect(() => {
+    const prev = prevOnlineRef.current
+    prevOnlineRef.current = onlineIds
+    if (!presenceReadyRef.current) return
+    for (const id of onlineIds) {
+      if (prev.has(id)) continue
+      const member = party.find(c => c.id === id)
+      if (!member) continue
+      log(<><span className={styles.who}>{firstName(member.name)}</span> connection <span className={styles.obj}>online</span></>, 'cyan')
+    }
+    for (const id of prev) {
+      if (onlineIds.has(id)) continue
+      const member = party.find(c => c.id === id)
+      if (!member) continue
+      log(<><span className={styles.who}>{firstName(member.name)}</span> connection <span className={styles.obj}>offline</span></>, 'danger')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onlineIds])
 
   if (authLoading || dmLoading) return <Boot>Authorizing operator link…</Boot>
   if (!session) return <Navigate to="/login" replace />
@@ -170,6 +207,12 @@ export function OperatorConsole() {
         <div className={styles.opRight}>
           <div className={styles.opStat}><span className={styles.v}>{members.length}</span><span className={styles.l}>Linked PCs</span></div>
           <div className={styles.opStat}><span className={cx(styles.v, styles.cyan)}>Standby</span><span className={styles.l}>Encounter</span></div>
+          <button
+            type="button" className={styles.glyphBtn} onClick={toggleFullscreen}
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} aria-label="Toggle fullscreen"
+          >
+            <i className={`fa-solid ${isFullscreen ? 'fa-compress' : 'fa-expand'}`} />
+          </button>
           <div className={styles.opRootpill}><span className={styles.dot} /> Root Access Granted</div>
         </div>
       </header>
@@ -956,7 +999,7 @@ function BroadcastPanel({ selected, onSend, log }: {
       return
     }
     log(
-      <>Pushed {tone === 'corrupted' ? <span style={{ color: 'var(--amber-hot)' }}>corrupted </span> : null}notice to <span className={styles.who}>{effTarget ? firstName(effTarget.name) : 'All Party'}</span></>,
+      <>Pushed {tone === 'corrupted' ? <span style={{ color: 'var(--amber-hot)' }}>corrupted </span> : null}notice <span className={styles.obj}>"{msg}"</span> to <span className={styles.who}>{effTarget ? firstName(effTarget.name) : 'All Party'}</span></>,
       tone === 'corrupted' ? 'danger' : 'cyan',
     )
     setMessage('')
@@ -1822,14 +1865,36 @@ const MEM_LEVELS = ['INTACT', 'PARTIAL', 'DEGRADED', 'FRAGMENTED', 'CORRUPTED'] 
 /** Preset roster glyphs the DM can assign as a character's menu portrait. */
 const GLYPHS = ['fa-user', 'fa-chess-rook', 'fa-hat-wizard', 'fa-shield-halved', 'fa-mask', 'fa-skull', 'fa-dragon', 'fa-khanda', 'fa-cross', 'fa-feather', 'fa-hand-fist', 'fa-eye']
 
+/** Fixed relation-type vocabulary — "System · Bonded" is the one value that gets the
+ *  amber G.U.I.D.E. styling, both here and on the player Lore screen. */
+const REL_TYPES = ['Ally', 'Mentor', 'Rival', 'Enigma', 'System · Bonded']
+/** Click-to-cycle order for the relation dot. Unset (`indexOf` = -1) lands on 'friendly' first. */
+const ATTITUDE_CYCLE = ['friendly', 'neutral', 'wary', 'hostile'] as const
+const ATTITUDE_LABEL: Record<string, string> = { friendly: 'Friendly', neutral: 'Neutral', wary: 'Wary', hostile: 'Hostile' }
+function attitudeClass(a?: Relation['attitude'] | null): 'fr' | 'ne' | 'wa' | 'ho' | 'un' {
+  return a === 'friendly' ? 'fr' : a === 'neutral' ? 'ne' : a === 'wary' ? 'wa' : a === 'hostile' ? 'ho' : 'un'
+}
+
+/** Flat section divider (label + hairline rule) — the Lore tab's section idiom, replacing
+ *  a boxed .actCard per section so a long form reads as one column, not stacked panels. */
+function LoreSecHead({ icon, label, first }: { icon: string; label: string; first?: boolean }) {
+  return (
+    <div className={cx(styles.loreSecH, first && styles.first)}>
+      <i className={`fa-solid ${icon}`} />
+      <span className={styles.t}>{label}</span>
+    </div>
+  )
+}
+
 /** The DM-only Lore tab. Two layers in ONE save:
  *   - `character_secrets` (DM-only, RLS, migration 0002): digitization + true lore —
  *     a player can NEVER read these.
- *   - `characters` row (player-readable): memory-fidelity descriptor + menu glyph.
- *  Drafts are local with a single explicit "Save Lore" (matches the design) so the
- *  slider can't spam writes; mount with key={characterId} so drafts reset on switch.
- *  The full player-facing lore form (backstory / personality / relations / identity)
- *  is a separate slice that lands with the player Lore screen. */
+ *   - `characters` row (player-readable): everything else — memory-fidelity descriptor,
+ *     menu glyph, portrait, and the full player-facing lore form (backstory / nature /
+ *     relations / identity). All of it folds into ONE `patch.lore` + `patch.identity`
+ *     write so no widget's draft can clobber another's.
+ *  Drafts are local with a single explicit "Save Lore" (matches the design) so typing
+ *  can't spam writes; mount with key={characterId} so drafts reset on switch. */
 function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
   row: CharacterRow
   member: PartyMember
@@ -1839,19 +1904,46 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
 }) {
   const savedDig = secret?.digitization ?? 0
   const savedLore = secret?.true_lore ?? ''
-  const savedMem = (row.lore?.memoryFidelity as string | undefined) ?? 'INTACT'
+  const savedMem = row.lore?.memoryFidelity ?? 'INTACT'
   const savedIcon = row.identity?.icon ?? 'fa-user'
+  const savedPortrait = row.identity?.portrait ?? ''
+  const savedBackstory = row.lore?.backstory ?? ''
+  const savedPersonality = row.lore?.personality ?? {}
+  const savedRelations = row.lore?.relations ?? []
+  const savedIdentity = row.lore?.identity ?? {}
 
   const [dig, setDig] = useState(savedDig)
   const [lore, setLore] = useState(savedLore)
   const [mem, setMem] = useState(savedMem)
   const [icon, setIcon] = useState(savedIcon)
+  const [portrait, setPortrait] = useState(savedPortrait)
+  const [portraitFailed, setPortraitFailed] = useState(false)
+  const [backstory, setBackstory] = useState(savedBackstory)
+  const [trait, setTrait] = useState(savedPersonality.trait ?? '')
+  const [ideal, setIdeal] = useState(savedPersonality.ideal ?? '')
+  const [bond, setBond] = useState(savedPersonality.bond ?? '')
+  const [flaw, setFlaw] = useState(savedPersonality.flaw ?? '')
+  const [relations, setRelations] = useState<Relation[]>(savedRelations)
+  const [alignment, setAlignment] = useState(savedIdentity.alignment ?? '')
+  const [age, setAge] = useState(savedIdentity.age ?? '')
+  const [height, setHeight] = useState(savedIdentity.height ?? '')
+  const [deity, setDeity] = useState(savedIdentity.deity ?? '')
+  const [homeland, setHomeland] = useState(savedIdentity.homeland ?? '')
   const [busy, setBusy] = useState(false)
 
   const secretDirty = dig !== savedDig || lore !== savedLore
-  const charDirty = mem !== savedMem || icon !== savedIcon
+  const personality = { trait, ideal, bond, flaw }
+  const identityLore = { alignment, age, height, deity, homeland }
+  const charDirty = mem !== savedMem || icon !== savedIcon || portrait !== savedPortrait
+    || backstory !== savedBackstory
+    || JSON.stringify(personality) !== JSON.stringify({ trait: savedPersonality.trait ?? '', ideal: savedPersonality.ideal ?? '', bond: savedPersonality.bond ?? '', flaw: savedPersonality.flaw ?? '' })
+    || JSON.stringify(relations) !== JSON.stringify(savedRelations)
+    || JSON.stringify(identityLore) !== JSON.stringify({ alignment: savedIdentity.alignment ?? '', age: savedIdentity.age ?? '', height: savedIdentity.height ?? '', deity: savedIdentity.deity ?? '', homeland: savedIdentity.homeland ?? '' })
   const dirty = secretDirty || charDirty
   const digClass: '' | 'high' | 'crit' = dig >= 80 ? 'crit' : dig >= 50 ? 'high' : ''
+
+  const patchRelation = (i: number, p: Partial<Relation>) =>
+    setRelations(list => list.map((r, j) => (j === i ? { ...r, ...p } : r)))
 
   async function save() {
     setBusy(true)
@@ -1859,8 +1951,17 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
     if (secretDirty) jobs.push(onUpdateSecret({ digitization: dig, true_lore: lore }))
     if (charDirty) {
       const patch: CharacterUpdate = {}
-      if (mem !== savedMem) patch.lore = { ...(row.lore ?? {}), memoryFidelity: mem }
-      if (icon !== savedIcon) patch.identity = { ...(row.identity ?? {}), icon }
+      const nextLore: CharacterLore = {
+        ...(row.lore ?? {}),
+        memoryFidelity: mem,
+        backstory,
+        personality,
+        relations,
+        identity: identityLore,
+      }
+      patch.lore = nextLore
+      const nextIdentity = { ...row.identity, icon, portrait: portrait.trim() || null }
+      patch.identity = nextIdentity
       jobs.push(onUpdateChar(patch))
     }
     await Promise.all(jobs)
@@ -1887,7 +1988,106 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
         </div>
       </div>
 
-      {/* digitization + memory fidelity side by side */}
+      {/* backstory */}
+      <LoreSecHead icon="fa-scroll" label="Backstory" first />
+      <div className={styles.qLabRow}>
+        <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Players see this</span>
+      </div>
+      <textarea
+        className={styles.qPlayerDesc}
+        value={backstory}
+        onChange={e => setBackstory(e.target.value)}
+        placeholder="The prose players read on the Lore screen…"
+      />
+      <p className={styles.acHint}>**bold**  *italics*  [text](url)  ## heading · blank line = new paragraph</p>
+
+      {/* nature — trait/ideal/bond/flaw */}
+      <LoreSecHead icon="fa-circle-dot" label="Personality / Nature" />
+      <div className={styles.catGrid2}>
+        <div><span className={styles.fieldLab}>Personality Trait</span><textarea className={styles.loreNatArea} value={trait} onChange={e => setTrait(e.target.value)} /></div>
+        <div><span className={styles.fieldLab}>Ideal</span><textarea className={styles.loreNatArea} value={ideal} onChange={e => setIdeal(e.target.value)} /></div>
+        <div><span className={styles.fieldLab}>Bond</span><textarea className={styles.loreNatArea} value={bond} onChange={e => setBond(e.target.value)} /></div>
+        <div><span className={styles.fieldLab}>Flaw</span><textarea className={styles.loreNatArea} value={flaw} onChange={e => setFlaw(e.target.value)} /></div>
+      </div>
+
+      {/* relations — colored-strip rows, click the dot to cycle attitude */}
+      <LoreSecHead icon="fa-diagram-project" label="Relations" />
+      {relations.length ? relations.map((r, i) => {
+        const cls = attitudeClass(r.attitude)
+        const sys = r.type === 'System · Bonded'
+        return (
+          <div key={i} className={cx(styles.loreRel, styles[cls], sys && styles.sys)}>
+            <div className={styles.loreRelTop}>
+              <button
+                type="button"
+                className={cx(styles.loreDot, (cls === 'ho' || cls === 'un') && styles.hollow)}
+                onClick={() => patchRelation(i, {
+                  attitude: ATTITUDE_CYCLE[(ATTITUDE_CYCLE.indexOf(r.attitude as typeof ATTITUDE_CYCLE[number]) + 1) % ATTITUDE_CYCLE.length],
+                })}
+                title={`${ATTITUDE_LABEL[r.attitude ?? ''] ?? 'Unknown'} — click to cycle attitude`}
+                aria-label="Cycle attitude"
+              />
+              <input className={cx(styles.sessIn, styles.rn)} value={r.name} onChange={e => patchRelation(i, { name: e.target.value })} placeholder="Name" />
+              <select className={cx(styles.selIn, styles.rt)} value={r.type} onChange={e => patchRelation(i, { type: e.target.value })}>
+                <option value="">Type…</option>
+                {REL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <span className={styles.loreAttLab}>{ATTITUDE_LABEL[r.attitude ?? ''] ?? '—'}</span>
+              <span className={styles.qOx} onClick={() => setRelations(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
+            </div>
+            <input className={cx(styles.sessIn, styles.loreRelDesc)} value={r.desc} onChange={e => patchRelation(i, { desc: e.target.value })} placeholder="Description…" />
+          </div>
+        )
+      }) : <div className={styles.fxNone}>No relations yet — add allies, mentors, rivals, or the system itself.</div>}
+      <div className={styles.loreRelAdd}>
+        <Btn tone="ghost" sm icon="fa-plus" label="Add Relation" onClick={() => setRelations(list => [...list, { name: '', type: '', desc: '' }])} />
+      </div>
+
+      {/* identity vitals — the fields the player Lore dossier shows beyond race/class */}
+      <LoreSecHead icon="fa-id-card" label="Identity" />
+      <div className={styles.catGrid2}>
+        <div><span className={styles.fieldLab}>Alignment</span><input className={styles.sessIn} value={alignment} onChange={e => setAlignment(e.target.value)} placeholder="e.g. Lawful Neutral" /></div>
+        <div><span className={styles.fieldLab}>Age</span><input className={styles.sessIn} value={age} onChange={e => setAge(e.target.value)} /></div>
+        <div><span className={styles.fieldLab}>Height</span><input className={styles.sessIn} value={height} onChange={e => setHeight(e.target.value)} /></div>
+        <div><span className={styles.fieldLab}>Deity</span><input className={styles.sessIn} value={deity} onChange={e => setDeity(e.target.value)} /></div>
+        <div><span className={styles.fieldLab}>Homeland</span><input className={styles.sessIn} value={homeland} onChange={e => setHomeland(e.target.value)} /></div>
+      </div>
+
+      {/* portrait — the image the player Lore screen + Equipment screen both show */}
+      <LoreSecHead icon="fa-image" label="Portrait" />
+      <div className={styles.loreGrid}>
+        <div className={styles.portraitPrev}>
+          {portrait && !portraitFailed ? (
+            <img src={portrait} alt="" onError={() => setPortraitFailed(true)} />
+          ) : (
+            <i className={`fa-solid ${icon}`} />
+          )}
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Public Image URL</span>
+          <input
+            className={styles.sessIn} value={portrait}
+            onChange={e => { setPortrait(e.target.value); setPortraitFailed(false) }}
+            placeholder="https://…/storage/v1/object/public/portraits/…"
+          />
+          <Btn tone="ghost" sm icon="fa-xmark" label="Clear" onClick={() => setPortrait('')} disabled={!portrait} />
+          <p className={styles.acHint}>Paste the public URL of a file already uploaded to the Storage "portraits" bucket. Absent/failed → the menu glyph below is shown instead.</p>
+        </div>
+      </div>
+      <div className={styles.glyphRow}>
+        <span className={styles.glyphLab}>Menu Glyph</span>
+        <div className={styles.glyphBtns}>
+          {GLYPHS.map(g => (
+            <button key={g} className={cx(styles.glyphBtn, g === icon && styles.on)} onClick={() => setIcon(g)} title={g} aria-label={g} aria-pressed={g === icon}>
+              <i className={`fa-solid ${g}`} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* DM-only tools — digitization, memory fidelity, true lore. Never sent to players
+          (memory fidelity is the one exception: it's a player-readable descriptor). */}
+      <LoreSecHead icon="fa-satellite-dish" label="DM Intelligence" />
       <div className={styles.loreGrid}>
         <div className={styles.actCard}>
           <div className={styles.acTitle}><i className="fa-solid fa-radiation lead" /><span className={styles.t}>Digitization</span></div>
@@ -1921,18 +2121,6 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
         </div>
       </div>
 
-      {/* menu glyph picker */}
-      <div className={styles.glyphRow}>
-        <span className={styles.glyphLab}>Menu Glyph</span>
-        <div className={styles.glyphBtns}>
-          {GLYPHS.map(g => (
-            <button key={g} className={cx(styles.glyphBtn, g === icon && styles.on)} onClick={() => setIcon(g)} title={g} aria-label={g} aria-pressed={g === icon}>
-              <i className={`fa-solid ${g}`} />
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* true lore — the dramatic-irony layer (design: q-gm-head + q-gmnotes) */}
       <div className={styles.gmHead}>
         <i className="fa-solid fa-user-secret" />
@@ -1946,13 +2134,16 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
         onChange={e => setLore(e.target.value)}
       />
 
-      <div className={styles.qActions}>
-        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : dirty ? 'Save Lore' : 'Saved'} onClick={() => void save()} disabled={!dirty || busy} />
-      </div>
-
-      <p className={styles.deferNote}>
-        Backstory, personality &amp; relations authoring arrives with the player Lore screen.
-      </p>
+      {/* Portaled to <body> — .console clips overflow for its scrolling panels, and that
+          clip applies to position:fixed descendants too (fixed only escapes the LAYOUT
+          containing-block chain, not an ancestor's paint/overflow clip), so a fixed button
+          left in place here renders with correct geometry but never actually paints. */}
+      {dirty && createPortal(
+        <div className={styles.loreFloatSave}>
+          <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : 'Save Lore'} onClick={() => void save()} disabled={busy} />
+        </div>,
+        document.body,
+      )}
     </>
   )
 }

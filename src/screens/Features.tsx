@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, EquippedGear, EquippedItem, Feature, FeatureCategory } from '../lib/database.types'
@@ -7,6 +7,7 @@ import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { rollHeal } from '../lib/dice'
 import { useRollLog, type RollLine } from '../lib/rolls'
+import { Prose } from '../lib/markdown'
 import styles from './Features.module.css'
 
 interface RouteContext {
@@ -59,34 +60,6 @@ function gearFeatures(character: CharacterRow): Feature[] {
  *  summary/description fields so pre-migration data still renders. */
 function cardText(f: Feature): string {
   return f.light_description ?? f.summary ?? f.description ?? ''
-}
-
-/** Lightweight inline markdown → React nodes: **bold** and *italics* (no raw HTML,
- *  so it's injection-safe). Unmatched markers render literally. */
-function renderInline(text: string): ReactNode[] {
-  const out: ReactNode[] = []
-  const re = /\*\*([^*]+)\*\*|\*([^*]+)\*/g
-  let last = 0
-  let m: RegExpExecArray | null
-  let i = 0
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) out.push(text.slice(last, m.index))
-    if (m[1] !== undefined) out.push(<strong key={i++}>{m[1]}</strong>)
-    else out.push(<em key={i++}>{m[2]}</em>)
-    last = re.lastIndex
-  }
-  if (last < text.length) out.push(text.slice(last))
-  return out
-}
-
-/** Render prose with blank-line paragraph breaks + inline markdown. */
-function Prose({ text, className }: { text: string; className?: string }) {
-  const paragraphs = text.split(/\n\s*\n/).filter(Boolean)
-  return (
-    <div className={className}>
-      {paragraphs.map((p, i) => <p key={i}>{renderInline(p)}</p>)}
-    </div>
-  )
 }
 
 /** Features — a dossier of the character's class features, feats, racial traits

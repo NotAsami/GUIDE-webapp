@@ -1,6 +1,7 @@
 import { useAuth } from '../lib/auth'
 import type { CharacterRow, CharacterSection } from '../lib/database.types'
 import { burden } from '../lib/burden'
+import { useFullscreen } from '../lib/fullscreen'
 import { RestButton } from './RestButton'
 import styles from './Layout.module.css'
 
@@ -14,6 +15,7 @@ interface Props {
  *  the Rest button beside it resets daily resources. */
 export function Topbar({ character, updateSections }: Props) {
   const { signOut } = useAuth()
+  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 
   const level = character.identity?.level ?? 1
   const reputation = character.identity?.reputation ?? 0
@@ -81,6 +83,12 @@ export function Topbar({ character, updateSections }: Props) {
           <span className="lab">Gold</span>
         </div>
         <RestButton character={character} updateSections={updateSections} />
+        <button
+          type="button" className={styles.signOut} onClick={toggleFullscreen}
+          title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        >
+          <i className={`fa-solid ${isFullscreen ? 'fa-compress' : 'fa-expand'}`} aria-hidden="true" />
+        </button>
         <button type="button" className={styles.signOut} onClick={() => signOut()}>Sign out</button>
       </div>
     </header>
