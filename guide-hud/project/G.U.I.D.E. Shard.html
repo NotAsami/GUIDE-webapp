@@ -1,0 +1,2643 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — SHARD INTERFACE // ROS CHRISSTONE</title>
+<!--
+  PHASE 5 — Shard Interface (a sub-screen of Equipment).
+
+  Notes / deviations from spec:
+
+  1.  Embedded slots: each is a horizontal floppy-port rectangle drawn
+      with TWO inset shadows — a hard dark top-inner shadow (the cut)
+      plus a thin beige bottom-inner highlight (the bevel edge). Combined
+      with a slight outer cyan rim-glow, this reads as a port cut INTO
+      the bone rather than a chip floating ON the skin. A faint vertical
+      bone-shadow runs behind each slot row (a subtle radial darken on
+      the head image's pixel data is impossible from CSS, so I used a
+      small dark drop-shadow under each slot to simulate the recess).
+
+  2.  The head image is rendered at a FIXED 420 px width inside a
+      sized stage element. All slot positions are percentage values
+      relative to that stage, so resizing the viewport never shifts the
+      slot/anatomy alignment. The slot coordinates here are starting
+      estimates — see the SLOT POSITION CONSTANTS in the script for the
+      single place to nudge them during iteration.
+
+  3.  Connector lines are drawn in a single <svg> overlay that spans the
+      whole main region. Paths are recomputed from getBoundingClientRect
+      on load / resize / scroll, so each line truly anchors at the slot
+      edge and the card edge. The data-pulse uses SMIL animateMotion
+      following each path with a 6 s loop, staggered per line.
+
+  4.  Subtle horror: the G.U.I.D.E. card’s INTEGRITY number runs a long
+      14 s keyframe where 99% of the timeline is normal and ~80 ms is a
+      single-frame opacity drop to 0.18. You will not consciously notice
+      it. The amber tint on slot 1, the lock glyph, and the greyed-out
+      CALIBRATE button do the rest of the work — each individually
+      reads as “system / locked,” but together they’re slightly off.
+
+  5.  Hover linkage: hovering a card flashes its corresponding slot and
+      brightens its connector line; hovering a slot does the inverse.
+      Implemented by tagging both with the same data-link id and
+      toggling a .linked class on all three (slot + card + svg path).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  /* ============================================================
+     PHASE-1 BASE  (kept verbatim so the two screens share DNA)
+     ============================================================ */
+  :root {
+    --bg:        #1d1d1d;
+    --bg-2:      #161616;
+    --beige:     #d4bf7d;
+    --beige-dim: #8a7a4a;
+    --cyan:      #00a6d6;
+    --cyan-dim:  #0d6e8c;
+    --cyan-hot:  #4dd6ff;
+    --gold-rare: #e2b021;
+    --text:      #dedede;
+    --muted:     #aaaaaa;
+    --danger:    #b93a3a;
+
+    --bar-top-h:    62px;
+    --bar-bottom-h: 50px;
+    --nav-h:        72px;
+    --nav-top-gap:  26px;
+
+    --font-display: "Cinzel", serif;
+    --font-prose:   "EB Garamond", serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-prose);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .stage {
+    position: fixed; inset: 0;
+    background:
+      url("https://www.transparenttextures.com/patterns/dark-leather.png"),
+      radial-gradient(120% 90% at 50% 50%, #232220 0%, #1a1a1a 60%, #0e0e0e 100%);
+    background-blend-mode: overlay, normal;
+  }
+  .scanlines {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 90;
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+      transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 91;
+    background: radial-gradient(120% 110% at 50% 50%,
+      transparent 55%, rgba(0,0,0,0.55) 95%, rgba(0,0,0,0.85) 100%);
+  }
+  .sweep {
+    pointer-events: none;
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 2px; z-index: 95;
+    background: linear-gradient(to bottom,
+      transparent, rgba(0,166,214,0.55) 50%, transparent);
+    box-shadow: 0 0 24px rgba(0,166,214,0.45);
+    opacity: 0;
+  }
+  .sweep.run { animation: sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards; }
+  @keyframes sweep-run {
+    0%   { opacity: 0; transform: translateY(-20px); }
+    8%   { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(100vh); }
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- Top Bar (identical to Phase 1) ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--bar-top-h); z-index: 50;
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; padding: 0 36px;
+    background: linear-gradient(to bottom,
+      rgba(15,15,15,0.95) 0%, rgba(22,22,22,0.92) 100%);
+    border-bottom: 1px solid var(--beige);
+    box-shadow: 0 1px 0 rgba(212,191,125,0.15),
+                0 8px 24px -8px rgba(0,0,0,0.6);
+  }
+  .topbar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .topbar::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 1px; background: var(--beige);
+    box-shadow: 0 0 8px rgba(212,191,125,0.4);
+  }
+  .top-left, .top-right {
+    display: flex; align-items: center; gap: 28px;
+    position: relative; z-index: 1;
+  }
+  .top-right { justify-content: flex-end; }
+  .stat-block { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+  .stat-row { display: flex; align-items: baseline; gap: 8px; }
+  .stat-num {
+    font-family: var(--font-display); font-weight: 600;
+    color: var(--beige); font-size: 22px; line-height: 1; letter-spacing: 0.04em;
+  }
+  .stat-label {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--cyan); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .bar {
+    height: 3px; width: 110px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5); position: relative; overflow: hidden;
+  }
+  .bar > i {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    box-shadow: 0 0 6px rgba(0,166,214,0.6); display: block;
+  }
+  .top-center { text-align: center; position: relative; z-index: 1; padding: 0 24px; }
+  .char-name {
+    font-family: var(--font-display); font-weight: 600; font-size: 18px;
+    letter-spacing: 0.4em; color: var(--text); text-transform: uppercase; line-height: 1;
+  }
+  .char-name .cursor {
+    display: inline-block; color: var(--cyan); transform: translateY(-1px);
+    margin-left: 4px; animation: blink 1s steps(2, end) infinite;
+  }
+  .char-sub {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+    color: var(--muted); margin-top: 4px; text-transform: uppercase;
+  }
+  .char-sub .sep { color: var(--beige-dim); margin: 0 8px; }
+  .gold-block, .weight-block { display: flex; align-items: baseline; gap: 10px; }
+  .gold-block .ic, .weight-block .ic {
+    font-family: var(--font-display); color: var(--beige); font-size: 20px; line-height: 1;
+  }
+  .gold-block .val, .weight-block .val {
+    font-family: var(--font-display); color: var(--beige); font-size: 18px;
+    letter-spacing: 0.06em; line-height: 1;
+  }
+  .gold-block .lab, .weight-block .lab {
+    font-family: var(--font-mono); color: var(--cyan); font-size: 9px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .ticker {
+    position: fixed; left: 0; right: 0; height: 12px; z-index: 51;
+    display: flex; align-items: center; padding: 0 24px;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+    color: rgba(0,166,214,0.55); pointer-events: none;
+    overflow: hidden; white-space: nowrap;
+  }
+  .ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
+  .ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212,191,125,0.45); }
+  .ticker .gap { width: 32px; display: inline-block; }
+  .ticker .dim { color: rgba(170,170,170,0.4); }
+
+  /* ---------- Bottom Bar (identical to Phase 1) ---------- */
+  .bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--bar-bottom-h); z-index: 50;
+    display: flex; align-items: center; padding: 0 32px;
+    background: linear-gradient(to top,
+      rgba(15,15,15,0.96) 0%, rgba(22,22,22,0.92) 100%);
+    border-top: 1px solid var(--beige);
+    box-shadow: 0 -1px 0 rgba(212,191,125,0.15), 0 -8px 24px -8px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .bottombar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .bb-line {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; width: 100%; color: var(--muted);
+    position: relative; z-index: 1;
+  }
+  .bb-line .lab  { color: var(--beige); }
+  .bb-line .val  { color: var(--cyan); }
+  .bb-line .dim  { color: var(--muted); }
+  .bb-line .sep  { color: var(--beige-dim); margin: 0 4px; }
+  .bb-line .dot  {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px rgba(0,166,214,0.7);
+    display: inline-block;
+  }
+  .bb-line .save-cursor {
+    color: var(--cyan); animation: blink 1s steps(2, end) infinite; margin-left: 2px;
+  }
+  .bb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  /* ============================================================
+     NAVBAR — repositioned at top, smaller, horizontal
+     ============================================================ */
+  .navbar {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap));
+    left: 50%; transform: translateX(-50%);
+    display: flex; gap: 14px;
+    z-index: 45;
+  }
+  .nav-slot { position: relative; width: 156px; display: flex; justify-content: center; }
+  .nav-slot.equipment { padding: 60px 0; margin: -60px 0; }
+
+  .nav-btn {
+    --w: 156px; --h: var(--nav-h); --cut: 11px;
+    width: var(--w); height: var(--h);
+    background: transparent; border: 0; padding: 0;
+    color: var(--text); font-family: var(--font-mono);
+    cursor: pointer; position: relative;
+    transition: transform 180ms ease;
+  }
+  .nav-btn .nb-frame {
+    position: absolute; inset: 0; background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 180ms ease;
+  }
+  .nav-btn .nb-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(212,191,125,0.04), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #141414);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 6px;
+    transition: box-shadow 180ms ease, background 180ms ease;
+  }
+  .nav-btn .nb-icon {
+    color: var(--beige); font-size: 20px; line-height: 1;
+    transition: color 180ms ease, text-shadow 180ms ease;
+  }
+  .nav-btn .nb-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.26em; color: var(--text); text-transform: uppercase;
+  }
+  .nav-btn .nb-marker {
+    position: absolute; top: 6px; left: 12px;
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.2em; color: var(--cyan); opacity: 0.7;
+  }
+  .nav-btn:hover { transform: translateY(-2px); }
+  .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.18),
+                0 0 18px rgba(0,166,214,0.35);
+  }
+  .nav-btn:hover .nb-icon {
+    color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.7);
+  }
+
+  /* Active state — Equipment */
+  .nav-btn.is-active .nb-frame { background: var(--cyan); }
+  .nav-btn.is-active .nb-inner {
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.18), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 28px rgba(0,166,214,0.30),
+                0 0 22px rgba(0,166,214,0.55);
+  }
+  .nav-btn.is-active .nb-icon { color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.9); }
+  .nav-btn.is-active .nb-label { color: var(--cyan-hot); }
+  .nav-btn.is-active .nb-marker { color: var(--beige); opacity: 1; }
+  .nav-btn.is-active::after {
+    content: ""; position: absolute;
+    top: -6px; left: 14%; right: 14%; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 20px rgba(0,166,214,0.6);
+    z-index: 2;
+  }
+
+  /* Sub-buttons (Inventory above, Stat Panel below) */
+  .nav-sub {
+    position: absolute; left: 50%;
+    transform: translate(-50%, 0) scale(0.95);
+    opacity: 0; pointer-events: none;
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
+    z-index: 1;
+  }
+  .nav-sub.above { bottom: calc(50% + 44px); }
+  .nav-sub.below { top:    calc(50% + 44px); }
+  .nav-sub .nav-btn {
+    --w: 122px; --h: 56px; --cut: 9px;
+  }
+  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
+  .nav-sub .nav-btn .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
+                linear-gradient(180deg, #141a1d, #0e1316);
+  }
+  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
+  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
+  .nav-sub .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
+  .nav-slot.equipment:hover .nav-sub,
+  .nav-slot.equipment:focus-within .nav-sub {
+    opacity: 1; pointer-events: auto;
+  }
+  .nav-slot.equipment:hover .nav-sub.above { transform: translate(-50%, -8px) scale(1); }
+  .nav-slot.equipment:hover .nav-sub.below { transform: translate(-50%, 8px) scale(1); }
+
+  /* breadcrumb under navbar */
+  .nav-meta {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 8px);
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.32em; color: var(--muted);
+    text-transform: uppercase; z-index: 44;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .nav-meta .acc  { color: var(--cyan); }
+  .nav-meta .dim  { color: var(--beige-dim); }
+
+  /* ============================================================
+     EQUIPMENT MAIN AREA
+     ============================================================ */
+  main.eq {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 50px);
+    bottom: calc(var(--bar-bottom-h) + 22px);
+    left: 0; right: 0;
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(440px, 1.55fr) minmax(280px, 1fr);
+    gap: 28px;
+    padding: 0 36px;
+    z-index: 10;
+  }
+
+  /* corner brackets, scoped to main */
+  main.eq::before, main.eq::after {
+    content: ""; position: absolute;
+    border-color: var(--beige); pointer-events: none; opacity: 0.55;
+  }
+
+  /* --- Column-level chrome --- */
+  .col {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .col-header {
+    display: flex; align-items: baseline; gap: 14px;
+    margin-bottom: 12px;
+    padding: 0 4px 8px;
+    border-bottom: 1px solid rgba(212,191,125,0.35);
+  }
+  .col-header .ch-num {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+  }
+  .col-header .ch-title {
+    font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
+  }
+  .col-header .ch-meta {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+  }
+
+  /* ============================================================
+     LEFT COLUMN — Weapons + Stats
+     ============================================================ */
+
+  .weapon-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .weapon-card {
+    --cut: 14px;
+    position: relative;
+    cursor: pointer;
+    transition: transform 200ms cubic-bezier(.2,.7,.2,1);
+  }
+  .weapon-card:hover { transform: translateX(2px); }
+
+  .weapon-card .wc-frame {
+    position: relative;
+    background: var(--beige);
+    clip-path: polygon(0 0,
+      calc(100% - var(--cut)) 0, 100% var(--cut),
+      100% 100%,
+      var(--cut) 100%, 0 calc(100% - var(--cut)));
+    padding: 1.5px;
+    transition: background 180ms ease;
+  }
+  .weapon-card .wc-inner {
+    background:
+      radial-gradient(160% 110% at 0% 50%, rgba(0,166,214,0.08), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #141414);
+    clip-path: polygon(0 0,
+      calc(100% - var(--cut) + 1px) 0, calc(100% - 1px) calc(var(--cut) - 1px),
+      calc(100% - 1px) calc(100% - 1px),
+      calc(var(--cut) - 1px) calc(100% - 1px), 0 calc(100% - var(--cut) + 1px));
+    padding: 14px 16px 12px 22px;
+    position: relative;
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    grid-template-rows: auto auto;
+    column-gap: 14px;
+    row-gap: 4px;
+    align-items: center;
+    transition: box-shadow 200ms ease;
+  }
+  .weapon-card .wc-inner::before {
+    /* rarity strip — left edge accent */
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0; width: 4px;
+    background: var(--strip, var(--beige));
+    box-shadow: 0 0 10px rgba(0,166,214,0.0);
+  }
+  .weapon-card[data-rarity="uncommon"] .wc-inner::before {
+    background: var(--cyan);
+    box-shadow: 0 0 12px rgba(0,166,214,0.45);
+  }
+  .weapon-card[data-rarity="common"] .wc-inner::before { background: var(--beige); opacity: 0.5; }
+  .weapon-card[data-rarity="rare"] .wc-inner::before {
+    background: var(--cyan-hot);
+    box-shadow: 0 0 14px rgba(77,214,255,0.6);
+  }
+
+  .weapon-card:hover .wc-inner {
+    box-shadow: inset 0 0 26px rgba(0,166,214,0.15),
+                0 0 22px rgba(0,166,214,0.25);
+  }
+
+  .weapon-card .wc-icon {
+    grid-row: 1 / span 2;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--beige);
+    font-size: 22px;
+    border: 1px solid rgba(212,191,125,0.4);
+    background: rgba(0,0,0,0.4);
+  }
+  .weapon-card .wc-name {
+    font-family: var(--font-display);
+    color: var(--cyan-hot);
+    font-size: 16px;
+    letter-spacing: 0.06em;
+    line-height: 1.1;
+  }
+  .weapon-card[data-rarity="common"] .wc-name { color: var(--text); }
+  .weapon-card .wc-dmg {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    text-transform: uppercase;
+    grid-column: 2;
+  }
+  .weapon-card .wc-dmg .v { color: var(--text); }
+  .weapon-card .wc-slot {
+    grid-row: 1 / span 2;
+    grid-column: 3;
+    text-align: right;
+    display: flex; flex-direction: column;
+    gap: 4px; align-items: flex-end;
+  }
+  .weapon-card .wc-slot .label {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.26em;
+    color: var(--beige);
+    text-transform: uppercase;
+  }
+  .weapon-card .wc-slot .rarity {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.22em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+  .weapon-card[data-rarity="common"] .wc-slot .rarity { color: var(--beige-dim); }
+
+  /* --- Stats panel --- */
+  .stats-panel {
+    margin-top: 22px;
+    display: flex; flex-direction: column;
+  }
+  .stat-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 22px;
+    padding: 14px 4px 8px;
+  }
+  .stat-line {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px dashed rgba(212,191,125,0.18);
+    padding: 6px 4px;
+  }
+  .stat-line .sl-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: var(--beige);
+    text-transform: uppercase;
+  }
+  .stat-line .sl-value {
+    font-family: var(--font-display);
+    font-size: 18px;
+    color: var(--cyan-hot);
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+  .stat-line .sl-value .unit {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--cyan);
+    margin-left: 4px;
+  }
+  .stat-line.hp .sl-value { color: var(--cyan-hot); }
+  .stat-line.full-row { grid-column: 1 / -1; }
+
+  .panel-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+  }
+  .pa-btn {
+    flex: 1;
+    --cut: 9px;
+    background: transparent;
+    border: 0; padding: 0;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    position: relative;
+    height: 44px;
+  }
+  .pa-btn .pa-frame {
+    position: absolute; inset: 0;
+    background: var(--cyan);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .pa-btn .pa-inner {
+    position: absolute; inset: 1.5px;
+    background: linear-gradient(180deg, #141a1d, #0e1316);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px;
+    color: var(--cyan-hot);
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    transition: box-shadow 180ms ease, color 180ms ease;
+  }
+  .pa-btn:hover .pa-inner {
+    color: #fff;
+    box-shadow: inset 0 0 22px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .pa-btn .pa-inner i { font-size: 11px; opacity: 0.85; }
+
+  /* ============================================================
+     CENTER COLUMN — Portrait
+     ============================================================ */
+  .portrait-col {
+    display: flex; flex-direction: column;
+    align-items: stretch;
+    min-width: 0;
+  }
+  .portrait-wrap {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    position: relative;
+    min-height: 0;
+  }
+  .portrait {
+    --cut: 28px;
+    width: 100%;
+    max-width: 540px;
+    margin: 0 auto;
+    position: relative;
+    flex: 1;
+    display: flex;
+    transition: filter 220ms ease;
+  }
+  .portrait::before {
+    /* outer double-line frame: beige */
+    content: "";
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .portrait::after {
+    /* secondary frame line (inner) */
+    content: "";
+    position: absolute; inset: 7px;
+    background: var(--bg);
+    clip-path: polygon(calc(var(--cut) - 6px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 6px), calc(100% - var(--cut) + 6px) 100%,
+      0 100%, 0 calc(var(--cut) - 6px));
+  }
+  .portrait .p-frame {
+    /* second beige line */
+    position: absolute; inset: 5px;
+    background: var(--beige);
+    opacity: 0.5;
+    clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
+      0 100%, 0 calc(var(--cut) - 4px));
+  }
+  .portrait .p-inner {
+    position: relative;
+    z-index: 2;
+    margin: 12px;
+    flex: 1;
+    background:
+      radial-gradient(120% 90% at 50% 50%, rgba(0,166,214,0.10), transparent 65%),
+      linear-gradient(180deg, #161616, #0d0d0d);
+    clip-path: polygon(calc(var(--cut) - 10px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 10px), calc(100% - var(--cut) + 10px) 100%,
+      0 100%, 0 calc(var(--cut) - 10px));
+    box-shadow:
+      inset 0 0 40px rgba(0,166,214,0.10),
+      inset 0 0 1px rgba(212,191,125,0.2);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 36px 28px;
+    overflow: hidden;
+  }
+  .portrait .p-inner::before {
+    /* scanline overlay inside portrait */
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,166,214,0.06) 0px, rgba(0,166,214,0.06) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: screen;
+    opacity: 0.7;
+  }
+  .portrait .p-corner {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: var(--cyan);
+    opacity: 0.85;
+    z-index: 3;
+  }
+  .portrait .p-corner.tl { top: 14px; left: 14px;
+    border-top: 1px solid; border-left: 1px solid; }
+  .portrait .p-corner.tr { top: 14px; right: 14px;
+    border-top: 1px solid; border-right: 1px solid; }
+  .portrait .p-corner.bl { bottom: 14px; left: 14px;
+    border-bottom: 1px solid; border-left: 1px solid; }
+  .portrait .p-corner.br { bottom: 14px; right: 14px;
+    border-bottom: 1px solid; border-right: 1px solid; }
+
+  .portrait .pf-feed {
+    font-family: var(--font-mono);
+    color: var(--cyan);
+    font-size: 11px;
+    letter-spacing: 0.32em;
+    text-align: center;
+    line-height: 1.9;
+    text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(0,166,214,0.35);
+    position: relative;
+    z-index: 2;
+  }
+  .portrait .pf-feed .dim { color: var(--muted); }
+  .portrait .pf-feed .strong {
+    color: var(--cyan-hot);
+    font-size: 13px;
+    letter-spacing: 0.36em;
+    display: block;
+    margin: 14px 0 8px;
+  }
+  .portrait .pf-feed .meta-line { display: block; }
+  .portrait .pf-feed .meta-line .k { color: var(--beige); }
+
+  .portrait .loader {
+    margin-top: 22px;
+    display: flex;
+    flex-direction: column; align-items: center; gap: 6px;
+    width: 70%;
+    position: relative; z-index: 2;
+  }
+  .portrait .loader .bar-wrap {
+    width: 100%; height: 8px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5);
+    position: relative; overflow: hidden;
+  }
+  .portrait .loader .bar-fill {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 0%;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan-hot));
+    box-shadow: 0 0 10px rgba(0,166,214,0.6);
+    animation: loadbar 6s cubic-bezier(.4,.0,.6,1) infinite;
+  }
+  @keyframes loadbar {
+    0%   { width: 0%; }
+    85%  { width: 100%; }
+    92%  { width: 100%; }
+    100% { width: 0%; }
+  }
+  .portrait .loader .pct-txt {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--cyan-hot);
+    letter-spacing: 0.32em;
+  }
+
+  .portrait:hover { filter: brightness(1.08); }
+  .portrait:hover .p-inner {
+    animation: portraitPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes portraitPulse {
+    0%, 100% { box-shadow: inset 0 0 40px rgba(0,166,214,0.10),
+                           inset 0 0 1px rgba(212,191,125,0.2); }
+    50%      { box-shadow: inset 0 0 60px rgba(0,166,214,0.28),
+                           inset 0 0 1px rgba(212,191,125,0.3),
+                           0 0 24px rgba(0,166,214,0.3); }
+  }
+
+  .char-info {
+    margin-top: 18px;
+    text-align: center;
+  }
+  .char-info .ci-name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 32px;
+    letter-spacing: 0.16em;
+    color: var(--beige);
+    text-transform: uppercase;
+    line-height: 1;
+    text-shadow: 0 0 14px rgba(212,191,125,0.2);
+  }
+  .char-info .ci-tagline {
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.36em;
+    color: var(--cyan);
+    text-transform: uppercase;
+  }
+  .char-info .ci-tagline .sep { color: var(--beige-dim); margin: 0 6px; }
+  .char-info .ci-arch {
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.32em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .char-info .ci-arch .sep { color: var(--beige-dim); margin: 0 6px; }
+
+  /* ============================================================
+     RIGHT COLUMN — Gear Grid 3x3
+     ============================================================ */
+  .gear-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-auto-rows: 1fr;
+    gap: 10px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .slot {
+    --cut: 11px;
+    position: relative;
+    cursor: pointer;
+    transition: transform 180ms ease;
+  }
+  .slot:hover { transform: translateY(-2px); }
+  .slot .s-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 200ms ease;
+  }
+  .slot .s-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.05), transparent 60%),
+      linear-gradient(180deg, #1a1a1a, #111);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between;
+    padding: 8px 10px;
+    transition: box-shadow 200ms ease;
+  }
+  .slot .s-label {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.24em;
+    color: var(--beige);
+    text-transform: uppercase;
+    align-self: stretch;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .slot .s-label .sync {
+    color: var(--cyan); opacity: 0.85; letter-spacing: 0.18em; font-size: 8px;
+  }
+  .slot .s-icon {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--beige);
+    font-size: 26px;
+    filter: drop-shadow(0 0 6px rgba(212,191,125,0.2));
+    transition: color 200ms ease, filter 200ms ease;
+  }
+  .slot .s-name {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    color: var(--cyan-hot);
+    text-transform: uppercase;
+    text-align: center;
+    line-height: 1.25;
+    align-self: stretch;
+    word-break: break-word;
+  }
+  .slot[data-rarity="empty"] .s-name { color: var(--muted); }
+  .slot[data-rarity="common"] .s-name { color: var(--text); }
+  .slot[data-rarity="empty"] .s-icon { color: var(--beige-dim); opacity: 0.6; }
+  .slot[data-rarity="rare"]  .s-name { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(0,166,214,0.3); }
+
+  .slot .rarity-dot {
+    position: absolute;
+    top: 7px; right: 8px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--beige);
+    z-index: 3;
+  }
+  .slot[data-rarity="uncommon"] .rarity-dot { background: var(--cyan); box-shadow: 0 0 6px rgba(0,166,214,0.6); }
+  .slot[data-rarity="rare"]     .rarity-dot { background: var(--cyan-hot); box-shadow: 0 0 8px rgba(77,214,255,0.7); }
+  .slot[data-rarity="empty"]    .rarity-dot { background: transparent; border: 1px dashed var(--beige-dim); }
+
+  .slot:hover .s-inner {
+    box-shadow: inset 0 0 22px rgba(0,166,214,0.18),
+                0 0 18px rgba(0,166,214,0.32);
+  }
+  .slot:hover .s-icon { color: #fff; filter: drop-shadow(0 0 8px rgba(0,166,214,0.55)); }
+
+  .slot.special .s-frame { background: var(--cyan); }
+  .slot.special .s-inner {
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.16), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+  }
+  .slot.special .s-icon { color: var(--cyan-hot); }
+
+  /* Wide feature slot — spans full row, horizontal layout */
+  .slot.wide { grid-column: 1 / -1; }
+  .slot.wide .s-inner {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 16px;
+    gap: 14px;
+  }
+  .slot.wide .s-label {
+    align-self: center;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    display: flex;
+    gap: 2px;
+  }
+  .slot.wide .s-icon { flex: 0 0 auto; font-size: 24px; }
+  .slot.wide .s-name { flex: 1; text-align: left; }
+
+  /* Quick Access split sub-slots */
+  .slot.quick .s-inner { padding: 8px 8px 10px; }
+  .slot.quick .quick-subs {
+    flex: 1; width: 100%;
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .slot.quick .qsub {
+    position: relative;
+    border: 1px solid rgba(212,191,125,0.4);
+    background: rgba(0,0,0,0.35);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 2px;
+    gap: 2px;
+  }
+  .slot.quick .qsub i {
+    font-size: 16px; color: var(--cyan-hot);
+    filter: drop-shadow(0 0 4px rgba(0,166,214,0.4));
+  }
+  .slot.quick .qsub .qct {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    color: var(--beige);
+    letter-spacing: 0.16em;
+  }
+  .slot.quick .qsub.empty i { color: var(--beige-dim); opacity: 0.5; }
+  .slot.quick .qsub.empty .qct { color: var(--muted); opacity: 0.7; }
+
+  /* ============================================================
+     TOOLTIPS (shared)
+     ============================================================ */
+  .tt {
+    position: absolute;
+    min-width: 260px; max-width: 320px;
+    padding: 14px 16px;
+    background: rgba(8,8,8,0.97);
+    border: 1px solid var(--beige);
+    box-shadow:
+      0 0 0 1px rgba(212,191,125,0.15),
+      0 14px 28px rgba(0,0,0,0.6),
+      0 0 22px rgba(0,166,214,0.22);
+    font-family: var(--font-mono);
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1.6;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 160ms ease, transform 160ms ease;
+    z-index: 200;
+    clip-path: polygon(10px 0, 100% 0,
+      100% calc(100% - 10px), calc(100% - 10px) 100%,
+      0 100%, 0 10px);
+  }
+  .tt.show { opacity: 1; transform: translateY(0); }
+  .tt .tt-name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: var(--cyan-hot);
+    font-size: 15px;
+    letter-spacing: 0.1em;
+    line-height: 1.1;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .tt[data-rarity="common"] .tt-name { color: var(--text); }
+  .tt[data-rarity="rare"] .tt-name { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(77,214,255,0.4); }
+  .tt .tt-sub {
+    color: var(--beige);
+    font-size: 9.5px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(212,191,125,0.25);
+  }
+  .tt .tt-row {
+    display: flex; gap: 8px;
+    margin: 4px 0;
+    align-items: baseline;
+  }
+  .tt .tt-row .k {
+    color: var(--beige);
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    min-width: 84px;
+  }
+  .tt .tt-row .v { color: var(--text); }
+  .tt .tt-flavor {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(212,191,125,0.25);
+    font-family: var(--font-prose);
+    font-style: italic;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--muted);
+    letter-spacing: 0.01em;
+    text-transform: none;
+  }
+  .tt .tt-attune {
+    margin-top: 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    color: var(--cyan);
+    text-transform: uppercase;
+  }
+  .tt .tt-attune.no { color: var(--muted); }
+
+  /* edge labels */
+  .side-label {
+    position: fixed;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.3em; color: var(--muted);
+    text-transform: uppercase; pointer-events: none; z-index: 12;
+  }
+  .side-label.left  { left: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: rotate(180deg) translateY(50%); }
+  .side-label.right { right: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: translateY(-50%); }
+  .side-label .acc  { color: var(--cyan); }
+
+  /* ============================================================
+     PHASE 5 — SHARD INTERFACE LAYOUT
+     ============================================================ */
+  main.sd {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 50px);
+    bottom: calc(var(--bar-bottom-h) + 22px);
+    left: 0; right: 0;
+    display: grid;
+    grid-template-columns: minmax(480px, 1.05fr) minmax(440px, 0.95fr);
+    gap: 70px;
+    padding: 0 36px;
+    z-index: 10;
+  }
+
+  .sd-left {
+    display: flex; flex-direction: column;
+    gap: 18px; min-width: 0;
+    min-height: 0;
+  }
+  .sd-right {
+    display: flex; flex-direction: column;
+    min-width: 0; min-height: 0;
+  }
+
+  /* ---------- Head panel: angular border + dark interior ---------- */
+  .head-panel {
+    --cut: 22px;
+    position: relative;
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  .head-panel::before {
+    content: ""; position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .head-panel::after {
+    content: ""; position: absolute; inset: 7px;
+    background: var(--bg);
+    clip-path: polygon(calc(var(--cut) - 6px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 6px), calc(100% - var(--cut) + 6px) 100%,
+      0 100%, 0 calc(var(--cut) - 6px));
+  }
+  .head-panel .hp-frame2 {
+    position: absolute; inset: 5px;
+    background: var(--beige); opacity: 0.5;
+    clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
+      0 100%, 0 calc(var(--cut) - 4px));
+  }
+  .head-panel .hp-inner {
+    position: relative; z-index: 2;
+    margin: 12px; flex: 1;
+    background:
+      radial-gradient(60% 70% at 60% 55%, rgba(0,166,214,0.12), transparent 70%),
+      radial-gradient(120% 90% at 50% 50%, rgba(0,166,214,0.04), transparent 65%),
+      linear-gradient(180deg, #161616, #0c0c0c);
+    clip-path: polygon(calc(var(--cut) - 10px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 10px), calc(100% - var(--cut) + 10px) 100%,
+      0 100%, 0 calc(var(--cut) - 10px));
+    box-shadow:
+      inset 0 0 60px rgba(0,166,214,0.12),
+      inset 0 0 1px rgba(212,191,125,0.2);
+    display: flex; align-items: flex-end; justify-content: center;
+    overflow: hidden;
+    padding: 22px 22px 0 22px;
+    min-height: 0;
+  }
+  .head-panel .hp-inner::before {
+    content: ""; position: absolute; inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(0,166,214,0.05) 0px, rgba(0,166,214,0.05) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: screen;
+    opacity: 0.55;
+    z-index: 1;
+  }
+  .head-panel .hp-corner {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: var(--cyan);
+    opacity: 0.85;
+    z-index: 4;
+  }
+  .head-panel .hp-corner.tl { top: 14px; left: 14px; border-top: 1px solid; border-left: 1px solid; }
+  .head-panel .hp-corner.tr { top: 14px; right: 14px; border-top: 1px solid; border-right: 1px solid; }
+  .head-panel .hp-corner.bl { bottom: 14px; left: 14px; border-bottom: 1px solid; border-left: 1px solid; }
+  .head-panel .hp-corner.br { bottom: 14px; right: 14px; border-bottom: 1px solid; border-right: 1px solid; }
+  .head-panel .hp-meta {
+    position: absolute;
+    top: 18px; left: 24px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.32em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    z-index: 4;
+    opacity: 0.85;
+  }
+  .head-panel .hp-meta .dim { color: var(--muted); }
+  .head-panel .hp-meta2 {
+    position: absolute;
+    bottom: 18px; right: 24px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    color: var(--beige);
+    text-transform: uppercase;
+    z-index: 4;
+    opacity: 0.7;
+  }
+
+  /* ---------- Head stage (fixed-aspect image container with slot overlay) ---------- */
+  .head-stage {
+    position: relative;
+    /* size to fill available space while preserving the
+       head image’s aspect ratio. Slot percentage coords stay valid
+       because head-stage IS the image’s display rect. */
+    height: 100%;
+    max-height: 100%;
+    max-width: 100%;
+    aspect-ratio: 564 / 694;
+    width: auto;
+    flex: 0 1 auto;
+    z-index: 2;
+    transition: transform 280ms ease;
+  }
+  .head-stage::before {
+    /* cyan rim-glow halo behind head so dark neck doesn’t vanish */
+    content: ""; position: absolute;
+    inset: -6% -10% -6% -10%;
+    background:
+      radial-gradient(58% 45% at 56% 38%, rgba(0,166,214,0.22), transparent 70%),
+      radial-gradient(45% 55% at 50% 78%, rgba(0,166,214,0.18), transparent 70%);
+    z-index: 0;
+    pointer-events: none;
+    filter: blur(2px);
+  }
+  .head-stage .head-img {
+    display: block;
+    width: 100%; height: 100%;
+    object-fit: contain;
+    position: relative; z-index: 1;
+    user-select: none;
+    pointer-events: none;
+    filter:
+      drop-shadow(0 0 18px rgba(0,166,214,0.35))
+      drop-shadow(0 0 36px rgba(0,166,214,0.18));
+    transition: transform 280ms ease, filter 280ms ease;
+  }
+  .head-stage:hover { /* tiny scale on overall stage */ }
+  .head-stage:hover .head-img {
+    transform: scale(1.012);
+    filter:
+      drop-shadow(0 0 22px rgba(0,166,214,0.45))
+      drop-shadow(0 0 44px rgba(0,166,214,0.22));
+  }
+
+  /* ---------- Embedded shard slots (the key element) ---------- */
+  .slot-port {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 96px; height: 20px;
+    padding: 0;
+    border: 0;
+    cursor: pointer;
+    z-index: 5;
+    background:
+      linear-gradient(180deg, #050505 0%, #0c0c0c 50%, #060606 100%);
+    /* RECESSED LOOK: hard dark top-inner shadow (the cut) +
+       thin beige bottom-inner highlight (the bevel) + beige inner border +
+       outer cyan rim-glow + tiny dark drop below (suggests the port is set DEEP) */
+    box-shadow:
+      inset 0 2px 3px rgba(0,0,0,0.95),
+      inset 0 -1px 0 rgba(212,191,125,0.35),
+      inset 0 0 0 1px rgba(212,191,125,0.55),
+      0 0 8px rgba(0,166,214,0.32),
+      0 1px 2px rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    transition: box-shadow 220ms ease, transform 220ms ease;
+  }
+  .slot-port::before,
+  .slot-port::after {
+    /* tiny alignment notches on each end — sells "port" reading */
+    content: ""; position: absolute;
+    top: 3px; bottom: 3px;
+    width: 1px;
+    background: rgba(212,191,125,0.45);
+  }
+  .slot-port::before { left: 5px; }
+  .slot-port::after  { right: 5px; }
+
+  .slot-port .sp-glyph {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0;
+    color: rgba(0,166,214,0.7);
+  }
+
+  /* Slot 1 — filled & LOCKED (amber) */
+  .slot-port.filled-locked {
+    background:
+      linear-gradient(180deg, #1a1206 0%, #2a1d08 50%, #1a1206 100%);
+    box-shadow:
+      inset 0 2px 3px rgba(0,0,0,0.88),
+      inset 0 -1px 0 rgba(226,176,33,0.45),
+      inset 0 0 0 1px rgba(212,191,125,0.6),
+      0 0 10px rgba(226,176,33,0.28),
+      0 1px 2px rgba(0,0,0,0.6);
+  }
+  .slot-port.filled-locked .sp-glyph { color: rgba(226,176,33,0.9); }
+  .slot-port.filled-locked:hover,
+  .slot-port.filled-locked.linked {
+    box-shadow:
+      inset 0 2px 3px rgba(0,0,0,0.88),
+      inset 0 -1px 0 rgba(226,176,33,0.65),
+      inset 0 0 0 1px rgba(212,191,125,0.75),
+      0 0 18px rgba(226,176,33,0.55),
+      0 1px 2px rgba(0,0,0,0.6);
+  }
+
+  /* Slot 2 — filled (cyan) */
+  .slot-port.filled {
+    background:
+      linear-gradient(180deg, #061418 0%, #0a2028 50%, #061418 100%);
+    box-shadow:
+      inset 0 2px 3px rgba(0,0,0,0.88),
+      inset 0 -1px 0 rgba(0,166,214,0.5),
+      inset 0 0 0 1px rgba(212,191,125,0.55),
+      0 0 10px rgba(0,166,214,0.45),
+      0 1px 2px rgba(0,0,0,0.6);
+  }
+  .slot-port.filled .sp-glyph { color: rgba(0,166,214,0.9); }
+  .slot-port.filled:hover,
+  .slot-port.filled.linked {
+    box-shadow:
+      inset 0 2px 3px rgba(0,0,0,0.88),
+      inset 0 -1px 0 rgba(0,166,214,0.75),
+      inset 0 0 0 1px rgba(212,191,125,0.75),
+      0 0 18px rgba(0,166,214,0.7),
+      0 1px 2px rgba(0,0,0,0.6);
+  }
+
+  /* Slot 3 — empty */
+  .slot-port.empty {
+    background:
+      linear-gradient(180deg, #030303 0%, #080808 50%, #030303 100%);
+  }
+  .slot-port.empty .sp-glyph { color: rgba(0,166,214,0.55); font-size: 14px; }
+  .slot-port.empty:hover,
+  .slot-port.empty.linked {
+    box-shadow:
+      inset 0 2px 3px rgba(0,0,0,0.95),
+      inset 0 -1px 0 rgba(212,191,125,0.5),
+      inset 0 0 0 1px rgba(212,191,125,0.7),
+      0 0 14px rgba(0,166,214,0.5),
+      0 1px 2px rgba(0,0,0,0.6);
+  }
+
+  /* slot floating label (left side, away from the connector lines) */
+  .slot-port .sp-label {
+    position: absolute;
+    right: calc(100% + 10px);
+    top: 50%; transform: translateY(-50%);
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 0.22em;
+    color: var(--muted);
+    text-transform: uppercase;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+  .slot-port:hover .sp-label,
+  .slot-port.linked .sp-label { opacity: 1; color: var(--cyan); }
+  .slot-port.filled-locked:hover .sp-label,
+  .slot-port.filled-locked.linked .sp-label { color: var(--gold-rare); }
+
+  /* When the head stage is hovered, all slots glow slightly stronger */
+  .head-stage:hover .slot-port:not(:hover):not(.linked) {
+    box-shadow:
+      inset 0 2px 3px rgba(0,0,0,0.92),
+      inset 0 -1px 0 rgba(212,191,125,0.45),
+      inset 0 0 0 1px rgba(212,191,125,0.6),
+      0 0 12px rgba(0,166,214,0.45),
+      0 1px 2px rgba(0,0,0,0.6);
+  }
+  .head-stage:hover .slot-port.filled:not(:hover):not(.linked) {
+    box-shadow:
+      inset 0 2px 3px rgba(0,0,0,0.88),
+      inset 0 -1px 0 rgba(0,166,214,0.65),
+      inset 0 0 0 1px rgba(212,191,125,0.65),
+      0 0 14px rgba(0,166,214,0.6),
+      0 1px 2px rgba(0,0,0,0.6);
+  }
+  .head-stage:hover .slot-port.filled-locked:not(:hover):not(.linked) {
+    box-shadow:
+      inset 0 2px 3px rgba(0,0,0,0.88),
+      inset 0 -1px 0 rgba(226,176,33,0.6),
+      inset 0 0 0 1px rgba(212,191,125,0.7),
+      0 0 14px rgba(226,176,33,0.45),
+      0 1px 2px rgba(0,0,0,0.6);
+  }
+
+  /* ============================================================
+     CONNECTORS — SVG overlay across the whole main region
+     ============================================================ */
+  .connectors {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 6;
+    overflow: visible;
+  }
+  .connectors .conn {
+    fill: none;
+    stroke: var(--beige);
+    stroke-width: 1.4;
+    opacity: 0.55;
+    filter: drop-shadow(0 0 2px rgba(0,166,214,0.4));
+    transition: stroke 220ms ease, opacity 220ms ease,
+                filter 220ms ease, stroke-width 220ms ease;
+  }
+  .connectors .conn.guide {
+    stroke: rgba(226,176,33,0.6);
+    filter: drop-shadow(0 0 2px rgba(226,176,33,0.35));
+  }
+  .connectors .conn.empty {
+    stroke: rgba(212,191,125,0.45);
+    stroke-dasharray: 3 3;
+  }
+  .connectors .conn.linked {
+    stroke: var(--cyan-hot);
+    opacity: 1;
+    stroke-width: 1.8;
+    filter: drop-shadow(0 0 4px rgba(0,166,214,0.85))
+            drop-shadow(0 0 8px rgba(0,166,214,0.55));
+  }
+  .connectors .conn.guide.linked {
+    stroke: var(--gold-rare);
+    filter: drop-shadow(0 0 4px rgba(226,176,33,0.85))
+            drop-shadow(0 0 8px rgba(226,176,33,0.5));
+  }
+  .connectors .conn-cap {
+    fill: var(--beige);
+  }
+  .connectors .conn-cap.guide { fill: var(--gold-rare); }
+  .connectors .conn-pulse {
+    fill: var(--cyan-hot);
+    filter: drop-shadow(0 0 4px rgba(0,166,214,0.9));
+  }
+  .connectors .conn-pulse.guide {
+    fill: var(--gold-rare);
+    filter: drop-shadow(0 0 4px rgba(226,176,33,0.85));
+  }
+
+  /* ============================================================
+     SHARD CARDS
+     ============================================================ */
+  .shard-cards {
+    display: flex; flex-direction: column;
+    gap: 14px;
+    flex: 1; min-height: 0;
+  }
+
+  .shard-card {
+    --cut: 16px;
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    cursor: pointer;
+    transition: transform 200ms ease;
+  }
+  .shard-card:hover { transform: translateX(-2px); }
+  .shard-card.empty { cursor: pointer; }
+  .shard-card.locked { cursor: default; }
+
+  .shard-card .sc-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(0 0,
+      calc(100% - var(--cut)) 0, 100% var(--cut),
+      100% 100%,
+      var(--cut) 100%, 0 calc(100% - var(--cut)));
+    transition: background 220ms ease;
+  }
+  .shard-card .sc-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(140% 100% at 50% 50%, rgba(0,166,214,0.05), transparent 65%),
+      linear-gradient(180deg, #1a1a1a, #111);
+    clip-path: polygon(0 0,
+      calc(100% - var(--cut) + 1px) 0, calc(100% - 1px) calc(var(--cut) - 1px),
+      calc(100% - 1px) calc(100% - 1px),
+      calc(var(--cut) - 1px) calc(100% - 1px), 0 calc(100% - var(--cut) + 1px));
+    padding: 12px 16px 12px 12px;
+    /* Three columns: emblem | content | icon-only actions */
+    display: grid;
+    grid-template-columns: 64px 1fr 42px;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "icon head    actions"
+      "icon stats   actions"
+      "icon buffs   actions";
+    column-gap: 14px;
+    row-gap: 5px;
+    align-items: start;
+    transition: box-shadow 220ms ease;
+  }
+  .shard-card:hover .sc-inner,
+  .shard-card.linked .sc-inner {
+    box-shadow: inset 0 0 26px rgba(0,166,214,0.18),
+                0 0 22px rgba(0,166,214,0.32);
+  }
+
+  /* G.U.I.D.E. card — amber tint, beige border (no full amber border, just inner glow) */
+  .shard-card.guide .sc-inner {
+    background:
+      radial-gradient(70% 80% at 50% 50%, rgba(226,176,33,0.10), transparent 65%),
+      radial-gradient(40% 60% at 0% 50%, rgba(226,176,33,0.06), transparent 60%),
+      radial-gradient(40% 60% at 100% 50%, rgba(226,176,33,0.05), transparent 60%),
+      linear-gradient(180deg, #1c1813, #14110b);
+  }
+  .shard-card.guide:hover .sc-inner,
+  .shard-card.guide.linked .sc-inner {
+    box-shadow: inset 0 0 30px rgba(226,176,33,0.20),
+                0 0 22px rgba(226,176,33,0.32);
+  }
+  /* tiny amber accents only in the CORNERS, not the whole border */
+  .shard-card.guide .sc-corner {
+    position: absolute;
+    width: 16px; height: 16px;
+    border-color: var(--gold-rare);
+    opacity: 0.85;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .shard-card.guide .sc-corner.tl { top: 8px; left: 8px;
+    border-top: 1px solid; border-left: 1px solid; }
+  .shard-card.guide .sc-corner.br { bottom: 8px; right: 8px;
+    border-bottom: 1px solid; border-right: 1px solid; }
+
+  /* Empty card — lower opacity frame */
+  .shard-card.empty .sc-frame {
+    background: var(--beige);
+    opacity: 0.55;
+  }
+  .shard-card.empty .sc-inner {
+    background:
+      radial-gradient(120% 90% at 50% 50%, rgba(0,166,214,0.04), transparent 65%),
+      linear-gradient(180deg, #161616, #0e0e0e);
+  }
+
+  /* shake animation when locked card is clicked */
+  @keyframes deniedShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-3px); }
+    40% { transform: translateX(3px); }
+    60% { transform: translateX(-2px); }
+    80% { transform: translateX(2px); }
+  }
+  .shard-card.shake { animation: deniedShake 280ms ease-out; }
+
+  /* --- Card grid areas --- */
+  .sc-icon-wrap {
+    grid-area: icon;
+    width: 64px; height: 64px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    align-self: center;
+  }
+  .sc-head {
+    grid-area: head;
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .sc-name-group {
+    display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1;
+  }
+  .sc-name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 16px;
+    letter-spacing: 0.10em;
+    color: var(--cyan-hot);
+    line-height: 1.05;
+    text-transform: uppercase;
+  }
+  .shard-card.guide .sc-name { color: var(--gold-rare); letter-spacing: 0.13em; }
+  .shard-card.empty .sc-name { color: var(--muted); font-size: 15px; letter-spacing: 0.16em; }
+  .sc-sub {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 0.20em;
+    color: var(--muted);
+    text-transform: uppercase;
+    line-height: 1.25;
+  }
+  .shard-card.guide .sc-sub { color: rgba(226,176,33,0.7); }
+  .sc-badge {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 0.20em;
+    color: var(--beige);
+    text-transform: uppercase;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .sc-badge .lock { color: var(--gold-rare); font-size: 11px; }
+  .sc-rarity {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.20em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .sc-rarity::before {
+    content: "";
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 6px rgba(0,166,214,0.7);
+  }
+  .shard-card.empty .sc-rarity::before { display: none; }
+
+  .sc-stats {
+    grid-area: stats;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 14px;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.16em;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 5px 0;
+    border-top: 1px dashed rgba(212,191,125,0.22);
+    border-bottom: 1px dashed rgba(212,191,125,0.22);
+  }
+  .sc-stats .row {
+    display: flex; align-items: baseline; gap: 6px;
+    white-space: nowrap;
+  }
+  .sc-stats .k { color: var(--beige); }
+  .sc-stats .v { color: var(--text); }
+  .sc-stats .v.acc { color: var(--cyan-hot); }
+  .shard-card.guide .sc-stats .v.acc { color: var(--gold-rare); }
+
+  .sc-buffs {
+    grid-area: buffs;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    color: var(--text);
+    line-height: 1.5;
+    min-width: 0;
+  }
+  .sc-buffs .b { display: block; }
+  .sc-buffs .plus {
+    color: var(--cyan-hot);
+    margin-right: 6px;
+    font-weight: 600;
+  }
+  .shard-card.guide .sc-buffs .plus { color: var(--gold-rare); }
+  .shard-card.guide .sc-buffs .b { color: rgba(255,236,196,0.85); }
+
+  /* ====== Action column — icon-only buttons stacked vertically ====== */
+  .sc-actions {
+    grid-area: actions;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 6px;
+    align-self: stretch;
+    padding-top: 2px;
+  }
+  .sc-btn {
+    --cut: 6px;
+    position: relative;
+    background: transparent; border: 0; padding: 0;
+    cursor: pointer;
+    width: 38px; height: 30px;
+    font-family: var(--font-mono);
+  }
+  .sc-btn .scb-frame {
+    position: absolute; inset: 0;
+    background: var(--cyan);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .sc-btn .scb-inner {
+    position: absolute; inset: 1.5px;
+    background: linear-gradient(180deg, #141a1d, #0e1316);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; align-items: center; justify-content: center;
+    color: var(--cyan-hot);
+    font-size: 12px;
+    transition: box-shadow 180ms ease, color 180ms ease;
+  }
+  .sc-btn:hover .scb-inner {
+    color: #fff;
+    box-shadow: inset 0 0 14px rgba(0,166,214,0.4),
+                0 0 12px rgba(0,166,214,0.55);
+  }
+  .sc-btn.eject .scb-frame { background: rgba(185,58,58,0.7); }
+  .sc-btn.eject .scb-inner { color: rgba(220,120,120,0.95); }
+  .sc-btn.eject:hover .scb-inner {
+    color: #fff;
+    box-shadow: inset 0 0 14px rgba(185,58,58,0.4),
+                0 0 12px rgba(185,58,58,0.5);
+  }
+  .sc-btn.disabled { cursor: not-allowed; }
+  .sc-btn.disabled .scb-frame { background: rgba(212,191,125,0.35); }
+  .sc-btn.disabled .scb-inner {
+    color: var(--beige-dim);
+    background: linear-gradient(180deg, #1a1714, #11100c);
+  }
+  .sc-btn.disabled:hover .scb-inner {
+    color: var(--muted);
+    box-shadow: none;
+  }
+  /* Hover tooltip for icon-only buttons */
+  .sc-btn::after {
+    content: attr(data-tip);
+    position: absolute;
+    right: calc(100% + 8px);
+    top: 50%; transform: translateY(-50%) translateX(4px);
+    background: rgba(8,8,8,0.96);
+    border: 1px solid var(--beige);
+    padding: 4px 8px;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--cyan-hot);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 160ms ease, transform 160ms ease;
+    z-index: 10;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+  }
+  .sc-btn:hover::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+  .sc-btn.disabled:hover::after { color: var(--amber-hot, #f2b14a); border-color: var(--gold-rare); }
+  .sc-btn.eject:hover::after { color: rgba(220,120,120,0.95); border-color: rgba(185,58,58,0.6); }
+
+  /* G.U.I.D.E. integrity flicker — the subtle horror */
+  @keyframes integrityFlicker {
+    0%, 99.40%, 100%   { opacity: 1; }
+    99.45%, 99.50%     { opacity: 0.18; }
+    99.55%, 99.60%     { opacity: 1; }
+    99.65%, 99.68%     { opacity: 0.6; }
+    99.72%             { opacity: 1; }
+  }
+  .integrity-flicker {
+    display: inline-block;
+    animation: integrityFlicker 14s linear infinite;
+  }
+
+  /* Empty card: large pulsing "+" */
+  .empty-plus {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 46px;
+    line-height: 1;
+    color: rgba(0,166,214,0.55);
+    animation: emptyPulse 3.4s ease-in-out infinite;
+    text-shadow: 0 0 12px rgba(0,166,214,0.35);
+    user-select: none;
+  }
+  @keyframes emptyPulse {
+    0%, 100% { opacity: 0.45; transform: scale(1);    text-shadow: 0 0 8px rgba(0,166,214,0.3); }
+    50%      { opacity: 1;    transform: scale(1.06); text-shadow: 0 0 16px rgba(0,166,214,0.6); }
+  }
+
+  /* G.U.I.D.E. emblem */
+  .guide-emblem {
+    width: 58px; height: 58px;
+    color: var(--gold-rare);
+    opacity: 0.95;
+    filter: drop-shadow(0 0 6px rgba(226,176,33,0.45));
+  }
+  .vigor-emblem {
+    width: 48px; height: 58px;
+    filter: drop-shadow(0 0 8px rgba(0,166,214,0.55));
+  }
+  .vigor-emblem .core   { fill: rgba(0,166,214,0.25); stroke: var(--cyan-hot); stroke-width: 1.4; }
+  .vigor-emblem .facet  { fill: rgba(0,166,214,0.10); stroke: var(--cyan); stroke-width: 1.1; }
+  .vigor-emblem .high   { fill: rgba(255,255,255,0.85); }
+
+  /* ============================================================
+     LINK STATUS PANEL (small, bottom-left)
+     ============================================================ */
+  .link-status {
+    --cut: 12px;
+    position: relative;
+    padding: 14px 18px 14px 18px;
+    flex: 0 0 auto;
+  }
+  .link-status .ls-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+  }
+  .link-status .ls-inner {
+    position: relative; z-index: 1;
+    margin: 1.5px;
+    padding: 12px 16px;
+    background: linear-gradient(180deg, #16181a, #0e1013);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+  }
+  .ls-head {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .ls-head::after {
+    content: ""; flex: 1; height: 1px;
+    background: linear-gradient(90deg,
+      rgba(0,166,214,0.55), rgba(0,166,214,0));
+  }
+  .ls-head .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px rgba(0,166,214,0.7);
+    animation: blink 1.6s steps(2, end) infinite;
+  }
+  .ls-rows {
+    display: grid; grid-template-columns: auto 1fr;
+    gap: 5px 16px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .ls-rows .k { color: var(--beige); }
+  .ls-rows .v { color: var(--text); text-align: right; }
+  .ls-rows .v.acc { color: var(--cyan-hot); }
+  .ls-band {
+    margin-top: 12px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .ls-band-head {
+    display: flex; justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: var(--beige);
+    text-transform: uppercase;
+  }
+  .ls-band-head .v { color: var(--cyan-hot); }
+  .ls-band-bar {
+    height: 6px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.55);
+    position: relative; overflow: hidden;
+  }
+  .ls-band-bar > i {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 82.7%;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan-hot));
+    box-shadow: 0 0 6px rgba(0,166,214,0.6);
+  }
+  .ls-band-bar > i::after {
+    content: "";
+    position: absolute; right: -2px; top: -2px; bottom: -2px;
+    width: 2px;
+    background: var(--cyan-hot);
+    box-shadow: 0 0 8px rgba(0,166,214,0.9);
+  }
+</style>
+</head>
+<body>
+
+<div class="stage"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="sweep" id="sweep"></div>
+
+<!-- ====================== TOP BAR ====================== -->
+<header class="topbar" role="banner">
+  <div class="top-left">
+    <div class="stat-block" aria-label="Level">
+      <div class="stat-row"><span class="stat-num">08</span><span class="stat-label">Level</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:62%"></i></div>
+    </div>
+    <div class="stat-block" aria-label="Reputation">
+      <div class="stat-row"><span class="stat-num">35</span><span class="stat-label">Reputation</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:48%"></i></div>
+    </div>
+  </div>
+
+  <div class="top-center">
+    <div class="char-name">Ros Chrisstone<span class="cursor">█</span></div>
+    <div class="char-sub">
+      <span>Human · Fighter</span>
+      <span class="sep">/</span>
+      <span>Champion Archetype</span>
+      <span class="sep">/</span>
+      <span>Brettany Reclamation</span>
+    </div>
+  </div>
+
+  <div class="top-right">
+    <div class="weight-block">
+      <span class="ic">⚖</span><span class="val">45 / 120</span><span class="lab">Burden</span>
+    </div>
+    <div class="gold-block">
+      <span class="ic">⊙</span><span class="val">1,247</span><span class="lab">Gold</span>
+    </div>
+  </div>
+</header>
+
+<div class="ticker above" aria-hidden="true">
+  <span>TASK_MANAGER_SD11S</span><span class="gap"></span>
+  <span class="dim">// AURUM_LEDGER_OK</span><span class="gap"></span>
+  <span>PROTOCOL: 6920-A44</span><span class="gap"></span>
+  <span class="dim">0001 0110 1001 0011 1100</span>
+</div>
+<div class="ticker below" aria-hidden="true">
+  <span>FRAME 04 // SECTOR 12</span><span class="gap"></span>
+  <span class="dim">PARTY.OK</span><span class="gap"></span>
+  <span>SOULBOND 0x4F1A</span><span class="gap"></span>
+  <span class="dim">CHANNEL 1F-Δ</span>
+</div>
+
+<!-- side labels -->
+<div class="side-label left">
+  <span class="acc">EQUIPMENT</span> &nbsp;//&nbsp; NEURAL INTERFACE &nbsp;//&nbsp; <span class="acc">SHARD_LINK :: ACTIVE</span>
+</div>
+<div class="side-label right">
+  Castella-08 &nbsp;//&nbsp; <span class="acc">PORT 02: VIGOR</span> &nbsp;//&nbsp; Port 03: Vacant
+</div>
+
+<!-- ====================== NAVBAR ====================== -->
+<nav class="navbar" aria-label="Primary">
+
+  <!-- 1. Equipment (ACTIVE) -->
+  <div class="nav-slot">
+    <button class="nav-btn is-active" data-nav="equipment" aria-current="page">
+      <span class="nb-frame"></span>
+      <span class="nb-marker">01 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-khanda"></i></span>
+        <span class="nb-label">Equipment</span>
+      </span>
+    </button>
+  </div>
+
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="lore">
+      <span class="nb-frame"></span><span class="nb-marker">02 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-book-open"></i></span>
+        <span class="nb-label">Lore</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="spellbook">
+      <span class="nb-frame"></span><span class="nb-marker">03 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-scroll"></i></span>
+        <span class="nb-label">Spellbook</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="character">
+      <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-user-shield"></i></span>
+        <span class="nb-label">Character</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="journal">
+      <span class="nb-frame"></span><span class="nb-marker">05 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-clipboard"></i></span>
+        <span class="nb-label">Journal</span>
+      </span>
+    </button>
+  </div>
+</nav>
+
+<div class="nav-meta">
+  <span class="dim">◇</span>
+  <span>Section</span>
+  <span class="acc">/ Equipment</span>
+  <span class="dim">·</span>
+  <span>Neural Interface</span>
+  <span class="dim">·</span>
+  <span class="acc">SHARD_LINK :: ACTIVE</span>
+  <span class="dim">//</span>
+  <span>ROS.CHRISSTONE</span>
+</div>
+
+<!-- ====================== MAIN ====================== -->
+<main class="sd">
+
+  <!-- ===== LEFT COLUMN: Head panel + Neural link status ===== -->
+  <section class="col sd-left" aria-label="Neural interface bio-scan">
+
+    <div class="col-header">
+      <span class="ch-num">01</span>
+      <span class="ch-title">Neural Interface</span>
+      <span class="ch-meta">Bio-scan // Sagittal // 0x4F1A</span>
+    </div>
+
+    <div class="head-panel">
+      <div class="hp-frame2"></div>
+      <div class="hp-inner">
+
+        <span class="hp-corner tl"></span>
+        <span class="hp-corner tr"></span>
+        <span class="hp-corner bl"></span>
+        <span class="hp-corner br"></span>
+
+        <div class="hp-meta">
+          <span class="dim">SCAN</span> &middot; SAGITTAL.L<br>
+          <span class="dim">SUBJ</span> &middot; ROS.CHRISSTONE<br>
+          <span class="dim">VESSEL</span> &middot; HUMAN.M.32
+        </div>
+        <div class="hp-meta2">
+          PORT MATRIX <span style="color:var(--muted)">//</span> CLASS&nbsp;IV
+        </div>
+
+        <div class="head-stage" id="headStage">
+          <img class="head-img" src="uploads/head-scan.png"
+               alt="Cranial bio-scan showing brain and vasculature">
+
+          <!-- ===== Embedded shard slots (overlay on head image) ===== -->
+          <!--
+              Slot positions are percentage coordinates relative to the
+              head-stage. translate(-50%,-50%) means the value IS the
+              slot's center. Nudge these freely during iteration.
+          -->
+          <button class="slot-port filled-locked"
+                  data-link="guide"
+                  style="top: 38%; left: 73%; height: 30px"
+                  aria-label="G.U.I.D.E. port (locked)">
+            <span class="sp-glyph"><i class="fa-solid fa-lock" style="font-size:10px;"></i></span>
+            <span class="sp-label">G.U.I.D.E. PORT</span>
+          </button>
+
+          <button class="slot-port filled"
+                  data-link="vigor"
+                  style="top: 48%; left: 71%;"
+                  aria-label="Shard port 02">
+            <span class="sp-glyph">&#9670;</span>
+            <span class="sp-label">SHARD PORT 02</span>
+          </button>
+
+          <button class="slot-port empty"
+                  data-link="empty"
+                  style="top: 58%; left: 69%;"
+                  aria-label="Shard port 03 (empty)">
+            <span class="sp-glyph">+</span>
+            <span class="sp-label">SHARD PORT 03</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ===== RIGHT COLUMN: Shard cards ===== -->
+  <section class="col sd-right" aria-label="Shard manifest">
+
+    <div class="col-header">
+      <span class="ch-num">02</span>
+      <span class="ch-title">Shard Manifest</span>
+      <span class="ch-meta">2 / 3 ports occupied</span>
+    </div>
+
+    <div class="shard-cards">
+
+      <!-- ===================== CARD 1 — G.U.I.D.E. (locked) ===================== -->
+      <article class="shard-card guide locked" data-link="guide" data-card="guide" tabindex="0">
+        <span class="sc-corner tl"></span>
+        <span class="sc-corner br"></span>
+        <div class="sc-frame"></div>
+        <div class="sc-inner">
+
+          <div class="sc-icon-wrap">
+            <!-- G.U.I.D.E. emblem: open eye inside a hexagon ringed by dotted orbit -->
+            <svg class="guide-emblem" viewBox="0 0 100 100" aria-hidden="true">
+              <!-- outer hexagon -->
+              <polygon points="50,6 88,28 88,72 50,94 12,72 12,28"
+                       fill="none" stroke="currentColor" stroke-width="1.6"/>
+              <!-- inner hexagon (concentric) -->
+              <polygon points="50,18 78,34 78,66 50,82 22,66 22,34"
+                       fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.55"/>
+              <!-- dotted orbit -->
+              <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor"
+                      stroke-width="0.6" stroke-dasharray="1.5 3" opacity="0.4"/>
+              <!-- open eye -->
+              <path d="M22 50 Q 50 28 78 50 Q 50 72 22 50 Z"
+                    fill="none" stroke="currentColor" stroke-width="1.4"/>
+              <!-- pupil -->
+              <circle cx="50" cy="50" r="6" fill="currentColor" opacity="0.85"/>
+              <circle cx="50" cy="50" r="2.4" fill="#0a0805"/>
+              <!-- small tick marks at hex points -->
+              <g stroke="currentColor" stroke-width="0.8" opacity="0.7">
+                <line x1="50" y1="2" x2="50" y2="8"/>
+                <line x1="50" y1="92" x2="50" y2="98"/>
+                <line x1="8"  y1="50" x2="14" y2="50"/>
+                <line x1="86" y1="50" x2="92" y2="50"/>
+              </g>
+            </svg>
+          </div>
+
+          <div class="sc-head">
+            <div class="sc-name-group">
+              <div class="sc-name">G.U.I.D.E. Shard</div>
+              <div class="sc-sub">Global Unification Initiative for Directed Entities</div>
+            </div>
+            <div class="sc-badge">
+              <span>v 2.4.7 &middot; Stable</span>
+              <span class="lock"><i class="fa-solid fa-lock"></i></span>
+            </div>
+          </div>
+
+          <div class="sc-stats">
+            <div class="row"><span class="k">Status</span> <span class="v acc">Permanent</span></div>
+            <div class="row"><span class="k">Integrity</span> <span class="v acc"><span class="integrity-flicker">98.2%</span></span></div>
+            <div class="row"><span class="k">Last Sync</span> <span class="v">0.07 ms</span></div>
+            <div class="row"><span class="k">Origin</span> <span class="v">Issued</span></div>
+          </div>
+
+          <div class="sc-buffs">
+            <span class="b"><span class="plus">+</span>Quest tracking</span>
+            <span class="b"><span class="plus">+</span>Automated combat assistance</span>
+            <span class="b"><span class="plus">+</span>Real-time map sync</span>
+          </div>
+
+          <div class="sc-actions">
+            <button class="sc-btn disabled" data-action="calibrate-guide"
+                    data-tip="// Locked" type="button" aria-label="Calibrate (locked)">
+              <span class="scb-frame"></span>
+              <span class="scb-inner"><i class="fa-solid fa-lock"></i></span>
+            </button>
+          </div>
+
+        </div>
+      </article>
+
+      <!-- ===================== CARD 2 — Shard of Vigor ===================== -->
+      <article class="shard-card vigor" data-link="vigor" data-card="vigor" tabindex="0">
+        <div class="sc-frame"></div>
+        <div class="sc-inner">
+
+          <div class="sc-icon-wrap">
+            <svg class="vigor-emblem" viewBox="0 0 80 100" aria-hidden="true">
+              <!-- diamond/crystal -->
+              <polygon class="core" points="40,4 70,38 40,96 10,38"/>
+              <!-- facets -->
+              <polygon class="facet" points="40,4 70,38 40,38"/>
+              <polygon class="facet" points="40,4 10,38 40,38"/>
+              <polygon class="facet" points="10,38 40,38 40,96"/>
+              <polygon class="facet" points="70,38 40,38 40,96"/>
+              <!-- top highlight -->
+              <polygon class="high" points="40,8 56,30 40,30" opacity="0.65"/>
+              <!-- thin orbit ring -->
+              <ellipse cx="40" cy="50" rx="34" ry="6" fill="none"
+                       stroke="#00a6d6" stroke-width="0.6" opacity="0.4"/>
+            </svg>
+          </div>
+
+          <div class="sc-head">
+            <div class="sc-name-group">
+              <div class="sc-name">Shard of Vigor</div>
+              <div class="sc-sub">Physical Enhancement Module</div>
+            </div>
+            <div class="sc-rarity">Uncommon</div>
+          </div>
+
+          <div class="sc-stats">
+            <div class="row"><span class="k">Type</span> <span class="v">Phys. Enhancement</span></div>
+            <div class="row"><span class="k">Status</span> <span class="v acc">Active</span></div>
+            <div class="row"><span class="k">Synced</span> <span class="v">3.4 hrs</span></div>
+            <div class="row"><span class="k">Drift</span> <span class="v">0.02 %</span></div>
+          </div>
+
+          <div class="sc-buffs">
+            <span class="b"><span class="plus">+</span>2 Strength</span>
+            <span class="b"><span class="plus">+</span>5 Maximum HP</span>
+          </div>
+
+          <div class="sc-actions">
+            <button class="sc-btn" data-action="calibrate-vigor"
+                    data-tip="Calibrate" type="button" aria-label="Calibrate">
+              <span class="scb-frame"></span>
+              <span class="scb-inner"><i class="fa-solid fa-sliders"></i></span>
+            </button>
+            <button class="sc-btn eject" data-action="eject-vigor"
+                    data-tip="Eject" type="button" aria-label="Eject shard">
+              <span class="scb-frame"></span>
+              <span class="scb-inner"><i class="fa-solid fa-eject"></i></span>
+            </button>
+          </div>
+
+        </div>
+      </article>
+
+      <!-- ===================== CARD 3 — Empty Port ===================== -->
+      <article class="shard-card empty" data-link="empty" data-card="empty" tabindex="0">
+        <div class="sc-frame"></div>
+        <div class="sc-inner">
+
+          <div class="sc-icon-wrap">
+            <span class="empty-plus">+</span>
+          </div>
+
+          <div class="sc-head">
+            <div class="sc-name-group">
+              <div class="sc-name">Empty Port</div>
+              <div class="sc-sub">Shard Port 03 &middot; Awaiting install</div>
+            </div>
+            <div class="sc-rarity" style="color:var(--muted);">
+              <span style="background:transparent;border:1px dashed var(--beige-dim);box-shadow:none;display:inline-block;width:7px;height:7px;border-radius:50%;"></span>
+              Vacant
+            </div>
+          </div>
+
+          <div class="sc-stats">
+            <div class="row"><span class="k">Status</span> <span class="v">Awaiting Shard</span></div>
+            <div class="row"><span class="k">Compat</span> <span class="v">Universal</span></div>
+            <div class="row"><span class="k">Type</span> <span class="v">Class IV</span></div>
+            <div class="row"><span class="k">Capacity</span> <span class="v">1 / 1</span></div>
+          </div>
+
+          <div class="sc-buffs" style="color:var(--muted); font-style: italic; font-family: var(--font-prose); font-size: 12px; letter-spacing: 0.02em; line-height: 1.4;">
+            No shard installed. Insert a compatible module to bind.
+          </div>
+
+          <div class="sc-actions">
+            <button class="sc-btn" data-action="insert"
+                    data-tip="Insert Shard" type="button" aria-label="Insert shard">
+              <span class="scb-frame"></span>
+              <span class="scb-inner"><i class="fa-solid fa-plus"></i></span>
+            </button>
+          </div>
+
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ===== Connector lines (SVG layer above columns, below cards/slots) ===== -->
+  <svg class="connectors" id="connectors" aria-hidden="true">
+    <!-- Paths and pulses are generated by JS so they snap to real DOM positions -->
+  </svg>
+
+</main>
+
+
+
+<!-- ====================== BOTTOM BAR ====================== -->
+<footer class="bottombar" role="contentinfo">
+  <div class="bb-line">
+    <span class="dot"></span>
+    <span class="lab">Neural Link:</span><span class="val">Stable</span>
+    <span class="sep">|</span>
+    <span class="lab">Shard Integrity:</span><span class="val">98.2%</span>
+    <span class="sep">|</span>
+    <span class="lab">Last Sync:</span><span class="val">0.07 ms</span>
+    <span class="sep">|</span>
+    <span class="lab">Castella-08:</span><span class="dim">Clear · Wind NNW 4kt</span>
+    <span class="sep">|</span>
+    <span class="lab">Tide:</span><span class="dim">Low @ 03:47</span>
+
+    <div class="bb-right">
+      <span class="lab">Codex</span><span class="val">v 2.4.7</span>
+      <span class="sep">|</span>
+      <span class="dot"></span><span class="val">DM Online</span>
+      <span class="sep">|</span>
+      <span class="lab" id="save-auto">SAVE · 00:44</span><span class="save-cursor">█</span>
+    </div>
+  </div>
+</footer>
+
+<!-- shared tooltip element, positioned by JS -->
+<div class="tt" id="tooltip" role="tooltip" aria-hidden="true"></div>
+
+<script>
+  // ----- Navbar / button click handlers -----
+  document.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.getAttribute('data-nav');
+      if (t === 'shard') { console.log('Opening Shard interface...'); return; }
+      const label = (btn.querySelector('.nb-label, .pa-inner, .s-name, .s-label')?.textContent || t).trim();
+      console.log(`Navigating to ${label}... [data-nav="${t}"]`);
+    });
+  });
+
+  // ----- Periodic cyan scan sweep -----
+  (function sweepLoop() {
+    const sweep = document.getElementById('sweep');
+    function trigger() {
+      sweep.classList.remove('run'); void sweep.offsetWidth;
+      sweep.classList.add('run');
+    }
+    function schedule() {
+      const delay = 7000 + Math.random() * 4000;
+      setTimeout(() => { trigger(); schedule(); }, delay);
+    }
+    setTimeout(() => { trigger(); schedule(); }, 2500);
+  })();
+
+  // ----- Save counter -----
+  (function liveCounter() {
+    const el = document.getElementById('save-auto');
+    if (!el) return;
+    let t = 44;
+    setInterval(() => {
+      t = (t + 1) % 60;
+      const s = t.toString().padStart(2, '0');
+      el.textContent = `SAVE · 00:${s}`;
+    }, 700);
+  })();
+
+  // ----- Portrait loader pct text, synced loosely to the bar's CSS anim -----
+  (function loadPctTick() {
+    const el = document.getElementById('loadPct');
+    if (!el) return;
+    const start = performance.now();
+    const dur = 6000;
+    function frame(now) {
+      const t = ((now - start) % dur) / dur;
+      let pct;
+      if (t < 0.85)      pct = Math.round((t / 0.85) * 100);
+      else if (t < 0.92) pct = 100;
+      else               pct = 0;
+      el.textContent = pct;
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
+
+  // ----- Tooltips for weapons + slots -----
+  (function tooltips() {
+    const tt = document.getElementById('tooltip');
+    const targets = document.querySelectorAll('[data-tt]');
+
+    function build(d) {
+      const rows = (d.rows || [])
+        .map(([k, v]) => `<div class="tt-row"><span class="k">${k}</span><span class="v">${v}</span></div>`)
+        .join('');
+      const flavor = d.flavor ? `<div class="tt-flavor">${d.flavor}</div>` : '';
+      const attune = d.attune
+        ? `<div class="tt-attune ${/^not|^none/i.test(d.attune) ? 'no' : ''}">Attuned: ${d.attune}</div>`
+        : '';
+      return `
+        <div class="tt-name">${d.name}</div>
+        <div class="tt-sub">${d.sub || ''}</div>
+        ${rows}
+        ${flavor}
+        ${attune}
+      `;
+    }
+
+    function position(target) {
+      const r = target.getBoundingClientRect();
+      const ttW = tt.offsetWidth;
+      const ttH = tt.offsetHeight;
+      const margin = 12;
+      // Decide side: prefer to the right; fall back to left if off-screen
+      let left = r.right + margin;
+      if (left + ttW > window.innerWidth - 12) {
+        left = r.left - ttW - margin;
+      }
+      // Clamp left
+      left = Math.max(12, Math.min(left, window.innerWidth - ttW - 12));
+      // Vertically align centered to the target, clamped to viewport
+      let top = r.top + r.height / 2 - ttH / 2;
+      top = Math.max(12, Math.min(top, window.innerHeight - ttH - 12));
+      tt.style.left = left + 'px';
+      tt.style.top  = top + 'px';
+    }
+
+    let active = null;
+
+    targets.forEach(target => {
+      const enter = () => {
+        try {
+          const d = JSON.parse(target.getAttribute('data-tt'));
+          tt.innerHTML = build(d);
+          tt.setAttribute('data-rarity', d.rarity || 'common');
+          tt.classList.add('show');
+          active = target;
+          // force layout so offsetWidth/Height are correct
+          requestAnimationFrame(() => position(target));
+        } catch (e) {
+          console.warn('Bad tooltip data', e, target);
+        }
+      };
+      const leave = () => {
+        tt.classList.remove('show');
+        active = null;
+      };
+      target.addEventListener('mouseenter', enter);
+      target.addEventListener('mouseleave', leave);
+      target.addEventListener('focus', enter);
+      target.addEventListener('blur', leave);
+    });
+
+    window.addEventListener('scroll', () => {
+      if (active) position(active);
+    }, true);
+    window.addEventListener('resize', () => {
+      if (active) position(active);
+    });
+  })();
+
+  /* ============================================================
+     PHASE 5 — Shard interface: connectors, hover linkage, clicks
+     ============================================================ */
+
+  // ----- Click handlers on slot ports + shard cards -----
+  (function shardClicks() {
+    const cardByLink = {};
+    document.querySelectorAll('.shard-card').forEach(c => {
+      cardByLink[c.dataset.link] = c;
+    });
+
+    function activate(link) {
+      const card = cardByLink[link];
+      if (!card) return;
+      if (link === 'guide') {
+        console.log('G.U.I.D.E. calibration... [LOCKED]');
+        card.classList.remove('shake');
+        // force reflow so the animation restarts each click
+        void card.offsetWidth;
+        card.classList.add('shake');
+        setTimeout(() => card.classList.remove('shake'), 320);
+      } else if (link === 'vigor') {
+        console.log('Opening upgrade interface for Shard of Vigor...');
+      } else if (link === 'empty') {
+        console.log('Opening shard installation...');
+      }
+    }
+
+    document.querySelectorAll('.shard-card').forEach(card => {
+      card.addEventListener('click', () => activate(card.dataset.link));
+      card.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activate(card.dataset.link);
+        }
+      });
+    });
+    document.querySelectorAll('.slot-port').forEach(slot => {
+      slot.addEventListener('click', () => activate(slot.dataset.link));
+    });
+
+    // Specific button-level handlers (don't double-fire on card click)
+    document.querySelectorAll('.sc-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const a = btn.getAttribute('data-action');
+        if (a === 'calibrate-guide') {
+          console.log('G.U.I.D.E. calibration... [LOCKED]');
+          const card = btn.closest('.shard-card');
+          card.classList.remove('shake'); void card.offsetWidth;
+          card.classList.add('shake');
+          setTimeout(() => card.classList.remove('shake'), 320);
+        } else if (a === 'calibrate-vigor') {
+          console.log('Calibrating Shard of Vigor...');
+        } else if (a === 'eject-vigor') {
+          console.log('Eject sequence armed: Shard of Vigor.');
+        } else if (a === 'insert') {
+          console.log('Opening shard installation...');
+        }
+      });
+    });
+  })();
+
+  // ----- Hover linkage: slot ↔ card ↔ connector line -----
+  (function shardLinkage() {
+    const groups = ['guide', 'vigor', 'empty'];
+    groups.forEach(link => {
+      const slot = document.querySelector(`.slot-port[data-link="${link}"]`);
+      const card = document.querySelector(`.shard-card[data-link="${link}"]`);
+      const path = () => document.querySelector(`.conn[data-link="${link}"]`);
+      const cap1 = () => document.querySelector(`.conn-cap[data-link="${link}"][data-end="start"]`);
+      const cap2 = () => document.querySelector(`.conn-cap[data-link="${link}"][data-end="end"]`);
+
+      function on() {
+        slot?.classList.add('linked');
+        card?.classList.add('linked');
+        path()?.classList.add('linked');
+      }
+      function off() {
+        slot?.classList.remove('linked');
+        card?.classList.remove('linked');
+        path()?.classList.remove('linked');
+      }
+      slot?.addEventListener('mouseenter', on);
+      slot?.addEventListener('mouseleave', off);
+      slot?.addEventListener('focus', on);
+      slot?.addEventListener('blur', off);
+      card?.addEventListener('mouseenter', on);
+      card?.addEventListener('mouseleave', off);
+      card?.addEventListener('focus', on);
+      card?.addEventListener('blur', off);
+    });
+  })();
+
+  // ----- Draw connector paths slot → card (recalculated on layout changes) -----
+  (function connectors() {
+    const svg = document.getElementById('connectors');
+    if (!svg) return;
+    const main = document.querySelector('main.sd');
+    if (!main) return;
+
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const links = ['guide', 'vigor', 'empty'];
+
+    // create one path + one pulse per link (re-used across redraws)
+    const els = {};
+    links.forEach((link, i) => {
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('class', `conn ${link === 'guide' ? 'guide' : ''} ${link === 'empty' ? 'empty' : ''}`.trim());
+      path.setAttribute('data-link', link);
+      svg.appendChild(path);
+
+      // start cap (on slot side) and end cap (on card side)
+      const cap1 = document.createElementNS(SVG_NS, 'circle');
+      cap1.setAttribute('class', `conn-cap ${link === 'guide' ? 'guide' : ''}`.trim());
+      cap1.setAttribute('r', '2.2');
+      cap1.setAttribute('data-link', link);
+      cap1.setAttribute('data-end', 'start');
+      svg.appendChild(cap1);
+
+      const cap2 = document.createElementNS(SVG_NS, 'circle');
+      cap2.setAttribute('class', `conn-cap ${link === 'guide' ? 'guide' : ''}`.trim());
+      cap2.setAttribute('r', '2.2');
+      cap2.setAttribute('data-link', link);
+      cap2.setAttribute('data-end', 'end');
+      svg.appendChild(cap2);
+
+      // traveling data-pulse (skip on the empty connector — nothing
+      // to transmit there)
+      let pulse = null;
+      let motion = null;
+      if (link !== 'empty') {
+        pulse = document.createElementNS(SVG_NS, 'circle');
+        pulse.setAttribute('class', `conn-pulse ${link === 'guide' ? 'guide' : ''}`.trim());
+        pulse.setAttribute('r', '2.8');
+        pulse.setAttribute('cx', '0');
+        pulse.setAttribute('cy', '0');
+        svg.appendChild(pulse);
+
+        motion = document.createElementNS(SVG_NS, 'animateMotion');
+        motion.setAttribute('dur', `${6 + i * 0.6}s`);
+        motion.setAttribute('repeatCount', 'indefinite');
+        motion.setAttribute('rotate', 'auto');
+        motion.setAttribute('begin', `${i * 2.2}s`);
+        // path data set during draw
+        const mpath = document.createElementNS(SVG_NS, 'mpath');
+        mpath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#conn-mp-${link}`);
+        motion.appendChild(mpath);
+        pulse.appendChild(motion);
+      }
+
+      els[link] = { path, cap1, cap2, pulse, motion };
+    });
+
+    function draw() {
+      const mr = main.getBoundingClientRect();
+      // resize the svg viewBox to match main
+      svg.setAttribute('viewBox', `0 0 ${mr.width} ${mr.height}`);
+      svg.setAttribute('width', mr.width);
+      svg.setAttribute('height', mr.height);
+
+      links.forEach(link => {
+        const slot = document.querySelector(`.slot-port[data-link="${link}"]`);
+        const card = document.querySelector(`.shard-card[data-link="${link}"]`);
+        if (!slot || !card) return;
+
+        const sr = slot.getBoundingClientRect();
+        const cr = card.getBoundingClientRect();
+
+        // start: slot's right edge, vertical center; in main-relative coords
+        const x1 = sr.right - mr.left;
+        const y1 = sr.top + sr.height / 2 - mr.top;
+        // end: card's left edge, vertical center
+        const x2 = cr.left - mr.left;
+        const y2 = cr.top + cr.height / 2 - mr.top;
+
+        // angular routing: out from slot horizontally a bit, then a single
+        // 45°-ish bend, then horizontal into the card. Looks like "circuit
+        // routing" rather than a straight line.
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const stub1 = Math.min(40, dx * 0.18);     // exit stub from slot
+        const stub2 = Math.min(24, dx * 0.12);     // entry stub to card
+        const px1 = x1 + stub1;
+        const px2 = x2 - stub2;
+        // mid waypoint: bend point aligned vertically with card
+        // routing: x1 -> px1 (h) -> px1 + |dy| diag to (px1 + |dy|, y2) -> px2 (h) -> x2 (h)
+        const diag = Math.min(Math.abs(dy), Math.max(0, (px2 - px1)));
+        const bendX = px1 + diag * Math.sign(dx);
+        const d = `M ${x1.toFixed(1)} ${y1.toFixed(1)}
+                   L ${px1.toFixed(1)} ${y1.toFixed(1)}
+                   L ${bendX.toFixed(1)} ${y2.toFixed(1)}
+                   L ${px2.toFixed(1)} ${y2.toFixed(1)}
+                   L ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+
+        const { path, cap1, cap2 } = els[link];
+        path.setAttribute('d', d);
+        path.setAttribute('id', `conn-mp-${link}`);
+        cap1.setAttribute('cx', x1);
+        cap1.setAttribute('cy', y1);
+        cap2.setAttribute('cx', x2);
+        cap2.setAttribute('cy', y2);
+      });
+    }
+
+    function redraw() { requestAnimationFrame(draw); }
+
+    // Initial draw — wait for image to load so head-stage has real height
+    const headImg = document.querySelector('.head-img');
+    if (headImg && !headImg.complete) {
+      headImg.addEventListener('load', redraw, { once: true });
+    }
+    redraw();
+
+    window.addEventListener('resize', redraw);
+    window.addEventListener('scroll', redraw, true);
+    // Also redraw after fonts settle (any reflow shifts)
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(redraw);
+    }
+  })();
+</script>
+
+</body>
+</html>

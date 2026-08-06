@@ -24,6 +24,11 @@ export type CharacterIdentity = {
    *  URL). Absent/failed → the screen falls back to the handshake "PORTRAIT_FEED"
    *  panel, so the layout is identical whether or not an image is set. */
   portrait?: string | null
+  /** CSS object-position for the portrait crop, so a DM can keep a face in
+   *  frame on tall/off-center source images. Absent = 'center top' (prior
+   *  hardcoded behavior). Applied everywhere `portrait` renders (Lore,
+   *  Equipment, the Operator Console's own preview). */
+  portraitFocus?: 'center top' | 'center center' | 'center bottom'
 }
 
 export type AbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'

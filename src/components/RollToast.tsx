@@ -27,6 +27,7 @@ export function RollToast() {
 
   const a = show.attack
   const d = show.damage
+  const c = show.check
   return (
     <div
       className={styles.toast} key={show.id} role="status"
@@ -41,6 +42,16 @@ export function RollToast() {
         <span className={styles.dismiss}><i className="fa-solid fa-xmark" /></span>
       </div>
 
+      {c && (
+        <div className={`${styles.line}${c.crit ? ' ' + styles.crit : ''}${c.fumble ? ' ' + styles.fumble : ''}`}>
+          <span className={styles.lab}>
+            {c.crit ? 'Critical!' : c.fumble ? 'Nat 1' : 'd20'}
+            {c.mode !== 'normal' && <span className={c.mode === 'adv' ? styles.adv : styles.dis}> ({c.mode.toUpperCase()})</span>}
+          </span>
+          <span className={styles.total}>{c.total}</span>
+          <span className={styles.bd}>{c.breakdown} = {c.total}</span>
+        </div>
+      )}
       {a && (
         <div className={`${styles.line}${a.crit ? ' ' + styles.crit : ''}${a.fumble ? ' ' + styles.fumble : ''}`}>
           <span className={styles.lab}>{a.crit ? 'Critical!' : a.fumble ? 'Attack (nat 1)' : 'Attack'}</span>

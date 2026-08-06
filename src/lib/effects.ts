@@ -17,6 +17,7 @@ import type {
   EquippedItem, ItemEffects, ItemSlot,
 } from './database.types'
 import { ITEM_SLOTS } from './equip'
+import { burdenTier, capacityForStr, currentBurden } from './burden'
 
 const GEAR_SLOT_KEYS: readonly ItemSlot[] = ITEM_SLOTS
 const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
@@ -84,8 +85,18 @@ export function effectiveSheet(character: CharacterRow): EffectiveSheet {
 
   // Flat scalar sums.
   const ac = (base.ac ?? 0) + sum(fx, e => e.ac)
-  const speed = (base.speed ?? 0) + sum(fx, e => e.speed)
   const initiative = (base.initiative ?? 0) + sum(fx, e => e.initiative)
+
+  // Speed: gear bonuses first, then the SRD encumbrance penalty (−10 ft
+  // encumbered, −20 ft heavy) — off the effective STR computed just above, so
+  // a Belt of Giant Strength both raises capacity AND can lift the penalty in
+  // the same pass. currentBurden/capacityForStr/burdenTier are the pure half
+  // of lib/burden.ts (no effectiveSheet call), so this can't recurse back
+  // into effectiveSheet the way burden()/maxBurden() do.
+  const gearSpeed = (base.speed ?? 0) + sum(fx, e => e.speed)
+  const tier = burdenTier(currentBurden(character), capacityForStr(abilities.str))
+  const speedPenalty = tier === 'heavy' ? 20 : tier === 'encumbered' ? 10 : 0
+  const speed = Math.max(0, gearSpeed - speedPenalty)
 
   // Darkvision: take the largest granted range.
   let darkvision = base.senses?.darkvision ?? 0

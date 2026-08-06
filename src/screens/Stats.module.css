@@ -229,6 +229,16 @@
   text-shadow: 0 0 8px rgba(111, 220, 140, 0.5);
 }
 
+/* Disadvantage on checks with this ability — SRD exhaustion or heavy
+   encumbrance (hasDisadvantage() in Stats.tsx). No advantage/green case
+   exists yet — nothing in the data model computes it (database.types.ts
+   keeps advantage as prose, deliberately never a flag). */
+.abDis {
+  position: absolute; top: 6px; left: 7px; z-index: 1;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--danger-hot); box-shadow: 0 0 6px rgba(255, 84, 84, 0.7);
+}
+
 /* ---- 05 senses ---- */
 .sensesList { display: flex; flex-direction: column; gap: 4px; flex: 1; justify-content: center; }
 .senseRow { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 10px; padding: 5px 2px; border-bottom: 1px dashed rgba(212, 191, 125, 0.18); }
@@ -238,6 +248,7 @@
 .senseRow .v.muted { color: var(--beige-dim); }
 .senseRow .v.acc { color: var(--cyan-hot); text-shadow: 0 0 6px rgba(0, 166, 214, 0.3); }
 .senseRow .v.status { color: var(--cyan); letter-spacing: 0.2em; font-size: 10px; text-transform: uppercase; }
+.senseRow .v.status.danger { color: var(--danger-hot); text-shadow: 0 0 6px rgba(255, 84, 84, 0.4); }
 
 /* ---- 06 saving throws ---- */
 .savesGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; flex: 1; align-content: center; }
@@ -297,16 +308,31 @@
 
 /* ---- 09 skills (3 columns, column-major fill) ---- */
 .skillsGrid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(6, auto); grid-auto-flow: column; gap: 0 18px; flex: 1; align-content: start; }
-.skillRow { display: grid; grid-template-columns: 12px 1fr auto auto; align-items: baseline; gap: 8px; padding: 4px 4px; border-bottom: 1px dashed rgba(212, 191, 125, 0.16); min-height: 24px; }
+.skillRow { display: grid; grid-template-columns: 16px 1fr auto auto; align-items: baseline; gap: 8px; padding: 4px 4px; border-bottom: 1px dashed rgba(212, 191, 125, 0.16); min-height: 24px; }
 .skillRow.prof { background: rgba(212, 191, 125, 0.04); }
+/* Proficiency reads by dot COUNT, not just color — one dot proficient, two
+   expertise — the same convention as the Rolls screen's skill flyout and the
+   DM console's Proficiencies card, so it can't drift into color-only (which
+   silently broke once already: tokens.css's --amber and --gold-rare are the
+   same hex value). */
+.skInd { grid-row: 1; align-self: center; display: flex; gap: 2px; }
 .skillRow .profDot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--beige); background: transparent; align-self: center; transition: background 180ms ease; }
 .skillRow.prof .profDot { background: var(--beige); box-shadow: 0 0 5px rgba(212, 191, 125, 0.45); }
+.skillRow.exp .profDot { border-color: var(--cyan-hot); background: var(--cyan-hot); box-shadow: 0 0 6px rgba(0, 166, 214, 0.6); }
 .skName { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; }
 .skillRow.prof .skName { color: var(--text); }
-.skAbil { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.22em; color: var(--beige-dim); text-transform: uppercase; }
+.skillRow.exp .skName { color: var(--cyan-hot); }
+.skAbil { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.22em; color: var(--beige-dim); text-transform: uppercase; }
 .skillRow.prof .skAbil { color: var(--beige); }
 .skMod { font-family: var(--font-mono); font-weight: 500; font-size: 12px; letter-spacing: 0.04em; color: var(--cyan); line-height: 1; min-width: 28px; text-align: right; opacity: 0.85; }
 .skillRow.prof .skMod { color: var(--cyan-hot); opacity: 1; text-shadow: 0 0 6px rgba(0, 166, 214, 0.3); }
+.skillRow.exp .skMod { color: var(--cyan-hot); opacity: 1; text-shadow: 0 0 8px rgba(0, 166, 214, 0.5); }
+
+/* Disadvantage dot — red, independent of the proficiency dots above (a skill
+   can be both proficient AND currently disadvantaged, e.g. Athletics while
+   heavily encumbered). No green/advantage case exists yet — nothing in the
+   data model computes advantage (see hasDisadvantage() in Stats.tsx). */
+.disDot { width: 5px; height: 5px; border-radius: 50%; background: var(--danger-hot); box-shadow: 0 0 5px rgba(255, 84, 84, 0.7); flex: 0 0 auto; }
 
 /* ---- 10 attacks ---- */
 .attackTable { display: flex; flex-direction: column; flex: 1; }

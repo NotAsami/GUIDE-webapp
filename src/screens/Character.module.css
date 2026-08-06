@@ -1,0 +1,407 @@
+/* Character screen ("Rolls" in the nav) — ported from G.U.I.D.E. Character.html.
+   Layout model matches Lore/Journal: a position:fixed body between the dock nav
+   and the bottombar, two columns with a --screen-min-h floor so a short
+   viewport scrolls instead of crushing the ring. Left column is the ability
+   hex-ring (rolls ability checks + saving throws); right column is the full
+   scrollable roll history fed by lib/rolls.tsx's shared, ephemeral log — every
+   roll in the app (weapon rolls included), not just the ones made here. */
+
+.rolls {
+  position: fixed;
+  top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
+  bottom: calc(var(--bar-bottom-h) + 18px);
+  left: 0; right: 0;
+  display: grid;
+  grid-template-columns: 64fr 36fr;
+  grid-template-rows: minmax(var(--screen-min-h), 1fr);
+  gap: 22px;
+  padding: 0 34px;
+  z-index: 10;
+}
+
+.arrayCol, .rollCol { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+/* --- Column header (identical to Lore/Journal) --- */
+.colHeader {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 10px;
+  padding: 0 2px 7px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
+  flex: 0 0 auto;
+}
+.chNum {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+}
+.chTitle {
+  font-family: var(--font-mono); font-size: 12px;
+  letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
+}
+.chMeta {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+}
+
+/* ============================================================
+   01  ABILITY ARRAY — the hex ring
+   ============================================================ */
+
+.ringStage {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ringScaler {
+  position: relative;
+  width: calc(540px * var(--ring-scale, 1));
+  height: calc(420px * var(--ring-scale, 1));
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.hexRing {
+  position: absolute;
+  top: 0; left: 0;
+  width: 540px; height: 420px;
+  transform: scale(var(--ring-scale, 1));
+  transform-origin: top left;
+}
+
+.ringGlyphWrap {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 420px; height: 420px;
+  color: var(--beige);
+  opacity: 0.12;
+  z-index: 0;
+  pointer-events: none;
+}
+.ringGlyph { width: 100%; height: 100%; display: block; }
+.rotateSlow { transform-origin: 320px 320px; animation: rot 60s linear infinite; }
+.rotateRev { transform-origin: 320px 320px; animation: rot 90s linear infinite reverse; }
+@keyframes rot { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.pulse { animation: glyphpulse 3s ease-in-out infinite; transform-origin: 320px 320px; }
+@keyframes glyphpulse {
+  0%, 100% { opacity: 0.65; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.18); }
+}
+
+/* --- Cluster positions inside the 540x420 ring --- */
+.cluster { position: absolute; width: 130px; height: 146px; z-index: 2; }
+.cluster:hover, .cluster:focus-within { z-index: 20; }
+.cluster[data-ability="STR"] { top: 0; left: 100px; }
+.cluster[data-ability="CON"] { top: 0; right: 100px; }
+.cluster[data-ability="DEX"] { top: 50%; left: 0; transform: translateY(-50%); }
+.cluster[data-ability="WIS"] { top: 50%; right: 0; transform: translateY(-50%); }
+.cluster[data-ability="INT"] { bottom: 0; left: 100px; }
+.cluster[data-ability="CHA"] { bottom: 0; right: 100px; }
+
+/* --- Hex --- */
+.hex {
+  position: relative; width: 100%; height: 100%;
+  cursor: pointer;
+  transition: transform 220ms cubic-bezier(.2, .7, .2, 1);
+}
+.hex:focus-visible { outline: 1.5px solid var(--cyan); outline-offset: 3px; }
+.hFrame {
+  position: absolute; inset: 0;
+  background: var(--beige);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  transition: background 200ms ease, filter 200ms ease;
+}
+.hInner {
+  position: absolute; inset: 2px;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  background:
+    radial-gradient(120% 90% at 50% 50%, rgba(0, 166, 214, 0.08), transparent 60%),
+    linear-gradient(180deg, #1c1c1c, #131313);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 18px 8px 14px; gap: 2px;
+  transition: box-shadow 220ms ease, background 220ms ease;
+}
+.hName {
+  font-family: var(--font-display); font-weight: 600; font-size: 12px;
+  letter-spacing: 0.34em; color: var(--beige); text-transform: uppercase; line-height: 1;
+}
+.hScore {
+  font-family: var(--font-display); font-weight: 600; font-size: 40px;
+  line-height: 1;
+  color: var(--cyan-hot); letter-spacing: 0.02em;
+  text-shadow: 0 0 14px rgba(0, 166, 214, 0.45);
+  margin: 2px 0 0;
+  transition: color 200ms ease, transform 200ms ease, text-shadow 200ms ease, font-size 200ms ease;
+  font-variant-numeric: tabular-nums;
+}
+.hMod {
+  font-family: var(--font-display); font-weight: 500; font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0.18em; color: var(--beige); margin-top: 2px;
+}
+.hSav {
+  margin-top: 4px;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em;
+  color: var(--muted); text-transform: uppercase;
+  background: transparent; border: 0; padding: 0;
+  transition: color 140ms ease;
+}
+.hSav:hover, .hSav:focus-visible { color: var(--text); }
+.hSav:focus-visible { outline: 1.5px solid var(--cyan); outline-offset: 1px; }
+.profShield {
+  width: 7px; height: 7px; flex: 0 0 auto;
+  background: var(--cyan); transform: rotate(45deg);
+  box-shadow: 0 0 6px rgba(0, 166, 214, 0.7);
+}
+.hex.profSav .hSav { color: var(--cyan); }
+
+.hex:hover .hFrame, .hex:focus-visible .hFrame {
+  background: var(--cyan-hot);
+  filter: drop-shadow(0 0 14px rgba(0, 166, 214, 0.55));
+}
+.hex:hover .hInner, .hex:focus-visible .hInner {
+  background:
+    radial-gradient(120% 90% at 50% 50%, rgba(0, 166, 214, 0.16), transparent 60%),
+    linear-gradient(180deg, #16252b, #0f1b21);
+  box-shadow: inset 0 0 28px rgba(0, 166, 214, 0.35);
+  animation: hexpulse 1.4s ease-in-out infinite;
+}
+@keyframes hexpulse {
+  0%, 100% { box-shadow: inset 0 0 28px rgba(0, 166, 214, 0.35); }
+  50%      { box-shadow: inset 0 0 48px rgba(0, 166, 214, 0.55); }
+}
+
+.hex.rolling .hScore { font-size: 50px; text-shadow: 0 0 22px rgba(0, 166, 214, 0.9); }
+.hex.critSuccess .hScore {
+  color: var(--gold-rare); text-shadow: 0 0 26px rgba(226, 176, 33, 0.9);
+  animation: critShine 0.6s ease-out;
+}
+.hex.critFail .hScore {
+  color: var(--danger); text-shadow: 0 0 22px rgba(185, 58, 58, 0.9);
+  animation: critFlicker 0.5s steps(6, end);
+}
+@keyframes critShine {
+  0%   { opacity: 0; transform: scale(0.6); }
+  35%  { opacity: 1; transform: scale(1.25); filter: brightness(1.6); }
+  100% { opacity: 1; transform: scale(1.05); filter: brightness(1); }
+}
+@keyframes critFlicker {
+  0%, 100% { opacity: 1; }
+  20%, 60% { opacity: 0.3; }
+  40%, 80% { opacity: 1; }
+}
+
+/* --- Skill flyout panel --- */
+.skillList {
+  position: absolute; top: 0; width: 220px; height: 100%;
+  opacity: 0; pointer-events: none;
+  transition: opacity 220ms ease, transform 260ms cubic-bezier(.2, .7, .2, 1);
+  z-index: -1;
+}
+.cluster:hover .skillList, .cluster:focus-within .skillList {
+  opacity: 1; pointer-events: auto; z-index: 21;
+}
+.skillList[data-side="left"]  { right: 65px; }
+.skillList[data-side="right"] { left: 65px; }
+.cluster:hover .skillList[data-side="left"],
+.cluster:focus-within .skillList[data-side="left"] { transform: translateX(-10px); }
+.cluster:hover .skillList[data-side="right"],
+.cluster:focus-within .skillList[data-side="right"] { transform: translateX(10px); }
+
+.slFrame { position: absolute; inset: 0; background: var(--beige); opacity: 0.85; }
+.slInner {
+  position: absolute; inset: 2px;
+  background:
+    radial-gradient(120% 90% at 0% 50%, rgba(0, 166, 214, 0.08), transparent 60%),
+    linear-gradient(180deg, #1a1a1a, #111);
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+}
+.skillList[data-side="left"] .slFrame {
+  clip-path: polygon(0% 0%, 100% 0%, 70.5% 25%, 70.5% 75%, 100% 100%, 0% 100%);
+}
+.skillList[data-side="left"] .slInner {
+  clip-path: polygon(0% 0%, 100% 0%, 70% 25%, 70% 75%, 100% 100%, 0% 100%);
+  padding: 10px 76px 10px 14px; align-items: stretch;
+}
+.skillList[data-side="right"] .slFrame {
+  clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 29.5% 75%, 29.5% 25%);
+}
+.skillList[data-side="right"] .slInner {
+  clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 30% 75%, 30% 25%);
+  padding: 10px 14px 10px 76px; align-items: stretch;
+}
+
+.skillCard {
+  position: relative; background: transparent; border: 0;
+  padding: 5px 4px 5px 8px; text-align: left;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: background 160ms ease;
+}
+.skillCard:focus-visible { outline: 1.5px solid var(--cyan); outline-offset: -1px; }
+.skillCard + .skillCard { border-top: 1px dashed rgba(212, 191, 125, 0.16); }
+.scName {
+  font-family: var(--font-display); font-weight: 500; font-size: 10px;
+  letter-spacing: 0.16em; color: var(--beige); text-transform: uppercase;
+}
+.scMod {
+  font-family: var(--font-mono); font-weight: 600; font-size: 11px;
+  letter-spacing: 0.05em; color: var(--cyan-hot); margin-left: 8px;
+}
+.skillCard.prof { background: linear-gradient(90deg, rgba(0, 166, 214, 0.10), transparent 70%); }
+.skillCard.prof::before {
+  content: ""; position: absolute; left: -1px; top: 50%; margin-top: -3px;
+  width: 6px; height: 6px; background: var(--cyan); transform: rotate(45deg);
+  box-shadow: 0 0 6px rgba(0, 166, 214, 0.75);
+}
+.skillCard.prof .scName { color: #efeacd; }
+/* Expertise (double proficiency) reads by a SECOND diamond, not color alone —
+   a single stronger cyan tint next to a single diamond reads too close to
+   plain proficiency at a glance (same failure mode fixed on the DM console's
+   Proficiencies card: color-only distinctions don't hold up here). */
+.skillCard.exp { background: linear-gradient(90deg, rgba(0, 166, 214, 0.22), transparent 75%); padding-left: 16px; }
+.skillCard.exp::after {
+  content: ""; position: absolute; left: 7px; top: 50%; margin-top: -3px;
+  width: 6px; height: 6px; background: var(--cyan); transform: rotate(45deg);
+  box-shadow: 0 0 6px rgba(0, 166, 214, 0.75);
+}
+.skillCard.exp .scName { color: var(--cyan-hot); }
+.skillCard.exp .scMod { color: var(--cyan-hot); text-shadow: 0 0 6px rgba(0, 166, 214, 0.5); }
+.skillCard:hover { background: rgba(0, 166, 214, 0.14); }
+.skillCard:hover .scName { color: #fff; }
+
+/* ============================================================
+   02  ROLL_LOG
+   ============================================================ */
+
+.advToggles { display: flex; gap: 8px; margin-bottom: 10px; flex: 0 0 auto; }
+.advBtn {
+  --cut: 8px;
+  flex: 1; height: 36px; position: relative;
+  background: transparent; border: 0; padding: 0; cursor: pointer;
+  font-family: var(--font-mono);
+}
+.advBtn:focus-visible { outline: 1.5px solid var(--cyan); outline-offset: 2px; }
+.abFrame {
+  position: absolute; inset: 0;
+  background: var(--beige-dim);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.abInner {
+  position: absolute; inset: 1.5px;
+  background: linear-gradient(180deg, #1a1a1a, #111);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  color: var(--muted); font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+}
+.abDot { width: 6px; height: 6px; border-radius: 50%; background: var(--beige-dim); flex: 0 0 auto; }
+.advBtn:hover .abInner { color: var(--text); }
+.advBtn.adv.isActive .abFrame { background: #4dd07d; }
+.advBtn.adv.isActive .abInner {
+  color: #c9efce; background: linear-gradient(180deg, #14241a, #0d1812);
+  box-shadow: inset 0 0 18px rgba(77, 208, 125, 0.35), 0 0 14px rgba(77, 208, 125, 0.45);
+}
+.advBtn.adv.isActive .abDot { background: #4dd07d; box-shadow: 0 0 8px rgba(77, 208, 125, 0.9); }
+.advBtn.dis.isActive .abFrame { background: #e07a3a; }
+.advBtn.dis.isActive .abInner {
+  color: #f0c8a8; background: linear-gradient(180deg, #261812, #1a100b);
+  box-shadow: inset 0 0 18px rgba(224, 122, 58, 0.35), 0 0 14px rgba(224, 122, 58, 0.5);
+}
+.advBtn.dis.isActive .abDot { background: #e07a3a; box-shadow: 0 0 8px rgba(224, 122, 58, 0.9); }
+
+.rollLog {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 8px;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 4px 6px 4px 2px;
+  scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent;
+}
+.rollLog::-webkit-scrollbar { width: 7px; }
+.rollLog::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
+.rollLog::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.45));
+  border: 2px solid #111;
+}
+
+.emptyLog {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.32em;
+  color: var(--beige-dim); text-transform: uppercase;
+}
+
+.rollEntry {
+  --cut: 10px;
+  position: relative; flex: 0 0 auto;
+  animation: rollFresh 420ms ease-out;
+}
+@keyframes rollFresh {
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.reFrame {
+  position: absolute; inset: 0;
+  background: var(--beige); opacity: 0.5;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.rollEntry.critSuccess .reFrame, .rollEntry.critFail .reFrame { opacity: 1; }
+.rollEntry.critSuccess .reFrame { background: var(--gold-rare); box-shadow: 0 0 14px rgba(226, 176, 33, 0.5); }
+.rollEntry.critFail .reFrame { background: var(--danger); box-shadow: 0 0 14px rgba(185, 58, 58, 0.5); }
+.reInner {
+  position: relative; margin: 1.5px;
+  background: linear-gradient(180deg, #1a1a1a, #111);
+  clip-path: polygon(calc(var(--cut) - 1.5px) 0, 100% 0, 100% calc(100% - var(--cut) + 1.5px), calc(100% - var(--cut) + 1.5px) 100%, 0 100%, 0 calc(var(--cut) - 1.5px));
+  padding: 10px 14px 12px;
+  display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto auto;
+  column-gap: 14px; row-gap: 2px; align-items: baseline;
+}
+.reName {
+  grid-column: 1;
+  font-family: var(--font-display); font-weight: 500; font-size: 12px;
+  letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase; line-height: 1.1;
+}
+.reTotal {
+  grid-column: 2; grid-row: 1 / span 2; align-self: center;
+  font-family: var(--font-display); font-weight: 600; font-size: 30px;
+  color: var(--cyan-hot); text-shadow: 0 0 10px rgba(0, 166, 214, 0.4);
+  font-variant-numeric: tabular-nums;
+}
+.rollEntry.critSuccess .reTotal { color: var(--gold-rare); text-shadow: 0 0 12px rgba(226, 176, 33, 0.6); }
+.rollEntry.critFail .reTotal { color: var(--danger); text-shadow: 0 0 10px rgba(185, 58, 58, 0.55); }
+.reD20 {
+  grid-column: 1;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em;
+  color: var(--muted); text-transform: uppercase;
+}
+.v { color: var(--text); }
+.pick { color: var(--cyan); }
+.mode { margin-left: 6px; font-size: 9px; letter-spacing: 0.22em; }
+.mode.adv { color: #4dd07d; }
+.mode.dis { color: #e07a3a; }
+.reBreak {
+  grid-column: 1;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+  color: var(--beige); text-transform: uppercase; opacity: 0.85;
+}
+.eq { color: var(--cyan); }
+.reStamp {
+  grid-column: 2; grid-row: 3; justify-self: end; align-self: end;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em;
+  color: var(--beige-dim); text-transform: uppercase;
+}
+.reCrit {
+  position: absolute; top: -7px; right: 12px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.32em;
+  padding: 2px 6px;
+  background: var(--bg); border: 1.5px solid var(--gold-rare); color: var(--gold-rare);
+  text-transform: uppercase; box-shadow: 0 0 10px rgba(226, 176, 33, 0.45); z-index: 2;
+}
+.rollEntry.critFail .reCrit { border-color: var(--danger); color: var(--danger); box-shadow: 0 0 10px rgba(185, 58, 58, 0.45); }
+
+@media (max-width: 1180px) {
+  .rolls { grid-template-columns: 1fr; grid-template-rows: minmax(360px, 1fr) minmax(260px, 320px); overflow-y: auto; }
+  .ringScaler { width: min(540px, 100%); height: min(420px, 60vh); }
+}

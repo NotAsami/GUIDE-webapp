@@ -1,0 +1,2215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — STAT PANEL // ROS CHRISSTONE</title>
+<!--
+  PHASE 9 — Stat Panel screen, COMPACT layout.
+
+  v2 restructure: the previous version printed each section as a
+  full-width row, producing a long vertical scroll. The user wanted
+  a denser readout closer in spirit to the reference dashboard.
+  This version drops the .sheet/.sec stack in favor of a 12-column
+  .panel-grid where every section lives in its own clip-edged
+  .widget. At ≥1280px the layout fits on one viewport with five
+  rows; below that, panels stack 2-wide and finally 1-wide.
+
+  Sub-screen affordance unchanged: Equipment is the active navbar
+  button; hovering reveals the Inventory + Stat Panel sub-pair with
+  Stat Panel marked as the active sub-button.
+
+  Interactive widgets (HP / Hit Dice / Death Saves / Exhaustion)
+  keep their behavior — only their visual chrome was tightened
+  to fit the denser layout (smaller HP type, smaller pips, smaller
+  dots, smaller exhaustion cells).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  /* ============================================================
+     SHARED CHROME  (kept verbatim with Equipment / Shard)
+     ============================================================ */
+  :root {
+    --bg:        #1d1d1d;
+    --bg-2:      #161616;
+    --beige:     #d4bf7d;
+    --beige-dim: #8a7a4a;
+    --cyan:      #00a6d6;
+    --cyan-dim:  #0d6e8c;
+    --cyan-hot:  #4dd6ff;
+    --gold-rare: #e2b021;
+    --text:      #dedede;
+    --muted:     #aaaaaa;
+    --danger:    #b93a3a;
+    --danger-hot:#ff5454;
+
+    --bar-top-h:    62px;
+    --bar-bottom-h: 50px;
+    --nav-h:        72px;
+    --nav-top-gap:  26px;
+
+    --font-display: "Cinzel", serif;
+    --font-prose:   "EB Garamond", serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%; width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-prose);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .stage {
+    position: fixed; inset: 0;
+    background:
+      url("https://www.transparenttextures.com/patterns/dark-leather.png"),
+      radial-gradient(120% 90% at 50% 50%, #232220 0%, #1a1a1a 60%, #0e0e0e 100%);
+    background-blend-mode: overlay, normal;
+  }
+  .scanlines {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 90;
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px,
+      transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+  .vignette {
+    pointer-events: none;
+    position: fixed; inset: 0; z-index: 91;
+    background: radial-gradient(120% 110% at 50% 50%,
+      transparent 55%, rgba(0,0,0,0.55) 95%, rgba(0,0,0,0.85) 100%);
+  }
+  .sweep {
+    pointer-events: none;
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 2px; z-index: 95;
+    background: linear-gradient(to bottom,
+      transparent, rgba(0,166,214,0.55) 50%, transparent);
+    box-shadow: 0 0 24px rgba(0,166,214,0.45);
+    opacity: 0;
+  }
+  .sweep.run { animation: sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards; }
+  @keyframes sweep-run {
+    0%   { opacity: 0; transform: translateY(-20px); }
+    8%   { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(100vh); }
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- Top Bar ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--bar-top-h); z-index: 50;
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center; padding: 0 36px;
+    background: linear-gradient(to bottom,
+      rgba(15,15,15,0.95) 0%, rgba(22,22,22,0.92) 100%);
+    border-bottom: 1px solid var(--beige);
+    box-shadow: 0 1px 0 rgba(212,191,125,0.15),
+                0 8px 24px -8px rgba(0,0,0,0.6);
+  }
+  .topbar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .topbar::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 1px; background: var(--beige);
+    box-shadow: 0 0 8px rgba(212,191,125,0.4);
+  }
+  .top-left, .top-right {
+    display: flex; align-items: center; gap: 28px;
+    position: relative; z-index: 1;
+  }
+  .top-right { justify-content: flex-end; }
+  .stat-block { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+  .stat-row { display: flex; align-items: baseline; gap: 8px; }
+  .stat-num {
+    font-family: var(--font-display); font-weight: 600;
+    color: var(--beige); font-size: 22px; line-height: 1; letter-spacing: 0.04em;
+  }
+  .stat-label {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--cyan); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .bar {
+    height: 3px; width: 110px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5); position: relative; overflow: hidden;
+  }
+  .bar > i {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+    box-shadow: 0 0 6px rgba(0,166,214,0.6); display: block;
+  }
+  .top-center { text-align: center; position: relative; z-index: 1; padding: 0 24px; }
+  .char-name {
+    font-family: var(--font-display); font-weight: 600; font-size: 18px;
+    letter-spacing: 0.4em; color: var(--text); text-transform: uppercase; line-height: 1;
+  }
+  .char-name .cursor {
+    display: inline-block; color: var(--cyan); transform: translateY(-1px);
+    margin-left: 4px; animation: blink 1s steps(2, end) infinite;
+  }
+  .char-sub {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+    color: var(--muted); margin-top: 4px; text-transform: uppercase;
+  }
+  .char-sub .sep { color: var(--beige-dim); margin: 0 8px; }
+  .gold-block, .weight-block { display: flex; align-items: baseline; gap: 10px; }
+  .gold-block .ic, .weight-block .ic {
+    font-family: var(--font-display); color: var(--beige); font-size: 20px; line-height: 1;
+  }
+  .gold-block .val, .weight-block .val {
+    font-family: var(--font-display); color: var(--beige); font-size: 18px;
+    letter-spacing: 0.06em; line-height: 1;
+  }
+  .gold-block .lab, .weight-block .lab {
+    font-family: var(--font-mono); color: var(--cyan); font-size: 9px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .ticker {
+    position: fixed; left: 0; right: 0; height: 12px; z-index: 51;
+    display: flex; align-items: center; padding: 0 24px;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+    color: rgba(0,166,214,0.55); pointer-events: none;
+    overflow: hidden; white-space: nowrap;
+  }
+  .ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
+  .ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212,191,125,0.45); }
+  .ticker .gap { width: 32px; display: inline-block; }
+  .ticker .dim { color: rgba(170,170,170,0.4); }
+
+  /* ---------- Bottom Bar ---------- */
+  .bottombar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: var(--bar-bottom-h); z-index: 50;
+    display: flex; align-items: center; padding: 0 32px;
+    background: linear-gradient(to top,
+      rgba(15,15,15,0.96) 0%, rgba(22,22,22,0.92) 100%);
+    border-top: 1px solid var(--beige);
+    box-shadow: 0 -1px 0 rgba(212,191,125,0.15), 0 -8px 24px -8px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .bottombar::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 4px);
+    mix-blend-mode: overlay;
+  }
+  .bb-line {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; width: 100%; color: var(--muted);
+    position: relative; z-index: 1;
+  }
+  .bb-line .lab  { color: var(--beige); }
+  .bb-line .val  { color: var(--cyan); }
+  .bb-line .dim  { color: var(--muted); }
+  .bb-line .sep  { color: var(--beige-dim); margin: 0 4px; }
+  .bb-line .dot  {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 8px rgba(0,166,214,0.7);
+    display: inline-block;
+  }
+  .bb-line .save-cursor {
+    color: var(--cyan); animation: blink 1s steps(2, end) infinite; margin-left: 2px;
+  }
+  .bb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+  /* ---------- NAVBAR (same as Equipment) ---------- */
+  .navbar {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap));
+    left: 50%; transform: translateX(-50%);
+    display: flex; gap: 14px;
+    z-index: 45;
+  }
+  .nav-slot { position: relative; width: 156px; display: flex; justify-content: center; }
+  .nav-slot.equipment { padding: 60px 0; margin: -60px 0; }
+
+  .nav-btn {
+    --w: 156px; --h: var(--nav-h); --cut: 11px;
+    width: var(--w); height: var(--h);
+    background: transparent; border: 0; padding: 0;
+    color: var(--text); font-family: var(--font-mono);
+    cursor: pointer; position: relative;
+    transition: transform 180ms ease;
+  }
+  .nav-btn .nb-frame {
+    position: absolute; inset: 0; background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 180ms ease;
+  }
+  .nav-btn .nb-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(212,191,125,0.04), transparent 60%),
+      linear-gradient(180deg, #1c1c1c, #141414);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 6px;
+    transition: box-shadow 180ms ease, background 180ms ease;
+  }
+  .nav-btn .nb-icon {
+    color: var(--beige); font-size: 20px; line-height: 1;
+    transition: color 180ms ease, text-shadow 180ms ease;
+  }
+  .nav-btn .nb-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.26em; color: var(--text); text-transform: uppercase;
+  }
+  .nav-btn .nb-marker {
+    position: absolute; top: 6px; left: 12px;
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.2em; color: var(--cyan); opacity: 0.7;
+  }
+  .nav-btn:hover { transform: translateY(-2px); }
+  .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.18),
+                0 0 18px rgba(0,166,214,0.35);
+  }
+  .nav-btn:hover .nb-icon {
+    color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.7);
+  }
+  .nav-btn.is-active .nb-frame { background: var(--cyan); }
+  .nav-btn.is-active .nb-inner {
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.18), transparent 60%),
+      linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 28px rgba(0,166,214,0.30),
+                0 0 22px rgba(0,166,214,0.55);
+  }
+  .nav-btn.is-active .nb-icon { color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.9); }
+  .nav-btn.is-active .nb-label { color: var(--cyan-hot); }
+  .nav-btn.is-active .nb-marker { color: var(--beige); opacity: 1; }
+  .nav-btn.is-active::after {
+    content: ""; position: absolute;
+    top: -6px; left: 14%; right: 14%; height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 20px rgba(0,166,214,0.6);
+    z-index: 2;
+  }
+  /* Sub-buttons */
+  .nav-sub {
+    position: absolute; left: 50%;
+    transform: translate(-50%, 0) scale(0.95);
+    opacity: 0; pointer-events: none;
+    transition: transform 220ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
+    z-index: 1;
+  }
+  .nav-sub.above { bottom: calc(50% + 44px); }
+  .nav-sub.below { top:    calc(50% + 44px); }
+  .nav-sub .nav-btn { --w: 122px; --h: 56px; --cut: 9px; }
+  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
+  .nav-sub .nav-btn .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
+                linear-gradient(180deg, #141a1d, #0e1316);
+  }
+  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
+  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
+  .nav-sub .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
+  .nav-sub .nav-btn.is-sub-active .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.22), transparent 60%),
+                linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 22px rgba(0,166,214,0.34),
+                0 0 16px rgba(0,166,214,0.45);
+  }
+  .nav-sub .nav-btn.is-sub-active .nb-icon  { color: var(--cyan-hot); text-shadow: 0 0 10px rgba(0,166,214,0.9); }
+  .nav-sub .nav-btn.is-sub-active .nb-label { color: var(--cyan-hot); }
+  .nav-slot.equipment:hover .nav-sub,
+  .nav-slot.equipment:focus-within .nav-sub { opacity: 1; pointer-events: auto; }
+  .nav-slot.equipment:hover .nav-sub.above { transform: translate(-50%, -8px) scale(1); }
+  .nav-slot.equipment:hover .nav-sub.below { transform: translate(-50%, 8px) scale(1); }
+
+  .nav-meta {
+    position: fixed;
+    left: 50%; transform: translateX(-50%);
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 8px);
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.32em; color: var(--muted);
+    text-transform: uppercase; z-index: 44;
+    display: flex; align-items: center; gap: 12px;
+    white-space: nowrap;
+  }
+  .nav-meta .acc  { color: var(--cyan); }
+  .nav-meta .dim  { color: var(--beige-dim); }
+  .nav-meta .stamp { color: var(--beige); }
+
+  .side-label {
+    position: fixed;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.3em; color: var(--muted);
+    text-transform: uppercase; pointer-events: none; z-index: 12;
+  }
+  .side-label.left  { left: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: rotate(180deg) translateY(50%); }
+  .side-label.right { right: 10px; top: 50%; writing-mode: vertical-rl;
+                      transform: translateY(-50%); }
+  .side-label .acc  { color: var(--cyan); }
+
+  /* ============================================================
+     STAT PANEL — compact dashboard
+     ============================================================ */
+  main.sp {
+    position: fixed;
+    top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 24px);
+    bottom: calc(var(--bar-bottom-h) + 10px);
+    left: 0; right: 0;
+    z-index: 10;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 24px 16px;
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px,
+      transparent 1px, transparent 4px);
+    scrollbar-color: rgba(0,166,214,0.55) rgba(0,0,0,0.5);
+    scrollbar-width: thin;
+  }
+  main.sp::-webkit-scrollbar { width: 8px; }
+  main.sp::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.5);
+    border-left: 1px solid rgba(212,191,125,0.15);
+  }
+  main.sp::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--cyan-dim), rgba(212,191,125,0.55));
+    border: 2px solid #111;
+  }
+
+  .dash {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex; flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Single compact section header at the top */
+  .dash-head {
+    display: flex; align-items: baseline; gap: 16px;
+    padding: 4px 4px 8px;
+    border-bottom: 1px solid rgba(212,191,125,0.45);
+    position: relative;
+  }
+  .dash-head::after {
+    content: ""; position: absolute;
+    left: 0; right: 0; bottom: -4px; height: 1px;
+    background: rgba(212,191,125,0.18);
+  }
+  .dash-head .dh-num {
+    font-family: var(--font-mono); font-size: 14px;
+    color: var(--cyan); letter-spacing: 0.24em; line-height: 1;
+    text-shadow: 0 0 10px rgba(0,166,214,0.4);
+  }
+  .dash-head .dh-title {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 18px; letter-spacing: 0.34em;
+    color: var(--beige); text-transform: uppercase; line-height: 1;
+    text-shadow: 0 0 10px rgba(212,191,125,0.15);
+  }
+  .dash-head .dh-meta {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 9.5px;
+    color: var(--muted); letter-spacing: 0.26em; text-transform: uppercase;
+    display: flex; gap: 12px; align-items: center;
+  }
+  .dash-head .dh-meta .dim { color: var(--beige-dim); }
+  .dash-head .dh-meta .acc { color: var(--cyan); }
+  .dash-head .dh-meta .cursor { color: var(--cyan); animation: blink 1s steps(2,end) infinite; }
+
+  /* 12-col panel grid */
+  .panel-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 10px;
+    margin-top: 8px;
+    padding-bottom: 8px;
+  }
+  .col-3  { grid-column: span 3; }
+  .col-4  { grid-column: span 4; }
+  .col-5  { grid-column: span 5; }
+  .col-6  { grid-column: span 6; }
+  .col-7  { grid-column: span 7; }
+  .col-8  { grid-column: span 8; }
+  .col-9  { grid-column: span 9; }
+  .col-12 { grid-column: span 12; }
+
+  @media (max-width: 1280px) {
+    .col-3, .col-4, .col-5 { grid-column: span 6; }
+    .col-6, .col-7, .col-8, .col-9 { grid-column: span 12; }
+  }
+  @media (max-width: 760px) {
+    .panel-grid > * { grid-column: span 12 !important; }
+  }
+
+  /* ----- Widget chassis ----- */
+  .widget {
+    position: relative;
+    background: linear-gradient(180deg, rgba(22,22,22,0.85), rgba(13,13,13,0.85));
+    border: 1px solid rgba(212,191,125,0.32);
+    padding: 10px 14px 12px 18px;
+    display: flex; flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    height: 100%;
+  }
+  .widget::before {
+    content: ""; position: absolute;
+    left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--beige); opacity: 0.55;
+  }
+  .widget.alert::before { background: var(--danger-hot); opacity: 0.85; box-shadow: 0 0 10px rgba(255,84,84,0.6); }
+  .widget .w-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed rgba(212,191,125,0.28);
+  }
+  .widget .w-num {
+    font-family: var(--font-mono); font-size: 8.5px;
+    color: var(--cyan); letter-spacing: 0.24em;
+  }
+  .widget .w-title {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--beige); letter-spacing: 0.3em; text-transform: uppercase;
+  }
+  .widget .w-meta {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 8.5px;
+    color: var(--muted); letter-spacing: 0.22em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .widget .w-meta .dim { color: var(--beige-dim); }
+  .widget .w-meta .acc { color: var(--cyan); }
+  .widget .w-meta button {
+    background: transparent; border: 1px solid rgba(212,191,125,0.35);
+    color: var(--beige);
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    padding: 2px 7px; cursor: pointer;
+    transition: all 160ms ease;
+  }
+  .widget .w-meta button:hover {
+    color: var(--cyan-hot); border-color: var(--cyan);
+    box-shadow: 0 0 10px rgba(0,166,214,0.4);
+  }
+  .widget .w-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+
+  @keyframes widgetFlash {
+    0%   { box-shadow: none; }
+    30%  { box-shadow: 0 0 16px rgba(0,166,214,0.42), inset 0 0 22px rgba(0,166,214,0.16); }
+    100% { box-shadow: none; }
+  }
+  .widget.flash { animation: widgetFlash 600ms ease-out; }
+
+  /* ----- Shared angular cell  (used in primary, ability, sense grids) ----- */
+  .ablock {
+    --cut: 8px;
+    position: relative;
+    transition: transform 180ms ease;
+  }
+  .ablock .ab-frame {
+    position: absolute; inset: 0;
+    background: var(--beige);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 180ms ease;
+  }
+  .ablock .ab-inner {
+    position: absolute; inset: 1.5px;
+    background:
+      radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.06), transparent 60%),
+      linear-gradient(180deg, #1a1a1a, #111);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    transition: box-shadow 180ms ease;
+  }
+  .ablock:hover .ab-inner {
+    box-shadow: inset 0 0 18px rgba(0,166,214,0.18),
+                0 0 14px rgba(0,166,214,0.26);
+  }
+  .ablock:hover .ab-frame { background: var(--cyan); }
+
+  /* ============================================================
+     01 COMBAT (4 small primary cells)
+     ============================================================ */
+  .combat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    flex: 1;
+  }
+  .combat-grid .ablock { height: 76px; }
+  .pb-content {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 6px 4px;
+    gap: 2px;
+  }
+  .pb-marker {
+    position: absolute; top: 4px; left: 8px;
+    font-family: var(--font-mono); font-size: 7.5px;
+    letter-spacing: 0.2em; color: var(--cyan); opacity: 0.75;
+  }
+  .pb-value {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 22px; letter-spacing: 0.02em;
+    color: var(--cyan-hot); line-height: 1;
+    text-shadow: 0 0 10px rgba(0,166,214,0.35);
+  }
+  .pb-value .unit {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.2em; color: var(--cyan); margin-left: 2px;
+    text-shadow: none; font-weight: 400;
+  }
+  .pb-label {
+    font-family: var(--font-mono); font-size: 7.5px;
+    letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase;
+    text-align: center; margin-top: 2px;
+  }
+  .ac-breakdown {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.18em; color: var(--muted);
+    text-transform: uppercase;
+    display: flex; align-items: center; gap: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(212,191,125,0.22);
+    flex-wrap: wrap;
+  }
+  .ac-breakdown .k   { color: var(--beige); }
+  .ac-breakdown .v   { color: var(--text); }
+  .ac-breakdown .op  { color: var(--beige-dim); }
+  .ac-breakdown .tag {
+    font-size: 8px; letter-spacing: 0.2em;
+    color: var(--cyan); border: 1px solid rgba(0,166,214,0.4);
+    padding: 1px 5px;
+  }
+
+  /* ============================================================
+     02 HIT POINTS
+     ============================================================ */
+  .hp-body {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 14px;
+    flex: 1; align-items: stretch;
+  }
+  .hp-main { display: flex; flex-direction: column; justify-content: center; }
+  .hp-current-row { display: flex; align-items: baseline; gap: 10px; }
+  .hp-current {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 40px; line-height: 1; letter-spacing: 0.01em;
+    color: var(--cyan-hot);
+    text-shadow: 0 0 14px rgba(0,166,214,0.45);
+    cursor: pointer;
+    padding: 1px 6px;
+    border: 1px dashed transparent;
+    transition: border-color 160ms ease, color 200ms ease, text-shadow 200ms ease;
+    min-width: 70px; text-align: right;
+  }
+  .hp-current:hover { border-color: rgba(0,166,214,0.45); }
+  .hp-current.danger {
+    color: var(--danger-hot);
+    text-shadow: 0 0 14px rgba(255,84,84,0.55);
+  }
+  .hp-current input {
+    width: 70px; background: rgba(0,166,214,0.08);
+    border: 1px solid var(--cyan); color: var(--cyan-hot);
+    font: inherit; padding: 1px 6px; outline: 0;
+    text-align: right;
+  }
+  .hp-slash {
+    font-family: var(--font-mono); color: var(--beige-dim);
+    font-size: 24px; line-height: 1;
+  }
+  .hp-max {
+    font-family: var(--font-mono); font-size: 22px;
+    color: var(--beige); letter-spacing: 0.02em; line-height: 1;
+  }
+  .hp-meta {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 6px;
+    font-family: var(--font-mono); font-size: 8.5px;
+    color: var(--muted); letter-spacing: 0.2em; text-transform: uppercase;
+  }
+  .hp-meta .lab { color: var(--beige); }
+  .hp-meta .sep { color: var(--beige-dim); }
+  .hp-meta .pct { color: var(--cyan); }
+  .hp-meta .pct.danger { color: var(--danger-hot); }
+  .hp-bar {
+    margin-top: 8px; height: 5px;
+    border: 1px solid var(--beige);
+    background: rgba(0,0,0,0.5);
+    position: relative; overflow: hidden;
+  }
+  .hp-bar .fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--cyan-hot));
+    box-shadow: 0 0 8px rgba(0,166,214,0.5);
+    transition: width 280ms cubic-bezier(.4,0,.2,1), background 280ms ease;
+  }
+  .hp-bar .fill.danger {
+    background: linear-gradient(90deg, #6b1f1f, var(--danger-hot));
+    box-shadow: 0 0 10px rgba(185,58,58,0.6);
+  }
+  .hp-bar .notch {
+    position: absolute; top: -2px; bottom: -2px;
+    left: 25%; width: 1px; background: rgba(212,191,125,0.5);
+  }
+  .hp-side {
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    gap: 8px;
+    border-left: 1px dashed rgba(212,191,125,0.22);
+    padding-left: 12px;
+    min-width: 124px;
+  }
+  .hp-steppers { display: flex; gap: 5px; }
+  .hp-step {
+    --cut: 5px;
+    flex: 1;
+    background: rgba(0,166,214,0.08);
+    border: 1px solid var(--cyan-dim);
+    color: var(--cyan-hot);
+    font-family: var(--font-mono); font-size: 12px;
+    letter-spacing: 0.04em;
+    padding: 4px 0; line-height: 1;
+    cursor: pointer;
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  }
+  .hp-step:hover {
+    background: rgba(0,166,214,0.22);
+    color: #fff;
+    box-shadow: 0 0 12px rgba(0,166,214,0.45);
+  }
+  .hp-step .delta {
+    display: block;
+    font-size: 7px; letter-spacing: 0.18em;
+    color: var(--cyan); opacity: 0.8;
+    margin-top: 1px;
+  }
+  .temp-hp-row {
+    display: flex; flex-direction: column; gap: 2px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(212,191,125,0.22);
+  }
+  .temp-hp-row .lab {
+    font-family: var(--font-mono); font-size: 7.5px;
+    color: var(--beige); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .temp-hp-row .val-wrap { display: flex; align-items: baseline; gap: 6px; }
+  .temp-hp {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 18px; color: var(--cyan-hot);
+    cursor: pointer; padding: 1px 5px;
+    border: 1px dashed transparent;
+    line-height: 1; min-width: 30px; text-align: right;
+    transition: border-color 160ms ease;
+  }
+  .temp-hp:hover { border-color: rgba(0,166,214,0.45); }
+  .temp-hp.zero { color: var(--beige-dim); }
+  .temp-hp input {
+    width: 50px;
+    background: rgba(0,166,214,0.08);
+    border: 1px solid var(--cyan); color: var(--cyan-hot);
+    font: inherit; padding: 1px 5px; outline: 0; text-align: right;
+  }
+  .temp-hp-row .hint {
+    font-family: var(--font-mono); font-size: 7px;
+    color: var(--muted); letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  /* ============================================================
+     03 HIT DICE
+     ============================================================ */
+  .hd-summary { display: flex; align-items: baseline; gap: 8px; }
+  .hd-summary .v {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 22px; color: var(--cyan-hot);
+    text-shadow: 0 0 10px rgba(0,166,214,0.35);
+    line-height: 1;
+  }
+  .hd-summary .lab {
+    font-family: var(--font-mono); font-size: 8.5px;
+    color: var(--beige); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .hd-summary .rem {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 8.5px;
+    color: var(--muted); letter-spacing: 0.2em; text-transform: uppercase;
+  }
+  .hd-summary .rem .acc { color: var(--cyan); }
+  .hd-pips {
+    display: flex; gap: 6px;
+    align-items: center;
+    flex: 1;
+  }
+  .hd-pip {
+    --cut: 6px;
+    flex: 1;
+    max-width: 50px; min-height: 38px;
+    aspect-ratio: 1.1 / 1;
+    position: relative;
+    background: transparent;
+    border: 0; padding: 0; cursor: pointer;
+    transition: transform 160ms ease;
+  }
+  .hd-pip:hover { transform: translateY(-2px); }
+  .hd-pip .hp-frame {
+    position: absolute; inset: 0;
+    background: var(--cyan);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 200ms ease, opacity 200ms ease;
+  }
+  .hd-pip .hp-inner {
+    position: absolute; inset: 1.5px;
+    background: linear-gradient(180deg, #16252b, #0d1417);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 0;
+    transition: background 200ms ease, box-shadow 200ms ease;
+  }
+  .hd-pip .hp-inner .num {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 12px; color: var(--cyan-hot);
+    line-height: 1; text-shadow: 0 0 6px rgba(0,166,214,0.5);
+  }
+  .hd-pip .hp-inner .pip-lab {
+    font-family: var(--font-mono); font-size: 6.5px;
+    color: var(--cyan); letter-spacing: 0.18em; margin-top: 1px;
+  }
+  .hd-pip:hover .hp-inner {
+    box-shadow: inset 0 0 14px rgba(0,166,214,0.3),
+                0 0 10px rgba(0,166,214,0.4);
+  }
+  .hd-pip.spent .hp-frame { background: var(--beige-dim); opacity: 0.55; }
+  .hd-pip.spent .hp-inner {
+    background: linear-gradient(180deg, #181613, #100f0d);
+  }
+  .hd-pip.spent .hp-inner .num { color: var(--beige-dim); text-shadow: none; }
+  .hd-pip.spent .hp-inner .pip-lab { color: var(--beige-dim); }
+  .hd-pip.spent:hover .hp-inner { box-shadow: none; }
+  .hd-pip.spent::after {
+    content: ""; position: absolute;
+    top: 50%; left: 14%; right: 14%; height: 1px;
+    background: var(--beige-dim);
+    transform: rotate(-22deg);
+    pointer-events: none;
+  }
+
+  /* ============================================================
+     04 ABILITY SCORES (6 cells horizontal)
+     ============================================================ */
+  .ability-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    flex: 1;
+  }
+  .ability-grid .ablock { height: 96px; }
+  .ab-content {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center;
+    padding: 8px 4px 6px;
+  }
+  .ab-name {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 9px; letter-spacing: 0.24em;
+    color: var(--beige); text-transform: uppercase;
+    text-align: center; line-height: 1;
+  }
+  .ab-mod {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 24px; letter-spacing: 0.02em;
+    color: var(--cyan-hot); line-height: 1;
+    text-shadow: 0 0 12px rgba(0,166,214,0.35);
+  }
+  .ab-score {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.18em; color: var(--muted);
+    text-transform: uppercase;
+  }
+  .ab-score .paren { color: var(--beige-dim); }
+
+  /* ============================================================
+     05 SENSES (compact list)
+     ============================================================ */
+  .senses-list { display: flex; flex-direction: column; gap: 4px; flex: 1; justify-content: center; }
+  .sense-row {
+    display: grid; grid-template-columns: 1fr auto;
+    align-items: baseline; gap: 10px;
+    padding: 5px 2px;
+    border-bottom: 1px dashed rgba(212,191,125,0.18);
+  }
+  .sense-row:last-child { border-bottom: 0; }
+  .sense-row .k {
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--beige); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .sense-row .v {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text); letter-spacing: 0.04em;
+  }
+  .sense-row .v.muted { color: var(--beige-dim); }
+  .sense-row .v.acc { color: var(--cyan-hot); text-shadow: 0 0 6px rgba(0,166,214,0.3); }
+  .sense-row .v.status {
+    color: var(--cyan); letter-spacing: 0.2em;
+    font-size: 10px; text-transform: uppercase;
+  }
+
+  /* ============================================================
+     06 SAVING THROWS (6 mini cells in 2x3)
+     ============================================================ */
+  .saves-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 6px; flex: 1; align-content: center;
+  }
+  .save-cell {
+    --cut: 6px;
+    position: relative;
+    padding: 7px 8px 7px 10px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(212,191,125,0.3);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    display: grid;
+    grid-template-columns: 10px 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 1px 7px;
+    align-items: center;
+  }
+  .save-cell.prof { background: rgba(0,166,214,0.07); border-color: rgba(0,166,214,0.4); }
+  .save-cell .prof-dot {
+    grid-row: 1 / span 2;
+    width: 8px; height: 8px; border-radius: 50%;
+    border: 1.5px solid var(--beige-dim);
+    background: transparent;
+    align-self: center;
+  }
+  .save-cell.prof .prof-dot {
+    background: var(--cyan); border-color: var(--cyan-hot);
+    box-shadow: 0 0 6px rgba(0,166,214,0.6);
+  }
+  .save-cell .name {
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--beige); letter-spacing: 0.22em; text-transform: uppercase;
+  }
+  .save-cell.prof .name { color: var(--cyan); }
+  .save-cell .mod {
+    grid-column: 3; grid-row: 1 / span 2;
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 17px; color: var(--cyan-hot);
+    text-shadow: 0 0 6px rgba(0,166,214,0.3);
+    line-height: 1; letter-spacing: 0.02em;
+  }
+  .save-cell .sub {
+    font-family: var(--font-mono); font-size: 7px;
+    color: var(--muted); letter-spacing: 0.2em; text-transform: uppercase;
+  }
+  .save-cell.prof .sub { color: var(--beige); }
+
+  /* ============================================================
+     07 DEATH SAVES
+     ============================================================ */
+  .death-rows { display: flex; flex-direction: column; gap: 6px; flex: 1; justify-content: center; }
+  .death-row {
+    display: grid; grid-template-columns: 80px 1fr;
+    align-items: center; gap: 10px;
+  }
+  .death-row .lab {
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--beige); letter-spacing: 0.24em; text-transform: uppercase;
+  }
+  .death-dots { display: flex; gap: 9px; }
+  .death-dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: transparent;
+    border: 1.5px solid var(--beige);
+    cursor: pointer; padding: 0;
+    position: relative;
+    transition: all 200ms ease;
+  }
+  .death-dot:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 10px rgba(0,166,214,0.4);
+  }
+  .death-row.successes .death-dot.on {
+    background: var(--cyan);
+    border-color: var(--cyan-hot);
+    box-shadow: 0 0 12px rgba(0,166,214,0.7),
+                inset 0 0 5px rgba(255,255,255,0.25);
+  }
+  .death-row.fails .death-dot.on {
+    background: var(--danger);
+    border-color: var(--danger-hot);
+    box-shadow: 0 0 12px rgba(185,58,58,0.7),
+                inset 0 0 5px rgba(255,255,255,0.2);
+  }
+  .death-dot.on::after {
+    content: ""; position: absolute;
+    inset: 3px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.45), transparent 70%);
+  }
+  .death-banner {
+    margin-top: 4px;
+    padding: 6px 10px;
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.28em; text-transform: uppercase;
+    text-align: center;
+    border: 1px solid transparent;
+    background: rgba(0,0,0,0.4);
+    color: var(--muted);
+    transition: all 220ms ease;
+    clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px),
+      calc(100% - 7px) 100%, 0 100%, 0 7px);
+  }
+  .death-banner::before { content: "// "; opacity: 0.6; }
+  .death-banner.stable {
+    border-color: var(--cyan);
+    background: rgba(0,166,214,0.10);
+    color: var(--cyan-hot);
+    box-shadow: 0 0 14px rgba(0,166,214,0.3);
+    text-shadow: 0 0 8px rgba(0,166,214,0.5);
+  }
+  .death-banner.failed {
+    border-color: var(--danger);
+    background: rgba(185,58,58,0.12);
+    color: var(--danger-hot);
+    box-shadow: 0 0 16px rgba(185,58,58,0.45);
+    text-shadow: 0 0 8px rgba(185,58,58,0.6);
+    animation: failPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes failPulse {
+    0%, 100% { box-shadow: 0 0 16px rgba(185,58,58,0.45); }
+    50%      { box-shadow: 0 0 26px rgba(185,58,58,0.75); }
+  }
+
+  /* ============================================================
+     08 EXHAUSTION
+     ============================================================ */
+  .exh-track {
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    gap: 5px;
+    margin-top: 2px;
+    flex: 1; align-content: center;
+  }
+  .exh-cell {
+    --cut: 5px;
+    aspect-ratio: 1 / 1;
+    max-height: 44px;
+    background: transparent;
+    border: 0; padding: 0; cursor: pointer;
+    position: relative;
+    transition: transform 160ms ease;
+  }
+  .exh-cell:hover { transform: translateY(-2px); }
+  .exh-cell .ex-frame {
+    position: absolute; inset: 0;
+    background: rgba(212,191,125,0.35);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    transition: background 220ms ease, box-shadow 220ms ease;
+  }
+  .exh-cell .ex-inner {
+    position: absolute; inset: 1.5px;
+    background: linear-gradient(180deg, #1c1c1c, #131313);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
+      100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
+      0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-weight: 500;
+    color: var(--beige-dim);
+    font-size: 13px; line-height: 1;
+    transition: color 220ms ease, background 220ms ease;
+  }
+  .exh-cell.on[data-lvl="1"] .ex-frame { background: #d4bf7d; }
+  .exh-cell.on[data-lvl="2"] .ex-frame { background: #c9a25a; }
+  .exh-cell.on[data-lvl="3"] .ex-frame { background: #b8854a; }
+  .exh-cell.on[data-lvl="4"] .ex-frame { background: #a86340; }
+  .exh-cell.on[data-lvl="5"] .ex-frame { background: #b03d3a; }
+  .exh-cell.on[data-lvl="6"] .ex-frame {
+    background: var(--danger-hot);
+    box-shadow: 0 0 14px rgba(255,84,84,0.45);
+  }
+  .exh-cell.on .ex-inner {
+    background: linear-gradient(180deg, rgba(212,191,125,0.18), rgba(185,58,58,0.12));
+    color: var(--text);
+  }
+  .exh-cell.on[data-lvl="5"] .ex-inner,
+  .exh-cell.on[data-lvl="6"] .ex-inner {
+    color: var(--danger-hot);
+    text-shadow: 0 0 8px rgba(255,84,84,0.5);
+  }
+  .exh-readout {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--font-mono); font-size: 8.5px;
+    color: var(--muted); letter-spacing: 0.2em; text-transform: uppercase;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(212,191,125,0.22);
+  }
+  .exh-readout .level { color: var(--cyan); }
+  .exh-readout .effect { color: var(--beige); text-align: right; }
+  .exh-readout .effect.danger { color: var(--danger-hot); text-shadow: 0 0 6px rgba(255,84,84,0.4); }
+
+  /* ============================================================
+     09 SKILLS  (3 columns of 6)
+     ============================================================ */
+  .skills-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0 18px;
+    flex: 1;
+    align-content: start;
+  }
+  .skill-row {
+    display: grid;
+    grid-template-columns: 12px 1fr auto auto;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 4px;
+    border-bottom: 1px dashed rgba(212,191,125,0.16);
+    min-height: 24px;
+  }
+  .skill-row.prof { background: rgba(212,191,125,0.04); }
+  .skill-row .prof-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    border: 1px solid var(--beige);
+    background: transparent;
+    align-self: center;
+    transition: background 180ms ease;
+  }
+  .skill-row.prof .prof-dot {
+    background: var(--beige);
+    box-shadow: 0 0 5px rgba(212,191,125,0.45);
+  }
+  .skill-row .sk-name {
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: 0.14em; color: var(--muted);
+    text-transform: uppercase;
+  }
+  .skill-row.prof .sk-name { color: var(--text); }
+  .skill-row .sk-abil {
+    font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.22em; color: var(--beige-dim);
+    text-transform: uppercase;
+  }
+  .skill-row.prof .sk-abil { color: var(--beige); }
+  .skill-row .sk-mod {
+    font-family: var(--font-mono); font-weight: 500;
+    font-size: 12px; letter-spacing: 0.04em;
+    color: var(--cyan); line-height: 1;
+    min-width: 28px; text-align: right;
+    opacity: 0.85;
+  }
+  .skill-row.prof .sk-mod {
+    color: var(--cyan-hot); opacity: 1;
+    text-shadow: 0 0 6px rgba(0,166,214,0.3);
+  }
+
+  /* ============================================================
+     10 ATTACK QUICK-REFERENCE  (compact)
+     ============================================================ */
+  .attack-table {
+    display: flex; flex-direction: column;
+    flex: 1;
+  }
+  .at-row {
+    display: grid;
+    grid-template-columns: 22px 1fr auto auto;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px;
+    border-bottom: 1px dashed rgba(212,191,125,0.18);
+    font-family: var(--font-mono);
+  }
+  .at-row:last-of-type { border-bottom: 0; }
+  .at-row .at-icon {
+    color: var(--beige); font-size: 12px;
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(212,191,125,0.4);
+    background: rgba(0,0,0,0.4);
+  }
+  .at-row .at-name {
+    font-family: var(--font-display); font-weight: 600;
+    font-size: 12px; letter-spacing: 0.06em;
+    color: var(--cyan-hot); line-height: 1.1;
+  }
+  .at-row .at-name .hand {
+    display: block;
+    font-family: var(--font-mono); font-weight: 400;
+    font-size: 7.5px; letter-spacing: 0.22em;
+    color: var(--beige-dim); text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .at-row .at-toh {
+    font-family: var(--font-mono); font-size: 13px;
+    color: var(--cyan-hot); letter-spacing: 0.04em;
+    text-shadow: 0 0 6px rgba(0,166,214,0.3);
+  }
+  .at-row .at-dmg {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text); letter-spacing: 0.04em;
+    text-align: right;
+  }
+  .at-row .at-dmg .type {
+    display: block;
+    color: var(--beige-dim); font-size: 8px;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    margin-top: 1px;
+  }
+  .at-foot {
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(212,191,125,0.22);
+    font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.18em; color: var(--muted);
+    text-transform: uppercase;
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap;
+  }
+  .at-foot .k { color: var(--beige); }
+  .at-foot .acc { color: var(--cyan); }
+  .at-foot .dim { color: var(--beige-dim); }
+
+  /* ============================================================
+     11 PROFICIENCIES — chip groups (horizontal 3-col)
+     ============================================================ */
+  .prof-chips-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 10px 18px; flex: 1; align-content: start;
+  }
+  .prof-group { display: flex; flex-direction: column; gap: 5px; }
+  .prof-group .pg-head {
+    display: flex; align-items: baseline; gap: 6px;
+    border-bottom: 1px dashed rgba(212,191,125,0.25);
+    padding-bottom: 3px;
+  }
+  .prof-group .pg-head i {
+    font-size: 9px; color: var(--beige); opacity: 0.75;
+  }
+  .prof-group .pg-head .lab {
+    font-family: var(--font-mono); font-size: 8.5px;
+    color: var(--beige); letter-spacing: 0.26em; text-transform: uppercase;
+  }
+  .prof-group .pg-head .ct {
+    margin-left: auto;
+    font-family: var(--font-mono); font-size: 7.5px;
+    color: var(--muted); letter-spacing: 0.18em; text-transform: uppercase;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip {
+    --cut: 4px;
+    padding: 3px 8px;
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--text); letter-spacing: 0.1em;
+    background: rgba(0,166,214,0.08);
+    border: 1px solid rgba(0,166,214,0.35);
+    clip-path: polygon(var(--cut) 0, 100% 0,
+      100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+      0 100%, 0 var(--cut));
+    text-transform: uppercase;
+    transition: all 160ms ease;
+    cursor: default;
+  }
+  .chip:hover {
+    color: var(--cyan-hot);
+    border-color: var(--cyan);
+    background: rgba(0,166,214,0.18);
+    box-shadow: 0 0 8px rgba(0,166,214,0.3);
+  }
+  .chip.beige {
+    background: rgba(212,191,125,0.08);
+    border-color: rgba(212,191,125,0.35);
+    color: var(--beige);
+  }
+  .chip.beige:hover {
+    color: var(--text); border-color: var(--beige);
+    box-shadow: 0 0 8px rgba(212,191,125,0.3);
+  }
+  .chip.muted {
+    background: rgba(0,0,0,0.3);
+    border-color: rgba(170,170,170,0.25);
+    color: var(--muted);
+  }
+  .chip.empty {
+    background: transparent;
+    border: 1px dashed rgba(170,170,170,0.3);
+    color: var(--beige-dim);
+  }
+</style>
+</head>
+<body>
+
+<div class="stage"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="sweep" id="sweep"></div>
+
+<!-- ====================== TOP BAR ====================== -->
+<header class="topbar" role="banner">
+  <div class="top-left">
+    <div class="stat-block" aria-label="Level">
+      <div class="stat-row"><span class="stat-num">08</span><span class="stat-label">Level</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:62%"></i></div>
+    </div>
+    <div class="stat-block" aria-label="Reputation">
+      <div class="stat-row"><span class="stat-num">35</span><span class="stat-label">Reputation</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:48%"></i></div>
+    </div>
+  </div>
+
+  <div class="top-center">
+    <div class="char-name">Ros Chrisstone<span class="cursor">█</span></div>
+    <div class="char-sub">
+      <span>Human · Fighter</span>
+      <span class="sep">/</span>
+      <span>Champion Archetype</span>
+      <span class="sep">/</span>
+      <span>Brettany Reclamation</span>
+    </div>
+  </div>
+
+  <div class="top-right">
+    <div class="weight-block">
+      <span class="ic">⚖</span><span class="val">45 / 120</span><span class="lab">Burden</span>
+    </div>
+    <div class="gold-block">
+      <span class="ic">⊙</span><span class="val">1,247</span><span class="lab">Gold</span>
+    </div>
+  </div>
+</header>
+
+<div class="ticker above" aria-hidden="true">
+  <span>TASK_MANAGER_SD11S</span><span class="gap"></span>
+  <span class="dim">// AURUM_LEDGER_OK</span><span class="gap"></span>
+  <span>PROTOCOL: 6920-A44</span><span class="gap"></span>
+  <span class="dim">0001 0110 1001 0011 1100</span>
+</div>
+<div class="ticker below" aria-hidden="true">
+  <span>FRAME 09 // STAT.PANEL</span><span class="gap"></span>
+  <span class="dim">PARTY.OK</span><span class="gap"></span>
+  <span>SOULBOND 0x4F1A</span><span class="gap"></span>
+  <span class="dim">VITALS_NOMINAL</span>
+</div>
+
+<div class="side-label left">
+  <span class="acc">EQUIPMENT</span> &nbsp;//&nbsp; STAT_READOUT &nbsp;//&nbsp; VITALS OK
+</div>
+<div class="side-label right">
+  Castella-08 &nbsp;//&nbsp; <span class="acc">SHEET: COMPLETE</span> &nbsp;//&nbsp; Loadout 02
+</div>
+
+<!-- ====================== NAVBAR ====================== -->
+<nav class="navbar" aria-label="Primary">
+  <div class="nav-slot equipment">
+    <button class="nav-btn is-active" data-nav="equipment" aria-current="page">
+      <span class="nb-frame"></span>
+      <span class="nb-marker">01 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-khanda"></i></span>
+        <span class="nb-label">Equipment</span>
+      </span>
+    </button>
+    <div class="nav-sub above" aria-hidden="false">
+      <button class="nav-btn" data-nav="inventory">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-bag-shopping"></i></span>
+          <span class="nb-label">Inventory</span>
+        </span>
+      </button>
+    </div>
+    <div class="nav-sub below" aria-hidden="false">
+      <button class="nav-btn is-sub-active" data-nav="stat-panel" aria-current="page">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-chart-simple"></i></span>
+          <span class="nb-label">Stat Panel</span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="lore">
+      <span class="nb-frame"></span><span class="nb-marker">02 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-book-open"></i></span>
+        <span class="nb-label">Lore</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="spellbook">
+      <span class="nb-frame"></span><span class="nb-marker">03 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-scroll"></i></span>
+        <span class="nb-label">Spellbook</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="character">
+      <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-user-shield"></i></span>
+        <span class="nb-label">Character</span>
+      </span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="journal">
+      <span class="nb-frame"></span><span class="nb-marker">05 ◇</span>
+      <span class="nb-inner">
+        <span class="nb-icon"><i class="fa-solid fa-clipboard"></i></span>
+        <span class="nb-label">Journal</span>
+      </span>
+    </button>
+  </div>
+</nav>
+
+<div class="nav-meta">
+  <span class="dim">◇</span>
+  <span>Section</span>
+  <span class="acc">/ Equipment</span>
+  <span class="dim">·</span>
+  <span>Character Data</span>
+  <span class="dim">·</span>
+  <span class="stamp">STAT_READOUT</span>
+  <span class="dim">::</span>
+  <span class="acc">Complete</span>
+</div>
+
+<!-- ====================== MAIN — STAT PANEL ====================== -->
+<main class="sp" aria-label="Stat readout">
+  <div class="dash">
+
+    <!-- Section header -->
+    <header class="dash-head">
+      <span class="dh-num">09</span>
+      <span class="dh-title">Stat Panel</span>
+      <span class="dh-meta">
+        <span><span class="dim">Class</span> Fighter (Champion) <span class="dim">·</span> <span class="acc">Lv 8</span></span>
+        <span class="dim">·</span>
+        <span><span class="dim">Auto-Sync</span> <span class="acc">ON</span></span>
+        <span class="cursor">▌</span>
+      </span>
+    </header>
+
+    <div class="panel-grid">
+
+      <!-- ============ ROW 1 :: COMBAT · HP · HIT DICE ============ -->
+
+      <!-- 01 COMBAT -->
+      <section class="widget col-5" data-panel="combat">
+        <div class="w-head">
+          <span class="w-num">01</span>
+          <span class="w-title">Combat</span>
+          <span class="w-meta">Quick stats</span>
+        </div>
+        <div class="w-body">
+          <div class="combat-grid">
+            <div class="ablock">
+              <span class="ab-frame"></span><span class="ab-inner"></span>
+              <span class="pb-marker">A.C</span>
+              <div class="pb-content">
+                <div class="pb-value">17</div>
+                <div class="pb-label">Armor Class</div>
+              </div>
+            </div>
+            <div class="ablock">
+              <span class="ab-frame"></span><span class="ab-inner"></span>
+              <span class="pb-marker">INIT</span>
+              <div class="pb-content">
+                <div class="pb-value">+1</div>
+                <div class="pb-label">Initiative</div>
+              </div>
+            </div>
+            <div class="ablock">
+              <span class="ab-frame"></span><span class="ab-inner"></span>
+              <span class="pb-marker">SPD</span>
+              <div class="pb-content">
+                <div class="pb-value">30<span class="unit">ft</span></div>
+                <div class="pb-label">Speed</div>
+              </div>
+            </div>
+            <div class="ablock">
+              <span class="ab-frame"></span><span class="ab-inner"></span>
+              <span class="pb-marker">PROF</span>
+              <div class="pb-content">
+                <div class="pb-value">+3</div>
+                <div class="pb-label">Proficiency</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ac-breakdown">
+            <span class="k">AC 17</span>
+            <span class="op">=</span>
+            <span class="v">16</span>
+            <span class="tag">Chain Mail</span>
+            <span class="op">+</span>
+            <span class="v">1</span>
+            <span class="tag">DEX</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 02 HIT POINTS -->
+      <section class="widget col-4" data-panel="hp">
+        <div class="w-head">
+          <span class="w-num">02</span>
+          <span class="w-title">Hit Points</span>
+          <span class="w-meta"><span id="hp-pct-tag"><span class="dim">Vitals</span> 100%</span></span>
+        </div>
+        <div class="w-body">
+          <div class="hp-body">
+            <div class="hp-main">
+              <div class="hp-current-row">
+                <span class="hp-current" id="hp-current" title="Click to edit">42</span>
+                <span class="hp-slash">/</span>
+                <span class="hp-max" id="hp-max">42</span>
+              </div>
+              <div class="hp-meta">
+                <span class="lab">Current</span>
+                <span class="sep">·</span>
+                <span class="pct" id="hp-pct">100% Vitals</span>
+              </div>
+              <div class="hp-bar" aria-hidden="true">
+                <div class="fill" id="hp-fill" style="width:100%"></div>
+                <div class="notch" title="25% danger threshold"></div>
+              </div>
+            </div>
+            <div class="hp-side">
+              <div class="hp-steppers">
+                <button class="hp-step" data-hp-step="-5">−<span class="delta">5</span></button>
+                <button class="hp-step" data-hp-step="-1">−<span class="delta">1</span></button>
+                <button class="hp-step" data-hp-step="+1">+<span class="delta">1</span></button>
+                <button class="hp-step" data-hp-step="+5">+<span class="delta">5</span></button>
+              </div>
+              <div class="temp-hp-row">
+                <div class="lab">Temporary HP</div>
+                <div class="val-wrap">
+                  <span class="temp-hp zero" id="temp-hp" title="Click to edit">0</span>
+                  <span class="hint">absorbs first</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 03 HIT DICE -->
+      <section class="widget col-3" data-panel="hd">
+        <div class="w-head">
+          <span class="w-num">03</span>
+          <span class="w-title">Hit Dice</span>
+          <span class="w-meta"><button id="hd-reset" title="Long rest restores all">Rest</button></span>
+        </div>
+        <div class="w-body">
+          <div class="hd-summary">
+            <span class="v">5d10</span>
+            <span class="lab">Pool</span>
+            <span class="rem"><span class="acc" id="hd-remaining">5</span> / 5 left</span>
+          </div>
+          <div class="hd-pips" id="hd-pips">
+            <button class="hd-pip" data-idx="0" title="Spend one hit die">
+              <span class="hp-frame"></span>
+              <span class="hp-inner"><span class="num">d10</span><span class="pip-lab">01</span></span>
+            </button>
+            <button class="hd-pip" data-idx="1" title="Spend one hit die">
+              <span class="hp-frame"></span>
+              <span class="hp-inner"><span class="num">d10</span><span class="pip-lab">02</span></span>
+            </button>
+            <button class="hd-pip" data-idx="2" title="Spend one hit die">
+              <span class="hp-frame"></span>
+              <span class="hp-inner"><span class="num">d10</span><span class="pip-lab">03</span></span>
+            </button>
+            <button class="hd-pip" data-idx="3" title="Spend one hit die">
+              <span class="hp-frame"></span>
+              <span class="hp-inner"><span class="num">d10</span><span class="pip-lab">04</span></span>
+            </button>
+            <button class="hd-pip" data-idx="4" title="Spend one hit die">
+              <span class="hp-frame"></span>
+              <span class="hp-inner"><span class="num">d10</span><span class="pip-lab">05</span></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ROW 2 :: ABILITIES + SENSES ============ -->
+
+      <!-- 04 ABILITY SCORES -->
+      <section class="widget col-8" data-panel="abilities">
+        <div class="w-head">
+          <span class="w-num">04</span>
+          <span class="w-title">Ability Scores</span>
+          <span class="w-meta">6 attributes <span class="dim">·</span> static</span>
+        </div>
+        <div class="w-body">
+          <div class="ability-grid">
+            <div class="ablock">
+              <span class="ab-frame"></span><span class="ab-inner"></span>
+              <div class="ab-content">
+                <div class="ab-name">Strength</div>
+                <div class="ab-mod">+3</div>
+                <div class="ab-score"><span class="paren">(</span>16<span class="paren">)</span></div>
+              </div>
+            </div>
+            <div class="ablock">
+              <span class="ab-frame"></span><span class="ab-inner"></span>
+              <div class="ab-content">
+                <div class="ab-name">Dexterity</div>
+                <div class="ab-mod">+1</div>
+                <div class="ab-score"><span class="paren">(</span>12<span class="paren">)</span></div>
+              </div>
+            </div>
+            <div class="ablock">
+              <span class="ab-frame"></span><span class="ab-inner"></span>
+              <div class="ab-content">
+                <div class="ab-name">Constitution</div>
+                <div class="ab-mod">+2</div>
+                <div class="ab-score"><span class="paren">(</span>14<span class="paren">)</span></div>
+              </div>
+            </div>
+            <div class="ablock">
+              <span class="ab-frame"></span><span class="ab-inner"></span>
+              <div class="ab-content">
+                <div class="ab-name">Intelligence</div>
+                <div class="ab-mod">+0</div>
+                <div class="ab-score"><span class="paren">(</span>10<span class="paren">)</span></div>
+              </div>
+            </div>
+            <div class="ablock">
+              <span class="ab-frame"></span><span class="ab-inner"></span>
+              <div class="ab-content">
+                <div class="ab-name">Wisdom</div>
+                <div class="ab-mod">+1</div>
+                <div class="ab-score"><span class="paren">(</span>13<span class="paren">)</span></div>
+              </div>
+            </div>
+            <div class="ablock">
+              <span class="ab-frame"></span><span class="ab-inner"></span>
+              <div class="ab-content">
+                <div class="ab-name">Charisma</div>
+                <div class="ab-mod">+0</div>
+                <div class="ab-score"><span class="paren">(</span>11<span class="paren">)</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 05 SENSES & DEFENSES -->
+      <section class="widget col-4" data-panel="senses">
+        <div class="w-head">
+          <span class="w-num">05</span>
+          <span class="w-title">Senses &amp; Defenses</span>
+          <span class="w-meta">Passive · Condition</span>
+        </div>
+        <div class="w-body">
+          <div class="senses-list">
+            <div class="sense-row">
+              <span class="k">Passive Perception</span>
+              <span class="v acc">14</span>
+            </div>
+            <div class="sense-row">
+              <span class="k">Passive Investigation</span>
+              <span class="v">10</span>
+            </div>
+            <div class="sense-row">
+              <span class="k">Passive Insight</span>
+              <span class="v">11</span>
+            </div>
+            <div class="sense-row">
+              <span class="k">Darkvision</span>
+              <span class="v muted">— (Human)</span>
+            </div>
+            <div class="sense-row">
+              <span class="k">Condition</span>
+              <span class="v status">Normal</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ROW 3 :: SAVES · DEATH SAVES · EXHAUSTION ============ -->
+
+      <!-- 06 SAVING THROWS -->
+      <section class="widget col-4" data-panel="saves">
+        <div class="w-head">
+          <span class="w-num">06</span>
+          <span class="w-title">Saving Throws</span>
+          <span class="w-meta">◆ STR · CON</span>
+        </div>
+        <div class="w-body">
+          <div class="saves-grid">
+            <div class="save-cell prof">
+              <span class="prof-dot"></span>
+              <span class="name">Str</span>
+              <span class="sub">Strength</span>
+              <span class="mod">+6</span>
+            </div>
+            <div class="save-cell">
+              <span class="prof-dot"></span>
+              <span class="name">Dex</span>
+              <span class="sub">Dexterity</span>
+              <span class="mod">+1</span>
+            </div>
+            <div class="save-cell prof">
+              <span class="prof-dot"></span>
+              <span class="name">Con</span>
+              <span class="sub">Constitution</span>
+              <span class="mod">+5</span>
+            </div>
+            <div class="save-cell">
+              <span class="prof-dot"></span>
+              <span class="name">Int</span>
+              <span class="sub">Intelligence</span>
+              <span class="mod">+0</span>
+            </div>
+            <div class="save-cell">
+              <span class="prof-dot"></span>
+              <span class="name">Wis</span>
+              <span class="sub">Wisdom</span>
+              <span class="mod">+1</span>
+            </div>
+            <div class="save-cell">
+              <span class="prof-dot"></span>
+              <span class="name">Cha</span>
+              <span class="sub">Charisma</span>
+              <span class="mod">+0</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 07 DEATH SAVES -->
+      <section class="widget col-4" data-panel="deaths">
+        <div class="w-head">
+          <span class="w-num">07</span>
+          <span class="w-title">Death Saves</span>
+          <span class="w-meta"><button id="ds-reset" title="Clear all marks">Clear</button></span>
+        </div>
+        <div class="w-body">
+          <div class="death-rows">
+            <div class="death-row successes">
+              <span class="lab">Successes</span>
+              <div class="death-dots" data-row="s">
+                <button class="death-dot" data-i="0" aria-label="Success 1"></button>
+                <button class="death-dot" data-i="1" aria-label="Success 2"></button>
+                <button class="death-dot" data-i="2" aria-label="Success 3"></button>
+              </div>
+            </div>
+            <div class="death-row fails">
+              <span class="lab">Failures</span>
+              <div class="death-dots" data-row="f">
+                <button class="death-dot" data-i="0" aria-label="Failure 1"></button>
+                <button class="death-dot" data-i="1" aria-label="Failure 2"></button>
+                <button class="death-dot" data-i="2" aria-label="Failure 3"></button>
+              </div>
+            </div>
+          </div>
+          <div class="death-banner" id="death-banner">Conscious · Standing</div>
+        </div>
+      </section>
+
+      <!-- 08 EXHAUSTION -->
+      <section class="widget col-4" data-panel="exh">
+        <div class="w-head">
+          <span class="w-num">08</span>
+          <span class="w-title">Exhaustion</span>
+          <span class="w-meta"><span class="dim">6 levels</span> · death @ 6</span>
+        </div>
+        <div class="w-body">
+          <div class="exh-track" id="exh-track">
+            <button class="exh-cell" data-lvl="1"><span class="ex-frame"></span><span class="ex-inner">1</span></button>
+            <button class="exh-cell" data-lvl="2"><span class="ex-frame"></span><span class="ex-inner">2</span></button>
+            <button class="exh-cell" data-lvl="3"><span class="ex-frame"></span><span class="ex-inner">3</span></button>
+            <button class="exh-cell" data-lvl="4"><span class="ex-frame"></span><span class="ex-inner">4</span></button>
+            <button class="exh-cell" data-lvl="5"><span class="ex-frame"></span><span class="ex-inner">5</span></button>
+            <button class="exh-cell" data-lvl="6"><span class="ex-frame"></span><span class="ex-inner">6</span></button>
+          </div>
+          <div class="exh-readout">
+            <span>Current: <span class="level" id="exh-level">Level 0</span></span>
+            <span class="effect" id="exh-effect">No effect</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ROW 4 :: SKILLS · ATTACKS ============ -->
+
+      <!-- 09 SKILLS -->
+      <section class="widget col-8" data-panel="skills">
+        <div class="w-head">
+          <span class="w-num">09</span>
+          <span class="w-title">Skills</span>
+          <span class="w-meta">18 entries <span class="dim">·</span> 4 proficient</span>
+        </div>
+        <div class="w-body">
+          <div class="skills-grid">
+
+            <!-- Column 1 -->
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Acrobatics</span><span class="sk-abil">Dex</span><span class="sk-mod">+1</span></div>
+            <!-- Column 2 -->
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Insight</span><span class="sk-abil">Wis</span><span class="sk-mod">+1</span></div>
+            <!-- Column 3 -->
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Performance</span><span class="sk-abil">Cha</span><span class="sk-mod">+0</span></div>
+
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Animal Handling</span><span class="sk-abil">Wis</span><span class="sk-mod">+1</span></div>
+            <div class="skill-row prof"><span class="prof-dot"></span><span class="sk-name">Intimidation</span><span class="sk-abil">Cha</span><span class="sk-mod">+3</span></div>
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Persuasion</span><span class="sk-abil">Cha</span><span class="sk-mod">+0</span></div>
+
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Arcana</span><span class="sk-abil">Int</span><span class="sk-mod">+0</span></div>
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Investigation</span><span class="sk-abil">Int</span><span class="sk-mod">+0</span></div>
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Religion</span><span class="sk-abil">Int</span><span class="sk-mod">+0</span></div>
+
+            <div class="skill-row prof"><span class="prof-dot"></span><span class="sk-name">Athletics</span><span class="sk-abil">Str</span><span class="sk-mod">+6</span></div>
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Medicine</span><span class="sk-abil">Wis</span><span class="sk-mod">+1</span></div>
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Sleight of Hand</span><span class="sk-abil">Dex</span><span class="sk-mod">+1</span></div>
+
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Deception</span><span class="sk-abil">Cha</span><span class="sk-mod">+0</span></div>
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Nature</span><span class="sk-abil">Int</span><span class="sk-mod">+0</span></div>
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">Stealth</span><span class="sk-abil">Dex</span><span class="sk-mod">+1</span></div>
+
+            <div class="skill-row"><span class="prof-dot"></span><span class="sk-name">History</span><span class="sk-abil">Int</span><span class="sk-mod">+0</span></div>
+            <div class="skill-row prof"><span class="prof-dot"></span><span class="sk-name">Perception</span><span class="sk-abil">Wis</span><span class="sk-mod">+4</span></div>
+            <div class="skill-row prof"><span class="prof-dot"></span><span class="sk-name">Survival</span><span class="sk-abil">Wis</span><span class="sk-mod">+4</span></div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- 10 ATTACK QUICK-REFERENCE -->
+      <section class="widget col-4" data-panel="attacks">
+        <div class="w-head">
+          <span class="w-num">10</span>
+          <span class="w-title">Attacks</span>
+          <span class="w-meta">Dual-wield</span>
+        </div>
+        <div class="w-body">
+          <div class="attack-table">
+            <div class="at-row">
+              <span class="at-icon"><i class="fa-solid fa-khanda"></i></span>
+              <span class="at-name">Claymore<span class="hand">Main hand · Melee 5ft</span></span>
+              <span class="at-toh">+6</span>
+              <span class="at-dmg">2d6 + 3<span class="type">slashing</span></span>
+            </div>
+            <div class="at-row">
+              <span class="at-icon"><i class="fa-solid fa-khanda" style="transform:scaleX(-1);"></i></span>
+              <span class="at-name">Claymore<span class="hand">Off hand · Melee 5ft</span></span>
+              <span class="at-toh">+6</span>
+              <span class="at-dmg">2d6<span class="type">slashing</span></span>
+            </div>
+          </div>
+          <div class="at-foot">
+            <span class="k">Style</span>
+            <span class="dim">::</span>
+            <span class="acc">Two-Weapon Fighting</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ROW 5 :: PROFICIENCIES ============ -->
+
+      <!-- 11 PROFICIENCIES & TRAINING -->
+      <section class="widget col-12" data-panel="prof">
+        <div class="w-head">
+          <span class="w-num">11</span>
+          <span class="w-title">Proficiencies &amp; Training</span>
+          <span class="w-meta">Class &amp; race grants <span class="dim">·</span> 11 trained</span>
+        </div>
+        <div class="w-body">
+          <div class="prof-chips-grid">
+
+            <div class="prof-group">
+              <div class="pg-head">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span class="lab">Armor</span>
+                <span class="ct">4 entries</span>
+              </div>
+              <div class="chips">
+                <span class="chip beige">Light Armor</span>
+                <span class="chip beige">Medium Armor</span>
+                <span class="chip beige">Heavy Armor</span>
+                <span class="chip beige">Shields</span>
+              </div>
+            </div>
+
+            <div class="prof-group">
+              <div class="pg-head">
+                <i class="fa-solid fa-khanda"></i>
+                <span class="lab">Weapons</span>
+                <span class="ct">2 entries</span>
+              </div>
+              <div class="chips">
+                <span class="chip">Simple</span>
+                <span class="chip">Martial</span>
+              </div>
+            </div>
+
+            <div class="prof-group">
+              <div class="pg-head">
+                <i class="fa-solid fa-hammer"></i>
+                <span class="lab">Tools</span>
+                <span class="ct">none trained</span>
+              </div>
+              <div class="chips">
+                <span class="chip empty">—</span>
+              </div>
+            </div>
+
+            <div class="prof-group">
+              <div class="pg-head">
+                <i class="fa-solid fa-language"></i>
+                <span class="lab">Languages</span>
+                <span class="ct">2 entries</span>
+              </div>
+              <div class="chips">
+                <span class="chip">Common</span>
+                <span class="chip">Castellan</span>
+              </div>
+            </div>
+
+            <div class="prof-group">
+              <div class="pg-head">
+                <i class="fa-solid fa-hand-fist"></i>
+                <span class="lab">Fighting Style</span>
+                <span class="ct">1 selected</span>
+              </div>
+              <div class="chips">
+                <span class="chip">Two-Weapon Fighting</span>
+              </div>
+            </div>
+
+            <div class="prof-group">
+              <div class="pg-head">
+                <i class="fa-solid fa-id-badge"></i>
+                <span class="lab">Background</span>
+                <span class="ct">Soldier</span>
+              </div>
+              <div class="chips">
+                <span class="chip beige">Athletics</span>
+                <span class="chip beige">Intimidation</span>
+                <span class="chip muted">Castellan Guard</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<!-- ====================== BOTTOM BAR ====================== -->
+<footer class="bottombar" role="contentinfo">
+  <div class="bb-line">
+    <span class="dot"></span>
+    <span class="lab">Neural Link:</span><span class="val">Stable</span>
+    <span class="sep">|</span>
+    <span class="lab">Shard Integrity:</span><span class="val">98.2%</span>
+    <span class="sep">|</span>
+    <span class="lab">Last Sync:</span><span class="val">0.07 ms</span>
+    <span class="sep">|</span>
+    <span class="lab">Castella-08:</span><span class="dim">Clear · Wind NNW 4kt</span>
+    <span class="sep">|</span>
+    <span class="lab">Tide:</span><span class="dim">Low @ 03:47</span>
+
+    <div class="bb-right">
+      <span class="lab">Codex</span><span class="val">v 2.4.7</span>
+      <span class="sep">|</span>
+      <span class="dot"></span><span class="val">DM Online</span>
+      <span class="sep">|</span>
+      <span class="lab" id="save-auto">SAVE · 00:44</span><span class="save-cursor">█</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ----- Navbar handlers -----
+  document.querySelectorAll('[data-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.getAttribute('data-nav');
+      const label = (btn.querySelector('.nb-label, .pa-inner')?.textContent || t).trim();
+      console.log(`Navigating to ${label}... [data-nav="${t}"]`);
+    });
+  });
+
+  // ----- Periodic cyan scan sweep -----
+  (function sweepLoop() {
+    const sweep = document.getElementById('sweep');
+    function trigger() {
+      sweep.classList.remove('run'); void sweep.offsetWidth;
+      sweep.classList.add('run');
+    }
+    function schedule() {
+      const delay = 7000 + Math.random() * 4000;
+      setTimeout(() => { trigger(); schedule(); }, delay);
+    }
+    setTimeout(() => { trigger(); schedule(); }, 2500);
+  })();
+
+  // ----- Save counter -----
+  (function liveCounter() {
+    const el = document.getElementById('save-auto');
+    if (!el) return;
+    let t = 44;
+    setInterval(() => {
+      t = (t + 1) % 60;
+      const s = t.toString().padStart(2, '0');
+      el.textContent = `SAVE · 00:${s}`;
+    }, 700);
+  })();
+
+  // ============================================================
+  // INTERACTIVE STATE — in-memory only, no storage APIs
+  // ============================================================
+  const state = {
+    hpCurrent: 42,
+    hpMax: 42,
+    tempHp: 0,
+    hitDice: [false, false, false, false, false],
+    deathSuccesses: [false, false, false],
+    deathFailures: [false, false, false],
+    exhaustion: 0,
+  };
+
+  function flashPanel(name) {
+    const p = document.querySelector(`.widget[data-panel="${name}"]`);
+    if (!p) return;
+    p.classList.remove('flash'); void p.offsetWidth;
+    p.classList.add('flash');
+  }
+
+  // ----- HIT POINTS -----
+  const hpCurrentEl = document.getElementById('hp-current');
+  const hpMaxEl     = document.getElementById('hp-max');
+  const hpFillEl    = document.getElementById('hp-fill');
+  const hpPctEl     = document.getElementById('hp-pct');
+  const hpPctTagEl  = document.getElementById('hp-pct-tag');
+  const hpWidget    = document.querySelector('.widget[data-panel="hp"]');
+
+  function renderHp() {
+    hpCurrentEl.textContent = state.hpCurrent;
+    hpMaxEl.textContent     = state.hpMax;
+    const pct = Math.max(0, Math.min(100, Math.round((state.hpCurrent / state.hpMax) * 100)));
+    hpFillEl.style.width = pct + '%';
+    hpPctEl.textContent  = pct + '% Vitals';
+    hpPctTagEl.innerHTML = `<span class="dim">Vitals</span> ${pct}%`;
+    const danger = state.hpCurrent / state.hpMax < 0.25;
+    hpCurrentEl.classList.toggle('danger', danger);
+    hpFillEl.classList.toggle('danger', danger);
+    hpPctEl.classList.toggle('danger', danger);
+    hpWidget.classList.toggle('alert', danger);
+    hpPctTagEl.style.color = danger ? 'var(--danger-hot)' : '';
+  }
+
+  function setHp(v) {
+    state.hpCurrent = Math.max(0, Math.min(state.hpMax, Math.round(v)));
+    renderHp();
+    flashPanel('hp');
+  }
+
+  hpCurrentEl.addEventListener('click', () => {
+    if (hpCurrentEl.querySelector('input')) return;
+    const cur = state.hpCurrent;
+    hpCurrentEl.innerHTML = `<input type="number" min="0" max="${state.hpMax}" value="${cur}">`;
+    const input = hpCurrentEl.querySelector('input');
+    input.focus(); input.select();
+    const commit = () => {
+      const v = parseInt(input.value, 10);
+      if (!isNaN(v)) setHp(v); else renderHp();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter')  input.blur();
+      if (e.key === 'Escape') renderHp();
+    });
+  });
+
+  document.querySelectorAll('[data-hp-step]').forEach(b => {
+    b.addEventListener('click', () => {
+      const d = parseInt(b.getAttribute('data-hp-step'), 10);
+      setHp(state.hpCurrent + d);
+    });
+  });
+
+  // ----- Temp HP -----
+  const tempHpEl = document.getElementById('temp-hp');
+  function renderTemp() {
+    tempHpEl.textContent = state.tempHp;
+    tempHpEl.classList.toggle('zero', state.tempHp === 0);
+  }
+  tempHpEl.addEventListener('click', () => {
+    if (tempHpEl.querySelector('input')) return;
+    tempHpEl.innerHTML = `<input type="number" min="0" max="99" value="${state.tempHp}">`;
+    const input = tempHpEl.querySelector('input');
+    input.focus(); input.select();
+    const commit = () => {
+      const v = parseInt(input.value, 10);
+      if (!isNaN(v)) {
+        state.tempHp = Math.max(0, Math.min(99, v));
+        flashPanel('hp');
+      }
+      renderTemp();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter')  input.blur();
+      if (e.key === 'Escape') renderTemp();
+    });
+  });
+
+  renderHp();
+  renderTemp();
+
+  // ----- HIT DICE -----
+  const hdRemainingEl = document.getElementById('hd-remaining');
+  const hdPipsEl      = document.getElementById('hd-pips');
+  function renderHd() {
+    hdPipsEl.querySelectorAll('.hd-pip').forEach((pip, i) => {
+      pip.classList.toggle('spent', state.hitDice[i]);
+    });
+    hdRemainingEl.textContent = state.hitDice.filter(x => !x).length;
+  }
+  hdPipsEl.addEventListener('click', (e) => {
+    const pip = e.target.closest('.hd-pip');
+    if (!pip) return;
+    const i = parseInt(pip.getAttribute('data-idx'), 10);
+    state.hitDice[i] = !state.hitDice[i];
+    renderHd();
+    flashPanel('hd');
+  });
+  document.getElementById('hd-reset').addEventListener('click', () => {
+    state.hitDice = state.hitDice.map(() => false);
+    renderHd();
+    flashPanel('hd');
+  });
+  renderHd();
+
+  // ----- DEATH SAVES -----
+  const deathBanner = document.getElementById('death-banner');
+  function renderDeath() {
+    document.querySelectorAll('.death-dots[data-row="s"] .death-dot').forEach((d, i) => {
+      d.classList.toggle('on', state.deathSuccesses[i]);
+    });
+    document.querySelectorAll('.death-dots[data-row="f"] .death-dot').forEach((d, i) => {
+      d.classList.toggle('on', state.deathFailures[i]);
+    });
+    const s = state.deathSuccesses.filter(Boolean).length;
+    const f = state.deathFailures.filter(Boolean).length;
+    deathBanner.classList.remove('stable', 'failed');
+    if (s === 3) {
+      deathBanner.classList.add('stable');
+      deathBanner.textContent = 'Stabilized · Unconscious 1d4 hr';
+    } else if (f === 3) {
+      deathBanner.classList.add('failed');
+      deathBanner.textContent = 'Stabilize Failed · Deceased';
+    } else if (s === 0 && f === 0) {
+      deathBanner.textContent = 'Conscious · Standing';
+    } else {
+      deathBanner.textContent = `Rolling · ${s} success${s===1?'':'es'} · ${f} fail${f===1?'':'s'}`;
+    }
+  }
+  document.querySelectorAll('.death-dots').forEach(row => {
+    row.addEventListener('click', (e) => {
+      const dot = e.target.closest('.death-dot');
+      if (!dot) return;
+      if (state.deathSuccesses.filter(Boolean).length === 3 ||
+          state.deathFailures.filter(Boolean).length === 3) return;
+      const which = row.getAttribute('data-row');
+      const i = parseInt(dot.getAttribute('data-i'), 10);
+      const arr = which === 's' ? state.deathSuccesses : state.deathFailures;
+      arr[i] = !arr[i];
+      renderDeath();
+      flashPanel('deaths');
+    });
+  });
+  document.getElementById('ds-reset').addEventListener('click', () => {
+    state.deathSuccesses = [false, false, false];
+    state.deathFailures  = [false, false, false];
+    renderDeath();
+    flashPanel('deaths');
+  });
+  renderDeath();
+
+  // ----- EXHAUSTION -----
+  const EXH_EFFECTS = [
+    'No effect',
+    'Disadvantage on ability checks',
+    'Speed halved',
+    'Disadvantage on attacks &amp; saves',
+    'Hit point max halved',
+    'Speed reduced to 0',
+    'Death',
+  ];
+  const exhLevelEl  = document.getElementById('exh-level');
+  const exhEffectEl = document.getElementById('exh-effect');
+  const exhWidget   = document.querySelector('.widget[data-panel="exh"]');
+  function renderExh() {
+    document.querySelectorAll('.exh-cell').forEach(cell => {
+      const lvl = parseInt(cell.getAttribute('data-lvl'), 10);
+      cell.classList.toggle('on', lvl <= state.exhaustion);
+    });
+    exhLevelEl.textContent  = `Level ${state.exhaustion}`;
+    exhEffectEl.innerHTML   = EXH_EFFECTS[state.exhaustion];
+    exhEffectEl.classList.toggle('danger', state.exhaustion >= 5);
+    exhWidget.classList.toggle('alert', state.exhaustion >= 5);
+  }
+  document.querySelectorAll('.exh-cell').forEach(cell => {
+    cell.addEventListener('click', () => {
+      const lvl = parseInt(cell.getAttribute('data-lvl'), 10);
+      if (lvl === state.exhaustion) state.exhaustion = lvl - 1;
+      else state.exhaustion = lvl;
+      renderExh();
+      flashPanel('exh');
+    });
+  });
+  renderExh();
+</script>
+
+</body>
+</html>

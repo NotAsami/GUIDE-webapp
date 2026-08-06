@@ -1003,6 +1003,7 @@ function Portrait({ character }: { character: CharacterRow }) {
                 className={styles.pImg}
                 src={id.portrait ?? undefined}
                 alt={character.name}
+                style={{ objectPosition: id.portraitFocus ?? 'center top' }}
                 onError={() => setImgFailed(true)}
               />
             ) : (

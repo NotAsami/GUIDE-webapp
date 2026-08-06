@@ -8,10 +8,5 @@
 - An already premade list of items in dnd, not sure where to get it, but this would be for sake of easy use so that the dm doesn't have to create every single item from scratch, like health potions of giant's strength, daggers, swords, pikes and other weapons and armor.
 ## FEATURE ENGINE & ROLL CONTEXT PANEL
 - Current state of features is that they are only descriptive, they can't grant wisdom boost, effects like healing or anything, question is how to implement a way to actually use these features Like we would need a list of a lot of things the feature could do, but you also need specific ones for specific ones, like you can't make a list of everything a feature would want. Difficult. Like we have features ranging from Judgment’s Edge: When you hit a creature affected by your Arbiter’s Judgment, deal +1d4  radiant or  necrotic damage (your choice), to Final Strike: You declare a creature’s final judgment. Your next attack against them is an automatic critical hit, and they make death saves with disadvantage if reduced to 0 hit points. There is no easy way to make this happen. This will be a MAJOR slice. ALREADY DESCRIBED IN INVENTORY REFACTOR (??) → MOVE TO OWN DOC ← NAMED FEATURE ENGINE & ADDITIONAL ROLL CONTEXT PANEL, SOME DESCRIPTION IN GITHUB README.md 
-## ISSUES
-- The Lore Screen needs some way to center the screen on the face of the character.
-- Return widget on inventory management in DM-view is missing the last half of the button, render issue.
-- When adding arrows to the quiver using the stow function, it doesn't merge the arrows that are the same type. If you have 15 arrows in the quiver and add 5 from inventory, it should become 20 but it is 15 and 5.
-- Add search bar to holding bag and backpack
-- Display dis / adv on stat-panel
-- Being burdened doesn't update the movement and disadvantage on checks in stat-panel
+## ADD CAMPAIGN SWITCHER
+- Add a way to categorize characters to their respective campaign and the ability for the player to have multiple characters, if they have 2, they will get a popup on login to select the character they want. The DM then needs to have the ability switch between campaigns and see the characters that are in that campaign. This will be a major slice, but it will be a good way to organize the characters and campaigns, also the ability to create multiple characters (seed multiple characters) for 1 account. NEEDS A DESIGN

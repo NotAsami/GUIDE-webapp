@@ -14,7 +14,7 @@
  * mixing the two conventions silently shifts every item one cell.)
  */
 
-import type { EquippedGear, EquippedItem, InventoryItem } from './database.types'
+import type { EquippedGear, EquippedItem, InventoryItem, ItemCategory } from './database.types'
 
 /** The on-person loadout. Fixed on every platform: placements are coordinates, so
  *  a grid 10 wide on desktop and 5 on mobile would strand items in columns that
@@ -193,4 +193,33 @@ export function place<T extends InventoryItem>(item: T, dest: Destination): T {
     delete next.row
   }
   return next
+}
+
+/** Ammo/consumable/misc are fungible stacks — 20 arrows are one "Arrows ×20"
+ *  entry, not 20 rows. Gear and weapons are always distinct instances even
+ *  sharing a name. Mirrors the DM grant flow (OperatorConsole.tsx). */
+export function isStackable(category?: ItemCategory): boolean {
+  return category === 'ammo' || category === 'consumable' || category === 'misc'
+}
+
+/**
+ * Move `item` to `dest`, merging into a matching stack already sitting there
+ * (same container, name, category, not locked) instead of leaving it as a
+ * second row — the single merge rule shared by player stow/retrieve
+ * (Inventory.tsx) and DM grants (OperatorConsole.tsx's grantSnapshots), so
+ * the two paths can't drift out of sync again.
+ */
+export function placeMerging(inventory: InventoryItem[], item: InventoryItem, dest: Destination): InventoryItem[] {
+  if (isStackable(item.category)) {
+    const existing = inventory.find(i =>
+      i.id !== item.id && i.containerId === dest.containerId
+      && i.name === item.name && i.category === item.category && !i.locked)
+    if (existing) {
+      const qty = (existing.qty ?? 1) + (item.qty ?? 1)
+      return inventory
+        .filter(i => i.id !== item.id)
+        .map(i => (i.id === existing.id ? { ...i, qty } : i))
+    }
+  }
+  return inventory.map(i => (i.id === item.id ? place(i, dest) : i))
 }

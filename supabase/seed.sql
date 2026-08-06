@@ -11,34 +11,34 @@
 --   picked the Stat-Panel set instead.
 
 with player as (
-  select id from auth.users where email = 'samo.tv.sibik@gmail.com' limit 1
+  select id from auth.users where email = 'astragurl69@gmail.com' limit 1
 )
 insert into characters (owner, name, identity, sheet, resources, inventory, equipped, shards, spellbook, lore, progress)
 select
   (select id from player),
   'Ros Chrisstone',
   jsonb_build_object(
-    'race',        'Human',
-    'class',       'Fighter',
+    'race',        'Elf',
+    'class',       'Warlock',
     'archetype',   null,   -- §5: invented lore. Set when you confirm canon.
     'background',  null,
-    'level',       7,
-    'reputation',  35
+    'level',       3,
+    'reputation',  40
   ),
   jsonb_build_object(
     'abilities', jsonb_build_object(
-      'str', 18, 'dex', 14, 'con', 16,
-      'int', 10, 'wis', 13, 'cha', 12
+      'str', 13, 'dex', 16, 'con', 10,
+      'int', 8, 'wis', 12, 'cha', 18
     ),
-    'hp',               jsonb_build_object('current', 52, 'max', 52, 'temp', 0),
-    'hitDice',          jsonb_build_object('current', 7,  'max', 7,  'die', 'd10'),
-    'ac',               16,
-    'initiative',       2,
+    'hp',               jsonb_build_object('current', 23, 'max', 23, 'temp', 0),
+    'hitDice',          jsonb_build_object('current', 5,  'max', 5,  'die', 'd8'),
+    'ac',               13,
+    'initiative',       1,
     'speed',            30,
-    'proficiencyBonus', 3,
-    'coins',            jsonb_build_object('gold', 1247, 'silver', 0, 'copper', 0),
+    'proficiencyBonus', 2,
+    'coins',            jsonb_build_object('gold', 14, 'silver', 0, 'copper', 0),
     -- Class-mechanical (follows from class=Fighter, SRD — not invented lore):
-    'saveProficiencies', jsonb_build_array('str', 'con'),
+    'saveProficiencies', jsonb_build_array('wis', 'cha'),
     'proficiencies', jsonb_build_object(
       'armor',          jsonb_build_array('Light Armor', 'Medium Armor', 'Heavy Armor', 'Shields'),
       'weapons',        jsonb_build_array('Simple', 'Martial'),
@@ -111,7 +111,7 @@ where exists (select 1 from player)
 on conflict do nothing;
 
 -- Sanity check: should return one row after insert.
-select id, owner, name, sheet->'hp' as hp from characters where owner = (select id from auth.users where email = 'samo.tv.sibik@gmail.com');
+select id, owner, name, sheet->'hp' as hp from characters where owner = (select id from auth.users where email = 'astragurl69@gmail.com');
 
 -- Grant the DM role to an account. Run after the DM has logged in once.
 -- insert into dm_users (user_id)

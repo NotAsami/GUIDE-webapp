@@ -11,6 +11,7 @@ import {
   proficientSkillCount, saveTotal,
 } from '../lib/dnd'
 import { effectiveSheet } from '../lib/effects'
+import { burden, burdenTier, type BurdenTier } from '../lib/burden'
 import { handLabel, weaponAttackBonus, weaponDamageString } from '../lib/weapons'
 import styles from './Stats.module.css'
 
@@ -41,6 +42,13 @@ export function Stats() {
   // below spread from `character.sheet` (the canon base) — never from `view`.
   const view = effectiveSheet(character)
   const base = character.sheet ?? {}
+
+  // Disadvantage sources, computed once and threaded to every widget that
+  // marks it (Ability Scores, Skills, Senses' own combined readout) so they
+  // can't drift out of sync with each other.
+  const exhaustion = (character.resources?.exhaustion as number | undefined) ?? 0
+  const load = burden(character)
+  const tier = burdenTier(load.current, load.max)
 
   const meta = (
     <>
@@ -79,12 +87,12 @@ export function Stats() {
           <Combat sheet={view} />
           <HitPoints sheet={view} character={character} updateSection={updateSection} />
           <HitDice sheet={view} character={character} updateSection={updateSection} />
-          <AbilityScores sheet={view} base={base.abilities} />
-          <Senses sheet={view} character={character} />
+          <AbilityScores sheet={view} base={base.abilities} exhaustion={exhaustion} tier={tier} />
+          <Senses sheet={view} character={character} exhaustion={exhaustion} tier={tier} />
           <SavingThrows sheet={view} />
           <DeathSavesWidget character={character} updateSection={updateSection} />
           <Exhaustion character={character} updateSection={updateSection} />
-          <Skills sheet={view} />
+          <Skills sheet={view} exhaustion={exhaustion} tier={tier} />
           <Attacks character={character} sheet={view} />
           <Proficiencies character={character} sheet={view} />
         </div>
@@ -99,6 +107,19 @@ function classLine(character: CharacterRow): string {
   const lvl = character.identity?.level
   const name = arch ? `${cls} (${arch})` : cls
   return lvl ? `${name} · Lv ${lvl}` : name
+}
+
+/** Which abilities currently carry disadvantage on checks: SRD exhaustion
+ *  (level 1+) hits all six, heavy encumbrance hits STR/DEX/CON specifically.
+ *  Same two sources as the Senses widget's combined "Ability Checks" label —
+ *  this just resolves them per-ability instead of as one line. No source of
+ *  computed ADVANTAGE exists in the data model (database.types.ts keeps it
+ *  as prose on items/features, deliberately never a flag), so there's no
+ *  green-dot case to handle here yet. */
+function hasDisadvantage(key: AbilityKey, exhaustion: number, tier: BurdenTier): boolean {
+  if (exhaustion >= 1) return true
+  if (tier === 'heavy') return key === 'str' || key === 'dex' || key === 'con'
+  return false
 }
 
 /* ---------- shared widget chassis ---------- */
@@ -293,7 +314,9 @@ function HitDice({ sheet, character, updateSection }: {
 
 /* ---------- 04 Ability Scores ---------- */
 
-function AbilityScores({ sheet, base }: { sheet: CharacterSheet; base?: CharacterSheet['abilities'] }) {
+function AbilityScores({ sheet, base, exhaustion, tier }: {
+  sheet: CharacterSheet; base?: CharacterSheet['abilities']; exhaustion: number; tier: BurdenTier
+}) {
   const scores = abilities(sheet)
   const buffed = ABILITY_ORDER.some(k => base && scores[k] !== base[k])
   return (
@@ -304,9 +327,13 @@ function AbilityScores({ sheet, base }: { sheet: CharacterSheet; base?: Characte
       <div className={styles.abilityGrid}>
         {ABILITY_ORDER.map(key => {
           const delta = base ? scores[key] - base[key] : 0
+          const disadv = hasDisadvantage(key, exhaustion, tier)
           return (
             <div key={key} className={`${styles.ablock}${delta !== 0 ? ' ' + styles.buffed : ''}`}>
               <span className={styles.abFrame} /><span className={styles.abInner} />
+              {disadv && (
+                <span className={styles.abDis} title="Disadvantage on checks with this ability" />
+              )}
               <div className={styles.abContent}>
                 <div className={styles.abName}>{ABILITY_NAMES[key]}</div>
                 <div className={styles.abMod}>{formatMod(abilityMod(scores[key]))}</div>
@@ -329,11 +356,21 @@ function AbilityScores({ sheet, base }: { sheet: CharacterSheet; base?: Characte
 
 /* ---------- 05 Senses & Defenses ---------- */
 
-function Senses({ sheet, character }: { sheet: CharacterSheet; character: CharacterRow }) {
+function Senses({ sheet, character, exhaustion, tier }: {
+  sheet: CharacterSheet; character: CharacterRow; exhaustion: number; tier: BurdenTier
+}) {
   const race = character.identity?.race ?? 'Unknown'
   const dark = sheet.senses?.darkvision ?? 0
-  const exhaustion = (character.resources?.exhaustion as number | undefined) ?? 0
   const condition = exhaustion > 0 ? `Exhausted L${exhaustion}` : 'Normal'
+
+  // Disadvantage on ability checks: SRD exhaustion (level 1+) and heavy
+  // encumbrance both apply it — same two sources as hasDisadvantage(), which
+  // the Ability Scores / Skills widgets use to mark it per-ability/skill.
+  const disadvReasons: string[] = []
+  if (exhaustion >= 1) disadvReasons.push('Exhaustion')
+  if (tier === 'heavy') disadvReasons.push('Heavy Load')
+  const checks = disadvReasons.length ? `Disadvantage · ${disadvReasons.join(' + ')}` : 'Normal'
+
   return (
     <Widget num="05" title="Senses & Defenses" meta="Passive · Condition" span={4}>
       <div className={styles.sensesList}>
@@ -342,13 +379,17 @@ function Senses({ sheet, character }: { sheet: CharacterSheet; character: Charac
         <SenseRow k="Passive Insight" v={String(passiveScore(sheet, 'insight'))} />
         <SenseRow k="Darkvision" v={dark > 0 ? `${dark} ft` : `— (${race})`} muted={dark === 0} />
         <SenseRow k="Condition" v={condition} status />
+        <SenseRow k="Ability Checks" v={checks} status danger={disadvReasons.length > 0} />
       </div>
     </Widget>
   )
 }
 
-function SenseRow({ k, v, acc, muted, status }: { k: string; v: string; acc?: boolean; muted?: boolean; status?: boolean }) {
-  const cls = [styles.v, acc && styles.acc, muted && styles.muted, status && styles.status].filter(Boolean).join(' ')
+function SenseRow({ k, v, acc, muted, status, danger }: {
+  k: string; v: string; acc?: boolean; muted?: boolean; status?: boolean; danger?: boolean
+}) {
+  const cls = [styles.v, acc && styles.acc, muted && styles.muted, status && styles.status, danger && styles.danger]
+    .filter(Boolean).join(' ')
   return (
     <div className={styles.senseRow}>
       <span className={styles.k}>{k}</span>
@@ -462,7 +503,7 @@ function Exhaustion({ character, updateSection }: {
 
 /* ---------- 09 Skills ---------- */
 
-function Skills({ sheet }: { sheet: CharacterSheet }) {
+function Skills({ sheet, exhaustion, tier }: { sheet: CharacterSheet; exhaustion: number; tier: BurdenTier }) {
   const totals = allSkillTotals(sheet)
   const profCount = proficientSkillCount(sheet)
   return (
@@ -470,14 +511,26 @@ function Skills({ sheet }: { sheet: CharacterSheet }) {
       meta={<>{SKILLS.length} entries <span className="dim">·</span> {profCount} proficient</>}
     >
       <div className={styles.skillsGrid}>
-        {totals.map(({ skill, mod, proficient }) => (
-          <div key={skill.key} className={`${styles.skillRow}${proficient ? ' ' + styles.prof : ''}`}>
-            <span className={styles.profDot} />
-            <span className={styles.skName}>{skill.name}</span>
-            <span className={styles.skAbil}>{ABILITY_ABBR[skill.ability]}</span>
-            <span className={styles.skMod}>{formatMod(mod)}</span>
-          </div>
-        ))}
+        {totals.map(({ skill, mod, proficient, expertise }) => {
+          const disadv = hasDisadvantage(skill.ability, exhaustion, tier)
+          return (
+            <div
+              key={skill.key}
+              className={`${styles.skillRow}${proficient ? ' ' + styles.prof : ''}${expertise ? ' ' + styles.exp : ''}`}
+            >
+              <span className={styles.skInd}>
+                <span className={styles.profDot} />
+                {expertise && <span className={styles.profDot} />}
+              </span>
+              <span className={styles.skName}>{skill.name}</span>
+              <span className={styles.skAbil}>
+                {ABILITY_ABBR[skill.ability]}
+                {disadv && <span className={styles.disDot} title="Disadvantage" />}
+              </span>
+              <span className={styles.skMod}>{formatMod(mod)}</span>
+            </div>
+          )
+        })}
       </div>
     </Widget>
   )

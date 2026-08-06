@@ -70,10 +70,17 @@ export function currentBurden(character: CharacterRow): number {
   return Math.round(total * 10) / 10
 }
 
-/** Carrying capacity in pounds: SRD STR × 15, off the effective STR. */
-export function maxBurden(character: CharacterRow): number {
-  const str = effectiveSheet(character).abilities?.str ?? 10
+/** Carrying capacity in pounds: SRD STR × 15. Pure — no effectiveSheet call —
+ *  so effects.ts can use it while computing the effective sheet itself
+ *  without a circular call back into effectiveSheet(). */
+export function capacityForStr(str: number): number {
   return str * 15
+}
+
+/** Carrying capacity in pounds, off the EFFECTIVE STR so a Belt of Giant
+ *  Strength raises what you can haul too. */
+export function maxBurden(character: CharacterRow): number {
+  return capacityForStr(effectiveSheet(character).abilities?.str ?? 10)
 }
 
 /** Both numbers plus the encumbrance ratio, for the topbar pill and Inventory. */
@@ -81,4 +88,18 @@ export function burden(character: CharacterRow): { current: number; max: number;
   const current = currentBurden(character)
   const max = maxBurden(character)
   return { current, max, ratio: max > 0 ? current / max : 0 }
+}
+
+export type BurdenTier = 'none' | 'encumbered' | 'heavy'
+
+/** SRD variant encumbrance tiers: encumbered at 1/3 capacity (STR×5), heavy at
+ *  2/3 (STR×10). Weight is the only capacity system — these tiers slow the
+ *  character, they never block a pickup. Shared by Inventory (the bar's tick
+ *  marks + note), effects.ts (the speed penalty), and Stats.tsx (the
+ *  disadvantage-on-checks readout) so the thresholds can't drift apart. */
+export function burdenTier(current: number, max: number): BurdenTier {
+  if (max <= 0) return 'none'
+  if (current > (max * 2) / 3) return 'heavy'
+  if (current > max / 3) return 'encumbered'
+  return 'none'
 }
