@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { CharacterRow, CharacterSection, CharacterSheet } from '../lib/database.types'
+import type { CharacterRow, CharacterSection, CharacterSheet, ShardTree } from '../lib/database.types'
 import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet } from '../lib/effects'
 import { parseDice, rollDice } from '../lib/dice'
@@ -11,11 +11,12 @@ interface Props {
   character: CharacterRow
   /** Atomic multi-section write (sheet + resources) from the shared hook. */
   updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  shardTrees?: Record<string, ShardTree>
 }
 
 type Mode = 'short' | 'long'
 
-export function RestButton({ character, updateSections }: Props) {
+export function RestButton({ character, updateSections, shardTrees = {} }: Props) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<Mode>('long')
   const [busy, setBusy] = useState(false)
@@ -28,14 +29,14 @@ export function RestButton({ character, updateSections }: Props) {
   const hdAvail = hd?.current ?? 0
   const hdDie = hd?.die ?? 'd10'
   const hdSides = parseDice(hdDie)?.sides ?? 10
-  const conMod = Math.floor(((effectiveSheet(character).abilities?.con ?? 10) - 10) / 2)
+  const conMod = Math.floor(((effectiveSheet(character, shardTrees).abilities?.con ?? 10) - 10) / 2)
   const activeCount = Array.isArray(character.resources?.activeEffects)
     ? (character.resources!.activeEffects as unknown[]).length : 0
   // A short rest is worth taking (even with 0 dice) if it would recharge a feature.
   const shortRechargeable = (character.sheet?.features ?? [])
     .some(f => f.recharge === 'short' && f.uses && f.uses.current < f.uses.max)
 
-  const { patch: longPatch, lines: longLines } = longRestPatch(character)
+  const { patch: longPatch, lines: longLines } = longRestPatch(character, shardTrees)
 
   function openModal() {
     setSpend(Math.min(1, hdAvail))
@@ -56,10 +57,11 @@ export function RestButton({ character, updateSections }: Props) {
     const rolls = rollDice(spend, hdSides)
     const healed = Math.max(0, rolls.reduce((a, b) => a + b, 0) + conMod * spend)
     const hp = character.sheet?.hp ?? { current: 0, max: 0 }
-    const hpMax = hp.max ?? 0
-    const nextHp = Math.min(hpMax, (hp.current ?? 0) + healed)
+    const baseMax = hp.max ?? 0
+    const healMax = effectiveSheet(character, shardTrees).hp?.max ?? baseMax
+    const nextHp = Math.min(healMax, (hp.current ?? 0) + healed)
     const gained = nextHp - (hp.current ?? 0)
-    const nextSheet: CharacterSheet = { ...character.sheet, hp: { ...hp, current: nextHp, max: hpMax } }
+    const nextSheet: CharacterSheet = { ...character.sheet, hp: { ...hp, current: nextHp, max: baseMax } }
     if (hd) nextSheet.hitDice = { ...hd, current: Math.max(0, hdAvail - spend) }
     const resources = character.resources ?? {}
 
@@ -77,7 +79,7 @@ export function RestButton({ character, updateSections }: Props) {
     }
     if (spend > 0) {
       const modStr = conMod ? ` ${conMod > 0 ? '+' : '−'} ${Math.abs(conMod * spend)}` : ''
-      lines.push({ label: 'HP', total: `${nextHp} / ${hpMax}`, breakdown: `+${gained} · rolled ${rolls.join(' + ')}${modStr}`, tone: 'heal' })
+      lines.push({ label: 'HP', total: `${nextHp} / ${healMax}`, breakdown: `+${gained} · rolled ${rolls.join(' + ')}${modStr}`, tone: 'heal' })
       lines.push({ label: 'Hit Dice', total: `${Math.max(0, hdAvail - spend)}${hdDie}`, breakdown: `−${spend} spent` })
     }
     if (activeCount > 0) lines.push({ label: 'Effects Cleared', total: `${activeCount}`, breakdown: 'potions worn off', tone: 'buff' })

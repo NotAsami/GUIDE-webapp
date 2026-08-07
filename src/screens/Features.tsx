@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import type { CharacterRow, CharacterSection, EquippedGear, EquippedItem, Feature, FeatureCategory } from '../lib/database.types'
+import type { CharacterRow, CharacterSection, EquippedGear, EquippedItem, Feature, FeatureCategory, ShardTree } from '../lib/database.types'
 import { ITEM_SLOTS } from '../lib/equip'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { rollHeal } from '../lib/dice'
 import { useRollLog, type RollLine } from '../lib/rolls'
+import { effectiveSheet } from '../lib/effects'
+import { shardFeatures } from '../lib/shards'
 import { Prose } from '../lib/markdown'
 import styles from './Features.module.css'
 
 interface RouteContext {
   character: CharacterRow
   updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  shardTrees?: Record<string, ShardTree>
 }
 
 /** Display order + labels for the dossier sections. Empty groups are skipped. */
@@ -71,7 +74,7 @@ function cardText(f: Feature): string {
  *  too: it rolls, decrements the counter, and surfaces the result as a
  *  single-roll toast (the player applies the effect, as with an attack). */
 export function Features() {
-  const { character, updateSection } = useOutletContext<RouteContext>()
+  const { character, updateSection, shardTrees = {} } = useOutletContext<RouteContext>()
   const nav = useNavigate()
   const { addRoll } = useRollLog()
   const features = character.sheet?.features ?? []
@@ -100,12 +103,14 @@ export function Features() {
     if (f.roll) {
       const { total, breakdown } = rollHeal(f.roll)
       if (f.rollTone === 'heal') {
-        // Heal-tagged rolls raise real HP, like a potion (clamped to max).
+        // Heal-tagged rolls raise real HP, like a potion — clamped to the
+        // EFFECTIVE max, but the persisted `max` stays the authored base.
         const hp = sheet.hp ?? { current: 0, max: 0 }
-        const max = hp.max ?? 0
+        const baseMax = hp.max ?? 0
+        const healMax = effectiveSheet(character, shardTrees).hp?.max ?? baseMax
         const cur = hp.current ?? 0
-        const next = Math.min(max, cur + total)
-        nextSheet = { ...nextSheet, hp: { ...hp, current: next, max } }
+        const next = Math.min(healMax, cur + total)
+        nextSheet = { ...nextSheet, hp: { ...hp, current: next, max: baseMax } }
         lines.push({ label: f.rollLabel ?? 'Healed', total: `+${next - cur}`, breakdown: `${breakdown} · HP ${cur} → ${next}`, tone: 'heal' })
       } else {
         // Other rolls are show-only — the player applies the effect (like an attack).
@@ -143,6 +148,11 @@ export function Features() {
   const fromGear = gearFeatures(character)
   if (fromGear.length) byGroup.push({ key: 'gear', label: 'Gear Features', icon: 'fa-gem', items: fromGear })
 
+  // Derived from slotted shards (base grant + every attuned node) — unslot the
+  // shard or DM-reset the tree and these vanish, same read-only rule as gear.
+  const fromShards = shardFeatures(character, shardTrees)
+  if (fromShards.length) byGroup.push({ key: 'shard', label: 'Shard Features', icon: 'fa-diamond', items: fromShards })
+
   const meta = (
     <>
       <span className="dim">◇</span>
@@ -170,7 +180,7 @@ export function Features() {
           <span className={styles.dhNum}>10</span>
           <span className={styles.dhTitle}>Features</span>
           <span className={styles.dhMeta}>
-            <span><span className="dim">Catalogued</span> {features.length + fromGear.length}</span>
+            <span><span className="dim">Catalogued</span> {features.length + fromGear.length + fromShards.length}</span>
             <span className="dim">·</span>
             <span><span className="dim">Source</span> <span className="acc">DM-Authored</span></span>
             <span className={styles.cursor}>▌</span>

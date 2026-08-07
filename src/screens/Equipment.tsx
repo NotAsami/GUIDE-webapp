@@ -4,7 +4,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import type {
   ActiveEffect, CharacterRow, CharacterSection, CharacterSheet, ContainerKind,
   EquippedGear, EquippedItem, EquippedWeapon, InventoryItem, ItemRarity, ItemSlot,
-  Json, WeaponHand,
+  Json, ShardTree, WeaponHand,
 } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
@@ -23,12 +23,14 @@ import {
 import { PERSON } from '../lib/placement'
 import { useRollLog } from '../lib/rolls'
 import { useItemTooltip, type Bind, type TooltipData } from '../components/ItemTooltip'
+import { SHARD_SLOT_KEYS, shardSlots } from '../lib/shards'
 import styles from './Equipment.module.css'
 
 interface RouteContext {
   character: CharacterRow
   updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
   updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  shardTrees?: Record<string, ShardTree>
 }
 
 /** Equipment — a read-only loadout view of `equipped` (7 gear slots + weapons)
@@ -37,8 +39,8 @@ interface RouteContext {
  *  equipped yet, and there's no item catalog to pull from). No mutation this
  *  pass: editing HP stays in the Stat Panel; equipping needs Inventory first. */
 export function Equipment() {
-  const { character, updateSection, updateSections } = useOutletContext<RouteContext>()
-  const sheet = effectiveSheet(character)
+  const { character, updateSection, updateSections, shardTrees = {} } = useOutletContext<RouteContext>()
+  const sheet = effectiveSheet(character, shardTrees)
   const gear = (character.equipped ?? {}) as EquippedGear
   const weapons = gear.weapons ?? []
   const inventory = (character.inventory as unknown as InventoryItem[]) ?? []
@@ -314,7 +316,7 @@ export function Equipment() {
             </span>
           </button>
 
-          <ShardBar guideShard={gear.guideShard ?? null} bind={bind} />
+          <ShardBar character={character} shardTrees={shardTrees} bind={bind} />
 
           <div className={styles.panelActions}>
             <ActionBtn
@@ -663,37 +665,46 @@ function GearSlot({ slot, item, bind, onOpen }: {
 }
 
 
-/** The shard bar — a wide row spanning the gear grid, split by dividers into 3
- *  shard sub-slots (slot 0 = the G.U.I.D.E. shard, 2 more open slots). It's a
- *  launcher: every part links to the Shard menu (install/remove happens there),
- *  so empty slots show a "+" and filled ones show the shard's icon. */
-function ShardBar({ guideShard, bind }: { guideShard: EquippedItem | null; bind: Bind }) {
-  const slots: { item: EquippedItem | null; label: string; locked?: boolean }[] = [
-    { item: guideShard, label: 'G.U.I.D.E.', locked: true },
-    { item: null, label: 'Shard Slot' },
-    { item: null, label: 'Shard Slot' },
-  ]
+/** Shard trees use a free-form rarity string (D&D has no "Very Rare" tier in
+ *  ItemRarity) — fold it down to the 4-value scale the shared tooltip uses. */
+function tooltipRarity(rarity: string): ItemRarity {
+  const r = rarity.toLowerCase()
+  if (r === 'uncommon') return 'uncommon'
+  if (r === 'rare' || r === 'very rare') return 'rare'
+  if (r === 'legendary' || r === 'artifact') return 'legendary'
+  return 'common'
+}
+
+/** The shard bar — a wide row spanning the gear grid, split by dividers into
+ *  the 3 real shard slots (lib/shards.ts `ShardSlot`, the same state the
+ *  Shard screen reads/writes — this is a launcher + live mirror, not its own
+ *  copy). Install/remove happens on the Shard menu; empty slots show a "+"
+ *  and filled ones show the slotted shard's own icon/name. */
+function ShardBar({ character, shardTrees, bind }: { character: CharacterRow; shardTrees: Record<string, ShardTree>; bind: Bind }) {
+  const slots = shardSlots(character)
   return (
     <div className={`${styles.slot} ${styles.special} ${styles.shardBar}`}>
       <span className={styles.sFrame} />
       <span className={styles.sInner}>
         <span className={styles.shardLabel}>Shards <Link to="/shard" className={styles.shardLink}>open menu →</Link></span>
         <div className={styles.shardSubs}>
-          {slots.map((s, i) => {
-            const filled = !!s.item || s.locked
-            const tt: TooltipData = s.item
-              ? { name: s.item.name, sub: [rarityLabel(s.item.rarity ?? 'common'), 'Codex Module'].join(' · '), rows: s.item.rows ?? [['Type', 'Shard slot']], flavor: s.item.flavor, attune: s.item.attune ?? 'Shard-bound', rarity: s.item.rarity ?? 'common' }
-              : s.locked
+          {SHARD_SLOT_KEYS.map(key => {
+            const slot = slots[key]
+            const tree = slot.shardId ? shardTrees[slot.shardId] : undefined
+            const filled = !!tree || slot.locked
+            const tt: TooltipData = tree
+              ? { name: tree.name, sub: [tree.rarity, tree.module].filter(Boolean).join(' · '), rows: (tree.baseDetails ?? []).map(d => [d.l, d.v] as [string, string]), flavor: tree.flavor, attune: slot.locked ? 'Shard-bound' : 'Requires attunement', rarity: tooltipRarity(tree.rarity) }
+              : slot.locked
                 ? { name: 'G.U.I.D.E. Shard', sub: 'Core Module · Locked', rows: [['Status', 'Soulbound'], ['Type', 'Shard slot']], flavor: 'The core interface shard. Manage it in the Shard menu.', attune: 'Shard-bound', rarity: 'common' }
                 : { name: 'Shard Slot', sub: 'Vacant', rows: [['Status', 'No shard installed']], flavor: 'Install a shard from the Shard menu.', rarity: 'empty' }
             return (
               <Link
-                key={i} to="/shard"
+                key={key} to="/shard"
                 className={`${styles.shardSub}${filled ? '' : ' ' + styles.empty}`}
-                {...bind(tt)} aria-label={s.item ? s.item.name : s.locked ? 'G.U.I.D.E. shard' : 'Empty shard slot'}
+                {...bind(tt)} aria-label={tree ? tree.name : slot.locked ? 'G.U.I.D.E. shard' : 'Empty shard slot'}
               >
-                <i className={`fa-solid ${s.item?.icon ?? (s.locked ? 'fa-gem' : 'fa-plus')}`} />
-                <span className={styles.shardSubLabel}>{s.item ? s.item.name : s.locked ? s.label : 'Empty'}</span>
+                <i className={`fa-solid ${tree?.icon ?? (slot.locked ? 'fa-gem' : 'fa-plus')}`} />
+                <span className={styles.shardSubLabel}>{tree ? tree.name : slot.locked ? 'G.U.I.D.E.' : 'Empty'}</span>
               </Link>
             )
           })}

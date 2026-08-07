@@ -1,7 +1,8 @@
 /**
- * Item-effect layering. Worn gear contributes numeric `effects` (lib/database
- * types `ItemEffects`) that get layered over the canonical base sheet to produce
- * an `EffectiveSheet` — the values every screen DISPLAYS.
+ * Item-effect layering. Worn gear AND slotted shards contribute numeric
+ * `effects`/`mods` (lib/database types `ItemEffects`) that get layered over
+ * the canonical base sheet to produce an `EffectiveSheet` — the values every
+ * screen DISPLAYS.
  *
  * Hard rule: the result is derived, display-only. It must NEVER be written back
  * to the DB. Persisting an item-boosted score as the base would corrupt canon and
@@ -10,14 +11,20 @@
  * Order of operations for abilities: effective = max(base, highest "set") + Σ flat.
  * (A "set" floor like Belt of Giant Strength replaces your natural score; magic
  *  flat bonuses add on top of that.)
+ *
+ * `shardTrees` is the caller's shard catalog (lib/shards.ts `useShardCatalog`),
+ * passed in rather than fetched here — effectiveSheet stays a pure function of
+ * its arguments. Callers with no catalog in hand may omit it; the effective
+ * sheet then simply carries no shard bonus (degrades safely, never throws).
  */
 
 import type {
   AbilityKey, AbilityScores, ActiveEffect, CharacterRow, EffectiveSheet,
-  EquippedItem, ItemEffects, ItemSlot,
+  EquippedItem, ItemEffects, ItemSlot, ShardTree,
 } from './database.types'
 import { ITEM_SLOTS } from './equip'
 import { burdenTier, capacityForStr, currentBurden } from './burden'
+import { shardEffects } from './shards'
 
 const GEAR_SLOT_KEYS: readonly ItemSlot[] = ITEM_SLOTS
 const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
@@ -50,6 +57,7 @@ export function summarizeEffects(e: ItemEffects): string {
   if (e.speed) parts.push(`${signed(e.speed)} ft spd`)
   if (e.initiative) parts.push(`${signed(e.initiative)} init`)
   if (e.darkvision) parts.push(`darkvision ${e.darkvision} ft`)
+  if (e.maxHp) parts.push(`${signed(e.maxHp)} Max HP`)
   if (typeof e.saves === 'number') { if (e.saves) parts.push(`${signed(e.saves)} saves`) }
   else if (e.saves) for (const [k, v] of Object.entries(e.saves)) if (v) parts.push(`${signed(v)} ${k.toUpperCase()} save`)
   if (e.skills) for (const [k, v] of Object.entries(e.skills)) if (v) parts.push(`${signed(v)} ${k}`)
@@ -60,12 +68,14 @@ function sum(fx: ItemEffects[], pick: (e: ItemEffects) => number | undefined): n
   return fx.reduce((n, e) => n + (pick(e) ?? 0), 0)
 }
 
-/** Base sheet with all worn-gear effects layered in. DERIVED, display-only. */
-export function effectiveSheet(character: CharacterRow): EffectiveSheet {
+/** Base sheet with all worn-gear + slotted-shard effects layered in. DERIVED,
+ *  display-only. */
+export function effectiveSheet(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): EffectiveSheet {
   const base = character.sheet ?? {}
   const fx = [
     ...wornGear(character).map(i => i.effects),
     ...activeEffects(character).map(e => e.effects),
+    ...shardEffects(character, shardTrees),
   ].filter((e): e is ItemEffects => !!e)
 
   // Abilities: max(base, highest set) + Σ flat.
@@ -86,6 +96,13 @@ export function effectiveSheet(character: CharacterRow): EffectiveSheet {
   // Flat scalar sums.
   const ac = (base.ac ?? 0) + sum(fx, e => e.ac)
   const initiative = (base.initiative ?? 0) + sum(fx, e => e.initiative)
+
+  // Max HP: authored base + Σ shard maxHp. The authored `sheet.hp.max` stays
+  // canon (levels + CON) — a rest/heal write path spreads `hp` from the base
+  // sheet and must persist THIS max unchanged, only healing `current` up to
+  // the effective ceiling computed here.
+  const hpMax = (base.hp?.max ?? 0) + sum(fx, e => e.maxHp)
+  const hp = base.hp ? { ...base.hp, max: hpMax } : undefined
 
   // Speed: gear bonuses first, then the SRD encumbrance penalty (−10 ft
   // encumbered, −20 ft heavy) — off the effective STR computed just above, so
@@ -131,6 +148,7 @@ export function effectiveSheet(character: CharacterRow): EffectiveSheet {
     ac,
     speed,
     initiative,
+    hp,
     senses: { ...base.senses, darkvision },
     saveBonuses,
     skillBonuses,

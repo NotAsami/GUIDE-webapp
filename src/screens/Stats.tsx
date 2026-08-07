@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import type {
-  AbilityKey, CharacterRow, CharacterSection, CharacterSheet, EquippedWeapon, Json,
+  AbilityKey, CharacterRow, CharacterSection, CharacterSheet, EquippedWeapon, Json, ShardTree,
 } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
@@ -18,6 +18,7 @@ import styles from './Stats.module.css'
 interface RouteContext {
   character: CharacterRow
   updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  shardTrees?: Record<string, ShardTree>
 }
 
 type DeathSaves = { successes: number; failures: number }
@@ -37,17 +38,18 @@ const EXHAUSTION_EFFECTS = [
  *  skills and passives are computed by SRD math (lib/dnd.ts) from the canon
  *  ability scores — never the mockup's placeholder numbers. */
 export function Stats() {
-  const { character, updateSection } = useOutletContext<RouteContext>()
-  // DISPLAY from the effective sheet (base + equipped-gear effects). Write-paths
-  // below spread from `character.sheet` (the canon base) — never from `view`.
-  const view = effectiveSheet(character)
+  const { character, updateSection, shardTrees = {} } = useOutletContext<RouteContext>()
+  // DISPLAY from the effective sheet (base + equipped-gear + shard effects).
+  // Write-paths below spread from `character.sheet` (the canon base) — never
+  // from `view`.
+  const view = effectiveSheet(character, shardTrees)
   const base = character.sheet ?? {}
 
   // Disadvantage sources, computed once and threaded to every widget that
   // marks it (Ability Scores, Skills, Senses' own combined readout) so they
   // can't drift out of sync with each other.
   const exhaustion = (character.resources?.exhaustion as number | undefined) ?? 0
-  const load = burden(character)
+  const load = burden(character, shardTrees)
   const tier = burdenTier(load.current, load.max)
 
   const meta = (
@@ -195,9 +197,13 @@ function HitPoints({ sheet, character, updateSection }: {
   async function writeHp(next: { current?: number; temp?: number }) {
     if (!character.sheet) return
     const hp = character.sheet.hp ?? { current: 0, max: 0 }
+    // `max` (the prop) is the EFFECTIVE ceiling — fine to clamp `current`
+    // against, but the persisted `max` must stay the AUTHORED base or a
+    // shard bonus would bake into canon and survive ejecting the shard.
+    const baseMax = hp.max ?? 0
     const current = next.current !== undefined ? Math.max(0, Math.min(max, next.current)) : hp.current
     const t = next.temp !== undefined ? Math.max(0, next.temp) : hp.temp
-    await updateSection('sheet', { ...character.sheet, hp: { ...hp, current, max, temp: t } })
+    await updateSection('sheet', { ...character.sheet, hp: { ...hp, current, max: baseMax, temp: t } })
   }
 
   return (

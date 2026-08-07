@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, type DmCampaignState, type DmCatalogState, type DmFeaturesState } from '../lib/dm'
+import { useDmShards, type DmShardsState } from '../lib/dmShards'
+import { SHARD_SLOT_KEYS, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
+import { MOD_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '../lib/modEditor'
+import type { ShardSlot } from '../lib/database.types'
 import { longRestPatch } from '../lib/rest'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/voice'
 import { usePartyPresence } from '../lib/presence'
@@ -99,7 +103,7 @@ const hpClassOf = (p: PartyMember): '' | 'warn' | 'crit' => {
 const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hpMax) * 100)) : 0)
 
 type View = 'overview' | 'character' | 'quests' | 'sessions' | 'catalog'
-type CharTab = 'actions' | 'inventory' | 'lore'
+type CharTab = 'actions' | 'inventory' | 'lore' | 'shards'
 
 export function OperatorConsole() {
   const { session, loading: authLoading } = useAuth()
@@ -108,6 +112,7 @@ export function OperatorConsole() {
   const campaign = useDmCampaign()
   const catalog = useDmCatalog()
   const featureLib = useDmFeatures()
+  const shardLib = useDmShards()
   const confiscated = useDmConfiscated()
   const onlineIds = usePartyPresence()
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
@@ -327,6 +332,13 @@ export function OperatorConsole() {
                 >
                   Lore Editor
                 </div>
+                <div
+                  className={cx(styles.wtab, charTab === 'shards' && styles.active)}
+                  onClick={() => setCharTab('shards')}
+                  title="Shard slots, points, reveals"
+                >
+                  Shards
+                </div>
                 <div className={cx(styles.wtab, styles.lvl, styles.disabled)} title="Level-up — later slice">
                   <i className="fa-solid fa-arrow-up-right-dots" /> Level Up
                 </div>
@@ -346,6 +358,8 @@ export function OperatorConsole() {
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
+                ) : charTab === 'shards' ? (
+                  <ShardsTab key={selectedRow.id} row={selectedRow} shardLib={shardLib} onUpdate={patch => updateCharacter(selectedRow.id, patch)} log={log} />
                 ) : charTab === 'inventory' ? (
                   <OperatorInventory
                     key={selectedRow.id} row={selectedRow} member={selected}
@@ -1048,56 +1062,6 @@ function BroadcastPanel({ selected, onSend, log }: {
   )
 }
 
-// ---- effects authoring: modifier rows <-> structured ItemEffects ----
-/** The numeric modifiers the engine (lib/effects.ts) actually reads. `Note` and
- *  other descriptive perks are authored as Detail rows instead, not here. */
-const MOD_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'AC', 'Attack', 'Damage', 'Saves', 'Speed', 'Initiative', 'Darkvision'] as const
-/** One authored modifier: a stat, an amount, and (abilities only) whether the
- *  amount is a flat bonus or a floor the score is set to (abilitySet). */
-type Mod = { stat: string; amt: number; set?: boolean }
-const ABIL_KEYS: Record<string, AbilityKey> = { STR: 'str', DEX: 'dex', CON: 'con', INT: 'int', WIS: 'wis', CHA: 'cha' }
-const isAbility = (stat: string) => stat in ABIL_KEYS
-
-/** Compile the GUI modifier rows into the structured `effects` the engine layers
- *  over the sheet (lib/effects.ts). Abilities can be a flat bonus OR a "set to"
- *  floor (Giant Strength); everything else is a flat bonus. */
-function compileEffects(mods: Mod[]): ItemEffects | undefined {
-  const eff: ItemEffects = {}
-  for (const m of mods) {
-    const n = m.amt
-    if (!Number.isFinite(n)) continue
-    const ak = ABIL_KEYS[m.stat]
-    if (ak) { if (m.set) (eff.abilitySet ??= {})[ak] = n; else (eff.abilities ??= {})[ak] = n }
-    else if (m.stat === 'AC') eff.ac = n
-    else if (m.stat === 'Attack') eff.attack = n
-    else if (m.stat === 'Damage') eff.damage = n
-    else if (m.stat === 'Saves') eff.saves = n
-    else if (m.stat === 'Speed') eff.speed = n
-    else if (m.stat === 'Initiative') eff.initiative = n
-    else if (m.stat === 'Darkvision') eff.darkvision = n
-  }
-  return Object.keys(eff).length ? eff : undefined
-}
-
-/** Reverse of compileEffects, to seed the editor when editing an existing item.
- *  Object-form `saves` (per-ability) isn't round-tripped — the seed never uses it
- *  and the editor only offers all-saves; such an item keeps its structured value. */
-function effectsToMods(eff?: ItemEffects): Mod[] {
-  if (!eff) return []
-  const mods: Mod[] = []
-  const up = (k: string) => k.toUpperCase()
-  for (const [k, v] of Object.entries(eff.abilities ?? {})) mods.push({ stat: up(k), amt: v as number })
-  for (const [k, v] of Object.entries(eff.abilitySet ?? {})) mods.push({ stat: up(k), amt: v as number, set: true })
-  if (eff.ac != null) mods.push({ stat: 'AC', amt: eff.ac })
-  if (eff.attack != null) mods.push({ stat: 'Attack', amt: eff.attack })
-  if (eff.damage != null) mods.push({ stat: 'Damage', amt: eff.damage })
-  if (typeof eff.saves === 'number') mods.push({ stat: 'Saves', amt: eff.saves })
-  if (eff.speed != null) mods.push({ stat: 'Speed', amt: eff.speed })
-  if (eff.initiative != null) mods.push({ stat: 'Initiative', amt: eff.initiative })
-  if (eff.darkvision != null) mods.push({ stat: 'Darkvision', amt: eff.darkvision })
-  return mods
-}
-
 /** Catalog Manager: the DM's item-authoring library. Left = index grouped by
  *  category; right = the item form. Spells / Features / Shards are their own future
  *  catalogs, shown as inert "soon" tabs to reserve their place (matches the mockup).
@@ -1105,6 +1069,7 @@ function effectsToMods(eff?: ItemEffects): Mod[] {
  *  so a granted copy is mechanically real the instant it lands. */
 function CatalogSurface({ catalog, featureLib }: { catalog: DmCatalogState; featureLib: DmFeaturesState }) {
   const { items, createItem, updateItem, deleteItem, loading, error } = catalog
+  const nav = useNavigate()
   const [tab, setTab] = useState<'items' | 'features'>('items')
   const [selId, setSelId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -1130,7 +1095,7 @@ function CatalogSurface({ catalog, featureLib }: { catalog: DmCatalogState; feat
     { key: 'items', label: 'Items', icon: 'fa-box-open', n: items.length, soon: false },
     { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
     { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', soon: true },
-    { key: 'shards', label: 'Shards', icon: 'fa-gem', soon: true },
+    { key: 'shards', label: 'Shards', icon: 'fa-gem', soon: false },
   ]
 
   return (
@@ -1145,7 +1110,7 @@ function CatalogSurface({ catalog, featureLib }: { catalog: DmCatalogState; feat
         {catTabs.map(t => (
           <button key={t.key} className={cx(styles.catTab, t.key === tab && styles.sel, t.soon && styles.stub)}
             disabled={t.soon} title={t.soon ? 'Its own later slice' : undefined}
-            onClick={() => !t.soon && setTab(t.key as 'items' | 'features')}>
+            onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else setTab(t.key as 'items' | 'features') }}>
             <i className={`fa-solid ${t.icon}`} />{t.label}
             {t.n != null && <span className={styles.ctC}>{t.n}</span>}
           </button>
@@ -1972,6 +1937,110 @@ function LoreSecHead({ icon, label, first }: { icon: string; label: string; firs
     <div className={cx(styles.loreSecH, first && styles.first)}>
       <i className={`fa-solid ${icon}`} />
       <span className={styles.t}>{label}</span>
+    </div>
+  )
+}
+
+/** Shards tab — slot assignment, the per-shard `earned` point grant, a
+ *  Reset Tree escape hatch (attuned → [], no separate refund needed since
+ *  `spent` is derived, never stored), and revealing a concealed node's real
+ *  text once its prereqs have resolved. `shardLib` is the SAME merged
+ *  catalog+secrets working set the Lattice Editor uses — reveal needs the
+ *  real name/effect a player session can never read directly. */
+function ShardsTab({ row, shardLib, onUpdate, log }: {
+  row: CharacterRow
+  shardLib: DmShardsState
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const slots = (row.shards ?? {}) as Record<string, ShardSlot>
+  const installable = shardLib.trees.filter(t => t.published && t.id !== 'guide')
+
+  async function writeSlot(key: ShardSlotKey, next: ShardSlot) {
+    await onUpdate({ shards: { ...row.shards, [key]: next } })
+  }
+
+  return (
+    <div className={styles.actGrid}>
+      {SHARD_SLOT_KEYS.map(key => {
+        const slot: ShardSlot = slots[key] ?? { shardId: null, earned: 0, attuned: [] }
+        const tree = slot.shardId ? shardLib.trees.find(t => t.id === slot.shardId) : undefined
+        const available = shardAvailable(tree, slot)
+        const spent = shardSpent(tree, slot)
+        const concealedToReveal = tree
+          ? tree.nodes.filter(n => n.concealed && slot.attuned.includes(n.id) && !slot.revealed?.[n.id])
+          : []
+
+        return (
+          <div key={key} className={cx(styles.actCard, styles.wide)}>
+            <div className={styles.acTitle}>
+              <i className={`fa-solid ${slot.locked ? 'fa-lock' : 'fa-gem'} lead`} />
+              <span className={styles.num}>{key.slice(-1)}</span>
+              <span className={styles.t}>{tree ? tree.name : `Shard Port ${key.slice(-1)}`}</span>
+            </div>
+
+            {slot.locked ? (
+              <div className={styles.catCtrNote}>Permanent — cannot be reassigned or ejected.</div>
+            ) : !slot.shardId ? (
+              <select className={styles.numIn} style={{ width: '100%' }} value="" onChange={e => {
+                if (!e.target.value) return
+                void writeSlot(key, { shardId: e.target.value, earned: 0, attuned: ['core'] })
+                log(<>Slotted <span className={styles.obj}>{shardLib.trees.find(t => t.id === e.target.value)?.name}</span> into {key}</>)
+              }}>
+                <option value="">Assign a shard…</option>
+                {installable.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            ) : (
+              <>
+                <div className={styles.vitRead}>
+                  <span className={styles.hpnum}>{available}</span><span className={styles.hpmax}>/ {tree?.capacity ?? 0} available</span>
+                </div>
+                <div className={styles.catCtrNote}>Earned {slot.earned} · Spent {spent} · Attuned {slot.attuned.length}/{tree?.nodes.length ?? 0}</div>
+                <div className={styles.stepper} style={{ marginTop: 4 }}>
+                  <input className={styles.numIn} type="number" min={0} max={tree?.capacity ?? 0} value={slot.earned}
+                    onChange={e => {
+                      const cap = tree?.capacity ?? 0
+                      const next = Math.max(0, Math.min(cap, parseInt(e.target.value || '0', 10) || 0))
+                      void writeSlot(key, { ...slot, earned: next })
+                    }} />
+                </div>
+                <div className={styles.btnRow} style={{ marginTop: 4 }}>
+                  <Btn tone="amber" sm icon="fa-plus" label="+1 Earned" onClick={() => {
+                    const cap = tree?.capacity ?? 0
+                    void writeSlot(key, { ...slot, earned: Math.min(cap, slot.earned + 1) })
+                    log(<>Granted {key} <span className={styles.obj}>+1 attunement point</span></>)
+                  }} />
+                  <Btn tone="danger" sm icon="fa-rotate-left" label="Reset Tree" onClick={() => {
+                    void writeSlot(key, { ...slot, attuned: [] })
+                    log(<>Reset <span className={styles.obj}>{tree?.name}</span> — all nodes un-attuned</>, 'danger')
+                  }} />
+                </div>
+                <div className={styles.btnRow} style={{ marginTop: 4 }}>
+                  <Btn tone="ghost" sm icon="fa-eject" label="Eject" onClick={() => {
+                    void writeSlot(key, { ...slot, shardId: null })
+                    log(<>Ejected <span className={styles.obj}>{tree?.name}</span> from {key}</>)
+                  }} />
+                </div>
+
+                {concealedToReveal.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div className={styles.catCtrNote}>Concealed — attuned, unrevealed</div>
+                    {concealedToReveal.map(n => (
+                      <div key={n.id} className={styles.btnRow} style={{ marginTop: 4 }}>
+                        <span className={styles.obj}>{n.name}</span>
+                        <Btn tone="cyan" sm icon="fa-eye" label="Reveal" onClick={() => {
+                          void writeSlot(key, { ...slot, revealed: { ...slot.revealed, [n.id]: { name: n.name, effect: n.effect } } })
+                          log(<>Revealed <span className={styles.obj}>{n.name}</span> to the player</>, 'cyan')
+                        }} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -981,7 +981,14 @@
    tallest in its row — otherwise a full list stretches the row (and the Vitals card
    with it), then snaps back when a search shrinks the list. With this cap the Vitals
    card always drives the row height, so nothing resizes when you search. */
-.catList { max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding-right: 3px; }
+.catList {
+  max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding-right: 3px;
+  /* Once the list hits its own top/bottom, a wheel scroll must stop there —
+     not chain to the card/page behind it (Firefox chains by default where
+     Chrome sometimes doesn't, which read as "the whole screen scrolls"). */
+  overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: rgba(226, 176, 33, 0.35) transparent;
+}
 .catList::-webkit-scrollbar { width: 5px; }
 .catList::-webkit-scrollbar-thumb { background: rgba(226,176,33,0.35); }
 .catListEmpty { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.06em; color: var(--beige-dim); padding: 10px 4px; text-align: center; }

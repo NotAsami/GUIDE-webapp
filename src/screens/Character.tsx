@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import type { AbilityKey, CharacterRow, CharacterSheet } from '../lib/database.types'
+import type { AbilityKey, CharacterRow, CharacterSheet, ShardTree } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import {
@@ -17,6 +17,7 @@ import styles from './Character.module.css'
 
 interface RouteContext {
   character: CharacterRow
+  shardTrees?: Record<string, ShardTree>
 }
 
 type Mode = 'normal' | 'adv' | 'dis'
@@ -36,8 +37,8 @@ const FLASH_MS = 2000
  *  this screen renders in full (every roll made anywhere in the app, not just
  *  here), not persisted to the character row. */
 export function Character() {
-  const { character } = useOutletContext<RouteContext>()
-  const view = effectiveSheet(character)
+  const { character, shardTrees = {} } = useOutletContext<RouteContext>()
+  const view = effectiveSheet(character, shardTrees)
   const scores = abilities(view)
   const { rolls, addRoll } = useRollLog()
   const [mode, setMode] = useState<Mode>('normal')

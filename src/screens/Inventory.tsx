@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import type {
   CharacterRow, CharacterSection, ContainerKind, EquippedItem, InventoryItem,
-  ItemCategory, Json, WeaponData,
+  ItemCategory, Json, ShardTree, WeaponData,
 } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
@@ -26,6 +26,7 @@ interface RouteContext {
   character: CharacterRow
   updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
   updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  shardTrees?: Record<string, ShardTree>
 }
 
 /** Fallback chrome for a tab whose container isn't equipped — a locked tab still
@@ -69,14 +70,14 @@ function fpClass(w: number, h: number): string {
  * framed region; the surrounding chrome never moves when you switch tabs.
  */
 export function Inventory() {
-  const { character, updateSection, updateSections } = useOutletContext<RouteContext>()
+  const { character, updateSection, updateSections, shardTrees = {} } = useOutletContext<RouteContext>()
   const nav = useNavigate()
   const { addRoll } = useRollLog()
   const { tooltip, bind, hide: hideTooltip } = useItemTooltip()
 
   const inventory = getInventory(character)
   const gear = getGear(character)
-  const load = burden(character)
+  const load = burden(character, shardTrees)
   const coins = character.sheet.coins ?? { gold: 0 }
 
   /** Fixed four: ON PERSON plus one tab per page-container KIND. */
@@ -256,7 +257,7 @@ export function Inventory() {
 
   async function use(item: InventoryItem) {
     if (busy) return
-    const outcome = consumeEffect(item, character)
+    const outcome = consumeEffect(item, character, shardTrees)
     if (outcome.wasted) {
       addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
       return

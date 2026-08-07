@@ -241,6 +241,9 @@ export type ItemEffects = {
   initiative?: number
   /** Darkvision granted/extended, in feet (takes the max). */
   darkvision?: number
+  /** Flat bonus to max HP (shard nodes; no item grants this today). Folded into
+   *  `hp.max` by lib/effects.ts — the authored `sheet.hp.max` stays the canon base. */
+  maxHp?: number
 }
 
 /** A single item. Self-describing: the object carries its own display detail +
@@ -408,6 +411,77 @@ export type CharacterLore = {
   memoryFidelity?: string
 }
 
+// ── Shards (`shard_tree_catalog` / `shard_tree_secrets`, migration 0008). A
+//    shard tree is authored content (catalog), same snapshot-free reference
+//    pattern as the rest of the catalog: the character row holds only a slot
+//    id + progress, never a copy of the tree. ──
+
+/** A single upgrade node in a shard's attunement lattice. Position is polar:
+ *  `tier` is the ring (0 = core), `angle` is degrees clockwise from up — no
+ *  hardcoded pixel coords, the player/editor canvases derive layout from this.
+ *  `state` (locked/available/attuned) is NEVER stored — derived from `prereqs`
+ *  vs. the character's `attuned` set, same rule as item attunement (equip.ts). */
+export type ShardNode = {
+  id: string
+  name: string
+  tier: number
+  branch: string
+  angle: number
+  cost: number
+  icon: string
+  prereqs: string[]
+  /** Player-facing prose, shown in the node detail panel. */
+  effect: string
+  /** Renders as "???" until every prereq is attuned. The real name/effect/mods
+   *  live in `shard_tree_secrets` until the DM reveals it (Operator Console). */
+  concealed?: boolean
+  /** Structured buffs applied while attuned — folded into effectiveSheet(). */
+  mods?: ItemEffects
+  /** Features granted while attuned. Snapshot copies, same pattern as
+   *  EquippedItem.features — never a bare feature_catalog reference. */
+  features?: Feature[]
+  detailRows?: { l: string; v: string }[]
+}
+
+/** A shard tree definition — the DM-authored content a slot references by id.
+ *  `capacity` caps both how many points the DM can grant (`earned`) and how
+ *  many a player can spend (`Σ attuned node cost`). */
+export type ShardTree = {
+  id: string
+  name: string
+  rarity: string
+  module: string
+  icon: string
+  capacity: number
+  published: boolean
+  flavor?: string
+  attuneRule?: string
+  /** Applied the moment the shard is slotted, before any node is attuned. */
+  baseMods?: ItemEffects
+  baseFeatures?: Feature[]
+  baseDetails?: { l: string; v: string }[]
+  branches: Record<string, string>
+  branchColors?: Record<string, string>
+  nodes: ShardNode[]
+}
+
+/** Per-character state for one of the 3 shard slots. `slot1` is always the
+ *  G.U.I.D.E. shard (`locked: true` — unequippable). `earned`/`spent` are a
+ *  per-shard point pool: `spent` is NEVER stored, it's Σ cost of `attuned`
+ *  nodes, so it can't drift from the attuned set (one source of truth). */
+export type ShardSlot = {
+  shardId: string | null
+  locked?: boolean
+  earned: number
+  attuned: string[]
+  /** DM-revealed text for concealed nodes this slot has attuned (Operator
+   *  Console reveal action, Phase D). A concealed node's real name/effect
+   *  live in `shard_tree_secrets`, which a player session can never read —
+   *  this is the only path that text can reach the player, and only once
+   *  the DM has chosen to copy it here. */
+  revealed?: Record<string, { name: string; effect: string }>
+}
+
 export type CharacterRow = {
   id: string
   owner: string
@@ -417,7 +491,7 @@ export type CharacterRow = {
   resources: Record<string, Json>
   inventory: Json[]
   equipped: Record<string, Json>
-  shards: Record<string, Json>
+  shards: Record<string, ShardSlot>
   spellbook: Record<string, Json> & { spellcasting?: boolean }
   lore: CharacterLore
   progress: CharacterProgress
@@ -538,6 +612,24 @@ export type CatalogFeatureRow = { id: string; data: CatalogFeatureData; updated_
 export type CatalogFeatureInsert = { id?: string; data: CatalogFeatureData }
 export type CatalogFeatureUpdate = { data?: CatalogFeatureData }
 
+// ── Shard tree catalog (migration 0008). Unlike item/feature catalog this table
+//    DOES carry a player policy (published rows only) — the tree has to render
+//    on the player's Shard screen. `shard_tree_secrets` is the DM-only half:
+//    every `dm` note, plus a concealed node's real name/effect/mods, so a
+//    concealed node ships to the client as bare geometry (id/tier/angle/cost/
+//    prereqs) with nothing to spoil. Same wall as quest_secrets. ──
+export type ShardTreeCatalogRow = { id: string; data: ShardTree; updated_at: string }
+export type ShardTreeCatalogInsert = { id?: string; data: ShardTree }
+export type ShardTreeCatalogUpdate = { data?: ShardTree }
+
+export type ShardTreeSecretData = {
+  dm?: string
+  nodes?: Record<string, { name: string; effect: string; dm?: string; mods?: ItemEffects; features?: Feature[] }>
+}
+export type ShardTreeSecretRow = { shard_id: string; data: ShardTreeSecretData; updated_at: string }
+export type ShardTreeSecretInsert = { shard_id: string; data?: ShardTreeSecretData }
+export type ShardTreeSecretUpdate = { data?: ShardTreeSecretData }
+
 export type Database = {
   public: {
     Tables: {
@@ -593,6 +685,18 @@ export type Database = {
         Row: ConfiscatedItemRow
         Insert: ConfiscatedItemInsert
         Update: Partial<Omit<ConfiscatedItemRow, 'id'>>
+        Relationships: []
+      }
+      shard_tree_catalog: {
+        Row: ShardTreeCatalogRow
+        Insert: ShardTreeCatalogInsert
+        Update: ShardTreeCatalogUpdate
+        Relationships: []
+      }
+      shard_tree_secrets: {
+        Row: ShardTreeSecretRow
+        Insert: ShardTreeSecretInsert
+        Update: ShardTreeSecretUpdate
         Relationships: []
       }
     }
