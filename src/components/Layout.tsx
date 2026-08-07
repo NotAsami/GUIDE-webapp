@@ -1,6 +1,7 @@
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useCharacter } from '../lib/character'
 import { useAuth } from '../lib/auth'
+import { useShardCatalog } from '../lib/shards'
 import { Topbar } from './Topbar'
 import { Bottombar } from './Bottombar'
 import { RollToast } from './RollToast'
@@ -12,6 +13,7 @@ import { useEffect, useState } from 'react'
 export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
   const { character, loading, error, updateSection, updateSections } = useCharacter()
+  const { catalog: shardTrees } = useShardCatalog()
   const nav = useNavigate()
 
   // Announce this character on the party-presence channel while the app is
@@ -103,9 +105,9 @@ export function Layout() {
           each screen renders its own <Deco> so the rail text is screen-specific. */}
 
       <div className={styles.shell}>
-        <Topbar character={character} updateSections={updateSections} />
+        <Topbar character={character} updateSections={updateSections} shardTrees={shardTrees} />
         <main className={styles.main}>
-          <Outlet context={{ character, updateSection, updateSections }} />
+          <Outlet context={{ character, updateSection, updateSections, shardTrees }} />
         </main>
         <Bottombar />
       </div>

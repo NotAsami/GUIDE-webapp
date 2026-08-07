@@ -1,5 +1,6 @@
-import type { CharacterRow, CharacterSection, CharacterSheet } from './database.types'
+import type { CharacterRow, CharacterSection, CharacterSheet, ShardTree } from './database.types'
 import type { RollLine } from './rolls'
+import { effectiveSheet } from './effects'
 
 /** Build the long-rest result: faithful 5e long-rest defaults, applied in ONE
  *  atomic write (both sections spread from the existing data — never replaced).
@@ -14,8 +15,13 @@ import type { RollLine } from './rolls'
  *  Shared so the player Rest button AND the Operator Console Vitals card produce
  *  IDENTICAL writes — both target the same `sheet`/`resources` fields, so they can
  *  never drift (single source of truth). The `lines` are the player-facing roll-log
- *  summary; the DM side may ignore them. */
-export function longRestPatch(character: CharacterRow): {
+ *  summary; the DM side may ignore them.
+ *
+ *  Heals to the EFFECTIVE max (base + shard bonuses) if `shardTrees` is passed,
+ *  but always persists the AUTHORED `hp.max` unchanged — a rest can't bake a
+ *  shard's bonus into canon, so ejecting the shard correctly drops max HP back
+ *  down without this write having corrupted the base. */
+export function longRestPatch(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): {
   patch: Partial<Pick<CharacterRow, CharacterSection>>
   lines: RollLine[]
 } {
@@ -24,11 +30,12 @@ export function longRestPatch(character: CharacterRow): {
   const lines: RollLine[] = []
 
   const hp = sheet.hp ?? { current: 0, max: 0 }
-  const hpMax = hp.max ?? 0
-  const hpHealed = Math.max(0, hpMax - (hp.current ?? 0))
-  const nextSheet: CharacterSheet = { ...sheet, hp: { ...hp, current: hpMax, max: hpMax, temp: 0 } }
+  const baseMax = hp.max ?? 0
+  const healMax = effectiveSheet(character, shardTrees).hp?.max ?? baseMax
+  const hpHealed = Math.max(0, healMax - (hp.current ?? 0))
+  const nextSheet: CharacterSheet = { ...sheet, hp: { ...hp, current: healMax, max: baseMax, temp: 0 } }
   lines.push({
-    label: 'HP', total: `${hpMax} / ${hpMax}`,
+    label: 'HP', total: `${healMax} / ${healMax}`,
     breakdown: hpHealed > 0 ? `+${hpHealed} restored` : 'already full', tone: 'heal',
   })
 

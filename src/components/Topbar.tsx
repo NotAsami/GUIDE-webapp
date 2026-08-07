@@ -1,6 +1,7 @@
 import { useAuth } from '../lib/auth'
-import type { CharacterRow, CharacterSection } from '../lib/database.types'
+import type { CharacterRow, CharacterSection, ShardTree } from '../lib/database.types'
 import { burden } from '../lib/burden'
+import { effectiveSheet } from '../lib/effects'
 import { useFullscreen } from '../lib/fullscreen'
 import { RestButton } from './RestButton'
 import styles from './Layout.module.css'
@@ -9,11 +10,12 @@ interface Props {
   character: CharacterRow
   /** Atomic multi-section write — the Rest button resets sheet + resources together. */
   updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  shardTrees?: Record<string, ShardTree>
 }
 
 /** Shared chrome. The HP pill shows current/max (editing lives in the Stat Panel);
  *  the Rest button beside it resets daily resources. */
-export function Topbar({ character, updateSections }: Props) {
+export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
   const { signOut } = useAuth()
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 
@@ -21,12 +23,14 @@ export function Topbar({ character, updateSections }: Props) {
   const reputation = character.identity?.reputation ?? 0
   const gold = character.sheet?.coins?.gold ?? 0
   const hpCurrent = character.sheet?.hp?.current ?? 0
-  const hpMax = character.sheet?.hp?.max ?? 0
+  // Effective max — base + slotted-shard bonuses (lib/effects.ts). Current
+  // HP itself is never shard-boosted; only the ceiling moves.
+  const hpMax = effectiveSheet(character, shardTrees).hp?.max ?? character.sheet?.hp?.max ?? 0
   const hpLow = hpMax > 0 && hpCurrent / hpMax <= 0.25
 
   // Burden is derived from item weights (carried + equipped) vs STR-based
   // capacity — one shared helper, also read by the Inventory screen.
-  const { current: burdenCurrent, max: burdenMax, ratio: burdenRatio } = burden(character)
+  const { current: burdenCurrent, max: burdenMax, ratio: burdenRatio } = burden(character, shardTrees)
   const overBurdened = burdenRatio > 1
 
   const flavor = [character.identity?.race, character.identity?.class].filter(Boolean) as string[]
@@ -82,7 +86,7 @@ export function Topbar({ character, updateSections }: Props) {
           <span className="val">{gold.toLocaleString()}</span>
           <span className="lab">Gold</span>
         </div>
-        <RestButton character={character} updateSections={updateSections} />
+        <RestButton character={character} updateSections={updateSections} shardTrees={shardTrees} />
         <button
           type="button" className={styles.signOut} onClick={toggleFullscreen}
           title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}

@@ -1,0 +1,483 @@
+/* Shard Lattice Editor — ported from G.U.I.D.E. Shard Lattice Editor.html +
+   shard-lattice.js. DM/operator surface: standalone like OperatorConsole (not
+   under Layout), amber skin (the console's system-truth accent), cyan is the
+   player voice (used only in Player Preview mode). */
+
+.page { position: fixed; inset: 0; background: var(--bg); color: var(--text); font-family: var(--font-prose); overflow: hidden; }
+.stage {
+  position: fixed; inset: 0; z-index: 0;
+  background: radial-gradient(120% 95% at 50% 40%, #221f18 0%, #181715 55%, #0c0b09 100%);
+}
+.scanlines { pointer-events: none; position: fixed; inset: 0; z-index: 90; background-image: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.022) 0px, rgba(255, 255, 255, 0.022) 1px, transparent 1px, transparent 3px); mix-blend-mode: overlay; }
+.vignette { pointer-events: none; position: fixed; inset: 0; z-index: 91; background: radial-gradient(120% 110% at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.55) 94%, rgba(0, 0, 0, 0.85) 100%); }
+
+/* ---------- top bar ---------- */
+.opbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 60;
+  display: flex; align-items: center; gap: 18px; padding: 0 20px;
+  background: linear-gradient(to bottom, rgba(20, 17, 9, 0.96), rgba(16, 15, 13, 0.94));
+  border-bottom: 1px solid var(--amber);
+  box-shadow: 0 1px 0 rgba(226, 176, 33, 0.2), 0 8px 26px -10px rgba(0, 0, 0, 0.7);
+}
+.opSigil {
+  flex: 0 0 auto; width: 38px; height: 38px; position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--amber-hot); font-size: 18px; background: var(--amber);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  filter: drop-shadow(0 0 10px rgba(226, 176, 33, 0.4));
+}
+/* Inset dark hexagon behind the icon, in front of the amber background — the
+   amber only shows through as a 1px ring. Without this the badge is solid
+   amber-on-amber (icon and background the same hue, reads as a blank blob). */
+.opSigil::before {
+  content: ""; position: absolute; inset: 1px; z-index: -1;
+  /* Centered, not the mockup's 50% 35% — at 38px that upward bias reads as
+     the bottom half going noticeably darker rather than a subtle highlight. */
+  background: radial-gradient(120% 90% at 50% 50%, rgba(226, 176, 33, 0.2), transparent 65%), #14110a;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.opId { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 4px; }
+.opTitle { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: 0.24em; color: var(--amber-hot); text-transform: uppercase; line-height: 1; text-shadow: 0 0 14px rgba(226, 176, 33, 0.28); }
+.opTitle .slash { color: var(--beige-dim); margin: 0 6px; font-weight: 400; }
+.opSub { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.26em; color: var(--muted); text-transform: uppercase; }
+.opSub .acc { color: var(--amber); } .opSub .sep { color: var(--beige-dim); margin: 0 7px; }
+.opRight { margin-left: auto; position: relative; z-index: 1; display: flex; align-items: center; gap: 18px; }
+.opStat { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.opStat .v { font-family: var(--font-display); font-weight: 600; font-size: 16px; color: var(--amber); line-height: 1; }
+.opStat .v.cyan { color: var(--cyan-hot); } .opStat .v.warn { color: var(--danger-hot); }
+.opStat .l { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
+.opRootpill {
+  --cut: 6px; --bc: rgba(226, 176, 33, 0.5);
+  display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; color: var(--amber-hot); text-transform: uppercase;
+  border: 1.5px solid var(--bc); padding: 7px 11px; background-color: rgba(226, 176, 33, 0.06);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.opRootpill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 8px rgba(226, 176, 33, 0.8); animation: blink 2.4s steps(2, end) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.opBack {
+  --cut: 6px; --bc: rgba(212, 191, 125, 0.3);
+  display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige);
+  border: 1.5px solid var(--bc); padding: 8px 12px; cursor: pointer; background-color: rgba(0, 0, 0, 0.3);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.opBack:hover { --bc: rgba(226, 176, 33, 0.5); color: var(--amber-hot); }
+
+/* ---------- shell grid ---------- */
+.editor { position: fixed; top: 60px; bottom: 38px; left: 0; right: 0; z-index: 10; display: grid; grid-template-columns: 236px minmax(0, 1fr) 330px; gap: 10px; padding: 10px; }
+.region { position: relative; min-height: 0; min-width: 0; }
+.region .frame { position: absolute; inset: 0; background: var(--beige); opacity: 0.85; clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px); }
+.region .inner { position: absolute; inset: 1.5px; background: linear-gradient(180deg, #161513, #0e0d0b); clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); display: flex; flex-direction: column; overflow: hidden; }
+.rCorner { position: absolute; width: 12px; height: 12px; border-color: var(--amber); opacity: 0.7; z-index: 6; pointer-events: none; }
+.rCorner.tl { top: 7px; left: 7px; border-top: 1.5px solid; border-left: 1.5px solid; }
+.rCorner.br { bottom: 7px; right: 7px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
+.rHead { position: relative; z-index: 3; flex: 0 0 auto; display: flex; align-items: baseline; gap: 10px; padding: 12px 14px 9px; border-bottom: 1px solid rgba(212, 191, 125, 0.28); }
+.rhNum { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.26em; color: var(--amber); }
+.rhTitle { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.32em; color: var(--beige); text-transform: uppercase; }
+.rhMeta { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; color: var(--muted); text-transform: uppercase; }
+.rhMeta .acc { color: var(--amber); }
+.rScroll { position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(226, 176, 33, 0.35) rgba(0, 0, 0, 0.3); }
+.rScroll::-webkit-scrollbar { width: 7px; }
+.rScroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
+.rScroll::-webkit-scrollbar-thumb { background: rgba(226, 176, 33, 0.35); }
+
+/* ---------- left: shard library + audit ---------- */
+.lib { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.libRow { position: relative; isolation: isolate; display: flex; align-items: center; gap: 10px; cursor: pointer; text-align: left; width: 100%; padding: 9px 11px; background: var(--beige); clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); transition: background 150ms ease; border: 0; }
+.libRow::before { content: ""; position: absolute; inset: 1.5px; z-index: -1; background: linear-gradient(180deg, #191714, #110f0d); clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+.libRow:hover { background: var(--amber); }
+.libRow.sel { background: var(--amber); filter: drop-shadow(0 0 8px rgba(226, 176, 33, 0.28)); }
+.libRow.sel::before { background: linear-gradient(180deg, rgba(226, 176, 33, 0.11), rgba(20, 17, 10, 0.95)), #100f0d; box-shadow: inset 0 0 22px rgba(226, 176, 33, 0.13), inset 2px 0 0 var(--amber); }
+/* Hexagon, not the TL/BR rect chamfer — the 2-corner gradient recipe doesn't
+   apply to a 6-sided shape. box-shadow inset is NOT a fix here either: its
+   ring has uniform thickness relative to the RECTANGULAR box, so where the
+   clip-path cuts across it at an angle the visible sliver gets thinner (and
+   on some edges vanishes) — the same underlying problem as a plain border,
+   just less obviously. The actually-safe technique (same one .node/.nd
+   already use) is two clipped layers: a full-size frame in the border
+   colour, and a smaller inset layer on top in the fill colour — both
+   independently clipped to the hex, so the visible ring is the frame
+   showing through evenly on every edge. */
+.lrIc { flex: 0 0 auto; width: 28px; height: 28px; position: relative; }
+.lrIcFrame { position: absolute; inset: 0; background: rgba(212, 191, 125, 0.4); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+.lrIcInner {
+  position: absolute; inset: 1.5px; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--beige); background: rgba(0, 0, 0, 0.45);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.libRow.sel .lrIcFrame { background: var(--amber); }
+.libRow.sel .lrIcInner { color: var(--amber-hot); }
+.lrTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.lrT { font-family: var(--font-prose); font-size: 14.5px; color: var(--text); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.libRow.sel .lrT { color: var(--amber-hot); }
+.lrS { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; }
+.lrPub { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 7px rgba(79, 174, 107, 0.6); }
+.lrPub.draft { background: var(--amber-dim); box-shadow: none; }
+.libNew { margin: 2px 10px 12px; display: flex; }
+.auditHead { display: flex; align-items: center; gap: 9px; padding: 11px 13px 8px; border-top: 1px solid rgba(212, 191, 125, 0.2); }
+.auditHead .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.26em; color: var(--beige); text-transform: uppercase; }
+.auditHead .n { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--muted); }
+.audit { display: flex; flex-direction: column; gap: 5px; padding: 0 10px 12px; }
+.auditItem {
+  --cut: 5px; --bc: rgba(212, 191, 125, 0.14);
+  display: flex; align-items: flex-start; gap: 9px; padding: 8px 10px; cursor: pointer; background-color: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--bc); border-left: 2px solid var(--sev, var(--beige-dim));
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.auditItem:hover { background-color: rgba(226, 176, 33, 0.07); }
+.auditItem i { font-size: 10px; color: var(--sev, var(--beige-dim)); margin-top: 2px; }
+.aiTx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.aiT { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); }
+.aiS { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.02em; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+.auditItem.err { --sev: var(--danger-hot); } .auditItem.warn { --sev: var(--amber); } .auditItem.ok { --sev: var(--good); }
+
+/* ---------- center: toolbar + canvas ---------- */
+.tools { position: relative; z-index: 4; flex: 0 0 auto; display: flex; flex-wrap: nowrap; align-items: center; gap: 9px; padding: 9px 12px; border-bottom: 1px solid rgba(212, 191, 125, 0.24); overflow: visible; }
+.toolGroup { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 7px; overflow-x: auto; scrollbar-width: none; }
+.canvasInner { container-type: inline-size; container-name: cv; position: relative; }
+@container cv (max-width: 900px) { .tool .lbl { display: none; } .tool { padding: 8px 10px; gap: 0; } }
+.tool {
+  --cut: 5px; --bc: rgba(212, 191, 125, 0.22);
+  flex: 0 0 auto; position: relative; display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+  background-color: rgba(0, 0, 0, 0.35); border: 1px solid var(--bc); padding: 8px 11px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: color 130ms ease, border-color 130ms ease, background 130ms ease;
+}
+.tool i { font-size: 11px; }
+.tool:hover { --bc: rgba(226, 176, 33, 0.45); color: var(--text); }
+.tool.on { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226, 176, 33, 0.1); box-shadow: inset 0 0 14px rgba(226, 176, 33, 0.12); }
+.tool.danger:hover { --bc: rgba(185, 58, 58, 0.6); color: var(--danger-hot); }
+.toolDiv { width: 1px; align-self: stretch; background: rgba(212, 191, 125, 0.2); margin: 0 3px; }
+.modeSeg {
+  --cut: 6px; --bc: var(--amber);
+  flex: 0 0 auto; display: flex; gap: 0; border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.modeSeg button { background: rgba(0, 0, 0, 0.4); border: 0; cursor: pointer; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); padding: 9px 14px; display: flex; align-items: center; gap: 7px; }
+.modeSeg button:hover { color: var(--text); }
+.modeSeg button.on { color: var(--amber-hot); background: rgba(226, 176, 33, 0.14); }
+.modeSeg button.on.play { color: var(--cyan-hot); background: rgba(0, 166, 214, 0.16); }
+
+.pad { position: relative; z-index: 1; flex: 1; min-height: 0; overflow: hidden; cursor: grab; }
+.pad.grabbing { cursor: grabbing; }
+.pad.linking { cursor: crosshair; }
+.pad.adding { cursor: copy; }
+.latStage { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.latCanvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.latSvg { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: visible; }
+
+.ringGuide { fill: none; stroke: var(--beige); stroke-width: 1.2; opacity: 0.34; stroke-dasharray: 5 8; vector-effect: non-scaling-stroke; }
+.spokeGuide { stroke: var(--beige); opacity: 0.13; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.ringTag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; fill: var(--amber); opacity: 0.85; }
+.edge { fill: none; stroke: var(--beige-dim); stroke-width: 1.5; opacity: 0.55; vector-effect: non-scaling-stroke; }
+.edge.sel { stroke: var(--amber); opacity: 1; stroke-width: 2.2; filter: drop-shadow(0 0 5px rgba(226, 176, 33, 0.6)); }
+.edge.dead { stroke: var(--danger); opacity: 0.8; stroke-dasharray: 4 4; }
+.edgeHit { stroke: transparent; stroke-width: 14; fill: none; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: pointer; }
+.linkGhost { stroke: var(--amber-hot); stroke-width: 2; stroke-dasharray: 5 5; opacity: 0.9; fill: none; vector-effect: non-scaling-stroke; }
+
+.nd { --sz: 78px; position: absolute; width: var(--sz); height: var(--sz); transform: translate(-50%, -50%); background: transparent; border: 0; padding: 0; cursor: grab; z-index: 3; }
+.nd.core { --sz: 96px; } .nd.apex { --sz: 88px; }
+.nf { position: absolute; inset: 0; background: var(--bc, var(--beige-dim)); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+.ni { position: absolute; inset: 2.5px; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); background: linear-gradient(180deg, #171512, #0e0d0b); display: flex; align-items: center; justify-content: center; }
+.ni i { font-size: 24px; color: var(--bc, var(--beige)); }
+.nd.core .ni i { font-size: 30px; }
+.ncost { position: absolute; top: -3px; right: 0; z-index: 4; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; color: var(--amber-hot); background: #0a0908; border: 1.5px solid var(--amber); border-radius: 50%; }
+.nlab { position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); pointer-events: none; text-shadow: 0 1px 4px #000; }
+.ntier { position: absolute; bottom: -2px; left: 0; z-index: 4; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.06em; color: var(--beige-dim); background: #0a0908; padding: 0 3px; border: 1px solid rgba(212, 191, 125, 0.25); }
+.nd:hover .nf { filter: drop-shadow(0 0 10px rgba(226, 176, 33, 0.45)); }
+.nd.sel .nf { background: var(--amber-hot); filter: drop-shadow(0 0 14px rgba(226, 176, 33, 0.7)); }
+.nd.sel .nlab { color: var(--amber-hot); }
+.nd.linksrc .nf { background: var(--amber); animation: linkPulse 1s ease-in-out infinite; }
+@keyframes linkPulse { 0%, 100% { filter: drop-shadow(0 0 6px rgba(226, 176, 33, 0.5)); } 50% { filter: drop-shadow(0 0 18px rgba(226, 176, 33, 0.95)); } }
+.nd.bad .nf { background: var(--danger); }
+.nd.dragging { z-index: 9; cursor: grabbing; }
+.nconceal { position: absolute; top: -3px; left: -1px; z-index: 4; font-size: 8px; color: var(--violet); }
+
+.preview .nd { cursor: pointer; }
+.preview .nlab, .preview .ntier { display: none; }
+.preview .nd.pLocked { opacity: 0.4; }
+.preview .nd.pLocked .nf { background: var(--bc, var(--beige-dim)); filter: saturate(0.25) brightness(0.5); }
+.preview .nd.pLocked .ni i { color: var(--bc, var(--beige-dim)); filter: saturate(0.2) brightness(0.7); opacity: 0.5; }
+.preview .nd.pAvail .nf { background: var(--bc, var(--cyan)); }
+.preview .nd.pAvail .ni { background: linear-gradient(180deg, #1b1a16, #101010); animation: nodePulse 1.7s ease-in-out infinite; }
+.preview .nd.pAvail .ni i { color: var(--bc, var(--cyan-hot)); filter: brightness(1.35); }
+@keyframes nodePulse { 0%, 100% { box-shadow: inset 0 0 14px rgba(255, 255, 255, 0.06), 0 0 8px rgba(255, 255, 255, 0.06); } 50% { box-shadow: inset 0 0 26px rgba(255, 255, 255, 0.14), 0 0 18px rgba(255, 255, 255, 0.16); } }
+.preview .nd.pAtt .nf { background: var(--bc, var(--cyan)); filter: brightness(1.3) drop-shadow(0 0 12px rgba(255, 255, 255, 0.35)); }
+.preview .nd.pAtt .ni { background: linear-gradient(180deg, #232019, #141313); box-shadow: inset 0 0 26px rgba(255, 255, 255, 0.14); }
+.preview .nd.pAtt .ni i { color: #fff; filter: drop-shadow(0 0 7px var(--bc, var(--cyan))); }
+.preview .ncost { color: var(--bc, var(--cyan-hot)); border-color: var(--bc, var(--cyan)); }
+.preview .edge.dim { opacity: 0.16; }
+.preview .edge.open { opacity: 0.5; stroke-dasharray: 4 5; }
+.preview .edge.live { opacity: 1; stroke-width: 2.4; filter: brightness(1.3); }
+
+.pvBanner { position: absolute; left: 0; right: 0; top: 0; z-index: 7; display: flex; align-items: center; gap: 12px; white-space: nowrap; overflow: hidden; padding: 8px 14px; background: linear-gradient(to bottom, rgba(0, 32, 42, 0.95), rgba(0, 20, 26, 0.75) 70%, rgba(0, 20, 26, 0)); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--cyan-hot); }
+.pvBanner .pts { margin-left: auto; flex: 0 0 auto; color: var(--cyan-hot); }
+.pvBanner .pts b { font-family: var(--font-display); font-size: 15px; }
+.pvBanner .reset { flex: 0 0 auto; cursor: pointer; color: var(--beige); border: 1px solid rgba(212, 191, 125, 0.35); padding: 4px 9px; letter-spacing: 0.16em; background: none; }
+.pvBanner .reset:hover { color: var(--amber-hot); border-color: var(--amber); }
+.zoomers { position: absolute; right: 10px; bottom: 10px; z-index: 6; display: flex; flex-direction: column; gap: 5px; }
+.zoomers button {
+  --cut: 4px; --bc: rgba(226, 176, 33, 0.5);
+  width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center; background-color: rgba(10, 9, 8, 0.9); border: 1.5px solid var(--bc); color: var(--amber); font-size: 11px; cursor: pointer;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.zoomers button:hover { color: #fff; background-color: rgba(226, 176, 33, 0.18); }
+.canvasHint { position: absolute; left: 12px; right: 46px; bottom: 10px; z-index: 6; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; pointer-events: none; }
+.snapread { position: absolute; left: 12px; top: 12px; z-index: 6; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; color: var(--amber-hot); background: rgba(10, 9, 8, 0.85); border: 1.5px solid rgba(226, 176, 33, 0.4); padding: 5px 9px; text-transform: uppercase; }
+
+/* ---------- right: inspector ---------- */
+.insp { padding: 13px 14px 18px; display: flex; flex-direction: column; }
+.fieldLab { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; margin-bottom: 6px; display: block; }
+.in {
+  --cut: 5px; --bc: rgba(212, 191, 125, 0.32);
+  width: 100%; background-color: rgba(0, 0, 0, 0.5); border: 1.5px solid var(--bc); color: var(--text); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; padding: 9px 11px; margin-bottom: 12px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.in:focus { outline: none; --bc: var(--amber); }
+select.in { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--amber) 50%), linear-gradient(135deg, var(--amber) 50%, transparent 50%); background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+.prose {
+  --cut: 7px; --bc: rgba(212, 191, 125, 0.32);
+  width: 100%; min-height: 88px; resize: vertical; background-color: rgba(0, 0, 0, 0.4); border: 1.5px solid var(--bc); border-left: 2px solid var(--cyan); color: var(--text); font-family: var(--font-prose); font-size: 14.5px; line-height: 1.55; padding: 10px 12px; margin-bottom: 12px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  /* Firefox won't scroll a wheel/drag past a clip-path on the SAME element
+     that owns the scrollbar in some versions — force the scrolling axis so
+     it never silently degrades to "grows forever" or "stuck". */
+  overflow-y: auto;
+  /* Once the field's own content is fully scrolled, a further wheel/trackpad
+     scroll must stop there, not chain to the inspector panel behind it. */
+  overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: rgba(212, 191, 125, 0.35) transparent;
+}
+.prose::-webkit-scrollbar { width: 6px; }
+.prose::-webkit-scrollbar-thumb { background: rgba(212, 191, 125, 0.35); }
+.prose:focus { outline: none; --bc: var(--cyan-hot); }
+.prose.dm { --bc: rgba(226, 176, 33, 0.32); border-left-color: var(--amber); background-color: rgba(226, 176, 33, 0.05); font-family: var(--font-mono); font-size: 11px; line-height: 1.6; min-height: 62px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.grid2 .in { margin-bottom: 12px; }
+.sec { display: flex; align-items: center; gap: 8px; margin: 3px 0 9px; }
+.sec .fieldLab { margin-bottom: 0; }
+.sec::after { content: ""; flex: 1; height: 1px; background: rgba(212, 191, 125, 0.15); }
+.icons { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 5px; margin-bottom: 13px; }
+.ic {
+  --cut: 4px; --bc: rgba(212, 191, 125, 0.2);
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; color: var(--muted); background-color: rgba(0, 0, 0, 0.35); border: 1px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.ic:hover { --bc: rgba(226, 176, 33, 0.45); color: var(--text); }
+.ic.sel { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226, 176, 33, 0.12); }
+.stepper {
+  --cut: 5px; --bc: rgba(212, 191, 125, 0.3);
+  display: flex; align-items: center; border: 1.5px solid var(--bc); margin-bottom: 12px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.stepper button { width: 32px; height: 34px; background: rgba(0, 0, 0, 0.45); border: 0; color: var(--amber); font-size: 12px; cursor: pointer; }
+.stepper button:hover { color: #fff; background: rgba(226, 176, 33, 0.14); }
+.stepper .val { flex: 1; text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--text); }
+.stepper .val .u { font-family: var(--font-mono); font-size: 9px; color: var(--beige-dim); margin-left: 3px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 11px; }
+.chip {
+  --cut: 4px; --bc: rgba(212, 191, 125, 0.3);
+  display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--beige); background-color: rgba(0, 0, 0, 0.35); border: 1px solid var(--bc); padding: 5px 9px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.chip .x { cursor: pointer; color: var(--beige-dim); font-size: 10px; }
+.chip .x:hover { color: var(--danger-hot); }
+.chip.none { --bc: rgba(185, 58, 58, 0.45); color: var(--danger-hot); }
+.tog {
+  --cut: 5px; --bc: rgba(212, 191, 125, 0.2);
+  display: flex; align-items: center; gap: 11px; padding: 9px 11px; margin-bottom: 10px; background-color: rgba(0, 0, 0, 0.28); border: 1px solid var(--bc); border-left: 2px solid var(--beige-dim); cursor: pointer;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.tog.on { border-left-color: var(--violet); }
+.tog .sw { flex: 0 0 auto; width: 32px; height: 17px; border-radius: 9px; background: rgba(0, 0, 0, 0.6); border: 1px solid var(--beige-dim); position: relative; }
+.tog .sw::after { content: ""; position: absolute; top: 1px; left: 1px; width: 13px; height: 13px; border-radius: 50%; background: var(--beige-dim); transition: transform 160ms ease, background 160ms ease; }
+.tog.on .sw { background: rgba(160, 122, 214, 0.25); border-color: var(--violet); }
+.tog.on .sw::after { transform: translateX(15px); background: var(--violet); }
+.tog .tl { flex: 1; min-width: 0; }
+.tog .tl .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); }
+.tog .tl .s { font-family: var(--font-mono); font-size: 7.5px; color: var(--muted); margin-top: 2px; }
+
+.btn { position: relative; border: 0; padding: 0; cursor: pointer; font-family: var(--font-mono); background: transparent; height: 34px; flex: 1; min-width: 0; }
+.btn .bf { position: absolute; inset: 0; clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+.btn .bi { position: absolute; inset: 1.5px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
+.btn .bi i { font-size: 10px; }
+.btn.amber .bf { background: var(--amber); } .btn.amber .bi { background: linear-gradient(180deg, #2a2110, #1a1509); color: var(--amber-hot); }
+.btn.amber:hover .bi { color: #fff; box-shadow: inset 0 0 18px rgba(226, 176, 33, 0.3), 0 0 14px rgba(226, 176, 33, 0.45); }
+.btn.cyan .bf { background: var(--cyan); } .btn.cyan .bi { background: linear-gradient(180deg, #102229, #0c161a); color: var(--cyan-hot); }
+.btn.cyan:hover .bi { color: #fff; box-shadow: inset 0 0 18px rgba(0, 166, 214, 0.3), 0 0 14px rgba(0, 166, 214, 0.45); }
+.btn.ghost .bf { background: var(--beige-dim); opacity: 0.7; } .btn.ghost .bi { background: linear-gradient(180deg, #1a1813, #12110e); color: var(--beige); }
+.btn.ghost:hover .bi { color: var(--amber-hot); }
+.btn.danger .bf { background: var(--danger); } .btn.danger .bi { background: linear-gradient(180deg, #2a1212, #1a0d0d); color: var(--danger-hot); }
+.btn.danger:hover .bi { color: #fff; box-shadow: inset 0 0 18px rgba(185, 58, 58, 0.35); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btnrow { display: flex; gap: 8px; margin-top: 4px; }
+.inspEmpty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 30px 18px; min-height: 260px; }
+/* Hexagon — see .lrIc note above for why this needs the frame+inner layers,
+   not an inset ring or the TL/BR gradient recipe. */
+.inspEmpty .icBig { width: 56px; height: 56px; position: relative; }
+.icBigFrame { position: absolute; inset: 0; background: rgba(226, 176, 33, 0.45); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+.icBigInner {
+  position: absolute; inset: 1.5px; display: flex; align-items: center; justify-content: center;
+  font-size: 23px; color: var(--amber); background: rgba(226, 176, 33, 0.05);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.inspEmpty .t { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3em; color: var(--muted); text-transform: uppercase; }
+.inspEmpty .d { font-family: var(--font-prose); font-size: 14px; line-height: 1.5; color: var(--muted); max-width: 250px; }
+.inspEmpty .k { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; color: var(--beige-dim); text-transform: uppercase; line-height: 2; }
+.inspEmpty .k b { color: var(--beige); border: 1px solid rgba(212, 191, 125, 0.3); padding: 1px 5px; font-weight: 400; }
+
+.itabs {
+  --cut: 6px; --bc: rgba(212, 191, 125, 0.28);
+  display: flex; gap: 0; margin: -2px 0 13px; border: 1px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.itabs button { flex: 1; min-width: 0; background: rgba(0, 0, 0, 0.4); border: 0; cursor: pointer; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); padding: 9px 6px; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.itabs button:hover { color: var(--text); }
+.itabs button.on { color: var(--amber-hot); background: rgba(226, 176, 33, 0.14); box-shadow: inset 0 -2px 0 var(--amber); }
+
+.modRow {
+  --cut: 5px; --bc: rgba(226, 176, 33, 0.2);
+  display: flex; align-items: center; gap: 9px; padding: 8px 10px; margin-bottom: 7px; background-color: rgba(0, 0, 0, 0.32); border: 1px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.modRow .mk { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige); }
+.modRow .mop { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber-dim); border: 1px solid rgba(226, 176, 33, 0.3); padding: 2px 6px; }
+.modRow .mv { margin-left: auto; font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--amber-hot); }
+.modRow .dx { cursor: pointer; font-size: 11px; color: var(--beige-dim); }
+.modRow .dx:hover { color: var(--danger-hot); }
+
+.spoke { display: flex; align-items: center; gap: 9px; padding: 7px 10px; margin-bottom: 6px; background: rgba(0, 0, 0, 0.3); border-left: 2px solid var(--sc, var(--beige-dim)); clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+.spoke .sd { flex: 0 0 auto; width: 9px; height: 9px; background: var(--sc, var(--beige-dim)); clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+.spoke .snIn { flex: 1; min-width: 0; background: transparent; border: 0; border-bottom: 1px solid transparent; color: var(--text); font-family: var(--font-prose); font-size: 15px; padding: 2px 0; }
+.spoke .snIn:hover { border-bottom-color: rgba(212, 191, 125, 0.25); }
+.spoke .snIn:focus { outline: none; border-bottom-color: var(--amber); }
+.spoke .swSet { flex: 0 0 auto; display: flex; gap: 3px; }
+.spoke .swt { width: 11px; height: 11px; cursor: pointer; background: var(--pc); opacity: 0.4; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); border: 0; padding: 0; }
+.spoke .swt:hover { opacity: 0.85; }
+.spoke .swt.on { opacity: 1; transform: scale(1.35); }
+.spoke .sc { flex: 0 0 auto; min-width: 14px; text-align: right; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; color: var(--muted); }
+.spoke .dx { flex: 0 0 auto; cursor: pointer; font-size: 10px; color: var(--beige-dim); background: none; border: 0; }
+.spoke .dx:hover { color: var(--danger-hot); }
+
+.wgt { position: relative; isolation: isolate; padding: 12px 14px 14px; margin-bottom: 11px; background: var(--amber); clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+.wgt::before { content: ""; position: absolute; inset: 0 0 0 2px; z-index: -1; background: linear-gradient(180deg, #1b1710, #12100c); clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px); }
+.wgtHead { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 9px; }
+.wgtHead .wi { flex: 0 0 auto; font-size: 13px; color: var(--amber-hot); margin-top: 1px; }
+.wgtHead .wt { font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase; color: var(--amber-hot); line-height: 1.35; }
+.wgtHead .wn { margin-left: auto; max-width: 118px; text-align: right; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber-dim); line-height: 1.55; }
+.wgtEmpty { font-family: var(--font-mono); font-size: 10px; line-height: 1.65; color: var(--amber-dim); margin-bottom: 11px; }
+.wgtBtn {
+  --cut: 8px; --bc: rgba(226, 176, 33, 0.45);
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; height: 38px; cursor: pointer; background-color: rgba(0, 0, 0, 0.4); border: 1.5px solid var(--bc); color: var(--amber-hot); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.wgtBtn:hover { --bc: var(--amber); color: #fff; box-shadow: inset 0 0 16px rgba(226, 176, 33, 0.14); }
+.wgtBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.dtlRow { display: flex; align-items: center; gap: 10px; padding: 9px 11px; margin-bottom: 8px; background: rgba(0, 0, 0, 0.3); border-left: 2px solid var(--amber); }
+.dtlRow .dl { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige); }
+.dtlRow .dv { flex: 1; text-align: center; font-family: var(--font-prose); font-size: 15px; color: var(--text); }
+.dtlRow .dx { cursor: pointer; font-size: 11px; color: var(--beige-dim); background: none; border: 0; }
+.dtlRow .dx:hover { color: var(--danger-hot); }
+.dtlNew { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 9px; margin-bottom: 4px; }
+.dtlNew input {
+  --cut: 7px; --bc: rgba(226, 176, 33, 0.32);
+  min-width: 0; height: 40px; background-color: rgba(0, 0, 0, 0.4); border: 1.5px solid var(--bc); color: var(--text); font-family: var(--font-prose); font-size: 15px; padding: 0 12px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.dtlNew .wgtBtn { width: auto; height: 40px; padding: 0 16px; }
+.imeta {
+  --cut: 5px; --bc: rgba(226, 176, 33, 0.28);
+  display: flex; align-items: center; gap: 9px; padding: 9px 11px; margin-bottom: 13px; background-color: rgba(226, 176, 33, 0.05); border: 1px solid var(--bc); border-left: 2px solid var(--amber);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.imeta i { color: var(--amber-hot); font-size: 12px; }
+.imeta .t { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--amber-hot); }
+.imeta .s { margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- bottom bar ---------- */
+.botbar { position: fixed; left: 0; right: 0; bottom: 0; height: 38px; z-index: 60; display: flex; align-items: center; gap: 14px; padding: 0 16px; background: linear-gradient(to top, rgba(18, 16, 10, 0.97), rgba(14, 13, 11, 0.9)); border-top: 1px solid rgba(212, 191, 125, 0.28); }
+.tel { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; text-transform: uppercase; color: rgba(226, 176, 33, 0.6); }
+.status { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--good); }
+.status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 7px rgba(79, 174, 107, 0.7); }
+.status.bad { color: var(--danger-hot); } .status.bad .dot { background: var(--danger-hot); box-shadow: 0 0 7px rgba(255, 84, 84, 0.7); }
+.dirty { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--amber); opacity: 0; }
+.dirty.on { opacity: 1; }
+.acts { margin-left: auto; display: flex; gap: 8px; }
+.acts .btn { width: 132px; flex: 0 0 auto; height: 28px; }
+.toastEl {
+  --cut: 7px; --bc: var(--amber);
+  position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%) translateY(10px); z-index: 120; opacity: 0; pointer-events: none; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background-color: rgba(14, 13, 10, 0.96); border: 1.5px solid var(--bc); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber-hot);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.toastEl.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toastEl.warn { --bc: var(--danger-hot); color: var(--danger-hot); }
+
+/* ---------- chamfered-border-corner fix (CLAUDE.md recipe) ----------
+   A plain `border` physically cannot draw along an oblique clip-path edge —
+   these two gradients paint the diagonal stroke a border can't. Every rule
+   above that sets --cut/--bc is fixed by this one shared block; 0.7071 ≈
+   1/√2, the perpendicular offset of a 45° line. */
+.opRootpill, .opBack, .auditItem, .tool, .modeSeg, .in, .prose, .ic, .stepper,
+.chip, .tog, .zoomers button, .itabs, .modRow, .wgtBtn, .dtlNew input, .imeta,
+.toastEl, .catFx, .selIn {
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
+/* the blanket border-color above flattens mixed borders — re-assert the
+   accent left edge (straight edge, so the plain border is correct there) */
+.catFx { border-left-color: var(--amber); }
+
+/* ---------- Effects Granted / Base Effects — exact port of the item catalog
+   form's widget (OperatorConsole.module.css: .catFx and .selIn), so
+   DM-authoring reads identically in both places. ---------- */
+.catFx {
+  --cut: 7px; --bc: rgba(226, 176, 33, 0.32);
+  border: 1px solid var(--bc); border-left: 3px solid var(--amber); background-color: rgba(226, 176, 33, 0.05); padding: 12px 13px 13px; margin-bottom: 14px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.catFxHead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.catFxHead i { color: var(--amber-hot); font-size: 11px; }
+.catFxHead .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber-hot); }
+.catFxHead .s { margin-left: auto; font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber-dim); }
+.catFxRows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.catFxRow { display: flex; align-items: center; gap: 8px; }
+.catFxRow .selIn, .catFxRow .in { margin-bottom: 0; }
+.catFxRow .fxStat { flex: 1 1 auto; min-width: 0; }
+.catFxRow .fxMode { flex: 0 0 104px; }
+.catFxRow .fxAmt { flex: 0 0 62px; text-align: center; }
+.catFxRow .fxX { flex: 0 0 auto; cursor: pointer; color: var(--beige-dim); font-size: 11px; padding: 4px 6px; transition: color 130ms ease; }
+.catFxRow .fxX:hover { color: var(--danger-hot); }
+.catFxNone { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em; color: var(--amber-dim); padding: 3px 2px 10px; }
+.catFxAdd { display: flex; }
+.catFxAdd .btn { flex: 0 0 auto; min-width: 148px; }
+
+/* select — keeps its dropdown chevrons; box-shadow gives the base ring (a
+   clip-path-safe technique on its own), the corner stripes above sharpen
+   just the two cut corners on top of it. */
+.selIn {
+  --cut: 5px; --bc: rgba(212, 191, 125, 0.32);
+  width: 100%; background-color: rgba(0, 0, 0, 0.5); border: 1px solid var(--bc); color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--bc);
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; padding: 8px 10px; margin-bottom: 10px; cursor: pointer;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  appearance: none; -webkit-appearance: none;
+}
+.selIn:focus { outline: none; --bc: var(--amber); }
+.selIn option { background: #14130f; color: var(--text); }
+.selIn {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--amber) 50%),
+    linear-gradient(135deg, var(--amber) 50%, transparent 50%),
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: padding-box, padding-box, border-box, border-box;
+  background-position: calc(100% - 14px) 14px, calc(100% - 9px) 14px, top left, bottom right;
+  background-size: 5px 5px, 5px 5px, calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}

@@ -13,10 +13,10 @@
  * effect-layered sheet — writing layered scores back would corrupt canon.
  */
 
-import type { CharacterRow, EquippedItem } from './database.types'
+import type { CharacterRow, EquippedItem, ShardTree } from './database.types'
 import { rollHeal } from './dice'
 import type { RollLine } from './rolls'
-import { activeEffects, summarizeEffects } from './effects'
+import { activeEffects, effectiveSheet, summarizeEffects } from './effects'
 
 export interface ConsumeOutcome {
   /** True when using it would do nothing (a pure heal at full HP) — don't spend it. */
@@ -33,10 +33,12 @@ export interface ConsumeOutcome {
 
 /** Resolve what using `item` does to this character (HP + status), without touching
  *  the container the item lives in. */
-export function consumeEffect(item: EquippedItem, character: CharacterRow): ConsumeOutcome {
+export function consumeEffect(item: EquippedItem, character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): ConsumeOutcome {
   const base = character.sheet
   const cur = base.hp?.current ?? 0
-  const max = base.hp?.max ?? 0
+  // Clamp against the EFFECTIVE max (base + shard bonuses); the write below
+  // never touches `max`, so the authored base is untouched either way.
+  const max = effectiveSheet(character, shardTrees).hp?.max ?? base.hp?.max ?? 0
   const hasEffects = !!item.effects && Object.keys(item.effects).length > 0
   const canHeal = item.heal !== undefined && (max <= 0 || cur < max)
 
@@ -51,7 +53,8 @@ export function consumeEffect(item: EquippedItem, character: CharacterRow): Cons
   if (canHeal) {
     const { total, breakdown } = rollHeal(item.heal!)
     const next = max > 0 ? Math.min(max, cur + total) : cur + total
-    out.sheet = { ...base, hp: { ...(base.hp ?? { max }), current: next } }
+    const baseHp = base.hp ?? { current: 0, max: 0 }
+    out.sheet = { ...base, hp: { ...baseHp, current: next } }
     lines.push({ label: 'Healed', total: `+${next - cur}`, breakdown: `${breakdown} · HP ${cur} → ${next}`, tone: 'heal' })
   }
 

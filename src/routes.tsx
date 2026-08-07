@@ -11,6 +11,8 @@ import { Features } from './screens/Features'
 import { Inventory } from './screens/Inventory'
 import { Journal } from './screens/Journal'
 import { Lore } from './screens/Lore'
+import { Shard } from './screens/Shard'
+import { ShardLattice } from './screens/ShardLattice'
 import { OperatorConsole } from './screens/OperatorConsole'
 
 export const router = createBrowserRouter([
@@ -20,6 +22,7 @@ export const router = createBrowserRouter([
   // own amber chrome — NOT a child of the player Layout. The screen self-gates on
   // dm_users membership and redirects non-DM users back to '/'.
   { path: '/dm', element: <OperatorConsole /> },
+  { path: '/dm/shards', element: <ShardLattice /> },
   {
     path: '/',
     element: <Layout />,
@@ -30,8 +33,7 @@ export const router = createBrowserRouter([
       { path: 'stat-panel', element: <Stats /> },
       { path: 'features', element: <Features /> },
       { path: 'character', element: <Character /> },
-      { path: 'shard', element: <Stub title="Shard Interface" section="shards"
-          blurb="3 shard slots: G.U.I.D.E. (locked), Vigor (active), empty. Opens the Shard Tree modal — already a data-driven template." /> },
+      { path: 'shard', element: <Shard /> },
       { path: 'lore', element: <Lore /> },
       { path: 'journal', element: <Journal /> },
       { path: 'spellbook', element: <Stub title="Spellbook" section="spellbook"

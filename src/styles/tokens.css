@@ -23,6 +23,8 @@
   --amber-dim:  #8a6d1a;
   --amber-deep: #2a2110;
   --good:       #4fae6b;
+  /* Shard branch palette (Shard Tree / Shard Lattice Editor) — grit/ash spoke. */
+  --violet:     #a07ad6;
 
   /* Extended rarity scale (Operator Console catalog). The player screens only
      needed common→legendary; the catalog also reads very-rare. */

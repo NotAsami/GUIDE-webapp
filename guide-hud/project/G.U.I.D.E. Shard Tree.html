@@ -32,6 +32,10 @@
     --cyan-dim:  #0d6e8c;
     --cyan-hot:  #4dd6ff;
     --gold-rare: #e2b021;
+    /* shared with the DM lattice editor — branch spoke palette */
+    --amber:     #e2b021;
+    --amber-hot: #ffce4d;
+    --violet:    #a07ad6;
     --text:      #dedede;
     --muted:     #aaaaaa;
 
@@ -454,33 +458,31 @@
   .ring-guide {
     fill: none;
     stroke: var(--beige);
-    stroke-width: 1;
-    opacity: 0.16;
-    stroke-dasharray: 2 7;
+    stroke-width: 1.2;
+    opacity: 0.3;
+    stroke-dasharray: 5 8;
+    vector-effect: non-scaling-stroke;
   }
 
   /* ---- connector lines ---- */
+  /* Edges inherit their child node's BRANCH colour (stroke set inline by
+     render()); state is carried by weight + opacity, not by hue, so the
+     spoke you are following stays legible the whole way out. */
   .edge {
     fill: none;
     stroke: var(--beige);
     stroke-width: 1.4;
-    opacity: 0.4;
+    opacity: 0.42;
+    vector-effect: non-scaling-stroke;
     transition: stroke 220ms ease, opacity 220ms ease, stroke-width 220ms ease, filter 220ms ease;
   }
-  .edge.locked { stroke: var(--beige-dim); stroke-dasharray: 3 4; opacity: 0.3; }
-  /* both endpoints attuned → current flows: bright cyan w/ glow */
-  .edge.live {
-    stroke: var(--cyan); opacity: 0.95; stroke-width: 1.8;
-    filter: drop-shadow(0 0 4px rgba(0,166,214,0.7));
-  }
-  .edge.hl {
-    stroke: var(--cyan-hot); opacity: 1; stroke-width: 2;
-    filter: drop-shadow(0 0 5px rgba(0,166,214,0.85));
-  }
-  .edge-pulse {
-    fill: var(--cyan-hot);
-    filter: drop-shadow(0 0 5px rgba(0,166,214,0.95));
-  }
+  .edge.locked { stroke-dasharray: 3 4; opacity: 0.16; }
+  /* parent attuned, child not yet — the reachable frontier */
+  .edge.open { stroke-dasharray: 4 5; opacity: 0.5; }
+  /* both endpoints attuned → current flows */
+  .edge.live { opacity: 1; stroke-width: 2.2; filter: brightness(1.3); }
+  .edge.hl   { opacity: 1; stroke-width: 2.6; filter: brightness(1.5); }
+  .edge-pulse { fill: #fff; filter: drop-shadow(0 0 5px rgba(255,255,255,0.8)); }
 
   /* ---- hex node ---- */
   .node {
@@ -526,54 +528,56 @@
     display: none;
   }
 
-  /* ATTUNED — filled cyan, solid inner glow */
+  /* Every node carries its BRANCH colour in --bc (set by render()).
+     State is read from luminance and glow rather than from hue, so the
+     branch a node belongs to is legible whether it is locked or lit. */
+
+  /* ATTUNED — branch colour at full burn, white-hot glyph */
   .node.attuned .n-frame {
-    background: var(--cyan);
-    filter: drop-shadow(0 0 12px rgba(0,166,214,0.5));
+    background: var(--bc, var(--cyan));
+    filter: brightness(1.3) drop-shadow(0 0 12px rgba(255,255,255,0.3));
   }
   .node.attuned .n-inner {
-    background:
-      radial-gradient(120% 90% at 50% 45%, rgba(0,166,214,0.4), transparent 65%),
-      linear-gradient(180deg, #103642, #0a222b);
-    box-shadow: inset 0 0 26px rgba(0,166,214,0.5);
+    background: linear-gradient(180deg, #232019, #141313);
+    box-shadow: inset 0 0 26px rgba(255,255,255,0.14);
   }
-  .node.attuned .n-inner i { color: #eafaff; text-shadow: 0 0 12px rgba(0,166,214,0.9); }
+  .node.attuned .n-inner i { color: #fff; text-shadow: 0 0 12px var(--bc, var(--cyan)); }
+  .node.attuned .n-cost { color: var(--bc, var(--cyan-hot)); border-color: var(--bc, var(--cyan)); }
 
-  /* AVAILABLE — cyan outline, gentle pulse, clickable */
+  /* AVAILABLE — branch colour, gentle pulse, clickable */
   .node.available { cursor: pointer; }
-  .node.available .n-frame { background: var(--cyan); }
+  .node.available .n-frame { background: var(--bc, var(--cyan)); }
   .node.available .n-inner {
-    background:
-      radial-gradient(120% 90% at 50% 50%, rgba(0,166,214,0.12), transparent 62%),
-      linear-gradient(180deg, #14242a, #0d181d);
+    background: linear-gradient(180deg, #1b1a16, #101010);
     animation: nodePulse 1.7s ease-in-out infinite;
   }
-  .node.available .n-inner i { color: var(--cyan-hot); }
+  .node.available .n-inner i { color: var(--bc, var(--cyan-hot)); filter: brightness(1.35); }
+  .node.available .n-cost { color: var(--bc, var(--cyan-hot)); border-color: var(--bc, var(--cyan)); }
   @keyframes nodePulse {
-    0%, 100% { box-shadow: inset 0 0 14px rgba(0,166,214,0.2), 0 0 8px rgba(0,166,214,0.25); }
-    50%      { box-shadow: inset 0 0 26px rgba(0,166,214,0.4), 0 0 18px rgba(0,166,214,0.5); }
+    0%, 100% { box-shadow: inset 0 0 14px rgba(255,255,255,0.06), 0 0 8px rgba(255,255,255,0.06); }
+    50%      { box-shadow: inset 0 0 26px rgba(255,255,255,0.14), 0 0 18px rgba(255,255,255,0.16); }
   }
   .node.available:hover { transform: translate(-50%, -50%) scale(1.06); }
 
-  /* LOCKED — muted/dim, lock glyph, low opacity */
-  .node.locked { cursor: pointer; opacity: 0.5; }
-  .node.locked .n-frame { background: var(--beige-dim); }
+  /* LOCKED — branch colour desaturated back toward the plate */
+  .node.locked { cursor: pointer; opacity: 0.42; }
+  .node.locked .n-frame { background: var(--bc, var(--beige-dim)); filter: saturate(0.25) brightness(0.5); }
   .node.locked .n-inner { background: linear-gradient(180deg, #141414, #0d0d0d); }
-  .node.locked .n-inner i { color: var(--beige-dim); opacity: 0.4; }
+  .node.locked .n-inner i { color: var(--bc, var(--beige-dim)); filter: saturate(0.2) brightness(0.7); opacity: 0.5; }
   .node.locked .n-lock { display: block; }
   .node.locked .n-cost { color: var(--beige-dim); border-color: var(--beige-dim); box-shadow: none; }
 
   /* selected highlight ring */
-  .node.sel .n-frame { background: var(--cyan-hot); filter: drop-shadow(0 0 14px rgba(0,166,214,0.7)); }
-  .node.sel.locked { opacity: 0.72; }
-  .node.sel.locked .n-frame { background: var(--beige); }
+  .node.sel .n-frame { filter: brightness(1.5) drop-shadow(0 0 14px rgba(255,255,255,0.4)); }
+  .node.sel.locked { opacity: 0.75; }
+  .node.sel.locked .n-frame { filter: saturate(0.6) brightness(1.1); }
 
   /* one-shot fill flash on attune */
   .node.just .n-inner { animation: attuneFlash 620ms ease-out; }
   @keyframes attuneFlash {
-    0%   { box-shadow: inset 0 0 0 rgba(0,166,214,0); }
-    25%  { box-shadow: inset 0 0 40px rgba(255,255,255,0.7), 0 0 30px rgba(0,166,214,0.8); }
-    100% { box-shadow: inset 0 0 26px rgba(0,166,214,0.5); }
+    0%   { box-shadow: inset 0 0 0 rgba(255,255,255,0); }
+    25%  { box-shadow: inset 0 0 40px rgba(255,255,255,0.75), 0 0 30px rgba(255,255,255,0.5); }
+    100% { box-shadow: inset 0 0 26px rgba(255,255,255,0.14); }
   }
   .node.deny { animation: deniedShake 320ms ease-out; }
 
@@ -932,6 +936,13 @@ const CANVAS_R  = RING_GAP * MAX_TIER + 72;   // half-size, incl. rim node + mar
 const CANVAS_SZ = CANVAS_R * 2;
 
 const BRANCH_LABEL = { core: "Core", might: "Might", vitality: "Vitality", grit: "Grit", apex: "Apex" };
+/* Branch colours match the DM lattice editor 1:1 — the spoke a player sees
+   here is the same hue the operator assigned when authoring the tree. */
+const BRANCH_COLOR = {
+  core: "var(--amber-hot)", might: "var(--beige)", vitality: "var(--cyan)",
+  grit: "var(--violet)", apex: "var(--amber)"
+};
+const brColor = k => (SHARD_TREE.branchColors && SHARD_TREE.branchColors[k]) || BRANCH_COLOR[k] || "var(--beige-dim)";
 
 /* ============================================================================
    RENDER + LOGIC  (operates on SHARD_TREE data, never on DOM scraping)
@@ -967,6 +978,7 @@ const BRANCH_LABEL = { core: "Core", might: "Might", vitality: "Vitality", grit:
     el.type = 'button';
     el.dataset.id = n.id;
     el.setAttribute('aria-label', n.name);
+    el.style.setProperty('--bc', brColor(n.branch));
     el.innerHTML =
       '<span class="n-frame"></span>' +
       '<span class="n-inner"><i class="fa-solid ' + n.icon + '"></i></span>' +
@@ -1073,7 +1085,9 @@ const BRANCH_LABEL = { core: "Core", might: "Might", vitality: "Vitality", grit:
       }
       rec.path.setAttribute('d', d);
       const st = edgeState(e);
-      rec.path.setAttribute('class', 'edge ' + (st === 'live' ? 'live' : st === 'locked' ? 'locked' : ''));
+      const child = SHARD_TREE.nodes.find(x => x.id === e.child);
+      rec.path.style.stroke = brColor(child ? child.branch : 'core');
+      rec.path.setAttribute('class', 'edge ' + (st === 'live' ? 'live' : st === 'locked' ? 'locked' : 'open'));
 
       // traveling pulse only on live edges (current flows up the chosen path)
       if (st === 'live' && !rec.pulse) {
@@ -1179,7 +1193,7 @@ const BRANCH_LABEL = { core: "Core", might: "Might", vitality: "Vitality", grit:
     detailActive.innerHTML =
       '<div class="da-name ' + sl.cls + '">' + n.name + '</div>' +
       '<div class="da-tags">' +
-        '<span class="da-tag cyan">' + BRANCH_LABEL[n.branch] + '</span>' +
+        '<span class="da-tag cyan" style="color:' + brColor(n.branch) + ';border-color:' + brColor(n.branch) + '">' + BRANCH_LABEL[n.branch] + '</span>' +
         '<span class="da-tag">Tier ' + n.tier + '</span>' +
         '<span class="da-tag">' + (n.cost === 0 ? 'Free' : 'Cost ' + n.cost) + '</span>' +
       '</div>' +
@@ -1189,7 +1203,7 @@ const BRANCH_LABEL = { core: "Core", might: "Might", vitality: "Vitality", grit:
       '<div class="da-note" id="daNote"></div>' +
       attuneBtnHtml(n);
     detailPad.classList.add('has-node');
-    detailMeta.innerHTML = '<span class="acc">' + BRANCH_LABEL[n.branch] +
+    detailMeta.innerHTML = '<span class="acc" style="color:' + brColor(n.branch) + '">' + BRANCH_LABEL[n.branch] +
       '</span> \u00b7 ' + sl.txt;
 
     const btn = document.getElementById('attuneBtn');
@@ -1240,17 +1254,9 @@ const BRANCH_LABEL = { core: "Core", might: "Might", vitality: "Vitality", grit:
       'translate(' + panX.toFixed(1) + 'px,' + panY.toFixed(1) + 'px) scale(' + zoom.toFixed(3) + ')';
   }
   const clampZoom = z => Math.max(0.3, Math.min(2.6, z));
-  // open near full size, centred on the Core — nodes read large and the player
-  // pans/scrolls to reach the rim (rather than shrinking the whole tree to fit)
-  function initialView() {
-    const vw = stage.clientWidth, vh = stage.clientHeight;
-    if (!vw || !vh) return;
-    const fit = Math.min(vw / CANVAS_SZ, vh / CANVAS_SZ);
-    zoom = clampZoom(Math.max(0.92, fit));   // never smaller than 0.92
-    panX = vw / 2 - CANVAS_R * zoom;          // Core (canvas centre) → viewport centre
-    panY = vh / 2 - CANVAS_R * zoom;
-    applyTransform();
-  }
+  // Open with the WHOLE lattice in frame — the capstone at tier 4 has to be
+  // visible on load, otherwise the player never learns the tree has a top.
+  function initialView() { fitView(); }
   function fitView() {
     const vw = stage.clientWidth, vh = stage.clientHeight;
     if (!vw || !vh) return;

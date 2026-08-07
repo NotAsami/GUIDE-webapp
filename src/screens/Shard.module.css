@@ -1,0 +1,371 @@
+/* Shard Interface — ported from G.U.I.D.E. Shard.html. Shared chrome (topbar,
+   dock nav, tickers, side-rails, scanlines) lives in Layout / Nav / Deco; this
+   module owns the two-column body: the head-scan neural interface (left, with
+   the 3 embedded slot-ports) and the shard manifest cards (right), joined by
+   an SVG connector overlay. Same fixed-layout model as Equipment (the mockup
+   itself was a fixed, non-scrolling page). */
+
+.sd {
+  position: fixed;
+  top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 50px);
+  bottom: calc(var(--bar-bottom-h) + 22px);
+  left: 0; right: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: minmax(480px, 1.05fr) minmax(440px, 0.95fr);
+  gap: 70px;
+  padding: 0 36px;
+}
+
+.col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.sdLeft { gap: 18px; }
+
+.colHeader {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 12px;
+  padding: 0 4px 8px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
+}
+.chNum {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+}
+.chTitle {
+  font-family: var(--font-mono); font-size: 12px;
+  letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
+}
+.chMeta {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
+}
+
+/* ---------- Head panel: angular double-frame around the head-scan ---------- */
+.headPanel {
+  --cut: 22px;
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.headPanel::before {
+  content: ""; position: absolute; inset: 0;
+  background: var(--beige);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.headPanel::after {
+  content: ""; position: absolute; inset: 7px;
+  background: var(--bg);
+  clip-path: polygon(calc(var(--cut) - 6px) 0, 100% 0, 100% calc(100% - var(--cut) + 6px), calc(100% - var(--cut) + 6px) 100%, 0 100%, 0 calc(var(--cut) - 6px));
+}
+.hpFrame2 {
+  position: absolute; inset: 5px;
+  background: var(--beige); opacity: 0.5;
+  clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0, 100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%, 0 100%, 0 calc(var(--cut) - 4px));
+}
+.hpInner {
+  position: relative; z-index: 2;
+  margin: 12px; flex: 1;
+  background:
+    radial-gradient(60% 70% at 60% 55%, rgba(0, 166, 214, 0.12), transparent 70%),
+    radial-gradient(120% 90% at 50% 50%, rgba(0, 166, 214, 0.04), transparent 65%),
+    linear-gradient(180deg, #161616, #0c0c0c);
+  clip-path: polygon(calc(var(--cut) - 10px) 0, 100% 0, 100% calc(100% - var(--cut) + 10px), calc(100% - var(--cut) + 10px) 100%, 0 100%, 0 calc(var(--cut) - 10px));
+  box-shadow: inset 0 0 60px rgba(0, 166, 214, 0.12), inset 0 0 1px rgba(212, 191, 125, 0.2);
+  display: flex; align-items: flex-end; justify-content: center;
+  overflow: hidden;
+  padding: 22px 22px 0 22px;
+  min-height: 0;
+}
+.hpInner::before {
+  content: ""; position: absolute; inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0, 166, 214, 0.05) 0px, rgba(0, 166, 214, 0.05) 1px, transparent 1px, transparent 4px);
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  z-index: 1;
+}
+.hpCorner { position: absolute; width: 22px; height: 22px; border-color: var(--cyan); opacity: 0.85; z-index: 4; }
+.hpCorner.tl { top: 14px; left: 14px; border-top: 1.5px solid; border-left: 1.5px solid; }
+.hpCorner.tr { top: 14px; right: 14px; border-top: 1.5px solid; border-right: 1.5px solid; }
+.hpCorner.bl { bottom: 14px; left: 14px; border-bottom: 1.5px solid; border-left: 1.5px solid; }
+.hpCorner.br { bottom: 14px; right: 14px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
+.hpMeta {
+  position: absolute; top: 18px; left: 24px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.32em;
+  color: var(--cyan); text-transform: uppercase; z-index: 4; opacity: 0.85;
+}
+.hpMeta :global(.dim) { color: var(--muted); }
+.hpMeta2 {
+  position: absolute; bottom: 18px; right: 24px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.28em;
+  color: var(--beige); text-transform: uppercase; z-index: 4; opacity: 0.7;
+}
+.hpMeta2 :global(.dim) { color: var(--muted); }
+
+/* ---------- Head stage: fixed-aspect image + embedded slot-ports ---------- */
+.headStage {
+  position: relative;
+  height: 100%; max-height: 100%; max-width: 100%;
+  aspect-ratio: 564 / 694;
+  width: auto;
+  flex: 0 1 auto;
+  z-index: 2;
+}
+.headStage::before {
+  content: ""; position: absolute; inset: -6% -10%;
+  background:
+    radial-gradient(58% 45% at 56% 38%, rgba(0, 166, 214, 0.22), transparent 70%),
+    radial-gradient(45% 55% at 50% 78%, rgba(0, 166, 214, 0.18), transparent 70%);
+  z-index: 0; pointer-events: none; filter: blur(2px);
+}
+.headImg {
+  display: block; width: 100%; height: 100%; object-fit: contain;
+  position: relative; z-index: 1;
+  user-select: none; pointer-events: none;
+  filter: drop-shadow(0 0 18px rgba(0, 166, 214, 0.35)) drop-shadow(0 0 36px rgba(0, 166, 214, 0.18));
+  transition: transform 280ms ease, filter 280ms ease;
+}
+.headStage:hover .headImg {
+  transform: scale(1.012);
+  filter: drop-shadow(0 0 22px rgba(0, 166, 214, 0.45)) drop-shadow(0 0 44px rgba(0, 166, 214, 0.22));
+}
+
+/* ---------- Embedded shard slot — a recessed floppy port, no clip-path ---------- */
+.slotPort {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 96px; height: 20px;
+  padding: 0; border: 0; cursor: pointer;
+  z-index: 5;
+  background: linear-gradient(180deg, #050505 0%, #0c0c0c 50%, #060606 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.95),
+    inset 0 -1px 0 rgba(212, 191, 125, 0.35),
+    inset 0 0 0 1px rgba(212, 191, 125, 0.55),
+    0 0 8px rgba(0, 166, 214, 0.32),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center;
+  transition: box-shadow 220ms ease;
+}
+.slotPort::before, .slotPort::after {
+  content: ""; position: absolute; top: 3px; bottom: 3px; width: 1px;
+  background: rgba(212, 191, 125, 0.45);
+}
+.slotPort::before { left: 5px; }
+.slotPort::after { right: 5px; }
+.spGlyph { font-family: var(--font-mono); font-size: 11px; line-height: 1; color: rgba(0, 166, 214, 0.7); }
+
+.slotPort.locked {
+  background: linear-gradient(180deg, #1a1206 0%, #2a1d08 50%, #1a1206 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.88), inset 0 -1px 0 rgba(226, 176, 33, 0.45),
+    inset 0 0 0 1px rgba(212, 191, 125, 0.6), 0 0 10px rgba(226, 176, 33, 0.28), 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.slotPort.locked .spGlyph { color: rgba(226, 176, 33, 0.9); }
+.slotPort.locked:hover, .slotPort.locked.linked {
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.88), inset 0 -1px 0 rgba(226, 176, 33, 0.65),
+    inset 0 0 0 1px rgba(212, 191, 125, 0.75), 0 0 18px rgba(226, 176, 33, 0.55), 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.slotPort.filled {
+  background: linear-gradient(180deg, #061418 0%, #0a2028 50%, #061418 100%);
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.88), inset 0 -1px 0 rgba(0, 166, 214, 0.5),
+    inset 0 0 0 1px rgba(212, 191, 125, 0.55), 0 0 10px rgba(0, 166, 214, 0.45), 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.slotPort.filled .spGlyph { color: rgba(0, 166, 214, 0.9); }
+.slotPort.filled:hover, .slotPort.filled.linked {
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.88), inset 0 -1px 0 rgba(0, 166, 214, 0.75),
+    inset 0 0 0 1px rgba(212, 191, 125, 0.75), 0 0 18px rgba(0, 166, 214, 0.7), 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.slotPort.empty { background: linear-gradient(180deg, #030303 0%, #080808 50%, #030303 100%); }
+.slotPort.empty .spGlyph { color: rgba(0, 166, 214, 0.55); font-size: 14px; }
+.slotPort.empty:hover, .slotPort.empty.linked {
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.95), inset 0 -1px 0 rgba(212, 191, 125, 0.5),
+    inset 0 0 0 1px rgba(212, 191, 125, 0.7), 0 0 14px rgba(0, 166, 214, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.spLabel {
+  position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.22em;
+  color: var(--muted); text-transform: uppercase; white-space: nowrap;
+  pointer-events: none; opacity: 0; transition: opacity 200ms ease;
+}
+.slotPort:hover .spLabel, .slotPort.linked .spLabel { opacity: 1; color: var(--cyan); }
+.slotPort.locked:hover .spLabel, .slotPort.locked.linked .spLabel { color: var(--gold-rare); }
+
+/* ---------- Connectors: SVG overlay spanning the whole two-column body ---------- */
+.connectors { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; overflow: visible; }
+.conn {
+  fill: none; stroke: var(--beige); stroke-width: 1.4; opacity: 0.55;
+  filter: drop-shadow(0 0 2px rgba(0, 166, 214, 0.4));
+  transition: stroke 220ms ease, opacity 220ms ease, filter 220ms ease, stroke-width 220ms ease;
+}
+.conn.guide { stroke: rgba(226, 176, 33, 0.6); filter: drop-shadow(0 0 2px rgba(226, 176, 33, 0.35)); }
+.conn.empty { stroke: rgba(212, 191, 125, 0.45); stroke-dasharray: 3 3; }
+.conn.linked {
+  stroke: var(--cyan-hot); opacity: 1; stroke-width: 1.8;
+  filter: drop-shadow(0 0 4px rgba(0, 166, 214, 0.85)) drop-shadow(0 0 8px rgba(0, 166, 214, 0.55));
+}
+.conn.guide.linked { stroke: var(--gold-rare); filter: drop-shadow(0 0 4px rgba(226, 176, 33, 0.85)) drop-shadow(0 0 8px rgba(226, 176, 33, 0.5)); }
+.connCap { fill: var(--beige); }
+.connCap.guide { fill: var(--gold-rare); }
+.connPulse { fill: var(--cyan-hot); filter: drop-shadow(0 0 4px rgba(0, 166, 214, 0.9)); }
+.connPulse.guide { fill: var(--gold-rare); filter: drop-shadow(0 0 4px rgba(226, 176, 33, 0.85)); }
+
+/* ============================================================
+   SHARD MANIFEST CARDS
+   ============================================================ */
+.shardCards { display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
+
+.shardCard {
+  --cut: 16px;
+  position: relative; flex: 1; min-height: 0;
+  cursor: pointer;
+  transition: transform 200ms ease;
+  text-align: left;
+  background: none; border: 0; padding: 0; font: inherit; color: inherit;
+  display: block; width: 100%;
+}
+.shardCard:hover { transform: translateX(-2px); }
+.shardCard.locked { cursor: default; }
+
+.scFrame {
+  position: absolute; inset: 0;
+  background: var(--beige);
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+  transition: background 220ms ease;
+}
+.scInner {
+  position: absolute; inset: 1.5px;
+  background: radial-gradient(140% 100% at 50% 50%, rgba(0, 166, 214, 0.05), transparent 65%), linear-gradient(180deg, #1a1a1a, #111);
+  clip-path: polygon(0 0, calc(100% - var(--cut) + 1px) 0, calc(100% - 1px) calc(var(--cut) - 1px), calc(100% - 1px) calc(100% - 1px), calc(var(--cut) - 1px) calc(100% - 1px), 0 calc(100% - var(--cut) + 1px));
+  padding: 12px 16px 12px 12px;
+  display: grid;
+  grid-template-columns: 64px 1fr 42px;
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas: "icon head actions" "icon stats actions" "icon buffs actions";
+  column-gap: 14px; row-gap: 5px; align-items: start;
+  transition: box-shadow 220ms ease;
+}
+.shardCard:hover .scInner, .shardCard.linked .scInner { box-shadow: inset 0 0 26px rgba(0, 166, 214, 0.18), 0 0 22px rgba(0, 166, 214, 0.32); }
+
+.shardCard.guide .scInner {
+  background:
+    radial-gradient(70% 80% at 50% 50%, rgba(226, 176, 33, 0.10), transparent 65%),
+    radial-gradient(40% 60% at 0% 50%, rgba(226, 176, 33, 0.06), transparent 60%),
+    radial-gradient(40% 60% at 100% 50%, rgba(226, 176, 33, 0.05), transparent 60%),
+    linear-gradient(180deg, #1c1813, #14110b);
+}
+.shardCard.guide:hover .scInner, .shardCard.guide.linked .scInner { box-shadow: inset 0 0 30px rgba(226, 176, 33, 0.20), 0 0 22px rgba(226, 176, 33, 0.32); }
+.scCorner { position: absolute; width: 16px; height: 16px; border-color: var(--gold-rare); opacity: 0.85; z-index: 3; pointer-events: none; }
+.scCorner.tl { top: 8px; left: 8px; border-top: 1.5px solid; border-left: 1.5px solid; }
+.scCorner.br { bottom: 8px; right: 8px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
+
+.shardCard.empty .scFrame { opacity: 0.55; }
+.shardCard.empty .scInner { background: radial-gradient(120% 90% at 50% 50%, rgba(0, 166, 214, 0.04), transparent 65%), linear-gradient(180deg, #161616, #0e0e0e); }
+
+@keyframes deniedShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); } 40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); } 80% { transform: translateX(2px); }
+}
+.shardCard.shake { animation: deniedShake 280ms ease-out; }
+
+.scIconWrap { grid-area: icon; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; position: relative; align-self: center; }
+.scHead { grid-area: head; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.scNameGroup { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.scName { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: 0.10em; color: var(--cyan-hot); line-height: 1.05; text-transform: uppercase; }
+.shardCard.guide .scName { color: var(--gold-rare); letter-spacing: 0.13em; }
+.shardCard.empty .scName { color: var(--muted); font-size: 15px; letter-spacing: 0.16em; }
+.scSub { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.20em; color: var(--muted); text-transform: uppercase; line-height: 1.25; }
+.shardCard.guide .scSub { color: rgba(226, 176, 33, 0.7); }
+.scBadge { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.20em; color: var(--beige); text-transform: uppercase; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.scBadge .lock { color: var(--gold-rare); font-size: 11px; }
+.scRarity { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.20em; color: var(--cyan); text-transform: uppercase; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.scRarity::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.7); }
+.scRarity.vacant::before { background: transparent; border: 1.5px dashed var(--beige-dim); box-shadow: none; }
+
+.scStats {
+  grid-area: stats; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase;
+  padding: 5px 0; border-top: 1px dashed rgba(212, 191, 125, 0.22); border-bottom: 1px dashed rgba(212, 191, 125, 0.22);
+}
+.scStats .row { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.scStats .k { color: var(--beige); }
+.scStats .v { color: var(--text); }
+.scStats .v.acc { color: var(--cyan-hot); }
+.shardCard.guide .scStats .v.acc { color: var(--gold-rare); }
+
+.scBuffs { grid-area: buffs; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.04em; color: var(--text); line-height: 1.5; min-width: 0; }
+.scBuffs .b { display: block; }
+.scBuffs .plus { color: var(--cyan-hot); margin-right: 6px; font-weight: 600; }
+.shardCard.guide .scBuffs .plus { color: var(--gold-rare); }
+.shardCard.guide .scBuffs .b { color: rgba(255, 236, 196, 0.85); }
+.scBuffs.italic { color: var(--muted); font-style: italic; font-family: var(--font-prose); font-size: 12px; letter-spacing: 0.02em; line-height: 1.4; }
+
+.scActions { grid-area: actions; display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 6px; align-self: stretch; padding-top: 2px; }
+.scBtn { --cut: 6px; position: relative; background: transparent; border: 0; padding: 0; cursor: pointer; width: 38px; height: 30px; font-family: var(--font-mono); }
+.scbFrame { position: absolute; inset: 0; background: var(--cyan); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+.scbInner {
+  position: absolute; inset: 1.5px; background: linear-gradient(180deg, #141a1d, #0e1316);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  display: flex; align-items: center; justify-content: center; color: var(--cyan-hot); font-size: 12px;
+  transition: box-shadow 180ms ease, color 180ms ease;
+}
+.scBtn:hover .scbInner { color: #fff; box-shadow: inset 0 0 14px rgba(0, 166, 214, 0.4), 0 0 12px rgba(0, 166, 214, 0.55); }
+.scBtn.eject .scbFrame { background: rgba(185, 58, 58, 0.7); }
+.scBtn.eject .scbInner { color: rgba(220, 120, 120, 0.95); }
+.scBtn.eject:hover .scbInner { color: #fff; box-shadow: inset 0 0 14px rgba(185, 58, 58, 0.4), 0 0 12px rgba(185, 58, 58, 0.5); }
+.scBtn.disabled { cursor: not-allowed; }
+.scBtn.disabled .scbFrame { background: rgba(212, 191, 125, 0.35); }
+.scBtn.disabled .scbInner { color: var(--beige-dim); background: linear-gradient(180deg, #1a1714, #11100c); }
+.scBtn.disabled:hover .scbInner { color: var(--muted); box-shadow: none; }
+.scBtn::after {
+  content: attr(data-tip); position: absolute; right: calc(100% + 8px); top: 50%;
+  transform: translateY(-50%) translateX(4px);
+  background: rgba(8, 8, 8, 0.96); border: 1.5px solid var(--beige); padding: 4px 8px;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--cyan-hot); white-space: nowrap; pointer-events: none; opacity: 0;
+  transition: opacity 160ms ease, transform 160ms ease; z-index: 10; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+}
+.scBtn:hover::after { opacity: 1; transform: translateY(-50%) translateX(0); }
+.scBtn.disabled:hover::after { color: var(--amber-hot); border-color: var(--gold-rare); }
+.scBtn.eject:hover::after { color: rgba(220, 120, 120, 0.95); border-color: rgba(185, 58, 58, 0.6); }
+
+@keyframes integrityFlicker {
+  0%, 99.40%, 100% { opacity: 1; } 99.45%, 99.50% { opacity: 0.18; }
+  99.55%, 99.60% { opacity: 1; } 99.65%, 99.68% { opacity: 0.6; } 99.72% { opacity: 1; }
+}
+.integrityFlicker { display: inline-block; animation: integrityFlicker 14s linear infinite; }
+
+.emptyPlus {
+  font-family: var(--font-display); font-weight: 400; font-size: 46px; line-height: 1;
+  color: rgba(0, 166, 214, 0.55); animation: emptyPulse 3.4s ease-in-out infinite;
+  text-shadow: 0 0 12px rgba(0, 166, 214, 0.35); user-select: none;
+}
+@keyframes emptyPulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); text-shadow: 0 0 8px rgba(0, 166, 214, 0.3); }
+  50% { opacity: 1; transform: scale(1.06); text-shadow: 0 0 16px rgba(0, 166, 214, 0.6); }
+}
+
+.guideEmblem { width: 58px; height: 58px; color: var(--gold-rare); opacity: 0.95; filter: drop-shadow(0 0 6px rgba(226, 176, 33, 0.45)); }
+.vigorEmblem { width: 48px; height: 58px; filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.55)); }
+.vigorEmblem .core { fill: rgba(0, 166, 214, 0.25); stroke: var(--cyan-hot); stroke-width: 1.4; }
+.vigorEmblem .facet { fill: rgba(0, 166, 214, 0.10); stroke: var(--cyan); stroke-width: 1.1; }
+.vigorEmblem .high { fill: rgba(255, 255, 255, 0.85); }
+.genericEmblem { font-size: 30px; color: var(--cyan-hot); filter: drop-shadow(0 0 6px rgba(0, 166, 214, 0.45)); }
+
+/* ---------- Empty-slot shard picker ---------- */
+.picker { display: flex; flex-direction: column; gap: 6px; }
+.pickerSelect {
+  background: rgba(0, 0, 0, 0.5); border: 1.5px solid var(--cyan); color: var(--text);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em;
+  padding: 6px 8px; width: 100%;
+}
+.pickerEmpty { font-family: var(--font-mono); font-size: 9px; color: var(--muted); letter-spacing: 0.1em; }

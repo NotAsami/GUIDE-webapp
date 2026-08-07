@@ -12,7 +12,7 @@
  * the character, it never blocks a pickup. There is no slot cap to run out of.
  */
 
-import type { CharacterRow, EquippedItem, EquippedGear, InventoryItem } from './database.types'
+import type { CharacterRow, EquippedItem, EquippedGear, InventoryItem, ShardTree } from './database.types'
 import { ITEM_SLOTS, getGear, getInventory, getWeapons, getContainers } from './equip'
 import { effectiveSheet } from './effects'
 
@@ -78,15 +78,15 @@ export function capacityForStr(str: number): number {
 }
 
 /** Carrying capacity in pounds, off the EFFECTIVE STR so a Belt of Giant
- *  Strength raises what you can haul too. */
-export function maxBurden(character: CharacterRow): number {
-  return capacityForStr(effectiveSheet(character).abilities?.str ?? 10)
+ *  Strength (or a shard's STR node) raises what you can haul too. */
+export function maxBurden(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): number {
+  return capacityForStr(effectiveSheet(character, shardTrees).abilities?.str ?? 10)
 }
 
 /** Both numbers plus the encumbrance ratio, for the topbar pill and Inventory. */
-export function burden(character: CharacterRow): { current: number; max: number; ratio: number } {
+export function burden(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): { current: number; max: number; ratio: number } {
   const current = currentBurden(character)
-  const max = maxBurden(character)
+  const max = maxBurden(character, shardTrees)
   return { current, max, ratio: max > 0 ? current / max : 0 }
 }
 
