@@ -223,3 +223,26 @@ export function placeMerging(inventory: InventoryItem[], item: InventoryItem, de
   }
   return inventory.map(i => (i.id === item.id ? place(i, dest) : i))
 }
+
+/**
+ * Add a BRAND NEW item to the inventory — merges into a matching stack at its
+ * routed destination if one exists, otherwise appends. Distinct from
+ * placeMerging() above, which REPOSITIONS an item already present in the
+ * array (its final `.map()` matches on `item.id`): a freshly-minted item's id
+ * never matches anything already there, so placeMerging() silently no-ops on
+ * it — the array comes back unchanged, no error, item just never added. Any
+ * caller handing this a just-created item (a shop purchase, a pickup that
+ * isn't routed through the DM's grantSnapshots batching) wants this instead.
+ */
+export function placeNew(inventory: InventoryItem[], item: InventoryItem, dest: Destination): InventoryItem[] {
+  const placed = place(item, dest)
+  if (isStackable(placed.category)) {
+    const existing = inventory.find(i =>
+      i.containerId === dest.containerId && i.name === placed.name && i.category === placed.category && !i.locked)
+    if (existing) {
+      const qty = (existing.qty ?? 1) + (placed.qty ?? 1)
+      return inventory.map(i => (i.id === existing.id ? { ...i, qty } : i))
+    }
+  }
+  return [...inventory, placed]
+}

@@ -70,10 +70,14 @@ select
   -- Shard slots (migration 0008): `shardId` references shard_tree_catalog.id.
   -- `earned` is the DM-granted point pool for that shard; `spent` is NEVER
   -- stored — it's derived as Σ cost of `attuned` (lib/shards.ts shardSpent).
+  -- `owned` is the DM-granted satchel (lib/shards.ts shardOwned) — the only
+  -- ids the player's install picker offers. A shard already slotted here is
+  -- seeded as owned too, so an Eject leaves it reinstallable.
   jsonb_build_object(
     'slot1', jsonb_build_object('shardId', 'guide', 'locked', true,  'earned', 0, 'attuned', jsonb_build_array('core')),
     'slot2', jsonb_build_object('shardId', 'vigor', 'locked', false, 'earned', 5, 'attuned', jsonb_build_array('core', 'might_1', 'vit_1')),
-    'slot3', jsonb_build_object('shardId', null,    'locked', false, 'earned', 0, 'attuned', '[]'::jsonb)
+    'slot3', jsonb_build_object('shardId', null,    'locked', false, 'earned', 0, 'attuned', '[]'::jsonb),
+    'owned', jsonb_build_array('vigor')
   ),
   jsonb_build_object(
     'spellcasting', false

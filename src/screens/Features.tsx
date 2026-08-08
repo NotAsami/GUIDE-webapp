@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import type { CharacterRow, CharacterSection, EquippedGear, EquippedItem, Feature, FeatureCategory, ShardTree } from '../lib/database.types'
+import type { CharacterRow, CharacterSection, EquippedGear, EquippedItem, Feature, FeatureCategory, ShardPerk, ShardTree } from '../lib/database.types'
 import { ITEM_SLOTS } from '../lib/equip'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { rollHeal } from '../lib/dice'
 import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet } from '../lib/effects'
-import { shardFeatures } from '../lib/shards'
+import { shardFeatures, shardPerks } from '../lib/shards'
 import { Prose } from '../lib/markdown'
 import styles from './Features.module.css'
 
@@ -153,6 +153,11 @@ export function Features() {
   const fromShards = shardFeatures(character, shardTrees)
   if (fromShards.length) byGroup.push({ key: 'shard', label: 'Shard Features', icon: 'fa-diamond', items: fromShards })
 
+  // Cosmetic flavor bullets ("Darkvision", …) — name + description, deliberately
+  // NOT Feature snapshots (lib/shards.ts shardPerks), so they get their own
+  // section below the real dossier instead of joining a masonry group.
+  const perks = shardPerks(character, shardTrees)
+
   const meta = (
     <>
       <span className="dim">◇</span>
@@ -190,7 +195,7 @@ export function Features() {
           </button>
         </header>
 
-        {byGroup.length === 0 ? (
+        {byGroup.length === 0 && perks.length === 0 ? (
           <div className={styles.empty}>
             <i className="fa-solid fa-folder-open" aria-hidden="true" />
             <p>No features catalogued yet.</p>
@@ -223,6 +228,25 @@ export function Features() {
               </div>
             </section>
           ))
+        )}
+
+        {perks.length > 0 && (
+          <section className={styles.group}>
+            <div className={styles.groupHead}>
+              <span className={styles.ghIcon}><i className="fa-solid fa-wand-magic-sparkles" /></span>
+              <span className={styles.ghLabel}>Passive Perks</span>
+              <span className={styles.ghCount}>{perks.length}</span>
+              <span className={styles.ghRule} />
+            </div>
+            <div className={styles.masonry}>
+              {Array.from({ length: COLS }, (_, c) => (
+                <div key={c} className={styles.mCol}>
+                  {perks.filter((_, i) => i % COLS === c).map((p, i) => <PerkCard key={`${p.name}-${i}`} perk={p} />)}
+                </div>
+              ))}
+            </div>
+            <p className={styles.perkNote}>Flavor from slotted shards — cosmetic, not mechanical Features.</p>
+          </section>
         )}
       </div>
 
@@ -267,6 +291,22 @@ function FeatureCard({ feature, busy, onOpen, onUse }: {
             {exhausted ? 'Spent' : 'Use'}
           </button>
         )}
+      </div>
+    </div>
+  )
+}
+
+/** Cosmetic perk card — the FeatureCard shell (header bar + description) with
+ *  no footer/Use button, since a perk has no roll or uses to trigger. */
+function PerkCard({ perk }: { perk: ShardPerk }) {
+  return (
+    <div className={styles.card}>
+      <div className={styles.pcBody}>
+        <span className={styles.cHead}>
+          <span className={styles.cIcon}><i className={`fa-solid ${perk.icon ?? 'fa-wand-magic-sparkles'}`} /></span>
+          <span className={styles.cName}>{perk.name}</span>
+        </span>
+        {perk.description && <Prose text={perk.description} className={styles.cDesc} />}
       </div>
     </div>
   )

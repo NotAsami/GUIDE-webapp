@@ -3,6 +3,22 @@ import { supabase } from './supabase'
 import type { CharacterRow, CharacterSection, CharacterUpdate } from './database.types'
 import { useAuth } from './auth'
 
+/** Reject an incoming row if it's OLDER than what's already displayed —
+ *  `updated_at` is bumped by tg_set_updated_at on every write, so ISO-8601
+ *  strings compare correctly. Guards against a real race: the realtime
+ *  refetch triggered by THIS write's own coins UPDATE (shop_buy writes coins
+ *  first, inventory second — two separate statements) can resolve its
+ *  independent `.select()` AFTER updateSection's own `.select()` returns the
+ *  fully-current row, since they're two unrelated network round-trips with
+ *  no ordering guarantee between them. Without this guard, the later-
+ *  resolving but earlier-read (pre-inventory-write) fetch clobbers local
+ *  state and the just-granted item silently vanishes from the UI — even
+ *  though the DB row itself is correct. */
+function applyIfNewer(prev: CharacterRow | null, next: CharacterRow): CharacterRow {
+  if (!prev || next.updated_at >= prev.updated_at) return next
+  return prev
+}
+
 interface CharacterState {
   character: CharacterRow | null
   loading: boolean
@@ -81,7 +97,7 @@ export function useCharacter(): CharacterState {
             .eq('id', charId)
             .maybeSingle<CharacterRow>()
             .then(({ data }) => {
-              if (data) setCharacter(data)
+              if (data) setCharacter(prev => applyIfNewer(prev, data))
             })
         },
       )
@@ -109,7 +125,7 @@ export function useCharacter(): CharacterState {
         // Roll back on failure.
         setCharacter(character)
       } else if (data) {
-        setCharacter(data)
+        setCharacter(prev => applyIfNewer(prev, data))
       }
     },
     [character],
@@ -130,7 +146,7 @@ export function useCharacter(): CharacterState {
         setError(err.message)
         setCharacter(character) // roll back — both sections revert together
       } else if (data) {
-        setCharacter(data)
+        setCharacter(prev => applyIfNewer(prev, data))
       }
     },
     [character],

@@ -24,11 +24,11 @@ insert into shard_tree_catalog (id, data) values
     'flavor', 'Global Unification Initiative for Directed Entities. Issued, not found — it was never yours to attune.',
     'attuneRule', 'Permanent · slot 1 · cannot be ejected',
     'baseMods', '{}'::jsonb,
-    'baseFeatures', jsonb_build_array(
-      jsonb_build_object('name', 'Quest Tracking', 'category', 'other', 'usage', 'passive', 'light_description', 'Active objectives surface automatically as they update.'),
-      jsonb_build_object('name', 'Automated Combat Assistance', 'category', 'other', 'usage', 'passive', 'light_description', 'Suggests targets, ranges and advantage/disadvantage during combat.'),
-      jsonb_build_object('name', 'Real-Time Map Sync', 'category', 'other', 'usage', 'passive', 'light_description', 'Explored terrain and party positions stay in sync across the table.')
-    ),
+    'baseFeatures', '[]'::jsonb,
+    -- Flavor only — plain strings, never snapshotted as real Features (see
+    -- ShardTree.basePerks), so they show on the Shard manifest card without
+    -- flooding the player's Features screen.
+    'basePerks', jsonb_build_array('Quest Tracking', 'Automated Combat Assistance', 'Real-Time Map Sync'),
     'baseDetails', jsonb_build_array(
       jsonb_build_object('l', 'Status', 'v', 'Permanent'),
       jsonb_build_object('l', 'Origin', 'v', 'Issued')
@@ -54,7 +54,7 @@ insert into shard_tree_catalog (id, data) values
       jsonb_build_object('id', 'might_1', 'name', 'Hardened Sinew', 'tier', 1, 'branch', 'might', 'angle', -90, 'cost', 1, 'icon', 'fa-hand-fist', 'prereqs', jsonb_build_array('core'), 'effect', '+1 STR.', 'mods', jsonb_build_object('abilities', jsonb_build_object('str', 1))),
       jsonb_build_object('id', 'vit_1', 'name', 'Deep Reserves', 'tier', 1, 'branch', 'vitality', 'angle', 90, 'cost', 1, 'icon', 'fa-droplet', 'prereqs', jsonb_build_array('core'), 'effect', '+5 max HP.', 'mods', jsonb_build_object('maxHp', 5)),
       jsonb_build_object('id', 'grit_1', 'name', 'True Grit', 'tier', 1, 'branch', 'grit', 'angle', 180, 'cost', 1, 'icon', 'fa-anchor', 'prereqs', jsonb_build_array('core'), 'effect', '+2 max HP and advantage on death saving throws.', 'mods', jsonb_build_object('maxHp', 2)),
-      jsonb_build_object('id', 'might_2', 'name', 'Powerful Build', 'tier', 2, 'branch', 'might', 'angle', -120, 'cost', 1, 'icon', 'fa-dumbbell', 'prereqs', jsonb_build_array('might_1'), 'effect', 'Lifting and carrying capacity doubled; advantage on STR (Athletics) checks.'),
+      jsonb_build_object('id', 'might_2', 'name', 'Powerful Build', 'tier', 2, 'branch', 'might', 'angle', -120, 'cost', 1, 'icon', 'fa-dumbbell', 'prereqs', jsonb_build_array('might_1'), 'effect', 'Lifting and carrying capacity doubled; advantage on STR (Athletics) checks.', 'mods', jsonb_build_object('carryMult', 2)),
       jsonb_build_object('id', 'might_2b', 'name', 'Reckless Power', 'tier', 2, 'branch', 'might', 'angle', -60, 'cost', 1, 'icon', 'fa-explosion', 'prereqs', jsonb_build_array('might_1'), 'effect', 'Once per turn you may take a -2 penalty to AC until your next turn to deal +1d6 damage on a melee hit.'),
       jsonb_build_object('id', 'vit_2', 'name', 'Iron Constitution', 'tier', 2, 'branch', 'vitality', 'angle', 120, 'cost', 1, 'icon', 'fa-shield-heart', 'prereqs', jsonb_build_array('vit_1'), 'effect', '+5 max HP; advantage on saving throws against being poisoned.', 'mods', jsonb_build_object('maxHp', 5)),
       jsonb_build_object('id', 'vit_2b', 'name', 'Toughened Hide', 'tier', 2, 'branch', 'vitality', 'angle', 60, 'cost', 1, 'icon', 'fa-shield', 'prereqs', jsonb_build_array('vit_1'), 'effect', 'While you wear no heavy armor, your AC increases by 1.'),

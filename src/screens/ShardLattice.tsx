@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmFeatures, type DmFeaturesState } from '../lib/dm'
 import { useDmShards, type EditorNode, type EditorTree } from '../lib/dmShards'
 import { RING_GAP, branchColor, nodeXY } from '../lib/shards'
 import { MOD_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '../lib/modEditor'
-import type { Feature, ItemEffects } from '../lib/database.types'
+import type { Feature, ItemEffects, ShardPerk } from '../lib/database.types'
 import styles from './ShardLattice.module.css'
 
 const ICONS = ['fa-gem', 'fa-hand-fist', 'fa-shield', 'fa-shield-heart', 'fa-heart-pulse', 'fa-droplet', 'fa-bolt', 'fa-anchor',
@@ -17,6 +18,70 @@ const PALETTE = [
 ]
 type Tool = 'select' | 'add' | 'link'
 type Mode = 'author' | 'preview'
+
+/** Every .prose textarea in this editor sits inside the Node Inspector's own
+ *  scrollable panel (.rScroll) — and something about that nesting makes the
+ *  browser hand mouse-wheel input to the PANEL instead of the textarea under
+ *  the cursor: confirmed live, the textarea's own scrollTop never moved in
+ *  EITHER direction while the whole sidebar scrolled instead, on every
+ *  .prose field tested (not just the auto-grown DM Note ones — a plain
+ *  resize:vertical textarea with overflowing content did the identical
+ *  thing). Taking the wheel by hand — scroll the textarea, stop the event
+ *  before it reaches the panel, but only while the textarea still has room
+ *  to move, so chaining to the panel still works normally at the boundary —
+ *  fixes it, EXCEPT as a React `onWheel` prop: React attaches wheel/touch
+ *  listeners passively by default, so `preventDefault()` there is a silent
+ *  no-op (confirmed live too — the handler ran, scrollTop still never
+ *  moved). Has to be a real `addEventListener('wheel', fn, {passive:false})`
+ *  on the DOM node instead, which is what this hook wires up. */
+function useNoScrollChain() {
+  const ref = useRef<HTMLTextAreaElement | null>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      // 110%-zoom subpixel rounding can make scrollHeight-clientHeight read as
+      // 1-2px even when the field has no real overflow, which used to trip the
+      // boundary check into thinking there was room to scroll — capturing the
+      // event, moving scrollTop by that same 1-2px, then eating the rest of the
+      // gesture instead of letting it chain to the panel. Below this tolerance,
+      // don't intercept at all.
+      const range = el.scrollHeight - el.clientHeight
+      if (range <= 2) return
+      const atTop = e.deltaY < 0 && el.scrollTop <= 0
+      const atBottom = e.deltaY > 0 && el.scrollTop >= range
+      if (atTop || atBottom) return
+      el.scrollTop += e.deltaY
+      e.stopPropagation()
+      e.preventDefault()
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+  return ref
+}
+
+/** Auto-grows a textarea to fit its content (up to the CSS `max-height` cap,
+ *  where `.prose`'s `overflow-y: auto` takes over) — so the DM Note field is
+ *  only scrollable when the text genuinely overflows the cap, not by default
+ *  just because it's a fixed-height box. The inline `height` is clamped to
+ *  that same max-height in JS rather than left at the full (uncapped)
+ *  scrollHeight for CSS to visually clip alone — keeps the element's real
+ *  size matching what's rendered instead of relying on max-height to paper
+ *  over a much taller box. Also wires up useNoScrollChain's wheel fix on the
+ *  same ref/element, since every DM Note field needs both. */
+function useAutoGrow(value: string) {
+  const ref = useNoScrollChain()
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    const cap = parseFloat(getComputedStyle(el).maxHeight)
+    const target = Number.isFinite(cap) ? Math.min(el.scrollHeight, cap) : el.scrollHeight
+    el.style.height = `${target}px`
+  }, [value])
+  return ref
+}
 type AuditSev = 'err' | 'warn' | 'ok'
 type AuditItem = { sev: AuditSev; id: string | null; t: string; s: string }
 
@@ -565,6 +630,13 @@ function ShardInspector({ draft, setDraft, onDelete, fireToast, featureLib }: {
   featureLib: DmFeaturesState
 }) {
   const set = (fn: (t: EditorTree) => EditorTree) => setDraft(prev => (prev ? fn(prev) : prev))
+  const dmRef = useAutoGrow(draft.dm ?? '')
+  const flavorRef = useNoScrollChain()
+  // Whole-tree delete cascades to shard_tree_secrets and has no undo — arm on
+  // the first click, only the second (within the same tree selection) fires
+  // it. Same two-step idiom as InventoryPopup's Drop confirm.
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  useEffect(() => { setConfirmDelete(false) }, [draft.id])
   return (
     <>
       <div className={styles.imeta}><i className={`fa-solid ${draft.icon}`} /><span className={styles.t}>{draft.name}</span><span className={styles.s}>{draft.id}</span></div>
@@ -596,10 +668,11 @@ function ShardInspector({ draft, setDraft, onDelete, fireToast, featureLib }: {
         {ICONS.map(i => <div key={i} className={`${styles.ic} ${i === draft.icon ? styles.sel : ''}`} onClick={() => set(t => ({ ...t, icon: i }))}><i className={`fa-solid ${i}`} /></div>)}
       </div>
       <div className={styles.sec}><span className={styles.fieldLab}>Flavour — read on slot</span></div>
-      <textarea className={styles.prose} placeholder="What the player reads the moment the shard seats…" value={draft.flavor ?? ''} onChange={e => set(t => ({ ...t, flavor: e.target.value }))} />
+      <textarea ref={flavorRef} className={styles.prose} placeholder="What the player reads the moment the shard seats…" value={draft.flavor ?? ''} onChange={e => set(t => ({ ...t, flavor: e.target.value }))} />
 
       <EffectsWidget mods={draft.baseMods ?? {}} onChange={mods => set(t => ({ ...t, baseMods: mods }))} label="Base Effects" note="Applied on slot · before any node" />
       <FeaturesWidget features={draft.baseFeatures ?? []} onChange={feats => set(t => ({ ...t, baseFeatures: feats }))} label="Base Features" note="While slotted" library={featureLib} />
+      <PerksWidget perks={draft.basePerks ?? []} onChange={perks => set(t => ({ ...t, basePerks: perks }))} label="Base Perks" note="While slotted" />
       <DetailsWidget rows={draft.baseDetails ?? []} onChange={rows => set(t => ({ ...t, baseDetails: rows }))} label="Detail Rows" />
 
       <div className={styles.sec} style={{ marginTop: 14 }}><span className={styles.fieldLab}>Branch Spokes</span></div>
@@ -637,10 +710,14 @@ function ShardInspector({ draft, setDraft, onDelete, fireToast, featureLib }: {
       <div className={styles.wgtEmpty} style={{ margin: '8px 0 12px' }}>Spokes are the tree&rsquo;s radial identity — colour carries into the player view. Removing one reassigns its nodes to the first remaining branch.</div>
 
       <div className={styles.sec}><span className={styles.fieldLab}>DM Note — never shown</span></div>
-      <textarea className={`${styles.prose} ${styles.dm}`} placeholder="// operator only" value={draft.dm ?? ''} onChange={e => set(t => ({ ...t, dm: e.target.value }))} />
+      <textarea ref={dmRef} className={`${styles.prose} ${styles.dm}`} placeholder="// operator only" value={draft.dm ?? ''} onChange={e => set(t => ({ ...t, dm: e.target.value }))} />
 
       <div className={styles.btnrow}>
-        <button type="button" className={`${styles.btn} ${styles.danger}`} onClick={onDelete}><span className={styles.bf} /><span className={styles.bi}><i className="fa-solid fa-trash" /> Delete</span></button>
+        {confirmDelete ? (
+          <button type="button" className={`${styles.btn} ${styles.danger}`} onClick={onDelete}><span className={styles.bf} /><span className={styles.bi}><i className="fa-solid fa-trash" /> Confirm Delete?</span></button>
+        ) : (
+          <button type="button" className={`${styles.btn} ${styles.danger}`} onClick={() => setConfirmDelete(true)}><span className={styles.bf} /><span className={styles.bi}><i className="fa-solid fa-trash" /> Delete</span></button>
+        )}
       </div>
     </>
   )
@@ -676,6 +753,8 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
 }) {
   const set = (fn: (t: EditorTree) => EditorTree) => setDraft(prev => (prev ? fn(prev) : prev))
   const setNode = (patch: Partial<EditorNode>) => set(t => ({ ...t, nodes: t.nodes.map(n => (n.id === node.id ? { ...n, ...patch } : n)) }))
+  const dmRef = useAutoGrow(node.dm ?? '')
+  const effectRef = useNoScrollChain()
 
   return (
     <>
@@ -730,7 +809,7 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
         </select>
       )}
       <div className={styles.sec}><span className={styles.fieldLab}>Player-Facing Effect</span></div>
-      <textarea className={styles.prose} placeholder="What the player reads in the node detail panel…" value={node.effect} onChange={e => setNode({ effect: e.target.value })} />
+      <textarea ref={effectRef} className={styles.prose} placeholder="What the player reads in the node detail panel…" value={node.effect} onChange={e => setNode({ effect: e.target.value })} />
 
       <div className={`${styles.tog} ${node.concealed ? styles.on : ''}`} onClick={() => setNode({ concealed: !node.concealed })}>
         <span className={styles.sw} /><span className={styles.tl}><span className={styles.t}>Concealed</span><span className={styles.s}>Renders as ??? until its prereqs resolve</span></span>
@@ -738,10 +817,11 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
 
       <EffectsWidget mods={node.mods ?? {}} onChange={mods => setNode({ mods })} label="Effects Granted" note="Applied while attuned" />
       <FeaturesWidget features={node.features ?? []} onChange={feats => setNode({ features: feats })} label="Features Granted" note="While attuned" library={featureLib} />
+      <PerksWidget perks={node.perks ?? []} onChange={perks => setNode({ perks })} label="Perks Granted" note="While attuned" />
       <DetailsWidget rows={node.detailRows ?? []} onChange={rows => setNode({ detailRows: rows })} label="Detail Rows" />
 
       <div className={styles.sec} style={{ marginTop: 14 }}><span className={styles.fieldLab}>DM Note — never shown</span></div>
-      <textarea className={`${styles.prose} ${styles.dm}`} placeholder="// operator only" value={node.dm ?? ''} onChange={e => setNode({ dm: e.target.value })} />
+      <textarea ref={dmRef} className={`${styles.prose} ${styles.dm}`} placeholder="// operator only" value={node.dm ?? ''} onChange={e => setNode({ dm: e.target.value })} />
 
       <div className={styles.btnrow}>
         <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => {
@@ -844,6 +924,112 @@ function FeaturesWidget({ features, onChange, label, note, library }: {
         <option value="" disabled>Attach a feature…</option>
         {available.map(row => <option key={row.id} value={row.id}>{row.data.name}</option>)}
       </select>
+    </div>
+  )
+}
+
+/** Passive flavor bullets — plain strings, not Feature snapshots. Unlike
+ *  FeaturesWidget above (which attaches real, mechanical Features that flow
+ *  through shardFeatures() into the player's Features screen), a perk is
+ *  cosmetic-only: it shows on the shard's buffs list / node detail panel and
+ *  nowhere else, so flavor text like "Quest Tracking" can't flood the real
+ *  Features system. */
+const PERK_ICONS = ['fa-wand-magic-sparkles', ...ICONS]
+
+/** Icon-picker button + popup, portaled to <body> and positioned in `fixed`
+ *  coordinates from the button's own rect — same pattern as Equipment.tsx's
+ *  ammo menu. Required because this button lives inside `.rScroll`
+ *  (overflow-y: auto): an absolutely-positioned popup nested inside it gets
+ *  clipped to the scroll container's box regardless of z-index, so it has to
+ *  render outside that DOM subtree entirely to appear above everything. */
+function PerkIconPicker({ icon, onPick }: { icon: string; onPick: (i: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current || !popRef.current) return
+    const b = btnRef.current.getBoundingClientRect()
+    const p = popRef.current
+    const gap = 6
+    const left = Math.max(12, Math.min(b.left, window.innerWidth - p.offsetWidth - 12))
+    let top = b.bottom + gap
+    if (top + p.offsetHeight > window.innerHeight - 12) top = b.top - p.offsetHeight - gap
+    setPos({ left, top })
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('click', close)
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [open])
+
+  return (
+    <div className={styles.iconPickWrap}>
+      <button
+        ref={btnRef} type="button" className={styles.iconPickBtn}
+        onClick={e => { e.stopPropagation(); setOpen(o => !o); setPos(null) }}
+      >
+        <i className={`fa-solid ${icon}`} />
+      </button>
+      {open && createPortal(
+        <div
+          ref={popRef} className={styles.iconPickPop}
+          style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className={styles.icons}>
+            {PERK_ICONS.map(i => (
+              <div key={i} className={`${styles.ic} ${i === icon ? styles.sel : ''}`}
+                onClick={() => { onPick(i); setOpen(false) }}>
+                <i className={`fa-solid ${i}`} />
+              </div>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  )
+}
+
+function PerksWidget({ perks, onChange, label, note }: {
+  perks: ShardPerk[]; onChange: (p: ShardPerk[]) => void; label: string; note: string
+}) {
+  const [name, setName] = useState('')
+  const [desc, setDesc] = useState('')
+  const [icon, setIcon] = useState(PERK_ICONS[0])
+  function add() {
+    const n = name.trim()
+    if (!n) return
+    onChange([...perks, { name: n, description: desc.trim(), icon }])
+    setName(''); setDesc('')
+  }
+  return (
+    <div className={styles.wgt}>
+      <div className={styles.wgtHead}><i className={`fa-solid fa-wand-magic-sparkles ${styles.wi}`} /><span className={styles.wt}>{label}</span><span className={styles.wn}>{note} · Flavor only, not a real Feature</span></div>
+      {perks.length ? perks.map((p, i) => (
+        <div key={i} className={styles.dtlRow}>
+          <i className={`fa-solid ${p.icon ?? PERK_ICONS[0]}`} style={{ color: 'var(--cyan)', width: 16, flex: '0 0 auto' }} />
+          <span className={styles.dl}>{p.name}</span>
+          <span className={styles.dv}>{p.description}</span>
+          <i className={`fa-solid fa-xmark ${styles.dx}`} onClick={() => onChange(perks.filter((_, idx) => idx !== i))} />
+        </div>
+      )) : <div className={styles.wgtEmpty}>No passive perks.</div>}
+      <div className={styles.dtlNew} style={{ gridTemplateColumns: 'auto minmax(0,1fr) minmax(0,2fr) auto' }}>
+        <PerkIconPicker icon={icon} onPick={setIcon} />
+        <input placeholder="Perk name…" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} />
+        <input placeholder="Description…" value={desc} onChange={e => setDesc(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} />
+        <button type="button" className={styles.wgtBtn} onClick={add}><i className="fa-solid fa-plus" /> Add</button>
+      </div>
     </div>
   )
 }

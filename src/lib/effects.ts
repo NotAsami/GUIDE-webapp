@@ -61,6 +61,7 @@ export function summarizeEffects(e: ItemEffects): string {
   if (typeof e.saves === 'number') { if (e.saves) parts.push(`${signed(e.saves)} saves`) }
   else if (e.saves) for (const [k, v] of Object.entries(e.saves)) if (v) parts.push(`${signed(v)} ${k.toUpperCase()} save`)
   if (e.skills) for (const [k, v] of Object.entries(e.skills)) if (v) parts.push(`${signed(v)} ${k}`)
+  if (e.carryMult && e.carryMult !== 1) parts.push(`×${e.carryMult} carry`)
   return parts.join(', ') || 'effect'
 }
 
@@ -68,15 +69,31 @@ function sum(fx: ItemEffects[], pick: (e: ItemEffects) => number | undefined): n
   return fx.reduce((n, e) => n + (pick(e) ?? 0), 0)
 }
 
-/** Base sheet with all worn-gear + slotted-shard effects layered in. DERIVED,
- *  display-only. */
-export function effectiveSheet(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): EffectiveSheet {
-  const base = character.sheet ?? {}
-  const fx = [
+/** Every effect bundle currently active on the character: worn gear, temporary
+ *  applied effects, and slotted-shard mods. Shared by effectiveSheet() and
+ *  burden.ts's carryMultiplier() so the two can't drift onto different lists
+ *  of "what's active right now". */
+export function effectSources(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): ItemEffects[] {
+  return [
     ...wornGear(character).map(i => i.effects),
     ...activeEffects(character).map(e => e.effects),
     ...shardEffects(character, shardTrees),
   ].filter((e): e is ItemEffects => !!e)
+}
+
+/** Carrying-capacity multiplier (Powerful Build-style nodes). Takes the
+ *  largest granted value rather than summing/multiplying across sources —
+ *  5e's Powerful Build doesn't stack with itself, so two "doubled" sources
+ *  still just double, not quadruple. */
+export function carryMultiplier(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): number {
+  return effectSources(character, shardTrees).reduce((m, e) => Math.max(m, e.carryMult ?? 1), 1)
+}
+
+/** Base sheet with all worn-gear + slotted-shard effects layered in. DERIVED,
+ *  display-only. */
+export function effectiveSheet(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): EffectiveSheet {
+  const base = character.sheet ?? {}
+  const fx = effectSources(character, shardTrees)
 
   // Abilities: max(base, highest set) + Σ flat.
   const baseAb = base.abilities ?? ZERO
@@ -107,11 +124,15 @@ export function effectiveSheet(character: CharacterRow, shardTrees: Record<strin
   // Speed: gear bonuses first, then the SRD encumbrance penalty (−10 ft
   // encumbered, −20 ft heavy) — off the effective STR computed just above, so
   // a Belt of Giant Strength both raises capacity AND can lift the penalty in
-  // the same pass. currentBurden/capacityForStr/burdenTier are the pure half
-  // of lib/burden.ts (no effectiveSheet call), so this can't recurse back
-  // into effectiveSheet the way burden()/maxBurden() do.
+  // the same pass; carryMultiplier() folds in too, so a Powerful Build node
+  // that doubles capacity also pushes the encumbrance thresholds out, not
+  // just the Inventory/Topbar bar's displayed max. currentBurden/
+  // capacityForStr/burdenTier/carryMultiplier are the pure half of lib/
+  // burden.ts + effectSources() (no effectiveSheet call), so this can't
+  // recurse back into effectiveSheet the way burden()/maxBurden() do.
   const gearSpeed = (base.speed ?? 0) + sum(fx, e => e.speed)
-  const tier = burdenTier(currentBurden(character), capacityForStr(abilities.str))
+  const carryMult = fx.reduce((m, e) => Math.max(m, e.carryMult ?? 1), 1)
+  const tier = burdenTier(currentBurden(character), capacityForStr(abilities.str) * carryMult)
   const speedPenalty = tier === 'heavy' ? 20 : tier === 'encumbered' ? 10 : 0
   const speed = Math.max(0, gearSpeed - speedPenalty)
 

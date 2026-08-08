@@ -1,0 +1,38 @@
+/* Placeholder rail — right-edge slide-in, portaled to body like the other
+   overlays. Content is a stub; see the .tsx header comment for what's next. */
+
+.overlay { position: fixed; inset: 0; z-index: 350; }
+.scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55); animation: fadeIn 160ms ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.rail {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: min(340px, 100%);
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, rgba(15, 15, 15, 0.98), rgba(10, 10, 10, 0.98));
+  border-left: 1.5px solid rgba(0, 166, 214, 0.4);
+  box-shadow: -18px 0 40px rgba(0, 0, 0, 0.6);
+  animation: slideIn 200ms cubic-bezier(.2, .7, .2, 1);
+}
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+.head {
+  flex: 0 0 auto; display: flex; align-items: baseline; gap: 10px;
+  padding: 18px 18px 14px; border-bottom: 1px dashed rgba(0, 166, 214, 0.28);
+}
+.eyebrow { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.28em; color: var(--cyan-dim); text-transform: uppercase; }
+.title { margin: 0; flex: 1; font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: 0.12em; color: var(--text); text-transform: uppercase; }
+.close {
+  flex: 0 0 auto; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(0, 166, 214, 0.35); color: var(--cyan);
+  cursor: pointer; transition: color 130ms ease, border-color 130ms ease;
+}
+.close:hover { color: var(--cyan-hot); border-color: var(--cyan); }
+
+.body {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  padding: 24px; text-align: center;
+}
+.body i { font-size: 30px; color: var(--cyan-dim); }
+.soon { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.3em; color: var(--cyan); text-transform: uppercase; }
+.hint { max-width: 220px; font-family: var(--font-mono); font-size: 9.5px; line-height: 1.6; letter-spacing: 0.04em; color: var(--muted); text-transform: none; }

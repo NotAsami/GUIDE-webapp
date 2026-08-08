@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './auth'
 import { supabase } from './supabase'
 import type {
-  Feature, ItemEffects, ShardNode, ShardTree, ShardTreeCatalogRow, ShardTreeSecretRow,
+  Feature, ItemEffects, ShardNode, ShardPerk, ShardTree, ShardTreeCatalogRow, ShardTreeSecretRow,
 } from './database.types'
 
 /** The editor's working copy: a ShardTree with `dm` notes merged onto the
@@ -28,22 +28,22 @@ function mergeTree(tree: ShardTree, secret: ShardTreeSecretRow | undefined): Edi
     nodes: tree.nodes.map((n): EditorNode => {
       const s = secretNodes[n.id]
       if (!s) return n
-      return { ...n, name: s.name, effect: s.effect, dm: s.dm, mods: s.mods ?? n.mods, features: s.features ?? n.features }
+      return { ...n, name: s.name, effect: s.effect, dm: s.dm, mods: s.mods ?? n.mods, features: s.features ?? n.features, perks: s.perks ?? n.perks }
     }),
   }
 }
 
 /** Reverse the merge for a write: concealed nodes lose name/effect/mods/
- *  features/dm from the catalog copy (geometry only survives there) and gain
- *  them back in the returned secrets payload; every OTHER node's `dm` note
- *  (if any) moves to secrets too, catalog keeps everything else. */
-function splitForSave(tree: EditorTree): { catalog: ShardTree; secretsData: { dm?: string; nodes: Record<string, { name: string; effect: string; dm?: string; mods?: ItemEffects; features?: Feature[] }> } } {
-  const secretNodes: Record<string, { name: string; effect: string; dm?: string; mods?: ItemEffects; features?: Feature[] }> = {}
+ *  features/perks/dm from the catalog copy (geometry only survives there) and
+ *  gain them back in the returned secrets payload; every OTHER node's `dm`
+ *  note (if any) moves to secrets too, catalog keeps everything else. */
+function splitForSave(tree: EditorTree): { catalog: ShardTree; secretsData: { dm?: string; nodes: Record<string, { name: string; effect: string; dm?: string; mods?: ItemEffects; features?: Feature[]; perks?: ShardPerk[] }> } } {
+  const secretNodes: Record<string, { name: string; effect: string; dm?: string; mods?: ItemEffects; features?: Feature[]; perks?: ShardPerk[] }> = {}
   const catalogNodes: ShardNode[] = tree.nodes.map(n => {
     const { dm, ...node } = n
     if (n.concealed) {
-      secretNodes[n.id] = { name: node.name, effect: node.effect, dm, mods: node.mods, features: node.features }
-      // Geometry only — no name/effect/mods/features reach the catalog row.
+      secretNodes[n.id] = { name: node.name, effect: node.effect, dm, mods: node.mods, features: node.features, perks: node.perks }
+      // Geometry only — no name/effect/mods/features/perks reach the catalog row.
       const geometry: ShardNode = {
         id: node.id, name: '', tier: node.tier, branch: node.branch, angle: node.angle,
         cost: node.cost, icon: node.icon, prereqs: node.prereqs, effect: '', concealed: true,

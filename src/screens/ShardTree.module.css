@@ -56,12 +56,14 @@
   border-bottom: 1px solid rgba(212, 191, 125, 0.35);
 }
 .pnHeader::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1.5px; background: rgba(0, 166, 214, 0.4); box-shadow: 0 0 10px rgba(0, 166, 214, 0.35); }
+/* hexagon: nearly every edge is angled, so a border would vanish (only the
+   two vertical edges would show anything) — same fix as InventoryPopup's
+   .imCrystal: a solid-ish filled clip + glow, no border attempted. */
 .hdCrystal {
   flex: 0 0 auto; width: 46px; height: 46px;
   display: flex; align-items: center; justify-content: center;
   color: var(--cyan-hot); font-size: 24px;
-  border: 1.5px solid rgba(0, 166, 214, 0.5);
-  background: radial-gradient(120% 90% at 50% 40%, rgba(0, 166, 214, 0.18), transparent 65%), rgba(0, 0, 0, 0.45);
+  background: radial-gradient(120% 90% at 50% 40%, rgba(0, 166, 214, 0.3), transparent 65%), rgba(0, 166, 214, 0.45);
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
   filter: drop-shadow(0 0 10px rgba(0, 166, 214, 0.45));
 }
@@ -244,6 +246,9 @@
 .daEffect::-webkit-scrollbar { width: 5px; }
 .daEffect::-webkit-scrollbar-thumb { background: rgba(0, 166, 214, 0.4); }
 .effLabel { display: block; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.28em; color: var(--cyan); text-transform: uppercase; margin-bottom: 7px; }
+.daPerks { flex: 0 0 auto; margin-top: 12px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; color: var(--beige); }
+.daPerks .perk { display: block; margin-top: 5px; }
+.daPerks .plus { color: var(--cyan); margin-right: 6px; }
 .daNote { margin-top: 10px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold-rare); min-height: 13px; }
 
 .daAttune { margin-top: 12px; flex: 0 0 auto; --cut: 9px; position: relative; background: transparent; border: 0; padding: 0; height: 46px; width: 100%; cursor: pointer; font-family: var(--font-mono); }

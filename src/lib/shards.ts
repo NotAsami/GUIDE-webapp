@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './auth'
 import { supabase } from './supabase'
 import type {
-  CharacterRow, Feature, ItemEffects, ShardNode, ShardSlot, ShardTree, ShardTreeCatalogRow,
+  CharacterRow, Feature, ItemEffects, ShardNode, ShardPerk, ShardSlot, ShardsField, ShardTree, ShardTreeCatalogRow,
 } from './database.types'
 
 export const SHARD_SLOT_KEYS = ['slot1', 'slot2', 'slot3'] as const
@@ -24,10 +24,46 @@ const EMPTY_SLOT: ShardSlot = { shardId: null, earned: 0, attuned: [] }
 
 /** All 3 slots, normalized — missing slots read as empty rather than undefined. */
 export function shardSlots(character: CharacterRow): Record<ShardSlotKey, ShardSlot> {
-  const raw = (character.shards ?? {}) as Record<string, ShardSlot>
+  const raw = character.shards ?? {}
   const out = {} as Record<ShardSlotKey, ShardSlot>
   for (const k of SHARD_SLOT_KEYS) out[k] = raw[k] ?? EMPTY_SLOT
   return out
+}
+
+/** Eject a shard from a slot: benches its earned/attuned progress under its
+ *  own id (character.shards.bench) and empties the slot. Re-slotting the
+ *  SAME shard later (installShard) restores that progress exactly instead of
+ *  resetting to a fresh core node — the fix for the recurring "attunement
+ *  lost on re-equip" bug, shared by both the player Shard screen and the DM
+ *  OperatorConsole shard assignment so neither can regress independently.
+ *  No-op on an already-empty or locked slot. */
+export function ejectShard(character: CharacterRow, key: ShardSlotKey): ShardsField {
+  const slot = shardSlots(character)[key]
+  if (!slot.shardId || slot.locked) return character.shards
+  return {
+    ...character.shards,
+    bench: { ...character.shards?.bench, [slot.shardId]: { earned: slot.earned, attuned: slot.attuned } },
+    [key]: { shardId: null, earned: 0, attuned: [] },
+  }
+}
+
+/** Slot a shard into a port: restores its benched progress if this exact
+ *  shard was ejected earlier, otherwise starts fresh at the core node. */
+export function installShard(character: CharacterRow, key: ShardSlotKey, shardId: string): ShardsField {
+  const { [shardId]: saved, ...bench } = character.shards?.bench ?? {}
+  return {
+    ...character.shards,
+    bench,
+    [key]: saved ? { shardId, earned: saved.earned, attuned: saved.attuned } : { shardId, earned: 0, attuned: ['core'] },
+  }
+}
+
+/** Shard trees the DM has granted this character (their satchel) — the only
+ *  ids the player's install picker will offer, whether or not currently
+ *  slotted. Granting is a DM action (Operator Console); players never
+ *  self-serve from the full published catalog. */
+export function shardOwned(character: CharacterRow): string[] {
+  return character.shards?.owned ?? []
 }
 
 /** Points spent on a shard's tree — Σ cost of its attuned nodes. The ONLY
@@ -120,6 +156,29 @@ export function shardFeatures(character: CharacterRow, catalog: Record<string, S
     }
   }
   return out
+}
+
+/** Cosmetic flavor perks ("Darkvision") from every slotted shard's
+ *  `basePerks` plus every attuned node's `perks`. Name + description, not
+ *  Feature snapshots — display-only, and deliberately kept out of
+ *  shardFeatures() so flavor text can't flood the player's Features screen.
+ *  Concealed, un-revealed nodes contribute nothing. Drops any entry with no
+ *  name — pre-migration rows may still carry the old bare-string perk format
+ *  (a JS string has no `.name`), and a nameless entry has nothing to show. */
+export function shardPerks(character: CharacterRow, catalog: Record<string, ShardTree>): ShardPerk[] {
+  const out: ShardPerk[] = []
+  for (const slot of Object.values(shardSlots(character))) {
+    if (!slot.shardId) continue
+    const tree = catalog[slot.shardId]
+    if (!tree) continue
+    out.push(...(tree.basePerks ?? []))
+    for (const id of slot.attuned) {
+      const node = tree.nodes.find(n => n.id === id)
+      if (!node || (node.concealed && !slot.revealed?.[id])) continue
+      out.push(...(node.perks ?? []))
+    }
+  }
+  return out.filter(p => typeof p === 'object' && !!p?.name)
 }
 
 export interface ShardCatalogState {

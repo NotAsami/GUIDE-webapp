@@ -283,6 +283,36 @@
   box-shadow: 0 0 8px rgba(0, 166, 214, 0.7);
 }
 
+/* Bottombar action buttons (Reopen Shop / Roll Context) — same compact pill
+   as RestButton's .restBtn in the Topbar, so the two bars share one "small
+   persistent action" idiom. */
+.bbBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--cyan);
+  padding: 4px 9px;
+  background: rgba(0, 166, 214, 0.06);
+  border: 1.5px solid var(--cyan-dim);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.bbBtn:hover {
+  color: var(--cyan-hot);
+  border-color: var(--cyan);
+  background: rgba(0, 166, 214, 0.12);
+}
+.bbBtn.on {
+  color: var(--cyan-hot);
+  border-color: var(--cyan);
+  background: rgba(0, 166, 214, 0.16);
+  box-shadow: inset 0 0 10px rgba(0, 166, 214, 0.2);
+}
+.bbBtn i { font-size: 9px; }
+
 /* ---- Ticker fragments hugging the top divider ---- */
 
 .ticker {

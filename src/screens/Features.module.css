@@ -89,6 +89,15 @@
 }
 .ghRule { flex: 1; height: 1px; background: rgba(212, 191, 125, 0.18); }
 
+/* ---- passive perks: reuses .card/.cHead/.cDesc from the masonry group above
+   (same JSX classes, no footer/use-button) so a perk reads as the same visual
+   family as a real Feature card, just without the interactive parts. ---- */
+.perkNote {
+  margin-top: 10px;
+  font-family: var(--font-mono); font-size: 8.5px;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+}
+
 /* ---- masonry: 3 fixed columns, cards scale to content (no vertical grid) ---- */
 .masonry {
   display: flex;
@@ -144,6 +153,17 @@
   cursor: pointer;
 }
 .cOpen:focus-visible { outline: 1px solid var(--cyan); outline-offset: -3px; }
+
+/* Perk cards have no click target, but still need .cOpen's stacking treatment:
+   .card::before paints its dark interior fill via z-index:auto/positioned, so
+   any non-positioned child (a bare .cHead/.cDesc with no wrapper) renders
+   BEHIND it and is invisible. */
+.pcBody {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
 
 /* header: a vibrant kind-tinted backdrop square holding the icon + name on one
    row; the name reads in the codex cyan. Default = fuller yellow. */

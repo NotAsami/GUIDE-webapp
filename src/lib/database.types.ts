@@ -244,6 +244,11 @@ export type ItemEffects = {
   /** Flat bonus to max HP (shard nodes; no item grants this today). Folded into
    *  `hp.max` by lib/effects.ts — the authored `sheet.hp.max` stays the canon base. */
   maxHp?: number
+  /** Carrying-capacity multiplier (Powerful Build-style: "capacity doubled").
+   *  Doesn't sum across sources like the flat fields above — lib/effects.ts's
+   *  carryMultiplier() takes the largest granted value, since 5e's Powerful
+   *  Build doesn't stack with itself. Absent/1 = no change. */
+  carryMult?: number
 }
 
 /** A single item. Self-describing: the object carries its own display detail +
@@ -441,7 +446,15 @@ export type ShardNode = {
    *  EquippedItem.features — never a bare feature_catalog reference. */
   features?: Feature[]
   detailRows?: { l: string; v: string }[]
+  /** Passive flavor bullets ("Darkvision") — name + description, no
+   *  mechanical effect. Shown wherever a node's grants render but
+   *  deliberately NOT snapshotted as a Feature, so cosmetic fluff can't flood
+   *  the player's real Features screen (lib/shards.ts shardFeatures() never
+   *  reads this). Use `features` instead for anything with real game rules. */
+  perks?: ShardPerk[]
 }
+
+export type ShardPerk = { name: string; description: string; icon?: string }
 
 /** A shard tree definition — the DM-authored content a slot references by id.
  *  `capacity` caps both how many points the DM can grant (`earned`) and how
@@ -460,6 +473,8 @@ export type ShardTree = {
   baseMods?: ItemEffects
   baseFeatures?: Feature[]
   baseDetails?: { l: string; v: string }[]
+  /** Passive flavor bullets granted on slot — see ShardNode.perks. */
+  basePerks?: ShardPerk[]
   branches: Record<string, string>
   branchColors?: Record<string, string>
   nodes: ShardNode[]
@@ -482,6 +497,18 @@ export type ShardSlot = {
   revealed?: Record<string, { name: string; effect: string }>
 }
 
+/** The `characters.shards` JSONB column: the 3 slots by key, plus `owned` —
+ *  ids of shard trees the DM has granted this character but that may not be
+ *  slotted (yet, or ever again after an Eject). The player's install picker
+ *  only offers `owned` shards; granting is a DM action, not player self-serve. */
+export type ShardsField = Partial<Record<'slot1' | 'slot2' | 'slot3', ShardSlot>> & {
+  owned?: string[]
+  /** Progress benched on Eject, keyed by shard id — re-slotting the SAME
+   *  shard later (Shard.tsx install / OperatorConsole ShardsTab) restores its
+   *  earned/attuned exactly instead of resetting to a fresh core node. */
+  bench?: Record<string, { earned: number; attuned: string[] }>
+}
+
 export type CharacterRow = {
   id: string
   owner: string
@@ -491,7 +518,7 @@ export type CharacterRow = {
   resources: Record<string, Json>
   inventory: Json[]
   equipped: Record<string, Json>
-  shards: Record<string, ShardSlot>
+  shards: ShardsField
   spellbook: Record<string, Json> & { spellcasting?: boolean }
   lore: CharacterLore
   progress: CharacterProgress
@@ -624,11 +651,50 @@ export type ShardTreeCatalogUpdate = { data?: ShardTree }
 
 export type ShardTreeSecretData = {
   dm?: string
-  nodes?: Record<string, { name: string; effect: string; dm?: string; mods?: ItemEffects; features?: Feature[] }>
+  nodes?: Record<string, { name: string; effect: string; dm?: string; mods?: ItemEffects; features?: Feature[]; perks?: ShardPerk[] }>
 }
 export type ShardTreeSecretRow = { shard_id: string; data: ShardTreeSecretData; updated_at: string }
 export type ShardTreeSecretInsert = { shard_id: string; data?: ShardTreeSecretData }
 export type ShardTreeSecretUpdate = { data?: ShardTreeSecretData }
+
+// ── Shop catalog (migration 0009): the DM's shopkeeper library. Stock lives ON
+//    the template — buying decrements `data.stock[i].qty` permanently, no
+//    separate "opening" table, so re-firing the same shop resumes wherever the
+//    last one left off. `is_open`/`open_for` are real columns (not buried in
+//    `data`) because RLS keys off them: the player policy (0009) returns a row
+//    only while it's open, and only for the targeted PC — `open_for` null
+//    means the whole party. ──
+export type ShopStockMode = 'unlimited' | 'limited'
+
+/** One line of shop stock. `item` is a SNAPSHOT of the item_catalog template's
+ *  `data`, taken when the DM adds it — item_catalog is DM-only RLS (0004) and
+ *  the player client never reads it, so the snapshot is the only way the stock
+ *  grid can render a name/icon/rarity. `item_id` is the stable key `shop_buy`
+ *  identifies this line by; the array index isn't, since it shifts when the
+ *  DM reorders stock. */
+export type ShopStockLine = {
+  item_id: string
+  /** gp. A per-shop override — starts at the catalog item's `value` but is
+   *  editable independently, same as the mockup's price input. */
+  price: number
+  mode: ShopStockMode
+  /** Ignored (treated as bottomless) when `mode` is 'unlimited'. */
+  qty: number
+  item: CatalogItemData
+}
+
+export type Shop = {
+  name: string
+  icon: string
+  location: string
+  /** Player-facing prose, shown in the takeover header when the shop opens. */
+  desc: string
+  stock: ShopStockLine[]
+}
+
+export type ShopCatalogRow = { id: string; data: Shop; is_open: boolean; open_for: string | null; updated_at: string }
+export type ShopCatalogInsert = { id?: string; data: Shop; is_open?: boolean; open_for?: string | null }
+export type ShopCatalogUpdate = { data?: Shop; is_open?: boolean; open_for?: string | null }
 
 export type Database = {
   public: {
@@ -699,9 +765,23 @@ export type Database = {
         Update: ShardTreeSecretUpdate
         Relationships: []
       }
+      shop_catalog: {
+        Row: ShopCatalogRow
+        Insert: ShopCatalogInsert
+        Update: ShopCatalogUpdate
+        Relationships: []
+      }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      /** Migration 0009's server-side purchase check — see the migration's
+       *  header comment for why this can't be a plain client UPDATE. */
+      shop_buy: { Args: { p_shop_id: string; p_item_id: string }; Returns: Json }
+      /** Migration 0009's atomic "close every shop, open this one" — see its
+       *  header comment for why two separate client UPDATEs can't guarantee
+       *  at most one shop open. */
+      shop_open: { Args: { p_id: string; p_character_id: string | null }; Returns: undefined }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }
