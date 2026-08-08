@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { CharacterRow, CharacterSection, ShardNode, ShardSlot, ShardTree } from '../lib/database.types'
 import { RING_GAP, branchColor, nodeState, nodeXY, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import styles from './ShardTree.module.css'
@@ -171,7 +172,7 @@ export function ShardTreeModal({ character, updateSection, slotKey, slot, tree, 
   const detailNode = (hoverId ? byId(hoverId) : selectedId ? byId(selectedId) : null) ?? null
   const spokes = Object.entries(tree.branches).filter(([k]) => k !== 'core' && k !== 'apex').slice(0, 3)
 
-  return (
+  return createPortal(
     <div className={styles.backdrop}>
       <div className={styles.scrim} onClick={onClose} />
       <div className={styles.overlay}>
@@ -330,7 +331,8 @@ export function ShardTreeModal({ character, updateSection, slotKey, slot, tree, 
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -363,6 +365,18 @@ function NodeDetail({
         <span className={styles.effLabel}>Effect</span>
         {d.effect}
       </div>
+      {/* Cosmetic flavor only — concealed nodes never carry perks to the
+          public catalog, so this naturally stays hidden until revealed. */}
+      {node.perks && node.perks.length > 0 && (
+        <div className={styles.daPerks}>
+          <span className={styles.effLabel}>Passive</span>
+          {node.perks.map(p => (
+            <span key={p.name} className={styles.perk}>
+              <span className={styles.plus}>+</span><b>{p.name}</b>{p.description && ` — ${p.description}`}
+            </span>
+          ))}
+        </div>
+      )}
       {denyMsg && <div className={styles.daNote}>// {denyMsg}</div>}
       {state === 'attuned' ? (
         <button type="button" className={styles.daAttune} disabled>

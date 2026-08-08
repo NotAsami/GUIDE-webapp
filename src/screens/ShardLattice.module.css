@@ -251,7 +251,11 @@ select.in { appearance: none; background-image: linear-gradient(45deg, transpare
 .prose::-webkit-scrollbar { width: 6px; }
 .prose::-webkit-scrollbar-thumb { background: rgba(212, 191, 125, 0.35); }
 .prose:focus { outline: none; --bc: var(--cyan-hot); }
-.prose.dm { --bc: rgba(226, 176, 33, 0.32); border-left-color: var(--amber); background-color: rgba(226, 176, 33, 0.05); font-family: var(--font-mono); font-size: 11px; line-height: 1.6; min-height: 62px; }
+/* Auto-grown by useAutoGrow (ShardLattice.tsx) up to this cap — resize:none
+   because a manual drag-resize would just get overwritten by the next
+   keystroke's auto-grow anyway. Only scrolls (via .prose's overflow-y:auto)
+   once a note actually exceeds the cap. */
+.prose.dm { --bc: rgba(226, 176, 33, 0.32); border-left-color: var(--amber); background-color: rgba(226, 176, 33, 0.05); font-family: var(--font-mono); font-size: 11px; line-height: 1.6; min-height: 62px; max-height: 240px; resize: none; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
 .grid2 .in { margin-bottom: 12px; }
 .sec { display: flex; align-items: center; gap: 8px; margin: 3px 0 9px; }
@@ -385,6 +389,25 @@ select.in { appearance: none; background-image: linear-gradient(45deg, transpare
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
 }
 .dtlNew .wgtBtn { width: auto; height: 40px; padding: 0 16px; }
+.iconPickWrap { position: relative; }
+.iconPickBtn {
+  --cut: 7px; --bc: rgba(226, 176, 33, 0.32);
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background-color: rgba(0, 0, 0, 0.4); border: 1.5px solid var(--bc); color: var(--amber-hot); font-size: 14px; cursor: pointer;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.iconPickBtn:hover { --bc: var(--amber); color: #fff; }
+/* Portaled to document.body (see PerkIconPicker in the .tsx) — .rScroll clips
+   overflow for the node inspector panel, so this cannot be a positioned
+   descendant of it without getting clipped regardless of z-index. */
+.iconPickPop {
+  position: fixed; z-index: 300;
+  width: 260px; max-height: 220px; overflow-y: auto;
+  padding: 10px; background-color: rgba(10, 9, 8, 0.98); border: 1.5px solid rgba(226, 176, 33, 0.4);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+}
+.iconPickPop .icons { margin-bottom: 0; }
 .imeta {
   --cut: 5px; --bc: rgba(226, 176, 33, 0.28);
   display: flex; align-items: center; gap: 9px; padding: 9px 11px; margin-bottom: 13px; background-color: rgba(226, 176, 33, 0.05); border: 1px solid var(--bc); border-left: 2px solid var(--amber);

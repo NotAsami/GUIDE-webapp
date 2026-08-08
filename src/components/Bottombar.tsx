@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react'
 import styles from './Layout.module.css'
 
+interface Props {
+  shopOpen: boolean
+  shopDismissed: boolean
+  onReopenShop: () => void
+  rollPanelOpen: boolean
+  onToggleRollPanel: () => void
+}
+
 /** Telemetry strip ported from Codex.html lines 1203–1224. All values are
  *  cosmetic for now (no character data feeds them in Phase 0); the save
  *  counter ticks once per second to match the mockup's "live" feel. */
-export function Bottombar() {
+export function Bottombar({ shopOpen, shopDismissed, onReopenShop, rollPanelOpen, onToggleRollPanel }: Props) {
   const [tick, setTick] = useState(14)
 
   useEffect(() => {
@@ -27,6 +35,20 @@ export function Bottombar() {
         <span className="lab">Tide:</span><span className="dim">Low @ 03:47</span>
 
         <div className={styles.bbRight}>
+          {/* Left the shop takeover open with "Leave Shop" — the DM hasn't
+              closed it server-side, so it's still live for the taking. */}
+          {shopOpen && shopDismissed && (
+            <button type="button" className={styles.bbBtn} onClick={onReopenShop} title="Reopen the live shop">
+              <i className="fa-solid fa-shop" /> Shop
+            </button>
+          )}
+          <button
+            type="button" className={`${styles.bbBtn} ${rollPanelOpen ? styles.on : ''}`}
+            onClick={onToggleRollPanel} title="Roll context"
+          >
+            <i className="fa-solid fa-dice-d20" /> Rolls
+          </button>
+          <span className="sep">|</span>
           <span className="lab">Codex</span><span className="val">v 2.4.7</span>
           <span className="sep">|</span>
           <span className={styles.bbDot} /><span className="val">DM Online</span>

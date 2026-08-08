@@ -6,7 +6,9 @@
  * item's `weight × qty` across the bag (`inventory`) AND everything equipped
  * (gear slots, weapons, quick-access pouch, the G.U.I.D.E. shard) — equipping an
  * item doesn't make it weightless. Capacity is the SRD rule: STR × 15 lb, read
- * off the EFFECTIVE STR so a Belt of Giant Strength raises what you can haul too.
+ * off the EFFECTIVE STR so a Belt of Giant Strength raises what you can haul too,
+ * then scaled by effects.ts's carryMultiplier() for Powerful Build-style nodes
+ * that double capacity outright rather than adding to STR.
  *
  * Since the Inventory Refactor this is the ONLY capacity system: encumbrance slows
  * the character, it never blocks a pickup. There is no slot cap to run out of.
@@ -14,7 +16,7 @@
 
 import type { CharacterRow, EquippedItem, EquippedGear, InventoryItem, ShardTree } from './database.types'
 import { ITEM_SLOTS, getGear, getInventory, getWeapons, getContainers } from './equip'
-import { effectiveSheet } from './effects'
+import { carryMultiplier, effectiveSheet } from './effects'
 
 /** Per-stack weight: per-unit weight × quantity (both default sensibly). */
 export function itemWeight(item: { weight?: number; qty?: number }): number {
@@ -78,9 +80,11 @@ export function capacityForStr(str: number): number {
 }
 
 /** Carrying capacity in pounds, off the EFFECTIVE STR so a Belt of Giant
- *  Strength (or a shard's STR node) raises what you can haul too. */
+ *  Strength (or a shard's STR node) raises what you can haul too — then
+ *  scaled by carryMultiplier() for Powerful Build-style "doubled" nodes. */
 export function maxBurden(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): number {
-  return capacityForStr(effectiveSheet(character, shardTrees).abilities?.str ?? 10)
+  const str = effectiveSheet(character, shardTrees).abilities?.str ?? 10
+  return capacityForStr(str) * carryMultiplier(character, shardTrees)
 }
 
 /** Both numbers plus the encumbrance ratio, for the topbar pill and Inventory. */

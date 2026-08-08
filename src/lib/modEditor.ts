@@ -9,7 +9,7 @@ import type { AbilityKey, ItemEffects } from './database.types'
 
 /** The numeric modifiers the engine (lib/effects.ts) actually reads. `Note`
  *  and other descriptive perks are authored as Detail rows instead, not here. */
-export const MOD_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'AC', 'Attack', 'Damage', 'Saves', 'Speed', 'Initiative', 'Darkvision'] as const
+export const MOD_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'AC', 'Attack', 'Damage', 'Saves', 'Speed', 'Initiative', 'Darkvision', 'Carry Capacity ×'] as const
 
 /** One authored modifier: a stat, an amount, and (abilities only) whether the
  *  amount is a flat bonus or a floor the score is set to (abilitySet). */
@@ -36,6 +36,7 @@ export function compileEffects(mods: Mod[]): ItemEffects | undefined {
     else if (m.stat === 'Initiative') eff.initiative = n
     else if (m.stat === 'Darkvision') eff.darkvision = n
     else if (m.stat === 'Max HP') eff.maxHp = n
+    else if (m.stat === 'Carry Capacity ×') eff.carryMult = n
   }
   return Object.keys(eff).length ? eff : undefined
 }
@@ -57,5 +58,6 @@ export function effectsToMods(eff?: ItemEffects): Mod[] {
   if (eff.initiative != null) mods.push({ stat: 'Initiative', amt: eff.initiative })
   if (eff.darkvision != null) mods.push({ stat: 'Darkvision', amt: eff.darkvision })
   if (eff.maxHp != null) mods.push({ stat: 'Max HP', amt: eff.maxHp })
+  if (eff.carryMult != null) mods.push({ stat: 'Carry Capacity ×', amt: eff.carryMult })
   return mods
 }

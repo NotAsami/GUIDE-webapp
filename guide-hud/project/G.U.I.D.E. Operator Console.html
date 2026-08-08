@@ -1147,6 +1147,14 @@
   .cat-tog .tg-extra { flex: 1 1 100%; margin-top: 2px; }
   .cat-tog .tg-extra .sel-in { margin-bottom: 0; width: 100%; }
 
+  /* container sub-section: allowed-category multi-select */
+  .cat-acc { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; }
+  .cat-acc .ac { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+    background: rgba(0,0,0,0.3); border: 1px solid rgba(212,191,125,0.25); padding: 6px 11px; cursor: pointer;
+    clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); transition: color 140ms ease, border-color 140ms ease, box-shadow 140ms ease; }
+  .cat-acc .ac:hover { color: var(--text); border-color: rgba(226,176,33,0.45); }
+  .cat-acc .ac.on { color: var(--amber-hot); border-color: var(--amber); box-shadow: inset 0 0 12px rgba(226,176,33,0.16); }
+
   /* components V/S/M segmented */
   .cat-comp { display: flex; gap: 7px; margin-bottom: 11px; }
   .cat-comp .cc-opt { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.24); padding: 9px 6px;
@@ -1246,6 +1254,98 @@
   /* damage sub-section (spells) */
   .cat-dmg { border: 1px solid rgba(212,191,125,0.24); background: rgba(0,0,0,0.22); padding: 12px 13px; margin-bottom: 14px;
     clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+
+  /* ============================================================
+     SHOPKEEPERS TAB — same list+form pattern as Items/Spells, plus a
+     live OPEN control on each row (authoring vs. firing kept distinct).
+     ============================================================ */
+  .sk-row { display: flex; align-items: stretch; background: rgba(0,0,0,0.3); border: 1px solid rgba(212,191,125,0.12); border-left: 2px solid var(--amber-dim); transition: background 150ms ease, border-color 150ms ease; }
+  .sk-row:hover { border-color: rgba(226,176,33,0.4); }
+  .sk-row.sel { background: rgba(226,176,33,0.1); border-color: var(--amber); border-left-color: var(--amber); box-shadow: inset 0 0 16px rgba(226,176,33,0.12); }
+  .sk-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px; padding: 8px 10px; background: transparent; border: 0; cursor: pointer; text-align: left; font: inherit; transition: background 150ms ease; }
+  .sk-main:hover { background: rgba(226,176,33,0.07); }
+  .sk-main .sk-ic { flex: 0 0 auto; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--amber); background: rgba(0,0,0,0.4); border: 1px solid rgba(226,176,33,0.3);
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+  .sk-main .sk-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .sk-main .sk-t { font-family: var(--font-prose); font-size: 14px; color: var(--text); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sk-main .sk-s { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sk-open { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; padding: 0 10px; background: rgba(226,176,33,0.07); border: 0; border-left: 1px solid rgba(212,191,125,0.2); cursor: pointer;
+    font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--amber); transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease; }
+  .sk-open:hover { background: rgba(226,176,33,0.22); color: #fff; box-shadow: inset 0 0 14px rgba(226,176,33,0.35); }
+  .sk-open .arr { font-size: 8px; }
+
+  /* stock list */
+  .sk-stock-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 11px; }
+  .sk-stock-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 9px; padding: 8px 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(212,191,125,0.16); border-left: 2px solid var(--rar, var(--beige));
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+  .sk-stock-row .ss-ic { flex: 0 0 auto; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--beige); background: rgba(0,0,0,0.4); border: 1px solid rgba(212,191,125,0.2);
+    clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
+  .sk-stock-row .ss-tx { flex: 1 1 130px; min-width: 90px; display: flex; flex-direction: column; gap: 2px; }
+  .sk-stock-row .ss-t { font-family: var(--font-prose); font-size: 14px; color: var(--text); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sk-stock-row .ss-s { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .sk-stock-row .ss-s .rar { color: var(--rar, var(--muted)); }
+  .sk-gold { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; }
+  .sk-gold .sess-in { width: 74px; margin-bottom: 0; text-align: right; }
+  .sk-gold .gp { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber-dim); }
+  .sk-gold.over .sess-in { border-color: var(--amber); color: var(--amber-hot); }
+  .sk-mode { flex: 0 0 auto; display: flex; }
+  .sk-mode .sm { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); background: rgba(0,0,0,0.4); border: 1px solid rgba(212,191,125,0.24); padding: 7px 9px; cursor: pointer; transition: color 130ms ease, border-color 130ms ease, background 130ms ease; }
+  .sk-mode .sm + .sm { border-left: 0; }
+  .sk-mode .sm:hover { color: var(--text); border-color: rgba(226,176,33,0.45); }
+  .sk-mode .sm.on { color: var(--amber-hot); border-color: var(--amber); background: rgba(226,176,33,0.12); }
+  .sk-qty { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; }
+  .sk-qty .sess-in { width: 56px; margin-bottom: 0; text-align: center; }
+  .sk-qty .ql { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige-dim); }
+  .sk-stock-row .ss-x { flex: 0 0 auto; margin-left: auto; cursor: pointer; color: var(--beige-dim); font-size: 11px; padding: 4px 5px; transition: color 130ms ease; }
+  .sk-stock-row .ss-x:hover { color: var(--danger-hot); }
+
+  /* item picker */
+  .sk-pick { border: 1px solid rgba(212,191,125,0.3); border-left: 3px solid var(--beige); background: rgba(212,191,125,0.04); padding: 12px 13px 13px; margin-bottom: 14px;
+    clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+  .sk-pick .cat-fx-head i, .sk-pick .cat-fx-head .t { color: var(--beige); }
+  .sk-pick .cat-fx-head .s { color: var(--beige-dim); }
+  .sk-filters { display: flex; flex-direction: column; gap: 7px; margin: 9px 0 10px; }
+  .sk-filters .cat-acc { margin: 0; }
+  .sk-filters .fl { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige-dim); }
+  .sk-picklist { display: flex; flex-direction: column; gap: 5px; max-height: 208px; overflow-y: auto; padding-right: 4px; }
+  .sk-picklist::-webkit-scrollbar { width: 6px; }
+  .sk-picklist::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+  .sk-picklist::-webkit-scrollbar-thumb { background: rgba(226,176,33,0.35); }
+  .sk-pi { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 7px 9px; cursor: pointer; background: rgba(0,0,0,0.3); border: 1px solid rgba(212,191,125,0.14); border-left: 2px solid var(--rar, var(--beige-dim)); transition: background 140ms ease, border-color 140ms ease; }
+  .sk-pi:hover { background: rgba(226,176,33,0.08); border-color: rgba(226,176,33,0.4); }
+  .sk-pi .pi-ic { flex: 0 0 auto; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--beige); border: 1px solid rgba(212,191,125,0.2); background: rgba(0,0,0,0.4); }
+  .sk-pi .pi-t { flex: 1; min-width: 0; font-family: var(--font-prose); font-size: 13.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sk-pi .pi-m { flex: 0 0 auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--rar, var(--muted)); }
+  .sk-pi .pi-v { flex: 0 0 auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.08em; color: var(--amber-dim); }
+  .sk-pi.in { opacity: 0.42; cursor: default; }
+  .sk-pi.in:hover { background: rgba(0,0,0,0.3); border-color: rgba(212,191,125,0.14); }
+  .sk-pi.blocked { cursor: not-allowed; border-style: dashed; border-color: rgba(185,58,58,0.4); border-left-color: var(--danger); background: rgba(185,58,58,0.05); }
+  .sk-pi.blocked:hover { background: rgba(185,58,58,0.05); border-color: rgba(185,58,58,0.4); }
+  .sk-pi.blocked .pi-t { color: var(--muted); }
+  .sk-pi.blocked .pi-m { color: var(--danger-hot); }
+  .sk-warn { display: flex; align-items: center; gap: 8px; margin-top: 9px; padding: 7px 10px; background: rgba(185,58,58,0.06); border: 1px solid rgba(185,58,58,0.3); border-left: 2px solid var(--danger);
+    font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.06em; color: var(--muted); text-transform: none; }
+  .sk-warn i { color: var(--danger-hot); font-size: 10px; }
+
+  /* recipient picker overlay (reuses the Broadcast .bc-target toggle) */
+  .sk-pop { position: fixed; inset: 0; z-index: 210; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .sk-pop .pop-scrim { position: absolute; inset: 0; background: rgba(8,7,5,0.78); backdrop-filter: blur(2px); }
+  .sk-pop .pop-panel { --cut: 12px; position: relative; z-index: 1; width: 352px; padding: 17px 18px 18px; display: flex; flex-direction: column;
+    background: linear-gradient(180deg, #161310, #0d0c0a); border: 1px solid var(--amber);
+    clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+    box-shadow: 0 24px 60px rgba(0,0,0,0.7), 0 0 34px rgba(226,176,33,0.2); }
+  .sk-pop .pop-head { display: flex; align-items: center; gap: 9px; margin-bottom: 13px; padding-bottom: 10px; border-bottom: 1px solid rgba(212,191,125,0.24); }
+  .sk-pop .pop-head i { color: var(--amber-hot); font-size: 12px; }
+  .sk-pop .pop-head .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--amber-hot); }
+  .sk-pop .pop-head .x { margin-left: auto; cursor: pointer; color: var(--beige-dim); font-size: 12px; transition: color 130ms ease; }
+  .sk-pop .pop-head .x:hover { color: var(--danger-hot); }
+  .sk-pop .pop-shop { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; }
+  .sk-pop .pop-shop .ic { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--amber); background: rgba(226,176,33,0.08); border: 1px solid rgba(226,176,33,0.4);
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+  .sk-pop .pop-shop .n { font-family: var(--font-prose); font-size: 15px; color: var(--text); }
+  .sk-pop .pop-shop .m { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .sk-pop .sel-in { margin-bottom: 12px; }
+  .sk-pop .pop-note { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.06em; color: var(--beige-dim); margin-bottom: 13px; }
 
   /* ---- stub panels (Features / Shards — visible but deferred) ---- */
   .cat-stub {
@@ -1886,10 +1986,10 @@ const RAR_DEF = {   // rarity → border read (matches Inventory)
   quest:    { label:'Quest',    color:'var(--rar-vrare)'    },
 };
 const RAR_ORDER = ['common','uncommon','rare','quest'];
-const EQUIP_SLOTS = ['helmet','armor','cloak','boots','accessory','quick-access','weapon'];
+const EQUIP_SLOTS = ['helmet','armor','cloak','boots','back','accessory','quick-access','weapon'];
 const FX_STATS = ['STR','DEX','CON','INT','WIS','CHA','AC','HP','Max HP','Speed','Attack','Damage','Save DC','Flag'];
 const FX_DURATIONS = ['Rounds','Minutes','Hours','Until Rest','Permanent while equipped'];
-const ITEM_ICONS = ['fa-flask','fa-khanda','fa-shield-halved','fa-gem','fa-ring','fa-hat-wizard','fa-helmet-battle','fa-shirt','fa-boot','fa-scroll','fa-book','fa-key','fa-wand-sparkles','fa-skull','fa-vial','fa-crosshairs','fa-hammer','fa-bolt','fa-fire','fa-droplet','fa-feather','fa-coins'];
+const ITEM_ICONS = ['fa-flask','fa-khanda','fa-shield-halved','fa-gem','fa-ring','fa-hat-wizard','fa-helmet-safety','fa-shirt','fa-shoe-prints','fa-scroll','fa-book','fa-key','fa-wand-sparkles','fa-skull','fa-vial','fa-crosshairs','fa-hammer','fa-bolt','fa-fire','fa-droplet','fa-feather','fa-coins'];
 const SPELL_SCHOOLS = ['Abjuration','Conjuration','Divination','Enchantment','Evocation','Illusion','Necromancy','Transmutation'];
 /* FEATURES = INTRINSIC only (class / subclass / race / feat / background). Item-
    granted features are authored on the item itself and surface on the player
@@ -1949,6 +2049,11 @@ const CATALOG_ITEMS = [
     weight:'1 lb', value:25, equippable:false, slot:'accessory', attunement:false,
     desc:'A neat roll of picks, tension wrenches, and a small mirror on a wire. Worn smooth by careful hands.',
     effects:[], duration:'Permanent while equipped' },
+  { id:'bag_holding', name:'Bag of Holding', category:'tool', rarity:'rare', w:1, h:1, icon:'fa-gem',
+    weight:'0 lb', value:4000, equippable:true, slot:'accessory', attunement:false,
+    container:true, weightless:true, accepts:[],
+    desc:'The mouth of the bag is only the access port. Whatever is put through it is held somewhere the Codex declines to name, and weighs nothing on this side.',
+    effects:[], duration:'Permanent while equipped' },
 ];
 
 const CATALOG_SPELLS = [
@@ -2001,6 +2106,22 @@ const CATALOG_FEATURES = [
 /* ============================================================================
    STATE + RENDER
    ============================================================================ */
+/* ▸▸▸ CATALOG_SHOPKEEPERS — shop templates. stock[] references CATALOG_ITEMS
+   by id; price defaults to the item's catalog value but is overridable per
+   shop. mode: 'unlimited' | 'limited' (qty is authored now, wired later). */
+const CATALOG_SHOPKEEPERS = [
+  { id:'rusty_flagon', name:'The Rusty Flagon', icon:'fa-flask', location:'Castella Market',
+    desc:'A low-beamed taproom that sells more than ale. Bryn keeps the good stock behind the bar and the better stock under it, and will part with either for the right weight of coin.',
+    stock:[ { itemId:'pot_heal', price:55, mode:'unlimited', qty:1 },
+            { itemId:'pot_str', price:900, mode:'limited', qty:2 },
+            { itemId:'thieves_tools', price:25, mode:'limited', qty:4 } ] },
+  { id:'ironwright', name:'Halvard Ironwright', icon:'fa-hammer', location:'Forge Row, Castella',
+    desc:'The smith speaks in single words and prices in whole numbers. Everything on his rack is honest; nothing on it is cheap.',
+    stock:[ { itemId:'sword_1', price:1500, mode:'limited', qty:1 },
+            { itemId:'amulet_poison', price:640, mode:'unlimited', qty:1 } ] },
+];
+const SK_STOCK_MODES = ['unlimited','limited'];
+
 const byId = id => PARTY.find(p => p.id === id);
 let selectedId = null;            // null = PARTY OVERVIEW
 let view       = 'overview';      // 'overview' | 'sessions' | 'quests' | 'catalog' | 'character'
@@ -2010,13 +2131,21 @@ let charTab = 'actions';          // selected-character work area tab: actions |
 let loreDraft = null;             // working lore form draft (per character)
 let questDraft = null;            // working quest form draft
 let questEditId = null;           // index into QUESTS, or null for a new quest
-let catType    = 'items';         // catalog type switcher: items | spells | features | shards
+let catType    = 'items';         // catalog type switcher: items | spells | features | shops | shards
 let itemDraft  = null;            // working catalog-item draft
 let itemEditId = null;            // index into CATALOG_ITEMS, or null for new
 let spellDraft = null;            // working catalog-spell draft
 let spellEditId = null;           // index into CATALOG_SPELLS, or null for new
 let featDraft  = null;            // working catalog-feature draft (intrinsic only)
 let featEditId = null;            // index into CATALOG_FEATURES, or null for new
+let shopDraft  = null;            // working shopkeeper draft
+let shopEditId = null;            // index into CATALOG_SHOPKEEPERS, or null for new
+let shopPickQ   = '';             // stock item-picker: search string
+let shopPickRar = 'all';          // stock item-picker: rarity filter
+let shopPickCat = 'all';          // stock item-picker: category filter
+let shopOpenIdx = null;           // shopkeeper being opened via the recipient picker
+let shopTarget  = 'selected';     // recipient picker (mirrors bcTarget)
+let shopPcId    = null;           // chosen PC when target = 'selected'
 let grantSel   = null;            // selected catalog item id
 let effSel     = EFFECT_CATALOG[0].id;
 let durSel     = '3 rounds';
@@ -2058,7 +2187,7 @@ function renderRoster() {
   html += '<button class="ov-entry ' + (view === 'catalog' ? 'active' : '') + '" data-catalog>' +
             '<span class="ov-ic"><i class="fa-solid fa-box-archive"></i></span>' +
             '<span class="ov-tx"><span class="ov-t">Catalog</span>' +
-            '<span class="ov-s">Library · ' + CATALOG_ITEMS.length + ' items · ' + CATALOG_SPELLS.length + ' spells · ' + CATALOG_FEATURES.length + ' features</span></span>' +
+            '<span class="ov-s">Library · ' + CATALOG_ITEMS.length + ' items · ' + CATALOG_SPELLS.length + ' spells · ' + CATALOG_FEATURES.length + ' features · ' + CATALOG_SHOPKEEPERS.length + ' shops</span></span>' +
           '</button>';
   html += '<div class="roster-div">Characters</div>';
 
@@ -2643,13 +2772,15 @@ function loadItemDraft(idx) {
   itemDraft = { id:it.id, name:it.name, category:it.category, rarity:it.rarity, w:it.w, h:it.h, icon:it.icon,
     weight:it.weight, value:it.value, equippable:it.equippable, slot:it.slot, attunement:it.attunement,
     desc:it.desc, effects:it.effects.map(e => ({ stat:e.stat, val:e.val })), duration:it.duration,
+    container:!!it.container, weightless:!!it.weightless, accepts:(it.accepts || []).slice(),
     featureIds: (it.featureIds || []).slice() };
 }
 function newItemDraft() {
   itemEditId = null;
   itemDraft = { id:null, name:'', category:'misc', rarity:'common', w:1, h:1, icon:'fa-cube',
     weight:'', value:0, equippable:false, slot:'accessory', attunement:false,
-    desc:'', effects:[], duration:'Permanent while equipped', featureIds: [] };
+    desc:'', effects:[], duration:'Permanent while equipped',
+    container:false, weightless:false, accepts:[], featureIds: [] };
 }
 function loadSpellDraft(idx) {
   spellEditId = idx; const s = CATALOG_SPELLS[idx];
@@ -2671,6 +2802,7 @@ function renderCatalog() {
     { key:'items',    label:'Items',    icon:'fa-box-open',     n:CATALOG_ITEMS.length },
     { key:'spells',   label:'Spells',   icon:'fa-wand-sparkles', n:CATALOG_SPELLS.length },
     { key:'features', label:'Features', icon:'fa-star',          n:CATALOG_FEATURES.length },
+    { key:'shops',    label:'Shopkeepers', icon:'fa-shop',      n:CATALOG_SHOPKEEPERS.length },
     { key:'shards',   label:'Shards',   icon:'fa-diamond',       stub:true },
   ];
   const tabHtml = tabs.map(t =>
@@ -2683,6 +2815,7 @@ function renderCatalog() {
   if (catType === 'items')      main = catalogItemsBody();
   else if (catType === 'spells') main = catalogSpellsBody();
   else if (catType === 'features') main = catalogFeaturesBody();
+  else if (catType === 'shops') main = catalogShopsBody();
   else main = catalogStub('fa-diamond', 'Shard Tree',
     'Editing a branching shard node tree is a graph editor, not a form \u2014 a dedicated future tool. The catalog tab reserves its place; the tree itself is built elsewhere.', 'Dedicated tool · not a form');
 
@@ -2775,6 +2908,7 @@ function catalogItemsBody() {
       '<div class="cat-fx-add"><input class="sess-in" id="itFxNew" placeholder="Add a modifier row\u2026 (e.g. AC +1)"><button class="btn ghost sm" id="itFxAdd" style="flex:0 0 100px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-plus"></i> Add</span></button></div>' +
       '<div class="cat-fx-dur"><span class="field-lab">Duration</span><select class="sel-in" id="itDur">' + durOpts + '</select></div>' +
     '</div>' +
+    itemContainerHtml(d) +
     itemFeaturesGrantHtml(d) +
     '<div class="cat-actions"><button class="btn amber" id="itSave" style="height:42px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-floppy-disk"></i> ' + (itemEditId != null ? 'Save Item' : 'Create Item') + '</span></button></div>';
 
@@ -2975,6 +3109,231 @@ function wireCatalogFeatures() {
   });
 }
 
+/* ============================================================================
+   SHOPKEEPERS — the fifth catalog tab. Authoring a shop is authoring a
+   TEMPLATE (same contract as items/spells/features): SAVE commits, it does
+   not push to a player. The live action lives on the LIST — OPEN ▸ fires the
+   shop for a recipient through the same picker the Broadcast panel uses.
+   ============================================================================ */
+const catItemById = id => CATALOG_ITEMS.find(i => i.id === id);
+
+function loadShopDraft(idx) {
+  shopEditId = idx; const s = CATALOG_SHOPKEEPERS[idx];
+  shopDraft = { id:s.id, name:s.name, icon:s.icon, location:s.location, desc:s.desc,
+    stock: s.stock.map(e => ({ itemId:e.itemId, price:e.price, mode:e.mode, qty:e.qty })) };
+}
+function newShopDraft() {
+  shopEditId = null;
+  shopDraft = { id:null, name:'', icon:'fa-coins', location:'', desc:'', stock:[] };
+}
+
+/* the stock item-picker list — searchable, filtered by the same rarity /
+   category chips used across the catalog. Quest-tier items are rendered
+   blocked: a shop must not be a back door around DM-controlled plot items. */
+function shopPickListHtml() {
+  const d = shopDraft;
+  const q = shopPickQ.trim().toLowerCase();
+  const rows = CATALOG_ITEMS.filter(it => {
+    if (shopPickRar !== 'all' && it.rarity !== shopPickRar) return false;
+    if (shopPickCat !== 'all' && it.category !== shopPickCat) return false;
+    if (q && !(it.name + ' ' + it.category + ' ' + it.rarity).toLowerCase().includes(q)) return false;
+    return true;
+  }).map(it => {
+    const rd = RAR_DEF[it.rarity] || RAR_DEF.common;
+    const blocked = it.rarity === 'quest' || it.category === 'quest';
+    const already = d.stock.some(e => e.itemId === it.id);
+    const cls = blocked ? 'blocked' : (already ? 'in' : '');
+    return '<button class="sk-pi ' + cls + '" style="--rar:' + (blocked ? 'var(--danger)' : rd.color) + '" data-pick="' + esc2(it.id) + '"' + (blocked || already ? ' disabled' : '') + '>' +
+      '<span class="pi-ic"><i class="fa-solid ' + it.icon + '"></i></span>' +
+      '<span class="pi-t">' + esc2(it.name) + '</span>' +
+      '<span class="pi-m">' + (blocked ? 'Quest · excluded' : (already ? 'In stock' : esc2(rd.label))) + '</span>' +
+      (blocked ? '' : '<span class="pi-v">' + (it.value || 0) + ' gp</span>') +
+    '</button>';
+  }).join('');
+  return rows || '<div class="cat-fx-none">No catalog items match this filter.</div>';
+}
+
+function shopStockHtml() {
+  const d = shopDraft;
+  const rows = d.stock.length
+    ? d.stock.map((e, i) => {
+        const it = catItemById(e.itemId);
+        if (!it) return '';
+        const rd = RAR_DEF[it.rarity] || RAR_DEF.common;
+        const def = CAT_DEF[it.category] || CAT_DEF.misc;
+        const over = Number(e.price) !== Number(it.value || 0);
+        return '<div class="sk-stock-row" style="--rar:' + rd.color + '">' +
+          '<span class="ss-ic"><i class="fa-solid ' + it.icon + '"></i></span>' +
+          '<span class="ss-tx"><span class="ss-t">' + esc2(it.name) + '</span>' +
+            '<span class="ss-s">' + esc2(def.label) + ' · <span class="rar">' + esc2(rd.label) + '</span> · catalog ' + (it.value || 0) + ' gp' + (over ? ' · overridden' : '') + '</span></span>' +
+          '<span class="sk-gold ' + (over ? 'over' : '') + '"><input class="sess-in" type="number" min="0" data-price="' + i + '" value="' + (e.price || 0) + '"><span class="gp">gp</span></span>' +
+          '<span class="sk-mode">' +
+            '<span class="sm ' + (e.mode === 'unlimited' ? 'on' : '') + '" data-mode="' + i + '" data-modeval="unlimited">Unlimited</span>' +
+            '<span class="sm ' + (e.mode === 'limited' ? 'on' : '') + '" data-mode="' + i + '" data-modeval="limited">Limited</span>' +
+          '</span>' +
+          (e.mode === 'limited'
+            ? '<span class="sk-qty"><span class="ql">Qty</span><input class="sess-in" type="number" min="1" data-qty="' + i + '" value="' + (e.qty || 1) + '"></span>'
+            : '') +
+          '<span class="ss-x" data-stockx="' + i + '"><i class="fa-solid fa-xmark"></i></span>' +
+        '</div>';
+      }).join('')
+    : '<div class="cat-fx-none">No stock yet — pull items from the catalog below. Each line carries its own price and stock mode.</div>';
+
+  const rarChips = '<span class="ac ' + (shopPickRar === 'all' ? 'on' : '') + '" data-rar="all">All</span>' +
+    RAR_ORDER.filter(r => r !== 'quest').map(r => '<span class="ac ' + (shopPickRar === r ? 'on' : '') + '" data-rar="' + r + '">' + RAR_DEF[r].label + '</span>').join('');
+  const catChips = '<span class="ac ' + (shopPickCat === 'all' ? 'on' : '') + '" data-pcat="all">All</span>' +
+    CAT_ORDER.filter(c => c !== 'quest').map(c => '<span class="ac ' + (shopPickCat === c ? 'on' : '') + '" data-pcat="' + c + '">' + CAT_DEF[c].label + '</span>').join('');
+
+  return '<div class="cat-sec-lab"><span class="field-lab">Stock</span></div>' +
+    '<div class="sk-stock-rows" id="skStock">' + rows + '</div>' +
+    '<div class="sk-pick">' +
+      '<div class="cat-fx-head"><i class="fa-solid fa-box-open"></i><span class="t">Add From Catalog</span><span class="s">price defaults to catalog value</span></div>' +
+      '<div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input class="search-in" id="skSearch" placeholder="Search the item catalog…" value="' + esc2(shopPickQ) + '"></div>' +
+      '<div class="sk-filters">' +
+        '<div><div class="fl">Rarity</div><div class="cat-acc" id="skRar">' + rarChips + '</div></div>' +
+        '<div><div class="fl">Category</div><div class="cat-acc" id="skCat">' + catChips + '</div></div>' +
+      '</div>' +
+      '<div class="sk-picklist" id="skPickList">' + shopPickListHtml() + '</div>' +
+      '<div class="sk-warn"><i class="fa-solid fa-triangle-exclamation"></i> Quest-tier items are excluded from shop stock — plot items stay under direct DM grant.</div>' +
+    '</div>';
+}
+
+function catalogShopsBody() {
+  if (!shopDraft) { CATALOG_SHOPKEEPERS.length ? loadShopDraft(0) : newShopDraft(); }
+  let index = '<button class="btn cyan" id="catNewBtn" style="height:28px;flex:0 0 auto;font-size:9px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-plus"></i> New Shopkeeper</span></button>';
+  const rows = CATALOG_SHOPKEEPERS.map((s, idx) =>
+    '<div class="sk-row ' + (shopEditId === idx ? 'sel' : '') + '">' +
+      '<button class="sk-main" data-shop="' + idx + '">' +
+        '<span class="sk-ic"><i class="fa-solid ' + s.icon + '"></i></span>' +
+        '<span class="sk-tx"><span class="sk-t">' + esc2(s.name || 'Untitled') + '</span>' +
+        '<span class="sk-s">' + s.stock.length + ' item' + (s.stock.length === 1 ? '' : 's') + (s.location ? ' · ' + esc2(s.location) : '') + '</span></span>' +
+      '</button>' +
+      '<button class="sk-open" data-shopopen="' + idx + '" title="Open this shop for a player">Use <span class="arr">▸</span></button>' +
+    '</div>').join('') || '<div class="cat-empty">No shopkeepers yet</div>';
+  index += '<div class="cat-grp"><div class="cat-grp-head"><span class="gh-t">Shopkeepers</span><span class="gh-c">' + CATALOG_SHOPKEEPERS.length + '</span></div><div class="cat-rows">' + rows + '</div></div>';
+
+  const d = shopDraft;
+  const iconGrid = ITEM_ICONS.map(ic => '<div class="cat-ic ' + (ic === d.icon ? 'sel' : '') + '" data-icon="' + ic + '"><i class="fa-solid ' + ic + '"></i></div>').join('');
+  const stockN = d.stock.length;
+  const limited = d.stock.filter(e => e.mode === 'limited').length;
+
+  const form =
+    '<div class="cat-form-head"><span class="cfh-t">' + (shopEditId != null ? 'Edit Shopkeeper' : 'New Shopkeeper') + '</span>' +
+      '<span class="cfh-id">' + (d.id ? esc2(d.id) : 'unsaved template') + '</span></div>' +
+    '<div class="cat-prev" style="--rar:var(--amber);--cat-tint:rgba(226,176,33,0.05)">' +
+      '<span class="pv-cell"><i class="fa-solid ' + d.icon + '"></i><span class="pv-corner"><i class="fa-solid fa-shop"></i></span></span>' +
+      '<span class="pv-tx"><span class="pv-name">' + esc2(d.name || 'Untitled Shopkeeper') + '</span>' +
+        '<span class="pv-meta"><span>' + (d.location ? esc2(d.location) : 'no location') + '</span>' +
+        '<span class="rar">' + stockN + ' item' + (stockN === 1 ? '' : 's') + '</span>' +
+        '<span>' + (limited ? limited + ' limited' : 'all unlimited') + '</span></span></span>' +
+    '</div>' +
+    '<span class="field-lab">Name</span><input class="sess-in" id="skName" value="' + esc2(d.name) + '" placeholder="Name the shopkeeper…">' +
+    '<span class="field-lab">Icon</span><div class="cat-icons" id="skIcons">' + iconGrid + '</div>' +
+    '<span class="field-lab">Location <span style="color:var(--beige-dim)">· optional</span></span>' +
+    '<input class="sess-in" id="skLoc" value="' + esc2(d.location) + '" placeholder="e.g. Castella Market">' +
+    '<div class="q-lab-row"><span class="field-lab">Description</span><span class="q-facing player"><i class="fa-solid fa-eye"></i> Player-facing</span></div>' +
+    '<textarea class="cat-prose" id="skDesc" placeholder="The prose the player reads when the shop opens…">' + esc2(d.desc) + '</textarea>' +
+    shopStockHtml() +
+    '<div class="cat-actions"><button class="btn amber" id="skSave" style="height:42px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-floppy-disk"></i> ' + (shopEditId != null ? 'Save Shopkeeper' : 'Create Shopkeeper') + '</span></button></div>';
+
+  return '<div class="cat-layout"><div class="cat-index">' + index + '</div><div class="cat-form">' + form + '</div></div>';
+}
+
+function wireCatalogShops() {
+  const d = shopDraft;
+  document.querySelectorAll('#workBody .sk-main[data-shop]').forEach(r => r.addEventListener('click', () => { loadShopDraft(+r.dataset.shop); renderCatalog(); }));
+  document.querySelectorAll('#workBody .sk-open[data-shopopen]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); openShopRecipientPicker(+b.dataset.shopopen); }));
+  document.getElementById('catNewBtn')?.addEventListener('click', () => { newShopDraft(); renderCatalog(); console.log('[CATALOG] new blank shopkeeper'); });
+
+  const bind = (id, key) => { const el = document.getElementById(id); el && el.addEventListener('input', () => { d[key] = el.value; }); };
+  bind('skName','name'); bind('skLoc','location'); bind('skDesc','desc');
+  document.querySelectorAll('#skIcons .cat-ic').forEach(c => c.addEventListener('click', () => { d.icon = c.dataset.icon; renderCatalog(); }));
+
+  // stock rows — price / mode / qty / remove
+  document.querySelectorAll('[data-price]').forEach(inp => inp.addEventListener('input', () => { d.stock[+inp.dataset.price].price = Math.max(0, parseInt(inp.value, 10) || 0); }));
+  document.querySelectorAll('[data-qty]').forEach(inp => inp.addEventListener('input', () => { d.stock[+inp.dataset.qty].qty = Math.max(1, parseInt(inp.value, 10) || 1); }));
+  document.querySelectorAll('[data-mode]').forEach(m => m.addEventListener('click', () => {
+    const e = d.stock[+m.dataset.mode];
+    if (e.mode === m.dataset.modeval) return;
+    e.mode = m.dataset.modeval; if (e.mode === 'limited' && !e.qty) e.qty = 1;
+    renderCatalog();
+  }));
+  document.querySelectorAll('[data-stockx]').forEach(x => x.addEventListener('click', () => { d.stock.splice(+x.dataset.stockx, 1); renderCatalog(); }));
+
+  // item picker — search filters in place (keeps focus), chips re-render
+  const search = document.getElementById('skSearch');
+  search && search.addEventListener('input', () => {
+    shopPickQ = search.value;
+    document.getElementById('skPickList').innerHTML = shopPickListHtml();
+    wireShopPickRows();
+  });
+  document.querySelectorAll('#skRar .ac').forEach(c => c.addEventListener('click', () => { shopPickRar = c.dataset.rar; renderCatalog(); }));
+  document.querySelectorAll('#skCat .ac').forEach(c => c.addEventListener('click', () => { shopPickCat = c.dataset.pcat; renderCatalog(); }));
+  wireShopPickRows();
+
+  document.getElementById('skSave')?.addEventListener('click', () => {
+    const rec = { id: d.id || ('shop_' + Date.now().toString(36)), name:d.name, icon:d.icon, location:d.location, desc:d.desc,
+      stock: d.stock.map(e => ({ itemId:e.itemId, price:e.price, mode:e.mode, qty: e.mode === 'limited' ? (e.qty || 1) : 1 })) };
+    if (shopEditId != null) CATALOG_SHOPKEEPERS[shopEditId] = rec;
+    else { CATALOG_SHOPKEEPERS.push(rec); shopEditId = CATALOG_SHOPKEEPERS.length - 1; }
+    d.id = rec.id;
+    logAct('Catalog: saved shopkeeper <span class="obj">' + esc(rec.name || 'Untitled') + '</span> · ' + rec.stock.length + ' items', 'cyan');
+    console.log('[CATALOG] shopkeeper saved (template)', rec);
+    renderRoster(); renderCatalog();
+  });
+}
+
+function wireShopPickRows() {
+  document.querySelectorAll('#skPickList .sk-pi[data-pick]').forEach(b => b.addEventListener('click', () => {
+    if (b.disabled) return;
+    const it = catItemById(b.dataset.pick); if (!it) return;
+    shopDraft.stock.push({ itemId: it.id, price: it.value || 0, mode: 'unlimited', qty: 1 });
+    console.log('[CATALOG] stock +', it.name, '@', it.value || 0, 'gp');
+    renderCatalog();
+  }));
+}
+
+/* ---------- the live trigger: OPEN ▸ → recipient picker → fire ---------- */
+function openShopRecipientPicker(idx) {
+  shopOpenIdx = idx;
+  if (!shopPcId) shopPcId = selectedId || PARTY[0].id;
+  const s = CATALOG_SHOPKEEPERS[idx];
+  const pcOpts = PARTY.map(p => '<option value="' + p.id + '"' + (p.id === shopPcId ? ' selected' : '') + '>' + esc(p.name) + ' · ' + esc(p.cls) + ' ' + p.level + '</option>').join('');
+  const pop = document.createElement('div');
+  pop.className = 'sk-pop'; pop.id = 'skPop';
+  pop.innerHTML =
+    '<div class="pop-scrim" data-skclose></div>' +
+    '<div class="pop-panel">' +
+      '<div class="pop-head"><i class="fa-solid fa-shop"></i><span class="t">Open Shop</span><span class="x" data-skclose><i class="fa-solid fa-xmark"></i></span></div>' +
+      '<div class="pop-shop"><span class="ic"><i class="fa-solid ' + s.icon + '"></i></span>' +
+        '<span><span class="n">' + esc(s.name) + '</span><br><span class="m">' + s.stock.length + ' items' + (s.location ? ' · ' + esc(s.location) : '') + '</span></span></div>' +
+      '<span class="field-lab">Recipient</span>' +
+      '<div class="bc-target" id="skTarget">' +
+        '<div class="tg ' + (shopTarget === 'selected' ? 'sel' : '') + '" data-target="selected">Selected PC</div>' +
+        '<div class="tg ' + (shopTarget === 'all' ? 'sel' : '') + '" data-target="all">All Party</div>' +
+      '</div>' +
+      (shopTarget === 'selected' ? '<select class="sel-in" id="skPc">' + pcOpts + '</select>' : '') +
+      '<div class="pop-note">Fires the shop live — the template is unchanged.</div>' +
+      '<button class="btn amber" id="skFire" style="height:40px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-arrow-right-to-bracket"></i> Open Shop</span></button>' +
+    '</div>';
+  document.body.appendChild(pop);
+  const close = () => { pop.remove(); shopOpenIdx = null; };
+  pop.querySelectorAll('[data-skclose]').forEach(x => x.addEventListener('click', close));
+  pop.querySelector('#skTarget').addEventListener('click', e => {
+    const t = e.target.closest('[data-target]'); if (!t) return;
+    shopTarget = t.dataset.target; close(); openShopRecipientPicker(idx);
+  });
+  pop.querySelector('#skPc')?.addEventListener('change', e => { shopPcId = e.target.value; });
+  pop.querySelector('#skFire').addEventListener('click', () => {
+    const pc = shopTarget === 'selected' ? byId(shopPcId) : null;
+    const who = pc ? pc.name : 'All Party';
+    logAct('Opened <span class="obj">' + esc(s.name) + '</span> for <span class="who">' + esc(pc ? pc.name.split(' ')[0] : 'the party') + '</span>');
+    fireToast({ kind:'shop', name:s.name, location:s.location, icon:s.icon, count:s.stock.length, pc });
+    console.log('[SHOP] opened', s.name, '→', who, s);
+    close();
+  });
+}
+
 function catalogStub(icon, title, desc, pill) {
   return '<div class="cat-stub">' +
     '<div class="st-ic"><i class="fa-solid ' + icon + '"></i></div>' +
@@ -2992,6 +3351,32 @@ function wireCatalog() {
   if (catType === 'items') wireCatalogItems();
   else if (catType === 'spells') wireCatalogSpells();
   else if (catType === 'features') wireCatalogFeatures();
+  else if (catType === 'shops') wireCatalogShops();
+}
+
+function itemContainerHtml(d) {
+  const acc = d.accepts || [];
+  const chips = CAT_ORDER.map(c =>
+    '<span class="ac ' + (acc.includes(c) ? 'on' : '') + '" data-acc="' + c + '">' + esc2(CAT_DEF[c].label) + '</span>').join('');
+  const sub = d.container
+    ? '<div class="cat-fx">' +
+        '<div class="cat-fx-head"><i class="fa-solid fa-box-archive"></i><span class="t">Container</span><span class="s">contents browse as a list — no grid dimensions needed</span></div>' +
+        '<div class="cat-tog ' + (d.weightless ? 'on' : '') + '" id="itWtlessTog" style="margin:0 0 11px;">' +
+          '<span class="tg-sw"></span>' +
+          '<span class="tg-lab"><span class="t">Weightless</span><span class="s">Bag-of-holding property — contents do not count toward carry weight</span></span>' +
+        '</div>' +
+        '<span class="field-lab">Allowed Categories</span>' +
+        '<div class="cat-acc" id="itAccepts">' + chips + '</div>' +
+        '<div class="cat-fx-none" style="margin-top:9px;">' +
+          (acc.length ? 'Accepts only ' + acc.map(c => esc2(CAT_DEF[c].label)).join(' · ') + ' — covers quivers, component pouches and scabbards.'
+                      : 'No restriction — this container accepts anything.') +
+        '</div>' +
+      '</div>'
+    : '';
+  return '<div class="cat-tog ' + (d.container ? 'on' : '') + '" id="itContTog">' +
+      '<span class="tg-sw"></span>' +
+      '<span class="tg-lab"><span class="t">Container</span><span class="s">Holds other items · adds a tab to the player’s Inventory</span></span>' +
+    '</div>' + sub;
 }
 
 function itemFeaturesGrantHtml(d) {
@@ -3044,6 +3429,16 @@ function wireCatalogItems() {
   document.getElementById('itEquipTog')?.addEventListener('click', e => { if (e.target.closest('#itSlot')) return; d.equippable = !d.equippable; renderCatalog(); });
   document.getElementById('itAttuneTog')?.addEventListener('click', () => { d.attunement = !d.attunement; renderCatalog(); });
 
+  // container sub-section
+  document.getElementById('itContTog')?.addEventListener('click', () => { d.container = !d.container; renderCatalog(); });
+  document.getElementById('itWtlessTog')?.addEventListener('click', () => { d.weightless = !d.weightless; renderCatalog(); });
+  document.querySelectorAll('#itAccepts .ac').forEach(c => c.addEventListener('click', () => {
+    d.accepts = d.accepts || [];
+    const k = c.dataset.acc;
+    d.accepts = d.accepts.includes(k) ? d.accepts.filter(x => x !== k) : d.accepts.concat(k);
+    renderCatalog();
+  }));
+
   // effect modifier rows
   document.querySelectorAll('[data-fxstat]').forEach(sel => sel.addEventListener('change', () => { d.effects[+sel.dataset.fxstat].stat = sel.value; renderCatalog(); }));
   document.querySelectorAll('[data-fxval]').forEach(inp => inp.addEventListener('input', () => { d.effects[+inp.dataset.fxval].val = inp.value; }));
@@ -3064,6 +3459,7 @@ function wireCatalogItems() {
     const rec = { id: d.id || ('item_' + Date.now().toString(36)), name:d.name, category:d.category, rarity:d.rarity, w:d.w, h:d.h, icon:d.icon,
       weight:d.weight, value:d.value, equippable:d.equippable, slot:d.slot, attunement:d.attunement,
       desc:d.desc, effects:d.effects.map(e => ({ stat:e.stat, val:e.val })), duration:d.duration,
+      container:d.container, weightless:d.weightless, accepts:(d.accepts || []).slice(),
       featureIds: (d.featureIds || []).slice() };
     if (itemEditId != null) CATALOG_ITEMS[itemEditId] = rec;
     else { CATALOG_ITEMS.push(rec); itemEditId = CATALOG_ITEMS.length - 1; }
@@ -3314,6 +3710,13 @@ function fireToast(opt) {
         '<div class="tg-tx"><div class="tg-t">Item Acquired ::</div>' +
         '<div class="tg-n">' + esc(opt.name) + ' <span class="rar" style="color:' + col + '">· ' + esc(opt.rarity) + '</span></div></div></div>' +
       '<div class="tg-foot"><span class="led"></span> G.U.I.D.E. inventory sync</div>';
+  } else if (opt.kind === 'shop') {
+    inner =
+      '<div class="tg-tag">Realtime → ' + esc((opt.pc && opt.pc.name) || 'All Party') + '</div>' +
+      '<div class="tg-head"><span class="tg-ic"><i class="fa-solid ' + opt.icon + '"></i></span>' +
+        '<div class="tg-tx"><div class="tg-t">Shop Opened ::</div>' +
+        '<div class="tg-n">' + esc(opt.name) + ' <span class="rar" style="color:var(--muted)">· ' + opt.count + ' items</span></div></div></div>' +
+      '<div class="tg-foot"><span class="led"></span> ' + esc(opt.location || 'G.U.I.D.E. commerce channel') + '</div>';
   } else if (opt.kind === 'effect') {
     inner =
       '<div class="tg-tag">Realtime → ' + esc((opt.pc && opt.pc.name) || 'Player') + '</div>' +

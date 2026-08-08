@@ -1,9 +1,9 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import type { CharacterRow, CharacterSection, ShardSlot, ShardTree } from '../lib/database.types'
+import type { CharacterRow, CharacterSection, ShardsField, ShardSlot, ShardTree } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
-import { SHARD_SLOT_KEYS, shardAvailable, shardSlots, type ShardSlotKey } from '../lib/shards'
+import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardOwned, shardSlots, type ShardSlotKey } from '../lib/shards'
 import { summarizeEffects } from '../lib/effects'
 import { ShardTreeModal } from './ShardTree'
 import styles from './Shard.module.css'
@@ -92,21 +92,18 @@ export function Shard() {
     // render different card heights).
   }, [draw, character.shards])
 
-  async function writeSlots(next: Record<string, ShardSlot>) {
+  async function writeSlots(next: ShardsField) {
     await updateSection('shards', next)
   }
 
   async function eject(key: ShardSlotKey) {
-    const slot = slots[key]
-    if (!slot.shardId || slot.locked) return
-    // Keep earned/attuned — re-slotting the same shard restores progress.
-    await writeSlots({ ...character.shards, [key]: { ...slot, shardId: null } })
+    await writeSlots(ejectShard(character, key))
   }
 
   async function install(key: ShardSlotKey, shardId: string) {
     setPicking(null)
     if (!shardId) return
-    await writeSlots({ ...character.shards, [key]: { shardId, earned: 0, attuned: ['core'] } })
+    await writeSlots(installShard(character, key, shardId))
   }
 
   function activate(key: ShardSlotKey) {
@@ -121,7 +118,8 @@ export function Shard() {
   }
 
   const slottedIds = new Set(Object.values(slots).map(s => s.shardId).filter((id): id is string => !!id))
-  const installable = Object.values(shardTrees).filter(t => t.published && t.id !== 'guide' && !slottedIds.has(t.id))
+  const owned = shardOwned(character)
+  const installable = Object.values(shardTrees).filter(t => t.published && t.id !== 'guide' && owned.includes(t.id) && !slottedIds.has(t.id))
 
   const meta = (
     <>
@@ -216,15 +214,11 @@ export function Shard() {
                 tree={slot => (slot.shardId ? shardTrees[slot.shardId] : undefined)}
                 linked={linked === key}
                 shaking={shakeSlot === key}
-                picking={picking === key}
-                installable={installable}
                 cardRef={el => { cardRefs.current[key] = el }}
                 onMouseEnter={() => setLinked(key)}
                 onMouseLeave={() => setLinked(l => (l === key ? null : l))}
                 onActivate={() => activate(key)}
                 onEject={() => void eject(key)}
-                onInstall={id => void install(key, id)}
-                onCancelPick={() => setPicking(null)}
               />
             ))}
           </div>
@@ -258,28 +252,111 @@ export function Shard() {
           onClose={() => setOpenSlot(null)}
         />
       )}
+
+      {picking && (
+        <ShardPickerModal
+          port={picking.slice(-1)}
+          options={installable}
+          onCancel={() => setPicking(null)}
+          onInstall={id => void install(picking, id)}
+        />
+      )}
     </>
   )
 }
 
+/** Modal shard picker — ported from the picker added to G.U.I.D.E. Shard.html.
+ *  Lists only shards the DM has granted to this character (`shards.owned`)
+ *  that aren't already slotted; installing one binds it to the port that
+ *  opened the picker. */
+function ShardPickerModal({ port, options, onCancel, onInstall }: {
+  port: string
+  options: ShardTree[]
+  onCancel: () => void
+  onInstall: (shardId: string) => void
+}) {
+  const [selId, setSelId] = useState<string | null>(null)
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  const selected = options.find(o => o.id === selId) ?? null
+
+  return (
+    <div className={styles.pickerScrim} role="presentation" onClick={e => { if (e.target === e.currentTarget) onCancel() }}>
+      <div className={styles.picker} role="dialog" aria-modal="true" aria-labelledby="pickerTitle">
+        <div className={styles.pkFrame} />
+        <div className={styles.pkInner}>
+          <header className={styles.pkHead}>
+            <div>
+              <div className={styles.pkKicker}>Port {port} <span className={styles.dim}>//</span> Satchel</div>
+              <h2 className={styles.pkTitle} id="pickerTitle">Select Shard</h2>
+            </div>
+            <button type="button" className={styles.pkClose} onClick={onCancel} aria-label="Close picker">
+              <i className="fa-solid fa-xmark" />
+            </button>
+          </header>
+          <div className={styles.pkScanbar}><span className={styles.pkScan} /></div>
+
+          <div className={styles.pkList} role="listbox" aria-label="Available shards">
+            {options.length === 0 ? (
+              <div className={styles.pkEmpty}>No shards in satchel. Your DM grants shards from the Operator Console.</div>
+            ) : options.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                role="option"
+                aria-selected={t.id === selId}
+                className={styles.pkOpt}
+                onClick={() => setSelId(t.id)}
+                onDoubleClick={() => onInstall(t.id)}
+              >
+                <span className={styles.of} />
+                <span className={styles.pkTag}>{t.rarity}</span>
+                <span className={styles.oi}>
+                  <span className={styles.glyph}><i className={`fa-solid ${t.icon}`} /></span>
+                  <span>
+                    <span className={styles.pkName}>{t.name}</span>
+                    <span className={styles.pkSub}>{t.module}</span>
+                    <span className={styles.pkBuffs}>
+                      {buffLines(t).map(line => <span key={line}><span className={styles.plus}>+</span>{line.replace(/^\+\s*/, '')}</span>)}
+                    </span>
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <footer className={styles.pkFoot}>
+            <span className={styles.pkCount}>{options.length} shard{options.length === 1 ? '' : 's'} in satchel</span>
+            <div className={styles.pkFootActions}>
+              <button type="button" className={styles.pkBtn} onClick={onCancel}>Cancel</button>
+              <button type="button" className={`${styles.pkBtn} ${styles.primary}`} disabled={!selected} onClick={() => selected && onInstall(selected.id)}>Install</button>
+            </div>
+          </footer>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ShardCard({
-  slotKey, slot, tree, linked, shaking, picking, installable,
-  cardRef, onMouseEnter, onMouseLeave, onActivate, onEject, onInstall, onCancelPick,
+  slotKey, slot, tree, linked, shaking,
+  cardRef, onMouseEnter, onMouseLeave, onActivate, onEject,
 }: {
   slotKey: ShardSlotKey
   slot: ShardSlot
   tree: (slot: ShardSlot) => ShardTree | undefined
   linked: boolean
   shaking: boolean
-  picking: boolean
-  installable: ShardTree[]
   cardRef: (el: HTMLElement | null) => void
   onMouseEnter: () => void
   onMouseLeave: () => void
   onActivate: () => void
   onEject: () => void
-  onInstall: (shardId: string) => void
-  onCancelPick: () => void
 }) {
   const variant: Variant = slot.locked ? 'guide' : slot.shardId ? 'filled' : 'empty'
   const t = tree(slot)
@@ -373,25 +450,6 @@ function ShardCard({
             </button>
           )}
         </div>
-
-        {picking && (
-          <div className={styles.picker} style={{ gridColumn: '1 / -1' }} onClick={e => e.stopPropagation()}>
-            {installable.length === 0 ? (
-              <span className={styles.pickerEmpty}>No published shards available to install.</span>
-            ) : (
-              <select
-                className={styles.pickerSelect}
-                defaultValue=""
-                autoFocus
-                onChange={e => onInstall(e.target.value)}
-                onBlur={onCancelPick}
-              >
-                <option value="" disabled>Select a shard…</option>
-                {installable.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            )}
-          </div>
-        )}
       </div>
     </article>
   )
@@ -402,7 +460,9 @@ function Row({ k, v, acc }: { k: string; v: string; acc?: boolean }) {
 }
 
 /** Buff bullets from a shard's on-slot base grant: numeric mods first (via
- *  summarizeEffects), then any base features by name. */
+ *  summarizeEffects), then real base features by name, then cosmetic
+ *  `basePerks` by name — perks are name+description flavor, never Feature
+ *  snapshots, so they can't flood the player's Features screen. */
 function buffLines(t: ShardTree | undefined): string[] {
   if (!t) return []
   const lines: string[] = []
@@ -410,6 +470,7 @@ function buffLines(t: ShardTree | undefined): string[] {
     lines.push(...summarizeEffects(t.baseMods).split(', '))
   }
   for (const f of t.baseFeatures ?? []) lines.push(f.name)
+  for (const p of t.basePerks ?? []) lines.push(p.name)
   return lines
 }
 

@@ -7,6 +7,7 @@ import type {
   CatalogItemRow, CatalogItemInsert, CatalogItemUpdate,
   CatalogFeatureRow, CatalogFeatureInsert, CatalogFeatureUpdate,
   ConfiscatedItemRow, ConfiscatedItemInsert, InventoryItem,
+  ShopCatalogRow, Shop,
 } from './database.types'
 import { useAuth } from './auth'
 
@@ -516,4 +517,88 @@ export function useDmFeatures(): DmFeaturesState {
   }, [features])
 
   return { features, loading, error, refetch: fetchAll, createFeature, updateFeature, deleteFeature }
+}
+
+/* ============================================================
+   SHOP CATALOG (migration 0009) — shop feature, part 1
+   ============================================================ */
+
+export interface DmShopsState {
+  shops: ShopCatalogRow[]
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  saveShop: (id: string, data: Shop) => Promise<void>
+  createShop: (data: Shop) => Promise<ShopCatalogRow | null>
+  deleteShop: (id: string) => Promise<void>
+  /** Fires a shop live for one character (or the whole party if `characterId`
+   *  is null). Closes every other shop first — at most one can be open at a
+   *  time, so the player takeover never has to pick between two. */
+  openShop: (id: string, characterId: string | null) => Promise<void>
+  closeShop: (id: string) => Promise<void>
+}
+
+/** The DM's shopkeeper-authoring library (`shop_catalog`) — structurally the
+ *  twin of useDmCatalog/useDmFeatures, plus open/close since a shop (unlike an
+ *  item or feature template) has a live on/off state the console drives. */
+export function useDmShops(): DmShopsState {
+  const { session } = useAuth()
+  const [shops, setShops] = useState<ShopCatalogRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const byName = (a: ShopCatalogRow, b: ShopCatalogRow) => (a.data?.name ?? '').localeCompare(b.data?.name ?? '')
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setShops([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase.from('shop_catalog').select('*')
+    if (err) { setError(err.message); setShops([]) }
+    else { setShops(((data as ShopCatalogRow[]) ?? []).sort(byName)); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const saveShop = useCallback<DmShopsState['saveShop']>(async (id, data) => {
+    let previous: ShopCatalogRow | undefined
+    setShops(prev => prev.map(s => { if (s.id !== id) return s; previous = s; return { ...s, data } }))
+    const { data: row, error: err } = await supabase.from('shop_catalog').upsert({ id, data }).select().single<ShopCatalogRow>()
+    if (err) { setError(err.message); if (previous) setShops(prev => prev.map(s => (s.id === id ? previous! : s))) }
+    else if (row) setShops(prev => prev.map(s => (s.id === id ? row : s)).sort(byName))
+  }, [])
+
+  const createShop = useCallback<DmShopsState['createShop']>(async (data) => {
+    const { data: row, error: err } = await supabase.from('shop_catalog').insert({ data }).select().single<ShopCatalogRow>()
+    if (err) { setError(err.message); return null }
+    setShops(prev => [...prev, row].sort(byName))
+    return row
+  }, [])
+
+  const deleteShop = useCallback<DmShopsState['deleteShop']>(async (id) => {
+    const snapshot = shops
+    setShops(prev => prev.filter(s => s.id !== id))
+    const { error: err } = await supabase.from('shop_catalog').delete().eq('id', id)
+    if (err) { setError(err.message); setShops(snapshot) }
+  }, [shops])
+
+  const openShop = useCallback<DmShopsState['openShop']>(async (id, characterId) => {
+    const snapshot = shops
+    setShops(prev => prev.map(s => ({ ...s, is_open: s.id === id, open_for: s.id === id ? characterId : null })))
+    // One atomic RPC (migration 0009), not two client UPDATEs — see its
+    // header comment for why "close everything, then open this one" as two
+    // separate writes can't actually guarantee at most one shop open.
+    const { error: err } = await supabase.rpc('shop_open', { p_id: id, p_character_id: characterId })
+    if (err) { setError(err.message); setShops(snapshot); void fetchAll(); return }
+    void fetchAll()
+  }, [shops, fetchAll])
+
+  const closeShop = useCallback<DmShopsState['closeShop']>(async (id) => {
+    let previous: ShopCatalogRow | undefined
+    setShops(prev => prev.map(s => { if (s.id !== id) return s; previous = s; return { ...s, is_open: false, open_for: null } }))
+    const { error: err } = await supabase.from('shop_catalog').update({ is_open: false, open_for: null }).eq('id', id)
+    if (err) { setError(err.message); if (previous) setShops(prev => prev.map(s => (s.id === id ? previous! : s))) }
+  }, [])
+
+  return { shops, loading, error, refetch: fetchAll, saveShop, createShop, deleteShop, openShop, closeShop }
 }

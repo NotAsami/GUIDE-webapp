@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, type DmCampaignState, type DmCatalogState, type DmFeaturesState } from '../lib/dm'
+import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmShops, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmShopsState } from '../lib/dm'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
-import { SHARD_SLOT_KEYS, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
+import { OperatorShops } from './OperatorShops'
+import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import { MOD_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '../lib/modEditor'
-import type { ShardSlot } from '../lib/database.types'
+import type { ShardSlot, ShardTree } from '../lib/database.types'
 import { longRestPatch } from '../lib/rest'
+import { effectiveSheet } from '../lib/effects'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/voice'
 import { usePartyPresence } from '../lib/presence'
 import { useFullscreen } from '../lib/fullscreen'
@@ -56,9 +58,11 @@ interface PartyMember {
   effects: { name: string; kind: 'buff' | 'cond' | 'debuff' }[]
 }
 
-function toMember(c: CharacterRow, secret: CharacterSecret | undefined, online: boolean): PartyMember {
+function toMember(c: CharacterRow, secret: CharacterSecret | undefined, online: boolean, shardCatalog: Record<string, ShardTree>): PartyMember {
   const hp = (c.sheet?.hp?.current ?? 0) as number
-  const hpMax = (c.sheet?.hp?.max ?? 0) as number
+  // Effective max (authored base + shard bonuses) — the overview list and
+  // header must agree with what the player's Topbar shows, not just canon.
+  const hpMax = effectiveSheet(c, shardCatalog).hp?.max ?? (c.sheet?.hp?.max ?? 0)
   const tempHp = (c.sheet?.hp?.temp ?? 0) as number
   const raw = (c.resources?.activeEffects as ActiveEffect[] | undefined) ?? []
   return {
@@ -113,6 +117,11 @@ export function OperatorConsole() {
   const catalog = useDmCatalog()
   const featureLib = useDmFeatures()
   const shardLib = useDmShards()
+  const shopLib = useDmShops()
+  // EditorTree is a superset of ShardTree (catalog geometry + merged DM
+  // secrets) — safe to feed straight into effectiveSheet()'s shardTrees arg.
+  const shardCatalog = useMemo<Record<string, ShardTree>>(
+    () => Object.fromEntries(shardLib.trees.map(t => [t.id, t])), [shardLib.trees])
   const confiscated = useDmConfiscated()
   const onlineIds = usePartyPresence()
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
@@ -167,7 +176,7 @@ export function OperatorConsole() {
   if (!session) return <Navigate to="/login" replace />
   if (!isDm) return <Navigate to="/" replace />
 
-  const members = party.map(m => toMember(m, secrets[m.id], onlineIds.has(m.id)))
+  const members = party.map(m => toMember(m, secrets[m.id], onlineIds.has(m.id), shardCatalog))
   const selected = members.find(m => m.id === selectedId) ?? null
   const selectedRow = party.find(c => c.id === selectedId) ?? null
 
@@ -354,12 +363,12 @@ export function OperatorConsole() {
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
               ) : view === 'catalog' ? (
-                <CatalogSurface catalog={catalog} featureLib={featureLib} />
+                <CatalogSurface catalog={catalog} featureLib={featureLib} shopLib={shopLib} members={members} />
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
                 ) : charTab === 'shards' ? (
-                  <ShardsTab key={selectedRow.id} row={selectedRow} shardLib={shardLib} onUpdate={patch => updateCharacter(selectedRow.id, patch)} log={log} />
+                  <ShardsTab key={selectedRow.id} row={selectedRow} member={selected} shardLib={shardLib} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
                 ) : charTab === 'inventory' ? (
                   <OperatorInventory
                     key={selectedRow.id} row={selectedRow} member={selected}
@@ -368,7 +377,7 @@ export function OperatorConsole() {
                     log={log}
                   />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
                 )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
@@ -477,11 +486,12 @@ function OverviewDashboard({
  *  never clobbered, and targets the same fields the player screens read — HP and
  *  coins on `sheet`, death saves + exhaustion on `resources` (see Stats.tsx) —
  *  keeping one source of truth per value. */
-function ActionsTab({ row, member, catalog, featureLib, onUpdate, onVoice, log }: {
+function ActionsTab({ row, member, catalog, featureLib, shardCatalog, onUpdate, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
   catalog: CatalogItemRow[]
   featureLib: CatalogFeatureRow[]
+  shardCatalog: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
   log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
@@ -496,7 +506,11 @@ function ActionsTab({ row, member, catalog, featureLib, onUpdate, onVoice, log }
   const sheet = row.sheet ?? {}
   const hp = (sheet.hp ?? { current: 0, max: 0 }) as HP
   const hpCur = hp.current ?? 0
-  const hpMax = hp.max ?? 0
+  // `baseMax` is authored canon and what every write must persist; `hpMax` is
+  // the effective ceiling (+ shard bonuses) used for display and clamping —
+  // same split as the player Stat Panel's HitPoints widget.
+  const baseMax = hp.max ?? 0
+  const hpMax = effectiveSheet(row, shardCatalog).hp?.max ?? baseMax
   const tempHp = hp.temp ?? 0
   const hc = hpClassOf(member)
   const pct = pctOf(member)
@@ -515,12 +529,12 @@ function ActionsTab({ row, member, catalog, featureLib, onUpdate, onVoice, log }
   // ---- writes (each pre-spreads its section; log lines are optimistic — the
   //      log is a session aide-mémoire, and failures surface in the error rail) ----
   const writeHp = (next: number, nextTemp = tempHp) =>
-    onUpdate({ sheet: { ...sheet, hp: { ...hp, current: next, max: hpMax, temp: nextTemp } } })
+    onUpdate({ sheet: { ...sheet, hp: { ...hp, current: next, max: baseMax, temp: nextTemp } } })
   const heal = () => { void writeHp(Math.min(hpMax, hpCur + hpAmt)); log(<>Healed {who} <span className={styles.obj}>+{hpAmt} HP</span></>) }
   const damage = () => { void writeHp(Math.max(0, hpCur - hpAmt)); log(<>Damaged {who} <span className={styles.obj}>−{hpAmt} HP</span></>, 'danger') }
   const setHp = () => { void writeHp(Math.max(0, Math.min(hpMax, hpAmt))); log(<>Set {who} HP to <span className={styles.obj}>{Math.max(0, Math.min(hpMax, hpAmt))}</span></>) }
   const addTemp = () => { void writeHp(hpCur, tempHp + hpAmt); log(<>Granted {who} <span className={styles.obj}>+{hpAmt} temp HP</span></>) }
-  const longRest = () => { void onUpdate(longRestPatch(row).patch); log(<>Applied <span className={styles.obj}>Long Rest</span> to {who}</>) }
+  const longRest = () => { void onUpdate(longRestPatch(row, shardCatalog).patch); log(<>Applied <span className={styles.obj}>Long Rest</span> to {who}</>) }
 
   const coinVal = { gold, silver, copper }[coinKind]
   const moveCoins = async (op: 'award' | 'deduct') => {
@@ -1067,10 +1081,12 @@ function BroadcastPanel({ selected, onSend, log }: {
  *  catalogs, shown as inert "soon" tabs to reserve their place (matches the mockup).
  *  Items are stored in the app's structured shape (NOT the mockup's string effects)
  *  so a granted copy is mechanically real the instant it lands. */
-function CatalogSurface({ catalog, featureLib }: { catalog: DmCatalogState; featureLib: DmFeaturesState }) {
+function CatalogSurface({ catalog, featureLib, shopLib, members }: {
+  catalog: DmCatalogState; featureLib: DmFeaturesState; shopLib: DmShopsState; members: PartyMember[]
+}) {
   const { items, createItem, updateItem, deleteItem, loading, error } = catalog
   const nav = useNavigate()
-  const [tab, setTab] = useState<'items' | 'features'>('items')
+  const [tab, setTab] = useState<'items' | 'features' | 'shops'>('items')
   const [selId, setSelId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -1095,6 +1111,7 @@ function CatalogSurface({ catalog, featureLib }: { catalog: DmCatalogState; feat
     { key: 'items', label: 'Items', icon: 'fa-box-open', n: items.length, soon: false },
     { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
     { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', soon: true },
+    { key: 'shops', label: 'Shopkeepers', icon: 'fa-shop', n: shopLib.shops.length, soon: false },
     { key: 'shards', label: 'Shards', icon: 'fa-gem', soon: false },
   ]
 
@@ -1110,7 +1127,7 @@ function CatalogSurface({ catalog, featureLib }: { catalog: DmCatalogState; feat
         {catTabs.map(t => (
           <button key={t.key} className={cx(styles.catTab, t.key === tab && styles.sel, t.soon && styles.stub)}
             disabled={t.soon} title={t.soon ? 'Its own later slice' : undefined}
-            onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else setTab(t.key as 'items' | 'features') }}>
+            onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else setTab(t.key as 'items' | 'features' | 'shops') }}>
             <i className={`fa-solid ${t.icon}`} />{t.label}
             {t.n != null && <span className={styles.ctC}>{t.n}</span>}
           </button>
@@ -1121,6 +1138,8 @@ function CatalogSurface({ catalog, featureLib }: { catalog: DmCatalogState; feat
         <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
       ) : tab === 'features' ? (
         <FeatureLibrarySurface lib={featureLib} />
+      ) : tab === 'shops' ? (
+        <OperatorShops shopLib={shopLib} itemCatalog={items} members={members} />
       ) : (
         <div className={styles.catLayout}>
           <div className={styles.catIndex}>
@@ -1941,27 +1960,73 @@ function LoreSecHead({ icon, label, first }: { icon: string; label: string; firs
   )
 }
 
-/** Shards tab — slot assignment, the per-shard `earned` point grant, a
- *  Reset Tree escape hatch (attuned → [], no separate refund needed since
- *  `spent` is derived, never stored), and revealing a concealed node's real
- *  text once its prereqs have resolved. `shardLib` is the SAME merged
- *  catalog+secrets working set the Lattice Editor uses — reveal needs the
- *  real name/effect a player session can never read directly. */
-function ShardsTab({ row, shardLib, onUpdate, log }: {
+/** Shards tab — Satchel (Grant Shard: who owns which trees), slot assignment,
+ *  the per-shard `earned` point grant, a Reset Tree escape hatch (attuned →
+ *  [], no separate refund needed since `spent` is derived, never stored),
+ *  and revealing a concealed node's real text once its prereqs have
+ *  resolved. `shardLib` is the SAME merged catalog+secrets working set the
+ *  Lattice Editor uses — reveal needs the real name/effect a player session
+ *  can never read directly.
+ *
+ *  `shards.owned` (ShardsField) is the satchel: ids the DM has granted this
+ *  character. The player's install picker only offers owned-and-unslotted
+ *  trees — granting here is the only way a player gets access to a shard
+ *  they don't already have slotted. Slotting a shard directly (the per-port
+ *  dropdown below) also adds it to owned, so an Eject always leaves it
+ *  reinstallable from the player's own picker. */
+function ShardsTab({ row, member, shardLib, onUpdate, onVoice, log }: {
   row: CharacterRow
+  member: PartyMember
   shardLib: DmShardsState
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  onVoice: (msg: VoiceMsg) => Promise<boolean>
   log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
 }) {
   const slots = (row.shards ?? {}) as Record<string, ShardSlot>
+  const owned = row.shards?.owned ?? []
   const installable = shardLib.trees.filter(t => t.published && t.id !== 'guide')
 
   async function writeSlot(key: ShardSlotKey, next: ShardSlot) {
     await onUpdate({ shards: { ...row.shards, [key]: next } })
   }
 
+  async function toggleOwned(id: string) {
+    const has = owned.includes(id)
+    await onUpdate({ shards: { ...row.shards, owned: has ? owned.filter(o => o !== id) : [...owned, id] } })
+    const tree = shardLib.trees.find(t => t.id === id)
+    if (has) {
+      log(<>Revoked <span className={styles.obj}>{tree?.name}</span> from <span className={styles.who}>{firstName(member.name)}</span>'s satchel</>, 'danger')
+    } else {
+      void onVoice({ kind: 'item', target: member.id, name: tree?.name ?? 'Shard', icon: tree?.icon, rarity: tree?.rarity })
+      log(<>Granted <span className={styles.obj}>{tree?.name}</span> to <span className={styles.who}>{firstName(member.name)}</span></>, 'cyan')
+    }
+  }
+
   return (
     <div className={styles.actGrid}>
+      <div className={cx(styles.actCard, styles.wide)}>
+        <div className={styles.acTitle}><i className="fa-solid fa-box-open lead" /><span className={styles.num}>S</span><span className={styles.t}>Satchel — Grant Shards</span></div>
+        {installable.length === 0 ? (
+          <div className={styles.catListEmpty}>No published shards — author &amp; publish in the Lattice Editor.</div>
+        ) : (
+          <div className={styles.catList}>
+            {installable.map(t => {
+              const has = owned.includes(t.id)
+              return (
+                <button key={t.id} className={cx(styles.catItem, has && styles.sel)} onClick={() => void toggleOwned(t.id)}>
+                  <span className={styles.ciIc}><i className={`fa-solid ${t.icon}`} /></span>
+                  <span className={styles.ciTx}>
+                    <span className={styles.ciNm}>{t.name}</span>
+                    <span className={styles.ciTy}>{t.module}</span>
+                  </span>
+                  <span className={styles.ciRar}>{has ? 'Granted ✓' : t.rarity}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {SHARD_SLOT_KEYS.map(key => {
         const slot: ShardSlot = slots[key] ?? { shardId: null, earned: 0, attuned: [] }
         const tree = slot.shardId ? shardLib.trees.find(t => t.id === slot.shardId) : undefined
@@ -1983,9 +2048,11 @@ function ShardsTab({ row, shardLib, onUpdate, log }: {
               <div className={styles.catCtrNote}>Permanent — cannot be reassigned or ejected.</div>
             ) : !slot.shardId ? (
               <select className={styles.numIn} style={{ width: '100%' }} value="" onChange={e => {
-                if (!e.target.value) return
-                void writeSlot(key, { shardId: e.target.value, earned: 0, attuned: ['core'] })
-                log(<>Slotted <span className={styles.obj}>{shardLib.trees.find(t => t.id === e.target.value)?.name}</span> into {key}</>)
+                const shardId = e.target.value
+                if (!shardId) return
+                const next = installShard(row, key, shardId)
+                void onUpdate({ shards: { ...next, owned: owned.includes(shardId) ? owned : [...owned, shardId] } })
+                log(<>Slotted <span className={styles.obj}>{shardLib.trees.find(t => t.id === shardId)?.name}</span> into {key}</>)
               }}>
                 <option value="">Assign a shard…</option>
                 {installable.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -2017,7 +2084,7 @@ function ShardsTab({ row, shardLib, onUpdate, log }: {
                 </div>
                 <div className={styles.btnRow} style={{ marginTop: 4 }}>
                   <Btn tone="ghost" sm icon="fa-eject" label="Eject" onClick={() => {
-                    void writeSlot(key, { ...slot, shardId: null })
+                    void onUpdate({ shards: ejectShard(row, key) })
                     log(<>Ejected <span className={styles.obj}>{tree?.name}</span> from {key}</>)
                   }} />
                 </div>

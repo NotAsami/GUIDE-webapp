@@ -1,0 +1,186 @@
+/* Player-facing shop takeover. Same portal + chamfered-panel recipe as
+   RestButton.module.css, scaled up to a near-full-screen surface — see that
+   file's trailing comment for the cut-corner border fix this repeats. */
+
+.overlay {
+  position: fixed; inset: 0; z-index: 400;
+  display: grid; place-items: center;
+  padding: 28px;
+}
+.scrim {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(2px);
+  animation: overlayIn 180ms ease;
+}
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+
+.panel {
+  position: relative;
+  width: min(880px, 100%);
+  max-height: min(720px, 100%);
+  display: flex; flex-direction: column; min-height: 0;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(226, 176, 33, 0.08), transparent 60%),
+    rgba(10, 10, 10, 0.98);
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(226, 176, 33, 0.14);
+  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+  animation: panelIn 220ms cubic-bezier(.2, .7, .2, 1);
+  padding: 20px 22px;
+  overflow: hidden;
+}
+@keyframes panelIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+/* Cut-corner border fix — see RestButton.module.css / CLAUDE.md for the recipe. */
+.panel {
+  --cut: 16px; --bc: var(--amber);
+  border: 1.5px solid var(--bc);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    radial-gradient(120% 60% at 50% 0%, rgba(226, 176, 33, 0.08), transparent 60%);
+  background-color: rgba(10, 10, 10, 0.98);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right, 0 0;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px), auto;
+}
+
+.head { display: flex; align-items: flex-start; gap: 14px; flex: 0 0 auto; padding-bottom: 12px; border-bottom: 1px dashed rgba(212, 191, 125, 0.3); }
+/* hexagon: nearly every edge is angled, so a border would vanish (only the
+   two vertical edges would show anything) — same fix as InventoryPopup's
+   .imCrystal: a solid-ish filled clip + glow, no border attempted. */
+.portrait {
+  width: 52px; height: 52px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--amber-hot); font-size: 22px;
+  background: radial-gradient(120% 90% at 50% 40%, rgba(226, 176, 33, 0.3), transparent 65%), rgba(226, 176, 33, 0.35);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  filter: drop-shadow(0 0 9px rgba(226, 176, 33, 0.4));
+}
+.titles { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.eyebrow { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.28em; color: var(--amber-dim); text-transform: uppercase; }
+.name { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 21px; letter-spacing: 0.08em; color: var(--text); text-transform: uppercase; line-height: 1.1; }
+.loc { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
+.leave {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; margin-top: 2px;
+  background: rgba(185, 58, 58, 0.08); border: 1.5px solid var(--danger);
+  color: var(--danger-hot); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+  cursor: pointer; transition: background 130ms ease;
+}
+.leave:hover { background: rgba(185, 58, 58, 0.18); }
+
+.desc { margin: 12px 0 0; font-family: var(--font-prose); font-style: italic; font-size: 14.5px; line-height: 1.55; color: var(--muted); }
+
+/* purse — mirrors Inventory.module.css's coin badges, GP/SP/CP only */
+.purse { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 320px; margin: 14px 0; flex: 0 0 auto; }
+.coinBadge {
+  --cut: 5px; --bc: var(--beige-dim);
+  position: relative; border: 1px solid var(--bc);
+  background-color: rgba(0, 0, 0, 0.35);
+  padding: 6px 4px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat; background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
+.coinBadge.gp { --bc: rgba(212, 191, 125, 0.6); }
+.coinBadge.gp .ci { background: var(--beige); color: #1d1d1d; }
+.coinBadge.sp { --bc: rgba(170, 170, 170, 0.45); }
+.coinBadge.sp .ci { border: 1.5px solid var(--muted); color: var(--muted); }
+.coinBadge.cp { --bc: rgba(138, 122, 74, 0.55); }
+.coinBadge.cp .ci { border: 1.5px solid var(--beige-dim); color: var(--beige-dim); }
+.ci { width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 8px; }
+.cval { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text); }
+
+/* ============================================================
+   STOCK — ported verbatim from G.U.I.D.E. Shop.html's .stock-bar / .sc card
+   grid (itself "Inventory cell treatment, priced"). Only additions: a
+   `legendary` rarity tier (the mock only goes to rare/quest — this app's
+   ItemRarity has a 4th tier the mock never needed), using the exact
+   gold-rare recipe Inventory.module.css uses for it, and 1px borders bumped
+   to 1.5px per the documented zoom-hairline fix.
+   ============================================================ */
+.stockBar { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding-bottom: 9px; border-bottom: 1px dashed rgba(212, 191, 125, 0.22); }
+.stockBar .sh { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase; }
+.stockBar .n { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
+.stockBar .n .acc { color: var(--cyan); }
+.legend { margin-left: auto; display: flex; align-items: center; gap: 14px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.legend .sw { width: 9px; height: 9px; border: 1.5px solid var(--cyan); display: inline-block; margin-right: 6px; vertical-align: -1px; }
+.legend .sw.dim { border-color: rgba(212, 191, 125, 0.3); background: rgba(0, 0, 0, .4); }
+
+.stockScroll { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 2px 4px 0; scrollbar-width: thin; }
+.stockScroll::-webkit-scrollbar { width: 7px; }
+.stockScroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
+.stockScroll::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.5)); border: 1px solid #111; }
+.stockGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 12px; }
+.stockEmpty { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; color: var(--beige-dim); text-transform: uppercase; padding: 20px; text-align: center; }
+
+.sc { --cut: 9px; position: relative; text-align: left; background: transparent; border: 0; padding: 0; cursor: pointer; font-family: var(--font-mono); transition: transform 150ms ease, filter 170ms ease; }
+.sc .scBody { position: relative; display: flex; flex-direction: column; gap: 0; min-height: 186px; padding: 0; background: rgba(0, 0, 0, 0.3); border-radius: 1px; }
+.sc .scArt { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 104px; }
+.sc .glyph { font-size: 40px; color: var(--text); line-height: 1; filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.65)); transition: color 160ms ease; }
+.sc .catCorner { position: absolute; top: 7px; left: 8px; font-size: 10px; color: var(--muted); opacity: .85; line-height: 1; }
+.sc .rarCorner { position: absolute; top: 7px; right: 8px; font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige-dim); }
+.sc .scFoot { flex: 0 0 auto; padding: 9px 10px 10px; border-top: 1px solid rgba(212, 191, 125, 0.16); background: rgba(0, 0, 0, 0.34); display: flex; flex-direction: column; gap: 6px; }
+.sc .nm { font-family: var(--font-prose); font-size: 16.5px; line-height: 1.5; color: var(--text); letter-spacing: 0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc .pr { display: flex; align-items: baseline; gap: 7px; }
+.sc .pr .coin { width: 15px; height: 15px; border-radius: 50%; background: var(--beige); color: #1d1d1d; font-family: var(--font-display); font-weight: 700; font-size: 7.5px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; align-self: center; }
+.sc .pr .v { font-size: 14px; font-weight: 500; color: var(--beige); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.sc .pr .u { font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; }
+.sc .pr .st { margin-left: auto; font-size: 8px; letter-spacing: 0.18em; color: var(--cyan); text-transform: uppercase; }
+.sc:hover { transform: translateY(-2px); filter: brightness(1.14); }
+.sc:focus-visible { outline: 1px solid var(--cyan-hot); outline-offset: 3px; }
+
+/* category tints — verbatim from the mock, which is itself "verbatim from
+   the Inventory grid" (Inventory.module.css only tints 4 of these 7 today;
+   the shop card keeps the mock's fuller set since every category can appear
+   in stock). */
+.catWeapon { background: rgba(0, 166, 214, 0.07); }
+.catAmmo { background: rgba(0, 166, 214, 0.045); }
+.catArmor { background: rgba(212, 191, 125, 0.07); }
+.catConsumable { background: rgba(63, 199, 180, 0.07); }
+.catQuest { background: rgba(122, 106, 140, 0.11); }
+.catTool { background: rgba(170, 170, 170, 0.05); }
+.catMisc { background: rgba(0, 0, 0, 0.3); }
+
+.rarCommon { border: 1.5px solid rgba(212, 191, 125, 0.42); }
+.rarCommon .catCorner { color: var(--beige-dim); }
+.rarUncommon { border: 1.5px solid var(--cyan); box-shadow: 0 0 8px rgba(0, 166, 214, 0.22), inset 0 0 10px rgba(0, 166, 214, 0.08); }
+.rarUncommon .glyph { color: var(--cyan-hot); }
+.rarUncommon .catCorner, .rarUncommon .rarCorner { color: var(--cyan); }
+.rarRare { border: 1.5px solid var(--cyan-hot); box-shadow: 0 0 12px rgba(77, 214, 255, 0.3); animation: rarePulse 9s ease-in-out infinite; }
+.rarRare .glyph { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(77, 214, 255, 0.5); }
+.rarRare .rarCorner { color: var(--cyan-hot); }
+@keyframes rarePulse { 0%, 100% { box-shadow: 0 0 12px rgba(77, 214, 255, 0.3), inset 0 0 6px rgba(77, 214, 255, 0.05); } 50% { box-shadow: 0 0 18px rgba(77, 214, 255, 0.5), inset 0 0 16px rgba(77, 214, 255, 0.2); } }
+/* legendary — not in the mock (it only went to rare/quest); ported from the
+   real app's Inventory.module.css rarity=legendary treatment instead. */
+.rarLegendary { border: 1.5px solid var(--gold-rare); box-shadow: 0 0 12px rgba(226, 176, 33, 0.3); }
+.rarLegendary .glyph { color: var(--gold-rare); text-shadow: 0 0 8px rgba(226, 176, 33, 0.5); }
+.rarLegendary .catCorner, .rarLegendary .rarCorner { color: var(--gold-rare); }
+
+/* can't afford: dimmed, still openable so the player can look */
+.sc.poor { filter: grayscale(.7) brightness(.6); }
+.sc.poor .scBody { box-shadow: none; animation: none; }
+.sc.poor .pr .v { color: var(--danger-hot); }
+.sc.poor .pr .st { color: var(--danger); }
+.sc.poor:hover { filter: grayscale(.35) brightness(.86); transform: translateY(-1px); }
+.sc.poor .scBody::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(115deg, transparent 0 8px, rgba(0, 0, 0, 0.28) 8px 9px); }
+
+.sc.sold { cursor: not-allowed; filter: grayscale(.9) brightness(.5); }
+.sc.sold:hover { transform: none; filter: grayscale(.9) brightness(.55); }
+.sc.sold .scBody { animation: none; box-shadow: none; }
+.sc.sold .scArt::after {
+  content: "SOLD OUT"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-9deg);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.28em; color: var(--danger-hot);
+  border: 1.5px solid rgba(185, 58, 58, 0.75); background: rgba(10, 10, 10, 0.85); padding: 5px 10px; white-space: nowrap;
+}
+.sc.sold .pr .v, .sc.sold .pr .u { color: var(--beige-dim); }
+.sc.sold .pr .st { color: var(--danger); }
+.sc.bought .scBody { animation: cellFlash 900ms ease; }
+@keyframes cellFlash { 0% { box-shadow: 0 0 0 rgba(0, 166, 214, 0); } 25% { box-shadow: 0 0 22px rgba(0, 166, 214, .75), inset 0 0 18px rgba(0, 166, 214, .35); } 100% { box-shadow: 0 0 0 rgba(0, 166, 214, 0); } }

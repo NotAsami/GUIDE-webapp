@@ -2,13 +2,16 @@ import { Outlet, useNavigate } from 'react-router-dom'
 import { useCharacter } from '../lib/character'
 import { useAuth } from '../lib/auth'
 import { useShardCatalog } from '../lib/shards'
+import { useOpenShop } from '../lib/shops'
 import { Topbar } from './Topbar'
 import { Bottombar } from './Bottombar'
 import { RollToast } from './RollToast'
 import { SystemToasts } from './SystemToasts'
+import { ShopTakeover } from './ShopTakeover'
+import { RollContextPanel } from './RollContextPanel'
 import { usePresenceAnnounce } from '../lib/presence'
 import styles from './Layout.module.css'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
@@ -19,6 +22,21 @@ export function Layout() {
   // Announce this character on the party-presence channel while the app is
   // open — lights the Link LED on the DM's Operator Console.
   usePresenceAnnounce(character?.id)
+
+  // Shop open/dismiss state lives HERE, not inside ShopTakeover, so the
+  // Bottombar's "Reopen Shop" button can see it too. "Leave Shop" is a local
+  // dismissal only (players can't close a shop server-side) — a fresh
+  // opening (tracked via wasVisibleRef, same "was it visible last render"
+  // trick ShopTakeover used to own) always clears a stale dismissal.
+  const { shop } = useOpenShop(character?.id)
+  const [shopDismissed, setShopDismissed] = useState(false)
+  const wasShopVisibleRef = useRef(false)
+  useEffect(() => {
+    if (shop && !wasShopVisibleRef.current) setShopDismissed(false)
+    wasShopVisibleRef.current = !!shop
+  }, [shop])
+
+  const [rollPanelOpen, setRollPanelOpen] = useState(false)
 
   async function handleSignOut() {
     await signOut()
@@ -109,13 +127,21 @@ export function Layout() {
         <main className={styles.main}>
           <Outlet context={{ character, updateSection, updateSections, shardTrees }} />
         </main>
-        <Bottombar />
+        <Bottombar
+          shopOpen={!!shop} shopDismissed={shopDismissed} onReopenShop={() => setShopDismissed(false)}
+          rollPanelOpen={rollPanelOpen} onToggleRollPanel={() => setRollPanelOpen(v => !v)}
+        />
       </div>
 
       <RollToast />
       {/* Operator pushes (grants / effects / notices) arrive here via the
           G.U.I.D.E. voice channel — top-right, clear of RollToast. */}
       <SystemToasts characterId={character.id} />
+      {/* Shop feature part 1: appears the instant the DM fires a shop open
+          (shop_catalog RLS scopes it to this character or the whole party) —
+          no route, no nav entry, exists only while a shop is live. */}
+      <ShopTakeover character={character} updateSection={updateSection} shop={shop} dismissed={shopDismissed} onDismiss={() => setShopDismissed(true)} />
+      {rollPanelOpen && <RollContextPanel onClose={() => setRollPanelOpen(false)} />}
     </>
   )
 }

@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — SHOP // THE SALT LEDGER</title>
+<!--
+  SHOP — player-facing takeover, pushed by the DM from the Operator Console.
+  Not a nav destination: there is no player-initiated route here. Same size
+  class + frame language as the Shard Tree modal (overlay + beige double-line
+  panel over a dimmed ghost of the screen beneath).
+
+  100% player-facing: cyan primary, zero amber anywhere.
+
+  Reuses verbatim from Inventory: category tints (.cat-*), rarity borders
+  (.rar-*), the COIN PURSE badge row, and the item popup (#imodal / .im-*)
+  with BUY swapped in for Equip / Stow / Drop.
+
+  DATA — swap point at SHOPKEEPER / STOCK / PURSE below. Everything renders
+  from those; affordability is computed, never hand-authored.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  :root{--bg:#1d1d1d;--bg-2:#161616;--beige:#d4bf7d;--beige-dim:#8a7a4a;--cyan:#00a6d6;--cyan-dim:#0d6e8c;--cyan-hot:#4dd6ff;--teal:#3fc7b4;--violet:#7a6a8c;--violet-hot:#a594ba;--text:#dedede;--muted:#aaaaaa;--danger:#b93a3a;--danger-hot:#ff5454;--font-display:"Cinzel",serif;--font-prose:"EB Garamond",serif;--font-mono:"JetBrains Mono",ui-monospace,monospace}
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;width:100%;background:var(--bg);color:var(--text);font-family:var(--font-prose);overflow:hidden;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  a{color:var(--cyan)}a:hover{color:var(--cyan-hot)}
+
+  /* ---------- dimmed ghost of the screen beneath ---------- */
+  .backdrop{position:fixed;inset:0;z-index:0;background:url("https://www.transparenttextures.com/patterns/dark-leather.png"),radial-gradient(120% 90% at 50% 45%,#1a1a18 0%,#121212 55%,#080808 100%);background-blend-mode:overlay,normal}
+  .backdrop::before{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(212,191,125,0.09) 0 1px,transparent 1px 62px),linear-gradient(to top,rgba(212,191,125,0.07) 0 1px,transparent 1px 50px);filter:blur(1.2px);opacity:.9}
+  .scrim{position:fixed;inset:0;z-index:1;background:rgba(15,15,15,0.92)}
+  .scanlines{pointer-events:none;position:fixed;inset:0;z-index:90;background-image:repeating-linear-gradient(to bottom,rgba(255,255,255,0.025) 0px,rgba(255,255,255,0.025) 1px,transparent 1px,transparent 3px);mix-blend-mode:overlay}
+  .vignette{pointer-events:none;position:fixed;inset:0;z-index:91;background:radial-gradient(120% 110% at 50% 50%,transparent 52%,rgba(0,0,0,0.58) 94%,rgba(0,0,0,0.88) 100%)}
+  .sweep{pointer-events:none;position:fixed;left:0;right:0;top:0;height:2px;z-index:95;background:linear-gradient(to bottom,transparent,rgba(0,166,214,0.55) 50%,transparent);box-shadow:0 0 24px rgba(0,166,214,0.45);opacity:0}
+  .sweep.run{animation:sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards}
+  @keyframes sweep-run{0%{opacity:0;transform:translateY(-20px)}8%{opacity:.9}100%{opacity:0;transform:translateY(100vh)}}
+  @keyframes blink{50%{opacity:0}}
+
+  .side-label{position:fixed;font-family:var(--font-mono);font-size:9.5px;letter-spacing:0.3em;color:var(--muted);text-transform:uppercase;pointer-events:none;z-index:12}
+  .side-label.left{left:10px;top:50%;writing-mode:vertical-rl;transform:rotate(180deg) translateY(50%)}
+  .side-label.right{right:10px;top:50%;writing-mode:vertical-rl;transform:translateY(-50%)}
+  .side-label .acc{color:var(--cyan)}
+
+  /* ---------- overlay mount ---------- */
+  .overlay{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:30px;opacity:0;animation:overlayIn 360ms cubic-bezier(.2,.7,.2,1) forwards}
+  .overlay.closing{animation:overlayOut 280ms ease forwards}
+  @keyframes overlayIn{from{opacity:0}to{opacity:1}}
+  @keyframes overlayOut{from{opacity:1}to{opacity:0}}
+
+  .panel{--cut:26px;position:relative;width:min(1240px,100%);height:min(840px,100%);transform:translateY(8px) scale(.985);animation:panelIn 420ms cubic-bezier(.2,.7,.2,1) 40ms forwards}
+  @keyframes panelIn{to{transform:translateY(0) scale(1)}}
+  .panel::before{content:"";position:absolute;inset:0;background:var(--beige);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));filter:drop-shadow(0 24px 60px rgba(0,0,0,0.7)) drop-shadow(0 0 42px rgba(0,166,214,0.22))}
+  .panel .pn-gap{position:absolute;inset:6px;background:#0a0a0a;clip-path:polygon(calc(var(--cut) - 5px) 0,100% 0,100% calc(100% - var(--cut) + 5px),calc(100% - var(--cut) + 5px) 100%,0 100%,0 calc(var(--cut) - 5px))}
+  .panel .pn-line{position:absolute;inset:4px;background:var(--beige);opacity:.5;clip-path:polygon(calc(var(--cut) - 3px) 0,100% 0,100% calc(100% - var(--cut) + 3px),calc(100% - var(--cut) + 3px) 100%,0 100%,0 calc(var(--cut) - 3px))}
+  .panel .pn-inner{position:absolute;inset:8px;background:radial-gradient(120% 90% at 50% 0%,rgba(0,166,214,0.08),transparent 55%),linear-gradient(180deg,#151515,#0d0d0d);clip-path:polygon(calc(var(--cut) - 7px) 0,100% 0,100% calc(100% - var(--cut) + 7px),calc(100% - var(--cut) + 7px) 100%,0 100%,0 calc(var(--cut) - 7px));box-shadow:inset 0 0 60px rgba(0,166,214,0.07),inset 0 0 1px rgba(212,191,125,0.25);overflow:hidden;display:flex;flex-direction:column}
+  .panel .pn-inner::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;background:repeating-linear-gradient(to bottom,rgba(0,166,214,0.03) 0px,rgba(0,166,214,0.03) 1px,transparent 1px,transparent 4px);mix-blend-mode:screen;opacity:.6}
+  .pn-corner{position:absolute;width:20px;height:20px;border-color:var(--cyan);opacity:.8;z-index:6;pointer-events:none}
+  .pn-corner.tl{top:16px;left:16px;border-top:1px solid;border-left:1px solid}
+  .pn-corner.br{bottom:16px;right:16px;border-bottom:1px solid;border-right:1px solid}
+
+  /* ============================================================
+     STOREFRONT HEADER — the DM authored this; it leads.
+     ============================================================ */
+  .sf-head{position:relative;z-index:3;flex:0 0 auto;display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:auto auto;gap:6px 20px;padding:20px 26px 15px;border-bottom:1px solid rgba(212,191,125,0.35)}
+  .sf-head::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:rgba(0,166,214,0.4);box-shadow:0 0 10px rgba(0,166,214,0.35)}
+  .sf-portrait{grid-column:1;grid-row:1 / span 2;align-self:start;flex:0 0 auto;width:96px;height:104px;display:flex;align-items:center;justify-content:center;color:var(--cyan-hot);font-size:40px;border:1px solid rgba(0,166,214,0.5);background:radial-gradient(120% 90% at 50% 35%,rgba(0,166,214,0.2),transparent 68%),rgba(0,0,0,0.5);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);filter:drop-shadow(0 0 14px rgba(0,166,214,0.4))}
+  .sf-titles{grid-column:2;grid-row:1;min-width:0;display:flex;flex-direction:column;gap:8px;align-self:center}
+  .sf-eyebrow{font-family:var(--font-mono);font-size:9px;letter-spacing:0.34em;color:var(--cyan);text-transform:uppercase;display:flex;align-items:center;gap:10px}
+  .sf-eyebrow .tick{width:5px;height:5px;background:var(--cyan);box-shadow:0 0 8px rgba(0,166,214,.85);animation:blink 2.4s steps(2,end) infinite}
+  .sf-eyebrow .dim{color:var(--beige-dim)}
+  .sf-name{font-family:var(--font-display);font-weight:700;font-size:clamp(24px,2.4vw,33px);letter-spacing:0.16em;color:var(--cyan-hot);text-transform:uppercase;line-height:1;text-shadow:0 0 20px rgba(0,166,214,0.28)}
+  .sf-meta{display:flex;align-items:center;flex-wrap:wrap;gap:9px}
+  .sf-chip{font-family:var(--font-mono);font-size:9px;letter-spacing:0.24em;color:var(--beige);text-transform:uppercase;border:1px solid rgba(212,191,125,0.45);padding:4px 9px;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+  .sf-chip.acc{color:var(--cyan);border-color:rgba(0,166,214,0.5)}
+  .sf-chip i{margin-right:6px;opacity:.85}
+  .sf-desc{grid-column:2 / span 2;grid-row:2;margin-bottom:0;font-family:var(--font-prose);font-size:clamp(15px,1.15vw,17px);line-height:1.5;color:var(--muted);font-style:italic;max-width:92ch;text-wrap:pretty;margin-top:2px}
+  .sf-desc .q{color:var(--text);font-style:normal}
+
+  .hd-close{grid-column:3;grid-row:1;align-self:start;flex:0 0 auto;--cut:9px;position:relative;background:transparent;border:0;padding:0;min-width:176px;height:40px;cursor:pointer;font-family:var(--font-mono)}
+  .hd-close .cl-frame{position:absolute;inset:0;background:var(--cyan);opacity:.85;clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+  .hd-close .cl-inner{position:absolute;inset:1.5px;background:linear-gradient(180deg,#141a1d,#0e1316);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));display:flex;align-items:center;justify-content:center;gap:9px;color:var(--cyan-hot);font-size:9.5px;letter-spacing:0.24em;text-transform:uppercase;transition:box-shadow 170ms ease,color 170ms ease}
+  .hd-close:hover .cl-inner{color:#fff;box-shadow:inset 0 0 20px rgba(0,166,214,0.3),0 0 16px rgba(0,166,214,0.45)}
+
+  /* ============================================================
+     PURSE STRIP — sticky; mirrors Inventory's COIN PURSE exactly
+     ============================================================ */
+  .purse{position:relative;z-index:3;flex:0 0 auto;display:flex;align-items:center;gap:24px;padding:11px 26px;border-bottom:1px solid rgba(212,191,125,0.22);background:linear-gradient(180deg,rgba(0,166,214,0.05),rgba(0,0,0,0.28))}
+  .sub-head{font-family:var(--font-mono);font-size:9.5px;letter-spacing:0.3em;color:var(--cyan);text-transform:uppercase;display:flex;align-items:center;gap:8px}
+  .purse-lead{flex:0 0 auto;display:flex;flex-direction:column;gap:7px}
+  .gold-readout{display:flex;align-items:baseline;gap:8px;font-family:var(--font-mono)}
+  .gold-readout .cur{font-size:32px;font-weight:500;color:var(--cyan-hot);line-height:1;text-shadow:0 0 14px rgba(0,166,214,0.4);font-variant-numeric:tabular-nums}
+  .gold-readout .unit{font-size:11px;color:var(--cyan);letter-spacing:0.24em}
+  .gold-readout.spent .cur{animation:goldTick 700ms ease}
+  @keyframes goldTick{0%{color:#fff;text-shadow:0 0 22px rgba(0,166,214,.9)}100%{color:var(--cyan-hot)}}
+  .coin-row{display:grid;grid-template-columns:repeat(5,minmax(56px,72px));gap:7px}
+  .coin-badge{--cut:5px;position:relative;border:1px solid var(--beige-dim);background:rgba(0,0,0,0.35);padding:7px 3px;display:flex;flex-direction:column;align-items:center;gap:4px;clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+  .coin-badge .ci{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:8.5px;line-height:1}
+  .coin-badge .cval{font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--text);line-height:1;font-variant-numeric:tabular-nums}
+  .coin-badge .clab{font-family:var(--font-mono);font-size:7px;letter-spacing:0.16em;color:var(--muted);text-transform:uppercase}
+  .coin-badge.pt{border-color:rgba(212,191,125,0.6)}.coin-badge.pt .ci{border:1px solid var(--beige);color:var(--beige)}
+  .coin-badge.gp{border-color:rgba(212,191,125,0.6)}.coin-badge.gp .ci{background:var(--beige);color:#1d1d1d}
+  .coin-badge.ep{border-color:rgba(0,166,214,0.4)}.coin-badge.ep .ci{border:1px solid var(--cyan-dim);color:var(--cyan)}
+  .coin-badge.sp{border-color:rgba(170,170,170,0.45)}.coin-badge.sp .ci{border:1px solid var(--muted);color:var(--muted)}
+  .coin-badge.cp{border-color:rgba(138,122,74,0.55)}.coin-badge.cp .ci{border:1px solid var(--beige-dim);color:var(--beige-dim)}
+  .purse-note{margin-left:auto;text-align:right;font-family:var(--font-mono);font-size:8.5px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);display:flex;flex-direction:column;gap:5px}
+  .purse-note .k{color:var(--beige-dim)}
+  .purse-note .acc{color:var(--cyan)}
+
+  /* ============================================================
+     STOCK — card grid (Inventory cell treatment, priced)
+     ============================================================ */
+  .stock{position:relative;z-index:2;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:12px 26px 0}
+  .stock-bar{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding-bottom:9px;border-bottom:1px dashed rgba(212,191,125,0.22)}
+  .stock-bar .sh{font-family:var(--font-mono);font-size:11px;letter-spacing:0.4em;color:var(--beige);text-transform:uppercase}
+  .stock-bar .n{font-family:var(--font-mono);font-size:9px;letter-spacing:0.22em;color:var(--muted);text-transform:uppercase}
+  .stock-bar .n .acc{color:var(--cyan)}
+  .stock-bar .legend{margin-left:auto;display:flex;align-items:center;gap:14px;font-family:var(--font-mono);font-size:8.5px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted)}
+  .stock-bar .legend .sw{width:9px;height:9px;border:1px solid var(--cyan);display:inline-block;margin-right:6px;vertical-align:-1px}
+  .stock-bar .legend .sw.dim{border-color:rgba(212,191,125,0.3);background:rgba(0,0,0,.4)}
+  .stock-scroll{position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:14px 6px 22px 0;scrollbar-width:thin}
+  .stock::after{content:"";position:absolute;left:26px;right:26px;bottom:0;height:34px;pointer-events:none;background:linear-gradient(to top,#0d0d0d 10%,rgba(13,13,13,0))}
+  .stock-scroll::-webkit-scrollbar{width:7px}
+  .stock-scroll::-webkit-scrollbar-track{background:rgba(0,0,0,0.4)}
+  .stock-scroll::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--cyan-dim),rgba(212,191,125,0.5));border:1px solid #111}
+  .stock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:12px}
+
+  .sc{--cut:9px;position:relative;text-align:left;background:transparent;border:0;padding:0;cursor:pointer;font-family:var(--font-mono);transition:transform 150ms ease,filter 170ms ease}
+  .sc .sc-body{position:relative;display:flex;flex-direction:column;gap:0;min-height:186px;padding:0;background:rgba(0,0,0,0.3);border-radius:1px}
+  .sc .sc-art{position:relative;flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:104px}
+  .sc .glyph{font-size:40px;color:var(--text);line-height:1;filter:drop-shadow(0 0 6px rgba(0,0,0,0.65));transition:color 160ms ease}
+  .sc .cat-corner{position:absolute;top:7px;left:8px;font-size:10px;color:var(--muted);opacity:.85;line-height:1}
+  .sc .rar-corner{position:absolute;top:7px;right:8px;font-size:7.5px;letter-spacing:0.2em;text-transform:uppercase;color:var(--beige-dim)}
+  .sc .sc-foot{flex:0 0 auto;padding:9px 10px 10px;border-top:1px solid rgba(212,191,125,0.16);background:rgba(0,0,0,0.34);display:flex;flex-direction:column;gap:6px}
+  .sc .nm{font-family:var(--font-prose);font-size:16.5px;line-height:1.5;color:var(--text);letter-spacing:0.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sc .pr{display:flex;align-items:baseline;gap:7px}
+  .sc .pr .coin{width:15px;height:15px;border-radius:50%;background:var(--beige);color:#1d1d1d;font-family:var(--font-display);font-weight:700;font-size:7.5px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;align-self:center}
+  .sc .pr .v{font-size:14px;font-weight:500;color:var(--beige);letter-spacing:0.04em;font-variant-numeric:tabular-nums}
+  .sc .pr .u{font-size:8px;letter-spacing:0.2em;color:var(--beige-dim);text-transform:uppercase}
+  .sc .pr .st{margin-left:auto;font-size:8px;letter-spacing:0.18em;color:var(--cyan);text-transform:uppercase}
+  .sc:hover{transform:translateY(-2px);filter:brightness(1.14)}
+  .sc:focus-visible{outline:1px solid var(--cyan-hot);outline-offset:3px}
+
+  /* category tints + rarity borders — verbatim from the Inventory grid */
+  .cat-weapon{background:rgba(0,166,214,0.07)}
+  .cat-ammo{background:rgba(0,166,214,0.045)}
+  .cat-armor{background:rgba(212,191,125,0.07)}
+  .cat-consumable{background:rgba(63,199,180,0.07)}
+  .cat-quest{background:rgba(122,106,140,0.11)}
+  .cat-tool{background:rgba(170,170,170,0.05)}
+  .cat-misc{background:rgba(0,0,0,0.3)}
+  .rar-common{border:1px solid rgba(212,191,125,0.42)}
+  .rar-common .cat-corner{color:var(--beige-dim)}
+  .rar-uncommon{border:1px solid var(--cyan);box-shadow:0 0 8px rgba(0,166,214,0.22),inset 0 0 10px rgba(0,166,214,0.08)}
+  .rar-uncommon .glyph{color:var(--cyan-hot)}
+  .rar-uncommon .cat-corner,.rar-uncommon .rar-corner{color:var(--cyan)}
+  .rar-rare{border:1px solid var(--cyan-hot);box-shadow:0 0 12px rgba(77,214,255,0.3);animation:rarePulse 9s ease-in-out infinite}
+  .rar-rare .glyph{color:var(--cyan-hot);text-shadow:0 0 8px rgba(77,214,255,0.5)}
+  .rar-rare .rar-corner{color:var(--cyan-hot)}
+  @keyframes rarePulse{0%,100%{box-shadow:0 0 12px rgba(77,214,255,0.3),inset 0 0 6px rgba(77,214,255,0.05)}50%{box-shadow:0 0 18px rgba(77,214,255,0.5),inset 0 0 16px rgba(77,214,255,0.2)}}
+  .rar-quest{border:1px solid var(--violet);box-shadow:inset 0 0 12px rgba(122,106,140,0.16)}
+  .rar-quest .glyph{color:var(--violet-hot)}
+  .rar-quest .cat-corner,.rar-quest .rar-corner{color:var(--violet)}
+
+  /* --- can't afford: dimmed, still openable so the player can look --- */
+  .sc.poor{filter:grayscale(.7) brightness(.6)}
+  .sc.poor .sc-body{box-shadow:none;animation:none}
+  .sc.poor .pr .v{color:var(--danger-hot)}
+  .sc.poor .pr .st{color:var(--danger)}
+  .sc.poor:hover{filter:grayscale(.35) brightness(.86);transform:translateY(-1px)}
+  .sc.poor .sc-body::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(115deg,transparent 0 8px,rgba(0,0,0,0.28) 8px 9px)}
+
+  /* --- sold out: visual only, not wired (limited stock lands later) --- */
+  .sc.sold{cursor:not-allowed;filter:grayscale(.9) brightness(.5)}
+  .sc.sold:hover{transform:none;filter:grayscale(.9) brightness(.55)}
+  .sc.sold .sc-body{animation:none;box-shadow:none}
+  .sc.sold .sc-art::after{content:"SOLD OUT";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-9deg);font-family:var(--font-mono);font-size:10px;letter-spacing:0.28em;color:var(--danger-hot);border:1px solid rgba(185,58,58,0.75);background:rgba(10,10,10,0.85);padding:5px 10px;white-space:nowrap}
+  .sc.sold .pr .v,.sc.sold .pr .u{color:var(--beige-dim)}
+  .sc.sold .pr .st{color:var(--danger)}
+  .sc.bought .sc-body{animation:cellFlash 900ms ease}
+  @keyframes cellFlash{0%{box-shadow:0 0 0 rgba(0,166,214,0)}25%{box-shadow:0 0 22px rgba(0,166,214,.75),inset 0 0 18px rgba(0,166,214,.35)}100%{box-shadow:0 0 0 rgba(0,166,214,0)}}
+
+  .pn-foot{position:relative;z-index:3;flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:11px 26px 13px;border-top:1px solid rgba(212,191,125,0.28);font-family:var(--font-mono);font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted)}
+  .pn-foot .lab{color:var(--beige-dim)}
+  .pn-foot .acc{color:var(--cyan)}
+  .pn-foot .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px rgba(0,166,214,0.7)}
+  .pn-foot .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+  .pn-foot .sep{color:var(--beige-dim)}
+  .kbd{border:1px solid rgba(212,191,125,0.4);padding:2px 6px;color:var(--text);font-size:8px;letter-spacing:0.16em}
+
+  /* ============================================================
+     ITEM POPUP — the app's popup, verbatim; BUY replaces Equip/Stow/Drop
+     ============================================================ */
+  .imodal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;padding:34px}
+  .imodal.open{display:flex}
+  .im-scrim{position:absolute;inset:0;background:rgba(10,10,10,0.78);backdrop-filter:blur(2px);animation:fadeIn 200ms ease forwards}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .im-panel{--cut:22px;position:relative;width:min(560px,100%);max-height:min(600px,100%);display:flex;transform:translateY(10px) scale(.985);opacity:0;animation:panelIn2 300ms cubic-bezier(.2,.7,.2,1) 30ms forwards}
+  @keyframes panelIn2{to{transform:translateY(0) scale(1);opacity:1}}
+  .im-panel::before{content:"";position:absolute;inset:0;background:var(--beige);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));filter:drop-shadow(0 22px 50px rgba(0,0,0,0.7)) drop-shadow(0 0 34px rgba(0,166,214,0.2))}
+  .im-panel .pn-gap2{position:absolute;inset:5px;background:#0a0a0a;clip-path:polygon(calc(var(--cut) - 4px) 0,100% 0,100% calc(100% - var(--cut) + 4px),calc(100% - var(--cut) + 4px) 100%,0 100%,0 calc(var(--cut) - 4px))}
+  .im-panel .pn-line2{position:absolute;inset:3.5px;background:var(--beige);opacity:.5;clip-path:polygon(calc(var(--cut) - 2px) 0,100% 0,100% calc(100% - var(--cut) + 2px),calc(100% - var(--cut) + 2px) 100%,0 100%,0 calc(var(--cut) - 2px))}
+  .im-inner{position:relative;flex:1;min-width:0;margin:7px;background:radial-gradient(120% 90% at 50% 0%,rgba(0,166,214,0.08),transparent 55%),linear-gradient(180deg,#151515,#0d0d0d);clip-path:polygon(calc(var(--cut) - 6px) 0,100% 0,100% calc(100% - var(--cut) + 6px),calc(100% - var(--cut) + 6px) 100%,0 100%,0 calc(var(--cut) - 6px));box-shadow:inset 0 0 50px rgba(0,166,214,0.06);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .im-inner::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;background:repeating-linear-gradient(to bottom,rgba(0,166,214,0.03) 0px,rgba(0,166,214,0.03) 1px,transparent 1px,transparent 4px);mix-blend-mode:screen;opacity:.6}
+  .im-corner{position:absolute;width:16px;height:16px;border-color:var(--cyan);opacity:.75;z-index:6;pointer-events:none}
+  .im-corner.tl{top:12px;left:12px;border-top:1px solid;border-left:1px solid}
+  .im-corner.br{bottom:12px;right:12px;border-bottom:1px solid;border-right:1px solid}
+  .im-head{position:relative;z-index:3;flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:18px 18px 14px;border-bottom:1px solid rgba(212,191,125,0.32)}
+  .im-head::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:rgba(0,166,214,0.35);box-shadow:0 0 9px rgba(0,166,214,0.3)}
+  .im-crystal{flex:0 0 auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--cyan-hot);font-size:21px;border:1px solid rgba(0,166,214,0.5);background:radial-gradient(120% 90% at 50% 40%,rgba(0,166,214,0.18),transparent 65%),rgba(0,0,0,0.45);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);filter:drop-shadow(0 0 9px rgba(0,166,214,0.4))}
+  .im-titles{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .im-name{font-family:var(--font-display);font-weight:600;font-size:20px;letter-spacing:0.1em;color:var(--text);text-transform:uppercase;line-height:1.05}
+  .im-panel[data-rar="uncommon"] .im-name,.im-panel[data-rar="rare"] .im-name{color:var(--cyan-hot);text-shadow:0 0 14px rgba(0,166,214,0.25)}
+  .im-panel[data-rar="quest"] .im-name{color:var(--violet-hot)}
+  .im-tags{display:flex;flex-wrap:wrap;gap:6px}
+  .im-tag{font-family:var(--font-mono);font-size:8.5px;letter-spacing:0.2em;text-transform:uppercase;color:var(--beige);border:1px solid rgba(212,191,125,0.45);padding:3px 8px;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+  .im-tag.acc{color:var(--cyan);border-color:rgba(0,166,214,0.5)}
+  .im-close{margin-left:auto;flex:0 0 auto;width:34px;height:34px;background:rgba(0,0,0,0.4);border:1px solid rgba(212,191,125,0.4);color:var(--beige);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);transition:color 150ms ease,border-color 150ms ease,box-shadow 150ms ease}
+  .im-close:hover{color:var(--cyan-hot);border-color:var(--cyan);box-shadow:0 0 12px rgba(0,166,214,0.3)}
+  .im-body{position:relative;z-index:2;flex:1 1 auto;min-height:0;overflow-y:auto;padding:16px 18px;scrollbar-width:thin}
+  .im-body::-webkit-scrollbar{width:6px}
+  .im-body::-webkit-scrollbar-track{background:rgba(0,0,0,0.4)}
+  .im-body::-webkit-scrollbar-thumb{background:rgba(0,166,214,0.4)}
+  .im-facts{display:grid;grid-template-columns:repeat(2,1fr);gap:7px 20px;padding-bottom:13px;border-bottom:1px dashed rgba(212,191,125,0.25)}
+  .im-facts .f{display:flex;justify-content:space-between;gap:12px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.1em}
+  .im-facts .f .k{color:var(--beige-dim);font-size:8.5px;letter-spacing:0.2em;text-transform:uppercase}
+  .im-facts .f .v{color:var(--text)}
+  .im-facts .f .v.short{color:var(--danger-hot)}
+  .im-desc{margin-top:13px;font-family:var(--font-prose);font-style:italic;font-size:15.5px;line-height:1.55;color:var(--muted);text-wrap:pretty}
+  .im-sec{margin-top:16px}
+  .im-sec-h{font-family:var(--font-mono);font-size:9px;letter-spacing:0.28em;color:var(--cyan);text-transform:uppercase;display:flex;align-items:center;gap:8px;padding-bottom:7px}
+  .im-sec-h::after{content:"";flex:1;height:1px;background:rgba(0,166,214,0.22)}
+  .im-fx{display:flex;flex-direction:column;gap:5px}
+  .im-fx .row{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.08em;color:var(--text);background:rgba(0,0,0,0.28);border-left:2px solid var(--cyan);padding:7px 10px}
+  .im-fx .row .k{color:var(--beige);font-size:9px;letter-spacing:0.2em;text-transform:uppercase;min-width:70px}
+  .im-fx .row .s{margin-left:auto;color:var(--muted);font-size:8.5px;letter-spacing:0.18em;text-transform:uppercase}
+  .im-actions{position:relative;z-index:3;flex:0 0 auto;display:flex;gap:9px;padding:13px 18px 16px;border-top:1px solid rgba(212,191,125,0.28)}
+  .ia{--cut:8px;position:relative;background:transparent;border:0;padding:0;height:44px;cursor:pointer;font-family:var(--font-mono);flex:1}
+  .ia .af{position:absolute;inset:0;background:var(--cyan);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+  .ia .ai{position:absolute;inset:1.5px;background:linear-gradient(180deg,#141a1d,#0e1316);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));display:flex;align-items:center;justify-content:center;gap:9px;color:var(--cyan-hot);font-size:9.5px;letter-spacing:0.24em;text-transform:uppercase;transition:box-shadow 160ms ease,color 160ms ease}
+  .ia:hover .ai{color:#fff;box-shadow:inset 0 0 20px rgba(0,166,214,0.3),0 0 15px rgba(0,166,214,0.4)}
+  .ia.ghost .af{background:rgba(212,191,125,0.45)}
+  .ia.ghost .ai{color:var(--beige)}
+  .ia.ghost:hover .ai{color:var(--text);box-shadow:inset 0 0 18px rgba(212,191,125,0.14)}
+  .ia[disabled]{cursor:not-allowed;opacity:.42}
+  .ia[disabled]:hover .ai{color:var(--cyan-hot);box-shadow:none}
+  .ia .price-tail{margin-left:2px;color:var(--beige)}
+  /* BUY — three states */
+  .ia.buy.pending{cursor:progress}
+  .ia.buy.pending .af{background:rgba(0,166,214,0.5)}
+  .ia.buy.pending .ai{color:var(--cyan);letter-spacing:0.28em}
+  .ia.buy.pending .ai::before{content:"";width:11px;height:11px;border:1px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin 700ms linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .ia.buy.pending .ai{background:repeating-linear-gradient(115deg,#141a1d 0 8px,#101619 8px 16px)}
+  .ia.buy.ok .af{background:var(--cyan-hot)}
+  .ia.buy.ok .ai{color:#fff;box-shadow:inset 0 0 26px rgba(77,214,255,0.4),0 0 22px rgba(77,214,255,0.55)}
+  .ia.buy.deny .af{background:rgba(185,58,58,0.7)}
+  .ia.buy.deny .ai{color:var(--danger-hot)}
+  .ia.buy.deny{animation:segDeny 320ms ease}
+  @keyframes segDeny{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+  .im-warn{padding:0 18px 12px;font-family:var(--font-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--danger-hot);display:none;align-items:flex-start;gap:9px;line-height:1.6}
+  .im-warn.show{display:flex}
+  .im-warn .body{font-family:var(--font-prose);font-style:italic;font-size:14px;letter-spacing:0;text-transform:none;color:var(--muted);margin-top:4px}
+  .im-warn .tag{color:var(--danger-hot);border:1px solid rgba(185,58,58,0.6);padding:3px 7px;flex:0 0 auto}
+  .im-note{padding:0 18px 12px;font-family:var(--font-mono);font-size:8.5px;letter-spacing:0.2em;text-transform:uppercase;color:var(--beige-dim);display:flex;gap:8px}
+  .im-note .acc{color:var(--cyan)}
+
+  /* toast — the success flourish */
+  .toast{position:fixed;left:50%;bottom:44px;transform:translate(-50%,14px);z-index:400;--cut:9px;opacity:0;pointer-events:none;transition:opacity 200ms ease,transform 260ms cubic-bezier(.2,.7,.2,1)}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast .tf{position:absolute;inset:0;background:var(--cyan);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));filter:drop-shadow(0 0 24px rgba(0,166,214,0.5))}
+  .toast .ti{position:relative;margin:1.5px;background:linear-gradient(180deg,#16252b,#0d1418);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));padding:12px 22px;display:flex;align-items:center;gap:13px;font-family:var(--font-mono);font-size:9.5px;letter-spacing:0.24em;text-transform:uppercase;color:var(--cyan-hot);box-shadow:inset 0 0 26px rgba(0,166,214,0.22)}
+  .toast .ti .nm{color:var(--text);font-family:var(--font-prose);font-size:15px;letter-spacing:0.02em;text-transform:none;font-style:italic}
+  .toast .ti .cost{color:var(--beige)}
+
+  @media (max-height:760px){.sf-head{padding:15px 24px 12px}.sf-portrait{width:78px;height:86px;font-size:32px}.sf-desc{font-size:15px;max-height:4.6em;overflow-y:auto}.gold-readout .cur{font-size:26px}.sc .sc-body{min-height:160px}.sc .sc-art{min-height:84px}.sc .glyph{font-size:34px}}
+  @media (max-width:900px){.sf-head{grid-template-columns:auto 1fr;gap:10px 16px}.hd-close{grid-column:2;justify-self:end}.sf-desc{grid-column:1 / span 2}.sf-name{font-size:26px}.purse{flex-wrap:wrap;gap:14px}.purse-note{margin-left:0}}
+  @media (prefers-reduced-motion:reduce){.overlay,.panel,.sc,.toast,.ia.buy.pending .ai::before{animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="backdrop"></div>
+<div class="scrim"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="sweep" id="sweep"></div>
+
+<div class="side-label left"><span class="acc">MERCHANT CHANNEL</span> &nbsp;//&nbsp; SESSION PUSHED BY DM &nbsp;//&nbsp; LEDGER LIVE</div>
+<div class="side-label right">Castella-08 &nbsp;//&nbsp; <span class="acc">TRADE: OPEN</span> &nbsp;//&nbsp; Ros Chrisstone</div>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="Shop">
+  <div class="panel" data-screen-label="Shop Takeover">
+    <div class="pn-gap"></div>
+    <div class="pn-line"></div>
+    <div class="pn-inner">
+      <span class="pn-corner tl"></span>
+      <span class="pn-corner br"></span>
+
+      <!-- ============ STOREFRONT — authored by the DM ============ -->
+      <header class="sf-head">
+        <span class="sf-portrait" id="sfIcon"><i class="fa-solid fa-scale-balanced"></i></span>
+        <div class="sf-titles">
+          <div class="sf-eyebrow"><span class="tick"></span><span>Merchant Channel Open</span><span class="dim">//</span><span id="sfKind">Trade Post</span></div>
+          <h1 class="sf-name" id="sfName">The Salt Ledger</h1>
+          <div class="sf-meta">
+            <span class="sf-chip acc" id="sfLoc"><i class="fa-solid fa-location-dot"></i>Castella-08 · Lower Quay</span>
+            <span class="sf-chip" id="sfKeeper"><i class="fa-solid fa-user"></i>Maribel Ansk, Ledgerwright</span>
+            <span class="sf-chip" id="sfHours"><i class="fa-solid fa-hourglass-half"></i>Open Until Tidefall</span>
+          </div>
+        </div>
+        <button class="hd-close" id="closeBtn" type="button" aria-label="Leave the shop">
+          <span class="cl-frame"></span>
+          <span class="cl-inner"><i class="fa-solid fa-arrow-left-long"></i> Leave Shop</span>
+        </button>
+        <p class="sf-desc" id="sfDesc"></p>
+      </header>
+
+      <!-- ============ PURSE — mirrors Inventory's COIN PURSE ============ -->
+      <div class="purse">
+        <div class="purse-lead">
+          <div class="sub-head">Coin Purse</div>
+          <div class="gold-readout" id="goldRead"><span class="cur" id="goldCur">1,247</span><span class="unit">gp on hand</span></div>
+        </div>
+        <div class="coin-row" id="coinRow"></div>
+        <div class="purse-note">
+          <span><span class="k">Ledger</span> · <span class="acc">Live — server confirms every purchase</span></span>
+          <span><span class="k">Affordable</span> · <span class="acc" id="affordCount">—</span></span>
+        </div>
+      </div>
+
+      <!-- ============ STOCK ============ -->
+      <section class="stock" aria-label="Stock">
+        <div class="stock-bar">
+          <span class="sh">Stock</span>
+          <span class="n" id="stockN"></span>
+          <span class="legend">
+            <span><span class="sw"></span>Affordable</span>
+            <span><span class="sw dim"></span>Out of reach</span>
+          </span>
+        </div>
+        <div class="stock-scroll">
+          <div class="stock-grid" id="stockGrid"></div>
+        </div>
+      </section>
+
+      <footer class="pn-foot">
+        <span class="dot"></span><span class="lab">Channel:</span><span class="acc">Merchant · DM-gated</span>
+        <span class="sep">|</span><span class="lab">Ledger Sync:</span><span class="acc">0.09 ms</span>
+        <div class="right">
+          <span class="lab">Leave anytime</span><span class="kbd">ESC</span>
+          <span class="sep">|</span><span class="lab">Codex</span><span class="acc">v 2.4.7</span>
+        </div>
+      </footer>
+    </div>
+  </div>
+</div>
+
+<!-- ITEM POPUP — same component as Inventory / Equipment, BUY swapped in -->
+<div class="imodal" id="imodal" role="dialog" aria-modal="true" aria-label="Item detail">
+  <div class="im-scrim" data-close="1"></div>
+  <div class="im-panel" id="imPanel" data-rar="common">
+    <div class="pn-gap2"></div>
+    <div class="pn-line2"></div>
+    <div class="im-inner">
+      <span class="im-corner tl"></span>
+      <span class="im-corner br"></span>
+      <div class="im-head" id="imHead"></div>
+      <div class="im-body" id="imBody"></div>
+      <div class="im-warn" id="imWarn"></div>
+      <div class="im-note" id="imNote"></div>
+      <div class="im-actions" id="imActions"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><span class="tf"></span><span class="ti" id="toastIn"></span></div>
+
+<script>
+/* ============================================================
+   DATA — JSON SWAP POINT.
+   The DM authors SHOPKEEPER + STOCK on the Operator Console and
+   pushes them to one player or the whole party. PURSE comes from
+   the player's own sheet. Nothing below is hand-tuned per item:
+   affordability is computed from PURSE.gp vs price every render.
+   ============================================================ */
+const SHOPKEEPER = {
+  icon: 'fa-scale-balanced',
+  name: 'The Salt Ledger',
+  kind: 'Trade Post',
+  keeper: 'Maribel Ansk, Ledgerwright',
+  location: 'Castella-08 · Lower Quay',
+  hours: 'Open Until Tidefall',
+  desc: 'A narrow shop wedged between two chandleries, smelling of brine and hot wax. Maribel keeps her stock behind a counter of scarred whalebone and her prices in a book no one else is permitted to read. She looks up when you enter, marks a line, and does not hurry. <span class="q">"Reclamation coin, is it. Then look properly — I don\'t restock for people who browse."</span>'
+};
+
+const PURSE = { pt: 12, gp: 1247, ep: 4, sp: 88, cp: 152 };
+
+const STOCK = [
+  { id:'s1', name:'Quayman\'s Buckler',  icon:'fa-shield-halved',       cat:'armor',      rar:'common',   price:45,   stock:3, stat:'+1 AC',        slot:'Off-Hand',  wt:5,
+    desc:'Salt-pitted and honest. The rim has been re-bound twice; whoever carried it last stopped needing it.',
+    fx:[{k:'Armor',v:'+1 AC',s:'While Held'}] },
+  { id:'s2', name:'Tidewrought Cutlass', icon:'fa-khanda',              cat:'weapon',     rar:'uncommon', price:320,  stock:1, stat:'1d8 + 1 slashing', slot:'Main Hand', wt:3,
+    desc:'Forged from a keel-nail recovered off the drowned mole. It draws with a sound like a rope going taut and never rusts, however long the wet holds it.',
+    fx:[{k:'Damage',v:'1d8 + 1 slashing',s:'Finesse'},{k:'On Hit',v:'+1 vs. Drowned',s:'Passive'}] },
+  { id:'s3', name:'Vial of Deepwater',   icon:'fa-flask-vial',          cat:'consumable', rar:'common',   price:28,   stock:9, stat:'Heal 2d4 + 2',  slot:'—',         wt:0.5,
+    desc:'Drawn from the cold layer below the harbour mouth. Tastes of iron and closes small wounds while you swallow.',
+    fx:[{k:'Restores',v:'2d4 + 2 HP',s:'One Action'}] },
+  { id:'s4', name:'Ledgerwright\'s Kit', icon:'fa-screwdriver-wrench',  cat:'tool',       rar:'common',   price:75,   stock:2, stat:'+2 Appraisal',  slot:'—',         wt:4,
+    desc:'Loupe, scale-weights, a stub of red chalk. With this in hand you can price a thing honestly, which is rarer than it sounds.',
+    fx:[{k:'Appraisal',v:'+2',s:'Proficiency'}] },
+  { id:'s5', name:'Cinder Charge',       icon:'fa-fire-flame-curved',   cat:'consumable', rar:'uncommon', price:210,  stock:4, stat:'3d6 fire, 10 ft.', slot:'—',      wt:1,
+    desc:'A sealed clay bulb of quay-fire. Maribel sets it on the counter very gently and does not let go until you have paid.',
+    fx:[{k:'Damage',v:'3d6 fire',s:'10 ft. Radius'},{k:'Save',v:'DEX 13',s:'Half On Success'}] },
+  { id:'s6', name:'Reclamation Signet',  icon:'fa-ring',                cat:'misc',       rar:'uncommon', price:480,  stock:1, stat:'+1 Persuasion', slot:'Ring',      wt:0,
+    desc:'Brettany silver, the crest half-worn. Not official — but officials rarely look twice, and that is the whole of its value.',
+    fx:[{k:'Persuasion',v:'+1',s:'While Worn'},{k:'Bearing',v:'Brettany Reclamation',s:'Social'}] },
+  { id:'s7', name:'Shard of Still Water',icon:'fa-gem',                 cat:'misc',       rar:'rare',     price:1650, stock:1, stat:'Attunement Slot', slot:'Shard Socket', wt:0.2,
+    desc:'It has no light of its own and takes light badly, as though the surface were a little further away than it appears. Maribel will not name where it came from.',
+    fx:[{k:'Grants',v:'Attunement Slot',s:'Neural'},{k:'Hold Breath',v:'×3 Duration',s:'Passive'}] },
+  { id:'s8', name:'Harbour Chain Coat',  icon:'fa-shirt',               cat:'armor',      rar:'uncommon', price:900,  stock:1, stat:'AC 14 + DEX (max 2)', slot:'Chest', wt:22,
+    desc:'Riveted small-link over oiled canvas, cut for a boat deck rather than a battlefield. Heavy, and quiet, which is the trade.',
+    fx:[{k:'Armor',v:'AC 14 + DEX (max 2)',s:'Medium'},{k:'Stealth',v:'No Penalty',s:'Quiet Weave'}] },
+  { id:'s9', name:'Waxed Deck Rope',     icon:'fa-link',                cat:'tool',       rar:'common',   price:18,   stock:6, stat:'50 ft.',        slot:'—',         wt:8,
+    desc:'Fifty feet, spliced and sealed. Will hold four hundred pounds dry and rather less than that in a storm.',
+    fx:[{k:'Length',v:'50 ft.',s:'Utility'}] },
+  { id:'s10',name:'Bone-Ink Charter',    icon:'fa-scroll',              cat:'quest',      rar:'quest',    price:150,  stock:1, stat:'Quest Item',    slot:'—',         wt:0.1,
+    desc:'A shipping charter for a vessel the harbourmaster insists never existed. Maribel is selling it, which means she wants it out of her shop.',
+    fx:[{k:'Reveals',v:'Quay Manifest 04',s:'Journal'}] },
+  /* limited stock — designed, not yet produced by anything upstream */
+  { id:'s11',name:'Lanternfish Oil',     icon:'fa-oil-can',             cat:'consumable', rar:'common',   price:36,   stock:0, stat:'Light 30 ft., 6 hr', slot:'—',    wt:1,
+    desc:'Burns blue-green and does not smoke. The last two flasks went to a dredging crew this morning.',
+    fx:[{k:'Light',v:'30 ft.',s:'6 Hours'}] },
+  { id:'s12',name:'Pilot\'s Compass',    icon:'fa-compass',             cat:'tool',       rar:'common',   price:120,  stock:2, stat:'+1 Navigation', slot:'—',         wt:1,
+    desc:'Brass, sticky in the bearing, but it has never once pointed at anything but north — which is more than can be said for the harbour charts.',
+    fx:[{k:'Navigation',v:'+1',s:'Proficiency'}] },
+  { id:'s13',name:'Bolt Sheaf (20)',     icon:'fa-location-arrow',      cat:'ammo',       rar:'common',   price:12,   stock:8, stat:'20 bolts',      slot:'Quiver',    wt:1.5,
+    desc:'Quay-cut ash, fletched with gull feather. Straight enough for twenty yards and honest about it.',
+    fx:[{k:'Count',v:'×20',s:'Consumable'}] },
+  { id:'s14',name:'Oilskin Cloak',       icon:'fa-umbrella',            cat:'armor',      rar:'common',   price:55,   stock:4, stat:'Weather Ward',  slot:'Back',      wt:4,
+    desc:'Stiff, foul-smelling, and the only garment on this coast that keeps a night watch dry.',
+    fx:[{k:'Exposure',v:'Advantage',s:'Cold & Wet'}] },
+  { id:'s15',name:'Lockwright\'s Picks',  icon:'fa-key',                 cat:'tool',       rar:'common',   price:95,   stock:2, stat:'+2 Sleight',    slot:'—',         wt:0.5,
+    desc:'Six irons in a leather roll, worn to the shape of one particular hand. Not, Maribel notes, her hand.',
+    fx:[{k:'Sleight of Hand',v:'+2',s:'Proficiency'}] },
+  { id:'s16',name:'Brine-Cured Rations', icon:'fa-drumstick-bite',      cat:'consumable', rar:'common',   price:9,    stock:12,stat:'3 days',        slot:'—',         wt:3,
+    desc:'Three days of food that will not spoil and will not be enjoyed.',
+    fx:[{k:'Sustenance',v:'3 Days',s:'Travel'}] },
+  { id:'s17',name:'Dredger\'s Maul',      icon:'fa-hammer',              cat:'weapon',     rar:'common',   price:65,   stock:2, stat:'2d6 bludgeoning', slot:'Two-Handed', wt:12,
+    desc:'Made for breaking barnacle-welded chain. It does the same to a helm, given room to swing.',
+    fx:[{k:'Damage',v:'2d6 bludgeoning',s:'Heavy'}] },
+  { id:'s18',name:'Glass Signal Lens',   icon:'fa-circle-half-stroke',  cat:'tool',       rar:'uncommon', price:260,  stock:1, stat:'Signal 1 mile', slot:'—',         wt:2,
+    desc:'Ground for the old mole light. Catches a lantern and throws it a mile down the channel, to anyone watching for it.',
+    fx:[{k:'Signal',v:'1 Mile',s:'Line Of Sight'}] },
+  { id:'s19',name:'Silt-Diver\'s Bell',   icon:'fa-bell',                cat:'misc',       rar:'uncommon', price:540,  stock:1, stat:'10 min. air',   slot:'—',         wt:30,
+    desc:'A hooded copper bell for walking the harbour floor. Two of the three men who used it came back up.',
+    fx:[{k:'Breathe',v:'10 Minutes',s:'Submerged'},{k:'Speed',v:'Halved',s:'While Worn'}] },
+  { id:'s20',name:'Antivenom Draught',   icon:'fa-syringe',             cat:'consumable', rar:'uncommon', price:180,  stock:3, stat:'End Poisoned',  slot:'—',         wt:0.5,
+    desc:'For the grey eels that nest under the quay stones. Works on most other things that bite, she says, mostly.',
+    fx:[{k:'Cures',v:'Poisoned',s:'One Action'}] },
+  { id:'s21',name:'Chartroom Sextant',   icon:'fa-compass-drafting',    cat:'tool',       rar:'uncommon', price:420,  stock:1, stat:'+3 Navigation', slot:'—',         wt:3,
+    desc:'Reclamation issue, serial filed off. It will put you within a mile of where you actually are.',
+    fx:[{k:'Navigation',v:'+3',s:'Proficiency'}] },
+  { id:'s22',name:'Whalebone Charm',     icon:'fa-anchor',              cat:'misc',       rar:'common',   price:40,   stock:5, stat:'+1 vs. Fear',   slot:'Neck',      wt:0.1,
+    desc:'Carved by a crew that made it home. Worth precisely as much as you believe it is.',
+    fx:[{k:'Saves',v:'+1 vs. Frightened',s:'While Worn'}] },
+  { id:'s23',name:'Sealed Deep Chart',   icon:'fa-map',                 cat:'quest',      rar:'quest',    price:600,  stock:1, stat:'Quest Item',    slot:'—',         wt:0.2,
+    desc:'Still wax-sealed. Maribel will not open it and would rather you did that elsewhere.',
+    fx:[{k:'Reveals',v:'Drowned Mole',s:'Journal'}] },
+  { id:'s24',name:'Everlit Lantern',     icon:'fa-lightbulb',           cat:'misc',       rar:'rare',      price:2100, stock:1, stat:'Light 40 ft.', slot:'Off-Hand',  wt:2,
+    desc:'No oil, no wick, no heat. It has been burning on her top shelf for eleven years and she has stopped explaining it.',
+    fx:[{k:'Light',v:'40 ft.',s:'Permanent'},{k:'Reveals',v:'Invisible Ink',s:'Passive'}] }
+];
+
+const CAT = {
+  weapon:{corner:'fa-khanda',label:'Weapon'}, ammo:{corner:'fa-location-arrow',label:'Ammunition'},
+  armor:{corner:'fa-shield-halved',label:'Armor'}, consumable:{corner:'fa-flask-vial',label:'Consumable'},
+  tool:{corner:'fa-screwdriver-wrench',label:'Tool'}, quest:{corner:'fa-scroll',label:'Quest'},
+  misc:{corner:'fa-circle-dot',label:'Misc'}
+};
+const RAR_LABEL = { common:'Common', uncommon:'Uncommon', rare:'Rare', quest:'Quest' };
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const num = n => n.toLocaleString('en-US');
+let openIt = null, buyState = 'idle';
+
+function afford(it){ return PURSE.gp >= it.price; }
+function soldOut(it){ return it.stock === 0; }
+
+function renderShopkeeper(){
+  $('sfIcon').innerHTML = '<i class="fa-solid ' + SHOPKEEPER.icon + '"></i>';
+  $('sfName').textContent = SHOPKEEPER.name;
+  $('sfKind').textContent = SHOPKEEPER.kind;
+  $('sfLoc').innerHTML = '<i class="fa-solid fa-location-dot"></i>' + esc(SHOPKEEPER.location);
+  $('sfKeeper').innerHTML = '<i class="fa-solid fa-user"></i>' + esc(SHOPKEEPER.keeper);
+  $('sfHours').innerHTML = '<i class="fa-solid fa-hourglass-half"></i>' + esc(SHOPKEEPER.hours);
+  $('sfDesc').innerHTML = SHOPKEEPER.desc; /* authored prose; DM-trusted */
+  document.title = 'G.U.I.D.E. — SHOP // ' + SHOPKEEPER.name.toUpperCase();
+}
+
+function renderPurse(flash){
+  $('goldCur').textContent = num(PURSE.gp);
+  $('coinRow').innerHTML =
+    '<div class="coin-badge pt"><span class="ci">PT</span><span class="cval">' + num(PURSE.pt) + '</span><span class="clab">Plat</span></div>' +
+    '<div class="coin-badge gp"><span class="ci">GP</span><span class="cval" id="gpBadge">' + num(PURSE.gp) + '</span><span class="clab">Gold</span></div>' +
+    '<div class="coin-badge ep"><span class="ci">EP</span><span class="cval">' + num(PURSE.ep) + '</span><span class="clab">Elec</span></div>' +
+    '<div class="coin-badge sp"><span class="ci">SP</span><span class="cval">' + num(PURSE.sp) + '</span><span class="clab">Silv</span></div>' +
+    '<div class="coin-badge cp"><span class="ci">CP</span><span class="cval">' + num(PURSE.cp) + '</span><span class="clab">Copp</span></div>';
+  const live = STOCK.filter(i => !soldOut(i));
+  $('affordCount').textContent = live.filter(afford).length + ' of ' + live.length + ' in stock';
+  if (flash){ const g = $('goldRead'); g.classList.remove('spent'); void g.offsetWidth; g.classList.add('spent'); }
+}
+
+function renderStock(){
+  $('stockN').innerHTML = '<span class="acc">' + STOCK.filter(i => !soldOut(i)).length + '</span> lines available <span class="acc">·</span> priced in gold';
+  $('stockGrid').innerHTML = STOCK.map(it => {
+    const out = soldOut(it), poor = !out && !afford(it);
+    const state = out ? 'Sold Out' : poor ? 'Short ' + num(it.price - PURSE.gp) + ' gp' : it.stock === 1 ? 'Last One' : '×' + it.stock;
+    return '<button class="sc' + (out ? ' sold' : poor ? ' poor' : '') + '" data-id="' + it.id + '"' + (out ? ' disabled aria-disabled="true"' : '') +
+      ' aria-label="' + esc(it.name) + ', ' + it.price + ' gold' + (out ? ', sold out' : poor ? ', cannot afford' : '') + '">' +
+      '<span class="sc-body cat-' + it.cat + ' rar-' + it.rar + '">' +
+        '<span class="sc-art">' +
+          '<span class="cat-corner"><i class="fa-solid ' + CAT[it.cat].corner + '"></i></span>' +
+          '<span class="rar-corner">' + RAR_LABEL[it.rar] + '</span>' +
+          '<span class="glyph"><i class="fa-solid ' + it.icon + '"></i></span>' +
+        '</span>' +
+        '<span class="sc-foot">' +
+          '<span class="nm">' + esc(it.name) + '</span>' +
+          '<span class="pr"><span class="coin">GP</span><span class="v">' + num(it.price) + '</span><span class="u">gp</span><span class="st">' + state + '</span></span>' +
+        '</span>' +
+      '</span></button>';
+  }).join('');
+  $('stockGrid').querySelectorAll('.sc:not(.sold)').forEach(b =>
+    b.addEventListener('click', () => openPopup(b.dataset.id)));
+}
+
+/* ============================================================
+   ITEM POPUP — identical component, BUY in place of Equip/Stow/Drop
+   ============================================================ */
+function openPopup(id){
+  const it = STOCK.find(x => x.id === id); if (!it) return;
+  openIt = it; buyState = 'idle';
+  const short = Math.max(0, it.price - PURSE.gp);
+  $('imPanel').setAttribute('data-rar', it.rar);
+
+  $('imHead').innerHTML =
+    '<span class="im-crystal"><i class="fa-solid ' + it.icon + '"></i></span>' +
+    '<span class="im-titles"><span class="im-name">' + esc(it.name) + '</span>' +
+      '<span class="im-tags">' +
+        '<span class="im-tag">' + CAT[it.cat].label + '</span>' +
+        '<span class="im-tag' + (it.rar !== 'common' ? ' acc' : '') + '">' + RAR_LABEL[it.rar] + '</span>' +
+        '<span class="im-tag acc">' + esc(SHOPKEEPER.name) + '</span>' +
+      '</span></span>' +
+    '<button class="im-close" id="imClose" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>';
+
+  const fx = (it.fx || []).map(f =>
+    '<div class="row"><span class="k">' + esc(f.k) + '</span><span>' + esc(f.v) + '</span><span class="s">' + esc(f.s) + '</span></div>').join('');
+  $('imBody').innerHTML =
+    '<div class="im-facts">' +
+      '<div class="f"><span class="k">Price</span><span class="v">' + num(it.price) + ' gp</span></div>' +
+      '<div class="f"><span class="k">On Hand</span><span class="v' + (short ? ' short' : '') + '">' + num(PURSE.gp) + ' gp</span></div>' +
+      '<div class="f"><span class="k">' + (it.cat === 'weapon' ? 'Damage' : it.cat === 'armor' ? 'Armor' : 'Key Stat') + '</span><span class="v">' + esc(it.stat || '—') + '</span></div>' +
+      '<div class="f"><span class="k">Slot</span><span class="v">' + esc(it.slot || 'Not equippable') + '</span></div>' +
+      '<div class="f"><span class="k">Weight</span><span class="v">' + it.wt + ' lb</span></div>' +
+      '<div class="f"><span class="k">' + (short ? 'Shortfall' : 'After Purchase') + '</span><span class="v' + (short ? ' short' : '') + '">' + num(short ? short : PURSE.gp - it.price) + ' gp</span></div>' +
+    '</div>' +
+    '<div class="im-desc">' + esc(it.desc) + '</div>' +
+    (fx ? '<div class="im-sec"><div class="im-sec-h">Granted Effects</div><div class="im-fx">' + fx + '</div></div>' : '');
+
+  $('imNote').innerHTML = '<span class="acc">◇</span> Purchase is confirmed by the ledger, not by this panel';
+  $('imWarn').className = 'im-warn';
+  $('imWarn').innerHTML = '';
+  $('imActions').innerHTML =
+    '<button class="ia buy" id="buyBtn"><span class="af"></span><span class="ai"><i class="fa-solid fa-coins"></i>Buy<span class="price-tail">· ' + num(it.price) + ' gp</span></span></button>' +
+    '<button class="ia ghost" id="backBtn"><span class="af"></span><span class="ai"><i class="fa-solid fa-arrow-left-long"></i>Back To Stock</span></button>';
+
+  $('imodal').classList.add('open');
+  $('imClose').addEventListener('click', closePopup);
+  $('backBtn').addEventListener('click', closePopup);
+  $('buyBtn').addEventListener('click', attemptBuy);
+  $('imBody').scrollTop = 0;
+}
+
+function closePopup(){
+  $('imodal').classList.remove('open');
+  openIt = null; buyState = 'idle';
+}
+
+function setBuy(state, label, icon){
+  const b = $('buyBtn'); if (!b) return;
+  buyState = state;
+  b.className = 'ia buy' + (state === 'idle' ? '' : ' ' + state);
+  b.querySelector('.ai').innerHTML = (icon ? '<i class="fa-solid ' + icon + '"></i>' : '') + label;
+  b.disabled = state === 'pending' || state === 'ok';
+}
+
+/* ------------------------------------------------------------
+   BUY — never an instant client-side assumption. Click puts the
+   button into PENDING while the ledger is asked; only the reply
+   moves it to SUCCESS or INSUFFICIENT.
+   Wire attemptBuy() to the real POST /shop/buy in Claude Code.
+   ------------------------------------------------------------ */
+function attemptBuy(){
+  if (!openIt || buyState !== 'idle') return;
+  const it = openIt;
+  setBuy('pending', 'Authorizing…', '');
+  $('imWarn').className = 'im-warn';
+  console.log('SHOP.BUY requested:', it.name, it.price);
+
+  setTimeout(() => {
+    if (PURSE.gp < it.price) { denyBuy(it); return; }
+    PURSE.gp -= it.price;
+    if (it.stock > 0) it.stock -= 1;
+    setBuy('ok', 'Purchased', 'fa-check');
+    renderPurse(true);
+    renderStock();
+    const card = document.querySelector('.sc[data-id="' + it.id + '"]');
+    if (card) card.classList.add('bought');
+    showToast(it);
+    console.log('SHOP.BUY confirmed:', it.name, '· gold now', PURSE.gp);
+    setTimeout(closePopup, 1000);
+  }, 1150);
+}
+
+function denyBuy(it){
+  const short = it.price - PURSE.gp;
+  setBuy('deny', 'Insufficient Gold', 'fa-ban');
+  $('imWarn').className = 'im-warn show';
+  $('imWarn').innerHTML =
+    '<span class="tag">Ledger Refused</span>' +
+    '<span><span>Short by ' + num(short) + ' gp — ' + num(it.price) + ' asked, ' + num(PURSE.gp) + ' on hand.</span>' +
+    '<span class="body">Maribel closes the book without comment. Nothing is spent; browse something else, or come back heavier.</span></span>';
+  console.log('SHOP.BUY refused — short', short);
+  setTimeout(() => { if (buyState === 'deny') setBuy('idle', 'Buy<span class="price-tail">· ' + num(it.price) + ' gp</span>', 'fa-coins'); }, 2400);
+}
+
+let toastT = null;
+function showToast(it){
+  $('toastIn').innerHTML = '<i class="fa-solid fa-check"></i><span>Purchased</span><span class="nm">' + esc(it.name) + '</span><span class="cost">− ' + num(it.price) + ' gp</span>';
+  const t = $('toast'); t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ------------------------------------------------------------ leaving */
+function leave(){
+  const o = $('overlay');
+  o.classList.add('closing');
+  console.log('SHOP closed — returning to previous screen');
+  setTimeout(() => { o.style.display = 'none'; }, 280);
+}
+$('closeBtn').addEventListener('click', leave);
+$('imodal').addEventListener('click', e => { if (e.target.dataset.close) closePopup(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if ($('imodal').classList.contains('open')) closePopup(); else leave();
+});
+
+renderShopkeeper();
+renderPurse(false);
+renderStock();
+requestAnimationFrame(() => $('sweep').classList.add('run'));
+</script>
+</body>
+</html>
