@@ -22,7 +22,7 @@ COMPLETELY DESIGNED:
 
 SMALL CHANGES TO DESIGN:
 - Feature Engine (small change to feature editor in dm-view needed to be designed)
-- Spellbook (designed, needs a category for spells from features though ("use sanctuary on will" → no need for spellslot (cantrip))
+- Spellbook (designed, needs a category for spells from features though ("use sanctuary on will" → no need for spellslot (cantrip), should be like a category or some indicator that you got it from a feature)
 
 NO DESIGN / ONLY PART:
 - Level up characters for DM-view (needs design)
