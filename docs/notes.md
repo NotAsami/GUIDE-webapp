@@ -12,25 +12,40 @@
 ## ADD CAMPAIGN SWITCHER
 - Add a way to categorize characters to their respective campaign and the ability for the player to have multiple characters, if they have 2, they will get a popup on login to select the character they want. The DM then needs to have the ability switch between campaigns and see the characters that are in that campaign. This will be a major slice, but it will be a good way to organize the characters and campaigns, also the ability to create multiple characters (seed multiple characters) for 1 account. NEEDS A DESIGN
 ## ISSUES
+- Currently, there is no way to make an item grant proficiency or expertise.
 - The stat shard has overlapping text if bonus to constitution or intelligence, the text is too long and the +2 or +1 is overlapping with it
 - If you slot a shard, upgrade it and then unslot said shard, it doesn't save what you had upgraded.
 - The shard picker: after pressing the + button it should bring up a picker (designed in G.U.I.D.E. Shards.html on claude design)
-
+- The Feature editor has some missing things that are in the design, change when we do the feature engine
 ## LEFT TO DO:
 COMPLETELY DESIGNED:
 - Spell editor in DM-view catalog (designed)
 - Party overview in the nav-bar or somewhere else, not sure where though, maybe a panel like the roll-context panel? (designed)
 - Roll context panel, opens with a button in the bottom bar (only for decor currently) (designed)
+- Level up characters for DM-view (designed, need to review the design and make sure it is implemented correctly)
 
 SMALL CHANGES TO DESIGN:
 - Feature Engine (small change to feature editor in dm-view needed to be designed)
 - Spellbook (designed, needs a category for spells from features though ("use sanctuary on will" → no need for spellslot (cantrip), should be like a category or some indicator that you got it from a feature)
 
-NO DESIGN / ONLY PART:
-- Level up characters for DM-view (needs design)
+NO DESIGN / ONLY PART OF DESIGN:
 - Shop Feature (needs design)
 - Mobile port (only inventory designed)
 - Campaign switcher / character switcher (needs design) (last thing to implement)
 
 NO NEED TO DESIGN:
 - Premade list of items
+
+## DO THIS WEEK
+- Shop (Already working on design)
+- Roll context panel (major slice)
+- Spellbook (minor slice) + Spelleditor (minor slice)
+
+## NEXT WEEK
+- Feature engine (major slice)
+- Party overview (minor slice)
+- Level up characters for DM-view (minor slice)
+- Campaign switcher / character switcher (major slice)
+
+## SOMETIME ELSE
+- Mobile port (major slice, needs to be done after everything)
