@@ -13,12 +13,18 @@
 - Add a way to categorize characters to their respective campaign and the ability for the player to have multiple characters, if they have 2, they will get a popup on login to select the character they want. The DM then needs to have the ability switch between campaigns and see the characters that are in that campaign. This will be a major slice, but it will be a good way to organize the characters and campaigns, also the ability to create multiple characters (seed multiple characters) for 1 account. NEEDS A DESIGN
 ## BETTER IMAGE UPLOADS
 - Like so you don't have to use the sql for it.
+## ADD A WAY TO HAVE ITEMS COST DIFFIRENT CURRENCIES IN SHOPS
+- Describes itself
 ## ISSUES
 - Currently, there is no way to make an item grant proficiency or expertise.
 - The stat shard has overlapping text if bonus to constitution or intelligence, the text is too long and the +2 or +1 is overlapping with it
 - If you slot a shard, upgrade it and then unslot said shard, it doesn't save what you had upgraded.
 - The Feature editor has some missing things that are in the design, change when we do the feature engine
 - Add a way to add a picture of shopkeeper to the menu (needs design)
+- Replicate the design of the shop exactly like in the design (should put this to CLAUDE.md to always try to replicate the designs to the best of their abilities)
+- The catalog screens are not scrollable to the right / left, so on laptops the shards are cut off, instead of decresing the size of the buttons, make them scroll if too long
+
+
 ## LEFT TO DO:
 COMPLETELY DESIGNED:
 - Spell editor in DM-view catalog (designed)
@@ -34,14 +40,16 @@ NO DESIGN / ONLY PART OF DESIGN:
 - Shop Feature (needs design)
 - Mobile port (only inventory designed)
 - Campaign switcher / character switcher (needs design) (last thing to implement)
+- Loot table engine (needs design)
 
 NO NEED TO DESIGN:
-- Premade list of items
+- List of premade items
+- Implement markdown parsers to most input fields
 
 ## DO THIS WEEK
-- Shop (Already working on design)
-- Roll context panel (major slice)
-- Spellbook (minor slice) + Spelleditor (minor slice)
+- Shop (Already working on design) - DONE
+- Roll context panel (major slice) (only parts that don't need the feature engine)
+- Spellbook (minor slice) + Spelleditor (minor slice) (probably won't have the limit for it)
 
 ## NEXT WEEK
 - Feature engine (major slice)
