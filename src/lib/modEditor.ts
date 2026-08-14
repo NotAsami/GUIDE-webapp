@@ -5,15 +5,13 @@
  * lattice editor's effect widgets can never drift into two different stat
  * lists or two different "bonus vs. set" rules.
  */
-import type { AbilityKey, ItemEffects } from './database.types'
+import type { AbilityKey, ItemEffects, Mod } from './database.types'
+
+export type { Mod }
 
 /** The numeric modifiers the engine (lib/effects.ts) actually reads. `Note`
  *  and other descriptive perks are authored as Detail rows instead, not here. */
-export const MOD_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'AC', 'Attack', 'Damage', 'Saves', 'Speed', 'Initiative', 'Darkvision', 'Carry Capacity ×'] as const
-
-/** One authored modifier: a stat, an amount, and (abilities only) whether the
- *  amount is a flat bonus or a floor the score is set to (abilitySet). */
-export type Mod = { stat: string; amt: number; set?: boolean }
+export const MOD_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'AC', 'Attack', 'Damage', 'Saves', 'Speed', 'Initiative', 'Darkvision', 'Max HP', 'Carry Capacity ×'] as const
 
 const ABIL_KEYS: Record<string, AbilityKey> = { STR: 'str', DEX: 'dex', CON: 'con', INT: 'int', WIS: 'wis', CHA: 'cha' }
 export const isAbility = (stat: string): boolean => stat in ABIL_KEYS

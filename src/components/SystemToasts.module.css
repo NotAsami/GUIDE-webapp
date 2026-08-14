@@ -91,6 +91,28 @@
   66% { transform: translateX(-1px); opacity: 0.9; }
 }
 
+/* effect tones — Apply Effect toast reads ActiveEffect.kind: cyan buff (the
+   .toast default, no class needed), amber condition, red debuff. Recolor only
+   (no glitch — that's reserved for the corrupted VOICE tone above, a
+   different axis: who's speaking, not what landed on you). */
+.toast.cond {
+  --bc: var(--amber);
+  box-shadow: 0 0 0 1px rgba(226, 176, 33, 0.2), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(226, 176, 33, 0.3);
+}
+.toast.cond .tgIc { color: var(--amber-hot); background: rgba(226, 176, 33, 0.5); }
+.toast.cond .tgIc::before { background: #28291e; }
+.toast.cond .tgT { color: var(--amber-hot); }
+.toast.cond .led { background: var(--amber); box-shadow: 0 0 6px rgba(226, 176, 33, 0.8); }
+
+.toast.debuff {
+  --bc: var(--danger-hot);
+  box-shadow: 0 0 0 1px rgba(255, 84, 84, 0.2), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(255, 84, 84, 0.3);
+}
+.toast.debuff .tgIc { color: var(--danger-hot); background: rgba(185, 58, 58, 0.55); }
+.toast.debuff .tgIc::before { background: #241010; }
+.toast.debuff .tgT { color: var(--danger-hot); }
+.toast.debuff .led { background: var(--danger-hot); box-shadow: 0 0 6px rgba(255, 84, 84, 0.8); }
+
 @media (prefers-reduced-motion: reduce) {
   .toast, .toast.out { animation: none; transform: none; opacity: 1; }
   .toast.corrupted .tgT { animation: none; }

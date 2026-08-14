@@ -251,6 +251,21 @@ export type ItemEffects = {
   carryMult?: number
 }
 
+/** One authored modifier row: a stat, an amount, and (abilities only) whether the
+ *  amount is a flat bonus or a floor the score is set to (abilitySet). Shared by
+ *  the item/shard modifier editor (lib/modEditor.ts) and the effect catalog's
+ *  Modifiers block — one shape, compiled by `compileEffects` into `ItemEffects`. */
+export type Mod = { stat: string; amt: number; set?: boolean }
+
+/** Duration options offered wherever an effect is APPLIED — never on the effect
+ *  definition itself (see EffectDef). Only 'Rounds'/'Minutes'/'Hours' are counted
+ *  (paired with an `amount`); 'Until rest' and 'Permanent while equipped' are not. */
+export type EffectDuration = 'Rounds' | 'Minutes' | 'Hours' | 'Until rest' | 'Permanent while equipped'
+
+/** An item's reference to an effect_catalog definition, plus how long IT grants
+ *  it — duration lives on the applier, not the definition. */
+export type EffectRef = { effectId: string; dur: EffectDuration; amount?: number }
+
 /** A single item. Self-describing: the object carries its own display detail +
  *  mechanical `effects`. Granted copies also keep an `item_id` back-ref to their
  *  `item_catalog` template (Phase 2 slice 5), but the item stays self-describing —
@@ -293,6 +308,13 @@ export type EquippedItem = {
   w?: number
   h?: number
   effects?: ItemEffects
+  /** Effect-library references (DM authoring, catalog only). `effects` above is
+   *  the COMPILED cache of these — recompiled from the referenced effects' `mods`
+   *  every time the item is saved in the catalog form, so equip/grant keeps
+   *  reading plain `ItemEffects` with no changes. The player client never reads
+   *  the effect catalog. Absent on pre-library items and on granted/owned copies
+   *  (which only ever carry the compiled `effects`). */
+  effectRefs?: EffectRef[]
   /** Features this item grants while EQUIPPED — full snapshots (each carrying a
    *  `feature_id` back-ref), embedded so the player client never needs to read
    *  the DM-only feature catalog. Surfaced as the Gear Features group on the
@@ -328,6 +350,12 @@ export type ActiveEffect = {
   source?: string
   /** Free-text duration reminder shown on the status chip. */
   note?: string
+  /** Full prose description, snapshotted at apply time (the effect library's
+   *  `desc` when applied from there; an item's `flavor` when drunk as a
+   *  potion). The player never reads the effect catalog, so this is the one
+   *  copy their Effects panel tooltip has — `note` stays the short status-line
+   *  summary, this is the longer read. */
+  desc?: string
   /** When it was applied (epoch ms). */
   at?: number
 }
@@ -648,6 +676,41 @@ export type CatalogFeatureRow = { id: string; data: CatalogFeatureData; updated_
 export type CatalogFeatureInsert = { id?: string; data: CatalogFeatureData }
 export type CatalogFeatureUpdate = { data?: CatalogFeatureData }
 
+// ── Effect catalog (migration 0013): the DM's effect-authoring library. An
+//    effect DEFINITION is three things — Modifiers (numeric, `Mod[]`), Flags
+//    (never numeric: advantage/resistance/immunity) and Description (prose) —
+//    and nothing else. DURATION IS NOT HERE: a definition says what it does,
+//    whoever applies it (an item's `effectRefs`, later a spell or the console)
+//    says how long. Items reference these by id; `compileEffects` folds the
+//    referenced mods into the item's own `effects: ItemEffects` at save time
+//    (a compiled cache — see effectRefs on EquippedItem), so the equip/grant
+//    engine keeps reading plain ItemEffects with no changes. DM-only RLS, no
+//    player policy — same wall as feature_catalog. ──
+export type EffectKind = 'buff' | 'debuff' | 'condition'
+/** Non-numeric mechanical effects. 'advantage'/'disadvantage' target a roll
+ *  (a save, a check, an attack); 'resistance'/'vulnerability'/'immunity'
+ *  target a damage type. Never a number — the ItemEffects rule. */
+export type EffectFlagMode = 'advantage' | 'disadvantage' | 'resistance' | 'vulnerability' | 'immunity'
+export type EffectFlag = { mode: EffectFlagMode; target: string }
+export type EffectDef = {
+  name: string
+  /** Font Awesome icon name, e.g. 'fa-bolt'. */
+  icon: string
+  /** Drives the tint wherever this effect appears (index group, preview, item
+   *  reference row). */
+  kind: EffectKind
+  /** Free-text, lowercase-normalised, autocompleted from tags already in use. */
+  tags: string[]
+  mods: Mod[]
+  flags: EffectFlag[]
+  /** Player-facing prose — the rule a modifier/flag can't express (e.g. Bless's
+   *  1d4, Haste's speed ×2 and the after-effect). */
+  desc: string
+}
+export type CatalogEffectRow = { id: string; data: EffectDef; updated_at: string }
+export type CatalogEffectInsert = { id?: string; data: EffectDef }
+export type CatalogEffectUpdate = { data?: EffectDef }
+
 // ── Spell catalog (migration 0010): the DM's spell-authoring library. Same
 //    snapshot pattern as feature_catalog — Grant Spell copies a template onto
 //    `characters.spellbook.spells`, DM-only RLS, no player policy. Field shape
@@ -856,6 +919,12 @@ export type Database = {
         Row: CatalogFeatureRow
         Insert: CatalogFeatureInsert
         Update: CatalogFeatureUpdate
+        Relationships: []
+      }
+      effect_catalog: {
+        Row: CatalogEffectRow
+        Insert: CatalogEffectInsert
+        Update: CatalogEffectUpdate
         Relationships: []
       }
       spell_catalog: {

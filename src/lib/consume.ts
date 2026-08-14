@@ -61,7 +61,8 @@ export function consumeEffect(item: EquippedItem, character: CharacterRow, shard
   if (hasEffects) {
     const eff = {
       id: crypto.randomUUID(), name: item.name, icon: item.icon,
-      effects: item.effects!, source: item.name, note: item.duration, at: Date.now(),
+      effects: item.effects!, source: item.name, note: item.duration,
+      desc: item.flavor, at: Date.now(),
     }
     out.resources = {
       ...character.resources, activeEffects: [...activeEffects(character), eff],
