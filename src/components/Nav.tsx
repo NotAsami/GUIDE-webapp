@@ -72,6 +72,18 @@ function NavBtn({
   )
 }
 
+/** One hover-revealed column of sub-buttons, positioned by `pos`
+ *  (`styles.above` / `styles.below`). Renders nothing when empty. */
+function subStack(pos: string, items: (NavItem | undefined)[], pathname: string) {
+  const list = items.filter((x): x is NavItem => !!x)
+  if (!list.length) return null
+  return (
+    <div className={`${styles.sub} ${pos}`}>
+      {list.map(s => <NavBtn key={s.to} item={s} subActive={pathname === s.to} />)}
+    </div>
+  )
+}
+
 export function Nav({ variant = 'hero', meta }: Props) {
   const { pathname } = useLocation()
   const isDock = variant === 'dock'
@@ -90,19 +102,17 @@ export function Nav({ variant = 'hero', meta }: Props) {
           // Both variants hover-reveal sub-modules — the dock's own sizing
           // for .hasSub/.sub lives in Nav.module.css's DOCK VARIANT block.
           if (sub) {
+            // The dock sits right under the topbar, so an "above" sub would
+            // clip against it: hang both in one column below instead. The
+            // hero (Codex home) floats mid-page and keeps the split.
+            // (Stat Panel on top, Inventory under it.)
+            const above = isDock ? [] : [sub.above]
+            const below = isDock ? [sub.below, sub.above] : [sub.below]
             return (
               <div key={item.to} className={`${styles.slot} ${styles.hasSub}`}>
-                {sub.above && (
-                  <div className={`${styles.sub} ${styles.above}`}>
-                    <NavBtn item={sub.above} subActive={pathname === sub.above.to} />
-                  </div>
-                )}
+                {subStack(styles.above, above, pathname)}
                 <NavBtn item={item} active={lit} />
-                {sub.below && (
-                  <div className={`${styles.sub} ${styles.below}`}>
-                    <NavBtn item={sub.below} subActive={pathname === sub.below.to} />
-                  </div>
-                )}
+                {subStack(styles.below, below, pathname)}
               </div>
             )
           }
