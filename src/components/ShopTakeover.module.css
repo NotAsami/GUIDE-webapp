@@ -1,6 +1,15 @@
-/* Player-facing shop takeover. Same portal + chamfered-panel recipe as
-   RestButton.module.css, scaled up to a near-full-screen surface — see that
-   file's trailing comment for the cut-corner border fix this repeats. */
+/* Player-facing shop takeover — ported to match
+   "guide-hud/project/G.U.I.D.E. Shop.html" pixel-for-pixel (docs/notes.md:
+   "Replicate the design of the shop exactly like in the design"). 100%
+   player-facing: cyan primary, zero amber anywhere — the one deliberate
+   palette flip in this app, everywhere else DM-facing amber owns cyan-free
+   surfaces and vice versa.
+
+   Frame is the mock's four-layer beige/cyan double-line panel (::before beige
+   clip-path → .pnGap black inset → .pnLine beige inset → .pnInner the actual
+   dark content box) instead of this app's usual single cut-corner border —
+   see docs/Chamfered_clip-path_corners_fix.md for why a plain border can't
+   do this alone. */
 
 .overlay {
   position: fixed; inset: 0; z-index: 400;
@@ -16,71 +25,144 @@
 @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
 
 .panel {
+  --cut: 26px;
   position: relative;
-  width: min(880px, 100%);
-  max-height: min(720px, 100%);
+  width: min(1240px, 100%); height: min(840px, 100%);
+  transform: translateY(8px) scale(.985);
+  animation: panelIn 420ms cubic-bezier(.2, .7, .2, 1) 40ms forwards;
+}
+@keyframes panelIn { to { transform: translateY(0) scale(1); } }
+.panel::before {
+  content: ""; position: absolute; inset: 0; background: var(--beige);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  filter: drop-shadow(0 24px 60px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 42px rgba(0, 166, 214, 0.22));
+}
+.pnGap {
+  position: absolute; inset: 6px; background: #0a0a0a;
+  clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0, 100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%, 0 100%, 0 calc(var(--cut) - 5px));
+}
+.pnLine {
+  position: absolute; inset: 4px; background: var(--beige); opacity: .5;
+  clip-path: polygon(calc(var(--cut) - 3px) 0, 100% 0, 100% calc(100% - var(--cut) + 3px), calc(100% - var(--cut) + 3px) 100%, 0 100%, 0 calc(var(--cut) - 3px));
+}
+.pnInner {
+  position: absolute; inset: 8px; overflow: hidden;
   display: flex; flex-direction: column; min-height: 0;
   background:
-    radial-gradient(120% 60% at 50% 0%, rgba(226, 176, 33, 0.08), transparent 60%),
-    rgba(10, 10, 10, 0.98);
-  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(226, 176, 33, 0.14);
-  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
-  animation: panelIn 220ms cubic-bezier(.2, .7, .2, 1);
-  padding: 20px 22px;
-  overflow: hidden;
+    radial-gradient(120% 90% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 55%),
+    linear-gradient(180deg, #151515, #0d0d0d);
+  clip-path: polygon(calc(var(--cut) - 7px) 0, 100% 0, 100% calc(100% - var(--cut) + 7px), calc(100% - var(--cut) + 7px) 100%, 0 100%, 0 calc(var(--cut) - 7px));
+  box-shadow: inset 0 0 60px rgba(0, 166, 214, 0.07), inset 0 0 1px rgba(212, 191, 125, 0.25);
 }
-@keyframes panelIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.pnCorner { position: absolute; width: 20px; height: 20px; border-color: var(--cyan); opacity: .8; z-index: 6; pointer-events: none; }
+.pnCorner.tl { top: 16px; left: 16px; border-top: 1px solid; border-left: 1px solid; }
+.pnCorner.br { bottom: 16px; right: 16px; border-bottom: 1px solid; border-right: 1px solid; }
 
-/* Cut-corner border fix — see RestButton.module.css / CLAUDE.md for the recipe. */
-.panel {
-  --cut: 16px; --bc: var(--amber);
-  border: 1.5px solid var(--bc);
-  background-image:
-    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
-    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
-    radial-gradient(120% 60% at 50% 0%, rgba(226, 176, 33, 0.08), transparent 60%);
-  background-color: rgba(10, 10, 10, 0.98);
-  background-repeat: no-repeat;
-  background-origin: border-box;
-  background-position: top left, bottom right, 0 0;
-  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px), auto;
+/* ============================================================
+   STOREFRONT HEADER — the DM authored this; it leads.
+   ============================================================ */
+.sfHead {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto;
+  gap: 6px 20px; padding: 20px 26px 15px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
 }
-
-.head { display: flex; align-items: flex-start; gap: 14px; flex: 0 0 auto; padding-bottom: 12px; border-bottom: 1px dashed rgba(212, 191, 125, 0.3); }
+.sfHead::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: rgba(0, 166, 214, 0.4); box-shadow: 0 0 10px rgba(0, 166, 214, 0.35);
+}
 /* hexagon: nearly every edge is angled, so a border would vanish (only the
    two vertical edges would show anything) — same fix as InventoryPopup's
-   .imCrystal: a solid-ish filled clip + glow, no border attempted. */
+   .imCrystal: a solid-ish filled clip + glow, no border attempted. (An
+   earlier pass here copied the mockup's plain `border` verbatim, which is
+   exactly the bug this comment warns about — visible on the 2 vertical
+   edges only, absent on the 4 diagonal ones.) */
 .portrait {
-  width: 52px; height: 52px; flex: 0 0 auto;
+  grid-column: 1; grid-row: 1 / span 2; align-self: start;
+  width: 96px; height: 104px; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
-  color: var(--amber-hot); font-size: 22px;
-  background: radial-gradient(120% 90% at 50% 40%, rgba(226, 176, 33, 0.3), transparent 65%), rgba(226, 176, 33, 0.35);
+  color: var(--cyan-hot); font-size: 40px;
+  background: radial-gradient(120% 90% at 50% 35%, rgba(0, 166, 214, 0.35), transparent 68%), rgba(0, 166, 214, 0.18);
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  filter: drop-shadow(0 0 9px rgba(226, 176, 33, 0.4));
+  filter: drop-shadow(0 0 14px rgba(0, 166, 214, 0.55));
 }
-.titles { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.eyebrow { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.28em; color: var(--amber-dim); text-transform: uppercase; }
-.name { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 21px; letter-spacing: 0.08em; color: var(--text); text-transform: uppercase; line-height: 1.1; }
-.loc { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
+.titles { grid-column: 2; grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; align-self: center; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.34em; color: var(--cyan); text-transform: uppercase;
+  display: flex; align-items: center; gap: 10px;
+}
+.tick { width: 5px; height: 5px; background: var(--cyan); box-shadow: 0 0 8px rgba(0, 166, 214, .85); animation: blink 2.4s steps(2, end) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.name {
+  margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(24px, 2.4vw, 33px);
+  letter-spacing: 0.16em; color: var(--cyan-hot); text-transform: uppercase; line-height: 1;
+  text-shadow: 0 0 20px rgba(0, 166, 214, 0.28);
+}
+.chips { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+/* chamfered + bordered — see docs/Chamfered_clip-path_corners_fix.md: a plain
+   border draws fine on the straight edges but leaves the clip-path's diagonal
+   corners bare, so the corner stroke is painted as a background-image instead. */
+.chip {
+  --cut: 4px; --bc: rgba(212, 191, 125, 0.45);
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em; color: var(--beige); text-transform: uppercase;
+  border: 1px solid var(--bc); padding: 4px 9px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat; background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
+.chip.acc { color: var(--cyan); --bc: rgba(0, 166, 214, 0.5); }
+.chip i { margin-right: 6px; opacity: .85; }
+
+.desc { grid-column: 2 / span 2; grid-row: 2; margin: 2px 0 0; max-width: 92ch; font-family: var(--font-prose); font-style: italic; font-size: clamp(15px, 1.15vw, 17px); line-height: 1.5; color: var(--muted); }
+
+/* close button — mockup's .hd-close: cyan two-layer chamfer, same trick as
+   the outer .panel but at button scale. */
 .leave {
-  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
-  padding: 8px 12px; margin-top: 2px;
-  background: rgba(185, 58, 58, 0.08); border: 1.5px solid var(--danger);
-  color: var(--danger-hot); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
-  cursor: pointer; transition: background 130ms ease;
+  grid-column: 3; grid-row: 1; align-self: start; --cut: 9px;
+  position: relative; flex: 0 0 auto; min-width: 176px; height: 40px;
+  background: transparent; border: 0; padding: 0; cursor: pointer; font-family: var(--font-mono);
 }
-.leave:hover { background: rgba(185, 58, 58, 0.18); }
+.leaveFrame {
+  position: absolute; inset: 0; background: var(--cyan); opacity: .85;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.leaveInner {
+  position: absolute; inset: 1.5px;
+  background: linear-gradient(180deg, #141a1d, #0e1316);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  color: var(--cyan-hot); font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase;
+  transition: box-shadow 170ms ease, color 170ms ease;
+}
+.leave:hover .leaveInner { color: #fff; box-shadow: inset 0 0 20px rgba(0, 166, 214, 0.3), 0 0 16px rgba(0, 166, 214, 0.45); }
 
-.desc { margin: 12px 0 0; font-family: var(--font-prose); font-style: italic; font-size: 14.5px; line-height: 1.55; color: var(--muted); }
+/* ============================================================
+   PURSE STRIP — mirrors Inventory's COIN PURSE; PT/EP dropped, this app's
+   sheet only carries gp/sp/cp.
+   ============================================================ */
+.purse {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 24px; padding: 11px 26px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.22);
+  background: linear-gradient(180deg, rgba(0, 166, 214, 0.05), rgba(0, 0, 0, 0.28));
+}
+.purseLead { flex: 0 0 auto; display: flex; flex-direction: column; gap: 7px; }
+.subHead { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.3em; color: var(--cyan); text-transform: uppercase; }
+.goldReadout { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-mono); }
+.goldReadout .cur { font-size: 32px; font-weight: 500; color: var(--cyan-hot); line-height: 1; text-shadow: 0 0 14px rgba(0, 166, 214, 0.4); font-variant-numeric: tabular-nums; }
+.goldReadout .unit { font-size: 11px; color: var(--cyan); letter-spacing: 0.24em; }
 
-/* purse — mirrors Inventory.module.css's coin badges, GP/SP/CP only */
-.purse { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 320px; margin: 14px 0; flex: 0 0 auto; }
+.coinRow { display: grid; grid-template-columns: repeat(3, minmax(56px, 72px)); gap: 7px; }
 .coinBadge {
   --cut: 5px; --bc: var(--beige-dim);
   position: relative; border: 1px solid var(--bc);
   background-color: rgba(0, 0, 0, 0.35);
-  padding: 6px 4px;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 3px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
@@ -95,8 +177,26 @@
 .coinBadge.sp .ci { border: 1.5px solid var(--muted); color: var(--muted); }
 .coinBadge.cp { --bc: rgba(138, 122, 74, 0.55); }
 .coinBadge.cp .ci { border: 1.5px solid var(--beige-dim); color: var(--beige-dim); }
-.ci { width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 8px; }
-.cval { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text); }
+.ci { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 8.5px; line-height: 1; }
+.cval { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text); line-height: 1; font-variant-numeric: tabular-nums; }
+.clab { font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
+
+.purseNote {
+  margin-left: auto; text-align: right;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+  display: flex; flex-direction: column; gap: 5px;
+}
+.purseNote .k { color: var(--beige-dim); }
+.purseNote .acc { color: var(--cyan); }
+
+/* ============================================================
+   STOCK REGION — bottom fade over the scroll, verbatim from the mock
+   ============================================================ */
+.stock { position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 12px 26px 0; }
+.stock::after {
+  content: ""; position: absolute; left: 26px; right: 26px; bottom: 0; height: 34px; pointer-events: none;
+  background: linear-gradient(to top, #0d0d0d 10%, rgba(13, 13, 13, 0));
+}
 
 /* ============================================================
    STOCK — ported verbatim from G.U.I.D.E. Shop.html's .stock-bar / .sc card
@@ -114,7 +214,7 @@
 .legend .sw { width: 9px; height: 9px; border: 1.5px solid var(--cyan); display: inline-block; margin-right: 6px; vertical-align: -1px; }
 .legend .sw.dim { border-color: rgba(212, 191, 125, 0.3); background: rgba(0, 0, 0, .4); }
 
-.stockScroll { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 2px 4px 0; scrollbar-width: thin; }
+.stockScroll { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 6px 22px 0; scrollbar-width: thin; }
 .stockScroll::-webkit-scrollbar { width: 7px; }
 .stockScroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
 .stockScroll::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.5)); border: 1px solid #111; }
@@ -184,3 +284,61 @@
 .sc.sold .pr .st { color: var(--danger); }
 .sc.bought .scBody { animation: cellFlash 900ms ease; }
 @keyframes cellFlash { 0% { box-shadow: 0 0 0 rgba(0, 166, 214, 0); } 25% { box-shadow: 0 0 22px rgba(0, 166, 214, .75), inset 0 0 18px rgba(0, 166, 214, .35); } 100% { box-shadow: 0 0 0 rgba(0, 166, 214, 0); } }
+
+/* ============================================================
+   FOOTER — status bar
+   ============================================================ */
+.pnFoot {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 14px; padding: 11px 26px 13px;
+  border-top: 1px solid rgba(212, 191, 125, 0.28);
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+}
+.footLab { color: var(--beige-dim); }
+.footAcc { color: var(--cyan); }
+.footDot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px rgba(0, 166, 214, 0.7); }
+.footRight { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.footSep { color: var(--beige-dim); }
+.kbd { border: 1px solid rgba(212, 191, 125, 0.4); padding: 2px 6px; color: var(--text); font-size: 8px; letter-spacing: 0.16em; }
+
+/* ============================================================
+   TOAST — purchase flourish, bottom-center
+   ============================================================ */
+.toast {
+  position: fixed; left: 50%; bottom: 44px; transform: translate(-50%, 14px); z-index: 420; --cut: 9px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 200ms ease, transform 260ms cubic-bezier(.2, .7, .2, 1);
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toastFrame { position: absolute; inset: 0; background: var(--cyan); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); filter: drop-shadow(0 0 24px rgba(0, 166, 214, 0.5)); }
+.toastInner {
+  position: relative; margin: 1.5px;
+  background: linear-gradient(180deg, #16252b, #0d1418);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  padding: 12px 22px; display: flex; align-items: center; gap: 13px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan-hot);
+  box-shadow: inset 0 0 26px rgba(0, 166, 214, 0.22);
+}
+.toastInner .nm { color: var(--text); font-family: var(--font-prose); font-size: 15px; letter-spacing: 0.02em; text-transform: none; font-style: italic; }
+.toastInner .cost { color: var(--beige); }
+
+@media (max-height: 760px) {
+  .sfHead { padding: 15px 24px 12px; }
+  .portrait { width: 78px; height: 86px; font-size: 32px; }
+  .desc { font-size: 15px; max-height: 4.6em; overflow-y: auto; }
+  .goldReadout .cur { font-size: 26px; }
+  .sc .scBody { min-height: 160px; }
+  .sc .scArt { min-height: 84px; }
+  .sc .glyph { font-size: 34px; }
+}
+@media (max-width: 900px) {
+  .sfHead { grid-template-columns: auto 1fr; gap: 10px 16px; }
+  .leave { grid-column: 2; justify-self: end; }
+  .desc { grid-column: 1 / span 2; }
+  .name { font-size: 26px; }
+  .purse { flex-wrap: wrap; gap: 14px; }
+  .purseNote { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel, .sc, .toast, .tick { animation: none !important; }
+}

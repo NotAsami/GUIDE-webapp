@@ -21,6 +21,23 @@ export function canAfford(coins: Coins | undefined, priceGp: number): boolean {
   return toCopper(coins) >= priceGp * 100
 }
 
+export type PriceUnit = 'gp' | 'sp' | 'cp'
+
+/** cp-per-unit — MUST match `shop_buy`'s (migration 0009/0012) multiplier
+ *  exactly, or the client's "can I afford this" preview drifts from what the
+ *  server actually charges. */
+const UNIT_CP: Record<PriceUnit, number> = { gp: 100, sp: 10, cp: 1 }
+
+/** A shop/catalog `price` + `unit` pair, flattened to copper. */
+export function priceCp(price: number, unit: PriceUnit | undefined): number {
+  return price * UNIT_CP[unit ?? 'gp']
+}
+
+/** Player-facing "12 gp" / "5 sp" — unit defaults to gp, same as priceCp. */
+export function formatPrice(price: number, unit: PriceUnit | undefined): string {
+  return `${price.toLocaleString()} ${unit ?? 'gp'}`
+}
+
 // Dev-only self-check (no test runner in this repo — see CLAUDE.md) so a
 // broken round-trip or off-by-one in the split shows up in the console the
 // next time anyone runs `npm run dev`, not silently at the table.
@@ -31,4 +48,8 @@ if (import.meta.env?.DEV) {
   console.assert(back.gold === 3 && back.silver === 4 && back.copper === 5, 'coins: round-trip')
   console.assert(canAfford({ gold: 0, silver: 9, copper: 10 }, 1), 'coins: exact afford')
   console.assert(!canAfford({ gold: 0, silver: 9, copper: 9 }, 1), 'coins: short by 1cp')
+  console.assert(priceCp(5, 'gp') === 500, 'coins: priceCp gp')
+  console.assert(priceCp(5, 'sp') === 50, 'coins: priceCp sp')
+  console.assert(priceCp(5, 'cp') === 5, 'coins: priceCp cp')
+  console.assert(priceCp(5, undefined) === 500, 'coins: priceCp defaults to gp')
 }

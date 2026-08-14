@@ -227,6 +227,29 @@
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.9), 0 1px 1px rgba(0, 0, 0, 0.9);
   z-index: 3; line-height: 1;
 }
+
+/* "NEW" — set on a freshly-minted item (shop buy, DM grant), cleared on first
+ * hover (docs/notes.md:63). Shares the app's cyan "system/info" accent (see
+ * this file's .acc / .sys / .tick) rather than a dedicated colour. */
+.newBadge {
+  font-family: var(--font-mono); font-size: 7px; font-weight: 600;
+  letter-spacing: 0.12em; color: var(--cyan-hot); text-transform: uppercase;
+  background: rgba(0, 166, 214, 0.18); border: 1px solid var(--cyan);
+  padding: 1px 4px; line-height: 1.5;
+  text-shadow: 0 0 6px rgba(0, 166, 214, 0.6);
+  pointer-events: none;
+}
+.cellItem .newBadge { position: absolute; top: 3px; right: 4px; z-index: 4; }
+.crow .newBadge { flex: 0 0 auto; }
+
+/* dot on a container's tab — surfaces a NEW item routed into a container the
+ * player hasn't opened yet. */
+.tabDot {
+  position: absolute; top: 5px; right: 7px; z-index: 5;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.85);
+  pointer-events: none;
+}
 .cellItem:hover { transform: translateY(-1px); filter: brightness(1.16); z-index: 4; }
 
 /* footprint icon scale */
@@ -598,9 +621,11 @@
 .crow .ri { display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--beige); height: 100%; }
 .crow .rn {
   font-family: var(--font-prose); font-size: 16px; letter-spacing: 0.01em; color: var(--text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  display: flex; align-items: center; gap: 8px;
+  min-width: 0; display: flex; align-items: center; gap: 8px;
 }
+/* the name text truncates on its own so a trailing .newBadge never gets
+   clipped off the end of a long name. */
+.rnText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rowLock { font-size: 10px; color: var(--danger); flex: 0 0 auto; }
 .crow .rq { font-size: 10px; letter-spacing: 0.1em; color: var(--muted); text-align: right; }
 .crow .rq.none { opacity: 0.35; }

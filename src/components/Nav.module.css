@@ -1,6 +1,7 @@
 /* Center navbar ported from G.U.I.D.E. Codex.html lines 562–752.
    Five framed slots over the glyph: Equipment (hover-expands to Inventory
-   above + Stat Panel below), Lore, Spellbook, Character, Journal. */
+   above + Stat Panel below), Lore, Spellbook, Rolls (hover-expands to
+   Features below), Journal. */
 
 .navbar {
   display: flex;
@@ -30,7 +31,7 @@
   display: flex;
   justify-content: center;
 }
-.slot.equipment {
+.slot.hasSub {
   /* extend hover area vertically so the cursor can travel onto the revealed
      sub-buttons without leaving the slot (margin cancels the layout effect) */
   padding: 120px 0;
@@ -177,17 +178,17 @@
   text-shadow: 0 0 10px rgba(0, 166, 214, 0.85);
 }
 
-.slot.equipment:hover .sub,
-.slot.equipment:focus-within .sub {
+.slot.hasSub:hover .sub,
+.slot.hasSub:focus-within .sub {
   opacity: 1;
   pointer-events: auto;
 }
-.slot.equipment:hover .sub.above,
-.slot.equipment:focus-within .sub.above {
+.slot.hasSub:hover .sub.above,
+.slot.hasSub:focus-within .sub.above {
   transform: translate(-50%, -8px) scale(1);
 }
-.slot.equipment:hover .sub.below,
-.slot.equipment:focus-within .sub.below {
+.slot.hasSub:hover .sub.below,
+.slot.hasSub:focus-within .sub.below {
   transform: translate(-50%, 8px) scale(1);
 }
 
@@ -219,7 +220,7 @@
    (sizes/positions ported from the Stat Panel mockup navbar)
    ============================================================ */
 .dock .slot { width: 156px; }
-.dock .slot.equipment { padding: 60px 0; margin: -60px 0; }
+.dock .slot.hasSub { padding: 60px 0; margin: -60px 0; }
 
 .dock .btn { --w: 156px; --h: var(--nav-h); --cut: 11px; }
 .dock .btn .inner { gap: 6px; }

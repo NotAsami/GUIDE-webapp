@@ -235,8 +235,9 @@
 /* ============================================================
    MAIN — WORK AREA
    ============================================================ */
-.workTabs { position: relative; z-index: 3; flex: 0 0 auto; display: flex; gap: 6px; padding: 9px 13px 0; border-bottom: 1px solid rgba(212,191,125,0.22); box-shadow: 0 1px 0 rgba(226,176,33,0.12); }
+.workTabs { position: relative; z-index: 3; flex: 0 0 auto; display: flex; gap: 6px; padding: 9px 13px 0; border-bottom: 1px solid rgba(212,191,125,0.22); box-shadow: 0 1px 0 rgba(226,176,33,0.12); overflow-x: auto; scrollbar-width: thin; }
 .wtab {
+  flex: 0 0 auto;
   position: relative; isolation: isolate; padding: 9px 15px;
   font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em;
   color: var(--muted); text-transform: uppercase; background: var(--beige);
@@ -1033,8 +1034,9 @@
 /* ============================================================
    CATALOG MANAGER (campaign surface) — slice 5
    ============================================================ */
-.catTabs { display: flex; gap: 6px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(212,191,125,0.22); }
+.catTabs { display: flex; gap: 6px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(212,191,125,0.22); overflow-x: auto; scrollbar-width: thin; }
 .catTab {
+  flex: 0 0 auto;
   position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
   color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.24);
@@ -1097,6 +1099,7 @@
 
 .catDim { display: flex; align-items: center; gap: 9px; }
 .catDim .sessIn { width: 64px; margin-bottom: 0; text-align: center; }
+.catDim .selIn { width: 56px; margin-bottom: 0; padding-right: 16px; }
 .catDim .x { font-family: var(--font-mono); font-size: 12px; color: var(--beige-dim); }
 .catDim .unit { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 
@@ -1514,17 +1517,19 @@
 .skStockRow .ssS .rar { color: var(--rar, var(--muted)); }
 .skGold { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; }
 .skGold .sessIn { width: 74px; margin-bottom: 0; text-align: right; }
+.skGold .selIn { width: 52px; margin-bottom: 0; padding-right: 16px; }
 .skGold .gp { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber-dim); }
 .skGold.over .sessIn { --bc: var(--amber); color: var(--amber-hot); }
+.skGold.over .selIn { --bc: var(--amber); color: var(--amber-hot); }
 .skMode { flex: 0 0 auto; display: flex; }
 .skMode .sm {
   font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
   background: rgba(0,0,0,0.4); border: 1px solid rgba(212,191,125,0.24); padding: 7px 9px; cursor: pointer;
   transition: color 130ms ease, border-color 130ms ease, background 130ms ease;
 }
-.skMode .sm + .sm { border-left: 0; }
+.skMode .sm + .sm { margin-left: -1px; }
 .skMode .sm:hover { color: var(--text); border-color: rgba(226,176,33,0.45); }
-.skMode .sm.on { color: var(--amber-hot); border-color: var(--amber); background: rgba(226,176,33,0.12); }
+.skMode .sm.on { position: relative; z-index: 1; color: var(--amber-hot); border-color: var(--amber); background: rgba(226,176,33,0.12); }
 .skQty { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; }
 .skQty .sessIn { width: 56px; margin-bottom: 0; text-align: center; }
 .skQty .ql { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige-dim); }

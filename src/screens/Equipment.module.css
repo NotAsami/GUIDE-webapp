@@ -727,9 +727,12 @@
 /* --- Shard bar: fills the gap between the gear slots and the action buttons,
    header + 3 shard sub-slots split by dividers --- */
 .shardBar {
+  display: block;
   flex: 1;
   margin-top: 12px;
   min-height: 92px;
+  text-decoration: none;
+  color: inherit;
 }
 .shardBar .sInner {
   flex-direction: column; align-items: stretch; justify-content: flex-start;
@@ -766,61 +769,8 @@
 .shardSub:hover i { filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.6)); }
 .shardSub:hover .shardSubLabel { color: var(--cyan-hot); }
 
-/* --- Active status effects (consumable buffs) --- */
-.statusList { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
-.statusHead {
-  display: flex; align-items: baseline; justify-content: space-between;
-  font-family: var(--font-mono); font-size: 9px;
-  letter-spacing: 0.26em; color: var(--cyan); text-transform: uppercase;
-  padding-bottom: 6px; margin-bottom: 2px;
-  border-bottom: 1px solid rgba(0, 166, 214, 0.25);
-}
-.statusHint { color: var(--muted); letter-spacing: 0.18em; font-size: 8px; }
-.statusChip {
-  position: relative;
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 8px 7px 10px;
-  border: 1px solid rgba(0, 166, 214, 0.35);
-  background:
-    radial-gradient(140% 100% at 0% 50%, rgba(0, 166, 214, 0.1), transparent 60%),
-    rgba(0, 0, 0, 0.32);
-}
-.statusChip::before {
-  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-  background: var(--cyan); box-shadow: 0 0 10px rgba(0, 166, 214, 0.5);
-}
-.scIcon {
-  width: 26px; height: 26px; flex: 0 0 auto;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--cyan-hot); font-size: 13px;
-  border: 1px solid rgba(0, 166, 214, 0.35);
-  background: rgba(0, 0, 0, 0.4);
-}
-.scBody { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.scName {
-  font-family: var(--font-display); font-size: 13px;
-  letter-spacing: 0.04em; color: var(--cyan-hot); line-height: 1.1;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.scMeta {
-  font-family: var(--font-mono); font-size: 8px;
-  letter-spacing: 0.16em; color: var(--beige); text-transform: uppercase;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.scRemove {
-  flex: 0 0 auto;
-  width: 24px; height: 24px;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--muted); font-size: 12px;
-  border: 1px solid rgba(212, 191, 125, 0.25);
-  cursor: pointer;
-  transition: color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
-}
-.scRemove:hover {
-  color: var(--danger-hot);
-  border-color: var(--danger);
-  box-shadow: 0 0 10px rgba(185, 58, 58, 0.4);
-}
+/* Active-effects chips moved to components/EffectsSidebar.module.css
+   (docs/notes.md:68 — the panel now mounts from the Stat Panel). */
 
 /* clickable gear slots (open the equip/unequip modal) */
 .clickable { cursor: pointer; }

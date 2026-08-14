@@ -10,9 +10,10 @@ import {
   abilityMod, abilities, allSkillTotals, formatMod, passiveScore,
   proficientSkillCount, saveTotal,
 } from '../lib/dnd'
-import { effectiveSheet } from '../lib/effects'
+import { activeEffects, effectiveSheet } from '../lib/effects'
 import { burden, burdenTier, type BurdenTier } from '../lib/burden'
 import { handLabel, weaponAttackBonus, weaponDamageString } from '../lib/weapons'
+import { EffectsSidebar } from '../components/EffectsSidebar'
 import styles from './Stats.module.css'
 
 interface RouteContext {
@@ -52,6 +53,16 @@ export function Stats() {
   const load = burden(character, shardTrees)
   const tier = burdenTier(load.current, load.max)
 
+  // Active Effects panel — moved here from Equipment (docs/notes.md:68) as a
+  // button on the Senses widget rather than its own permanent panel slot.
+  const [effectsOpen, setEffectsOpen] = useState(false)
+  const effects = activeEffects(character)
+  async function removeEffect(id: string) {
+    await updateSection('resources', {
+      ...character.resources, activeEffects: effects.filter(e => e.id !== id),
+    } as unknown as CharacterRow['resources'])
+  }
+
   const meta = (
     <>
       <span className="dim">◇</span>
@@ -90,7 +101,10 @@ export function Stats() {
           <HitPoints sheet={view} character={character} updateSection={updateSection} />
           <HitDice sheet={view} character={character} updateSection={updateSection} />
           <AbilityScores sheet={view} base={base.abilities} exhaustion={exhaustion} tier={tier} />
-          <Senses sheet={view} character={character} exhaustion={exhaustion} tier={tier} />
+          <Senses
+            sheet={view} character={character} exhaustion={exhaustion} tier={tier}
+            effectCount={effects.length} onOpenEffects={() => setEffectsOpen(true)}
+          />
           <SavingThrows sheet={view} />
           <DeathSavesWidget character={character} updateSection={updateSection} />
           <Exhaustion character={character} updateSection={updateSection} />
@@ -99,6 +113,11 @@ export function Stats() {
           <Proficiencies character={character} sheet={view} />
         </div>
       </div>
+
+      <EffectsSidebar
+        open={effectsOpen} effects={effects}
+        onRemove={id => void removeEffect(id)} onClose={() => setEffectsOpen(false)}
+      />
     </>
   )
 }
@@ -362,8 +381,9 @@ function AbilityScores({ sheet, base, exhaustion, tier }: {
 
 /* ---------- 05 Senses & Defenses ---------- */
 
-function Senses({ sheet, character, exhaustion, tier }: {
+function Senses({ sheet, character, exhaustion, tier, effectCount, onOpenEffects }: {
   sheet: CharacterSheet; character: CharacterRow; exhaustion: number; tier: BurdenTier
+  effectCount: number; onOpenEffects: () => void
 }) {
   const race = character.identity?.race ?? 'Unknown'
   const dark = sheet.senses?.darkvision ?? 0
@@ -378,7 +398,17 @@ function Senses({ sheet, character, exhaustion, tier }: {
   const checks = disadvReasons.length ? `Disadvantage · ${disadvReasons.join(' + ')}` : 'Normal'
 
   return (
-    <Widget num="05" title="Senses & Defenses" meta="Passive · Condition" span={4}>
+    <Widget
+      num="05" title="Senses & Defenses" span={4}
+      meta={
+        <>
+          Passive · Condition
+          <button className={`${styles.metaBtn} ${styles.glow}`} onClick={onOpenEffects} title="Active Effects">
+            Effects{effectCount > 0 ? ` (${effectCount})` : ''}
+          </button>
+        </>
+      }
+    >
       <div className={styles.sensesList}>
         <SenseRow k="Passive Perception" v={String(passiveScore(sheet, 'perception'))} acc />
         <SenseRow k="Passive Investigation" v={String(passiveScore(sheet, 'investigation'))} />

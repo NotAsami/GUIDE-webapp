@@ -103,6 +103,19 @@
 }
 .metaBtn:hover:not(:disabled) { color: var(--cyan-hot); border-color: var(--cyan); box-shadow: 0 0 10px rgba(0, 166, 214, 0.4); }
 .metaBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Effects button — a standing cyan glow (not just on hover) so it reads as a
+   panel launcher, not just another meta label. Pulses gently to draw the eye
+   without being distracting. */
+.metaBtn.glow {
+  color: var(--cyan-hot); border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(0, 166, 214, 0.55);
+  animation: metaGlow 2.6s ease-in-out infinite;
+}
+.metaBtn.glow:hover:not(:disabled) { box-shadow: 0 0 16px rgba(0, 166, 214, 0.85); }
+@keyframes metaGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 166, 214, 0.4); }
+  50%      { box-shadow: 0 0 16px rgba(0, 166, 214, 0.85); }
+}
 .wBody { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 
 /* ---- shared angular cell ---- */

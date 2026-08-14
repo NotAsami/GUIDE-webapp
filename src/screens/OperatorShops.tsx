@@ -16,6 +16,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CatalogItemRow, ItemCategory, ItemRarity, Shop, ShopCatalogRow, ShopStockLine, ShopStockMode } from '../lib/database.types'
+import { formatPrice, type PriceUnit } from '../lib/coins'
 import type { DmShopsState } from '../lib/dm'
 import { ALL_PARTY } from '../lib/voice'
 import { CAT_LABEL, CAT_ORDER, rarityLabel } from '../lib/items'
@@ -50,6 +51,8 @@ function Btn({ tone, lg, icon, label, onClick, disabled }: {
     </button>
   )
 }
+
+const UNITS: PriceUnit[] = ['gp', 'sp', 'cp']
 
 const SHOP_ICONS = [
   'fa-shop', 'fa-store', 'fa-coins', 'fa-mortar-pestle', 'fa-flask', 'fa-scroll',
@@ -153,6 +156,8 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
   const [name, setName] = useState(d?.name ?? '')
   const [icon, setIcon] = useState(d?.icon ?? 'fa-shop')
   const [location, setLocation] = useState(d?.location ?? '')
+  const [keeper, setKeeper] = useState(d?.keeper ?? '')
+  const [hours, setHours] = useState(d?.hours ?? '')
   const [desc, setDesc] = useState(d?.desc ?? '')
   const [stock, setStock] = useState<ShopStockLine[]>(d?.stock ?? [])
   const [query, setQuery] = useState('')
@@ -167,12 +172,19 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
     setStock(prev => prev.filter((_, idx) => idx !== i))
   }
   function addLine(it: CatalogItemRow) {
-    setStock(prev => [...prev, { item_id: it.id, price: it.data?.value ?? 0, mode: 'unlimited' as ShopStockMode, qty: 1, item: it.data }])
+    setStock(prev => [...prev, {
+      item_id: it.id, price: it.data?.value ?? 0, unit: it.data?.valueUnit ?? 'gp',
+      mode: 'unlimited' as ShopStockMode, qty: 1, item: it.data,
+    }])
   }
 
   async function submit() {
     setBusy(true)
-    await onSubmit({ name: name.trim(), icon, location: location.trim(), desc: desc.trim(), stock })
+    await onSubmit({
+      name: name.trim(), icon, location: location.trim(),
+      keeper: keeper.trim() || undefined, hours: hours.trim() || undefined,
+      desc: desc.trim(), stock,
+    })
     setBusy(false)
   }
 
@@ -221,6 +233,17 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
       <span className={styles.fieldLab}>Location</span>
       <input className={styles.sessIn} value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Brettany Market Row" />
 
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Keeper</span>
+          <input className={styles.sessIn} value={keeper} onChange={e => setKeeper(e.target.value)} placeholder="e.g. Old Maren" />
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Hours</span>
+          <input className={styles.sessIn} value={hours} onChange={e => setHours(e.target.value)} placeholder="e.g. Dawn to dusk" />
+        </div>
+      </div>
+
       <div className={styles.qLabRow}>
         <span className={styles.fieldLab}>Player-Facing Prose</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Shown when the shop opens</span>
@@ -234,14 +257,15 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
         ) : stock.map((line, i) => {
           const rar = line.item.rarity ?? 'common'
           const catalogValue = line.item.value
-          const overridden = catalogValue != null && catalogValue !== line.price
+          const catalogUnit = line.item.valueUnit ?? 'gp'
+          const overridden = catalogValue != null && (catalogValue !== line.price || catalogUnit !== (line.unit ?? 'gp'))
           return (
             <div key={line.item_id} className={styles.skStockRow} style={{ ['--rar' as string]: RAR_COLOR[rar] }}>
               <span className={styles.ssIc}><i className={`fa-solid ${line.item.icon ?? 'fa-box'}`} /></span>
               <span className={styles.ssTx}>
                 <span className={styles.ssT}>{line.item.name}</span>
                 <span className={styles.ssS}>
-                  {CAT_LABEL[line.item.category ?? 'misc']} · <span className={styles.rar}>{rarityLabel(rar)}</span> · catalog {catalogValue ?? 0} gp
+                  {CAT_LABEL[line.item.category ?? 'misc']} · <span className={styles.rar}>{rarityLabel(rar)}</span> · catalog {formatPrice(catalogValue ?? 0, catalogUnit)}
                   {overridden ? ' · overridden' : ''}
                 </span>
               </span>
@@ -251,7 +275,13 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
                   onChange={e => updateLine(i, { price: Math.max(0, parseInt(e.target.value || '0', 10) || 0) })}
                   aria-label={`${line.item.name} price`}
                 />
-                <span className={styles.gp}>gp</span>
+                <select
+                  className={styles.selIn} value={line.unit ?? 'gp'}
+                  onChange={e => updateLine(i, { unit: e.target.value as PriceUnit })}
+                  aria-label={`${line.item.name} price unit`}
+                >
+                  {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
               </span>
               <span className={styles.skMode}>
                 <span className={cx(styles.sm, line.mode === 'unlimited' && styles.on)} onClick={() => updateLine(i, { mode: 'unlimited' })}>Unlimited</span>
@@ -322,7 +352,7 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
                 <span className={styles.piIc}><i className={`fa-solid ${it.data?.icon ?? 'fa-box'}`} /></span>
                 <span className={styles.piT}>{it.data?.name ?? 'Untitled'}</span>
                 <span className={styles.piM}>{blocked ? 'Quest · excluded' : already ? 'In stock' : rarityLabel(rar)}</span>
-                {!blocked && <span className={styles.piV}>{it.data?.value ?? 0} gp</span>}
+                {!blocked && <span className={styles.piV}>{formatPrice(it.data?.value ?? 0, it.data?.valueUnit)}</span>}
               </button>
             )
           })}

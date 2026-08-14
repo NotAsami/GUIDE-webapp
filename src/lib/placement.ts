@@ -235,13 +235,13 @@ export function placeMerging(inventory: InventoryItem[], item: InventoryItem, de
  * isn't routed through the DM's grantSnapshots batching) wants this instead.
  */
 export function placeNew(inventory: InventoryItem[], item: InventoryItem, dest: Destination): InventoryItem[] {
-  const placed = place(item, dest)
+  const placed = { ...place(item, dest), isNew: true }
   if (isStackable(placed.category)) {
     const existing = inventory.find(i =>
       i.containerId === dest.containerId && i.name === placed.name && i.category === placed.category && !i.locked)
     if (existing) {
       const qty = (existing.qty ?? 1) + (placed.qty ?? 1)
-      return inventory.map(i => (i.id === existing.id ? { ...i, qty } : i))
+      return inventory.map(i => (i.id === existing.id ? { ...i, qty, isNew: true } : i))
     }
   }
   return [...inventory, placed]
