@@ -4,10 +4,6 @@
     - Not a problem currently since we are only max 4 players
       - Potentially considering a fifth and sixth player, so we do actually need the scaler (not sure if they will join)
 
-## SHOP FEATURE
-- A shop feature, it pops up on the players screens, they can spend money from their inventory, it will automatically deduct it from their balance it will automatically give them the item they purchased, the DM will be able to make these shopkeepers from their dm view, they will have a few presets that will take items they already created from some categories (they can't sell relics) and the dm will also be able to make their own custom one and save that as a preset so they can randomly generate a for example potion seller that will sell the potions from the potions list that is in the database. Integrates with the Loot table engine slice.
-  - Problems: ~~Need to sync very fast so that when a player purchases something it will be out of stock for the other players already~~ (FIXED BY SERVER SIDE CHECK OF ITEM PURCHASE, FIRST ONE WINS, OTHER GETS OUT OF STOCK POPUP). Increased complexity (maybe performance issues?)
-
 ## LOOT GENERATOR ENGINE
 DM view: Add a loot generator feature, you create a list of things you want to randomly give, like for example a chest, peasant corpse, knight corpse. Each would have a list like:
 Chainmail Boots x1 30%
@@ -29,52 +25,21 @@ The DM can define a list that would then parse these lists, choose what items to
 ## ADD CAMPAIGN SWITCHER
 - Add a way to categorize characters to their respective campaign and the ability for the player to have multiple characters, if they have 2, they will get a popup on login to select the character they want. The DM then needs to have the ability switch between campaigns and see the characters that are in that campaign. This will be a major slice, but it will be a good way to organize the characters and campaigns, also the ability to create multiple characters (seed multiple characters) for 1 account. NEEDS A DESIGN
 
-## EFFECT LIBRARY
-- The gap: effects exist as instances attached to things, but there is no library of definitions. Items author modifiers inline; the DM's Apply Effect picks from a hardcoded list. A spell saying "grant Haste" has nothing to reference — so party-targeted spells currently apply effects that don't do anything.
-- Fix: an EFFECTS tab in the Catalog Manager — a sixth tab, standard list + form. One definition, referenced by items, spells, features, and the console.
-- DECISIONS:
-  - Duration lives on the applier, not the definition. An effect defines what it does; whoever applies it decides how long. Haste is 1 minute cast, permanent-while-equipped from an item.
-  - Item effects migrate to references. No inline alternative — one source of truth. The item form's EFFECTS GRANTED sub-section becomes a picker plus per-row duration.
-  - The picker is a search, not a dropdown. Type to filter by name and tag, show a handful of matches. Same interaction as the shop stock item picker. A raw list of hundreds is unusable.
-- The three-way split that the model rests on
-| | Holds | Example (Haste) |
-|---|---|---|
-| **Modifiers** | Numeric stat changes | +2 AC, speed ×2 |
-| **Flags** | Non-numeric mechanical effects | Advantage on DEX saves |
-| **Description** | Prose the human applies | The extra limited action; the lethargy when it ends |
-
-- **Never pretend advantage is a flat number** — the rule that already governs items
-governs effects. The form must make modifiers and flags visually distinct, or the data
-ends up with `advantage: +1` in six months.
-- Definition also carries: name, icon, kind (Buff / Debuff / Condition — drives tint), and
-tags (free-text, autocomplete from tags in use, lowercase-normalised).
-- Add a markdown parser to the decsription field, so that the DM can add formatting to the description of the effect. (This should become standard practice, maybe add to claude.md, doc is present for the implementation)
-
 ## BETTER IMAGE UPLOADS
 - Like so you don't have to use the sql for it.
-
-## ADD A WAY TO HAVE ITEMS COST DIFFERENT CURRENCIES IN SHOPS
-- ~~Describes itself, plus auto-conversion (agent said it was implemented, but I haven't tested it yet since you can't use silver or copper to set the price of an item)~~ (DONE — shopkeeper stock rows and catalog items now have a gp/sp/cp unit selector; shop_buy migration applied to the live project)
 
 ## TURN TRACKER (not a VTT)
 - A turn tracker per-player button that when you press effects like poison get sent to the roll context panel that remind the player they took 1d6 damage (can roll in there) the button just “advances” the players turn, no tracking actual combat. The effects then need to be able to read the turn has advanced and remind themselves. Inspiration from dicecloud
 
 ## QOL ADDITIONS
-- ~~Add a “NEW” marker on to right of newly added items to inventory, disappears after first hover. If a new item lands inside a container the player hasn't opened (say, an axe auto-routed into an unopened backpack), the badge should also surface as a small dot on that container's tab~~ (DONE — persists in the DB, clears on hover or on opening the item)
 - A notification icon in the roll context panel when you roll something that incentivizes to open it, like a yellowish or red ping corcle (Also written in feature engine part) — DEFERRED, roll context panel is still a "Coming Soon" stub, this ships with it
 - Add a description of the effect that is in the effect panel, when you hover it, you get a tooltip that describes what the effect does, like “advantage on dex saves” or “+2 AC” or “speed x2” or “the extra limited action; the lethargy when it ends”
   - This will be possible due to the new effect editor having fields for descriptions — DEFERRED, needs the Effect Library built first (see that section above)
-- ~~Move features as a submenu to the rolls screen, ![img.png](imgs/img.png) like in the image. Something like we have on the navbar currently, where you can open the inventory submenu from the equipment button.~~ (DONE)
-- ~~Move the effects panel to the stat-panel subscreen, as a button that opens the panel of effects.~~ (DONE — button on the Senses widget, glows cyan)
 
 ## ISSUES
 - Currently, there is no way to make an item grant proficiency or expertise.
 - Add a way to add a picture of shopkeeper to the menu (needs design).
-- ~~Replicate the design of the shop exactly like in the design.~~ (DONE — pixel-level port of the mockup, cyan primary/zero amber, keeper + hours fields added)
-- ~~The catalog screens are not scrollable to the right / left, so on laptops the shards are cut off, instead of decresing the size of the buttons, make them scroll if too long~~ (DONE)
-- ~~The LIMITED option on item stock in the shopkeeper editor has the left border missing, the unlimited is fine.~~ (DONE)
 - Spells that grant effects don’t currently do anything except give an indicator to the effects panel, update the effect granter when effect editor is built. (Fix with the effect editor)
-- ~~The effect panel has no way to display debuffs, like red entries. (not confirmed)~~ (DONE — confirmed and fixed; chips now colour by kind: buff cyan, cond amber, debuff red)
 
 ## LEFT TO DO:
 COMPLETELY DESIGNED:
