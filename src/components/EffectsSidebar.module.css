@@ -1,0 +1,154 @@
+/* Active Effects slide-over — chrome copied verbatim from Equipment.module.css
+ * (the shared sidebar/modalClose/selectorEmpty family it still shares with
+ * EquipmentCarry.tsx's CarrySidebar) so this component is self-contained and
+ * mountable from any screen. Kind-coloured chips are new here — see the
+ * header comment in EffectsSidebar.tsx. */
+
+.sidebarScrim {
+  position: fixed;
+  inset: var(--bar-top-h) 0 var(--bar-bottom-h) 0;
+  z-index: 39;
+}
+
+.sidebar {
+  position: fixed;
+  top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 50px);
+  bottom: calc(var(--bar-bottom-h) + 22px);
+  right: 0;
+  width: min(400px, 90vw);
+  z-index: 40;
+  transform: translateX(106%);
+  transition: transform 260ms cubic-bezier(.2, .7, .2, 1);
+  pointer-events: none;
+}
+.sidebar.open { transform: translateX(0); pointer-events: auto; }
+.sidebarFrame {
+  position: absolute; inset: 0;
+  background: var(--beige);
+  clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%, 0 18px);
+}
+.sidebarInner {
+  position: absolute; inset: 1.5px 0 1.5px 1.5px;
+  background:
+    radial-gradient(120% 50% at 100% 0%, rgba(0, 166, 214, 0.12), transparent 60%),
+    linear-gradient(180deg, #1b1b1b, #121212);
+  clip-path: polygon(17px 0, 100% 0, 100% 100%, 0 100%, 0 17px);
+  display: flex; flex-direction: column;
+  padding: 16px 18px 14px;
+  box-shadow: -20px 0 44px rgba(0, 0, 0, 0.55);
+}
+.sidebarHead {
+  display: flex; align-items: center; gap: 12px;
+  padding-bottom: 12px; margin-bottom: 12px;
+  border-bottom: 1px dashed rgba(212, 191, 125, 0.3);
+}
+.shTitles { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.shKicker {
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.26em; color: var(--cyan); text-transform: uppercase;
+}
+.shName {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 19px; letter-spacing: 0.06em; color: var(--cyan-hot);
+  text-transform: uppercase; line-height: 1.05;
+}
+.modalClose {
+  margin-left: auto; flex: 0 0 auto;
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 14px;
+  border: 1px solid rgba(212, 191, 125, 0.25);
+  transition: color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.modalClose:hover {
+  color: var(--cyan-hot);
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(0, 166, 214, 0.4);
+}
+.sidebarBody { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.sidebarFoot {
+  margin-top: 12px; padding-top: 10px;
+  border-top: 1px dashed rgba(212, 191, 125, 0.25);
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em;
+  color: var(--muted); text-transform: uppercase; text-align: center; line-height: 1.5;
+}
+
+.selectorEmpty {
+  text-align: center;
+  padding: 20px 12px;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.18em; line-height: 1.7;
+  color: var(--muted); text-transform: uppercase;
+}
+.em {
+  display: block; margin-top: 6px;
+  color: var(--beige-dim); font-size: 9px; letter-spacing: 0.22em;
+}
+
+/* ============================================================
+   STATUS CHIPS — one per active effect. Colour reads `kind`
+   (docs/notes.md:77 — the effect panel previously had no way to show a
+   debuff; buff/cond/debuff match the DM console's own .fxLine palette).
+   ============================================================ */
+.statusChip {
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px 7px 10px;
+  border: 1px solid rgba(0, 166, 214, 0.35);
+  background:
+    radial-gradient(140% 100% at 0% 50%, rgba(0, 166, 214, 0.1), transparent 60%),
+    rgba(0, 0, 0, 0.32);
+}
+.statusChip::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--cyan); box-shadow: 0 0 10px rgba(0, 166, 214, 0.5);
+}
+.statusChip.cond { border-color: var(--amber); }
+.statusChip.cond::before { background: var(--amber); box-shadow: 0 0 10px rgba(226, 176, 33, 0.5); }
+.statusChip.cond .scName { color: var(--amber-hot); }
+.statusChip.debuff { border-color: var(--danger-hot); }
+.statusChip.debuff::before { background: var(--danger-hot); box-shadow: 0 0 10px rgba(255, 84, 84, 0.5); }
+.statusChip.debuff .scIcon { color: var(--danger-hot); border-color: rgba(255, 84, 84, 0.35); }
+.statusChip.debuff .scName { color: var(--danger-hot); }
+
+.scIcon {
+  width: 26px; height: 26px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--cyan-hot); font-size: 13px;
+  border: 1px solid rgba(0, 166, 214, 0.35);
+  background: rgba(0, 0, 0, 0.4);
+}
+.scBody { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.scName {
+  font-family: var(--font-display); font-size: 13px;
+  letter-spacing: 0.04em; color: var(--cyan-hot); line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.scMeta {
+  font-family: var(--font-mono); font-size: 8px;
+  letter-spacing: 0.16em; color: var(--beige); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.scSource {
+  font-family: var(--font-mono); font-size: 7.5px;
+  letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.scRemove {
+  flex: 0 0 auto;
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 12px;
+  border: 1px solid rgba(212, 191, 125, 0.25);
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+.scRemove:hover {
+  color: var(--danger-hot);
+  border-color: var(--danger);
+  box-shadow: 0 0 10px rgba(185, 58, 58, 0.4);
+}
+
+@media (max-width: 1100px) {
+  .sidebar { width: min(360px, 92vw); }
+}

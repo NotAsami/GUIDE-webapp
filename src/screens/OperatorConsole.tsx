@@ -763,7 +763,7 @@ function grantSnapshot(
   // arrows fall into the quiver, everything else takes the first free cell on
   // person and overflows to a bag. This is what retired the grant-destination
   // picker — the DM never has to choose a container.
-  return place(fresh, routeItem(fresh, gear, inventory))
+  return { ...place(fresh, routeItem(fresh, gear, inventory)), isNew: true }
 }
 
 /** Grant `qty` copies of a catalog template in ONE inventory write. Stackable
@@ -810,7 +810,7 @@ function grantSnapshots(
     const existing = next.find(i =>
       i.containerId === dest && i.name === probe.name && i.category === probe.category && !i.locked)
     next = existing
-      ? next.map(i => (i === existing ? { ...i, qty: (i.qty ?? 1) + take } : i))
+      ? next.map(i => (i === existing ? { ...i, qty: (i.qty ?? 1) + take, isNew: true } : i))
       : [...next, { ...probe, qty: take }]
     remaining -= take
   }
@@ -1197,6 +1197,7 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
   const [h, setH] = useState(d?.h ?? 1)
   const [weight, setWeight] = useState(String(d?.weight ?? ''))
   const [value, setValue] = useState(d?.value != null ? String(d.value) : '')
+  const [valueUnit, setValueUnit] = useState<'gp' | 'sp' | 'cp'>(d?.valueUnit ?? 'gp')
   // Container authoring. `isContainer` is its own toggle rather than being
   // inferred from the category: a backpack and a crowbar are both tools, and
   // only one of them holds things.
@@ -1231,7 +1232,7 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
     const data: CatalogItemData = {
       name: name.trim(), category, rarity, icon, w, h,
       ...(Number.isFinite(weightNum) ? { weight: weightNum } : {}),
-      ...(Number.isFinite(valueNum) ? { value: valueNum } : {}),
+      ...(Number.isFinite(valueNum) ? { value: valueNum, valueUnit } : {}),
       ...(isSlotted(category) ? { slot } : {}),
       ...(isContainer ? {
         container: {
@@ -1322,7 +1323,17 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
           </div>
         </div>
         <div><span className={styles.fieldLab}>Weight</span><input className={styles.sessIn} type="number" min={0} step="0.1" value={weight} onChange={e => setWeight(e.target.value)} placeholder="lb" /></div>
-        <div><span className={styles.fieldLab}>Value</span><input className={styles.sessIn} type="number" min={0} value={value} onChange={e => setValue(e.target.value)} placeholder="gold" /></div>
+        <div>
+          <span className={styles.fieldLab}>Value</span>
+          <div className={styles.catDim}>
+            <input className={styles.sessIn} type="number" min={0} value={value} onChange={e => setValue(e.target.value)} placeholder="0" />
+            <select className={styles.selIn} value={valueUnit} onChange={e => setValueUnit(e.target.value as 'gp' | 'sp' | 'cp')}>
+              <option value="gp">gp</option>
+              <option value="sp">sp</option>
+              <option value="cp">cp</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <span className={styles.fieldLab}>Icon</span>

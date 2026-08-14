@@ -104,6 +104,34 @@ export function Inventory() {
   const [denyKind, setDenyKind] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
+  // "NEW" badge dismissal (docs/notes.md:63) — persisted, not local-only, so it
+  // survives reload and follows the player across devices. `locallyCleared`
+  // hides the badge INSTANTLY on hover; the DB write is debounced so dragging
+  // the cursor across a grid of new tiles doesn't fire a write per tile.
+  const [locallyCleared, setLocallyCleared] = useState<Set<string>>(new Set())
+  const inventoryRef = useRef(inventory)
+  inventoryRef.current = inventory
+  const pendingClearRef = useRef<Set<string>>(new Set())
+  const flushTimerRef = useRef<number | null>(null)
+  function clearNew(id: string | null | undefined) {
+    if (!id) return
+    const item = inventoryRef.current.find(i => i.id === id)
+    if (!item?.isNew || locallyCleared.has(id)) return
+    setLocallyCleared(prev => new Set(prev).add(id))
+    pendingClearRef.current.add(id)
+    if (flushTimerRef.current) return
+    flushTimerRef.current = window.setTimeout(() => {
+      const ids = pendingClearRef.current
+      pendingClearRef.current = new Set()
+      flushTimerRef.current = null
+      const next = inventoryRef.current.map(i => (i.id && ids.has(i.id) ? { ...i, isNew: false } : i))
+      void updateSection('inventory', next as unknown as Json[])
+    }, 600)
+  }
+  function isNewVisible(item: InventoryItem): boolean {
+    return !!item.isNew && !(item.id && locallyCleared.has(item.id))
+  }
+
   // A container unequipped from the Equipment screen must not strand us on a tab
   // that no longer exists — fall back to ON PERSON.
   const active = tabs.find(t => t.id != null && t.id === activeId) ?? tabs[0]
@@ -214,6 +242,7 @@ export function Inventory() {
     if (!movedRef.current) {
       // A click, not a drag → open the popup. One gesture, app-wide.
       hideTooltip()
+      clearNew(d.id)
       setPopupId(d.id)
       return
     }
@@ -369,6 +398,9 @@ export function Inventory() {
                   {tabs.map(t => {
                     const locked = t.id == null
                     const count = locked ? 0 : inventory.filter(i => i.containerId === t.id).length
+                    // A NEW item auto-routed into a container the player hasn't
+                    // opened surfaces here as a dot on its tab (docs/notes.md:63).
+                    const hasNew = !locked && t.id !== PERSON && inventory.some(i => i.containerId === t.id && isNewVisible(i))
                     return (
                       <button
                         key={t.kind ?? PERSON}
@@ -393,6 +425,7 @@ export function Inventory() {
                             {locked ? <i className="fa-solid fa-lock" aria-hidden="true" /> : count}
                           </span>
                         </span>
+                        {hasNew && <span className={styles.tabDot} aria-hidden="true" />}
                       </button>
                     )
                   })}
@@ -454,9 +487,11 @@ export function Inventory() {
                           key={p.item.id ?? `${p.col},${p.row}`}
                           p={p}
                           dragging={drag?.id === p.item.id && movedRef.current}
+                          isNew={isNewVisible(p.item)}
                           bind={bind}
                           onPointerDown={e => onTileDown(e, p)}
-                          onActivate={() => { hideTooltip(); setPopupId(p.item.id ?? null) }}
+                          onActivate={() => { hideTooltip(); clearNew(p.item.id); setPopupId(p.item.id ?? null) }}
+                          onHover={() => clearNew(p.item.id)}
                         />
                       ))}
                       {drag?.target && movedRef.current && (
@@ -474,8 +509,9 @@ export function Inventory() {
                 ) : (
                   <ContainerList
                     items={contents} filter={filter} sortBy={sortBy} query={query} weightless={weightless}
-                    bind={bind}
-                    onPick={id => { hideTooltip(); setPopupId(id) }}
+                    bind={bind} isNewVisible={isNewVisible}
+                    onPick={id => { hideTooltip(); clearNew(id); setPopupId(id) }}
+                    onHover={clearNew}
                   />
                 )}
               </div>
@@ -595,14 +631,16 @@ export function itemTooltipData(item: (InventoryItem | EquippedItem) & Partial<W
   }
 }
 
-function ItemTile({ p, dragging, bind, onPointerDown, onActivate }: {
-  p: Placed; dragging: boolean
+function ItemTile({ p, dragging, isNew, bind, onPointerDown, onActivate, onHover }: {
+  p: Placed; dragging: boolean; isNew: boolean
   bind: ReturnType<typeof useItemTooltip>['bind']
   onPointerDown: (e: React.PointerEvent) => void
   onActivate: () => void
+  onHover: () => void
 }) {
   const { item } = p
   const cat = item.category ?? 'misc'
+  const tt = bind(itemTooltipData(item))
   return (
     <button
       type="button"
@@ -612,13 +650,22 @@ function ItemTile({ p, dragging, bind, onPointerDown, onActivate }: {
       style={{ gridColumn: `${p.col} / span ${p.w}`, gridRow: `${p.row} / span ${p.h}` }}
       onPointerDown={onPointerDown}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate() } }}
-      aria-label={`${item.name}${item.qty && item.qty > 1 ? ` ×${item.qty}` : ''}`}
-      {...bind(itemTooltipData(item))}
+      aria-label={`${item.name}${item.qty && item.qty > 1 ? ` ×${item.qty}` : ''}${isNew ? ', new' : ''}`}
+      {...tt}
+      onMouseEnter={e => {
+        // bind()'s onMouseEnter is typed as a zero-arg handler but actually
+        // reads e.currentTarget to position the tooltip — calling it bare (as
+        // an earlier version of this composition did) throws inside it and
+        // silently skips both the tooltip AND onHover() below.
+        (tt.onMouseEnter as unknown as (e: React.MouseEvent) => void)(e)
+        onHover()
+      }}
     >
       <i className={`fa-solid ${CAT_CORNER[cat]} ${styles.catCorner}`} aria-hidden="true" />
       <i className={`fa-solid ${item.icon ?? 'fa-cube'} ${styles.glyph}`} style={item.flip ? { transform: 'scaleX(-1)' } : undefined} aria-hidden="true" />
       {item.locked && <i className={`fa-solid fa-lock ${styles.lockPip}`} aria-hidden="true" />}
       {item.qty && item.qty > 1 && <span className={styles.stack}>×{item.qty}</span>}
+      {isNew && <span className={styles.newBadge}>New</span>}
     </button>
   )
 }
@@ -679,14 +726,16 @@ function ListUtilBar({ items, filter, sortBy, query, onFilter, onSort, onQuery }
 
 /** A container view: an unlimited, sortable, filterable list. No geometry — sort
  *  order is a view preference, never stored state. */
-function ContainerList({ items, filter, sortBy, query, weightless, bind, onPick }: {
+function ContainerList({ items, filter, sortBy, query, weightless, bind, isNewVisible, onPick, onHover }: {
   items: InventoryItem[]
   filter: ItemCategory | 'all'
   sortBy: SortKey
   query: string
   weightless: boolean
   bind: ReturnType<typeof useItemTooltip>['bind']
+  isNewVisible: (item: InventoryItem) => boolean
   onPick: (id: string) => void
+  onHover: (id: string | null | undefined) => void
 }) {
   const rows = useMemo(() => {
     let list = filter === 'all' ? items.slice() : items.filter(i => (i.category ?? 'misc') === filter)
@@ -720,6 +769,7 @@ function ContainerList({ items, filter, sortBy, query, weightless, bind, onPick 
     <div className={styles.clist}>
       {rows.map(it => {
         const cat = it.category ?? 'misc'
+        const tt = bind(itemTooltipData(it))
         return (
           <button
             key={it.id}
@@ -727,12 +777,17 @@ function ContainerList({ items, filter, sortBy, query, weightless, bind, onPick 
             className={`${styles.crow}${it.locked ? ' ' + styles.lockedItem : ''}`}
             data-rar={it.rarity ?? 'common'}
             onClick={() => onPick(it.id!)}
-            {...bind(itemTooltipData(it))}
+            {...tt}
+            onMouseEnter={e => {
+              (tt.onMouseEnter as unknown as (e: React.MouseEvent) => void)(e)
+              onHover(it.id)
+            }}
           >
             <span className={styles.ri}><i className={`fa-solid ${it.icon ?? 'fa-cube'}`} aria-hidden="true" /></span>
             <span className={styles.rn}>
               {it.locked && <i className={`fa-solid fa-lock ${styles.rowLock}`} aria-hidden="true" />}
-              {it.name}
+              <span className={styles.rnText}>{it.name}</span>
+              {isNewVisible(it) && <span className={styles.newBadge}>New</span>}
             </span>
             <span className={`${styles.rq}${it.qty && it.qty > 1 ? '' : ' ' + styles.none}`}>×{it.qty ?? 1}</span>
             <span className={styles.rw}>{weightless ? '—' : `${fmtWeight(itemWeight(it))} lb`}</span>

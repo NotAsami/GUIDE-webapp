@@ -17,9 +17,28 @@ const PRIMARY: NavItem[] = [
   { to: '/journal',   label: 'Journal',   marker: '05 ◇', icon: 'fa-clipboard' },
 ]
 
-/** Routes that live "under" the Equipment slot — when one is active the
- *  Equipment parent button reads lit, the same as the mockup's treatment. */
-const EQUIPMENT_GROUP = ['/equipment', '/inventory', '/stat-panel', '/features']
+/** Hover-expand sub-modules, keyed by parent route — same pattern the
+ *  Equipment slot originated (docs/notes.md: "Move features as a submenu to
+ *  the rolls screen... Something like we have on the navbar currently").
+ *  Rendered above/below the parent in the hero variant; the dock always
+ *  renders the parent as a plain button but still uses this map to light it
+ *  for any route in its group. */
+const SUB_MODULES: Record<string, { above?: NavItem; below?: NavItem }> = {
+  '/equipment': {
+    above: { to: '/inventory', label: 'Inventory', marker: '◇', icon: 'fa-bag-shopping' },
+    below: { to: '/stat-panel', label: 'Stat Panel', marker: '◇', icon: 'fa-chart-simple' },
+  },
+  '/character': {
+    below: { to: '/features', label: 'Features', marker: '◇', icon: 'fa-medal' },
+  },
+}
+
+/** `parent` plus every one of its sub-module routes — the set that lights the
+ *  dock's parent button. */
+function groupFor(parent: string): string[] {
+  const sub = SUB_MODULES[parent]
+  return [parent, sub?.above?.to, sub?.below?.to].filter((x): x is string => !!x)
+}
 
 type Variant = 'hero' | 'dock'
 
@@ -57,51 +76,49 @@ export function Nav({ variant = 'hero', meta }: Props) {
   const { pathname } = useLocation()
   const isDock = variant === 'dock'
 
-  // Dock lights the Equipment parent for any route in its group; hero lights it
-  // only on /equipment itself (sub-routes light their own sub-button).
-  const equipmentLit = isDock ? EQUIPMENT_GROUP.includes(pathname) : pathname === '/equipment'
-
   return (
     <>
       <nav
         className={`${styles.navbar} ${isDock ? styles.dock : styles.hero}`}
         aria-label="Primary"
       >
-        {PRIMARY.map(item =>
-          // The hover-expand sub-modules (Inventory / Stat Panel) belong to the
-          // hero launcher only. The dock bar renders Equipment as a plain button.
-          item.to === '/equipment' && !isDock ? (
-            <div key={item.to} className={`${styles.slot} ${styles.equipment}`}>
-              <div className={`${styles.sub} ${styles.above}`}>
-                <NavBtn
-                  item={{ to: '/inventory', label: 'Inventory', marker: '◇', icon: 'fa-bag-shopping' }}
-                  subActive={pathname === '/inventory'}
-                />
+        {PRIMARY.map(item => {
+          const sub = SUB_MODULES[item.to]
+          // Dock lights a parent for any route in its group; hero lights it
+          // only on its own route (sub-routes light their own sub-button).
+          const lit = isDock ? groupFor(item.to).includes(pathname) : pathname === item.to
+          // Both variants hover-reveal sub-modules — the dock's own sizing
+          // for .hasSub/.sub lives in Nav.module.css's DOCK VARIANT block.
+          if (sub) {
+            return (
+              <div key={item.to} className={`${styles.slot} ${styles.hasSub}`}>
+                {sub.above && (
+                  <div className={`${styles.sub} ${styles.above}`}>
+                    <NavBtn item={sub.above} subActive={pathname === sub.above.to} />
+                  </div>
+                )}
+                <NavBtn item={item} active={lit} />
+                {sub.below && (
+                  <div className={`${styles.sub} ${styles.below}`}>
+                    <NavBtn item={sub.below} subActive={pathname === sub.below.to} />
+                  </div>
+                )}
               </div>
-              <NavBtn item={item} active={equipmentLit} />
-              <div className={`${styles.sub} ${styles.below}`}>
-                <NavBtn
-                  item={{ to: '/stat-panel', label: 'Stat Panel', marker: '◇', icon: 'fa-chart-simple' }}
-                  subActive={pathname === '/stat-panel'}
-                />
-              </div>
-            </div>
-          ) : (
+            )
+          }
+          return (
             <div key={item.to} className={styles.slot}>
-              <NavBtn
-                item={item}
-                active={item.to === '/equipment' ? equipmentLit : pathname === item.to}
-              />
+              <NavBtn item={item} active={lit} />
             </div>
-          ),
-        )}
+          )
+        })}
       </nav>
 
       {isDock ? (
         meta && <div className={styles.navMeta}>{meta}</div>
       ) : (
         <div className={styles.hint}>
-          Hover <span className={styles.k}>Equipment</span> to reveal sub-modules
+          Hover <span className={styles.k}>Equipment</span> or <span className={styles.k}>Rolls</span> to reveal sub-modules
           &nbsp;·&nbsp; <NavLink to="/shard">Shard</NavLink>
         </div>
       )}

@@ -179,6 +179,14 @@
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em;
   text-transform: uppercase; color: var(--danger-hot);
 }
+.imNote {
+  padding: 0 18px 12px;
+  position: relative; z-index: 3; flex: 0 0 auto;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--beige-dim);
+  display: flex; gap: 8px;
+}
+.imNote .acc { color: var(--cyan); }
 .footWarn {
   margin: 0; padding: 0 18px 10px;
   position: relative; z-index: 3; flex: 0 0 auto;

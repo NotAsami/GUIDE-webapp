@@ -21,10 +21,10 @@ The DM can define a list that would then parse these lists, choose what items to
 ## PREMADE LIST OF ITEMS
 - An already premade list of items in dnd, not sure where to get it, but this would be for sake of easy use so that the dm doesn't have to create every single item from scratch, like health potions of giant's strength, daggers, swords, pikes and other weapons and armor.
 
-## FEATURE ENGINE & ROLL CONTEXT PANEL
+## GRAPH ENGINE & ROLL CONTEXT PANEL
 - Current state of features is that they are only descriptive, they can't grant wisdom boost, effects like healing or anything, question is how to implement a way to actually use these features Like we would need a list of a lot of things the feature could do, but you also need specific ones for specific ones, like you can't make a list of everything a feature would want. Difficult. Like we have features ranging from Judgment’s Edge: When you hit a creature affected by your Arbiter’s Judgment, deal +1d4  radiant or  necrotic damage (your choice), to Final Strike: You declare a creature’s final judgment. Your next attack against them is an automatic critical hit, and they make death saves with disadvantage if reduced to 0 hit points. There is no easy way to make this happen. This will be a MAJOR slice. ALREADY DESCRIBED IN INVENTORY REFACTOR (??) → MOVE TO OWN DOC ← NAMED FEATURE ENGINE & ADDITIONAL ROLL CONTEXT PANEL, SOME DESCRIPTION IN GITHUB README.md 
 - A notification icon in the roll context panel when you roll something that incentivises to open it, like a yellowish or red ping corcle
-- DOC IS MADE, NEED TO DISCUSS WITH CODING AGENT TO FIGURE OUT IMPLEMENTATION, THEN DESIGN
+- FULL DOC MADE, NOW DESIGN
 
 ## ADD CAMPAIGN SWITCHER
 - Add a way to categorize characters to their respective campaign and the ability for the player to have multiple characters, if they have 2, they will get a popup on login to select the character they want. The DM then needs to have the ability switch between campaigns and see the characters that are in that campaign. This will be a major slice, but it will be a good way to organize the characters and campaigns, also the ability to create multiple characters (seed multiple characters) for 1 account. NEEDS A DESIGN
@@ -53,40 +53,40 @@ tags (free-text, autocomplete from tags in use, lowercase-normalised).
 ## BETTER IMAGE UPLOADS
 - Like so you don't have to use the sql for it.
 
-## ADD A WAY TO HAVE ITEMS COST DIFFIRENT CURRENCIES IN SHOPS
-- Describes itself, plus auto-conversion (agent said it was implemented, but I haven't tested it yet since you can't use silver or copper to set the price of an item)
+## ADD A WAY TO HAVE ITEMS COST DIFFERENT CURRENCIES IN SHOPS
+- ~~Describes itself, plus auto-conversion (agent said it was implemented, but I haven't tested it yet since you can't use silver or copper to set the price of an item)~~ (DONE — shopkeeper stock rows and catalog items now have a gp/sp/cp unit selector; shop_buy migration applied to the live project)
 
 ## TURN TRACKER (not a VTT)
 - A turn tracker per-player button that when you press effects like poison get sent to the roll context panel that remind the player they took 1d6 damage (can roll in there) the button just “advances” the players turn, no tracking actual combat. The effects then need to be able to read the turn has advanced and remind themselves. Inspiration from dicecloud
 
 ## QOL ADDITIONS
-- Add a “NEW” marker on to right of newly added items to inventory, disappears after first hover. If a new item lands inside a container the player hasn't opened (say, an arrow auto-routed into an unopened backpack), the badge should also surface as a small dot on that container's tab
-- A notification icon in the roll context panel when you roll something that incentivises to open it, like a yellowish or red ping corcle (Also written in feature engine part)
+- ~~Add a “NEW” marker on to right of newly added items to inventory, disappears after first hover. If a new item lands inside a container the player hasn't opened (say, an axe auto-routed into an unopened backpack), the badge should also surface as a small dot on that container's tab~~ (DONE — persists in the DB, clears on hover or on opening the item)
+- A notification icon in the roll context panel when you roll something that incentivizes to open it, like a yellowish or red ping corcle (Also written in feature engine part) — DEFERRED, roll context panel is still a "Coming Soon" stub, this ships with it
 - Add a description of the effect that is in the effect panel, when you hover it, you get a tooltip that describes what the effect does, like “advantage on dex saves” or “+2 AC” or “speed x2” or “the extra limited action; the lethargy when it ends”
-  - This will be possible due to the new effect editor having fields for descriptions
+  - This will be possible due to the new effect editor having fields for descriptions — DEFERRED, needs the Effect Library built first (see that section above)
+- ~~Move features as a submenu to the rolls screen, ![img.png](imgs/img.png) like in the image. Something like we have on the navbar currently, where you can open the inventory submenu from the equipment button.~~ (DONE)
+- ~~Move the effects panel to the stat-panel subscreen, as a button that opens the panel of effects.~~ (DONE — button on the Senses widget, glows cyan)
 
 ## ISSUES
 - Currently, there is no way to make an item grant proficiency or expertise.
-- Add a way to add a picture of shopkeeper to the menu (needs design)
-- Replicate the design of the shop exactly like in the design (should put this to CLAUDE.md to always try to replicate the designs to the best of their abilities)
-- The catalog screens are not scrollable to the right / left, so on laptops the shards are cut off, instead of decresing the size of the buttons, make them scroll if too long
-- The LIMITED option on item stock in the shopkeeper editor has the left border missing, the unlimited is fine.
+- Add a way to add a picture of shopkeeper to the menu (needs design).
+- ~~Replicate the design of the shop exactly like in the design.~~ (DONE — pixel-level port of the mockup, cyan primary/zero amber, keeper + hours fields added)
+- ~~The catalog screens are not scrollable to the right / left, so on laptops the shards are cut off, instead of decresing the size of the buttons, make them scroll if too long~~ (DONE)
+- ~~The LIMITED option on item stock in the shopkeeper editor has the left border missing, the unlimited is fine.~~ (DONE)
 - Spells that grant effects don’t currently do anything except give an indicator to the effects panel, update the effect granter when effect editor is built. (Fix with the effect editor)
-- The effect panel has no way to display debuffs, like red entries.
+- ~~The effect panel has no way to display debuffs, like red entries. (not confirmed)~~ (DONE — confirmed and fixed; chips now colour by kind: buff cyan, cond amber, debuff red)
 
 ## LEFT TO DO:
 COMPLETELY DESIGNED:
-- Spell editor in DM-view catalog (designed)
 - Party overview in the nav-bar or somewhere else, not sure where though, maybe a panel like the roll-context panel? (designed)
 - Roll context panel, opens with a button in the bottom bar (only for decor currently) (designed)
 - Level up characters for DM-view (designed, need to review the design and make sure it is implemented correctly)
 
 SMALL CHANGES TO DESIGN:
-- Feature Engine (small change to feature editor in dm-view needed to be designed)
+- Graph Engine (Missing graph panel)
 - Spellbook (designed, needs a category for spells from features though ("use sanctuary on will" → no need for spellslot (cantrip), should be like a category or some indicator that you got it from a feature)
 
 NO DESIGN / ONLY PART OF DESIGN:
-- Shop Feature (needs design)
 - Mobile port (only inventory designed)
 - Campaign switcher / character switcher (needs design) (last thing to implement)
 - Loot table engine (needs design)
@@ -94,17 +94,3 @@ NO DESIGN / ONLY PART OF DESIGN:
 NO NEED TO DESIGN:
 - List of premade items
 - Implement markdown parsers to most input fields
-
-## DO THIS WEEK
-- Shop (Already working on design) - DONE
-- Roll context panel (major slice) (only parts that don't need the feature engine)
-- Spellbook (minor slice) + Spelleditor (minor slice) (probably won't have the limit for it)
-
-## NEXT WEEK
-- Feature engine (major slice)
-- Party overview (minor slice)
-- Level up characters for DM-view (minor slice)
-- Campaign switcher / character switcher (major slice)
-
-## SOMETIME ELSE
-- Mobile port (major slice, needs to be done after everything)

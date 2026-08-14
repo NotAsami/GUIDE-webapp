@@ -279,6 +279,9 @@ export type EquippedItem = {
   /** Nominal worth in gold. DM-authored in the catalog; display-only (the engine
    *  never spends it). Absent = priceless/unlisted. */
   value?: number
+  /** Denomination `value` is stated in. Absent = 'gp' (pre-existing rows keep
+   *  working with no migration). Display-only, same as `value` itself. */
+  valueUnit?: 'gp' | 'sp' | 'cp'
   qty?: number
   /** Per-unit weight in pounds (SRD). Summed across carried + equipped for Burden;
    *  multiplied by `qty` for stacks. Absent = weightless (0). */
@@ -363,6 +366,12 @@ export type EquippedWeapon = EquippedItem & WeaponData & { category?: 'weapon' }
 export type InventoryItem = EquippedItem & Partial<WeaponData> & {
   containerId: string
   col?: number; row?: number
+  /** True from the moment this item is minted (shop purchase, DM grant) until
+   *  the player hovers it — surfaces a "NEW" badge on the tile/row and a dot
+   *  on its container's tab if that container isn't open. Persisted (not
+   *  local-only) so it survives reload and follows the player across
+   *  devices. An unequip never sets this — see lib/equip.ts's toCarried. */
+  isNew?: boolean
 }
 
 /** Typed view onto the `equipped` JSONB: the eight worn gear slots plus the weapon
@@ -596,7 +605,7 @@ export type SessionUpdate = Partial<Omit<SessionRow, 'id'>>
 //    policy), so the catalog never reaches a player client. ──
 /** A catalog template's `data`: a full item definition MINUS per-instance state
  *  (id / qty / grid position), which Grant Item stamps on at grant time. */
-export type CatalogItemData = Omit<InventoryItem, 'id' | 'containerId' | 'col' | 'row' | 'qty'>
+export type CatalogItemData = Omit<InventoryItem, 'id' | 'containerId' | 'col' | 'row' | 'qty' | 'isNew'>
 export type CatalogItemRow = { id: string; data: CatalogItemData; updated_at: string }
 export type CatalogItemInsert = { id?: string; data: CatalogItemData }
 export type CatalogItemUpdate = { data?: CatalogItemData }
@@ -674,9 +683,14 @@ export type ShopStockMode = 'unlimited' | 'limited'
  *  DM reorders stock. */
 export type ShopStockLine = {
   item_id: string
-  /** gp. A per-shop override — starts at the catalog item's `value` but is
-   *  editable independently, same as the mockup's price input. */
+  /** A per-shop override — starts at the catalog item's `value` but is
+   *  editable independently, same as the mockup's price input. Denominated
+   *  in `unit`. */
   price: number
+  /** Denomination `price` is stated in. Absent = 'gp' (pre-existing rows keep
+   *  working with no migration) — must match `shop_buy`'s (migration 0009)
+   *  cp multiplier exactly, see coins.ts's header comment. */
+  unit?: 'gp' | 'sp' | 'cp'
   mode: ShopStockMode
   /** Ignored (treated as bottomless) when `mode` is 'unlimited'. */
   qty: number
@@ -687,6 +701,10 @@ export type Shop = {
   name: string
   icon: string
   location: string
+  /** Optional header chips (mockup: "guide-hud/project/G.U.I.D.E. Shop.html").
+   *  Both blank = chip omitted, same convention as `location`. */
+  keeper?: string
+  hours?: string
   /** Player-facing prose, shown in the takeover header when the shop opens. */
   desc: string
   stock: ShopStockLine[]

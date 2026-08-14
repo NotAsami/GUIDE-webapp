@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createPortal } from 'react-dom'
 import { Link, useOutletContext } from 'react-router-dom'
 import type {
-  ActiveEffect, CharacterRow, CharacterSection, CharacterSheet, ContainerKind,
+  CharacterRow, CharacterSection, CharacterSheet, ContainerKind,
   EquippedGear, EquippedItem, EquippedWeapon, InventoryItem, ItemRarity, ItemSlot,
   Json, ShardTree, WeaponHand,
 } from '../lib/database.types'
@@ -15,7 +15,7 @@ import {
   stowedContainers, unequipContainerPatch, unequipGearPatch, unequipWeaponPatch,
 } from '../lib/equip'
 import { CarrySidebar } from './EquipmentCarry'
-import { activeEffects, effectiveSheet, summarizeEffects } from '../lib/effects'
+import { effectiveSheet } from '../lib/effects'
 import {
   handLabel, rollWeaponAttack, weaponAttackBonus, weaponDamageString,
   type AmmoBonus,
@@ -44,7 +44,6 @@ export function Equipment() {
   const gear = (character.equipped ?? {}) as EquippedGear
   const weapons = gear.weapons ?? []
   const inventory = (character.inventory as unknown as InventoryItem[]) ?? []
-  const effects = activeEffects(character)
   const { tooltip, bind } = useItemTooltip()
   const { addRoll } = useRollLog()
 
@@ -54,11 +53,11 @@ export function Equipment() {
   const [manageWeapon, setManageWeapon] = useState<WeaponHand | null>(null)
   /** Which hand the weapon picker is equipping into (null = closed). */
   const [weaponPicker, setWeaponPicker] = useState<WeaponHand | null>(null)
-  /** Which slide-over is open. The Effects and Storage panels occupy the SAME
-   *  space over the gear column, so they are mutually exclusive by construction
-   *  rather than by remembering to close one before opening the other. */
-  const [drawer, setDrawer] = useState<'effects' | 'carry' | null>(null)
-  const effectsOpen = drawer === 'effects'
+  /** Which slide-over is open. Only Storage lives here now — Active Effects
+   *  moved to the Stat Panel (docs/notes.md:68) — kept as a drawer slot
+   *  rather than a plain boolean in case another gear-column slide-over
+   *  joins it later. */
+  const [drawer, setDrawer] = useState<'carry' | null>(null)
   const carryOpen = drawer === 'carry'
 
   /** Which ammunition stack is nocked. Deliberately NOT persisted: which arrow
@@ -174,15 +173,6 @@ export function Equipment() {
     const p = unequipContainerPatch(kind, gear, inventory)
     if (!p) return
     await updateSections(p)
-  }
-
-  /** Manually end an active status effect (atomic). Rest will later clear all. */
-  async function removeEffect(id: string) {
-    await updateSections({
-      resources: {
-        ...character.resources, activeEffects: effects.filter(e => e.id !== id),
-      } as unknown as CharacterRow['resources'],
-    })
   }
 
   /** Ammunition available to a ranged attack.
@@ -317,14 +307,6 @@ export function Equipment() {
           </button>
 
           <ShardBar character={character} shardTrees={shardTrees} bind={bind} />
-
-          <div className={styles.panelActions}>
-            <ActionBtn
-              icon="fa-bolt" label="Effects" count={effects.length}
-              active={effectsOpen} onClick={() => setDrawer(d => (d === 'effects' ? null : 'effects'))}
-            />
-            <ActionBtn to="/features" icon="fa-medal" label="Features" />
-          </div>
         </section>
         </div>
       </div>
@@ -367,10 +349,6 @@ export function Equipment() {
       {drawer && (
         <div className={styles.sidebarScrim} onClick={() => setDrawer(null)} aria-hidden="true" />
       )}
-      <EffectsSidebar
-        open={effectsOpen} effects={effects}
-        onRemove={id => void removeEffect(id)} onClose={() => setDrawer(null)}
-      />
       <CarrySidebar
         open={carryOpen}
         containers={containers}
@@ -683,10 +661,14 @@ function tooltipRarity(rarity: string): ItemRarity {
 function ShardBar({ character, shardTrees, bind }: { character: CharacterRow; shardTrees: Record<string, ShardTree>; bind: Bind }) {
   const slots = shardSlots(character)
   return (
-    <div className={`${styles.slot} ${styles.special} ${styles.shardBar}`}>
+    <Link
+      to="/shard"
+      className={`${styles.slot} ${styles.special} ${styles.shardBar} ${styles.clickable}`}
+      aria-label="Open Shard menu"
+    >
       <span className={styles.sFrame} />
       <span className={styles.sInner}>
-        <span className={styles.shardLabel}>Shards <Link to="/shard" className={styles.shardLink}>open menu →</Link></span>
+        <span className={styles.shardLabel}>Shards <span className={styles.shardLink}>open menu →</span></span>
         <div className={styles.shardSubs}>
           {SHARD_SLOT_KEYS.map(key => {
             const slot = slots[key]
@@ -698,19 +680,21 @@ function ShardBar({ character, shardTrees, bind }: { character: CharacterRow; sh
                 ? { name: 'G.U.I.D.E. Shard', sub: 'Core Module · Locked', rows: [['Status', 'Soulbound'], ['Type', 'Shard slot']], flavor: 'The core interface shard. Manage it in the Shard menu.', attune: 'Shard-bound', rarity: 'common' }
                 : { name: 'Shard Slot', sub: 'Vacant', rows: [['Status', 'No shard installed']], flavor: 'Install a shard from the Shard menu.', rarity: 'empty' }
             return (
-              <Link
-                key={key} to="/shard"
+              // Plain spans, not their own <Link> — the whole bar is one
+              // pressable link now, and an <a> can't nest inside an <a>.
+              <span
+                key={key}
                 className={`${styles.shardSub}${filled ? '' : ' ' + styles.empty}`}
-                {...bind(tt)} aria-label={tree ? tree.name : slot.locked ? 'G.U.I.D.E. shard' : 'Empty shard slot'}
+                {...bind(tt)}
               >
                 <i className={`fa-solid ${tree?.icon ?? (slot.locked ? 'fa-gem' : 'fa-plus')}`} />
                 <span className={styles.shardSubLabel}>{tree ? tree.name : slot.locked ? 'G.U.I.D.E.' : 'Empty'}</span>
-              </Link>
+              </span>
             )
           })}
         </div>
       </span>
-    </div>
+    </Link>
   )
 }
 
@@ -938,53 +922,6 @@ function WeaponPickerModal({ hand, candidates, onEquip, onClose }: {
 }
 
 
-
-/* ---------- active effects sidebar (slides over the gear column) ---------- */
-
-function EffectsSidebar({ open, effects, onRemove, onClose }: {
-  open: boolean; effects: ActiveEffect[]; onRemove: (id: string) => void; onClose: () => void
-}) {
-  return (
-    <aside className={`${styles.sidebar}${open ? ' ' + styles.open : ''}`} aria-hidden={!open}>
-      <div className={styles.sidebarFrame} />
-      <div className={styles.sidebarInner}>
-        <header className={styles.sidebarHead}>
-          <div className={styles.shTitles}>
-            <span className={styles.shKicker}>Status</span>
-            <span className={styles.shName}>Active Effects</span>
-          </div>
-          <button className={styles.modalClose} onClick={onClose} aria-label="Close effects">
-            <i className="fa-solid fa-xmark" />
-          </button>
-        </header>
-
-        <div className={styles.sidebarBody}>
-          {effects.length === 0 ? (
-            <div className={styles.selectorEmpty}>
-              No active effects
-              <span className={styles.em}>Drink a potion or apply a buff to see it here</span>
-            </div>
-          ) : (
-            effects.map(e => (
-              <div key={e.id} className={styles.statusChip}>
-                <span className={styles.scIcon}><i className={`fa-solid ${e.icon ?? 'fa-wand-sparkles'}`} /></span>
-                <span className={styles.scBody}>
-                  <span className={styles.scName}>{e.name}</span>
-                  <span className={styles.scMeta}>{summarizeEffects(e.effects)}{e.note ? ` · ${e.note}` : ''}</span>
-                </span>
-                <button className={styles.scRemove} onClick={() => onRemove(e.id)} aria-label={`End ${e.name}`}>
-                  <i className="fa-solid fa-xmark" />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-
-        <footer className={styles.sidebarFoot}>Effects clear on a rest, or end one early with ✕.</footer>
-      </div>
-    </aside>
-  )
-}
 
 /* ---------- portrait (cosmetic handshake feed — no portrait asset yet) ---------- */
 
