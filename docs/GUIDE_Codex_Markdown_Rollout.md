@@ -30,6 +30,13 @@ Both live in `src/lib/markdown.ts`.
   `// Effect` block). Also closes the mockup's one HTML-injection gap: the Spellbook mockup
   wrote `sp.description` straight into `innerHTML` unescaped; `<Prose>` returns React nodes,
   never `dangerouslySetInnerHTML`, so there's no reopening it here.
+- `effect_catalog.data.desc` (the Effects tab's Description block, `EffectForm` in
+  `src/screens/OperatorConsole.tsx`) — `renderInline`, at every place the description is shown as
+  a short/clipped fallback rather than a full paragraph: the effect's own live preview strip
+  (`.efPrev .pr`), its index row summary (`.crS.prose`) in `EffectLibrarySurface`, and an item's
+  referenced-effect summary (`.efRefSum.prose`) in the Items tab's Effects Granted picker. The
+  input stays a plain textarea per the established convention; the hint suffix
+  (`player-facing · **bold** *italics*`) follows the Spell form's exact wording.
 
 ## Not yet rolled out
 
@@ -37,14 +44,14 @@ Fields that still render raw text (or a bespoke blank-line-paragraph splitter wi
 markdown) as of this slice:
 
 - [ ] Quest player-facing description — `quests.description`, authored at
-      `src/screens/OperatorConsole.tsx:2137` (`.qPlayerDesc` textarea), rendered raw via the
+      `src/screens/OperatorConsole.tsx:3611` (`.qPlayerDesc` textarea), rendered raw via the
       local `paragraphs()` splitter at `src/screens/Journal.tsx:29-31,257`
-- [ ] Session recap — `sessions.recap`, authored at `src/screens/OperatorConsole.tsx:2294`
+- [ ] Session recap — `sessions.recap`, authored at `src/screens/OperatorConsole.tsx:3768`
       (`.sessRecap` textarea), rendered via the same `paragraphs()` splitter at
       `src/screens/Journal.tsx:307`
-- [ ] Quest GM notes — `quest_secrets.gm_notes`, authored at `src/screens/OperatorConsole.tsx:2076`
+- [ ] Quest GM notes — `quest_secrets.gm_notes`, authored at `src/screens/OperatorConsole.tsx:3650`
       (DM-only, never shown to players — lower priority)
-- [ ] True lore — `character_secrets.true_lore`, authored at `src/screens/OperatorConsole.tsx:1943`
+- [ ] True lore — `character_secrets.true_lore`, authored at `src/screens/OperatorConsole.tsx:3414`
       (`.gmNotes` textarea) — DM-only, never shown to players
 - [ ] Item catalog `description` / `light_description` / `deep_description` —
       `src/lib/database.types.ts:129-136`, tooltip render in `src/components/ItemTooltip.tsx`

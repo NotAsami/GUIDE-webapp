@@ -6,6 +6,7 @@ import type {
   SessionRow, SessionInsert, SessionUpdate,
   CatalogItemRow, CatalogItemInsert, CatalogItemUpdate,
   CatalogFeatureRow, CatalogFeatureInsert, CatalogFeatureUpdate,
+  CatalogEffectRow, CatalogEffectInsert, CatalogEffectUpdate,
   CatalogSpellRow, CatalogSpellInsert, CatalogSpellUpdate,
   ConfiscatedItemRow, ConfiscatedItemInsert, InventoryItem,
   ShopCatalogRow, Shop,
@@ -518,6 +519,65 @@ export function useDmFeatures(): DmFeaturesState {
   }, [features])
 
   return { features, loading, error, refetch: fetchAll, createFeature, updateFeature, deleteFeature }
+}
+
+export interface DmEffectsState {
+  effects: CatalogEffectRow[]
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  createEffect: (e: CatalogEffectInsert) => Promise<CatalogEffectRow | null>
+  updateEffect: (id: string, patch: CatalogEffectUpdate) => Promise<void>
+  deleteEffect: (id: string) => Promise<void>
+}
+
+/** The DM's effect-authoring library (`effect_catalog`, migration 0013) —
+ *  structurally the twin of useDmFeatures. Consumed by the item form's Effects
+ *  Granted picker; the referenced mods get compiled into the item's own
+ *  `effects` on save, so this table stays DM-only. */
+export function useDmEffects(): DmEffectsState {
+  const { session } = useAuth()
+  const [effects, setEffects] = useState<CatalogEffectRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const byName = (a: CatalogEffectRow, b: CatalogEffectRow) =>
+    (a.data?.name ?? '').localeCompare(b.data?.name ?? '')
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setEffects([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase.from('effect_catalog').select('*')
+    if (err) { setError(err.message); setEffects([]) }
+    else { setEffects(((data as CatalogEffectRow[]) ?? []).sort(byName)); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const createEffect = useCallback<DmEffectsState['createEffect']>(async (e) => {
+    const { data, error: err } = await supabase.from('effect_catalog').insert(e).select().single<CatalogEffectRow>()
+    if (err) { setError(err.message); return null }
+    setEffects(prev => [...prev, data].sort(byName))
+    return data
+  }, [])
+
+  const updateEffect = useCallback<DmEffectsState['updateEffect']>(async (id, patch) => {
+    let previous: CatalogEffectRow | undefined
+    setEffects(prev => prev.map(e => { if (e.id !== id) return e; previous = e; return { ...e, ...patch } as CatalogEffectRow }))
+    const { data, error: err } = await supabase.from('effect_catalog').update(patch).eq('id', id).select().single<CatalogEffectRow>()
+    if (err) { setError(err.message); if (previous) setEffects(prev => prev.map(e => (e.id === id ? previous! : e))) }
+    else if (data) setEffects(prev => prev.map(e => (e.id === id ? data : e)).sort(byName))
+  }, [])
+
+  const deleteEffect = useCallback<DmEffectsState['deleteEffect']>(async (id) => {
+    const snapshot = effects
+    setEffects(prev => prev.filter(e => e.id !== id))
+    const { error: err } = await supabase.from('effect_catalog').delete().eq('id', id)
+    if (err) { setError(err.message); setEffects(snapshot) }
+  }, [effects])
+
+  return { effects, loading, error, refetch: fetchAll, createEffect, updateEffect, deleteEffect }
 }
 
 export interface DmSpellsState {

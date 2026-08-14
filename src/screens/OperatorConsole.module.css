@@ -1143,18 +1143,18 @@
 .catFxHead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .catFxHead i { color: var(--amber-hot); font-size: 11px; }
 .catFxHead .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber-hot); }
-.catFxHead .s { margin-left: auto; font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber-dim); }
-.catFxRows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-.catFxRow { display: flex; align-items: center; gap: 8px; }
-.catFxRow .selIn, .catFxRow .sessIn { margin-bottom: 0; }
-.catFxRow .fxStat { flex: 1 1 auto; min-width: 0; }
-.catFxRow .fxMode { flex: 0 0 104px; }
-.catFxRow .fxAmt { flex: 0 0 62px; text-align: center; }
-.catFxRow .fxX { flex: 0 0 auto; cursor: pointer; color: var(--beige-dim); font-size: 11px; padding: 4px 6px; transition: color 130ms ease; }
-.catFxRow .fxX:hover { color: var(--danger-hot); }
+.catFxHead .s { margin-left: auto; font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .catFxNone { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em; color: var(--amber-dim); padding: 3px 2px 10px; }
-.catFxAdd { display: flex; }
-.catFxAdd .btn { flex: 0 0 auto; min-width: 148px; }
+
+/* .catFx.fold — collapsed by default; the whole head is the toggle (Effects
+   Granted, Items tab). Features Granted / the container block use plain
+   .catFx with no .fold, so they stay always-open. */
+.catFx.fold { padding-bottom: 12px; }
+.fxfHead { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+.fxfHead .car { font-size: 9px; color: var(--amber); transition: transform 160ms ease; }
+.catFx.fold.open .fxfHead .car { transform: rotate(90deg); }
+.fxfHead .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber-hot); }
+.fxfHead .s { margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* full-width equip-slot select (gear only) */
 .slotSel { width: 100%; }
@@ -1283,6 +1283,13 @@
 .catTab { --cut: 6px; --bc: rgba(212,191,125,0.24); }
 .catTog { --cut: 5px; --bc: rgba(212,191,125,0.2); }
 .durOpt { --cut: 4px; --bc: rgba(212,191,125,0.24); }
+.efBlock { --cut: 7px; --bc: color-mix(in oklab, var(--b, var(--beige-dim)) 34%, transparent); }
+.efChip { --cut: 4px; --bc: rgba(212,191,125,0.32); }
+.efKind .k { --cut: 5px; --bw: 1.5px; --bc: rgba(212,191,125,0.24); }
+.efPrev { --cut: 8px; --bw: 1.5px; --bc: var(--k, var(--beige-dim)); }
+.efPrev .pc { --cut: 7px; --bw: 1.5px; --bc: color-mix(in oklab, var(--k, var(--beige-dim)) 50%, transparent); }
+.efRefRow { --cut: 5px; --bw: 1.5px; --bc: rgba(212,191,125,0.16); }
+.efRefTop .ic { --cut: 4px; --bw: 1.5px; --bc: color-mix(in oklab, var(--k, var(--beige-dim)) 40%, transparent); }
 .glyphBtn { --cut: 5px; --bc: rgba(212,191,125,0.22); }
 .gmHead { --cut: 5px; --bc: rgba(226,176,33,0.4); }
 .gmNotes { --cut: 7px; --bc: rgba(226,176,33,0.45); }
@@ -1307,7 +1314,8 @@
 .catPrev .pvCell, .catProse, .catRow .crIc, .catSoonBlock, .catTab, .catTog,
 .durOpt, .glyphBtn, .gmHead, .gmNotes, .memSelect, .numIn, .profChip, .qCheck,
 .qPlayerDesc, .qSegOpt, .qTag, .searchIn, .selIn, .sessIn, .sessRecap,
-.toneOpt, .bcTarget .tg, .catDmg, .ccOpt, .ccB {
+.toneOpt, .bcTarget .tg, .catDmg, .ccOpt, .ccB,
+.efBlock, .efChip, .efKind .k, .efPrev, .efPrev .pc, .efRefRow, .efRefTop .ic {
   border-color: var(--bc);
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - var(--bw, 1px)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw, 1px)), transparent 0),
@@ -1412,6 +1420,9 @@
 .catTog { border-left-color: var(--beige-dim); }
 .catProse { border-left-color: var(--beige-dim); }
 .qPlayerDesc { border-left-color: var(--cyan); }
+.efBlock { border-left-color: var(--b); }
+.efRefRow { border-left-color: var(--k); }
+.efBlock.prose .catProse { border-left-color: var(--beige); }
 
 /* .selIn keeps its dropdown chevrons — merge them with the corner stripes
    (chevrons anchor to the padding box, stripes to the border box) */
@@ -1433,6 +1444,113 @@
 .detailAdd { display: flex; gap: 8px; align-items: stretch; margin: 6px 0 15px; }
 .detailAdd .sessIn { flex: 1; margin-bottom: 0; }
 .detailAdd button { flex: 0 0 96px; }
+
+/* ============================================================
+   EFFECTS TAB (Catalog · Effects) — an effect DEFINITION is three things and
+   the form makes them look like three things: MODIFIERS (amber, numeric),
+   FLAGS (cyan, never numeric), DESCRIPTION (beige, prose). Duration is
+   deliberately absent — the applier owns it. New chamfered+bordered classes
+   (.efBlock, .efChip, .efKind .k, .efPrev, .efPrev .pc, .efRefRow,
+   .efRefTop .ic) are registered in the cut-corner border fix block above
+   (search --cut) and the border-left reassert list just above this section.
+   ============================================================ */
+.efBadge { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; padding: 2px 6px; border: 1.5px solid; color: var(--k); border-color: color-mix(in oklab, var(--k) 45%, transparent); white-space: nowrap; }
+
+/* kind toggle — drives the tint the effect carries everywhere */
+.efKind { display: flex; gap: 7px; margin-bottom: 13px; }
+.efKind .k { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding: 9px 6px; background: rgba(0,0,0,0.35);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); transition: border-color 130ms ease, background 130ms ease; }
+.efKind .k i { font-size: 12px; color: var(--muted); transition: color 130ms ease; }
+.efKind .k .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); transition: color 130ms ease; }
+.efKind .k:hover { --bc: color-mix(in oklab, var(--k) 40%, transparent); }
+.efKind .k:hover i, .efKind .k:hover .t { color: var(--text); }
+.efKind .k.on { --bc: var(--k); background-color: color-mix(in oklab, var(--k) 10%, transparent); box-shadow: inset 0 0 14px color-mix(in oklab, var(--k) 14%, transparent); }
+.efKind .k.on i, .efKind .k.on .t { color: var(--k); }
+
+/* tag chips + autocomplete */
+.efTags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.efChip { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; color: var(--beige); background: rgba(212,191,125,0.07); padding: 4px 8px; }
+.efChip.empty { color: var(--beige-dim); background: none; border-style: dashed; }
+.efChip i { cursor: pointer; font-size: 9px; color: var(--beige-dim); transition: color 130ms ease; margin-left: 2px; }
+.efChip i:hover { color: var(--danger-hot); }
+.efTagbox { position: relative; margin-bottom: 14px; }
+.efTagbox .sessIn { margin-bottom: 0; }
+.efAc { position: absolute; top: calc(100% + 3px); left: 0; right: 0; z-index: 40; display: none; flex-direction: column; background: #141414; border: 1.5px solid rgba(226,176,33,0.4); max-height: 176px; overflow-y: auto; }
+.efAc.on { display: flex; }
+.efAc .t2 { text-align: left; cursor: pointer; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; color: var(--text); background: none; border: 0; border-bottom: 1px solid rgba(212,191,125,0.12); padding: 7px 10px; width: 100%; }
+.efAc .t2:hover { background: rgba(226,176,33,0.12); color: var(--amber-hot); }
+.efAc .t2 .n { float: right; font-size: 8px; color: var(--beige-dim); }
+
+.efNoduration { display: flex; align-items: center; gap: 9px; margin-bottom: 13px; padding: 8px 11px; background: rgba(0,0,0,0.28); border: 1.5px dashed rgba(212,191,125,0.3);
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--beige-dim); }
+.efNoduration i { color: var(--beige); font-size: 10px; }
+
+/* the three-way split — one block shape, three colours, three rules. --b
+   flows down to every child rule below via CSS custom-property inheritance,
+   so .mods/.flags/.prose need set it exactly once each. */
+.efBlock { border-left: 3px solid var(--b); background: color-mix(in oklab, var(--b) 5%, transparent); padding: 12px 13px 13px; margin-bottom: 13px; }
+.efBlock.mods { --b: var(--amber); }
+.efBlock.flags { --b: var(--cyan); }
+.efBlock.prose { --b: var(--beige); }
+.efBh { display: flex; align-items: center; gap: 9px; margin-bottom: 3px; }
+.efBh i { color: var(--b); font-size: 11px; }
+.efBh .t { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--b); }
+.efBh .n { margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.efRule { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.1em; text-transform: uppercase; color: color-mix(in oklab, var(--b) 60%, #1d1d1d); margin-bottom: 11px; }
+.efRows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.efRow { display: flex; align-items: center; gap: 7px; }
+.efRow .selIn, .efRow .sessIn { margin-bottom: 0; }
+.efRow .st { flex: 0 0 118px; }
+.efRow .fm { flex: 0 0 158px; }
+.efRow .tgt { flex: 1; min-width: 0; }
+.efRow .num { flex: 0 0 86px; text-align: center; font-family: var(--font-mono); }
+.efRow .x { flex: 0 0 auto; cursor: pointer; color: var(--beige-dim); font-size: 11px; padding: 4px 5px; transition: color 130ms ease; }
+.efRow .x:hover { color: var(--danger-hot); }
+.efRow .pv { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.efOps { flex: 0 0 auto; display: flex; }
+.efOps .o { width: 31px; height: 33px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: var(--font-mono); font-size: 12px; color: var(--muted); background: rgba(0,0,0,0.35); border: 1.5px solid rgba(212,191,125,0.42); transition: color 120ms ease, border-color 120ms ease, background 120ms ease; }
+.efOps .o + .o { margin-left: -1.5px; }
+.efOps .o:hover { color: var(--text); }
+.efOps .o.on { position: relative; z-index: 1; color: var(--amber); border-color: var(--amber); background-color: color-mix(in oklab, var(--amber) 12%, transparent); }
+.efNone { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em; color: color-mix(in oklab, var(--b) 55%, #1d1d1d); padding: 2px 2px 10px; }
+.efAdd { display: flex; gap: 8px; }
+.efAdd .btn { flex: 0 0 118px; }
+.efBlock .catProse { margin-bottom: 0; }
+
+/* effect preview strip (list read, mirrored in the form head) */
+.efPrev { display: flex; align-items: center; gap: 13px; padding: 12px 14px; margin-bottom: 14px; background: color-mix(in oklab, var(--k) 6%, transparent); }
+.efPrev .pc { flex: 0 0 auto; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--k); background: rgba(0,0,0,0.45); }
+.efPrev .pt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.efPrev .pn { font-family: var(--font-display); font-size: 15px; color: var(--text); }
+.efPrev .pm { display: flex; flex-wrap: wrap; gap: 5px 9px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.efPrev .pm .g { color: var(--k); }
+.efPrev .pm .pr { font-family: var(--font-prose); font-size: 12px; font-style: italic; letter-spacing: 0; text-transform: none; color: var(--beige-dim); }
+
+/* ---- Items tab: EFFECTS GRANTED is a reference picker (.catFx.fold) ---- */
+.efRefs { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 11px; }
+.efRefRow { display: flex; flex-direction: column; gap: 8px; padding: 9px 11px; background: rgba(0,0,0,0.32);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+.efRefTop { display: flex; align-items: center; gap: 9px; }
+.efRefTop .ic { flex: 0 0 auto; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--k); background: rgba(0,0,0,0.4);
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
+.efRefTop .nm { font-family: var(--font-prose); font-size: 14px; color: var(--text); }
+.efRefTop .x { margin-left: auto; cursor: pointer; color: var(--beige-dim); font-size: 11px; padding: 3px 4px; transition: color 130ms ease; }
+.efRefTop .x:hover { color: var(--danger-hot); }
+.efRefSum { display: flex; flex-wrap: wrap; gap: 5px; }
+.efRefSum span { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); background: rgba(0,0,0,0.35); border: 1.5px solid rgba(212,191,125,0.16); padding: 3px 7px; }
+.efRefSum.prose { font-family: var(--font-prose); font-size: 12.5px; font-style: italic; line-height: 1.45; color: var(--beige-dim); display: block; }
+.efRefDur { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1.5px solid rgba(212,191,125,0.12); }
+.efRefDur .dl { flex: 0 0 auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige-dim); }
+.efRefDur .selIn { flex: 1; margin-bottom: 0; }
+.efRefDur .num { flex: 0 0 74px; margin-bottom: 0; text-align: center; font-family: var(--font-mono); }
+.efRefDur .tick { flex: 0 0 auto; font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--beige-dim); }
+.efRefDur .tick.on { color: var(--cyan); }
+.efPick { border-top: 1.5px solid rgba(226,176,33,0.22); padding-top: 12px; }
+.efPick .searchWrap { margin-bottom: 9px; }
+
+/* .cat-row additions used by the Effects index (prose-only fallback summary) */
+.catRow .crS.prose { font-family: var(--font-prose); font-size: 12px; font-style: italic; letter-spacing: 0; text-transform: none; color: var(--beige-dim); }
+.catRow .crS .op { color: var(--beige-dim); }
 
 /* ============================================================
    PER-CHARACTER INVENTORY TAB (Inventory Refactor, slice 4)

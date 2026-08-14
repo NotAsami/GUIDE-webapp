@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmSpells, useDmShops, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmSpellsState, type DmShopsState } from '../lib/dm'
+import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState } from '../lib/dm'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
-import { MOD_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '../lib/modEditor'
+import { MOD_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
 import type { ShardSlot, ShardTree } from '../lib/database.types'
 import { longRestPatch } from '../lib/rest'
 import { effectiveSheet } from '../lib/effects'
@@ -14,12 +14,15 @@ import { pactSlotCount, pactSlotLevel } from '../lib/spells'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/voice'
 import { usePartyPresence } from '../lib/presence'
 import { useFullscreen } from '../lib/fullscreen'
+import { renderInline } from '../lib/markdown'
 import type {
   CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json,
   QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow,
   CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity,
-  ItemEffects, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
+  ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
   Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, CatalogFeatureData,
+  EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow,
+  EffectDuration, EffectRef,
   Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData,
   EquippedGear, CharacterLore, Relation,
 } from '../lib/database.types'
@@ -118,6 +121,7 @@ export function OperatorConsole() {
   const campaign = useDmCampaign()
   const catalog = useDmCatalog()
   const featureLib = useDmFeatures()
+  const effectLib = useDmEffects()
   const spellLib = useDmSpells()
   const shardLib = useDmShards()
   const shopLib = useDmShops()
@@ -368,7 +372,7 @@ export function OperatorConsole() {
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
               ) : view === 'catalog' ? (
-                <CatalogSurface catalog={catalog} featureLib={featureLib} spellLib={spellLib} shopLib={shopLib} members={members} />
+                <CatalogSurface catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} members={members} />
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
@@ -382,7 +386,7 @@ export function OperatorConsole() {
                     log={log}
                   />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} spellLib={spellLib.spells} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
                 )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
@@ -493,11 +497,12 @@ function OverviewDashboard({
  *  never clobbered, and targets the same fields the player screens read — HP and
  *  coins on `sheet`, death saves + exhaustion on `resources` (see Stats.tsx) —
  *  keeping one source of truth per value. */
-function ActionsTab({ row, member, catalog, featureLib, spellLib, shardCatalog, onUpdate, onVoice, log }: {
+function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, shardCatalog, onUpdate, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
   catalog: CatalogItemRow[]
   featureLib: CatalogFeatureRow[]
+  effectLib: CatalogEffectRow[]
   spellLib: CatalogSpellRow[]
   shardCatalog: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
@@ -619,7 +624,7 @@ function ActionsTab({ row, member, catalog, featureLib, spellLib, shardCatalog, 
         <GrantItemCard member={member} catalog={catalog} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
 
         {/* C — APPLY EFFECT: push a status effect onto this PC (slice 6) */}
-        <ApplyEffectCard member={member} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
+        <ApplyEffectCard member={member} effectLib={effectLib} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
 
         {/* D — CURRENCY */}
         <div className={styles.actCard}>
@@ -920,32 +925,25 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
   )
 }
 
-/** The Operator's quick-apply status list (mockup EFFECT_CATALOG). Static for
- *  now — a DM-authored effect library can join the Catalog surface later. Numeric
- *  modifiers are engine-real (layered by lib/effects.ts); dice/condition rules the
- *  engine can't model stay honest prose in `note`, never fake numbers. */
-const EFFECT_CATALOG: { id: string; name: string; kind: 'buff' | 'cond' | 'debuff'; icon: string; effects: ItemEffects; note?: string }[] = [
-  { id: 'str-potion', name: '+3 STR Potion', kind: 'buff', icon: 'fa-flask', effects: { abilities: { str: 3 } } },
-  { id: 'bless', name: 'Bless', kind: 'buff', icon: 'fa-hands-praying', effects: {}, note: '+1d4 attacks & saves' },
-  { id: 'haste', name: 'Haste', kind: 'buff', icon: 'fa-gauge-high', effects: { ac: 2 }, note: 'speed ×2 · extra action' },
-  { id: 'poisoned', name: 'Poisoned', kind: 'cond', icon: 'fa-skull-crossbones', effects: {}, note: 'disadv. on attacks & checks' },
-  { id: 'frightened', name: 'Frightened', kind: 'cond', icon: 'fa-ghost', effects: {}, note: 'disadv. while source in sight' },
-  { id: 'stunned', name: 'Stunned', kind: 'debuff', icon: 'fa-bolt', effects: {}, note: 'incapacitated · auto-fail STR/DEX saves' },
-]
 const DUR_UNITS = ['round', 'minute', 'hour', 'day'] as const
+/** ActiveEffect.kind predates the effect library and spells 'condition' as
+ *  'cond'. Bridges the two vocabularies at the one point they meet. */
+const EFFECT_KIND_TO_ACTIVE: Record<'buff' | 'debuff' | 'condition', 'buff' | 'cond' | 'debuff'> = { buff: 'buff', debuff: 'debuff', condition: 'cond' }
 
 /** Apply Effect (card C): push a status onto the PC's `resources.activeEffects` —
  *  the SAME field the player's potion-drinking writes and the effects tray reads,
  *  so the DM's push shows up in the tray, layers into the effective sheet, clears
  *  on rest, and the player can shrug it off manually (all existing behavior). */
-function ApplyEffectCard({ member, row, onUpdate, onVoice, log }: {
+function ApplyEffectCard({ member, effectLib, row, onUpdate, onVoice, log }: {
   member: PartyMember
+  effectLib: CatalogEffectRow[]
   row: CharacterRow
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
   log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
 }) {
-  const [effId, setEffId] = useState(EFFECT_CATALOG[0].id)
+  const [query, setQuery] = useState('')
+  const [effId, setEffId] = useState<string | null>(null)
   // Duration = amount × unit, or the until-rest override (rests clear effects
   // anyway, so "until rest" is the natural upper bound).
   const [durN, setDurN] = useState(1)
@@ -954,24 +952,40 @@ function ApplyEffectCard({ member, row, onUpdate, onVoice, log }: {
   const [busy, setBusy] = useState(false)
   const dur = untilRest ? 'until rest' : `${durN} ${durUnit}${durN === 1 ? '' : 's'}`
 
+  const q = query.trim().toLowerCase()
+  const list = q
+    ? effectLib.filter(e => (e.data?.name ?? '').toLowerCase().includes(q) || (e.data?.tags ?? []).some(t => t.includes(q)))
+    : effectLib
+  const selected = effectLib.find(e => e.id === effId) ?? null
+
   const resources = row.resources ?? {}
   const active = (resources.activeEffects as ActiveEffect[] | undefined) ?? []
   const first = firstName(member.name)
 
   async function apply() {
-    const def = EFFECT_CATALOG.find(e => e.id === effId)
-    if (!def) return
+    if (!selected) return
+    const d = selected.data
     setBusy(true)
+    // Modifiers compile into the same ItemEffects the engine already reads
+    // (compileEffects, mirrors the item form's Effects Granted). Flags are
+    // never numeric, so they surface as note text alongside the duration —
+    // a pure-prose effect falls back to a clipped description.
+    const noteParts = [dur, ...d.flags.map(flagText), d.mods.length === 0 && d.flags.length === 0 ? clipTx(d.desc, 60) : undefined]
     const eff: ActiveEffect = {
-      id: crypto.randomUUID(), name: def.name, icon: def.icon, kind: def.kind,
-      effects: def.effects, source: 'G.U.I.D.E. Operator',
-      note: [dur, def.note].filter(Boolean).join(' · '), at: Date.now(),
+      id: crypto.randomUUID(), name: d.name, icon: d.icon, kind: EFFECT_KIND_TO_ACTIVE[d.kind],
+      effects: compileEffects(d.mods) ?? {}, source: 'G.U.I.D.E. Operator',
+      note: noteParts.filter(Boolean).join(' · '),
+      // Full description, snapshotted — the player never reads the effect
+      // catalog, so this is the one copy their Effects panel tooltip has.
+      desc: d.desc.trim() || undefined, at: Date.now(),
     }
     const ok = await onUpdate({ resources: { ...resources, activeEffects: [...active, eff] } as CharacterRow['resources'] })
     setBusy(false)
     if (!ok) return
-    void onVoice({ kind: 'effect', target: member.id, name: def.name, dur })
-    log(<>Applied <span className={styles.obj}>{def.name}</span> to <span className={styles.who}>{first}</span></>, def.kind === 'buff' ? 'cyan' : 'danger')
+    void onVoice({ kind: 'effect', target: member.id, name: d.name, dur, fxKind: EFFECT_KIND_TO_ACTIVE[d.kind] })
+    log(<>Applied <span className={styles.obj}>{d.name}</span> to <span className={styles.who}>{first}</span></>, d.kind === 'buff' ? 'cyan' : 'danger')
+    setEffId(null)
+    setQuery('')
   }
 
   async function remove(id: string) {
@@ -984,10 +998,30 @@ function ApplyEffectCard({ member, row, onUpdate, onVoice, log }: {
     <div className={styles.actCard}>
       <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>C</span><span className={styles.t}>Apply Effect</span></div>
 
-      <span className={styles.fieldLab}>Effect</span>
-      <select className={styles.selIn} value={effId} onChange={e => setEffId(e.target.value)}>
-        {EFFECT_CATALOG.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-      </select>
+      <div className={styles.searchWrap}>
+        <i className="fa-solid fa-magnifying-glass" />
+        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search effects by name or tag…" />
+      </div>
+      <div className={styles.catList}>
+        {effectLib.length === 0 ? (
+          <div className={styles.catListEmpty}>Library is empty — author effects in the Catalog's Effects tab.</div>
+        ) : list.length === 0 ? (
+          <div className={styles.catListEmpty}>No effects match.</div>
+        ) : list.map(e => {
+          const K = EFFECT_KINDS[e.data?.kind ?? 'buff']
+          const parts = effectParts(e.data ?? { mods: [], flags: [] })
+          return (
+            <button key={e.id} className={cx(styles.catItem, e.id === effId && styles.sel)} onClick={() => setEffId(e.id)}>
+              <span className={styles.ciIc} style={{ color: K.color }}><i className={`fa-solid ${e.data?.icon ?? 'fa-bolt'}`} /></span>
+              <span className={styles.ciTx}>
+                <span className={styles.ciNm}>{e.data?.name ?? 'Untitled'}</span>
+                <span className={styles.ciTy}>{parts.length ? parts.join(' · ') : 'prose only'}</span>
+              </span>
+              <span className={styles.ciRar} style={{ color: K.color }}>{K.label}</span>
+            </button>
+          )
+        })}
+      </div>
 
       <span className={styles.fieldLab}>Duration</span>
       <div className={styles.durRow}>
@@ -1004,7 +1038,7 @@ function ApplyEffectCard({ member, row, onUpdate, onVoice, log }: {
       </div>
 
       <div className={styles.btnMount}>
-        <Btn tone="amber" icon="fa-bolt" label={busy ? 'Applying…' : 'Apply Effect'} onClick={() => void apply()} disabled={busy} />
+        <Btn tone="amber" icon="fa-bolt" label={busy ? 'Applying…' : selected ? `Apply ${selected.data?.name ?? 'Effect'}` : 'Apply Effect'} onClick={() => void apply()} disabled={busy || !selected} />
       </div>
 
       <div className={styles.fxActive}>
@@ -1104,12 +1138,12 @@ function BroadcastPanel({ selected, onSend, log }: {
  *  catalogs, shown as inert "soon" tabs to reserve their place (matches the mockup).
  *  Items are stored in the app's structured shape (NOT the mockup's string effects)
  *  so a granted copy is mechanically real the instant it lands. */
-function CatalogSurface({ catalog, featureLib, spellLib, shopLib, members }: {
-  catalog: DmCatalogState; featureLib: DmFeaturesState; spellLib: DmSpellsState; shopLib: DmShopsState; members: PartyMember[]
+function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, members }: {
+  catalog: DmCatalogState; featureLib: DmFeaturesState; effectLib: DmEffectsState; spellLib: DmSpellsState; shopLib: DmShopsState; members: PartyMember[]
 }) {
   const { items, createItem, updateItem, deleteItem, loading, error } = catalog
   const nav = useNavigate()
-  const [tab, setTab] = useState<'items' | 'features' | 'spells' | 'shops'>('items')
+  const [tab, setTab] = useState<'items' | 'features' | 'spells' | 'effects' | 'shops'>('items')
   const [selId, setSelId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -1134,6 +1168,7 @@ function CatalogSurface({ catalog, featureLib, spellLib, shopLib, members }: {
     { key: 'items', label: 'Items', icon: 'fa-box-open', n: items.length, soon: false },
     { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
     { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', n: spellLib.spells.length, soon: false },
+    { key: 'effects', label: 'Effects', icon: 'fa-bolt', n: effectLib.effects.length, soon: false },
     { key: 'shops', label: 'Shopkeepers', icon: 'fa-shop', n: shopLib.shops.length, soon: false },
     { key: 'shards', label: 'Shards', icon: 'fa-gem', soon: false },
   ]
@@ -1150,22 +1185,24 @@ function CatalogSurface({ catalog, featureLib, spellLib, shopLib, members }: {
         {catTabs.map(t => (
           <button key={t.key} className={cx(styles.catTab, t.key === tab && styles.sel, t.soon && styles.stub)}
             disabled={t.soon} title={t.soon ? 'Its own later slice' : undefined}
-            onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else setTab(t.key as 'items' | 'features' | 'spells' | 'shops') }}>
+            onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else setTab(t.key as 'items' | 'features' | 'spells' | 'effects' | 'shops') }}>
             <i className={`fa-solid ${t.icon}`} />{t.label}
             {t.n != null && <span className={styles.ctC}>{t.n}</span>}
           </button>
         ))}
       </div>
 
-      {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'shops' ? shopLib.error : error) ? (
+      {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : error) ? (
         <div className={styles.soonPanel}>
           <i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span>
-          <span>{tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'shops' ? shopLib.error : error}</span>
+          <span>{tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : error}</span>
         </div>
       ) : tab === 'features' ? (
         <FeatureLibrarySurface lib={featureLib} />
       ) : tab === 'spells' ? (
         <SpellLibrarySurface lib={spellLib} />
+      ) : tab === 'effects' ? (
+        <EffectLibrarySurface lib={effectLib} />
       ) : tab === 'shops' ? (
         <OperatorShops shopLib={shopLib} itemCatalog={items} members={members} />
       ) : (
@@ -1203,7 +1240,7 @@ function CatalogSurface({ catalog, featureLib, spellLib, shopLib, members }: {
           </div>
 
           <div className={styles.catForm}>
-            <CatalogForm key={activeId ?? 'new'} item={selected} featureLib={featureLib.features} onSubmit={handleSubmit} onDelete={selected ? handleDelete : undefined} />
+            <CatalogForm key={activeId ?? 'new'} item={selected} featureLib={featureLib.features} effectLib={effectLib.effects} onSubmit={handleSubmit} onDelete={selected ? handleDelete : undefined} />
           </div>
         </div>
       )}
@@ -1211,9 +1248,10 @@ function CatalogSurface({ catalog, featureLib, spellLib, shopLib, members }: {
   )
 }
 
-function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
+function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
   item: CatalogItemRow | null
   featureLib: CatalogFeatureRow[]
+  effectLib: CatalogEffectRow[]
   onSubmit: (data: CatalogItemData) => Promise<void>
   onDelete?: () => void
 }) {
@@ -1244,7 +1282,9 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
   const [dmgType, setDmgType] = useState(d?.type ?? '')
   const [heal, setHeal] = useState(d?.heal != null ? String(d.heal) : '')
   const [duration, setDuration] = useState(d?.duration ?? '')
-  const [mods, setMods] = useState<Mod[]>(effectsToMods(d?.effects))
+  const [effectRefs, setEffectRefs] = useState<EffectRef[]>(d?.effectRefs ?? [])
+  const [fxOpen, setFxOpen] = useState(false)
+  const [fxQuery, setFxQuery] = useState('')
   const [feats, setFeats] = useState<Feature[]>(d?.features ?? [])
   const [rows, setRows] = useState<[string, string][]>(d?.rows ?? [])
   const [rowLab, setRowLab] = useState('')
@@ -1253,6 +1293,14 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
 
   const rd = RAR_DEF[rarity]
   const def = CAT_DEF[category]
+
+  // Effects Granted picker pool — every library effect not already referenced,
+  // filtered over name + tags, capped at 5 (mirrors the shop stock picker).
+  const fxQ = fxQuery.trim().toLowerCase()
+  const fxPool = effectLib
+    .filter(e => !effectRefs.some(r => r.effectId === e.id))
+    .filter(e => !fxQ || (e.data.name + ' ' + (e.data.tags ?? []).join(' ')).toLowerCase().includes(fxQ))
+  const fxShown = fxPool.slice(0, 5)
 
   function build(): CatalogItemData {
     const weightNum = parseFloat(weight)
@@ -1280,8 +1328,13 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
         ? { ...(heal.trim() ? { heal: heal.trim() } : {}), ...(duration.trim() ? { duration: duration.trim() } : {}) }
         : {}),
     }
-    const effects = compileEffects(mods)
+    // effectRefs is the authored source; `effects` is a COMPILED CACHE recomputed
+    // here on every save so the equip/grant engine keeps reading plain
+    // ItemEffects with no changes (see EffectRef's doc comment).
+    const referencedMods = effectRefs.flatMap(r => effectLib.find(e => e.id === r.effectId)?.data.mods ?? [])
+    const effects = compileEffects(referencedMods)
     if (effects) data.effects = effects
+    if (effectRefs.length) data.effectRefs = effectRefs
     if (feats.length) data.features = feats
     if (rows.length) data.rows = rows
     return data
@@ -1497,34 +1550,98 @@ function CatalogForm({ item, featureLib, onSubmit, onDelete }: {
       </div>
       <textarea className={styles.catProse} value={flavor} onChange={e => setFlavor(e.target.value)} placeholder="The prose the player reads when they examine this item…" />
 
-      {/* structured effects (mechanical) — pick a stat, pick a number */}
-      <div className={styles.catFx}>
-        <div className={styles.catFxHead}><i className="fa-solid fa-flask-vial" /><span className={styles.t}>Effects Granted</span><span className={styles.s}>applied while equipped</span></div>
-        <div className={styles.catFxRows}>
-          {mods.length ? mods.map((m, i) => {
-            const patchMod = (p: Partial<Mod>) => setMods(list => list.map((x, j) => (j === i ? { ...x, ...p } : x)))
-            return (
-              <div key={i} className={styles.catFxRow}>
-                <select className={cx(styles.selIn, styles.fxStat)} value={m.stat}
-                  onChange={e => patchMod({ stat: e.target.value, set: isAbility(e.target.value) ? m.set : false })}>
-                  {MOD_STATS.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                {isAbility(m.stat) && (
-                  <select className={cx(styles.selIn, styles.fxMode)} value={m.set ? 'set' : 'bonus'} onChange={e => patchMod({ set: e.target.value === 'set' })}>
-                    <option value="bonus">Bonus +</option>
-                    <option value="set">Set to</option>
-                  </select>
-                )}
-                <input className={cx(styles.sessIn, styles.fxAmt)} type="number" value={m.amt}
-                  onChange={e => patchMod({ amt: parseInt(e.target.value, 10) || 0 })} />
-                <span className={styles.fxX} onClick={() => setMods(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
+      {/* effects granted — reference picker into the effect library. Each
+          reference carries its own duration; the item's own `effects` field is
+          recompiled from the referenced mods on save (build(), above) so the
+          equip/grant engine keeps reading plain ItemEffects unchanged. */}
+      <div className={cx(styles.catFx, styles.fold, fxOpen && styles.open)}>
+        <div className={styles.fxfHead} onClick={() => setFxOpen(o => !o)} role="button" tabIndex={0} aria-expanded={fxOpen}>
+          <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
+          <i className="fa-solid fa-flask-vial" style={{ color: 'var(--amber-hot)', fontSize: 11 }} />
+          <span className={styles.t}>Effects Granted</span>
+          <span className={styles.s}>
+            {effectRefs.length
+              ? `${effectRefs.length} referenced · ${clipTx(effectRefs.map(r => effectLib.find(e => e.id === r.effectId)?.data.name).filter(Boolean).join(', '), 42)}`
+              : 'none · references the effect library'}
+          </span>
+        </div>
+        {fxOpen && (
+          <>
+            <div className={styles.efRefs}>
+              {effectRefs.length ? effectRefs.map((r, i) => {
+                const eff = effectLib.find(e => e.id === r.effectId)
+                if (!eff) return null
+                const K = EFFECT_KINDS[eff.data.kind]
+                const parts = effectParts(eff.data)
+                const counted = EF_COUNTED.includes(r.dur)
+                const ticks = EF_TICKING.includes(r.dur)
+                const patchRef = (p: Partial<EffectRef>) => setEffectRefs(list => list.map((x, j) => (j === i ? { ...x, ...p } : x)))
+                return (
+                  <div key={i} className={styles.efRefRow} style={{ ['--k' as string]: K.color }}>
+                    <div className={styles.efRefTop}>
+                      <span className={styles.ic}><i className={`fa-solid ${eff.data.icon}`} /></span>
+                      <span className={styles.nm}>{eff.data.name}</span>
+                      <span className={styles.efBadge} style={{ ['--k' as string]: K.color }}>{K.label}</span>
+                      <span className={styles.x} onClick={() => setEffectRefs(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
+                    </div>
+                    {parts.length ? (
+                      <div className={styles.efRefSum}>{parts.map((p, pi) => <span key={pi}>{p}</span>)}</div>
+                    ) : (
+                      <div className={cx(styles.efRefSum, styles.prose)}>{renderInline(clipTx(eff.data.desc, 180))}</div>
+                    )}
+                    <div className={styles.efRefDur}>
+                      <span className={styles.dl}>Duration</span>
+                      {counted && (
+                        <input className={cx(styles.sessIn, styles.num)} type="number" min={1} value={r.amount ?? 1}
+                          onChange={e => patchRef({ amount: Math.max(1, parseInt(e.target.value, 10) || 1) })} />
+                      )}
+                      <select className={styles.selIn} value={r.dur} onChange={e => {
+                        const dur = e.target.value as EffectDuration
+                        const needsAmount = EF_COUNTED.includes(dur) && !r.amount
+                        patchRef({ dur, ...(needsAmount ? { amount: dur === 'Rounds' ? 3 : 10 } : {}) })
+                      }}>
+                        {EF_DURATIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                      <span className={cx(styles.tick, ticks && styles.on)}>{ticks ? 'ticks down' : 'cleared by hand'}</span>
+                    </div>
+                  </div>
+                )
+              }) : <div className={styles.catFxNone}>No effects referenced — search the library below. Each line carries its own duration, because duration belongs to whoever applies it.</div>}
+            </div>
+            <div className={styles.efPick}>
+              <div className={styles.searchWrap}>
+                <i className="fa-solid fa-magnifying-glass" />
+                <input className={styles.searchIn} value={fxQuery} onChange={e => setFxQuery(e.target.value)} placeholder="Search effects by name or tag…" />
               </div>
-            )
-          }) : <div className={styles.catFxNone}>No modifiers — add the buffs this item grants while worn (e.g. AC +1, or set STR to 21).</div>}
-        </div>
-        <div className={styles.catFxAdd}>
-          <Btn tone="ghost" sm icon="fa-plus" label="Add Modifier" onClick={() => setMods(list => [...list, { stat: 'STR', amt: 1 }])} />
-        </div>
+              <div className={styles.skPicklist}>
+                {!fxPool.length ? (
+                  <div className={styles.catFxNone}>{fxQ ? `No effect matches "${fxQuery.trim()}".` : 'Every effect in the library is already referenced.'}</div>
+                ) : (
+                  <>
+                    {fxShown.map(e => {
+                      const K = EFFECT_KINDS[e.data.kind]
+                      const parts = effectParts(e.data)
+                      return (
+                        <button key={e.id} className={styles.skPi} style={{ ['--rar' as string]: K.color }} onClick={() => {
+                          setEffectRefs(list => [...list, category === 'consumable'
+                            ? { effectId: e.id, dur: 'Minutes', amount: 10 }
+                            : { effectId: e.id, dur: 'Permanent while equipped', amount: 1 }])
+                          setFxQuery('')
+                        }}>
+                          <span className={styles.piIc}><i className={`fa-solid ${e.data.icon}`} /></span>
+                          <span className={styles.piT}>{e.data.name}</span>
+                          <span className={styles.piM}>{parts.length ? parts.join(' · ') : 'prose only'}</span>
+                          <span className={styles.piV}>{K.label}</span>
+                        </button>
+                      )
+                    })}
+                    {fxPool.length > fxShown.length && <div className={styles.catFxNone}>{fxPool.length - fxShown.length} more — keep typing to narrow.</div>}
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* features granted — embedded snapshots from the feature library, surfaced
@@ -1965,6 +2082,345 @@ function FeatureForm({ feature, onSubmit, onDelete }: {
 
       <div className={styles.qActions}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : feature ? 'Save Feature' : 'Create Feature'} onClick={() => void submit()} disabled={busy || !name.trim()} />
+        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+      </div>
+    </>
+  )
+}
+
+// ============================================================
+// EFFECT LIBRARY (Catalog · Effects tab) — the single source for what an
+// effect IS. Referenced by items (Effects Granted, below); a spell/feature/
+// console consumer is future work (see the plan's §5). An effect DEFINITION
+// is three things, kept visually distinct on purpose: MODIFIERS (amber,
+// numeric, `Mod[]` — the same shape lib/modEditor.ts already compiles into
+// ItemEffects), FLAGS (cyan, never numeric), DESCRIPTION (beige, prose).
+// Duration is deliberately absent — the applier owns it (EffectRef).
+// ============================================================
+const EFFECT_KIND_ORDER: EffectKind[] = ['buff', 'debuff', 'condition']
+/** Colour deviates from the mockup (which ties debuff AND condition to the
+ *  same red) to match the vocabulary the rest of the app already uses for
+ *  ActiveEffect.kind — "cyan buff, amber condition, red debuff"
+ *  (database.types.ts) — and the roster chips already fixed to that scheme. */
+const EFFECT_KINDS: Record<EffectKind, { label: string; icon: string; color: string }> = {
+  buff: { label: 'Buff', icon: 'fa-arrow-up-right-dots', color: 'var(--cyan)' },
+  debuff: { label: 'Debuff', icon: 'fa-arrow-down-short-wide', color: 'var(--danger)' },
+  condition: { label: 'Condition', icon: 'fa-triangle-exclamation', color: 'var(--amber)' },
+}
+const EF_FLAG_ORDER: EffectFlagMode[] = ['advantage', 'disadvantage', 'resistance', 'vulnerability', 'immunity']
+const EF_FLAG_MODES: Record<EffectFlagMode, { label: string; short: string; on: 'roll' | 'dmg' }> = {
+  advantage: { label: 'Advantage on', short: 'advantage', on: 'roll' },
+  disadvantage: { label: 'Disadvantage on', short: 'disadvantage', on: 'roll' },
+  resistance: { label: 'Resistance to', short: 'resistance', on: 'dmg' },
+  vulnerability: { label: 'Vulnerability to', short: 'vulnerability', on: 'dmg' },
+  immunity: { label: 'Immunity to', short: 'immunity', on: 'dmg' },
+}
+const EF_ROLL_TARGETS = [
+  'all saves', 'STR saves', 'DEX saves', 'CON saves', 'INT saves', 'WIS saves', 'CHA saves',
+  'saves vs poison', 'saves vs charm', 'saves vs fear',
+  'attack rolls', 'melee attacks', 'ranged attacks', 'spell attacks', 'ability checks',
+  'Stealth checks', 'Perception checks', 'Athletics checks', 'initiative', 'death saves', 'concentration checks',
+]
+const EF_DMG_TYPES = [
+  'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic',
+  'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder', 'all damage',
+]
+/** Durations offered wherever an effect is APPLIED (never on the definition). */
+const EF_DURATIONS: EffectDuration[] = ['Rounds', 'Minutes', 'Hours', 'Until rest', 'Permanent while equipped']
+const EF_TICKING: EffectDuration[] = ['Rounds']
+const EF_COUNTED: EffectDuration[] = ['Rounds', 'Minutes', 'Hours']
+const EFFECT_ICONS = [
+  'fa-bolt', 'fa-arrow-up-right-dots', 'fa-arrow-down-short-wide', 'fa-triangle-exclamation',
+  'fa-skull', 'fa-ghost', 'fa-fire', 'fa-snowflake', 'fa-droplet', 'fa-hand-fist',
+  'fa-shield-halved', 'fa-hands-praying', 'fa-wind', 'fa-heart-pulse', 'fa-eye',
+  'fa-moon', 'fa-gem', 'fa-flask', 'fa-ring', 'fa-khanda', 'fa-location-arrow', 'fa-star',
+]
+
+const clipTx = (s: string, n: number) => {
+  const t = (s ?? '').trim()
+  return t.length > n ? `${t.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : t
+}
+/** `+2 AC` for a flat bonus, `STR = 21` for a set-to floor. */
+const modText = (m: Mod) => (m.set ? `${m.stat} = ${m.amt}` : `${m.amt < 0 ? '−' : '+'}${Math.abs(m.amt)} ${m.stat}`)
+const flagText = (f: EffectFlag) => `${EF_FLAG_MODES[f.mode].short} ${f.target || '—'}`
+/** Mods then flags, as short human strings — used everywhere an effect is
+ *  summarised: the index row, the preview strip, an item's reference row. */
+const effectParts = (e: { mods: Mod[]; flags: EffectFlag[] }) => [...e.mods.map(modText), ...e.flags.map(flagText)]
+
+/** The Effects tab of the Catalog: author-once library of effect DEFINITIONS,
+ *  grouped by kind (mirrors the mockup). Same index+form pattern as Items/
+ *  Features/Spells — `key={activeId ?? 'new'}` on the form is the load/new
+ *  draft mechanism, no draft functions needed. */
+function EffectLibrarySurface({ lib }: { lib: DmEffectsState }) {
+  const { effects, createEffect, updateEffect, deleteEffect, loading } = lib
+  const [selId, setSelId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  const activeId = creating ? null : (selId ?? effects[0]?.id ?? null)
+  const selected = effects.find(e => e.id === activeId) ?? null
+
+  async function handleSubmit(data: EffectDef) {
+    if (selected) {
+      await updateEffect(selected.id, { data })
+    } else {
+      const created = await createEffect({ data })
+      if (created) { setCreating(false); setSelId(created.id) }
+    }
+  }
+  async function handleDelete() {
+    if (!selected) return
+    await deleteEffect(selected.id)
+    setSelId(null)
+  }
+
+  return (
+    <div className={styles.catLayout}>
+      <div className={styles.catIndex}>
+        <div className={styles.catNew}>
+          <Btn tone="cyan" icon="fa-plus" label="New Effect" onClick={() => { setCreating(true); setSelId(null) }} />
+        </div>
+        {EFFECT_KIND_ORDER.map(kind => {
+          const rows = effects.filter(e => (e.data?.kind ?? 'buff') === kind)
+          if (!rows.length) return null
+          const K = EFFECT_KINDS[kind]
+          return (
+            <div key={kind} className={styles.catGrp}>
+              <div className={styles.catGrpHead}><span className={styles.ghT}>{K.label}s</span><span className={styles.ghC}>{rows.length}</span></div>
+              <div className={styles.catRows}>
+                {rows.map(e => {
+                  const parts = effectParts(e.data ?? { mods: [], flags: [] })
+                  return (
+                    <button key={e.id} className={cx(styles.catRow, e.id === activeId && !creating && styles.sel)}
+                      style={{ ['--rar' as string]: K.color }} onClick={() => { setCreating(false); setSelId(e.id) }}>
+                      <span className={styles.crIc}><i className={`fa-solid ${e.data?.icon ?? 'fa-bolt'}`} /></span>
+                      <span className={styles.crTx}>
+                        <span className={styles.crT}>{e.data?.name ?? 'Untitled'}</span>
+                        {parts.length ? (
+                          <span className={styles.crS}>
+                            {parts.map((p, i) => (
+                              <span key={i}>{i > 0 && <span className={styles.op}> · </span>}{p}</span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className={cx(styles.crS, styles.prose)}>{renderInline(clipTx(e.data?.desc ?? '', 62))}</span>
+                        )}
+                      </span>
+                      <span className={styles.crTag} style={{ color: K.color, borderColor: K.color }}>
+                        {parts.length
+                          ? `${e.data.mods.length ? `${e.data.mods.length}M` : ''}${e.data.mods.length && e.data.flags.length ? ' ' : ''}${e.data.flags.length ? `${e.data.flags.length}F` : ''}`
+                          : 'prose'}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+        {effects.length === 0 && <div className={styles.catEmpty}>{loading ? '· loading ·' : '— library empty —'}</div>}
+      </div>
+
+      <div className={styles.catForm}>
+        <EffectForm key={activeId ?? 'new'} effect={selected} effectLib={effects} onSubmit={handleSubmit} onDelete={selected ? handleDelete : undefined} />
+      </div>
+    </div>
+  )
+}
+
+function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
+  effect: CatalogEffectRow | null
+  effectLib: CatalogEffectRow[]
+  onSubmit: (data: EffectDef) => Promise<void>
+  onDelete?: () => void
+}) {
+  const d = effect?.data
+  const [name, setName] = useState(d?.name ?? '')
+  const [icon, setIcon] = useState(d?.icon ?? 'fa-bolt')
+  const [kind, setKind] = useState<EffectKind>(d?.kind ?? 'buff')
+  const [tags, setTags] = useState<string[]>(d?.tags ?? [])
+  const [tagInput, setTagInput] = useState('')
+  const [tagAcOpen, setTagAcOpen] = useState(false)
+  const [mods, setMods] = useState<Mod[]>(d?.mods ?? [])
+  const [flags, setFlags] = useState<EffectFlag[]>(d?.flags ?? [])
+  const [desc, setDesc] = useState(d?.desc ?? '')
+  const [busy, setBusy] = useState(false)
+
+  const K = EFFECT_KINDS[kind]
+  const parts = effectParts({ mods, flags })
+
+  // Tags in use across the library ∪ this draft's own — autocomplete source.
+  const allTags = useMemo(() => {
+    const set = new Set<string>()
+    effectLib.forEach(e => (e.data?.tags ?? []).forEach(t => set.add(t)))
+    tags.forEach(t => set.add(t))
+    return [...set].sort()
+  }, [effectLib, tags])
+  const tagUses = (t: string) => effectLib.filter(e => (e.data?.tags ?? []).includes(t)).length
+  const tagHits = allTags.filter(t => t.includes(tagInput.trim().toLowerCase()) && !tags.includes(t)).slice(0, 8)
+
+  function addTag(raw: string) {
+    const t = raw.trim().toLowerCase().replace(/\s+/g, '_')
+    if (t && !tags.includes(t)) setTags(list => [...list, t])
+    setTagInput('')
+  }
+
+  function build(): EffectDef {
+    return { name: name.trim(), icon, kind, tags, mods, flags, desc }
+  }
+  async function submit() {
+    setBusy(true)
+    await onSubmit(build())
+    setBusy(false)
+  }
+
+  return (
+    <>
+      <div className={styles.catFormHead}>
+        <span className={styles.cfhT}>{effect ? 'Edit Effect' : 'New Effect'}</span>
+        <span className={styles.cfhId}>{effect ? effect.id : 'unsaved template'}</span>
+      </div>
+
+      <div className={styles.efPrev} style={{ ['--k' as string]: K.color }}>
+        <span className={styles.pc}><i className={`fa-solid ${icon}`} /></span>
+        <span className={styles.pt}>
+          <span className={styles.pn}>{name || 'Untitled Effect'}</span>
+          <span className={styles.pm}>
+            <span className={styles.g}>{K.label}</span>
+            {parts.length
+              ? parts.map((p, i) => <span key={i}>{p}</span>)
+              : <span className={styles.pr}>{desc.trim() ? renderInline(clipTx(desc, 90)) : 'prose only — the description carries the rule'}</span>}
+          </span>
+        </span>
+      </div>
+
+      <span className={styles.fieldLab}>Name</span>
+      <input className={styles.sessIn} value={name} onChange={e => setName(e.target.value)} placeholder="Name the effect…" />
+
+      <span className={styles.fieldLab}>Icon</span>
+      <div className={styles.catIcons}>
+        {EFFECT_ICONS.map(ic => (
+          <button key={ic} className={cx(styles.catIc, ic === icon && styles.sel)} onClick={() => setIcon(ic)} title={ic} aria-label={ic}>
+            <i className={`fa-solid ${ic}`} />
+          </button>
+        ))}
+      </div>
+
+      <span className={styles.fieldLab}>Kind <span style={{ color: 'var(--beige-dim)' }}>· drives the tint wherever this effect appears</span></span>
+      <div className={styles.efKind}>
+        {EFFECT_KIND_ORDER.map(k => {
+          const KK = EFFECT_KINDS[k]
+          return (
+            <button key={k} className={cx(styles.k, k === kind && styles.on)} style={{ ['--k' as string]: KK.color }} onClick={() => setKind(k)}>
+              <i className={`fa-solid ${KK.icon}`} /><span className={styles.t}>{KK.label}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <span className={styles.fieldLab}>Tags</span>
+      <div className={styles.efTags}>
+        {tags.length ? tags.map((t, i) => (
+          <span key={i} className={styles.efChip}>{t}<i className="fa-solid fa-xmark" onClick={() => setTags(list => list.filter((_, j) => j !== i))} /></span>
+        )) : <span className={cx(styles.efChip, styles.empty)}>no tags</span>}
+      </div>
+      <div className={styles.efTagbox}>
+        <input
+          className={styles.sessIn} value={tagInput}
+          onChange={e => { setTagInput(e.target.value); setTagAcOpen(true) }}
+          onFocus={() => setTagAcOpen(true)}
+          onBlur={() => setTimeout(() => setTagAcOpen(false), 140)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagInput) }
+            if (e.key === 'Escape') setTagAcOpen(false)
+          }}
+          placeholder="Add a tag — lowercased on save" autoComplete="off" spellCheck={false}
+        />
+        {tagAcOpen && tagHits.length > 0 && (
+          <div className={cx(styles.efAc, styles.on)}>
+            {tagHits.map(t => (
+              <button key={t} className={styles.t2} onMouseDown={e => e.preventDefault()} onClick={() => addTag(t)}>
+                {t}<span className={styles.n}>{tagUses(t)} in use</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className={styles.efNoduration}>
+        <i className="fa-solid fa-hourglass-half" /> No duration here — a definition says what it does; whoever applies it says how long
+      </div>
+
+      <div className={cx(styles.efBlock, styles.mods)}>
+        <div className={styles.efBh}><i className="fa-solid fa-calculator" /><span className={styles.t}>Modifiers</span><span className={styles.n}>{mods.length} row{mods.length === 1 ? '' : 's'}</span></div>
+        <div className={styles.efRule}>Numbers only · stat, operator, value</div>
+        <div className={styles.efRows}>
+          {mods.length ? mods.map((m, i) => {
+            const patchMod = (p: Partial<Mod>) => setMods(list => list.map((x, j) => (j === i ? { ...x, ...p } : x)))
+            return (
+              <div key={i} className={styles.efRow}>
+                <select className={cx(styles.selIn, styles.st)} value={m.stat}
+                  onChange={e => patchMod({ stat: e.target.value, set: isAbility(e.target.value) ? m.set : false })}>
+                  {MOD_STATS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <span className={styles.efOps}>
+                  {/* a debuff subtracts, not adds — the segment reads "−" and forces the
+                      sign to match, so the toggle, the number, and the preview never disagree */}
+                  <span className={cx(styles.o, !m.set && styles.on)}
+                    onClick={() => patchMod({ set: false, amt: kind === 'debuff' ? -Math.abs(m.amt || 1) : Math.abs(m.amt || 1) })}>
+                    {kind === 'debuff' ? '−' : '+'}
+                  </span>
+                  {isAbility(m.stat) && <span className={cx(styles.o, m.set && styles.on)} onClick={() => patchMod({ set: true })}>=</span>}
+                </span>
+                <input className={cx(styles.sessIn, styles.num)} type="number" step="any" value={m.amt}
+                  onChange={e => patchMod({ amt: e.target.value === '' ? 0 : Number(e.target.value) })} />
+                <span className={styles.pv}>{modText(m)}</span>
+                <span className={styles.x} onClick={() => setMods(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
+              </div>
+            )
+          }) : <div className={styles.efNone}>No modifiers — this effect changes no number. That is a complete answer.</div>}
+        </div>
+        <div className={styles.efAdd}>
+          <Btn tone="ghost" sm icon="fa-plus" label="Modifier" onClick={() => setMods(list => [...list, { stat: 'AC', amt: kind === 'debuff' ? -1 : 1 }])} />
+        </div>
+      </div>
+
+      <div className={cx(styles.efBlock, styles.flags)}>
+        <div className={styles.efBh}><i className="fa-solid fa-flag" /><span className={styles.t}>Flags</span><span className={styles.n}>{flags.length} row{flags.length === 1 ? '' : 's'}</span></div>
+        <div className={styles.efRule}>Never numbers · advantage, resistance, immunity</div>
+        <div className={styles.efRows}>
+          {flags.length ? flags.map((f, i) => {
+            const mode = EF_FLAG_MODES[f.mode]
+            const targetList = mode.on === 'roll' ? EF_ROLL_TARGETS : EF_DMG_TYPES
+            return (
+              <div key={i} className={styles.efRow}>
+                <select className={cx(styles.selIn, styles.fm)} value={f.mode} onChange={e => {
+                  const nextMode = e.target.value as EffectFlagMode
+                  const nextList = EF_FLAG_MODES[nextMode].on === 'roll' ? EF_ROLL_TARGETS : EF_DMG_TYPES
+                  setFlags(fl => fl.map((x, j) => (j === i ? { mode: nextMode, target: nextList[0] } : x)))
+                }}>
+                  {EF_FLAG_ORDER.map(k => <option key={k} value={k}>{EF_FLAG_MODES[k].label}</option>)}
+                </select>
+                <select className={cx(styles.selIn, styles.tgt)} value={f.target} onChange={e => setFlags(fl => fl.map((x, j) => (j === i ? { ...x, target: e.target.value } : x)))}>
+                  {targetList.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <span className={styles.x} onClick={() => setFlags(fl => fl.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
+              </div>
+            )
+          }) : <div className={styles.efNone}>No flags — no advantage, resistance or immunity to record.</div>}
+        </div>
+        <div className={styles.efAdd}>
+          <Btn tone="ghost" sm icon="fa-plus" label="Flag" onClick={() => setFlags(fl => [...fl, { mode: 'advantage', target: EF_ROLL_TARGETS[0] }])} />
+        </div>
+      </div>
+
+      <div className={cx(styles.efBlock, styles.prose)}>
+        <div className={styles.efBh}><i className="fa-solid fa-feather" /><span className={styles.t}>Description</span><span className={styles.n}><i className="fa-solid fa-eye" /> player-facing · **bold** *italics*</span></div>
+        <div className={styles.efRule}>Everything neither numeric nor a flag — often the real rule</div>
+        <textarea className={styles.catProse} value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. At the start of each of their turns the creature takes 1d6 damage…" />
+      </div>
+
+      <div className={styles.qActions}>
+        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : effect ? 'Save Effect' : 'Create Effect'} onClick={() => void submit()} disabled={busy || !name.trim()} />
         {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
       </div>
     </>

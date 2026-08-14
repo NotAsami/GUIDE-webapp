@@ -65,9 +65,12 @@ export function SystemToasts({ characterId }: { characterId: string }) {
 
 function ToastCard({ msg, out }: { msg: VoiceMsg; out: boolean }) {
   const corrupted = msg.kind === 'notice' && msg.tone === 'corrupted'
-  const cls = [styles.toast, corrupted && styles.corrupted, out && styles.out]
-    .filter(Boolean)
-    .join(' ')
+  const fxKind = msg.kind === 'effect' ? (msg.fxKind ?? 'buff') : undefined
+  const cls = [
+    styles.toast, corrupted && styles.corrupted,
+    fxKind === 'debuff' && styles.debuff, fxKind === 'cond' && styles.cond,
+    out && styles.out,
+  ].filter(Boolean).join(' ')
 
   if (msg.kind === 'item') {
     const col = RAR_COLOR[msg.rarity ?? ''] ?? 'var(--cyan)'

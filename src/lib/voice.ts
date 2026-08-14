@@ -22,8 +22,10 @@ export type VoiceMsg =
   | { kind: 'notice'; target: string; message: string; tone: VoiceTone }
   /** Grant Item ping — the ITEM ACQUIRED toast. */
   | { kind: 'item'; target: string; name: string; icon?: string; rarity?: string }
-  /** Apply Effect ping. */
-  | { kind: 'effect'; target: string; name: string; dur?: string }
+  /** Apply Effect ping. `fxKind` (not `kind` — that's the VoiceMsg discriminant)
+   *  tones the toast: cyan buff, amber condition, red debuff — same vocabulary
+   *  as ActiveEffect.kind and the DM console's own effect list. */
+  | { kind: 'effect'; target: string; name: string; dur?: string; fxKind?: 'buff' | 'cond' | 'debuff' }
   /** Currency ping — coins awarded to / deducted from the PC. */
   | { kind: 'coins'; target: string; amount: number; coin: 'gold' | 'silver' | 'copper'; op: 'award' | 'deduct' }
   /** Grant Feature ping — a roleplay boon landed on the sheet. */
