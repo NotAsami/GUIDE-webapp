@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — Party Staircase HUD (component)</title>
+<!--
+  STANDALONE COMPONENT — user handles final placement. Built to flank the Codex
+  topbar (--bar-top-h: 62px, same tokens/fonts). Dashed strip at top is a
+  REFERENCE silhouette of the real topbar for scale only.
+
+  v5 — built to the annotated sketch. True 45° geometry: card is 340×104, so
+  the diamond's half-width equals the half-height (52) and every angled edge
+  (diamond faces + right tip) runs at 45°.
+    · LEVEL — beige diamond hung off the top-left, overlapping the corner.
+    · TITLE — small cyan kicker with an angled rule, above the name.
+    · NAME  — dominant Cinzel line.
+    · HP BAR — the mid-height separator itself, running from the diamond's
+      right point out to the tip.
+    · BOTTOM — split by a vertical rule: HP value + status icons on the left,
+      AC + death saves (FAILS ONLY, 3 pips) on the right.
+    · BACKGROUND FILL — reflects current HP; its trailing edge is a chevron
+      parallel to the card's tip, not a flat vertical cut.
+  Text hugs the diamond: each row's inset follows the 45° edge at its own
+  height (title 68 · name 96 · bar 104 · HP 100 · status 78).
+
+  Status pips: cyan = buff; red = debuff/condition (skull=Poisoned,
+  triangle=Frightened, droplet=Bleeding). Hover any pip or death-save row
+  for detail.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  :root{
+    --bg:#1d1d1d; --bg-2:#161616; --beige:#d4bf7d; --beige-dim:#8a7a4a;
+    --cyan:#00a6d6; --cyan-dim:#0d6e8c; --text:#dedede; --muted:#aaaaaa; --danger:#b93a3a;
+    --bar-top-h:62px;
+    --font-display:"Cinzel",serif; --font-prose:"EB Garamond",serif; --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;width:100%;background:var(--bg);color:var(--text);font-family:var(--font-prose);overflow:hidden}
+  .stage{position:fixed;inset:0;background:radial-gradient(120% 90% at 50% 40%,#232220 0%,#1a1a1a 60%,#0e0e0e 100%)}
+  .scanlines{pointer-events:none;position:fixed;inset:0;z-index:90;background-image:repeating-linear-gradient(to bottom,rgba(255,255,255,0.025) 0px,rgba(255,255,255,0.025) 1px,transparent 1px,transparent 3px);mix-blend-mode:overlay}
+
+  /* ---------- reference topbar (context only, NOT part of the component) ---------- */
+  .ref-topbar{position:fixed;top:0;left:0;right:0;height:var(--bar-top-h);z-index:5;display:flex;align-items:center;justify-content:center;border-bottom:1px dashed rgba(212,191,125,0.4);background:linear-gradient(to bottom,rgba(15,15,15,0.7),rgba(22,22,22,0.5))}
+  .ref-topbar .rt-label{font-family:var(--font-mono);font-size:9px;letter-spacing:0.28em;color:rgba(212,191,125,0.55);text-transform:uppercase}
+
+  /* ============================================================
+     PARTY STAIRCASE COMPONENT      card: 340 × 104, all edges 45°
+     ============================================================ */
+  .stairs{position:fixed;top:0;z-index:20;display:flex;flex-direction:column;gap:18px}
+  .stairs.left{left:44px;padding-top:calc(var(--bar-top-h) + 26px)}
+  .stairs.right{right:44px;padding-top:calc(var(--bar-top-h) + 26px);align-items:flex-end}
+  .stairs.left .pcard:nth-child(2){margin-left:30px}
+  .stairs.right .pcard:nth-child(2){margin-right:30px}
+
+  /* ---- fused hexagon shell (one silhouette, one border pass) ---- */
+  .pcard{position:relative;width:340px;height:104px;flex:0 0 auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,0.55))}
+  .bg-outer{position:absolute;inset:0;background:var(--beige);clip-path:polygon(15.3% 0,84.7% 0,100% 50%,84.7% 100%,15.3% 100%,0 50%)}
+  .bg-inner{position:absolute;inset:2px;background:linear-gradient(180deg,#1c1a17,#100f0d);clip-path:polygon(15.3% 0,84.7% 0,100% 50%,84.7% 100%,15.3% 100%,0 50%)}
+  .fill-wrap{position:absolute;inset:2px;clip-path:polygon(15.3% 0,84.7% 0,100% 50%,84.7% 100%,15.3% 100%,30.6% 50%);overflow:hidden}
+  .stairs.right .bg-outer,.stairs.right .bg-inner{clip-path:polygon(84.7% 0,15.3% 0,0 50%,15.3% 100%,84.7% 100%,100% 50%)}
+  .stairs.right .fill-wrap{clip-path:polygon(84.7% 0,15.3% 0,0 50%,15.3% 100%,84.7% 100%,69.4% 50%)}
+  .bg-fill{position:absolute;top:0;bottom:0;left:50px;width:calc((100% - 50px) * var(--hp));background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));opacity:0.2;clip-path:polygon(0 0,calc(100% - 52px) 0,100% 50%,calc(100% - 52px) 100%,0 100%)}
+  .stairs.right .bg-fill{left:auto;right:50px;width:calc((100% - 50px) * var(--hp));background:linear-gradient(270deg,var(--cyan-dim),var(--cyan));clip-path:polygon(52px 0,100% 0,100% 100%,52px 100%,0 50%)}
+  .pcard.crit .bg-fill{background:linear-gradient(90deg,#7a2424,var(--danger));opacity:0.26}
+  .stairs.right .pcard.crit .bg-fill{background:linear-gradient(270deg,#7a2424,var(--danger))}
+
+  /* ---- diamond accent + portrait icon + level ---- */
+  .dia-accent{position:absolute;inset:0;z-index:1;pointer-events:none}
+  .stairs.right .dia-accent{transform:scaleX(-1)}
+  .p-icon{position:absolute;top:0;bottom:0;left:0;width:104px;display:flex;align-items:center;justify-content:center;z-index:2}
+  .stairs.right .p-icon{left:auto;right:0}
+  .p-icon i{font-size:27px;color:var(--cyan);text-shadow:0 0 12px rgba(0,166,214,0.55)}
+  .lvl{position:absolute;top:-16px;left:36px;width:32px;height:32px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);background:var(--beige);display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:11px;font-weight:600;color:#141414;z-index:4}
+  .stairs.right .lvl{left:auto;right:36px}
+
+  /* ---- content ---- */
+  .pbody{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;justify-content:space-between;padding:8px 0}
+  .ptop{padding-left:88px;padding-right:44px;font-size:0;line-height:1}
+  .stairs.right .ptop{padding-left:44px;padding-right:88px;text-align:right}
+  .ttl{position:relative;display:inline-block;vertical-align:top;margin-left:-14px;padding-left:14px;padding-bottom:4px;border-bottom:1px solid rgba(212,191,125,0.6);font-family:var(--font-mono);font-size:9px;letter-spacing:0.24em;color:var(--cyan);text-transform:uppercase;line-height:1}
+  .ttl::after{content:"";position:absolute;left:100%;bottom:-1px;width:31px;height:1px;background:rgba(212,191,125,0.6);transform-origin:0 50%;transform:rotate(-45deg)}
+  .stairs.right .ttl{margin-left:0;margin-right:-14px;padding-left:0;padding-right:14px}
+  .stairs.right .ttl::after{left:auto;right:100%;transform-origin:100% 50%;transform:rotate(45deg)}  .nm{margin-top:7px;padding-left:16px;font-family:var(--font-display);font-weight:600;font-size:18px;letter-spacing:0.06em;color:var(--beige);text-transform:uppercase;white-space:nowrap;line-height:1}
+  .stairs.right .nm{padding-left:0;padding-right:16px}
+
+  .track{position:absolute;top:50%;transform:translateY(-50%);left:104px;right:2px;height:5px;border:1px solid rgba(212,191,125,0.45);background:rgba(0,0,0,0.55);overflow:hidden}
+  .stairs.right .track{left:2px;right:104px}
+  .track i{position:absolute;top:0;bottom:0;left:0;background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));box-shadow:0 0 8px rgba(0,166,214,0.5);display:block}
+  .pcard.crit .track i{background:linear-gradient(90deg,#7a2424,var(--danger));box-shadow:0 0 8px rgba(185,58,58,0.5)}
+  .stairs.right .track i{left:auto;right:0;background:linear-gradient(270deg,var(--cyan-dim),var(--cyan))}
+  .stairs.right .pcard.crit .track i{background:linear-gradient(270deg,#7a2424,var(--danger))}
+
+  .pbottom{display:flex;align-items:flex-start}
+  .stairs.right .pbottom{flex-direction:row-reverse}
+  .bleft{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+  .bleft .hp-row{padding-left:100px;display:flex;align-items:baseline;gap:6px}
+  .bleft .chips{padding-left:78px;display:flex;align-items:center;gap:5px}
+  .stairs.right .bleft{align-items:flex-end}
+  .stairs.right .bleft .hp-row{padding-left:0;padding-right:100px}
+  .stairs.right .bleft .chips{padding-left:0;padding-right:78px}
+  .hp-lab{font-family:var(--font-mono);font-size:8px;letter-spacing:0.2em;color:var(--cyan);text-transform:uppercase}
+  .hp-val{font-family:var(--font-display);font-weight:700;font-size:16px;color:var(--text);line-height:1}
+  .pcard.crit .hp-val{color:#ff8f8f}
+
+  .bright{width:105px;flex:0 0 auto;border-left:1px solid rgba(212,191,125,0.32);padding-left:13px;display:flex;flex-direction:column;gap:6px}
+  .stairs.right .bright{border-left:0;border-right:1px solid rgba(212,191,125,0.32);padding-left:0;padding-right:13px;align-items:flex-end}
+  .ac{display:flex;align-items:baseline;gap:5px;font-family:var(--font-display);font-weight:700;font-size:15px;color:var(--text);line-height:1}
+  .ac .k{font-family:var(--font-mono);font-weight:400;font-size:8px;letter-spacing:0.2em;color:var(--cyan);text-transform:uppercase}
+  .ds{display:flex;align-items:center;gap:5px}
+  .ds b{width:11px;height:11px;border-radius:50%;border:1px solid rgba(212,191,125,0.5);background:rgba(0,0,0,0.5)}
+  .ds b.fail{background:var(--danger);border-color:var(--danger);box-shadow:0 0 6px rgba(185,58,58,0.6)}
+
+  .pip{width:13px;height:13px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:6px;background:rgba(0,166,214,0.16);border:1px solid var(--cyan);color:var(--cyan);box-shadow:0 0 5px rgba(0,166,214,0.4)}
+  .pip.bad{background:rgba(185,58,58,0.18);border-color:var(--danger);color:#ff9d9d;box-shadow:0 0 5px rgba(185,58,58,0.45)}
+</style>
+</head>
+<body>
+<div class="stage"></div>
+<div class="scanlines"></div>
+
+<div class="ref-topbar"><span class="rt-label">Reference — existing Codex topbar (62px)</span></div>
+
+<div class="stairs left">
+  <div class="pcard">
+    <div class="bg-outer"></div><div class="bg-inner"></div>
+    <div class="fill-wrap"><div class="bg-fill" style="--hp:.78"></div></div>
+    <svg class="dia-accent" viewBox="0 0 340 104" preserveAspectRatio="none"><polygon points="0,52 52,0 104,52 52,104" fill="none" stroke="var(--beige)" stroke-width="1.5"></polygon></svg>
+    <div class="p-icon"><i class="fa-solid fa-chess-rook"></i></div><span class="lvl">8</span>
+    <div class="pbody">
+      <div class="ptop">
+        <div class="ttl">Fighter</div>
+        <div class="nm">Ros Chrisstone</div>
+      </div>
+      <div class="track"><i style="width:78%"></i></div>
+      <div class="pbottom">
+        <div class="bleft">
+          <div class="hp-row"><span class="hp-lab">HP</span><span class="hp-val">52 / 67</span></div>
+          <div class="chips"><span class="pip" title="Bless · 9 rounds"><i class="fa-solid fa-arrow-up"></i></span></div>
+        </div>
+        <div class="bright">
+          <div class="ac"><span class="k">AC</span>17</div>
+          <div class="ds" title="Death save fails: 0 of 3"><b></b><b></b><b></b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pcard crit">
+    <div class="bg-outer"></div><div class="bg-inner"></div>
+    <div class="fill-wrap"><div class="bg-fill" style="--hp:.24"></div></div>
+    <svg class="dia-accent" viewBox="0 0 340 104" preserveAspectRatio="none"><polygon points="0,52 52,0 104,52 52,104" fill="none" stroke="var(--beige)" stroke-width="1.5"></polygon></svg>
+    <div class="p-icon"><i class="fa-solid fa-shield-halved"></i></div><span class="lvl">8</span>
+    <div class="pbody">
+      <div class="ptop">
+        <div class="ttl">Cleric</div>
+        <div class="nm">Brom Ironhide</div>
+      </div>
+      <div class="track"><i style="width:24%"></i></div>
+      <div class="pbottom">
+        <div class="bleft">
+          <div class="hp-row"><span class="hp-lab">HP</span><span class="hp-val">14 / 58</span></div>
+          <div class="chips"><span class="pip bad" title="Poisoned · until rest"><i class="fa-solid fa-skull"></i></span></div>
+        </div>
+        <div class="bright">
+          <div class="ac"><span class="k">AC</span>18</div>
+          <div class="ds" title="Death save fails: 1 of 3"><b class="fail"></b><b></b><b></b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="stairs right">
+  <div class="pcard">
+    <div class="bg-outer"></div><div class="bg-inner"></div>
+    <div class="fill-wrap"><div class="bg-fill" style="--hp:.80"></div></div>
+    <svg class="dia-accent" viewBox="0 0 340 104" preserveAspectRatio="none"><polygon points="0,52 52,0 104,52 52,104" fill="none" stroke="var(--beige)" stroke-width="1.5"></polygon></svg>
+    <div class="p-icon"><i class="fa-solid fa-hat-wizard"></i></div><span class="lvl">7</span>
+    <div class="pbody">
+      <div class="ptop">
+        <div class="ttl">Wizard</div>
+        <div class="nm">Vethra Quill</div>
+      </div>
+      <div class="track"><i style="width:80%"></i></div>
+      <div class="pbottom">
+        <div class="bleft">
+          <div class="hp-row"><span class="hp-lab">HP</span><span class="hp-val">33 / 41</span></div>
+          <div class="chips">
+            <span class="pip" title="Haste · 4 rounds"><i class="fa-solid fa-arrow-up"></i></span>
+            <span class="pip" title="+3 STR Potion · 1 hour"><i class="fa-solid fa-arrow-up"></i></span>
+          </div>
+        </div>
+        <div class="bright">
+          <div class="ac"><span class="k">AC</span>13</div>
+          <div class="ds" title="Death save fails: 0 of 3"><b></b><b></b><b></b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pcard crit">
+    <div class="bg-outer"></div><div class="bg-inner"></div>
+    <div class="fill-wrap"><div class="bg-fill" style="--hp:.20"></div></div>
+    <svg class="dia-accent" viewBox="0 0 340 104" preserveAspectRatio="none"><polygon points="0,52 52,0 104,52 52,104" fill="none" stroke="var(--beige)" stroke-width="1.5"></polygon></svg>
+    <div class="p-icon"><i class="fa-solid fa-mask"></i></div><span class="lvl">7</span>
+    <div class="pbody">
+      <div class="ptop">
+        <div class="ttl">Rogue</div>
+        <div class="nm">Sable</div>
+      </div>
+      <div class="track"><i style="width:20%"></i></div>
+      <div class="pbottom">
+        <div class="bleft">
+          <div class="hp-row"><span class="hp-lab">HP</span><span class="hp-val">9 / 45</span></div>
+          <div class="chips">
+            <span class="pip bad" title="Frightened · 2 rounds"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <span class="pip bad" title="Bleeding · 3 rounds"><i class="fa-solid fa-droplet"></i></span>
+          </div>
+        </div>
+        <div class="bright">
+          <div class="ac"><span class="k">AC</span>15</div>
+          <div class="ds" title="Death save fails: 2 of 3"><b class="fail"></b><b class="fail"></b><b></b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

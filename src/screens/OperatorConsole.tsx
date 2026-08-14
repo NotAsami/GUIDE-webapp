@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmShops, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmShopsState } from '../lib/dm'
+import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmSpells, useDmShops, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmSpellsState, type DmShopsState } from '../lib/dm'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
@@ -10,6 +10,7 @@ import { MOD_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '.
 import type { ShardSlot, ShardTree } from '../lib/database.types'
 import { longRestPatch } from '../lib/rest'
 import { effectiveSheet } from '../lib/effects'
+import { pactSlotCount, pactSlotLevel } from '../lib/spells'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/voice'
 import { usePartyPresence } from '../lib/presence'
 import { useFullscreen } from '../lib/fullscreen'
@@ -19,6 +20,7 @@ import type {
   CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity,
   ItemEffects, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
   Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, CatalogFeatureData,
+  Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData,
   EquippedGear, CharacterLore, Relation,
 } from '../lib/database.types'
 import { ITEM_SLOTS, PERSON, isRingSlot } from '../lib/equip'
@@ -55,7 +57,7 @@ interface PartyMember {
   tempHp: number
   online: boolean
   digitization: number
-  effects: { name: string; kind: 'buff' | 'cond' | 'debuff' }[]
+  effects: { name: string; kind: 'buff' | 'cond' | 'debuff'; source?: string }[]
 }
 
 function toMember(c: CharacterRow, secret: CharacterSecret | undefined, online: boolean, shardCatalog: Record<string, ShardTree>): PartyMember {
@@ -80,7 +82,7 @@ function toMember(c: CharacterRow, secret: CharacterSecret | undefined, online: 
     // DM-only horror gauge from the `character_secrets` table (RLS = DM-only).
     // Absent until the DM first authors it, so default to 0.
     digitization: secret?.digitization ?? 0,
-    effects: raw.map(e => ({ name: e.name ?? 'Effect', kind: e.kind ?? ('buff' as const) })),
+    effects: raw.map(e => ({ name: e.name ?? 'Effect', kind: e.kind ?? ('buff' as const), source: e.source })),
   }
 }
 
@@ -116,6 +118,7 @@ export function OperatorConsole() {
   const campaign = useDmCampaign()
   const catalog = useDmCatalog()
   const featureLib = useDmFeatures()
+  const spellLib = useDmSpells()
   const shardLib = useDmShards()
   const shopLib = useDmShops()
   // EditorTree is a superset of ShardTree (catalog geometry + merged DM
@@ -271,7 +274,7 @@ export function OperatorConsole() {
                   <span className={styles.ovIc}><i className="fa-solid fa-box-archive" /></span>
                   <span className={styles.ovTx}>
                     <span className={styles.ovT}>Catalog</span>
-                    <span className={styles.ovS}>{catalog.items.length} items · {featureLib.features.length} features</span>
+                    <span className={styles.ovS}>{catalog.items.length} items · {featureLib.features.length} features · {spellLib.spells.length} spells</span>
                   </span>
                 </button>
 
@@ -301,7 +304,9 @@ export function OperatorConsole() {
                       </div>
                       <div className={styles.fxDots}>
                         {p.effects.length
-                          ? p.effects.map((e, i) => <span key={i} className={cx(styles.fxDot, styles[e.kind])}><i /></span>)
+                          ? p.effects.map((e, i) => (
+                              <span key={i} className={cx(styles.fxDot, styles[e.kind])} title={`${e.name}${e.source ? ` · From: ${e.source}` : ''}`}><i /></span>
+                            ))
                           : <span className={styles.fxNone}>No active effects</span>}
                       </div>
                     </button>
@@ -363,7 +368,7 @@ export function OperatorConsole() {
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
               ) : view === 'catalog' ? (
-                <CatalogSurface catalog={catalog} featureLib={featureLib} shopLib={shopLib} members={members} />
+                <CatalogSurface catalog={catalog} featureLib={featureLib} spellLib={spellLib} shopLib={shopLib} members={members} />
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
@@ -377,7 +382,7 @@ export function OperatorConsole() {
                     log={log}
                   />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} spellLib={spellLib.spells} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
                 )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
@@ -462,7 +467,9 @@ function OverviewDashboard({
               </div>
               <div className={styles.drFx}>
                 {p.effects.length
-                  ? p.effects.map((e, i) => <span key={i} className={cx(styles.chip, styles[e.kind])}>{e.name}</span>)
+                  ? p.effects.map((e, i) => (
+                      <span key={i} className={cx(styles.chip, styles[e.kind])} title={e.source ? `From: ${e.source}` : undefined}>{e.name}</span>
+                    ))
                   : <span className={styles.none}>— clear —</span>}
               </div>
             </div>
@@ -486,11 +493,12 @@ function OverviewDashboard({
  *  never clobbered, and targets the same fields the player screens read — HP and
  *  coins on `sheet`, death saves + exhaustion on `resources` (see Stats.tsx) —
  *  keeping one source of truth per value. */
-function ActionsTab({ row, member, catalog, featureLib, shardCatalog, onUpdate, onVoice, log }: {
+function ActionsTab({ row, member, catalog, featureLib, spellLib, shardCatalog, onUpdate, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
   catalog: CatalogItemRow[]
   featureLib: CatalogFeatureRow[]
+  spellLib: CatalogSpellRow[]
   shardCatalog: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
@@ -687,6 +695,18 @@ function ActionsTab({ row, member, catalog, featureLib, shardCatalog, onUpdate, 
             here rather than player-editable — see Character.tsx / lib/dnd.ts,
             which already read these three sheet arrays for the Rolls screen. */}
         <ProficienciesCard member={member} row={row} onUpdate={onUpdate} log={log} />
+
+        {/* H — SPELLCASTING (wide): interim caster-profile editor — class,
+            ability, save DC, attack bonus, prepared max, slot totals. Writes
+            the SAME `spellbook` fields the player Spellbook screen reads, so
+            there is exactly one owner (CLAUDE.md). Level-Up (disabled above)
+            will become the primary way this gets set once it exists; this
+            stays as the manual fallback. */}
+        <CasterProfileCard key={row.id} member={member} row={row} onUpdate={onUpdate} log={log} />
+
+        {/* I — GRANT SPELL: snapshot a spell_catalog template onto this PC's
+            spellbook.spells, mirroring Grant Feature (F). */}
+        <GrantSpellCard member={member} row={row} spellLib={spellLib} onUpdate={onUpdate} onVoice={onVoice} log={log} />
       </div>
 
     </>
@@ -991,7 +1011,10 @@ function ApplyEffectCard({ member, row, onUpdate, onVoice, log }: {
         <div className={styles.faHead}>Active on {first}</div>
         {active.length ? active.map(e => (
           <div key={e.id} className={cx(styles.fxLine, styles[e.kind ?? 'buff'])}>
-            <span className={styles.nm}>{e.name}</span>
+            <span className={styles.nm}>
+              {e.name}
+              {e.source && <span className={styles.src}>From: {e.source}</span>}
+            </span>
             {e.note && <span className={styles.du}>{e.note}</span>}
             <span className={styles.x} onClick={() => void remove(e.id)} title="Clear effect"><i className="fa-solid fa-xmark" /></span>
           </div>
@@ -1081,12 +1104,12 @@ function BroadcastPanel({ selected, onSend, log }: {
  *  catalogs, shown as inert "soon" tabs to reserve their place (matches the mockup).
  *  Items are stored in the app's structured shape (NOT the mockup's string effects)
  *  so a granted copy is mechanically real the instant it lands. */
-function CatalogSurface({ catalog, featureLib, shopLib, members }: {
-  catalog: DmCatalogState; featureLib: DmFeaturesState; shopLib: DmShopsState; members: PartyMember[]
+function CatalogSurface({ catalog, featureLib, spellLib, shopLib, members }: {
+  catalog: DmCatalogState; featureLib: DmFeaturesState; spellLib: DmSpellsState; shopLib: DmShopsState; members: PartyMember[]
 }) {
   const { items, createItem, updateItem, deleteItem, loading, error } = catalog
   const nav = useNavigate()
-  const [tab, setTab] = useState<'items' | 'features' | 'shops'>('items')
+  const [tab, setTab] = useState<'items' | 'features' | 'spells' | 'shops'>('items')
   const [selId, setSelId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -1110,7 +1133,7 @@ function CatalogSurface({ catalog, featureLib, shopLib, members }: {
   const catTabs: { key: string; label: string; icon: string; n?: number; soon: boolean }[] = [
     { key: 'items', label: 'Items', icon: 'fa-box-open', n: items.length, soon: false },
     { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
-    { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', soon: true },
+    { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', n: spellLib.spells.length, soon: false },
     { key: 'shops', label: 'Shopkeepers', icon: 'fa-shop', n: shopLib.shops.length, soon: false },
     { key: 'shards', label: 'Shards', icon: 'fa-gem', soon: false },
   ]
@@ -1127,17 +1150,22 @@ function CatalogSurface({ catalog, featureLib, shopLib, members }: {
         {catTabs.map(t => (
           <button key={t.key} className={cx(styles.catTab, t.key === tab && styles.sel, t.soon && styles.stub)}
             disabled={t.soon} title={t.soon ? 'Its own later slice' : undefined}
-            onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else setTab(t.key as 'items' | 'features' | 'shops') }}>
+            onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else setTab(t.key as 'items' | 'features' | 'spells' | 'shops') }}>
             <i className={`fa-solid ${t.icon}`} />{t.label}
             {t.n != null && <span className={styles.ctC}>{t.n}</span>}
           </button>
         ))}
       </div>
 
-      {error ? (
-        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
+      {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'shops' ? shopLib.error : error) ? (
+        <div className={styles.soonPanel}>
+          <i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span>
+          <span>{tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'shops' ? shopLib.error : error}</span>
+        </div>
       ) : tab === 'features' ? (
         <FeatureLibrarySurface lib={featureLib} />
+      ) : tab === 'spells' ? (
+        <SpellLibrarySurface lib={spellLib} />
       ) : tab === 'shops' ? (
         <OperatorShops shopLib={shopLib} itemCatalog={items} members={members} />
       ) : (
@@ -1940,6 +1968,585 @@ function FeatureForm({ feature, onSubmit, onDelete }: {
         {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
       </div>
     </>
+  )
+}
+
+// ============================================================
+// SPELL LIBRARY (Catalog · Spells tab) + GRANT SPELL + SPELLCASTING —
+// the Spellbook slice's DM half. Same list+form / snapshot pattern as
+// Features. Damage is authored as free text (dice/scaling strings) and
+// parsed at the player boundary (lib/spells.ts) rather than here.
+// ============================================================
+const SPELL_SCHOOLS: SpellSchool[] = [
+  'Abjuration', 'Conjuration', 'Divination', 'Enchantment',
+  'Evocation', 'Illusion', 'Necromancy', 'Transmutation',
+]
+const spellLevelLabel = (l: number) => (l === 0 ? 'Cantrip' : `Level ${l}`)
+const SPELL_SCHOOL_ICON: Record<SpellSchool, string> = {
+  Evocation: 'fa-fire-flame-curved', Conjuration: 'fa-hand-sparkles', Transmutation: 'fa-arrows-spin',
+  Illusion: 'fa-ghost', Abjuration: 'fa-shield-halved', Divination: 'fa-eye',
+  Necromancy: 'fa-skull', Enchantment: 'fa-wand-magic-sparkles',
+}
+const SPELL_ICONS = [
+  'fa-wand-sparkles', 'fa-fire', 'fa-fire-flame-curved', 'fa-snowflake', 'fa-bolt', 'fa-water',
+  'fa-wind', 'fa-mountain', 'fa-meteor', 'fa-explosion', 'fa-skull', 'fa-ghost', 'fa-spider',
+  'fa-eye', 'fa-moon', 'fa-sun', 'fa-star', 'fa-shield-halved', 'fa-hand-sparkles', 'fa-hand-fist',
+  'fa-heart-pulse', 'fa-brain', 'fa-leaf', 'fa-droplet', 'fa-bone', 'fa-gem', 'fa-book-skull',
+]
+/** Default swatch shown in the color inputs when no override is authored yet
+ *  — matches the player screen's hardcoded cyan fallback (tokens.css --cyan). */
+const DEFAULT_SPELL_COLOR = '#00a6d6'
+
+/** The Spells tab of the Catalog: author-once library of spells, grouped by
+ *  level (mirrors the player Grimoire). Same index+form pattern as Items/
+ *  Features. */
+function SpellLibrarySurface({ lib }: { lib: DmSpellsState }) {
+  const { spells, createSpell, updateSpell, deleteSpell, loading } = lib
+  const [selId, setSelId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  const activeId = creating ? null : (selId ?? spells[0]?.id ?? null)
+  const selected = spells.find(s => s.id === activeId) ?? null
+
+  async function handleSubmit(data: CatalogSpellData) {
+    if (selected) {
+      await updateSpell(selected.id, { data })
+    } else {
+      const created = await createSpell({ data })
+      if (created) { setCreating(false); setSelId(created.id) }
+    }
+  }
+  async function handleDelete() {
+    if (!selected) return
+    await deleteSpell(selected.id)
+    setSelId(null)
+  }
+
+  const levels = [...new Set(spells.map(s => s.data?.level ?? 0))].sort((a, b) => a - b)
+
+  return (
+    <div className={styles.catLayout}>
+      <div className={styles.catIndex}>
+        <div className={styles.catNew}>
+          <Btn tone="cyan" icon="fa-plus" label="New Spell" onClick={() => { setCreating(true); setSelId(null) }} />
+        </div>
+        {levels.map(lvl => {
+          const rows = spells.filter(s => (s.data?.level ?? 0) === lvl)
+          return (
+            <div key={lvl} className={styles.catGrp}>
+              <div className={styles.catGrpHead}><span className={styles.ghT}>{spellLevelLabel(lvl)}</span><span className={styles.ghC}>{rows.length}</span></div>
+              <div className={styles.catRows}>
+                {rows.map(s => (
+                  <button key={s.id} className={cx(styles.catRow, s.id === activeId && !creating && styles.sel)}
+                    style={{ ['--rar' as string]: 'var(--cyan)' }} onClick={() => { setCreating(false); setSelId(s.id) }}>
+                    <span className={styles.crIc}>
+                      <i className={`fa-solid ${s.data?.icon || SPELL_SCHOOL_ICON[s.data?.school ?? 'Evocation']}`} style={s.data?.iconColor ? { color: s.data.iconColor } : undefined} />
+                    </span>
+                    <span className={styles.crTx}>
+                      <span className={styles.crT}>{s.data?.name ?? 'Untitled'}</span>
+                      <span className={styles.crS}>{s.data?.school ?? '—'}</span>
+                    </span>
+                    <span className={styles.crTag}>{spellLevelLabel(lvl)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+        {spells.length === 0 && <div className={styles.catEmpty}>{loading ? '· loading ·' : '— library empty —'}</div>}
+      </div>
+
+      <div className={styles.catForm}>
+        <SpellForm key={activeId ?? 'new'} spell={selected} onSubmit={handleSubmit} onDelete={selected ? handleDelete : undefined} />
+      </div>
+    </div>
+  )
+}
+
+function SpellForm({ spell, onSubmit, onDelete }: {
+  spell: CatalogSpellRow | null
+  onSubmit: (data: CatalogSpellData) => Promise<void>
+  onDelete?: () => void
+}) {
+  const d = spell?.data
+  const [name, setName] = useState(d?.name ?? '')
+  const [level, setLevel] = useState(d?.level ?? 0)
+  const [school, setSchool] = useState<SpellSchool>(d?.school ?? 'Evocation')
+  const [icon, setIcon] = useState(d?.icon ?? '')
+  const [iconColor, setIconColor] = useState(d?.iconColor ?? '')
+  const [castingTime, setCastingTime] = useState(d?.castingTime ?? '1 Action')
+  const [range, setRange] = useState(d?.range ?? '')
+  const [v, setV] = useState(d?.v ?? true)
+  const [s, setS] = useState(d?.s ?? true)
+  const [m, setM] = useState(d?.m ?? false)
+  const [material, setMaterial] = useState(d?.material ?? '')
+  const [duration, setDuration] = useState(d?.duration ?? 'Instantaneous')
+  const [concentration, setConcentration] = useState(d?.concentration ?? false)
+  const [ritual, setRitual] = useState(d?.ritual ?? false)
+  const [desc, setDesc] = useState(d?.desc ?? '')
+  const [hasDamage, setHasDamage] = useState(d?.hasDamage ?? false)
+  const [dice, setDice] = useState(d?.dice ?? '')
+  const [scaling, setScaling] = useState(d?.scaling ?? '')
+  const [dmgType, setDmgType] = useState(d?.dmgType ?? '')
+  const [dmgColor, setDmgColor] = useState(d?.dmgColor ?? '')
+  // Absent (undefined in stored data) reads as "can upcast" — mirror that
+  // here so a spell nobody has touched this field on still shows ON.
+  const [canUpcast, setCanUpcast] = useState(d?.canUpcast !== false)
+  const [maxUpcastLevel, setMaxUpcastLevel] = useState(d?.maxUpcastLevel ?? 0)
+  const [partyCastable, setPartyCastable] = useState(d?.partyCastable ?? false)
+  const [partyCastMode, setPartyCastMode] = useState<'heal' | 'effect'>(d?.partyCastMode ?? 'heal')
+  const [healDice, setHealDice] = useState(d?.healDice ?? '')
+  const [effectTone, setEffectTone] = useState<'buff' | 'cond' | 'debuff'>(d?.effectTone ?? 'buff')
+  const [effectNote, setEffectNote] = useState(d?.effectNote ?? '')
+  const [busy, setBusy] = useState(false)
+
+  function build(): CatalogSpellData {
+    return {
+      name: name.trim(), level, school,
+      ...(icon ? { icon } : {}),
+      ...(iconColor ? { iconColor } : {}),
+      castingTime: castingTime.trim(), range: range.trim(),
+      v, s, m,
+      ...(m && material.trim() ? { material: material.trim() } : {}),
+      duration: duration.trim(), concentration, ritual, desc: desc.trim(), hasDamage,
+      ...(hasDamage ? {
+        dice: dice.trim(), scaling: scaling.trim(), dmgType: dmgType.trim(),
+        ...(dmgColor ? { dmgColor } : {}),
+        canUpcast,
+        ...(canUpcast && maxUpcastLevel > 0 ? { maxUpcastLevel } : {}),
+      } : {}),
+      ...(partyCastable ? {
+        partyCastable: true, partyCastMode,
+        ...(partyCastMode === 'heal'
+          ? { healDice: healDice.trim() }
+          : { effectTone, ...(effectNote.trim() ? { effectNote: effectNote.trim() } : {}) }),
+      } : {}),
+    }
+  }
+  async function submit() {
+    setBusy(true)
+    await onSubmit(build())
+    setBusy(false)
+  }
+
+  return (
+    <>
+      <div className={styles.catFormHead}>
+        <span className={styles.cfhT}>{spell ? 'Edit Spell' : 'New Spell'}</span>
+        <span className={styles.cfhId}>{spell ? spell.id : 'unsaved template'}</span>
+      </div>
+
+      <span className={styles.fieldLab}>Name</span>
+      <input className={styles.sessIn} value={name} onChange={e => setName(e.target.value)} placeholder="Name the spell…" />
+
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Level</span>
+          <select className={styles.selIn} value={level} onChange={e => setLevel(parseInt(e.target.value, 10))}>
+            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => <option key={l} value={l}>{spellLevelLabel(l)}</option>)}
+          </select>
+        </div>
+        <div>
+          <span className={styles.fieldLab}>School</span>
+          <select className={styles.selIn} value={school} onChange={e => setSchool(e.target.value as SpellSchool)}>
+            {SPELL_SCHOOLS.map(sc => <option key={sc} value={sc}>{sc}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <span className={styles.fieldLab}>Icon</span>
+      <div className={styles.catIcons}>
+        <button
+          className={cx(styles.catIc, !icon && styles.sel)} onClick={() => setIcon('')}
+          title={`Auto (by school — ${SPELL_SCHOOL_ICON[school]})`} aria-label="Auto icon by school"
+        >
+          <i className={`fa-solid ${SPELL_SCHOOL_ICON[school]}`} style={{ opacity: 0.5 }} />
+        </button>
+        {SPELL_ICONS.map(ic => (
+          <button key={ic} className={cx(styles.catIc, ic === icon && styles.sel)} onClick={() => setIcon(ic)} title={ic} aria-label={ic}>
+            <i className={`fa-solid ${ic}`} />
+          </button>
+        ))}
+      </div>
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Icon Color</span>
+          <div className={styles.colorField}>
+            <input type="color" className={styles.colorIn} value={iconColor || DEFAULT_SPELL_COLOR} onChange={e => setIconColor(e.target.value)} />
+            {iconColor && <button type="button" className={styles.colorReset} onClick={() => setIconColor('')}>Auto</button>}
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.catGrid2}>
+        <div><span className={styles.fieldLab}>Casting Time</span><input className={styles.sessIn} value={castingTime} onChange={e => setCastingTime(e.target.value)} placeholder="e.g. 1 Action" /></div>
+        <div><span className={styles.fieldLab}>Range</span><input className={styles.sessIn} value={range} onChange={e => setRange(e.target.value)} placeholder="e.g. 120 ft" /></div>
+      </div>
+
+      <span className={styles.fieldLab}>Components</span>
+      <div className={styles.catComp}>
+        <div className={cx(styles.ccOpt, v && styles.on)} onClick={() => setV(x => !x)}><span className={styles.ccB}>{v && <i className="fa-solid fa-check" />}</span>Verbal</div>
+        <div className={cx(styles.ccOpt, s && styles.on)} onClick={() => setS(x => !x)}><span className={styles.ccB}>{s && <i className="fa-solid fa-check" />}</span>Somatic</div>
+        <div className={cx(styles.ccOpt, m && styles.on)} onClick={() => setM(x => !x)}><span className={styles.ccB}>{m && <i className="fa-solid fa-check" />}</span>Material</div>
+      </div>
+      {m && (
+        <>
+          <span className={styles.fieldLab}>Material Component</span>
+          <input className={styles.sessIn} value={material} onChange={e => setMaterial(e.target.value)} placeholder="e.g. a tiny ball of bat guano and sulfur" />
+        </>
+      )}
+
+      <span className={styles.fieldLab}>Duration</span>
+      <input className={styles.sessIn} value={duration} onChange={e => setDuration(e.target.value)} placeholder="e.g. Instantaneous" />
+
+      <div className={cx(styles.catTog, concentration && styles.on)} onClick={() => setConcentration(c => !c)} role="switch" aria-checked={concentration}>
+        <span className={styles.tgSw} />
+        <span className={styles.tgLab}><span className={styles.t}>Concentration</span><span className={styles.s}>Drops if the caster's focus breaks</span></span>
+      </div>
+      <div className={cx(styles.catTog, ritual && styles.on)} onClick={() => setRitual(r => !r)} role="switch" aria-checked={ritual}>
+        <span className={styles.tgSw} />
+        <span className={styles.tgLab}><span className={styles.t}>Ritual</span><span className={styles.s}>Castable without expending a slot</span></span>
+      </div>
+
+      <div className={styles.qLabRow}>
+        <span className={styles.fieldLab}>Description</span>
+        <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing · **bold** *italics*</span>
+      </div>
+      <textarea className={cx(styles.catProse, styles.player)} value={desc} onChange={e => setDesc(e.target.value)} placeholder="The prose the player reads in their Spellbook…" />
+
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Damage (optional)</span></div>
+      <div className={cx(styles.catTog, hasDamage && styles.on)} onClick={() => setHasDamage(h => !h)} role="switch" aria-checked={hasDamage}>
+        <span className={styles.tgSw} />
+        <span className={styles.tgLab}><span className={styles.t}>This spell deals damage</span><span className={styles.s}>Adds a dice expression + per-level scaling</span></span>
+      </div>
+      {hasDamage && (
+        <div className={styles.catDmg}>
+          <div className={styles.catGrid3}>
+            <div><span className={styles.fieldLab}>Dice</span><input className={styles.sessIn} value={dice} onChange={e => setDice(e.target.value)} placeholder="e.g. 8d6" /></div>
+            <div><span className={styles.fieldLab}>Per Level Above</span><input className={styles.sessIn} value={scaling} onChange={e => setScaling(e.target.value)} placeholder="e.g. 1d6" /></div>
+            <div><span className={styles.fieldLab}>Damage Type</span><input className={styles.sessIn} value={dmgType} onChange={e => setDmgType(e.target.value)} placeholder="e.g. Fire" /></div>
+          </div>
+          <div className={styles.catGrid2}>
+            <div>
+              <span className={styles.fieldLab}>Damage Color</span>
+              <div className={styles.colorField}>
+                <input type="color" className={styles.colorIn} value={dmgColor || DEFAULT_SPELL_COLOR} onChange={e => setDmgColor(e.target.value)} />
+                {dmgColor && <button type="button" className={styles.colorReset} onClick={() => setDmgColor('')}>Auto</button>}
+              </div>
+            </div>
+            <div>
+              <span className={styles.fieldLab}>Max Upcast Level</span>
+              <input
+                className={styles.sessIn} type="number" min={0} max={9} value={maxUpcastLevel || ''} disabled={!canUpcast}
+                placeholder="No cap (owned slots only)"
+                onChange={e => setMaxUpcastLevel(Math.max(0, Math.min(9, parseInt(e.target.value || '0', 10) || 0)))}
+              />
+            </div>
+          </div>
+          <div className={cx(styles.catTog, canUpcast && styles.on)} onClick={() => setCanUpcast(c => !c)} role="switch" aria-checked={canUpcast}>
+            <span className={styles.tgSw} />
+            <span className={styles.tgLab}>
+              <span className={styles.t}>Can Upcast</span>
+              <span className={styles.s}>Off = always casts at its own level — no stepper on the player screen. Some spells simply do nothing on upcast.</span>
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Party Cast (optional)</span></div>
+      <div className={cx(styles.catTog, partyCastable && styles.on)} onClick={() => setPartyCastable(p => !p)} role="switch" aria-checked={partyCastable}>
+        <span className={styles.tgSw} />
+        <span className={styles.tgLab}>
+          <span className={styles.t}>Castable at Party</span>
+          <span className={styles.s}>Adds a target picker on the player screen — heals or applies an effect to an ally</span>
+        </span>
+      </div>
+      {partyCastable && (
+        <div className={styles.catDmg}>
+          <span className={styles.fieldLab}>Mode</span>
+          <select className={styles.selIn} value={partyCastMode} onChange={e => setPartyCastMode(e.target.value as 'heal' | 'effect')}>
+            <option value="heal">Heal</option>
+            <option value="effect">Effect</option>
+          </select>
+          {partyCastMode === 'heal' ? (
+            <>
+              <span className={styles.fieldLab}>Heal Dice</span>
+              <input className={styles.sessIn} value={healDice} onChange={e => setHealDice(e.target.value)} placeholder="e.g. 1d8 + 3" />
+            </>
+          ) : (
+            <div className={styles.catGrid2}>
+              <div>
+                <span className={styles.fieldLab}>Effect Tone</span>
+                <select className={styles.selIn} value={effectTone} onChange={e => setEffectTone(e.target.value as 'buff' | 'cond' | 'debuff')}>
+                  <option value="buff">Buff</option>
+                  <option value="cond">Condition</option>
+                  <option value="debuff">Debuff</option>
+                </select>
+              </div>
+              <div>
+                <span className={styles.fieldLab}>Effect Note</span>
+                <input className={styles.sessIn} value={effectNote} onChange={e => setEffectNote(e.target.value)} placeholder="e.g. speed x2, extra action" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={styles.qActions}>
+        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : spell ? 'Save Spell' : 'Create Spell'} onClick={() => void submit()} disabled={busy || !name.trim()} />
+        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+      </div>
+    </>
+  )
+}
+
+/** Stamp a library template into a grantable Spell copy (fresh instance id +
+ *  back-ref), mirroring featureSnapshot. Cantrips are always effectively
+ *  "prepared" (never counted against the cap — lib/spells.ts preparedUsed);
+ *  a levelled spell arrives known-but-unprepared, same as the player screen's
+ *  default read for a spell with no `prepared` flag set. */
+function spellSnapshot(row: CatalogSpellRow): Spell {
+  return {
+    ...row.data,
+    id: `spell-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`,
+    spell_id: row.id,
+    prepared: row.data.level === 0,
+  }
+}
+
+/** Grant Spell (Actions card I): copies a library spell onto
+ *  `spellbook.spells`, spread so the caster profile / slot state survive.
+ *  Refuses a duplicate grant of the same catalog spell (by `spell_id`). */
+function GrantSpellCard({ member, row, spellLib, onUpdate, onVoice, log }: {
+  member: PartyMember
+  row: CharacterRow
+  spellLib: CatalogSpellRow[]
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  onVoice: (msg: VoiceMsg) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const [selId, setSelId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const sb = row.spellbook ?? {}
+  const current = sb.spells ?? []
+  const selected = spellLib.find(s => s.id === selId) ?? null
+  const first = firstName(member.name)
+  const alreadyKnown = selected ? current.some(s => s.spell_id === selected.id) : false
+
+  async function grant() {
+    if (!selected || alreadyKnown) return
+    setBusy(true)
+    const copy = spellSnapshot(selected)
+    const ok = await onUpdate({ spellbook: { ...sb, spells: [...current, copy] } })
+    setBusy(false)
+    if (!ok) return
+    void onVoice({ kind: 'spell', target: member.id, name: copy.name, level: copy.level })
+    log(<>Granted spell <span className={styles.obj}>{copy.name}</span> to <span className={styles.who}>{first}</span></>, 'cyan')
+    setSelId(null)
+  }
+
+  async function remove(id: string) {
+    const gone = current.find(s => s.id === id)
+    const ok = await onUpdate({ spellbook: { ...sb, spells: current.filter(s => s.id !== id) } })
+    if (ok && gone) log(<>Removed spell <span className={styles.obj}>{gone.name}</span> from <span className={styles.who}>{first}</span></>, 'danger')
+  }
+
+  return (
+    <div className={cx(styles.actCard, styles.wide)}>
+      <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>I</span><span className={styles.t}>Grant Spell</span></div>
+      <div className={styles.featGrantSplit}>
+        <div className={styles.fgCol}>
+          <span className={styles.fieldLab}>Library · Catalog · Spells tab</span>
+          <div className={styles.catList}>
+            {spellLib.length === 0 ? (
+              <div className={styles.catListEmpty}>Library is empty — author spells in the Catalog's Spells tab.</div>
+            ) : spellLib.map(sp => (
+              <button key={sp.id} className={cx(styles.catItem, sp.id === selId && styles.sel)} onClick={() => setSelId(sp.id)}>
+                <span className={styles.ciIc} style={{ color: sp.data?.iconColor || 'var(--cyan)' }}>
+                  <i className={`fa-solid ${sp.data?.icon || SPELL_SCHOOL_ICON[sp.data?.school ?? 'Evocation']}`} />
+                </span>
+                <span className={styles.ciTx}>
+                  <span className={styles.ciNm}>{sp.data?.name ?? 'Untitled'}</span>
+                  <span className={styles.ciTy}>{sp.data?.school ?? '—'}</span>
+                </span>
+                <span className={styles.ciRar} style={{ color: 'var(--muted)' }}>{spellLevelLabel(sp.data?.level ?? 0)}</span>
+              </button>
+            ))}
+          </div>
+          <div className={styles.grantAction}>
+            <Btn
+              tone="amber" icon="fa-arrow-right-to-bracket"
+              label={busy ? 'Granting…' : alreadyKnown ? 'Already Known' : `Grant to ${first}`}
+              onClick={() => void grant()} disabled={!selected || alreadyKnown || busy}
+            />
+          </div>
+        </div>
+        <div className={styles.fgCol}>
+          <span className={styles.fieldLab}>In {first}'s grimoire · {current.length}</span>
+          <div className={cx(styles.fxActive, styles.fgList)}>
+            {current.length ? current.map(sp => (
+              <div key={sp.id} className={cx(styles.fxLine, styles.buff)}>
+                <span className={styles.nm}>
+                  <i className={`fa-solid ${sp.icon || SPELL_SCHOOL_ICON[sp.school]}`} style={sp.iconColor ? { color: sp.iconColor } : undefined} /> {sp.name}
+                </span>
+                <span className={styles.du}>{spellLevelLabel(sp.level)}</span>
+                <span className={styles.x} onClick={() => void remove(sp.id)} title="Remove spell"><i className="fa-solid fa-xmark" /></span>
+              </div>
+            )) : <div className={styles.fxNone}>— no spells known —</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const CASTER_ABILITIES: AbilityKey[] = ['int', 'wis', 'cha']
+
+/** Spellcasting (Actions card H): interim caster-profile editor. Unlike every
+ *  other card here (immediate per-click writes), this is a dirty/Save form —
+ *  changing class/DC/slots one keystroke at a time isn't a "grant", it's
+ *  configuration, so it follows the FeatureForm/SpellForm draft convention
+ *  instead. The caller passes `key={row.id}` so switching the selected
+ *  character remounts this (and re-seeds the draft from the new row) instead
+ *  of leaking the previous character's in-progress edits; within one
+ *  character the draft stays local until Save. */
+function CasterProfileCard({ member, row, onUpdate, log }: {
+  member: PartyMember
+  row: CharacterRow
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const sb = row.spellbook ?? {}
+  const first = firstName(member.name)
+  const slotByLevel = new Map((sb.slots ?? []).map(sl => [sl.level, sl]))
+
+  const charLevel = row.identity?.level ?? 1
+
+  const [caster, setCaster] = useState(!!sb.spellcasting)
+  const [cls, setCls] = useState(sb.class ?? '')
+  const [ability, setAbility] = useState<AbilityKey>((sb.ability?.toLowerCase() as AbilityKey) ?? 'int')
+  const [saveDC, setSaveDC] = useState(sb.saveDC ?? 10)
+  const [attackBonus, setAttackBonus] = useState(sb.attackBonus ?? 0)
+  // Prepared style (Wizard/Cleric/Druid/Paladin) vs. Known style (Sorcerer/
+  // Bard/Ranger/Warlock/…) — see lib/spells.ts `preparesSpells`. Known casters
+  // have every spell ready at all times; Prepared Max is meaningless for them.
+  const [preparesSpells, setPreparesSpells] = useState(sb.preparesSpells !== false)
+  const [preparedMax, setPreparedMax] = useState(sb.preparedMax ?? 0)
+  // Warlock Pact Magic — see lib/spells.ts pactSlotCount/pactSlotLevel. Slot
+  // count AND level are DERIVED from character level (not authored here, same
+  // principle as cantrip scaling); this card only flips the switch. On, it
+  // replaces the standard 9-level ladder below entirely — Pact Magic ignores
+  // `slots[]` and is always Known-style regardless of the toggle above.
+  const [pactMagic, setPactMagic] = useState(!!sb.pactMagic)
+  const [slotTotals, setSlotTotals] = useState<number[]>(
+    () => Array.from({ length: 9 }, (_, i) => slotByLevel.get(i + 1)?.total ?? 0),
+  )
+  const [busy, setBusy] = useState(false)
+
+  function setSlotAt(i: number, total: number) {
+    setSlotTotals(prev => prev.map((t, idx) => (idx === i ? Math.max(0, total) : t)))
+  }
+
+  async function save() {
+    setBusy(true)
+    const nextSlots: SpellSlot[] = slotTotals.map((total, i) => {
+      const level = i + 1
+      const prevExpended = slotByLevel.get(level)?.expended ?? 0
+      return { level, total, expended: Math.min(prevExpended, total) }
+    })
+    const ok = await onUpdate({
+      spellbook: {
+        ...sb,
+        spellcasting: caster,
+        ...(cls.trim() ? { class: cls.trim() } : {}),
+        ability,
+        saveDC,
+        attackBonus,
+        preparesSpells,
+        preparedMax,
+        pactMagic,
+        slots: nextSlots,
+      },
+    })
+    setBusy(false)
+    if (ok) log(<>Updated <span className={styles.who}>{first}</span>'s <span className={styles.obj}>spellcasting profile</span></>, 'cyan')
+  }
+
+  return (
+    <div className={cx(styles.actCard, styles.wide)}>
+      <div className={styles.acTitle}><i className="fa-solid fa-hat-wizard lead" /><span className={styles.num}>H</span><span className={styles.t}>Spellcasting</span></div>
+
+      <div className={cx(styles.catTog, caster && styles.on)} onClick={() => setCaster(c => !c)} role="switch" aria-checked={caster}>
+        <span className={styles.tgSw} />
+        <span className={styles.tgLab}><span className={styles.t}>{first} Is A Caster</span><span className={styles.s}>Off = Spellbook renders the "no arcane current" empty state</span></span>
+      </div>
+
+      <div className={cx(styles.catTog, pactMagic && styles.on)} onClick={() => setPactMagic(p => !p)} role="switch" aria-checked={pactMagic}>
+        <span className={styles.tgSw} />
+        <span className={styles.tgLab}>
+          <span className={styles.t}>Pact Magic (Warlock)</span>
+          <span className={styles.s}>On = one small pool of same-level slots, derived from character level, that refresh on a SHORT rest. Replaces the standard ladder below and forces Known-style — no Prepare cap.</span>
+        </span>
+      </div>
+
+      {!pactMagic && (
+        <div className={cx(styles.catTog, preparesSpells && styles.on)} onClick={() => setPreparesSpells(p => !p)} role="switch" aria-checked={preparesSpells}>
+          <span className={styles.tgSw} />
+          <span className={styles.tgLab}>
+            <span className={styles.t}>Prepares Spells</span>
+            <span className={styles.s}>On = Wizard/Cleric/Druid/Paladin (daily prep + cap). Off = Sorcerer/Bard/Ranger/… — every known spell is always ready, no Prepare button on the player screen.</span>
+          </span>
+        </div>
+      )}
+
+      <div className={styles.catGrid3}>
+        <div><span className={styles.fieldLab}>Class</span><input className={styles.sessIn} value={cls} onChange={e => setCls(e.target.value)} placeholder="e.g. Wizard" /></div>
+        <div>
+          <span className={styles.fieldLab}>Ability</span>
+          <select className={styles.selIn} value={ability} onChange={e => setAbility(e.target.value as AbilityKey)}>
+            {CASTER_ABILITIES.map(a => <option key={a} value={a}>{ABILITY_ABBR[a].toUpperCase()}</option>)}
+          </select>
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Prepared Max</span>
+          <input
+            className={styles.sessIn} type="number" min={0} value={preparedMax} disabled={pactMagic || !preparesSpells}
+            onChange={e => setPreparedMax(Math.max(0, parseInt(e.target.value || '0', 10) || 0))}
+          />
+        </div>
+      </div>
+      <div className={styles.catGrid2}>
+        <div><span className={styles.fieldLab}>Save DC</span><input className={styles.sessIn} type="number" min={0} value={saveDC} onChange={e => setSaveDC(Math.max(0, parseInt(e.target.value || '0', 10) || 0))} /></div>
+        <div><span className={styles.fieldLab}>Spell Attack Bonus</span><input className={styles.sessIn} type="number" value={attackBonus} onChange={e => setAttackBonus(parseInt(e.target.value || '0', 10) || 0)} /></div>
+      </div>
+
+      {pactMagic ? (
+        <div className={styles.pactPreview}>
+          <span className={styles.fieldLab}>Pact Magic Slots (derived from character level {charLevel} — not authored)</span>
+          <div className={styles.pactPreviewRow}>
+            <i className="fa-solid fa-hat-wizard" />
+            <span>{pactSlotCount(charLevel)} slot{pactSlotCount(charLevel) === 1 ? '' : 's'}, all Level {pactSlotLevel(charLevel)}</span>
+          </div>
+        </div>
+      ) : (
+        <>
+          <span className={styles.fieldLab}>Spell Slots (total per level)</span>
+          <div className={styles.spellSlotRow}>
+            {slotTotals.map((total, i) => (
+              <div key={i} className={styles.spellSlotCell}>
+                <span className={styles.lvl}>L{i + 1}</span>
+                <input className={styles.sessIn} type="number" min={0} value={total} onChange={e => setSlotAt(i, parseInt(e.target.value || '0', 10) || 0)} />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className={styles.grantAction}>
+        <Btn tone="amber" icon="fa-floppy-disk" label={busy ? 'Saving…' : 'Save Profile'} onClick={() => void save()} disabled={busy} />
+      </div>
+    </div>
   )
 }
 

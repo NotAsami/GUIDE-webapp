@@ -3,7 +3,6 @@ import { Layout } from './components/Layout'
 import { Codex } from './screens/Codex'
 import { Login } from './screens/Login'
 import { AuthCallback } from './screens/AuthCallback'
-import { Stub } from './screens/Stub'
 import { Character } from './screens/Character'
 import { Stats } from './screens/Stats'
 import { Equipment } from './screens/Equipment'
@@ -11,6 +10,7 @@ import { Features } from './screens/Features'
 import { Inventory } from './screens/Inventory'
 import { Journal } from './screens/Journal'
 import { Lore } from './screens/Lore'
+import { Spellbook } from './screens/Spellbook'
 import { Shard } from './screens/Shard'
 import { ShardLattice } from './screens/ShardLattice'
 import { OperatorConsole } from './screens/OperatorConsole'
@@ -36,8 +36,7 @@ export const router = createBrowserRouter([
       { path: 'shard', element: <Shard /> },
       { path: 'lore', element: <Lore /> },
       { path: 'journal', element: <Journal /> },
-      { path: 'spellbook', element: <Stub title="Spellbook" section="spellbook"
-          blurb="Caster profile + known/prepared spells + slot state. Empty-state path when spellcasting:false." /> },
+      { path: 'spellbook', element: <Spellbook /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

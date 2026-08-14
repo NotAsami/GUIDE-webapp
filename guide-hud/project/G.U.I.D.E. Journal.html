@@ -253,7 +253,6 @@
     z-index: 45;
   }
   .nav-slot { position: relative; width: 156px; display: flex; justify-content: center; }
-  .nav-slot.equipment { padding: 60px 0; margin: -60px 0; }
 
   .nav-btn {
     --w: 156px; --h: var(--nav-h); --cut: 11px;
@@ -324,39 +323,6 @@
     box-shadow: 0 0 10px var(--cyan), 0 0 20px rgba(0,166,214,0.6);
     z-index: 2;
   }
-
-  /* Sub-buttons (Inventory above, Stat Panel below) */
-  .nav-sub {
-    position: absolute; left: 50%;
-    transform: translate(-50%, 0) scale(0.95);
-    opacity: 0; pointer-events: none;
-    transition: transform 220ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
-    z-index: 1;
-  }
-  .nav-sub.above { bottom: calc(50% + 44px); }
-  .nav-sub.below { top:    calc(50% + 44px); }
-  .nav-sub .nav-btn {
-    --w: 122px; --h: 56px; --cut: 9px;
-  }
-  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
-  .nav-sub .nav-btn .nb-inner {
-    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
-                linear-gradient(180deg, #141a1d, #0e1316);
-  }
-  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
-  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
-  .nav-sub .nav-btn:hover .nb-inner {
-    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
-                0 0 18px rgba(0,166,214,0.5);
-  }
-  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
-  .nav-slot.equipment:hover .nav-sub,
-  .nav-slot.equipment:focus-within .nav-sub {
-    opacity: 1; pointer-events: auto;
-  }
-  .nav-slot.equipment:hover .nav-sub.above { transform: translate(-50%, -8px) scale(1); }
-  .nav-slot.equipment:hover .nav-sub.below { transform: translate(-50%, 8px) scale(1); }
-
   /* breadcrumb / subheader under navbar */
   .nav-meta {
     position: fixed;
@@ -750,6 +716,47 @@
     main.journal { grid-template-columns: 38fr 62fr; }
     .read-pad { padding: 28px 32px 32px; }
   }
+
+
+  /* ---- Sub-buttons: original pill stack, now a single column hanging BELOW
+     the parent button (was an above/below pair centred on the active item,
+     which clipped against the top bar). ---- */
+  .nav-sub {
+    position: absolute; left: 50%; top: 100%; padding-top: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transform: translate(-50%, -6px) scale(0.95);
+    opacity: 0; pointer-events: none;
+    transition: opacity 180ms ease, transform 240ms cubic-bezier(.2,.7,.2,1);
+    z-index: 46;
+  }
+  .nav-sub .nav-btn { --w: 122px; --h: 56px; --cut: 9px; }
+  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
+  .nav-sub .nav-btn .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
+                linear-gradient(180deg, #141a1d, #0e1316);
+  }
+  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
+  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
+  .nav-sub .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
+  .nav-sub .nav-btn.is-sub-active .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.22), transparent 60%),
+                linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 22px rgba(0,166,214,0.34),
+                0 0 16px rgba(0,166,214,0.45);
+  }
+  .nav-sub .nav-btn.is-sub-active .nb-icon  { color: var(--cyan-hot); text-shadow: 0 0 10px rgba(0,166,214,0.9); }
+  .nav-sub .nav-btn.is-sub-active .nb-label { color: var(--cyan-hot); }
+  .nav-slot:hover .nav-sub,
+  .nav-slot:focus-within .nav-sub,
+  .nav-slot:has(.is-sub-active) .nav-sub { opacity: 1; pointer-events: auto; transform: translate(-50%, 0) scale(1); }
+  .nav-slot.equipment, .nav-slot.rolls { position: relative; }
+  .navbar { overflow: visible; }
+
+
 </style>
 </head>
 <body>
@@ -827,7 +834,7 @@
         <span class="nb-label">Equipment</span>
       </span>
     </button>
-    <div class="nav-sub above" aria-hidden="false">
+    <div class="nav-sub">
       <button class="nav-btn" data-nav="inventory">
         <span class="nb-frame"></span>
         <span class="nb-marker">◇</span>
@@ -836,8 +843,6 @@
           <span class="nb-label">Inventory</span>
         </span>
       </button>
-    </div>
-    <div class="nav-sub below" aria-hidden="false">
       <button class="nav-btn" data-nav="stat-panel">
         <span class="nb-frame"></span>
         <span class="nb-marker">◇</span>
@@ -867,14 +872,24 @@
       </span>
     </button>
   </div>
-  <div class="nav-slot">
+  <div class="nav-slot rolls">
     <button class="nav-btn" data-nav="character">
       <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
       <span class="nb-inner">
-        <span class="nb-icon"><i class="fa-solid fa-user-shield"></i></span>
-        <span class="nb-label">Character</span>
+        <span class="nb-icon"><i class="fa-solid fa-dice-d20"></i></span>
+        <span class="nb-label">Rolls</span>
       </span>
     </button>
+    <div class="nav-sub">
+      <button class="nav-btn" data-nav="features">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-diagram-project"></i></span>
+          <span class="nb-label">Features</span>
+        </span>
+      </button>
+    </div>
   </div>
   <div class="nav-slot">
     <button class="nav-btn is-active" data-nav="journal" aria-current="page">

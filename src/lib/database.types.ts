@@ -528,7 +528,7 @@ export type CharacterRow = {
   inventory: Json[]
   equipped: Record<string, Json>
   shards: ShardsField
-  spellbook: Record<string, Json> & { spellcasting?: boolean }
+  spellbook: CharacterSpellbook
   lore: CharacterLore
   progress: CharacterProgress
   updated_at: string
@@ -648,6 +648,135 @@ export type CatalogFeatureRow = { id: string; data: CatalogFeatureData; updated_
 export type CatalogFeatureInsert = { id?: string; data: CatalogFeatureData }
 export type CatalogFeatureUpdate = { data?: CatalogFeatureData }
 
+// ── Spell catalog (migration 0010): the DM's spell-authoring library. Same
+//    snapshot pattern as feature_catalog — Grant Spell copies a template onto
+//    `characters.spellbook.spells`, DM-only RLS, no player policy. Field shape
+//    mirrors the DM catalog mockup (flat v/s/m/material, not a nested
+//    `components` object) rather than the player-mockup's nesting — one shape,
+//    no mapping layer between author and player. ──
+export type SpellSchool =
+  | 'Abjuration' | 'Conjuration' | 'Divination' | 'Enchantment'
+  | 'Evocation'  | 'Illusion'    | 'Necromancy'  | 'Transmutation'
+
+/** A single spell, on a character's spellbook. `dice`/`scaling` are authored
+ *  free text (e.g. "8d6" / "1d6") and parsed at render (lib/spells.ts) — never
+ *  stored pre-parsed, so an author typo shows as un-rollable text instead of
+ *  corrupting the template. Cantrips scale by CHARACTER level (CLAUDE.md), not
+ *  `scaling` per upcast level — `scaling` still applies to cantrips, just
+ *  keyed by level tier (1/5/11/17) instead of chosen cast level. */
+export type Spell = {
+  id: string
+  /** Back-reference to the `spell_catalog` template this was granted from. */
+  spell_id?: string
+  /** Set when a feature granted this spell (e.g. "cast Sanctuary at will").
+   *  Shape only for now — no authoring UI grants this yet; see `atWill`. */
+  feature_id?: string
+  /** Feature-granted at-will cast: never spends a slot, regardless of level.
+   *  Shape only for now — no UI sets this yet. */
+  atWill?: boolean
+  name: string
+  level: number  // 0 = cantrip
+  school: SpellSchool
+  castingTime: string
+  range: string
+  v: boolean
+  s: boolean
+  m: boolean
+  material?: string
+  duration: string
+  concentration: boolean
+  ritual: boolean
+  /** Player-facing prose; supports the app's lightweight markdown (lib/markdown.ts). */
+  desc: string
+  /** FA icon class override (e.g. "fa-fire"). Absent = derived from `school`
+   *  (SCHOOL_ICON map, Spellbook.tsx/OperatorConsole.tsx). */
+  icon?: string
+  /** CSS color for the icon (e.g. "#e2701c"). Absent = the default cyan. */
+  iconColor?: string
+  hasDamage: boolean
+  dice?: string      // e.g. "8d6", "3d4+3"
+  scaling?: string   // added per upcast level (levelled) or per tier (cantrip)
+  dmgType?: string
+  /** CSS color for the damage display (expression, roll card, max-die glow).
+   *  Absent = the default cyan. */
+  dmgColor?: string
+  /** Whether this spell can be cast at a level above its own. Absent = `true`.
+   *  `false` = no upcast stepper on the player screen at all (control is
+   *  ABSENT, not disabled) — some spells simply do nothing on upcast. */
+  canUpcast?: boolean
+  /** Authored ceiling on the upcast level, independent of owned slots — e.g.
+   *  cap a spell at level 4 even if the caster owns 5th-level slots. Absent =
+   *  no extra cap (bounded only by owned slots, `lib/spells.ts` maxCastLevel).
+   *  Ignored when `canUpcast` is `false`. */
+  maxUpcastLevel?: number
+  /** Per-character state. Ignored for cantrips (always effectively prepared). */
+  prepared?: boolean
+  /** Adds a "cast on party member" button + target picker on the player screen.
+   *  Absent/false = no button, the rest of these fields are unused. */
+  partyCastable?: boolean
+  /** 'heal' rolls `healDice` onto the target's HP; 'effect' pushes a flavor-only
+   *  status (no numeric modifiers — see ItemEffects) onto their active effects.
+   *  Meaningful only when `partyCastable`. */
+  partyCastMode?: 'heal' | 'effect'
+  /** Heal-mode dice expression, e.g. "1d8 + 3". Rolled client-side (lib/dice.ts
+   *  rollHeal), same as a consumable's `heal` field — no upcast scaling. */
+  healDice?: string
+  /** Effect-mode status-chip color family. Absent = 'buff'. */
+  effectTone?: 'buff' | 'cond' | 'debuff'
+  /** Effect-mode free-text flavor shown on the status chip (e.g. "speed x2,
+   *  extra action") — deliberately not modelled as numbers (ItemEffects doc). */
+  effectNote?: string
+}
+
+export type SpellSlot = { level: number; total: number; expended: number }
+
+/** The `characters.spellbook` JSONB column. `preparedMax` is authored (DM);
+ *  prepared *count* is DERIVED by counting `spells` with `level>0 && prepared`
+ *  — never stored, so it can't drift from the per-spell flags (CLAUDE.md).
+ *
+ *  `preparesSpells` distinguishes the two 5e casting styles: PREPARED casters
+ *  (Wizard, Cleric, Druid, Paladin) choose a daily subset of their known
+ *  spells to ready; KNOWN casters (Sorcerer, Bard, Ranger, Warlock, …) have
+ *  every spell they know available at all times — there is no prep step, no
+ *  cap, and no Prepare/Unprepare control. Absent = `true` (prepared caster),
+ *  matching the original Wizard-only behavior before this field existed.
+ *  `lib/spells.ts`'s `isPrepared()` is the one place that resolves a spell's
+ *  effective prepared state from this flag — read that, never `spell.prepared`
+ *  directly, so a known caster's spells always read "ready" regardless of the
+ *  stored per-spell flag.
+ *
+ *  `pactMagic` is the Warlock special case: Pact Magic slots are ALL the same
+ *  level (not a ladder like `slots[]`), that level and the slot COUNT are
+ *  both pure functions of character level (`lib/spells.ts` `pactSlotLevel`/
+ *  `pactSlotCount` — the same derivation as cantrip scaling, nothing DM-
+ *  authored), and they refresh on a SHORT rest, not just a long one. `slots`
+ *  is ignored entirely when this is set; `pactExpended` is the only mutable
+ *  state (how many of the derived slots are currently spent). A pact caster
+ *  is always Known-style — `preparesSpells()` returns false whenever this is
+ *  set, regardless of the `preparesSpells` field. */
+export type CharacterSpellbook = {
+  spellcasting?: boolean
+  class?: string
+  ability?: AbilityKey | Uppercase<AbilityKey>
+  saveDC?: number
+  attackBonus?: number
+  preparesSpells?: boolean
+  preparedMax?: number
+  /** Always all 9 entries (levels 1..9) when present, even at total:0.
+   *  Ignored when `pactMagic` is set. */
+  slots?: SpellSlot[]
+  pactMagic?: boolean
+  pactExpended?: number
+  spells?: Spell[]
+}
+
+/** A catalog template's `data`: a Spell minus per-character instance fields
+ *  (id / spell_id / feature_id / atWill / prepared), stamped on at grant time. */
+export type CatalogSpellData = Omit<Spell, 'id' | 'spell_id' | 'feature_id' | 'atWill' | 'prepared'>
+export type CatalogSpellRow = { id: string; data: CatalogSpellData; updated_at: string }
+export type CatalogSpellInsert = { id?: string; data: CatalogSpellData }
+export type CatalogSpellUpdate = { data?: CatalogSpellData }
+
 // ── Shard tree catalog (migration 0008). Unlike item/feature catalog this table
 //    DOES carry a player policy (published rows only) — the tree has to render
 //    on the player's Shard screen. `shard_tree_secrets` is the DM-only half:
@@ -729,6 +858,12 @@ export type Database = {
         Update: CatalogFeatureUpdate
         Relationships: []
       }
+      spell_catalog: {
+        Row: CatalogSpellRow
+        Insert: CatalogSpellInsert
+        Update: CatalogSpellUpdate
+        Relationships: []
+      }
       characters: {
         Row: CharacterRow
         Insert: CharacterInsert
@@ -799,6 +934,13 @@ export type Database = {
        *  header comment for why two separate client UPDATEs can't guarantee
        *  at most one shop open. */
       shop_open: { Args: { p_id: string; p_character_id: string | null }; Returns: undefined }
+      /** Migration 0011's minimal party roster (id/name/race/class/level/hp
+       *  only) — see the migration's header comment for why this exists
+       *  instead of a broad player SELECT policy on `characters`. */
+      list_party_roster: { Args: Record<string, never>; Returns: Json }
+      /** Migration 0011's only path that can write another PC's HP or
+       *  activeEffects — see the migration's header comment. */
+      cast_party_effect: { Args: { p_target: string; p_heal: number | null; p_effect: Json | null }; Returns: Json }
     }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>

@@ -104,7 +104,7 @@ function entryHTML(R) {
       ${t.atk != null ? `<div class="tot atk"><span class="k">Total ${esc((R.lines.find(l => l.kind === 'attack') || {}).label || 'Attack')}</span><span class="v">${t.atk}</span></div>` : '<div></div>'}
       ${t.hasDamage ? `<div class="tot"><span class="k">Total Damage</span><span class="v">${t.dmgTotal}</span><div class="split">${dmgSplit}</div></div>` : '<div></div>'}
     </footer>
-    ${t.pending ? `<div class="pending-note"><i class="fa-solid fa-triangle-exclamation"></i>${t.pending} conditional rider${t.pending>1?'s':''} not yet resolved</div>` : ''}`;
+    ${t.pending ? `<div class="pending-note" data-pending="${R.id}"><i class="fa-solid fa-triangle-exclamation"></i>${t.pending} conditional rider${t.pending>1?'s':''} not yet resolved</div>` : ''}`;
 
   return `<article class="${cls.join(' ')}" data-entry="${R.id}">
     ${tag}<span class="e-frame"></span>
@@ -193,9 +193,16 @@ body.addEventListener('mouseover', e => {
     const [id, li] = m.dataset.mod.split(':'); const R = find(id); const L = R.lines[li];
     return showTip(m, 'Modifiers', L.mods.map(x => `${esc(x.k)} <b style="color:var(--beige)">${sgn(x.v)}</b>`).join('<br>'), null);
   }
+  const pn = e.target.closest('[data-pending]');
+  if (pn) {
+    const R = find(pn.dataset.pending);
+    const rows = (R.riders||[]).filter(r => r.on && r.conditional && !r.rolled)
+      .map(r => `<b style="color:var(--gold-rare)">${esc(r.name)}</b> not rolled<br><span style="color:var(--beige-dim)">${esc(r.src)} · ${esc(r.formula)}${r.dtype ? ' ' + esc(r.dtype) : ''}</span>`);
+    return showTip(pn, 'Unresolved', rows.join('<br><br>'), 'Roll it on the rider above');
+  }
   hideTip();
 });
-body.addEventListener('mouseout', e => { if (!e.relatedTarget || !e.relatedTarget.closest('[data-die],[data-mod]')) hideTip(); });
+body.addEventListener('mouseout', e => { if (!e.relatedTarget || !e.relatedTarget.closest('[data-die],[data-mod],[data-pending]')) hideTip(); });
 body.addEventListener('scroll', hideTip);
 
 function showTip(anchor, k, v, hint) {

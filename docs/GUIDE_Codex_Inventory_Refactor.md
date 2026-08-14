@@ -718,12 +718,12 @@ The useful test is **when the reference resolves**:
 
 **Features that grant spells** (Sanctuary Blade's "cast Sanctuary at will").
 Legitimate and worth structuring — the spellbook is app-owned data, like
-`hp.temp`. **But it is blocked:** the Spellbook screen is still a `Stub` and
-`CharacterRow.spellbook` is an untyped `Record<string, Json>`. There is no shape
-to write into. Design feature-granted spells as *part of* the Spellbook slice
-rather than bolting a field on now; when it happens, follow the item precedent —
-snapshot the spell into the spellbook carrying a `feature_id` back-ref, so
-removing the feature can remove its spells.
+`hp.temp`. **Partially unblocked:** the Spellbook slice landed (`Spellbook.tsx`,
+`CharacterSpellbook`/`Spell` types) and `Spell` already carries the `feature_id`
+back-ref and an `atWill` flag this note asks for — but only as shape. No feature
+form field writes them yet, and the grimoire doesn't group or badge them. Follow
+the item precedent when that lands: snapshot the spell onto the spellbook
+carrying `feature_id`, so removing the feature can remove its spells.
 
 **Auto-success features** ("your next saving throw automatically succeeds").
 Not a new category — this is category 4 pointed at a different roll. The lesson

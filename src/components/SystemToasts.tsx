@@ -105,6 +105,22 @@ function ToastCard({ msg, out }: { msg: VoiceMsg; out: boolean }) {
     )
   }
 
+  if (msg.kind === 'spell') {
+    return (
+      <div className={cls}>
+        <div className={styles.tgTag}>Realtime → You</div>
+        <div className={styles.tgHead}>
+          <span className={styles.tgIc}><i className="fa-solid fa-wand-sparkles" /></span>
+          <div className={styles.tgTx}>
+            <div className={styles.tgT}>Spell Learned ::</div>
+            <div className={styles.tgN}>{msg.name} <span className={styles.rar}>· {msg.level === 0 ? 'Cantrip' : `Level ${msg.level}`}</span></div>
+          </div>
+        </div>
+        <div className={styles.tgFoot}><span className={styles.led} /> G.U.I.D.E. grimoire sync</div>
+      </div>
+    )
+  }
+
   if (msg.kind === 'coins') {
     const coinName = msg.coin[0].toUpperCase() + msg.coin.slice(1)
     const gained = msg.op === 'award'

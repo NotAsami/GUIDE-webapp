@@ -184,9 +184,9 @@ when seeding the first character. Known conflicts:
 - **Invented lore to confirm or cut:** "Castellan" (as a language and as "Castellan Guard"),
   "Champion Archetype," "Brettany Reclamation," "Castellan Claymore," "Brettany Plate," "Ring of
   Ember," "Mantle of the Coastline." Keep only what you intend as canon.
-- **Cantrip scaling (Spellbook):** the roller currently lets cantrips upcast via the slot
-  stepper. Cantrips scale by *character level*, not by slot — wire them to read character level
-  and drop the stepper for cantrips.
+- **Cantrip scaling (Spellbook):** ~~the roller currently lets cantrips upcast via the slot
+  stepper.~~ **Done.** `src/lib/spells.ts` (`cantripTier`/`damageAt`) scales cantrip damage by
+  *character level* (tiers at 5/11/17); `Spellbook.tsx` shows no upcast stepper on cantrips.
 - **Home progress percentages:** decorative placeholders (some exceed 100%). Define what each
   bar actually measures, or treat as flavor.
 

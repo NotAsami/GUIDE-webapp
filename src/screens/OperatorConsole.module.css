@@ -1206,6 +1206,7 @@
 .fxLine.cond { border-color: var(--amber); }
 .fxLine.debuff { border-color: var(--danger-hot); }
 .fxLine .nm { font-family: var(--font-prose); font-size: 12.5px; color: var(--text); flex: 1; min-width: 0; }
+.fxLine .src { display: block; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; margin-top: 1px; }
 .fxLine .du { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 .fxLine .x { cursor: pointer; color: var(--beige-dim); font-size: 10px; padding: 2px 4px; transition: color 130ms ease; }
 .fxLine .x:hover { color: var(--danger-hot); }
@@ -1275,6 +1276,9 @@
 .catPrev .pvCell { --cut: 7px; --bc: color-mix(in oklab, var(--rar, var(--beige-dim)) 50%, transparent); }
 .catProse { --cut: 7px; --bc: rgba(212,191,125,0.32); }
 .catRow .crIc { --cut: 5px; --bc: rgba(212,191,125,0.2); }
+.catDmg { --cut: 7px; --bc: rgba(212,191,125,0.24); }
+.ccOpt { --cut: 5px; --bc: rgba(212,191,125,0.24); }
+.ccB { --cut: 3px; --bc: rgba(212,191,125,0.3); }
 .catSoonBlock { --cut: 6px; --bc: rgba(212,191,125,0.3); }
 .catTab { --cut: 6px; --bc: rgba(212,191,125,0.24); }
 .catTog { --cut: 5px; --bc: rgba(212,191,125,0.2); }
@@ -1303,7 +1307,7 @@
 .catPrev .pvCell, .catProse, .catRow .crIc, .catSoonBlock, .catTab, .catTog,
 .durOpt, .glyphBtn, .gmHead, .gmNotes, .memSelect, .numIn, .profChip, .qCheck,
 .qPlayerDesc, .qSegOpt, .qTag, .searchIn, .selIn, .sessIn, .sessRecap,
-.toneOpt, .bcTarget .tg {
+.toneOpt, .bcTarget .tg, .catDmg, .ccOpt, .ccB {
   border-color: var(--bc);
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - var(--bw, 1px)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw, 1px)), transparent 0),
@@ -1313,6 +1317,77 @@
   background-position: top left, bottom right;
   background-size: calc(var(--cut) + var(--bw, 1px)) calc(var(--cut) + var(--bw, 1px));
 }
+
+/* ============================================================
+   SPELL FORM (Catalog · Spells tab) — components segmented toggle +
+   damage sub-panel. New chamfered+bordered chips (.ccOpt, .ccB, .catDmg)
+   are registered in the cut-corner border fix block above (search --cut).
+   ============================================================ */
+.catComp { display: flex; gap: 7px; margin-bottom: 11px; }
+.ccOpt {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.24);
+  padding: 9px 6px;
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+  transition: border-color 130ms ease, color 130ms ease, background 130ms ease;
+}
+.ccOpt:hover { --bc: rgba(226,176,33,0.4); color: var(--text); }
+.ccOpt.on { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226,176,33,0.1); }
+.ccB {
+  width: 13px; height: 13px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--bc); font-size: 8px;
+  clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+}
+.ccOpt.on .ccB { --bc: var(--amber); background-color: var(--amber); color: #1a1509; }
+
+.catSecLab { display: flex; align-items: center; gap: 8px; margin: 4px 0 9px; }
+.catSecLab .fieldLab { margin-bottom: 0; }
+.catSecLab::after { content: ""; flex: 1; height: 1px; background: rgba(212,191,125,0.15); }
+
+.catDmg {
+  border: 1px solid rgba(212,191,125,0.24); background: rgba(0,0,0,0.22); padding: 12px 13px; margin-bottom: 14px;
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+
+/* spell description reads player-facing cyan (mirrors the player Spellbook),
+   distinct from the amber-tinted default .catProse used by items/features */
+.catProse.player { --bc: rgba(0,166,214,0.4); background-color: rgba(0,40,52,0.16); border-left-color: var(--cyan); }
+.catProse.player:focus { --bc: var(--cyan-hot); box-shadow: inset 0 0 14px rgba(0,166,214,0.1); }
+
+/* Spellcasting card (Actions tab): 9 slot-total inputs, one per spell level */
+.spellSlotRow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 13px; }
+.spellSlotCell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.spellSlotCell .lvl { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; color: var(--beige-dim); text-transform: uppercase; }
+.spellSlotCell .sessIn { width: 44px; text-align: center; margin-bottom: 0; }
+.sessIn:disabled, .selIn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Pact Magic read-only preview — total/level are derived from character
+   level, never authored, so this is a readout, not a form. */
+.pactPreview { margin-bottom: 13px; }
+.pactPreviewRow {
+  display: flex; align-items: center; gap: 9px; margin-top: 6px; padding: 10px 12px;
+  background: rgba(0, 166, 214, 0.06); border: 1px solid rgba(0, 166, 214, 0.3); border-left: 2px solid var(--cyan);
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--cyan-hot);
+}
+.pactPreviewRow i { color: var(--cyan); font-size: 12px; }
+
+/* Icon/damage color pickers (Spell form) — native color input, platform-
+   native over a bespoke swatch picker; a small text reset returns to "auto"
+   (the school-derived / cyan default the player screen falls back to). */
+.colorField { display: flex; align-items: center; gap: 9px; }
+.colorIn {
+  width: 40px; height: 30px; padding: 2px; cursor: pointer;
+  background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(212, 191, 125, 0.32);
+}
+.colorIn::-webkit-color-swatch-wrapper { padding: 0; }
+.colorIn::-webkit-color-swatch { border: 0; }
+.colorReset {
+  background: transparent; border: 0; padding: 0; cursor: pointer;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--muted); transition: color 130ms ease;
+}
+.colorReset:hover { color: var(--amber-hot); }
 
 /* ============================================================
    FEATURE LIBRARY + GRANT FEATURE — slice 7-lite

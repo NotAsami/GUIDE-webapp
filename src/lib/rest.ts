@@ -9,13 +9,16 @@ import { effectiveSheet } from './effects'
  *   - exhaustion -1, death saves cleared
  *   - active effects cleared (the "buffs reset on rest" decision)
  *   - every limited-use feature recharges
- *  Spell slots are intentionally NOT touched yet (no `spellbook.slots` shape;
- *  wire that with the Spellbook port). Attunement is a slot budget, not refilled.
+ *   - every standard spell slot's `expended` resets to 0 (5e default — a
+ *     SHORT rest does NOT do this for standard slots)
+ *   - Pact Magic slots reset too (a long rest grants every short-rest
+ *     benefit; see `pactShortRestPatch` for the short-rest-only path)
+ *  Attunement is a slot budget, not refilled.
  *
  *  Shared so the player Rest button AND the Operator Console Vitals card produce
- *  IDENTICAL writes — both target the same `sheet`/`resources` fields, so they can
- *  never drift (single source of truth). The `lines` are the player-facing roll-log
- *  summary; the DM side may ignore them.
+ *  IDENTICAL writes — both target the same `sheet`/`resources`/`spellbook` fields,
+ *  so they can never drift (single source of truth). The `lines` are the
+ *  player-facing roll-log summary; the DM side may ignore them.
  *
  *  Heals to the EFFECTIVE max (base + shard bonuses) if `shardTrees` is passed,
  *  but always persists the AUTHORED `hp.max` unchanged — a rest can't bake a
@@ -27,6 +30,7 @@ export function longRestPatch(character: CharacterRow, shardTrees: Record<string
 } {
   const sheet = character.sheet ?? {}
   const resources = character.resources ?? {}
+  const spellbook = character.spellbook ?? {}
   const lines: RollLine[] = []
 
   const hp = sheet.hp ?? { current: 0, max: 0 }
@@ -69,11 +73,43 @@ export function longRestPatch(character: CharacterRow, shardTrees: Record<string
   const ds = resources.deathSaves as { successes?: number; failures?: number } | undefined
   if (ds && ((ds.successes ?? 0) > 0 || (ds.failures ?? 0) > 0)) lines.push({ label: 'Death Saves', total: 'reset', breakdown: '0 / 0' })
 
+  const patch: Partial<Pick<CharacterRow, CharacterSection>> = {
+    sheet: nextSheet,
+    resources: { ...resources, deathSaves: { successes: 0, failures: 0 }, exhaustion: nextExhaustion, activeEffects: [] },
+  }
+
+  const slots = spellbook.slots
+  if (slots && slots.length) {
+    const recovered = slots.reduce((n, s) => n + s.expended, 0)
+    patch.spellbook = { ...spellbook, slots: slots.map(s => ({ ...s, expended: 0 })) }
+    if (recovered > 0) lines.push({ label: 'Spell Slots', total: 'restored', breakdown: `${recovered} recovered`, tone: 'buff' })
+  }
+
+  if (spellbook.pactMagic && (spellbook.pactExpended ?? 0) > 0) {
+    const recovered = spellbook.pactExpended ?? 0
+    patch.spellbook = { ...(patch.spellbook ?? spellbook), pactExpended: 0 }
+    lines.push({ label: 'Pact Magic', total: 'restored', breakdown: `${recovered} recovered`, tone: 'buff' })
+  }
+
+  return { patch, lines }
+}
+
+/** Warlock Pact Magic slots recharge on a SHORT rest too — the defining
+ *  trait of that class's spellcasting (2014/2024 5e both agree here). A long
+ *  rest already includes every short-rest benefit, so `longRestPatch` resets
+ *  `pactExpended` directly rather than composing this; this is the
+ *  short-rest-ONLY path (standard `slots[]` stay untouched — those still
+ *  need a long rest). Returns null when there's nothing to restore (not a
+ *  pact caster, or already full) so callers can skip the write/line cleanly. */
+export function pactShortRestPatch(character: CharacterRow): {
+  patch: Partial<Pick<CharacterRow, CharacterSection>>
+  lines: RollLine[]
+} | null {
+  const spellbook = character.spellbook ?? {}
+  const expended = spellbook.pactExpended ?? 0
+  if (!spellbook.pactMagic || expended <= 0) return null
   return {
-    patch: {
-      sheet: nextSheet,
-      resources: { ...resources, deathSaves: { successes: 0, failures: 0 }, exhaustion: nextExhaustion, activeEffects: [] },
-    },
-    lines,
+    patch: { spellbook: { ...spellbook, pactExpended: 0 } },
+    lines: [{ label: 'Pact Magic', total: 'restored', breakdown: `${expended} recovered`, tone: 'buff' }],
   }
 }

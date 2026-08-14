@@ -1051,12 +1051,12 @@
   .wb-catalog .cat-index::-webkit-scrollbar-thumb, .wb-catalog .cat-form::-webkit-scrollbar-thumb { background: rgba(226,176,33,0.35); }
 
   /* ---- type switcher (Items · Spells · Features · Shards) ---- */
-  .cat-tabs { display: flex; gap: 6px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(212,191,125,0.22); }
+  .cat-tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(212,191,125,0.22); }
   .cat-tab {
-    position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
-    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+    position: relative; display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
     color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.24);
-    padding: 9px 15px;
+    padding: 9px 12px;
     clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
     transition: border-color 130ms ease, color 130ms ease, background 130ms ease;
   }
@@ -1250,6 +1250,117 @@
   .cat-grp.gear .cat-grp-head::after { background: rgba(0,166,214,0.2); }
   .cat-row.via { border-left-color: var(--cyan); }
   .cat-row.via .cr-tag { color: var(--cyan); border-color: rgba(0,166,214,0.45); }
+
+  /* ============================================================
+     EFFECTS TAB (sixth) — an effect DEFINITION is three things and
+     the form makes them look like three things: MODIFIERS (amber,
+     numeric), FLAGS (cyan, never numeric), DESCRIPTION (beige,
+     prose). Duration is deliberately absent — the applier owns it.
+     ============================================================ */
+  .ef-badge { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; padding: 2px 6px; border: 1px solid; color: var(--k); border-color: color-mix(in oklab, var(--k) 45%, transparent); white-space: nowrap; }
+  .cat-row .cr-s.prose { font-family: var(--font-prose); font-size: 12px; font-style: italic; letter-spacing: 0; text-transform: none; color: var(--beige-dim); }
+  .cat-row .cr-s .op { color: var(--beige-dim); }
+
+  /* kind toggle — drives the tint the effect carries everywhere */
+  .ef-kind { display: flex; gap: 7px; margin-bottom: 13px; }
+  .ef-kind .k { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding: 9px 6px; background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.24);
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); transition: border-color 130ms ease, background 130ms ease; }
+  .ef-kind .k i { font-size: 12px; color: var(--muted); transition: color 130ms ease; }
+  .ef-kind .k .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); transition: color 130ms ease; }
+  .ef-kind .k:hover { border-color: rgba(226,176,33,0.4); }
+  .ef-kind .k:hover i, .ef-kind .k:hover .t { color: var(--text); }
+  .ef-kind .k.on { border-color: var(--k); background: color-mix(in oklab, var(--k) 10%, transparent); box-shadow: inset 0 0 14px color-mix(in oklab, var(--k) 14%, transparent); }
+  .ef-kind .k.on i, .ef-kind .k.on .t { color: var(--k); }
+
+  /* tag chips + autocomplete (same component as the feature editor) */
+  .ef-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .ef-chip { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; color: var(--beige); background: rgba(212,191,125,0.07); border: 1px solid rgba(212,191,125,0.32); padding: 4px 8px;
+    clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
+  .ef-chip.empty { color: var(--beige-dim); background: none; border-style: dashed; }
+  .ef-chip .x { cursor: pointer; font-size: 9px; color: var(--beige-dim); transition: color 130ms ease; }
+  .ef-chip .x:hover { color: var(--danger-hot); }
+  .ef-tagbox { position: relative; margin-bottom: 14px; }
+  .ef-tagbox .sess-in { margin-bottom: 0; }
+  .ef-ac { position: absolute; top: calc(100% + 3px); left: 0; right: 0; z-index: 40; display: none; flex-direction: column; background: #141414; border: 1px solid rgba(226,176,33,0.4); max-height: 176px; overflow-y: auto; }
+  .ef-ac.on { display: flex; }
+  .ef-ac .t2 { text-align: left; cursor: pointer; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; color: var(--text); background: none; border: 0; border-bottom: 1px solid rgba(212,191,125,0.12); padding: 7px 10px; }
+  .ef-ac .t2:hover { background: rgba(226,176,33,0.12); color: var(--amber-hot); }
+  .ef-ac .t2 .n { float: right; font-size: 8px; color: var(--beige-dim); }
+
+  /* the three-way split — one block shape, three colours, three rules */
+  .ef-block { border: 1px solid color-mix(in oklab, var(--b) 34%, transparent); border-left: 3px solid var(--b); background: color-mix(in oklab, var(--b) 5%, transparent); padding: 12px 13px 13px; margin-bottom: 13px;
+    clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+  .ef-block.mods { --b: var(--amber); }
+  .ef-block.flags { --b: var(--cyan); }
+  .ef-block.prose { --b: var(--beige); }
+  .ef-bh { display: flex; align-items: center; gap: 9px; margin-bottom: 3px; }
+  .ef-bh i { color: var(--b); font-size: 11px; }
+  .ef-bh .t { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--b); }
+  .ef-bh .n { margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .ef-rule { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.1em; text-transform: uppercase; color: color-mix(in oklab, var(--b) 60%, #1d1d1d); margin-bottom: 11px; }
+  .ef-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .ef-row { display: flex; align-items: center; gap: 7px; }
+  .ef-row .sel-in, .ef-row .sess-in { margin-bottom: 0; }
+  .ef-row .st { flex: 0 0 118px; }
+  .ef-row .fm { flex: 0 0 158px; }
+  .ef-row .tgt { flex: 1; min-width: 0; }
+  .ef-row .num { flex: 0 0 86px; text-align: center; font-family: var(--font-mono); }
+  .ef-row .x { flex: 0 0 auto; cursor: pointer; color: var(--beige-dim); font-size: 11px; padding: 4px 5px; transition: color 130ms ease; }
+  .ef-row .x:hover { color: var(--danger-hot); }
+  .ef-row .pv { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ef-ops { flex: 0 0 auto; display: flex; }
+  .ef-ops .o { width: 31px; height: 33px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: var(--font-mono); font-size: 12px; color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.42); transition: color 120ms ease, border-color 120ms ease, background 120ms ease; }
+  .ef-ops .o + .o { margin-left: -1px; }
+  .ef-ops .o.on { position: relative; z-index: 1; }
+  .ef-ops .o:hover { color: var(--text); }
+  .ef-ops .o.on { color: var(--b); border-color: var(--b); background: color-mix(in oklab, var(--b) 12%, transparent); }
+  .ef-none { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em; color: color-mix(in oklab, var(--b) 55%, #1d1d1d); padding: 2px 2px 10px; }
+  .ef-add { display: flex; gap: 8px; }
+  .ef-add .btn { flex: 0 0 118px; }
+  .ef-block .cat-prose { margin-bottom: 0; }
+  .ef-block.prose .cat-prose { border-left-color: var(--beige); }
+
+  /* effect preview strip (list read, mirrored in the form head) */
+  .ef-prev { display: flex; align-items: center; gap: 13px; padding: 12px 14px; margin-bottom: 14px; border: 1.5px solid var(--k); background: color-mix(in oklab, var(--k) 6%, transparent);
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
+  .ef-prev .pc { flex: 0 0 auto; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--k); background: rgba(0,0,0,0.45); border: 1px solid color-mix(in oklab, var(--k) 50%, transparent);
+    clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+  .ef-prev .pt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .ef-prev .pn { font-family: var(--font-display); font-size: 15px; color: var(--text); }
+  .ef-prev .pm { display: flex; flex-wrap: wrap; gap: 5px 9px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .ef-prev .pm .g { color: var(--k); }
+  .ef-prev .pm .pr { font-family: var(--font-prose); font-size: 12px; font-style: italic; letter-spacing: 0; text-transform: none; color: var(--beige-dim); }
+  .ef-noduration { display: flex; align-items: center; gap: 9px; margin-bottom: 13px; padding: 8px 11px; background: rgba(0,0,0,0.28); border: 1px dashed rgba(212,191,125,0.3);
+    font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--beige-dim); }
+  .ef-noduration i { color: var(--beige); font-size: 10px; }
+
+  /* ---- ITEMS tab: EFFECTS GRANTED is now a reference picker ---- */
+  .cat-fx.fold { padding-bottom: 12px; }
+  .fxf-head { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+  .fxf-head .car { font-size: 9px; color: var(--amber); transition: transform 160ms ease; }
+  .cat-fx.fold.open .fxf-head .car { transform: rotate(90deg); }
+  .fxf-head .t { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber-hot); }
+  .fxf-head .s { margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ef-refs { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 11px; }
+  .ef-ref-row { display: flex; flex-direction: column; gap: 8px; padding: 9px 11px; background: rgba(0,0,0,0.32); border: 1px solid rgba(212,191,125,0.16); border-left: 2px solid var(--k);
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+  .ef-ref-top { display: flex; align-items: center; gap: 9px; }
+  .ef-ref-top .ic { flex: 0 0 auto; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--k); background: rgba(0,0,0,0.4); border: 1px solid color-mix(in oklab, var(--k) 40%, transparent);
+    clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
+  .ef-ref-top .nm { font-family: var(--font-prose); font-size: 14px; color: var(--text); }
+  .ef-ref-top .x { margin-left: auto; cursor: pointer; color: var(--beige-dim); font-size: 11px; padding: 3px 4px; transition: color 130ms ease; }
+  .ef-ref-top .x:hover { color: var(--danger-hot); }
+  .ef-ref-sum { display: flex; flex-wrap: wrap; gap: 5px; }
+  .ef-ref-sum span { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,191,125,0.16); padding: 3px 7px; }
+  .ef-ref-sum.prose { font-family: var(--font-prose); font-size: 12.5px; font-style: italic; line-height: 1.45; color: var(--beige-dim); display: block; }
+  .ef-ref-dur { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid rgba(212,191,125,0.12); }
+  .ef-ref-dur .dl { flex: 0 0 auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige-dim); }
+  .ef-ref-dur .sel-in { flex: 1; margin-bottom: 0; }
+  .ef-ref-dur .num { flex: 0 0 74px; margin-bottom: 0; text-align: center; font-family: var(--font-mono); }
+  .ef-ref-dur .tick { flex: 0 0 auto; font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--beige-dim); }
+  .ef-ref-dur .tick.on { color: var(--cyan); }
+  .ef-pick { border-top: 1px solid rgba(226,176,33,0.22); padding-top: 12px; }
+  .ef-pick .search-wrap { margin-bottom: 9px; }
 
   /* damage sub-section (spells) */
   .cat-dmg { border: 1px solid rgba(212,191,125,0.24); background: rgba(0,0,0,0.22); padding: 12px 13px; margin-bottom: 14px;
@@ -1815,15 +1926,9 @@ const ITEM_CATALOG = [
   { id:'staff_pow',  name:'Staff of Power',        type:'Staff',      rarity:'very rare',icon:'fa-wand-magic-sparkles' }
 ];
 
-/* ▸▸▸ EFFECT_CATALOG — buffs / debuffs / conditions the DM applies */
-const EFFECT_CATALOG = [
-  { id:'str_pot', name:'+3 STR Potion', kind:'buff'   },
-  { id:'bless',   name:'Bless',         kind:'buff'   },
-  { id:'haste',   name:'Haste',         kind:'buff'   },
-  { id:'poison',  name:'Poisoned',      kind:'cond'   },
-  { id:'fright',  name:'Frightened',    kind:'cond'   },
-  { id:'stun',    name:'Stunned',       kind:'debuff' }
-];
+/* ▸▸▸ effects the DM applies live now come from CATALOG_EFFECTS (Catalog ▸
+   Effects tab) — one definition, referenced by items, spells, features and
+   this console. The old hardcoded EFFECT_CATALOG list is gone. */
 
 const DURATIONS = ['1 round','3 rounds','10 minutes','1 hour','until rest'];
 
@@ -1989,6 +2094,35 @@ const RAR_ORDER = ['common','uncommon','rare','quest'];
 const EQUIP_SLOTS = ['helmet','armor','cloak','boots','back','accessory','quick-access','weapon'];
 const FX_STATS = ['STR','DEX','CON','INT','WIS','CHA','AC','HP','Max HP','Speed','Attack','Damage','Save DC','Flag'];
 const FX_DURATIONS = ['Rounds','Minutes','Hours','Until Rest','Permanent while equipped'];
+/* ---- EFFECTS (the sixth catalog tab) ------------------------------------
+   An effect DEFINITION is three things and nothing else:
+     mods[]  { stat, op:'+'|'×'|'=', val:number }   — numeric, always
+     flags[] { mode, target }                      — mechanical, never numeric
+     desc                                          — player-facing prose
+   DURATION IS NOT HERE. An effect says what it does; whoever applies it says
+   how long. Items carry duration per reference; spells carry their own. */
+const EFFECT_KINDS = {
+  buff:      { label:'Buff',      icon:'fa-arrow-up-right-dots', color:'var(--cyan)'   },
+  debuff:    { label:'Debuff',    icon:'fa-arrow-down-short-wide', color:'var(--danger)' },
+  condition: { label:'Condition', icon:'fa-triangle-exclamation', color:'var(--danger)' },
+};
+const EFFECT_KIND_ORDER = ['buff','debuff','condition'];
+const EF_MOD_STATS = ['STR','DEX','CON','INT','WIS','CHA','AC','HP','Max HP','Speed','Attack','Damage','Save DC'];
+const EF_MOD_OPS = ['+','×','='];
+const EF_FLAG_MODES = {
+  advantage:     { label:'Advantage on',    short:'advantage',    on:'roll' },
+  disadvantage:  { label:'Disadvantage on', short:'disadvantage', on:'roll' },
+  resistance:    { label:'Resistance to',   short:'resistance',   on:'dmg'  },
+  vulnerability: { label:'Vulnerability to',short:'vulnerability',on:'dmg'  },
+  immunity:      { label:'Immunity to',     short:'immunity',     on:'dmg'  },
+};
+const EF_FLAG_ORDER = ['advantage','disadvantage','resistance','vulnerability','immunity'];
+const EF_ROLL_TARGETS = ['all saves','STR saves','DEX saves','CON saves','INT saves','WIS saves','CHA saves','saves vs poison','saves vs charm','saves vs fear','attack rolls','melee attacks','ranged attacks','spell attacks','ability checks','Stealth checks','Perception checks','Athletics checks','initiative','death saves','concentration checks'];
+const EF_DMG_TYPES = ['acid','bludgeoning','cold','fire','force','lightning','necrotic','piercing','poison','psychic','radiant','slashing','thunder','all damage'];
+/* durations offered wherever an effect is APPLIED (the applier's field) */
+const EF_DURATIONS = ['Rounds','Minutes','Hours','Until rest','Permanent while equipped'];
+const EF_TICKING = ['Rounds'];   // only round-based durations tick down; the rest are cleared by hand
+const EF_COUNTED = ['Rounds','Minutes','Hours'];
 const ITEM_ICONS = ['fa-flask','fa-khanda','fa-shield-halved','fa-gem','fa-ring','fa-hat-wizard','fa-helmet-safety','fa-shirt','fa-shoe-prints','fa-scroll','fa-book','fa-key','fa-wand-sparkles','fa-skull','fa-vial','fa-crosshairs','fa-hammer','fa-bolt','fa-fire','fa-droplet','fa-feather','fa-coins'];
 const SPELL_SCHOOLS = ['Abjuration','Conjuration','Divination','Enchantment','Evocation','Illusion','Necromancy','Transmutation'];
 /* FEATURES = INTRINSIC only (class / subclass / race / feat / background). Item-
@@ -2028,32 +2162,32 @@ const CATALOG_ITEMS = [
   { id:'pot_heal', name:'Potion of Healing', category:'consumable', rarity:'common', w:1, h:1, icon:'fa-flask',
     weight:'0.5 lb', value:50, equippable:false, slot:'accessory', attunement:false,
     desc:'Ruby fluid in a stoppered vial. Restores vitality the instant it touches the tongue.',
-    effects:[ { stat:'HP', val:'+2d4+2' } ], duration:'Permanent while equipped' },
+    effectRefs:[] },
   { id:'sword_1', name:'Longsword +1', category:'weapon', rarity:'uncommon', w:1, h:3, icon:'fa-khanda',
     weight:'3 lb', value:1500, equippable:true, slot:'weapon', attunement:false,
     desc:'A blade of Castellan steel, its edge humming faintly against the weave. It bites a touch deeper than honest iron should.',
-    effects:[ { stat:'Attack', val:'+1' }, { stat:'Damage', val:'+1' } ], duration:'Permanent while equipped', featureIds:['improved_crit'] },
+    effectRefs:[ { effectId:'keen_edge', dur:'Permanent while equipped', amount:1 } ], featureIds:['improved_crit'] },
   { id:'pot_str', name:'Potion of Giant Strength', category:'consumable', rarity:'rare', w:1, h:1, icon:'fa-vial',
     weight:'0.5 lb', value:800, equippable:false, slot:'accessory', attunement:false,
     desc:'Thick, amber draught that sits heavy in the gut. For a time, the drinker\u2019s thews swell with borrowed might.',
-    effects:[ { stat:'STR', val:'+3' } ], duration:'Hours' },
+    effectRefs:[ { effectId:'giant_str', dur:'Hours', amount:1 } ] },
   { id:'amulet_poison', name:'Amulet of the Unpoisoned', category:'armor', rarity:'uncommon', w:1, h:1, icon:'fa-gem',
     weight:'0.1 lb', value:600, equippable:true, slot:'accessory', attunement:true,
     desc:'A pale stone set in tarnished silver. The metal grows cold a heartbeat before any venom would take hold.',
-    effects:[ { stat:'Flag', val:'Advantage on saves vs poison' } ], duration:'Permanent while equipped', featureIds:['darkvision'] },
+    effectRefs:[ { effectId:'unpoisoned', dur:'Permanent while equipped', amount:1 } ], featureIds:['darkvision'] },
   { id:'shard_frag', name:'Unknown Shard Fragment', category:'quest', rarity:'quest', w:2, h:2, icon:'fa-gem',
     weight:'0.2 lb', value:0, equippable:false, slot:'quick-access', attunement:false,
     desc:'A sliver of something that hums when no one is listening. Not soulbound \u2014 not yet \u2014 and the G.U.I.D.E. socket grows warm whenever it is near.',
-    effects:[], duration:'Permanent while equipped' },
+    effectRefs:[] },
   { id:'thieves_tools', name:'Thieves\u2019 Tools', category:'tool', rarity:'common', w:2, h:1, icon:'fa-key',
     weight:'1 lb', value:25, equippable:false, slot:'accessory', attunement:false,
     desc:'A neat roll of picks, tension wrenches, and a small mirror on a wire. Worn smooth by careful hands.',
-    effects:[], duration:'Permanent while equipped' },
+    effectRefs:[] },
   { id:'bag_holding', name:'Bag of Holding', category:'tool', rarity:'rare', w:1, h:1, icon:'fa-gem',
     weight:'0 lb', value:4000, equippable:true, slot:'accessory', attunement:false,
     container:true, weightless:true, accepts:[],
     desc:'The mouth of the bag is only the access port. Whatever is put through it is held somewhere the Codex declines to name, and weighs nothing on this side.',
-    effects:[], duration:'Permanent while equipped' },
+    effectRefs:[] },
 ];
 
 const CATALOG_SPELLS = [
@@ -2103,6 +2237,36 @@ const CATALOG_FEATURES = [
     passive:true, maxUses:0, reset:'Long Rest', mechanic:{ type:'none', data:{} } },
 ];
 
+/* ▸▸▸ CATALOG_EFFECTS — the single source for effects. Items, spells and
+   features reference these by id; nothing here applies anything to anyone.
+   The seeds deliberately cover all three authoring cases: all-three (Haste),
+   one modifier only (Giant's Strength), flags only (Poisoned) and prose only
+   (Bless, Bleeding — the app has no clock; the player applies the die). */
+const CATALOG_EFFECTS = [
+  { id:'haste', name:'Haste', icon:'fa-bolt', kind:'buff', tags:['spell','transmutation','movement'],
+    mods:[ { stat:'AC', op:'+', val:2 }, { stat:'Speed', op:'×', val:2 } ],
+    flags:[ { mode:'advantage', target:'DEX saves' } ],
+    desc:'The world thickens and slows around the hastened. Each turn they may take one additional limited action — attack once, dash, disengage, hide, or use an object — and nothing more than that. When it ends the body collects on the borrowed speed: the target can neither move nor act until after their next turn.' },
+  { id:'giant_str', name:'Giant’s Strength', icon:'fa-hand-fist', kind:'buff', tags:['potion','item'],
+    mods:[ { stat:'STR', op:'=', val:21 } ], flags:[],
+    desc:'Thews swell with borrowed weight. Strength is SET to the draught’s fixed value rather than raised — a weak arm and a strong one end at the same number.' },
+  { id:'bless', name:'Bless', icon:'fa-hands-praying', kind:'buff', tags:['spell','divine'],
+    mods:[], flags:[],
+    desc:'A quiet favour settles over the blessed. Add 1d4 to every attack roll and every saving throw made while it holds — rolled by the player, at the moment of the roll.' },
+  { id:'bleeding', name:'Bleeding', icon:'fa-droplet', kind:'debuff', tags:['injury','ongoing'],
+    mods:[], flags:[],
+    desc:'The wound will not close. At the start of each of their turns the bleeding creature takes 1d6 damage. A successful DC 12 Medicine check, or any magical healing, ends it.' },
+  { id:'poisoned', name:'Poisoned', icon:'fa-skull', kind:'condition', tags:['poison','standard'],
+    mods:[], flags:[ { mode:'disadvantage', target:'attack rolls' }, { mode:'disadvantage', target:'ability checks' } ],
+    desc:'The standard condition. Nausea and a swimming head — nothing lands the way it was aimed.' },
+  { id:'keen_edge', name:'Keen Edge +1', icon:'fa-khanda', kind:'buff', tags:['weapon','magic_weapon'],
+    mods:[ { stat:'Attack', op:'+', val:1 }, { stat:'Damage', op:'+', val:1 } ], flags:[],
+    desc:'The edge sits a hair closer to true than honest steel manages.' },
+  { id:'unpoisoned', name:'Unpoisoned', icon:'fa-gem', kind:'buff', tags:['poison','ward','magic_item'],
+    mods:[], flags:[ { mode:'advantage', target:'saves vs poison' } ],
+    desc:'The metal goes cold a heartbeat before any venom takes hold.' },
+];
+
 /* ============================================================================
    STATE + RENDER
    ============================================================================ */
@@ -2131,13 +2295,17 @@ let charTab = 'actions';          // selected-character work area tab: actions |
 let loreDraft = null;             // working lore form draft (per character)
 let questDraft = null;            // working quest form draft
 let questEditId = null;           // index into QUESTS, or null for a new quest
-let catType    = 'items';         // catalog type switcher: items | spells | features | shops | shards
+let catType    = 'items';         // catalog type switcher: items | spells | features | effects | shops | shards
 let itemDraft  = null;            // working catalog-item draft
 let itemEditId = null;            // index into CATALOG_ITEMS, or null for new
 let spellDraft = null;            // working catalog-spell draft
 let spellEditId = null;           // index into CATALOG_SPELLS, or null for new
 let featDraft  = null;            // working catalog-feature draft (intrinsic only)
 let featEditId = null;            // index into CATALOG_FEATURES, or null for new
+let effDraft   = null;            // working catalog-effect draft
+let effEditId  = null;            // index into CATALOG_EFFECTS, or null for new
+let itFxOpen   = false;           // item form: EFFECTS GRANTED sub-section (collapsed by default)
+let itFxQ      = '';              // item form: effect-reference search string
 let shopDraft  = null;            // working shopkeeper draft
 let shopEditId = null;            // index into CATALOG_SHOPKEEPERS, or null for new
 let shopPickQ   = '';             // stock item-picker: search string
@@ -2147,7 +2315,7 @@ let shopOpenIdx = null;           // shopkeeper being opened via the recipient p
 let shopTarget  = 'selected';     // recipient picker (mirrors bcTarget)
 let shopPcId    = null;           // chosen PC when target = 'selected'
 let grantSel   = null;            // selected catalog item id
-let effSel     = EFFECT_CATALOG[0].id;
+let effSel     = CATALOG_EFFECTS[0].id;
 let durSel     = '3 rounds';
 let bcTarget   = 'selected';
 let bcTone     = 'normal';
@@ -2187,7 +2355,7 @@ function renderRoster() {
   html += '<button class="ov-entry ' + (view === 'catalog' ? 'active' : '') + '" data-catalog>' +
             '<span class="ov-ic"><i class="fa-solid fa-box-archive"></i></span>' +
             '<span class="ov-tx"><span class="ov-t">Catalog</span>' +
-            '<span class="ov-s">Library · ' + CATALOG_ITEMS.length + ' items · ' + CATALOG_SPELLS.length + ' spells · ' + CATALOG_FEATURES.length + ' features · ' + CATALOG_SHOPKEEPERS.length + ' shops</span></span>' +
+            '<span class="ov-s">Library · ' + CATALOG_ITEMS.length + ' items · ' + CATALOG_SPELLS.length + ' spells · ' + CATALOG_FEATURES.length + ' features · ' + CATALOG_EFFECTS.length + ' effects · ' + CATALOG_SHOPKEEPERS.length + ' shops</span></span>' +
           '</button>';
   html += '<div class="roster-div">Characters</div>';
 
@@ -2258,7 +2426,7 @@ function renderSelected() {
   const catHtml = ITEM_CATALOG.map(it => catItemHtml(it)).join('');
 
   // effect select options
-  const effOpts = EFFECT_CATALOG.map(e =>
+  const effOpts = CATALOG_EFFECTS.map(e =>
     '<option value="' + e.id + '"' + (e.id === effSel ? ' selected' : '') + '>' + esc(e.name) + ' · ' + e.kind + '</option>').join('');
   const durOpts = DURATIONS.map(d =>
     '<div class="dur-opt ' + (d === durSel ? 'sel' : '') + '" data-dur="' + esc(d) + '">' + esc(d) + '</div>').join('');
@@ -2771,7 +2939,7 @@ function loadItemDraft(idx) {
   itemEditId = idx; const it = CATALOG_ITEMS[idx];
   itemDraft = { id:it.id, name:it.name, category:it.category, rarity:it.rarity, w:it.w, h:it.h, icon:it.icon,
     weight:it.weight, value:it.value, equippable:it.equippable, slot:it.slot, attunement:it.attunement,
-    desc:it.desc, effects:it.effects.map(e => ({ stat:e.stat, val:e.val })), duration:it.duration,
+    desc:it.desc, effectRefs:(it.effectRefs || []).map(r => ({ effectId:r.effectId, dur:r.dur, amount:r.amount })),
     container:!!it.container, weightless:!!it.weightless, accepts:(it.accepts || []).slice(),
     featureIds: (it.featureIds || []).slice() };
 }
@@ -2779,7 +2947,7 @@ function newItemDraft() {
   itemEditId = null;
   itemDraft = { id:null, name:'', category:'misc', rarity:'common', w:1, h:1, icon:'fa-cube',
     weight:'', value:0, equippable:false, slot:'accessory', attunement:false,
-    desc:'', effects:[], duration:'Permanent while equipped',
+    desc:'', effectRefs:[],
     container:false, weightless:false, accepts:[], featureIds: [] };
 }
 function loadSpellDraft(idx) {
@@ -2802,6 +2970,7 @@ function renderCatalog() {
     { key:'items',    label:'Items',    icon:'fa-box-open',     n:CATALOG_ITEMS.length },
     { key:'spells',   label:'Spells',   icon:'fa-wand-sparkles', n:CATALOG_SPELLS.length },
     { key:'features', label:'Features', icon:'fa-star',          n:CATALOG_FEATURES.length },
+    { key:'effects',  label:'Effects',  icon:'fa-bolt', n:CATALOG_EFFECTS.length },
     { key:'shops',    label:'Shopkeepers', icon:'fa-shop',      n:CATALOG_SHOPKEEPERS.length },
     { key:'shards',   label:'Shards',   icon:'fa-diamond',       stub:true },
   ];
@@ -2815,6 +2984,7 @@ function renderCatalog() {
   if (catType === 'items')      main = catalogItemsBody();
   else if (catType === 'spells') main = catalogSpellsBody();
   else if (catType === 'features') main = catalogFeaturesBody();
+  else if (catType === 'effects') main = catalogEffectsBody();
   else if (catType === 'shops') main = catalogShopsBody();
   else main = catalogStub('fa-diamond', 'Shard Tree',
     'Editing a branching shard node tree is a graph editor, not a form \u2014 a dedicated future tool. The catalog tab reserves its place; the tree itself is built elsewhere.', 'Dedicated tool · not a form');
@@ -2854,18 +3024,6 @@ function catalogItemsBody() {
   const slotOpts = EQUIP_SLOTS.map(s => '<option value="' + s + '"' + (s === d.slot ? ' selected' : '') + '>' + s.replace('-', ' ').replace(/\b\w/g, m => m.toUpperCase()) + '</option>').join('');
   const iconGrid = ITEM_ICONS.map(ic => '<div class="cat-ic ' + (ic === d.icon ? 'sel' : '') + '" data-icon="' + ic + '"><i class="fa-solid ' + ic + '"></i></div>').join('');
 
-  const fxRows = d.effects.length
-    ? d.effects.map((e, i) => {
-        const statOpts = FX_STATS.map(s => '<option value="' + s + '"' + (s === e.stat ? ' selected' : '') + '>' + s + '</option>').join('');
-        return '<div class="cat-fx-row">' +
-          '<select class="sel-in fx-stat" data-fxstat="' + i + '">' + statOpts + '</select>' +
-          '<input class="sess-in fx-val" data-fxval="' + i + '" value="' + esc2(e.val) + '" placeholder="' + (e.stat === 'Flag' ? 'e.g. advantage on saves vs poison' : 'e.g. +3') + '">' +
-          '<span class="fx-x" data-fxx="' + i + '"><i class="fa-solid fa-xmark"></i></span>' +
-        '</div>';
-      }).join('')
-    : '<div class="cat-fx-none">No modifiers yet \u2014 add the buffs this item grants (e.g. STR +3), then set how long they last.</div>';
-  const durOpts = FX_DURATIONS.map(dn => '<option value="' + dn + '"' + (dn === d.duration ? ' selected' : '') + '>' + dn + '</option>').join('');
-
   const equipBlock =
     '<div class="cat-tog ' + (d.equippable ? 'on' : '') + '" id="itEquipTog">' +
       '<span class="tg-sw"></span>' +
@@ -2902,12 +3060,7 @@ function catalogItemsBody() {
     equipBlock + attuneBlock +
     '<div class="q-lab-row"><span class="field-lab">Description</span><span class="q-facing player"><i class="fa-solid fa-eye"></i> Player-facing</span></div>' +
     '<textarea class="cat-prose" id="itDesc" placeholder="The prose the player reads when they examine this item\u2026">' + esc2(d.desc) + '</textarea>' +
-    '<div class="cat-fx">' +
-      '<div class="cat-fx-head"><i class="fa-solid fa-flask-vial"></i><span class="t">Effects Granted</span><span class="s">where buffs + duration are authored</span></div>' +
-      '<div class="cat-fx-rows">' + fxRows + '</div>' +
-      '<div class="cat-fx-add"><input class="sess-in" id="itFxNew" placeholder="Add a modifier row\u2026 (e.g. AC +1)"><button class="btn ghost sm" id="itFxAdd" style="flex:0 0 100px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-plus"></i> Add</span></button></div>' +
-      '<div class="cat-fx-dur"><span class="field-lab">Duration</span><select class="sel-in" id="itDur">' + durOpts + '</select></div>' +
-    '</div>' +
+    itemEffectsRefHtml(d) +
     itemContainerHtml(d) +
     itemFeaturesGrantHtml(d) +
     '<div class="cat-actions"><button class="btn amber" id="itSave" style="height:42px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-floppy-disk"></i> ' + (itemEditId != null ? 'Save Item' : 'Create Item') + '</span></button></div>';
@@ -3343,6 +3496,286 @@ function catalogStub(icon, title, desc, pill) {
   '</div>';
 }
 
+/* ============================================================================
+   EFFECTS — the sixth catalog tab and the single source for what an effect IS.
+   Three authoring surfaces, kept visually distinct on purpose:
+     MODIFIERS (amber) numbers only · FLAGS (cyan) never numbers · DESCRIPTION
+     (beige serif) everything else. Duration is absent by design.
+   SAVE commits a TEMPLATE; it applies nothing to anyone.
+   ============================================================================ */
+const effById = id => CATALOG_EFFECTS.find(e => e.id === id);
+const clipTx = (s, n) => { s = String(s == null ? '' : s).trim(); return s.length > n ? s.slice(0, n - 1).replace(/\s+\S*$/, '') + '\u2026' : s; };
+function modText(m) {
+  const v = String(m.val == null ? '' : m.val);
+  if (m.op === '\u00d7') return m.stat.toLowerCase() + ' \u00d7' + v;
+  if (m.op === '=') return m.stat + ' = ' + v;
+  const n = Number(v) || 0;
+  return (n < 0 ? '\u2212' : '+') + Math.abs(n) + ' ' + m.stat;
+}
+function flagText(f) { const m = EF_FLAG_MODES[f.mode] || EF_FLAG_MODES.advantage; return m.short + ' ' + (f.target || '\u2014'); }
+function effectParts(e) { return (e.mods || []).map(modText).concat((e.flags || []).map(flagText)); }
+function allEffTags() {
+  const set = new Set();
+  CATALOG_EFFECTS.forEach(e => (e.tags || []).forEach(t => set.add(t)));
+  if (effDraft) (effDraft.tags || []).forEach(t => set.add(t));
+  return [...set].sort();
+}
+const effTagUse = t => CATALOG_EFFECTS.filter(e => (e.tags || []).includes(t)).length;
+
+function loadEffDraft(idx) {
+  effEditId = idx; const e = CATALOG_EFFECTS[idx];
+  effDraft = { id:e.id, name:e.name, icon:e.icon, kind:e.kind, tags:(e.tags || []).slice(),
+    mods:(e.mods || []).map(m => ({ stat:m.stat, op:m.op, val:m.val })),
+    flags:(e.flags || []).map(f => ({ mode:f.mode, target:f.target })), desc:e.desc };
+}
+function newEffDraft() {
+  effEditId = null;
+  effDraft = { id:null, name:'', icon:'fa-bolt', kind:'buff', tags:[], mods:[], flags:[], desc:'' };
+}
+
+function catalogEffectsBody() {
+  if (!effDraft) { CATALOG_EFFECTS.length ? loadEffDraft(0) : newEffDraft(); }
+  /* index — grouped by kind, each row summarising what the effect grants */
+  let index = '<button class="btn cyan" id="catNewBtn" style="height:28px;flex:0 0 auto;font-size:9px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-plus"></i> New Effect</span></button>';
+  EFFECT_KIND_ORDER.forEach(k => {
+    const items = CATALOG_EFFECTS.map((e, idx) => ({ e, idx })).filter(o => o.e.kind === k);
+    if (!items.length) return;
+    const K = EFFECT_KINDS[k];
+    const rows = items.map(({ e, idx }) => {
+      const parts = effectParts(e);
+      const sum = parts.length
+        ? '<span class="cr-s">' + parts.map(esc2).join(' <span class="op">\u00b7</span> ') + '</span>'
+        : '<span class="cr-s prose">' + esc2(clipTx(e.desc, 62)) + '</span>';
+      return '<button class="cat-row ' + (effEditId === idx ? 'sel' : '') + '" style="--rar:' + K.color + '" data-eff="' + idx + '">' +
+        '<span class="cr-ic"><i class="fa-solid ' + e.icon + '"></i></span>' +
+        '<span class="cr-tx"><span class="cr-t">' + esc2(e.name || 'Untitled') + '</span>' + sum + '</span>' +
+        '<span class="cr-tag">' + esc2(parts.length ? (e.mods.length ? e.mods.length + 'M' : '') + (e.mods.length && e.flags.length ? '\u2009' : '') + (e.flags.length ? e.flags.length + 'F' : '') : 'prose') + '</span>' +
+      '</button>';
+    }).join('');
+    index += '<div class="cat-grp"><div class="cat-grp-head"><span class="gh-t">' + esc2(K.label) + 's</span><span class="gh-c">' + items.length + '</span></div><div class="cat-rows">' + rows + '</div></div>';
+  });
+
+  const d = effDraft;
+  const K = EFFECT_KINDS[d.kind] || EFFECT_KINDS.buff;
+  const parts = effectParts(d);
+  const iconGrid = ITEM_ICONS.map(ic => '<div class="cat-ic ' + (ic === d.icon ? 'sel' : '') + '" data-icon="' + ic + '"><i class="fa-solid ' + ic + '"></i></div>').join('');
+  const kindToggle = EFFECT_KIND_ORDER.map(k => {
+    const KK = EFFECT_KINDS[k];
+    return '<div class="k ' + (k === d.kind ? 'on' : '') + '" style="--k:' + KK.color + '" data-kind="' + k + '">' +
+      '<i class="fa-solid ' + KK.icon + '"></i><span class="t">' + KK.label + '</span></div>';
+  }).join('');
+  const chips = (d.tags.length
+    ? d.tags.map((t, i) => '<span class="ef-chip">' + esc2(t) + '<i class="fa-solid fa-xmark x" data-tagx="' + i + '"></i></span>').join('')
+    : '<span class="ef-chip empty">no tags</span>');
+
+  /* MODIFIERS — stat · operator · number. Nothing else goes in here. */
+  const statOpts = m => EF_MOD_STATS.map(s => '<option value="' + s + '"' + (s === m.stat ? ' selected' : '') + '>' + s + '</option>').join('');
+  const modRows = d.mods.length
+    ? d.mods.map((m, i) =>
+        '<div class="ef-row">' +
+          '<select class="sel-in st" data-mstat="' + i + '">' + statOpts(m) + '</select>' +
+          '<span class="ef-ops">' + EF_MOD_OPS.map(o => '<span class="o ' + (o === m.op ? 'on' : '') + '" data-mop="' + i + '" data-opv="' + o + '">' + o + '</span>').join('') + '</span>' +
+          '<input class="sess-in num" type="number" step="any" data-mval="' + i + '" value="' + esc2(m.val) + '">' +
+          '<span class="pv">' + esc2(modText(m)) + '</span>' +
+          '<span class="x" data-mx="' + i + '"><i class="fa-solid fa-xmark"></i></span>' +
+        '</div>').join('')
+    : '<div class="ef-none">No modifiers \u2014 this effect changes no number. That is a complete answer.</div>';
+
+  /* FLAGS — mechanical, non-numeric. Mode decides whether the target list is
+     roll types or damage types. */
+  const flagRows = d.flags.length
+    ? d.flags.map((f, i) => {
+        const mode = EF_FLAG_MODES[f.mode] || EF_FLAG_MODES.advantage;
+        const modeOpts = EF_FLAG_ORDER.map(k => '<option value="' + k + '"' + (k === f.mode ? ' selected' : '') + '>' + EF_FLAG_MODES[k].label + '</option>').join('');
+        const list = mode.on === 'roll' ? EF_ROLL_TARGETS : EF_DMG_TYPES;
+        const tOpts = list.map(t => '<option value="' + esc2(t) + '"' + (t === f.target ? ' selected' : '') + '>' + esc2(t) + '</option>').join('');
+        return '<div class="ef-row">' +
+          '<select class="sel-in fm" data-fmode="' + i + '">' + modeOpts + '</select>' +
+          '<select class="sel-in tgt" data-ftgt="' + i + '">' + tOpts + '</select>' +
+          '<span class="x" data-flagx="' + i + '"><i class="fa-solid fa-xmark"></i></span>' +
+        '</div>';
+      }).join('')
+    : '<div class="ef-none">No flags \u2014 no advantage, resistance or immunity to record.</div>';
+
+  const form =
+    '<div class="cat-form-head"><span class="cfh-t">' + (effEditId != null ? 'Edit Effect' : 'New Effect') + '</span>' +
+      '<span class="cfh-id">' + (d.id ? esc2(d.id) : 'unsaved template') + '</span></div>' +
+    '<div class="ef-prev" style="--k:' + K.color + '">' +
+      '<span class="pc"><i class="fa-solid ' + d.icon + '"></i></span>' +
+      '<span class="pt"><span class="pn">' + esc2(d.name || 'Untitled Effect') + '</span>' +
+        '<span class="pm"><span class="g">' + esc2(K.label) + '</span>' +
+        (parts.length ? parts.map(p => '<span>' + esc2(p) + '</span>').join('')
+                      : '<span class="pr">' + esc2(clipTx(d.desc, 90) || 'prose only \u2014 the description carries the rule') + '</span>') +
+        '</span></span>' +
+    '</div>' +
+    '<span class="field-lab">Name</span><input class="sess-in" id="efName" value="' + esc2(d.name) + '" placeholder="Name the effect\u2026">' +
+    '<span class="field-lab">Icon</span><div class="cat-icons" id="efIcons">' + iconGrid + '</div>' +
+    '<span class="field-lab">Kind <span style="color:var(--beige-dim)">\u00b7 drives the tint wherever this effect appears</span></span>' +
+    '<div class="ef-kind" id="efKind">' + kindToggle + '</div>' +
+    '<span class="field-lab">Tags</span>' +
+    '<div class="ef-tags" id="efTags">' + chips + '</div>' +
+    '<div class="ef-tagbox"><input class="sess-in" id="efTagIn" placeholder="Add a tag \u2014 lowercased on save" autocomplete="off" spellcheck="false"><div class="ef-ac" id="efTagAc"></div></div>' +
+    '<div class="ef-noduration"><i class="fa-solid fa-hourglass-half"></i> No duration here \u2014 a definition says what it does; whoever applies it says how long</div>' +
+    '<div class="ef-block mods">' +
+      '<div class="ef-bh"><i class="fa-solid fa-calculator"></i><span class="t">Modifiers</span><span class="n">' + d.mods.length + ' row' + (d.mods.length === 1 ? '' : 's') + '</span></div>' +
+      '<div class="ef-rule">Numbers only \u00b7 stat, operator, value</div>' +
+      '<div class="ef-rows">' + modRows + '</div>' +
+      '<div class="ef-add"><button class="btn ghost sm" id="efModAdd"><span class="bf"></span><span class="bi"><i class="fa-solid fa-plus"></i> Modifier</span></button></div>' +
+    '</div>' +
+    '<div class="ef-block flags">' +
+      '<div class="ef-bh"><i class="fa-solid fa-flag"></i><span class="t">Flags</span><span class="n">' + d.flags.length + ' row' + (d.flags.length === 1 ? '' : 's') + '</span></div>' +
+      '<div class="ef-rule">Never numbers \u00b7 advantage, resistance, immunity</div>' +
+      '<div class="ef-rows">' + flagRows + '</div>' +
+      '<div class="ef-add"><button class="btn ghost sm" id="efFlagAdd"><span class="bf"></span><span class="bi"><i class="fa-solid fa-plus"></i> Flag</span></button></div>' +
+    '</div>' +
+    '<div class="ef-block prose">' +
+      '<div class="ef-bh"><i class="fa-solid fa-feather"></i><span class="t">Description</span>' +
+        '<span class="n"><i class="fa-solid fa-eye"></i> player-facing</span></div>' +
+      '<div class="ef-rule">Everything neither numeric nor a flag \u2014 often the real rule</div>' +
+      '<textarea class="cat-prose" id="efDesc" placeholder="e.g. At the start of each of their turns the creature takes 1d6 damage\u2026">' + esc2(d.desc) + '</textarea>' +
+    '</div>' +
+    '<div class="cat-actions"><button class="btn amber" id="efSave" style="height:42px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-floppy-disk"></i> ' + (effEditId != null ? 'Save Effect' : 'Create Effect') + '</span></button></div>';
+
+  return '<div class="cat-layout"><div class="cat-index">' + index + '</div><div class="cat-form">' + form + '</div></div>';
+}
+
+function wireCatalogEffects() {
+  const d = effDraft;
+  document.querySelectorAll('#workBody .cat-row[data-eff]').forEach(r => r.addEventListener('click', () => { loadEffDraft(+r.dataset.eff); renderCatalog(); }));
+  document.getElementById('catNewBtn')?.addEventListener('click', () => { newEffDraft(); renderCatalog(); console.log('[CATALOG] new blank effect'); });
+
+  const efName = document.getElementById('efName');
+  efName && efName.addEventListener('input', () => { d.name = efName.value; const pn = document.querySelector('#workBody .ef-prev .pn'); if (pn) pn.textContent = d.name || 'Untitled Effect'; });
+  const efDesc = document.getElementById('efDesc');
+  efDesc && efDesc.addEventListener('input', () => { d.desc = efDesc.value; });
+  document.querySelectorAll('#efIcons .cat-ic').forEach(c => c.addEventListener('click', () => { d.icon = c.dataset.icon; renderCatalog(); }));
+  document.querySelectorAll('#efKind .k').forEach(k => k.addEventListener('click', () => { d.kind = k.dataset.kind; renderCatalog(); }));
+
+  /* tags — chips + autocomplete over tags already in use */
+  const addTag = raw => {
+    const t = String(raw || '').trim().toLowerCase().replace(/\s+/g, '_');
+    if (!t) return;
+    if (!d.tags.includes(t)) d.tags.push(t);
+    renderCatalog();
+    setTimeout(() => document.getElementById('efTagIn')?.focus(), 0);
+  };
+  document.querySelectorAll('#efTags [data-tagx]').forEach(x => x.addEventListener('click', () => { d.tags.splice(+x.dataset.tagx, 1); renderCatalog(); }));
+  const tagIn = document.getElementById('efTagIn'), tagAc = document.getElementById('efTagAc');
+  if (tagIn && tagAc) {
+    const paint = () => {
+      const v = tagIn.value.trim().toLowerCase();
+      const hits = allEffTags().filter(t => t.includes(v) && !d.tags.includes(t)).slice(0, 8);
+      tagAc.innerHTML = hits.map(t => '<button class="t2" data-tagpick="' + esc2(t) + '">' + esc2(t) + '<span class="n">' + effTagUse(t) + ' in use</span></button>').join('');
+      tagAc.classList.toggle('on', !!hits.length);
+      tagAc.querySelectorAll('[data-tagpick]').forEach(b => b.addEventListener('click', () => addTag(b.dataset.tagpick)));
+    };
+    tagIn.addEventListener('input', paint);
+    tagIn.addEventListener('focus', paint);
+    tagIn.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(tagIn.value); }
+      if (e.key === 'Escape') tagAc.classList.remove('on');
+    });
+    tagIn.addEventListener('blur', () => setTimeout(() => tagAc.classList.remove('on'), 140));
+  }
+
+  /* modifiers */
+  document.getElementById('efModAdd')?.addEventListener('click', () => { d.mods.push({ stat:'AC', op:'+', val:1 }); renderCatalog(); });
+  document.querySelectorAll('[data-mstat]').forEach(s => s.addEventListener('change', () => { d.mods[+s.dataset.mstat].stat = s.value; renderCatalog(); }));
+  document.querySelectorAll('[data-mop]').forEach(o => o.addEventListener('click', () => { d.mods[+o.dataset.mop].op = o.dataset.opv; renderCatalog(); }));
+  document.querySelectorAll('[data-mval]').forEach(inp => inp.addEventListener('input', () => {
+    const m = d.mods[+inp.dataset.mval]; m.val = inp.value === '' ? '' : Number(inp.value);
+    const pv = inp.parentElement.querySelector('.pv'); if (pv) pv.textContent = modText(m);
+  }));
+  document.querySelectorAll('[data-mx]').forEach(x => x.addEventListener('click', () => { d.mods.splice(+x.dataset.mx, 1); renderCatalog(); }));
+
+  /* flags */
+  document.getElementById('efFlagAdd')?.addEventListener('click', () => { d.flags.push({ mode:'advantage', target:EF_ROLL_TARGETS[0] }); renderCatalog(); });
+  document.querySelectorAll('[data-fmode]').forEach(s => s.addEventListener('change', () => {
+    const f = d.flags[+s.dataset.fmode]; f.mode = s.value;
+    f.target = (EF_FLAG_MODES[f.mode].on === 'roll' ? EF_ROLL_TARGETS : EF_DMG_TYPES)[0];
+    renderCatalog();
+  }));
+  document.querySelectorAll('[data-ftgt]').forEach(s => s.addEventListener('change', () => { d.flags[+s.dataset.ftgt].target = s.value; renderCatalog(); }));
+  document.querySelectorAll('[data-flagx]').forEach(x => x.addEventListener('click', () => { d.flags.splice(+x.dataset.flagx, 1); renderCatalog(); }));
+
+  /* SAVE commits a template — it applies nothing to anyone */
+  document.getElementById('efSave')?.addEventListener('click', () => {
+    const rec = { id: d.id || ('fx_' + Date.now().toString(36)), name:d.name, icon:d.icon, kind:d.kind,
+      tags: d.tags.map(t => t.toLowerCase()),
+      mods: d.mods.map(m => ({ stat:m.stat, op:m.op, val: m.val === '' ? 0 : Number(m.val) })),
+      flags: d.flags.map(f => ({ mode:f.mode, target:f.target })), desc:d.desc };
+    if (effEditId != null) CATALOG_EFFECTS[effEditId] = rec;
+    else { CATALOG_EFFECTS.push(rec); effEditId = CATALOG_EFFECTS.length - 1; }
+    d.id = rec.id;
+    const parts = effectParts(rec);
+    logAct('Catalog: saved effect <span class="obj">' + esc(rec.name || 'Untitled') + '</span> \u00b7 ' + esc(EFFECT_KINDS[rec.kind].label) + (parts.length ? ' \u00b7 ' + esc(parts.join(' \u00b7 ')) : ' \u00b7 prose'), 'cyan');
+    console.log('[CATALOG] effect saved (template)', rec);
+    renderRoster(); renderCatalog();
+  });
+}
+
+/* ---------------------------------------------------------------------------
+   ITEMS \u25b8 EFFECTS GRANTED \u2014 references, not inline modifiers. The item holds
+   { effectId, dur, amount }: the effect says WHAT, the item says HOW LONG.
+   --------------------------------------------------------------------------- */
+function itemFxPickHtml() {
+  const d = itemDraft, q = itFxQ.trim().toLowerCase();
+  const pool = CATALOG_EFFECTS
+    .filter(e => !(d.effectRefs || []).some(r => r.effectId === e.id))
+    .filter(e => !q || (e.name + ' ' + (e.tags || []).join(' ')).toLowerCase().includes(q));
+  if (!pool.length) return '<div class="cat-fx-none">' + (q ? 'No effect matches \u201c' + esc2(itFxQ) + '\u201d.' : 'Every effect in the library is already referenced.') + '</div>';
+  const shown = pool.slice(0, 5);
+  return shown.map(e => {
+    const KK = EFFECT_KINDS[e.kind], parts = effectParts(e);
+    return '<button class="sk-pi" style="--rar:' + KK.color + '" data-efpick="' + esc2(e.id) + '">' +
+      '<span class="pi-ic"><i class="fa-solid ' + e.icon + '"></i></span>' +
+      '<span class="pi-t">' + esc2(e.name) + '</span>' +
+      '<span class="pi-m">' + esc2(parts.length ? parts.join(' \u00b7 ') : 'prose only') + '</span>' +
+      '<span class="pi-v">' + esc2(KK.label) + '</span>' +
+    '</button>';
+  }).join('') + (pool.length > shown.length ? '<div class="cat-fx-none">' + (pool.length - shown.length) + ' more \u2014 keep typing to narrow.</div>' : '');
+}
+
+function itemEffectsRefHtml(d) {
+  const refs = d.effectRefs || [];
+  const names = refs.map(r => (effById(r.effectId) || {}).name).filter(Boolean);
+  const head = '<div class="fxf-head" id="itFxHead"><span class="car"><i class="fa-solid fa-caret-right"></i></span>' +
+    '<i class="fa-solid fa-flask-vial" style="color:var(--amber-hot);font-size:11px"></i><span class="t">Effects Granted</span>' +
+    '<span class="s">' + (refs.length ? refs.length + ' referenced \u00b7 ' + esc2(clipTx(names.join(', '), 42)) : 'none \u00b7 references the effect library') + '</span></div>';
+  if (!itFxOpen) return '<div class="cat-fx fold closed">' + head + '</div>';
+
+  const rows = refs.length
+    ? refs.map((r, i) => {
+        const e = effById(r.effectId); if (!e) return '';
+        const KK = EFFECT_KINDS[e.kind], parts = effectParts(e);
+        const durOpts = EF_DURATIONS.map(u => '<option value="' + esc2(u) + '"' + (u === r.dur ? ' selected' : '') + '>' + esc2(u) + '</option>').join('');
+        const counted = EF_COUNTED.includes(r.dur), ticks = EF_TICKING.includes(r.dur);
+        return '<div class="ef-ref-row" style="--k:' + KK.color + '">' +
+          '<div class="ef-ref-top"><span class="ic"><i class="fa-solid ' + e.icon + '"></i></span>' +
+            '<span class="nm">' + esc2(e.name) + '</span>' +
+            '<span class="ef-badge" style="--k:' + KK.color + '">' + esc2(KK.label) + '</span>' +
+            '<span class="x" data-erx="' + i + '"><i class="fa-solid fa-xmark"></i></span></div>' +
+          (parts.length
+            ? '<div class="ef-ref-sum">' + parts.map(p => '<span>' + esc2(p) + '</span>').join('') + '</div>'
+            : '<div class="ef-ref-sum prose">' + esc2(clipTx(e.desc, 180)) + '</div>') +
+          '<div class="ef-ref-dur"><span class="dl">Duration</span>' +
+            (counted ? '<input class="sess-in num" type="number" min="1" data-eramt="' + i + '" value="' + (r.amount || 1) + '">' : '') +
+            '<select class="sel-in" data-erdur="' + i + '">' + durOpts + '</select>' +
+            '<span class="tick ' + (ticks ? 'on' : '') + '">' + (ticks ? 'ticks down' : 'cleared by hand') + '</span>' +
+          '</div>' +
+        '</div>';
+      }).join('')
+    : '<div class="cat-fx-none">No effects referenced \u2014 search the library below. Each line carries its own duration, because duration belongs to whoever applies it.</div>';
+
+  return '<div class="cat-fx fold open">' + head +
+    '<div class="ef-refs">' + rows + '</div>' +
+    '<div class="ef-pick">' +
+      '<div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input class="search-in" id="itFxSearch" placeholder="Search effects by name or tag\u2026" value="' + esc2(itFxQ) + '"></div>' +
+      '<div class="sk-picklist" id="itFxPickList">' + itemFxPickHtml() + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 function wireCatalog() {
   // type switcher
   document.querySelectorAll('#workBody .cat-tab').forEach(t => t.addEventListener('click', () => {
@@ -3351,6 +3784,7 @@ function wireCatalog() {
   if (catType === 'items') wireCatalogItems();
   else if (catType === 'spells') wireCatalogSpells();
   else if (catType === 'features') wireCatalogFeatures();
+  else if (catType === 'effects') wireCatalogEffects();
   else if (catType === 'shops') wireCatalogShops();
 }
 
@@ -3420,7 +3854,6 @@ function wireCatalogItems() {
   const itCat = document.getElementById('itCat'); itCat && itCat.addEventListener('change', () => { d.category = itCat.value; renderCatalog(); });
   const itRar = document.getElementById('itRar'); itRar && itRar.addEventListener('change', () => { d.rarity = itRar.value; renderCatalog(); });
   const itSlot = document.getElementById('itSlot'); itSlot && itSlot.addEventListener('change', () => { d.slot = itSlot.value; updateItemPreview(); });
-  const itDur = document.getElementById('itDur'); itDur && itDur.addEventListener('change', () => { d.duration = itDur.value; });
 
   // icon picker
   document.querySelectorAll('#itIcons .cat-ic').forEach(c => c.addEventListener('click', () => { d.icon = c.dataset.icon; renderCatalog(); }));
@@ -3439,13 +3872,23 @@ function wireCatalogItems() {
     renderCatalog();
   }));
 
-  // effect modifier rows
-  document.querySelectorAll('[data-fxstat]').forEach(sel => sel.addEventListener('change', () => { d.effects[+sel.dataset.fxstat].stat = sel.value; renderCatalog(); }));
-  document.querySelectorAll('[data-fxval]').forEach(inp => inp.addEventListener('input', () => { d.effects[+inp.dataset.fxval].val = inp.value; }));
-  document.querySelectorAll('[data-fxx]').forEach(x => x.addEventListener('click', () => { d.effects.splice(+x.dataset.fxx, 1); renderCatalog(); }));
-  const addFx = () => { const inp = document.getElementById('itFxNew'); const v = inp.value.trim(); d.effects.push({ stat:'STR', val:v }); renderCatalog(); setTimeout(() => document.getElementById('itFxNew')?.focus(), 0); };
-  document.getElementById('itFxAdd')?.addEventListener('click', addFx);
-  document.getElementById('itFxNew')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addFx(); } });
+  // EFFECTS GRANTED — collapsed by default; references + per-reference duration
+  d.effectRefs = d.effectRefs || [];
+  document.getElementById('itFxHead')?.addEventListener('click', () => { itFxOpen = !itFxOpen; renderCatalog(); });
+  document.querySelectorAll('[data-erx]').forEach(x => x.addEventListener('click', () => { d.effectRefs.splice(+x.dataset.erx, 1); renderCatalog(); }));
+  document.querySelectorAll('[data-erdur]').forEach(s => s.addEventListener('change', () => {
+    const r = d.effectRefs[+s.dataset.erdur]; r.dur = s.value;
+    if (EF_COUNTED.includes(r.dur) && !r.amount) r.amount = r.dur === 'Rounds' ? 3 : 10;
+    renderCatalog();
+  }));
+  document.querySelectorAll('[data-eramt]').forEach(inp => inp.addEventListener('input', () => { d.effectRefs[+inp.dataset.eramt].amount = Math.max(1, parseInt(inp.value, 10) || 1); }));
+  const itFxSearch = document.getElementById('itFxSearch');
+  itFxSearch && itFxSearch.addEventListener('input', () => {
+    itFxQ = itFxSearch.value;
+    document.getElementById('itFxPickList').innerHTML = itemFxPickHtml();
+    wireItemFxPick();
+  });
+  wireItemFxPick();
 
   // features granted — attach from / remove from the feature library
   d.featureIds = d.featureIds || [];
@@ -3458,7 +3901,7 @@ function wireCatalogItems() {
   document.getElementById('itSave')?.addEventListener('click', () => {
     const rec = { id: d.id || ('item_' + Date.now().toString(36)), name:d.name, category:d.category, rarity:d.rarity, w:d.w, h:d.h, icon:d.icon,
       weight:d.weight, value:d.value, equippable:d.equippable, slot:d.slot, attunement:d.attunement,
-      desc:d.desc, effects:d.effects.map(e => ({ stat:e.stat, val:e.val })), duration:d.duration,
+      desc:d.desc, effectRefs:(d.effectRefs || []).map(r => ({ effectId:r.effectId, dur:r.dur, amount:r.amount })),
       container:d.container, weightless:d.weightless, accepts:(d.accepts || []).slice(),
       featureIds: (d.featureIds || []).slice() };
     if (itemEditId != null) CATALOG_ITEMS[itemEditId] = rec;
@@ -3468,6 +3911,20 @@ function wireCatalogItems() {
     console.log('[CATALOG] item saved (template)', rec);
     renderRoster(); renderCatalog();
   });
+}
+
+function wireItemFxPick() {
+  document.querySelectorAll('#itFxPickList .sk-pi[data-efpick]').forEach(b => b.addEventListener('click', () => {
+    const e = effById(b.dataset.efpick); if (!e) return;
+    const d = itemDraft;
+    d.effectRefs = d.effectRefs || [];
+    d.effectRefs.push(d.equippable
+      ? { effectId:e.id, dur:'Permanent while equipped', amount:1 }
+      : { effectId:e.id, dur:'Minutes', amount:10 });
+    itFxQ = '';
+    console.log('[CATALOG] item references effect', e.id);
+    renderCatalog();
+  }));
 }
 
 function updateItemPreview() {
@@ -3573,7 +4030,7 @@ function wireSelected(p) {
     document.querySelectorAll('#durGrid .dur-opt').forEach(x => x.classList.toggle('sel', x === d));
   }));
   document.getElementById('applyBtn')?.addEventListener('click', () => {
-    const e = EFFECT_CATALOG.find(x => x.id === effSel);
+    const e = CATALOG_EFFECTS.find(x => x.id === effSel);
     p.effects.push({ name: e.name, kind: e.kind, dur: durSel });
     logAct('Applied <span class="obj">' + esc(e.name) + '</span> (' + esc(durSel) + ') to <span class="who">' + esc(p.name) + '</span>');
     fireToast({ kind:'effect', name: e.name, fxKind: e.kind, dur: durSel, pc: p });
