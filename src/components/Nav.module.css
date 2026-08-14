@@ -1,7 +1,8 @@
 /* Center navbar ported from G.U.I.D.E. Codex.html lines 562–752.
    Five framed slots over the glyph: Equipment (hover-expands to Inventory
    above + Stat Panel below), Lore, Spellbook, Rolls (hover-expands to
-   Features below), Journal. */
+   Features below), Journal.
+   Dock variant hangs all sub-buttons below instead — see .dock .sub.below. */
 
 .navbar {
   display: flex;
@@ -136,6 +137,10 @@
 .sub {
   position: absolute;
   left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   transform: translate(-50%, 0) scale(0.95);
   opacity: 0;
   pointer-events: none;
@@ -228,7 +233,8 @@
 .dock .btn .label { font-size: 10px; letter-spacing: 0.26em; }
 .dock .btn .marker { top: 6px; left: 12px; font-size: 8px; }
 
-.dock .sub.above { bottom: calc(50% + 44px); }
+/* Dock renders every sub in the .below column (Nav.tsx): an "above" sub would
+   clip against the topbar — the same fix the mockups made. */
 .dock .sub.below { top: calc(50% + 44px); }
 .dock .sub .btn { --w: 122px; --h: 56px; --cut: 9px; }
 .dock .sub .btn .icon { font-size: 14px; }
