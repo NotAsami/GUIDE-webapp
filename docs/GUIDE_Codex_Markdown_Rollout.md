@@ -26,6 +26,10 @@ Both live in `src/lib/markdown.ts`.
 
 - `characters.lore.backstory`, `lore.personality.{trait,ideal,bond,flaw}`,
   `lore.relations[].desc` — `src/screens/Lore.tsx`
+- `characters.spellbook.spells[].desc` — `src/screens/Spellbook.tsx` (`SpellDetail`'s
+  `// Effect` block). Also closes the mockup's one HTML-injection gap: the Spellbook mockup
+  wrote `sp.description` straight into `innerHTML` unescaped; `<Prose>` returns React nodes,
+  never `dangerouslySetInnerHTML`, so there's no reopening it here.
 
 ## Not yet rolled out
 

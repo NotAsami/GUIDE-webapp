@@ -6,6 +6,7 @@ import type {
   SessionRow, SessionInsert, SessionUpdate,
   CatalogItemRow, CatalogItemInsert, CatalogItemUpdate,
   CatalogFeatureRow, CatalogFeatureInsert, CatalogFeatureUpdate,
+  CatalogSpellRow, CatalogSpellInsert, CatalogSpellUpdate,
   ConfiscatedItemRow, ConfiscatedItemInsert, InventoryItem,
   ShopCatalogRow, Shop,
 } from './database.types'
@@ -517,6 +518,66 @@ export function useDmFeatures(): DmFeaturesState {
   }, [features])
 
   return { features, loading, error, refetch: fetchAll, createFeature, updateFeature, deleteFeature }
+}
+
+export interface DmSpellsState {
+  spells: CatalogSpellRow[]
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  createSpell: (s: CatalogSpellInsert) => Promise<CatalogSpellRow | null>
+  updateSpell: (id: string, patch: CatalogSpellUpdate) => Promise<void>
+  deleteSpell: (id: string) => Promise<void>
+}
+
+/** The DM's spell-authoring library (`spell_catalog`, migration 0010) —
+ *  structurally the twin of useDmFeatures. Consumed by Grant Spell (copy onto
+ *  a character's `spellbook.spells`) — a snapshot, so this table stays
+ *  DM-only. Sorted by level then name so the catalog groups the same way the
+ *  player Grimoire does. */
+export function useDmSpells(): DmSpellsState {
+  const { session } = useAuth()
+  const [spells, setSpells] = useState<CatalogSpellRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const byLevelThenName = (a: CatalogSpellRow, b: CatalogSpellRow) =>
+    (a.data?.level ?? 0) - (b.data?.level ?? 0) || (a.data?.name ?? '').localeCompare(b.data?.name ?? '')
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setSpells([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase.from('spell_catalog').select('*')
+    if (err) { setError(err.message); setSpells([]) }
+    else { setSpells(((data as CatalogSpellRow[]) ?? []).sort(byLevelThenName)); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const createSpell = useCallback<DmSpellsState['createSpell']>(async (s) => {
+    const { data, error: err } = await supabase.from('spell_catalog').insert(s).select().single<CatalogSpellRow>()
+    if (err) { setError(err.message); return null }
+    setSpells(prev => [...prev, data].sort(byLevelThenName))
+    return data
+  }, [])
+
+  const updateSpell = useCallback<DmSpellsState['updateSpell']>(async (id, patch) => {
+    let previous: CatalogSpellRow | undefined
+    setSpells(prev => prev.map(s => { if (s.id !== id) return s; previous = s; return { ...s, ...patch } as CatalogSpellRow }))
+    const { data, error: err } = await supabase.from('spell_catalog').update(patch).eq('id', id).select().single<CatalogSpellRow>()
+    if (err) { setError(err.message); if (previous) setSpells(prev => prev.map(s => (s.id === id ? previous! : s))) }
+    else if (data) setSpells(prev => prev.map(s => (s.id === id ? data : s)).sort(byLevelThenName))
+  }, [])
+
+  const deleteSpell = useCallback<DmSpellsState['deleteSpell']>(async (id) => {
+    const snapshot = spells
+    setSpells(prev => prev.filter(s => s.id !== id))
+    const { error: err } = await supabase.from('spell_catalog').delete().eq('id', id)
+    if (err) { setError(err.message); setSpells(snapshot) }
+  }, [spells])
+
+  return { spells, loading, error, refetch: fetchAll, createSpell, updateSpell, deleteSpell }
 }
 
 /* ============================================================

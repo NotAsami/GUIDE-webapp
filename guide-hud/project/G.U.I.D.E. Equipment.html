@@ -253,7 +253,6 @@
     z-index: 45;
   }
   .nav-slot { position: relative; width: 156px; display: flex; justify-content: center; }
-  .nav-slot.equipment { padding: 60px 0; margin: -60px 0; }
 
   .nav-btn {
     --w: 156px; --h: var(--nav-h); --cut: 11px;
@@ -324,39 +323,6 @@
     box-shadow: 0 0 10px var(--cyan), 0 0 20px rgba(0,166,214,0.6);
     z-index: 2;
   }
-
-  /* Sub-buttons (Inventory above, Stat Panel below) */
-  .nav-sub {
-    position: absolute; left: 50%;
-    transform: translate(-50%, 0) scale(0.95);
-    opacity: 0; pointer-events: none;
-    transition: transform 220ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
-    z-index: 1;
-  }
-  .nav-sub.above { bottom: calc(50% + 44px); }
-  .nav-sub.below { top:    calc(50% + 44px); }
-  .nav-sub .nav-btn {
-    --w: 122px; --h: 56px; --cut: 9px;
-  }
-  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
-  .nav-sub .nav-btn .nb-inner {
-    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
-                linear-gradient(180deg, #141a1d, #0e1316);
-  }
-  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
-  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
-  .nav-sub .nav-btn:hover .nb-inner {
-    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
-                0 0 18px rgba(0,166,214,0.5);
-  }
-  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
-  .nav-slot.equipment:hover .nav-sub,
-  .nav-slot.equipment:focus-within .nav-sub {
-    opacity: 1; pointer-events: auto;
-  }
-  .nav-slot.equipment:hover .nav-sub.above { transform: translate(-50%, -8px) scale(1); }
-  .nav-slot.equipment:hover .nav-sub.below { transform: translate(-50%, 8px) scale(1); }
-
   /* breadcrumb under navbar */
   .nav-meta {
     position: fixed;
@@ -397,10 +363,11 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    min-height: 0;
   }
   .col-header {
     display: flex; align-items: baseline; gap: 14px;
-    margin-bottom: 12px;
+    margin-bottom: clamp(7px, 1.2vh, 12px);
     padding: 0 4px 8px;
     border-bottom: 1px solid rgba(212,191,125,0.35);
   }
@@ -422,7 +389,7 @@
      LEFT COLUMN — Weapons + Stats
      ============================================================ */
 
-  .weapon-list { display: flex; flex-direction: column; gap: 12px; }
+  .weapon-list { display: flex; flex-direction: column; gap: clamp(7px, 1.2vh, 12px); flex: 0 0 auto; }
 
   .weapon-card {
     --cut: 14px;
@@ -450,7 +417,7 @@
       calc(100% - var(--cut) + 1px) 0, calc(100% - 1px) calc(var(--cut) - 1px),
       calc(100% - 1px) calc(100% - 1px),
       calc(var(--cut) - 1px) calc(100% - 1px), 0 calc(100% - var(--cut) + 1px));
-    padding: 14px 16px 12px 22px;
+    padding: clamp(9px, 1.4vh, 14px) 16px clamp(8px, 1.2vh, 12px) 22px;
     position: relative;
     display: grid;
     grid-template-columns: 44px 1fr auto;
@@ -535,19 +502,20 @@
 
   /* --- Stats panel --- */
   .stats-panel {
-    margin-top: 22px;
+    margin-top: clamp(10px, 2vh, 22px);
+    min-height: 0;
     display: flex; flex-direction: column;
   }
   .stat-list {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px 22px;
-    padding: 14px 4px 8px;
+    gap: clamp(2px, 0.6vh, 8px) 22px;
+    padding: clamp(7px, 1.2vh, 14px) 4px 8px;
   }
   .stat-line {
     display: flex; justify-content: space-between; align-items: baseline;
     border-bottom: 1px dashed rgba(212,191,125,0.18);
-    padding: 6px 4px;
+    padding: clamp(3px, 0.6vh, 6px) 4px;
   }
   .stat-line .sl-label {
     font-family: var(--font-mono);
@@ -574,7 +542,9 @@
   .stat-line.full-row { grid-column: 1 / -1; }
 
   .panel-actions {
-    margin-top: 16px;
+    margin-top: auto;
+    padding-top: clamp(8px, 1.6vh, 16px);
+    flex: 0 0 auto;
     display: flex;
     gap: 10px;
   }
@@ -586,7 +556,7 @@
     cursor: pointer;
     font-family: var(--font-mono);
     position: relative;
-    height: 44px;
+    height: clamp(34px, 4.6vh, 44px);
   }
   .pa-btn .pa-frame {
     position: absolute; inset: 0;
@@ -822,12 +792,21 @@
      ============================================================ */
   .gear-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-auto-rows: 1fr;
-    gap: 10px;
-    flex: 1;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: clamp(5px, 0.8vh, 8px);
+    flex: 1 1 auto;
     min-height: 0;
+    max-height: clamp(112px, 20vh, 180px);
   }
+  /* attunement pip — only worn slots that consume one of the three */
+  .slot .s-att {
+    position: absolute; right: 20px; top: 5px; z-index: 3;
+    font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em;
+    color: var(--cyan); opacity: 0.9;
+  }
+  .ch-meta .att-n { color: var(--cyan); }
+  .ch-meta.maxed .att-n, .ch-meta.maxed { color: var(--danger-hot); }
 
   .slot {
     --cut: 11px;
@@ -844,6 +823,10 @@
       0 100%, 0 var(--cut));
     transition: background 200ms ease;
   }
+  .gear-grid .slot .s-label { font-size: 8px; letter-spacing: 0.18em; }
+  .gear-grid .slot .s-name { font-size: 8.5px; letter-spacing: 0.1em; }
+  .gear-grid .slot .s-inner { padding: clamp(4px, 0.7vh, 7px) 7px; }
+  .gear-grid .slot .s-icon { font-size: clamp(15px, 2.1vh, 22px); }
   .slot .s-inner {
     position: absolute; inset: 1.5px;
     background:
@@ -873,7 +856,7 @@
     flex: 1;
     display: flex; align-items: center; justify-content: center;
     color: var(--beige);
-    font-size: 26px;
+    font-size: 22px;
     filter: drop-shadow(0 0 6px rgba(212,191,125,0.2));
     transition: color 200ms ease, filter 200ms ease;
   }
@@ -938,35 +921,191 @@
   .slot.wide .s-icon { flex: 0 0 auto; font-size: 24px; }
   .slot.wide .s-name { flex: 1; text-align: left; }
 
-  /* Quick Access split sub-slots */
-  .slot.quick .s-inner { padding: 8px 8px 10px; }
-  .slot.quick .quick-subs {
-    flex: 1; width: 100%;
-    display: grid; grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    margin-top: 4px;
+  /* ============================================================
+     05 CARRY — containers as system extensions. Built from the
+     same parts as the G.U.I.D.E. SHARD card on purpose: shards
+     extend what Ros can DO, containers extend what Ros can HOLD.
+     Three row types, distinguishable without labels —
+       page     : summary + a tab-arrow (contents live in Inventory)
+       inline   : capacity + chevron (contents expand here)
+       abstract : a status word, nothing to open
+     ============================================================ */
+  .carry-mod { flex: 0 0 auto; display: flex; flex-direction: column; gap: clamp(2px, 0.4vh, 4px); }
+  .carry-row { position: relative; }
+  .carry-row .slot { --cut: 8px; display: block; height: clamp(25px, 3.2vh, 32px); }
+  .carry-row .rarity-dot { display: none; }
+  .carry-row[data-rarity="uncommon"] .s-icon { color: var(--cyan); }
+  .carry-row[data-rarity="rare"] .s-icon { color: var(--cyan-hot); }
+  .carry-row .slot .s-inner {
+    flex-direction: row; align-items: center; justify-content: flex-start;
+    gap: 9px; padding: 0 11px 0 10px;
   }
-  .slot.quick .qsub {
-    position: relative;
-    border: 1px solid rgba(212,191,125,0.4);
-    background: rgba(0,0,0,0.35);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 2px;
-    gap: 2px;
+  .carry-row .s-icon { flex: 0 0 15px; font-size: 13px; }
+  .carry-row .s-nm {
+    flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.14em; color: var(--text); text-transform: uppercase;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .slot.quick .qsub i {
-    font-size: 16px; color: var(--cyan-hot);
-    filter: drop-shadow(0 0 4px rgba(0,166,214,0.4));
+  .carry-row[data-rarity="rare"] .s-nm { color: var(--cyan-hot); }
+  .carry-row .s-read {
+    flex: 0 0 auto; font-family: var(--font-mono); font-size: 8px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige);
+    display: flex; align-items: center; gap: 5px; white-space: nowrap;
   }
-  .slot.quick .qsub .qct {
-    font-family: var(--font-mono);
-    font-size: 8px;
-    color: var(--beige);
-    letter-spacing: 0.16em;
+  .carry-row .s-read .cap { color: var(--cyan); }
+  .carry-row .s-read .tab-go { color: var(--cyan); opacity: 0.7; font-size: 7px; }
+  .carry-row .s-read .status { color: var(--beige-dim); letter-spacing: 0.22em; }
+  .carry-row .s-chev {
+    flex: 0 0 auto; width: 14px; height: 22px; display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 0; cursor: pointer; color: var(--cyan); font-size: 9px;
+    transition: transform 180ms ease;
   }
-  .slot.quick .qsub.empty i { color: var(--beige-dim); opacity: 0.5; }
-  .slot.quick .qsub.empty .qct { color: var(--muted); opacity: 0.7; }
+  .carry-row.open .s-chev { transform: rotate(90deg); }
+  .c-act {
+    flex: 0 0 auto; background: transparent; border: 1px solid rgba(212,191,125,0.28);
+    color: var(--beige-dim); font-family: var(--font-mono); font-size: 6.5px;
+    letter-spacing: 0.18em; text-transform: uppercase; padding: 3px 6px; cursor: pointer;
+    clip-path: polygon(3px 0, 100% 0, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0 100%, 0 3px);
+    transition: color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .c-act:hover { color: var(--danger-hot); border-color: rgba(185,58,58,0.6); }
+  .c-act.equip { color: var(--cyan); border-color: rgba(0,166,214,0.42); }
+  .c-act.equip:hover { color: var(--cyan-hot); border-color: var(--cyan); box-shadow: 0 0 9px rgba(0,166,214,0.26); }
+
+  /* inline expansion — contents in place, indented under the row */
+  .crow-body {
+    display: none; margin: 2px 0 1px 24px; padding: 4px 10px 5px 10px;
+    border-left: 1px solid rgba(0,166,214,0.35); background: rgba(0,0,0,0.28);
+  }
+  .carry-row.open .crow-body { display: block; }
+  .crow-body .ln {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); padding: 2px 0;
+  }
+  .crow-body .ln .q { color: var(--text); }
+  .crow-body .ln.rare-ln, .crow-body .ln.rare-ln .q { color: var(--cyan-hot); }
+
+  /* stowed strip — every owned-but-unequipped container on one line */
+  .carry-stowed {
+    display: flex; align-items: center; gap: 8px; height: clamp(19px, 2.3vh, 22px); padding: 0 10px;
+    border: 1px dashed rgba(212,191,125,0.22); background: rgba(0,0,0,0.22);
+    font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em;
+    color: var(--beige-dim); text-transform: uppercase;
+  }
+  .carry-stowed .k { color: var(--muted); }
+  .carry-stowed .nm { color: var(--beige); }
+  .carry-stowed .sp { flex: 1; }
+  .carry-stowed .c-act { padding: 2px 6px; }
+
+  /* empty state reads as an equip target, not a blank panel */
+  .carry-target {
+    display: flex; align-items: center; gap: 8px; height: clamp(20px, 2.5vh, 24px); padding: 0 8px 0 10px;
+    border: 1px solid rgba(212,191,125,0.28); cursor: pointer;
+    background: repeating-linear-gradient(115deg, transparent 0 8px, rgba(212,191,125,0.05) 8px 9px), rgba(0,0,0,0.3);
+    font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em;
+    color: var(--muted); text-transform: uppercase;
+    transition: color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .carry-target i { color: var(--cyan); font-size: 8px; }
+  .carry-target .sp { flex: 1; }
+  .carry-target .hint { color: var(--beige-dim); }
+  .carry-target:hover { color: var(--text); border-color: var(--cyan); box-shadow: inset 0 0 14px rgba(0,166,214,0.12); }
+  .carry-foot {
+    display: flex; align-items: center; gap: 7px; padding: 1px 2px 0;
+    font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.18em;
+    color: var(--beige-dim); text-transform: uppercase;
+  }
+  .carry-foot .acc { color: var(--cyan); }
+
+  /* shard panel sits below CARRY — compressed to one wide card */
+  .shard-panel { flex: 0 0 auto; margin-top: clamp(7px, 1.2vh, 12px); }
+  .shard-panel .slot { display: block; width: 100%; height: clamp(34px, 4.6vh, 44px); }
+  .shard-panel .slot .s-inner { flex-direction: row; align-items: center; padding: 0 16px; gap: 14px; }
+  .shard-panel .slot .s-label { align-self: center; flex: 0 0 auto; }
+  .shard-panel .slot .s-icon { flex: 0 0 auto; font-size: 20px; }
+  .shard-panel .slot .s-name { flex: 1; text-align: left; align-self: center; }
+  .shard-panel .slot .s-cap {
+    flex: 0 0 auto; font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.2em; color: var(--cyan); text-transform: uppercase;
+  }
+
+  /* ---- short viewports (laptops): the three columns must fit the
+     fixed main area without spilling under the bottom bar ---- */
+  @media (max-width: 1500px) {
+    main.eq { grid-template-columns: minmax(230px, 1fr) minmax(320px, 1.35fr) minmax(250px, 1.05fr); gap: 16px; padding: 0 18px; }
+    .carry-row .s-nm { font-size: 8px; }
+    .carry-row .s-read { font-size: 7.5px; }
+  }
+  @media (max-height: 880px) {
+    .weapon-card .wc-inner { grid-template-columns: 36px 1fr auto; padding-top: 9px; padding-bottom: 8px; }
+    .weapon-card .wc-icon { width: 36px; height: 36px; font-size: 18px; }
+    .weapon-card .wc-name { font-size: 14px; }
+    .weapon-card .wc-dmg { font-size: 9px; }
+    .wc-atk { height: 26px; flex: 0 0 104px; }
+    .ammo-btn { height: 26px; }
+    .stat-line .sl-value { font-size: 16px; }
+    .stat-list { padding-top: 8px; }
+    .pa-btn { height: 34px; }
+    .panel-actions { padding-top: 10px; }
+    .carry-foot { font-size: 6.5px; }
+  }
+  @media (max-height: 760px) {
+    .gear-grid { max-height: 116px; }
+    .gear-grid .slot .s-name { font-size: 8px; }
+    .weapon-card .wc-icon { width: 32px; height: 32px; font-size: 16px; }
+    .weapon-card .wc-inner { grid-template-columns: 32px 1fr auto; }
+    .col-header .ch-title { font-size: 11px; }
+  }
+
+  /* ============================================================
+     AMMO PICKER — which arrow is nocked is a property of the
+     attack, so it lives on the weapon card, not the container.
+     ============================================================ */
+  .wc-act { grid-column: 2 / -1; grid-row: 3; display: flex; align-items: center; gap: 8px; margin-top: clamp(5px, 0.9vh, 8px); }
+  .wc-atk {
+    --cut: 7px; position: relative; height: 30px; flex: 0 0 116px;
+    background: transparent; border: 0; padding: 0; cursor: pointer; font-family: var(--font-mono);
+  }
+  .wc-atk .af { position: absolute; inset: 0; background: var(--cyan);
+    clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+  .wc-atk .ai { position: absolute; inset: 1.5px; background: linear-gradient(180deg, #141a1d, #0e1316);
+    clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    color: var(--cyan-hot); font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase;
+    transition: color 160ms ease, box-shadow 160ms ease; }
+  .wc-atk:hover .ai { color: #fff; box-shadow: inset 0 0 18px rgba(0,166,214,0.3), 0 0 14px rgba(0,166,214,0.4); }
+  .ammo { position: relative; flex: 0 0 auto; }
+  .ammo-btn {
+    display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px;
+    background: rgba(0,0,0,0.4); border: 1px solid rgba(212,191,125,0.32);
+    color: var(--beige); font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer;
+    clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+    transition: color 150ms ease, border-color 150ms ease;
+  }
+  .ammo-btn .am-ct { color: var(--cyan); }
+  .ammo-btn .chev { font-size: 8px; color: var(--beige-dim); }
+  .ammo-btn:hover { color: var(--text); border-color: rgba(0,166,214,0.5); }
+  .ammo.open .ammo-btn { border-color: var(--cyan); color: var(--text); }
+  .ammo-menu {
+    display: none; position: fixed; z-index: 400;
+    min-width: 190px; background: rgba(8,8,8,0.97); border: 1px solid var(--beige);
+    box-shadow: 0 12px 26px rgba(0,0,0,0.6), 0 0 16px rgba(0,166,214,0.18);
+    clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+    padding: 5px;
+  }
+  .ammo-menu.show { display: block; }
+  .ammo-menu .opt {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%;
+    background: transparent; border: 0; cursor: pointer; padding: 7px 9px;
+    font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--muted); text-align: left;
+  }
+  .ammo-menu .opt:hover { color: var(--text); background: rgba(0,166,214,0.09); }
+  .ammo-menu .opt.on { color: var(--cyan-hot); }
+  .ammo-menu .opt .q { color: var(--beige); }
+  .ammo-menu .opt.on .q { color: var(--cyan); }
 
   /* ============================================================
      TOOLTIPS (shared)
@@ -1063,6 +1202,47 @@
   .side-label.right { right: 10px; top: 50%; writing-mode: vertical-rl;
                       transform: translateY(-50%); }
   .side-label .acc  { color: var(--cyan); }
+
+
+  /* ---- Sub-buttons: original pill stack, now a single column hanging BELOW
+     the parent button (was an above/below pair centred on the active item,
+     which clipped against the top bar). ---- */
+  .nav-sub {
+    position: absolute; left: 50%; top: 100%; padding-top: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transform: translate(-50%, -6px) scale(0.95);
+    opacity: 0; pointer-events: none;
+    transition: opacity 180ms ease, transform 240ms cubic-bezier(.2,.7,.2,1);
+    z-index: 46;
+  }
+  .nav-sub .nav-btn { --w: 122px; --h: 56px; --cut: 9px; }
+  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
+  .nav-sub .nav-btn .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
+                linear-gradient(180deg, #141a1d, #0e1316);
+  }
+  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
+  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
+  .nav-sub .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
+  .nav-sub .nav-btn.is-sub-active .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.22), transparent 60%),
+                linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 22px rgba(0,166,214,0.34),
+                0 0 16px rgba(0,166,214,0.45);
+  }
+  .nav-sub .nav-btn.is-sub-active .nb-icon  { color: var(--cyan-hot); text-shadow: 0 0 10px rgba(0,166,214,0.9); }
+  .nav-sub .nav-btn.is-sub-active .nb-label { color: var(--cyan-hot); }
+  .nav-slot:hover .nav-sub,
+  .nav-slot:focus-within .nav-sub,
+  .nav-slot:has(.is-sub-active) .nav-sub { opacity: 1; pointer-events: auto; transform: translate(-50%, 0) scale(1); }
+  .nav-slot.equipment, .nav-slot.rolls { position: relative; }
+  .navbar { overflow: visible; }
+
+
 </style>
 </head>
 <body>
@@ -1098,7 +1278,7 @@
 
   <div class="top-right">
     <div class="weight-block">
-      <span class="ic">⚖</span><span class="val">45 / 120</span><span class="lab">Burden</span>
+      <span class="ic">⚖</span><span class="val">59.2 / 120</span><span class="lab">Burden</span>
     </div>
     <div class="gold-block">
       <span class="ic">⊙</span><span class="val">1,247</span><span class="lab">Gold</span>
@@ -1131,7 +1311,7 @@
 <nav class="navbar" aria-label="Primary">
 
   <!-- 1. Equipment (ACTIVE) -->
-  <div class="nav-slot">
+  <div class="nav-slot equipment">
     <button class="nav-btn is-active" data-nav="equipment" aria-current="page">
       <span class="nb-frame"></span>
       <span class="nb-marker">01 ◇</span>
@@ -1140,6 +1320,24 @@
         <span class="nb-label">Equipment</span>
       </span>
     </button>
+    <div class="nav-sub">
+      <button class="nav-btn" data-nav="inventory">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-bag-shopping"></i></span>
+          <span class="nb-label">Inventory</span>
+        </span>
+      </button>
+      <button class="nav-btn" data-nav="stat-panel">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-chart-simple"></i></span>
+          <span class="nb-label">Stat Panel</span>
+        </span>
+      </button>
+    </div>
   </div>
 
   <div class="nav-slot">
@@ -1160,14 +1358,24 @@
       </span>
     </button>
   </div>
-  <div class="nav-slot">
+  <div class="nav-slot rolls">
     <button class="nav-btn" data-nav="character">
       <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
       <span class="nb-inner">
-        <span class="nb-icon"><i class="fa-solid fa-user-shield"></i></span>
-        <span class="nb-label">Character</span>
+        <span class="nb-icon"><i class="fa-solid fa-dice-d20"></i></span>
+        <span class="nb-label">Rolls</span>
       </span>
     </button>
+    <div class="nav-sub">
+      <button class="nav-btn" data-nav="features">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-diagram-project"></i></span>
+          <span class="nb-label">Features</span>
+        </span>
+      </button>
+    </div>
   </div>
   <div class="nav-slot">
     <button class="nav-btn" data-nav="journal">
@@ -1187,7 +1395,7 @@
   <span class="dim">·</span>
   <span>Loadout 02 // Castellan</span>
   <span class="dim">·</span>
-  <span>Encumbrance <span class="acc">45 / 120</span></span>
+  <span>Encumbrance <span class="acc">59.2 / 120</span></span>
 </div>
 
 <!-- ====================== MAIN ====================== -->
@@ -1204,20 +1412,24 @@
 
     <div class="weapon-list">
 
-      <button class="weapon-card" data-rarity="uncommon"
-              data-tt='{"name":"Castellan Claymore","sub":"Uncommon · Heavy Greatsword","rows":[["Damage","2d6 + 4 slashing"],["Properties","Heavy, Two-Handed (waived: Dual Wielder)"],["Weight","6 lbs."],["Reach","5 ft."]],"flavor":"Forged for the Castellan Guard, this weapon\u2019s weight makes it nearly impossible to wield with one hand. Ros wields two.","attune":"Not required","rarity":"uncommon"}'>
+      <div class="weapon-card" data-rarity="common" data-ranged="quiver" tabindex="0" role="group"
+              data-tt='{"name":"Brettany Recurve","sub":"Common · Shortbow","rows":[["Damage","1d6 + 2 piercing"],["Properties","Ammunition, Two-Handed"],["Range","80 / 320 ft."],["Weight","2 lbs."],["Draws from","Castellan Quiver"]],"flavor":"A field bow with a horn-tipped limb, carried more for the reach than the damage. Ros shoots it well enough to be trusted with the last arrow.","attune":"Not required","rarity":"common"}'>
         <div class="wc-frame"><div class="wc-inner">
-          <div class="wc-icon"><i class="fa-solid fa-khanda"></i></div>
-          <div class="wc-name">Castellan Claymore</div>
-          <div class="wc-dmg"><span class="v">2d6 + 4</span> · Slashing</div>
+          <div class="wc-icon"><i class="fa-solid fa-bullseye"></i></div>
+          <div class="wc-name">Brettany Recurve</div>
+          <div class="wc-dmg"><span class="v">1d6 + 2</span> · Piercing · 80/320 ft</div>
           <div class="wc-slot">
             <span class="label">Main Hand</span>
-            <span class="rarity">Uncommon</span>
+            <span class="rarity">Common</span>
+          </div>
+          <div class="wc-act">
+            <button class="wc-atk" data-atk="Brettany Recurve"><span class="af"></span><span class="ai"><i class="fa-solid fa-burst"></i>Attack</span></button>
+            <div class="ammo" id="ammo-recurve"></div>
           </div>
         </div></div>
-      </button>
+      </div>
 
-      <button class="weapon-card" data-rarity="uncommon"
+      <div class="weapon-card" data-rarity="uncommon" tabindex="0" role="group"
               data-tt='{"name":"Castellan Claymore","sub":"Uncommon · Heavy Greatsword","rows":[["Damage","2d6 + 2 slashing"],["Properties","Heavy, Two-Handed (waived: Dual Wielder)"],["Weight","6 lbs."],["Note","Off-hand penalty applied"]],"flavor":"A twin to the main blade, balanced for the off-hand. Few outside the Castellan Guard would attempt this stance.","attune":"Not required","rarity":"uncommon"}'>
         <div class="wc-frame"><div class="wc-inner">
           <div class="wc-icon"><i class="fa-solid fa-khanda" style="transform:scaleX(-1);"></i></div>
@@ -1227,8 +1439,11 @@
             <span class="label">Off Hand</span>
             <span class="rarity">Uncommon</span>
           </div>
+          <div class="wc-act">
+            <button class="wc-atk" data-atk="Castellan Claymore (off hand)"><span class="af"></span><span class="ai"><i class="fa-solid fa-burst"></i>Attack</span></button>
+          </div>
         </div></div>
-      </button>
+      </div>
 
     </div>
 
@@ -1338,14 +1553,12 @@
     <div class="col-header">
       <span class="ch-num">04</span>
       <span class="ch-title">Gear</span>
-      <span class="ch-meta">7 slots</span>
+      <span class="ch-meta" id="attune-meta">Attuned <span class="att-n">2</span> / 3</span>
     </div>
 
     <div class="gear-grid">
 
-      <!-- Row 1 -->
-      <button class="slot" data-rarity="empty"
-              data-tt='{"name":"Helmet","sub":"Empty slot","rows":[["Status","Unequipped"],["Type","Head"]],"flavor":"Ros prefers an open helm; current loadout has no head piece equipped.","attune":"None","rarity":"empty"}'>
+      <button class="slot" data-rarity="empty" data-tt='{"name":"Helmet","sub":"Empty slot","rows":[["Status","Unequipped"],["Type","Head"]],"flavor":"Ros prefers an open helm; current loadout has no head piece equipped.","attune":"None","rarity":"empty"}'>
         <span class="s-frame"></span>
         <span class="s-inner">
           <span class="s-label">Helmet</span>
@@ -1355,8 +1568,7 @@
         <span class="rarity-dot"></span>
       </button>
 
-      <button class="slot" data-rarity="rare"
-              data-tt='{"name":"Brettany Plate","sub":"Rare · Heavy Armor","rows":[["AC","18"],["Type","Plate, reinforced"],["Stealth","Disadvantage"],["Weight","65 lbs."]],"flavor":"Forged in the foundry-vaults of Brettany before the city fell. The sigil on the breastplate is now worn smooth.","attune":"Not required","rarity":"rare"}'>
+      <button class="slot" data-rarity="rare" data-tt='{"name":"Brettany Plate","sub":"Rare · Heavy Armor","rows":[["AC","18"],["Type","Plate, reinforced"],["Stealth","Disadvantage"],["Weight","65 lbs."]],"flavor":"Forged in the foundry-vaults of Brettany before the city fell. The sigil on the breastplate is now worn smooth.","attune":"Not required","rarity":"rare"}'>
         <span class="s-frame"></span>
         <span class="s-inner">
           <span class="s-label">Armor</span>
@@ -1366,8 +1578,7 @@
         <span class="rarity-dot"></span>
       </button>
 
-      <button class="slot" data-rarity="uncommon"
-              data-tt='{"name":"Mantle of the Coastline","sub":"Uncommon · Cloak","rows":[["Bonus","+1 to saves vs. cold"],["Type","Wool / oilskin"],["Weight","3 lbs."]],"flavor":"Woven by the seafarers of Castella. Sheds rain like a duck and smells of salt no matter how often you wash it.","attune":"Not required","rarity":"uncommon"}'>
+      <button class="slot" data-rarity="uncommon" data-tt='{"name":"Mantle of the Coastline","sub":"Uncommon · Cloak","rows":[["Bonus","+1 to saves vs. cold"],["Type","Wool / oilskin"],["Weight","3 lbs."]],"flavor":"Woven by the seafarers of Castella. Sheds rain like a duck and smells of salt no matter how often you wash it.","attune":"Not required","rarity":"uncommon"}'>
         <span class="s-frame"></span>
         <span class="s-inner">
           <span class="s-label">Cloak</span>
@@ -1377,9 +1588,7 @@
         <span class="rarity-dot"></span>
       </button>
 
-      <!-- Row 2 -->
-      <button class="slot" data-rarity="common"
-              data-tt='{"name":"Soldier\u2019s Boots","sub":"Common · Boots","rows":[["Bonus","Standard issue"],["Type","Hardened leather"],["Weight","2 lbs."]],"flavor":"Worn, polished, and re-soled twice. They have walked through three regions and one siege.","attune":"None","rarity":"common"}'>
+      <button class="slot" data-rarity="common" data-tt='{"name":"Soldier’s Boots","sub":"Common · Boots","rows":[["Bonus","Standard issue"],["Type","Hardened leather"],["Weight","2 lbs."]],"flavor":"Worn, polished, and re-soled twice. They have walked through three regions and one siege.","attune":"None","rarity":"common"}'>
         <span class="s-frame"></span>
         <span class="s-inner">
           <span class="s-label">Boots</span>
@@ -1389,53 +1598,74 @@
         <span class="rarity-dot"></span>
       </button>
 
-      <!-- Row 3 -->
-      <button class="slot" data-rarity="uncommon"
-              data-tt='{"name":"Ring of Ember","sub":"Uncommon · Ring","rows":[["Charges","3 / day"],["Effect","Touch ignites a candle / torch"],["Type","Brass + ruby"]],"flavor":"A small comfort on the cold roads east of Castella. The ruby glows faintly when Ros is angry.","attune":"Required","rarity":"uncommon"}'>
+      <button class="slot" data-rarity="empty" data-tt='{"name":"Gloves","sub":"Empty slot","rows":[["Status","Unequipped"],["Type","Hands"]],"flavor":"The plate gauntlets went with the harness that did not come back from Brettany.","attune":"None","rarity":"empty"}'>
         <span class="s-frame"></span>
         <span class="s-inner">
-          <span class="s-label">Accessory</span>
+          <span class="s-label">Gloves</span>
+          <span class="s-icon"><i class="fa-solid fa-mitten"></i></span>
+          <span class="s-name">— Empty —</span>
+        </span>
+        <span class="rarity-dot"></span>
+      </button>
+
+      <button class="slot" data-rarity="uncommon" data-attuned="1" data-tt='{"name":"Castellan Sigil Amulet","sub":"Uncommon · Amulet","rows":[["Bonus","+1 to saves vs. fear"],["Type","Silver on cord"],["Attunement","Consumes a slot"]],"flavor":"Issued to sworn officers of the Castellan line. The reverse is stamped with a number, not a name.","attune":"Required","rarity":"uncommon"}'>
+        <span class="s-frame"></span>
+        <span class="s-inner">
+          <span class="s-label">Neck</span>
+          <span class="s-icon"><i class="fa-solid fa-gem"></i></span>
+          <span class="s-name">Castellan Sigil</span>
+        </span>
+        <span class="s-att">◈</span><span class="rarity-dot"></span>
+      </button>
+
+      <button class="slot" data-rarity="uncommon" data-attuned="1" data-tt='{"name":"Ring of Ember","sub":"Uncommon · Ring","rows":[["Charges","3 / day"],["Effect","Touch ignites a candle / torch"],["Type","Brass + ruby"]],"flavor":"A small comfort on the cold roads east of Castella. The ruby glows faintly when Ros is angry.","attune":"Required","rarity":"uncommon"}'>
+        <span class="s-frame"></span>
+        <span class="s-inner">
+          <span class="s-label">Ring</span>
           <span class="s-icon"><i class="fa-solid fa-ring"></i></span>
           <span class="s-name">Ring of Ember</span>
         </span>
-        <span class="rarity-dot"></span>
+        <span class="s-att">◈</span><span class="rarity-dot"></span>
       </button>
 
-      <button class="slot quick" data-rarity="common"
-              data-tt='{"name":"Quick Access","sub":"2 sub-slots","rows":[["Slot 1","Potion of Healing × 3"],["Slot 2","Empty"]],"flavor":"Hot-keyed pouch. Items here are usable as a bonus action.","attune":"None","rarity":"common"}'>
+      <button class="slot" data-rarity="empty" data-tt='{"name":"Ring","sub":"Empty slot","rows":[["Status","Unequipped"],["Type","Finger"],["Attunement","1 slot free"]],"flavor":"A bare finger. Whatever goes here will most likely want attunement, and there is exactly one slot left.","attune":"None","rarity":"empty"}'>
         <span class="s-frame"></span>
         <span class="s-inner">
-          <span class="s-label">Quick Access</span>
-          <div class="quick-subs">
-            <div class="qsub">
-              <i class="fa-solid fa-flask"></i>
-              <span class="qct">×3</span>
-            </div>
-            <div class="qsub empty">
-              <i class="fa-solid fa-plus"></i>
-              <span class="qct">Empty</span>
-            </div>
-          </div>
-        </span>
-        <span class="rarity-dot"></span>
-      </button>
-
-      <!-- Featured slot — spans full bottom row -->
-      <button class="slot special wide" data-rarity="empty" data-nav="shard"
-              data-tt='{"name":"G.U.I.D.E. Shard","sub":"Codex Module · Vacant","rows":[["Status","No shard installed"],["Type","Class IV slot"],["Capacity","1 / 1"]],"flavor":"The interface socket awaits a soulbound shard. Visit the Shard interface to install or remove.","attune":"Shard-bound","rarity":"empty"}'>
-        <span class="s-frame"></span>
-        <span class="s-inner">
-          <span class="s-label">G.U.I.D.E. Shard</span>
-          <span class="s-icon"><i class="fa-solid fa-gem"></i></span>
-          <span class="s-name">— Empty Slot —</span>
+          <span class="s-label">Ring</span>
+          <span class="s-icon"><i class="fa-solid fa-ring"></i></span>
+          <span class="s-name">— Empty —</span>
         </span>
         <span class="rarity-dot"></span>
       </button>
 
     </div>
+
+    <div class="col-header" style="margin-top:clamp(8px,1.4vh,13px);">
+      <span class="ch-num">05</span>
+      <span class="ch-title">Carry</span>
+      <span class="ch-meta" id="carry-meta">4 equipped</span>
+    </div>
+
+    <div class="carry-mod" id="carry-mod"></div>
+
+    <div class="shard-panel">
+      <button class="slot special" data-rarity="empty" data-nav="shard"
+              data-tt='{"name":"G.U.I.D.E. Shard","sub":"Codex Module · Vacant","rows":[["Status","No shard installed"],["Type","Class IV slot"],["Capacity","0 / 1"]],"flavor":"The interface socket awaits a soulbound shard. Visit the Shard interface to install or remove.","attune":"Shard-bound","rarity":"empty"}'>
+        <span class="s-frame"></span>
+        <span class="s-inner">
+          <span class="s-label">G.U.I.D.E. Shard</span>
+          <span class="s-icon"><i class="fa-solid fa-gem"></i></span>
+          <span class="s-name">— Empty Slot —</span>
+          <span class="s-cap">0 / 1 Installed</span>
+        </span>
+        <span class="rarity-dot"></span>
+      </button>
+    </div>
   </section>
 
 </main>
+
+<div class="ammo-menu" id="ammo-menu"></div>
 
 <!-- ====================== BOTTOM BAR ====================== -->
 <footer class="bottombar" role="contentinfo">
@@ -1520,7 +1750,7 @@
   })();
 
   // ----- Tooltips for weapons + slots -----
-  (function tooltips() {
+  const bindTooltip = (function tooltips() {
     const tt = document.getElementById('tooltip');
     const targets = document.querySelectorAll('[data-tt]');
 
@@ -1562,7 +1792,7 @@
 
     let active = null;
 
-    targets.forEach(target => {
+    function bind(target) {
       const enter = () => {
         try {
           const d = JSON.parse(target.getAttribute('data-tt'));
@@ -1584,7 +1814,8 @@
       target.addEventListener('mouseleave', leave);
       target.addEventListener('focus', enter);
       target.addEventListener('blur', leave);
-    });
+    }
+    targets.forEach(bind);
 
     window.addEventListener('scroll', () => {
       if (active) position(active);
@@ -1592,7 +1823,169 @@
     window.addEventListener('resize', () => {
       if (active) position(active);
     });
+    return bind;
   })();
+
+
+  /* ============================================================
+     05 CARRY — three row types, one shared frame.
+     Equip / unequip lives here and nowhere else; the Inventory
+     screen's container tabs are a CONSEQUENCE of this list.
+     ============================================================ */
+  const CARRY = [
+    { id:'backpack', type:'page', slot:'Back', name:'Castellan Field Pack', icon:'fa-bag-shopping',
+      rarity:'common', equipped:true, summary:'24 Items · 41.5 lb', tab:'Backpack',
+      tt:{ name:'Castellan Field Pack', sub:'Common · Container · Back', rows:[['Holds','24 items'],['Carried','41.5 lbs.'],['Slot','Back'],['Grants','BACKPACK tab in Inventory']],
+        flavor:'Oiled canvas over a bent-ash frame. Everything Ros does not need in the next ten seconds lives in here.', attune:'None', rarity:'common' } },
+    { id:'cache', type:'page', slot:'Bag', name:'Bag of Holding', icon:'fa-database',
+      rarity:'rare', equipped:true, summary:'12 Items · Weightless', tab:'Remote Cache',
+      tt:{ name:'Bag of Holding', sub:'Rare · Container · Extradimensional', rows:[['Holds','12 items'],['Carried','Weightless'],['Slot','Accessory'],['Grants','REMOTE CACHE tab in Inventory']],
+        flavor:'Contents are held off-device. The mouth of the bag is only the access port; the storage is somewhere the Codex declines to name.', attune:'Not required', rarity:'rare' } },
+    { id:'quiver', type:'inline', slot:'Belt', name:'Castellan Quiver', icon:'fa-arrow-up-long',
+      rarity:'common', equipped:true, cap:20,
+      contents:[ { n:'Arrows', q:10 }, { n:'Barbed Arrows', q:3 }, { n:'Signal Arrow', q:1, rare:true } ],
+      tt:{ name:'Castellan Quiver', sub:'Common · Container · Belt', rows:[['Capacity','14 / 20 arrows'],['Carried','1.9 lbs.'],['Accepts','Ammunition only'],['Contents','Listed in place — no tab']],
+        flavor:'Stiffened leather, cut for a hip draw. Twenty shafts fit the throat; fourteen are in it.', attune:'None', rarity:'common' } },
+    { id:'sack', type:'page', slot:'Hand', name:'Burlap Sack', icon:'fa-sack-xmark',
+      rarity:'common', equipped:false, summary:'0 Items · Empty', tab:'Sack',
+      tt:{ name:'Burlap Sack', sub:'Common · Container · Unequipped', rows:[['Status','Owned, not carried'],['Holds','30 lbs.'],['Slot','Hand'],['Effect','Equip to restore its Inventory tab']],
+        flavor:'A plain sack, folded flat at the bottom of the pack. It holds a great deal and occupies a hand doing it.', attune:'None', rarity:'common' } },
+  ];
+
+  function ammoStacks() {
+    const q = CARRY.find(c => c.id === 'quiver');
+    return q && q.equipped ? q.contents : [];
+  }
+  const ammoCount = () => ammoStacks().reduce((s, a) => s + a.q, 0);
+  let activeAmmo = 0;
+
+  function carryRowHtml(c) {
+    const read =
+      c.type === 'inline'   ? '<span class="s-read"><span class="cap">' + ammoCount() + ' / ' + c.cap + '</span> Arrows</span>'
+    : c.type === 'abstract' ? '<span class="s-read"><span class="status">' + c.status + '</span></span>'
+    :                         '<span class="s-read">' + c.summary + ' <i class="fa-solid fa-arrow-up-right-from-square tab-go" title="Opens as a tab in Inventory"></i></span>';
+    const chev = c.type === 'inline'
+      ? '<button class="s-chev" data-expand="' + c.id + '" aria-label="Show contents"><i class="fa-solid fa-chevron-right"></i></button>' : '';
+    const body = c.type === 'inline'
+      ? '<div class="crow-body">' + c.contents.map(a =>
+          '<div class="ln' + (a.rare ? ' rare-ln' : '') + '"><span>' + a.n + '</span><span class="q">×' + a.q + '</span></div>').join('') + '</div>'
+      : '';
+    return '<div class="carry-row" data-row="' + c.id + '" data-rarity="' + c.rarity + '">' +
+      '<div class="slot" data-rarity="' + c.rarity + '" data-tt=\'' + JSON.stringify(c.tt).replace(/'/g, '&#39;') + '\'>' +
+        '<span class="s-frame"></span>' +
+        '<span class="s-inner">' +
+          '<span class="s-icon"><i class="fa-solid ' + c.icon + '"></i></span>' +
+          '<span class="s-nm">' + c.name + '</span>' +
+          read + chev +
+          '<button class="c-act" data-toggle="' + c.id + '">Unequip</button>' +
+        '</span>' +
+        '<span class="rarity-dot"></span>' +
+      '</div>' + body + '</div>';
+  }
+
+  /* owned but unequipped: one line for all of them, so the panel never
+     grows just because the character kept a sack they are not carrying */
+  function stowedHtml(list) {
+    return '<div class="carry-stowed"><span class="k">Stowed</span>' +
+      list.map(c => '<span class="nm">' + c.name + '</span>').join('<span class="k">·</span>') +
+      '<span class="sp"></span>' +
+      list.map(c => '<button class="c-act equip" data-toggle="' + c.id + '">Equip</button>').join('') +
+      '</div>';
+  }
+
+  const targetHtml =
+    '<div class="carry-target" data-toggle="open" title="Equip a container from the inventory"><i class="fa-solid fa-plus"></i>' +
+    '<span>Equip a Container</span><span class="sp"></span><span class="hint">Adds Storage</span></div>';
+
+  function renderCarry() {
+    const host = document.getElementById('carry-mod');
+    const open = [...host.querySelectorAll('.carry-row.open')].map(r => r.dataset.row);
+    const on = CARRY.filter(c => c.equipped), off = CARRY.filter(c => !c.equipped);
+    host.innerHTML = on.map(carryRowHtml).join('') +
+      (off.length ? stowedHtml(off) : '') + targetHtml +
+      '<div class="carry-foot"><span class="acc">◇</span> Containers extend storage <span style="color:var(--beige-dim)">·</span> shards extend capability</div>';
+    open.forEach(id => host.querySelector('[data-row="' + id + '"]')?.classList.add('open'));
+    host.querySelectorAll('[data-tt]').forEach(bindTooltip);
+    host.querySelectorAll('[data-expand]').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      b.closest('.carry-row').classList.toggle('open');
+    }));
+    host.querySelectorAll('[data-toggle]').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = b.dataset.toggle;
+      if (id === 'open') { console.log('Equip a container into the open carry point...'); return; }
+      const c = CARRY.find(x => x.id === id);
+      c.equipped = !c.equipped;
+      console.log((c.equipped ? 'EQUIPPED' : 'UNEQUIPPED') + ': ' + c.name +
+        (c.type === 'page' ? ' — ' + (c.equipped ? 'adds' : 'removes') + ' the ' + c.tab.toUpperCase() + ' tab in Inventory' : ''));
+      renderCarry(); renderAmmo();
+    }));
+    document.getElementById('carry-meta').textContent = CARRY.filter(c => c.equipped).length + ' equipped';
+  }
+
+  /* ----- ammo picker: nocked arrow is a property of the attack ----- */
+  function renderAmmo() {
+    const host = document.getElementById('ammo-recurve');
+    if (!host) return;
+    const stacks = ammoStacks();
+    if (!stacks.length) { host.innerHTML = ''; host.style.display = 'none'; return; }
+    host.style.display = '';
+    if (activeAmmo >= stacks.length) activeAmmo = 0;
+    const a = stacks[activeAmmo];
+    host.innerHTML =
+      '<button class="ammo-btn"><i class="fa-solid fa-location-arrow"></i><span class="am-name">' + a.n + '</span>' +
+      '<span class="am-ct">×' + a.q + '</span><i class="fa-solid fa-chevron-down chev"></i></button>';
+    const menu = document.getElementById('ammo-menu');
+    menu.innerHTML = stacks.map((s, i) =>
+      '<button class="opt ' + (i === activeAmmo ? 'on' : '') + '" data-ammo="' + i + '"><span>' + s.n + '</span><span class="q">×' + s.q + '</span></button>').join('');
+    const btn = host.querySelector('.ammo-btn');
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const open = menu.classList.contains('show') && menu.dataset.owner === 'recurve';
+      closeAmmo();
+      if (open) return;
+      menu.dataset.owner = 'recurve';
+      menu.classList.add('show');
+      host.classList.add('open');
+      const r = btn.getBoundingClientRect();
+      menu.style.left = r.left + 'px';
+      menu.style.top = Math.max(12, r.top - menu.offsetHeight - 6) + 'px';
+    });
+    menu.querySelectorAll('[data-ammo]').forEach(o => o.addEventListener('click', e => {
+      e.stopPropagation();
+      activeAmmo = +o.dataset.ammo;
+      console.log('Nocked: ' + stacks[activeAmmo].n);
+      closeAmmo();
+      renderAmmo();
+    }));
+  }
+  function closeAmmo() {
+    document.getElementById('ammo-menu').classList.remove('show');
+    document.querySelectorAll('.ammo.open').forEach(a => a.classList.remove('open'));
+  }
+  document.addEventListener('click', closeAmmo);
+  document.querySelectorAll('[data-atk]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const st = ammoStacks()[activeAmmo];
+    const ranged = b.closest('[data-ranged]');
+    console.log('ATTACK: ' + b.dataset.atk + (ranged && st ? ' · ' + st.n + ' (' + st.q + ' left)' : ''));
+  }));
+
+  /* ----- attunement readout: three is the real constraint ----- */
+  function renderAttune() {
+    const used = document.querySelectorAll('.gear-grid .slot[data-attuned]').length;
+    const el = document.getElementById('attune-meta');
+    el.innerHTML = 'Attuned <span class="att-n">' + used + '</span> / 3';
+    el.classList.toggle('maxed', used >= 3);
+  }
+
+  document.querySelectorAll('.gear-grid .slot').forEach(s => s.addEventListener('click', () => {
+    const label = s.querySelector('.s-label')?.textContent.trim();
+    const name = s.querySelector('.s-name')?.textContent.trim();
+    console.log('Gear slot: ' + label + ' — ' + name);
+  }));
+
+  renderCarry(); renderAmmo(); renderAttune();
 </script>
 
 </body>

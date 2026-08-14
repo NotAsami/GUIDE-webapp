@@ -6,11 +6,17 @@ export function rollDie(sides: number): number {
   return Math.floor(Math.random() * sides) + 1
 }
 
-/** Parse a dice expression like "2d6" or "d8" → { count, sides }; null if invalid. */
-export function parseDice(expr: string): { count: number; sides: number } | null {
-  const m = /^\s*(\d*)\s*d\s*(\d+)\s*$/i.exec(expr)
+/** Parse a dice expression like "2d6", "d8" or "3d4 + 3" → { count, sides, mod };
+ *  null if invalid. `mod` is always present (0 when the expression has none) so
+ *  callers that only destructure `{ count, sides }` are unaffected. */
+export function parseDice(expr: string): { count: number; sides: number; mod: number } | null {
+  const m = /^\s*(\d*)\s*d\s*(\d+)\s*([+-]\s*\d+)?\s*$/i.exec(expr)
   if (!m) return null
-  return { count: m[1] ? parseInt(m[1], 10) : 1, sides: parseInt(m[2], 10) }
+  return {
+    count: m[1] ? parseInt(m[1], 10) : 1,
+    sides: parseInt(m[2], 10),
+    mod: m[3] ? parseInt(m[3].replace(/\s/g, ''), 10) : 0,
+  }
 }
 
 /** Roll `count` dice of `sides` faces; returns each individual result. */

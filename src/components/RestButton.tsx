@@ -4,7 +4,7 @@ import type { CharacterRow, CharacterSection, CharacterSheet, ShardTree } from '
 import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet } from '../lib/effects'
 import { parseDice, rollDice } from '../lib/dice'
-import { longRestPatch } from '../lib/rest'
+import { longRestPatch, pactShortRestPatch } from '../lib/rest'
 import styles from './RestButton.module.css'
 
 interface Props {
@@ -35,6 +35,8 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
   // A short rest is worth taking (even with 0 dice) if it would recharge a feature.
   const shortRechargeable = (character.sheet?.features ?? [])
     .some(f => f.recharge === 'short' && f.uses && f.uses.current < f.uses.max)
+  // ...or restore a Warlock's Pact Magic slots — their defining trait.
+  const pactPatch = pactShortRestPatch(character)
 
   const { patch: longPatch, lines: longLines } = longRestPatch(character, shardTrees)
 
@@ -83,9 +85,14 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
       lines.push({ label: 'Hit Dice', total: `${Math.max(0, hdAvail - spend)}${hdDie}`, breakdown: `−${spend} spent` })
     }
     if (activeCount > 0) lines.push({ label: 'Effects Cleared', total: `${activeCount}`, breakdown: 'potions worn off', tone: 'buff' })
+    if (pactPatch) lines.push(...pactPatch.lines)
 
     setOpen(false)
-    await updateSections({ sheet: nextSheet, resources: { ...resources, activeEffects: [] } })
+    await updateSections({
+      sheet: nextSheet,
+      resources: { ...resources, activeEffects: [] },
+      ...(pactPatch ? pactPatch.patch : {}),
+    })
     setBusy(false)
     addRoll({ kind: 'custom', title: 'Short Rest', subtitle: 'One hour · hit dice spent', icon: 'fa-campground', lines })
   }
@@ -133,6 +140,7 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
                   </span>
                 </div>
                 {activeCount > 0 && <Line line={{ label: 'Effects Cleared', total: `${activeCount}`, breakdown: 'potions worn off', tone: 'buff' }} />}
+                {pactPatch && <Line line={pactPatch.lines[0]} />}
                 {hdAvail === 0 && <p className={styles.note}>No hit dice remaining — take a long rest to regain some.</p>}
               </div>
             )}
@@ -144,7 +152,7 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
                   {busy ? 'Resting…' : 'Take Long Rest'}
                 </button>
               ) : (
-                <button type="button" className={styles.confirm} onClick={confirmShort} disabled={busy || (spend === 0 && activeCount === 0 && !shortRechargeable)}>
+                <button type="button" className={styles.confirm} onClick={confirmShort} disabled={busy || (spend === 0 && activeCount === 0 && !shortRechargeable && !pactPatch)}>
                   {busy ? 'Resting…' : 'Take Short Rest'}
                 </button>
               )}

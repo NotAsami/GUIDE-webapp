@@ -28,6 +28,8 @@ export type VoiceMsg =
   | { kind: 'coins'; target: string; amount: number; coin: 'gold' | 'silver' | 'copper'; op: 'award' | 'deduct' }
   /** Grant Feature ping — a roleplay boon landed on the sheet. */
   | { kind: 'feature'; target: string; name: string; icon?: string }
+  /** Grant Spell ping — a spell landed in the grimoire. */
+  | { kind: 'spell'; target: string; name: string; level: number }
 
 /** `target` is a character id, or 'all' for the whole party. */
 export const ALL_PARTY = 'all'

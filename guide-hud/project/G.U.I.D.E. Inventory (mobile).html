@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>G.U.I.D.E. — INVENTORY (MOBILE) // ROS CHRISSTONE</title>
+<!--
+  MOBILE PORT — Inventory.
+
+  Same data, same gestures, phone-native shell. Decisions:
+   · Separate file; desktop Inventory untouched.
+   · Presented inside a 390x844 phone frame that auto-fits the window.
+   · ON PERSON keeps the 5x4 reach grid at scaled cell size — footprints intact.
+   · Nav is a fixed bottom tab bar; Equipment's sub-screens sit inline in a
+     strip directly above it, so the hover-expand is replaced by a real row.
+   · LOAD / COIN is a collapsible accordion below the carried panel; collapsed
+     it still shows a live burden bar.
+   · Chrome kept: condensed top bar, scanlines, vignette, sweep. Dropped:
+     tickers, vertical side labels, nav-meta breadcrumb, desktop status bar —
+     the link/save readouts moved into the accordion footer so nothing is lost.
+   · body.coarse is always on: no hover tooltips, popup is a bottom sheet.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+:root{
+  --bg:#1d1d1d;--bg-2:#161616;--beige:#d4bf7d;--beige-dim:#8a7a4a;
+  --cyan:#00a6d6;--cyan-dim:#0d6e8c;--cyan-hot:#4dd6ff;--teal:#3fc7b4;
+  --violet:#7a6a8c;--violet-hot:#a594ba;--gold-rare:#e2b021;
+  --text:#dedede;--muted:#aaaaaa;--danger:#b93a3a;--danger-hot:#ff5454;
+  --font-display:"Cinzel",serif;--font-prose:"EB Garamond",serif;--font-mono:"JetBrains Mono",ui-monospace,monospace;
+  --sb-h:42px;--top-h:54px;--tab-h:60px;--sub-h:34px;--home-h:20px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;width:100%;background:#0b0b0b;color:var(--text);font-family:var(--font-prose);overflow:hidden;-webkit-font-smoothing:antialiased}
+a{color:var(--cyan)}a:hover{color:var(--cyan-hot)}
+@keyframes blink{50%{opacity:0}}
+
+/* ---------- desk + phone frame ---------- */
+.desk{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:url("https://www.transparenttextures.com/patterns/dark-leather.png"),radial-gradient(120% 90% at 50% 40%,#232220 0%,#161616 55%,#090909 100%);background-blend-mode:overlay,normal}
+.device{position:relative;width:390px;height:844px;flex:0 0 auto;border-radius:52px;padding:11px;background:linear-gradient(160deg,#3a3a38,#141414 40%,#0c0c0c 70%,#2a2a28);box-shadow:0 40px 90px -20px rgba(0,0,0,.85),0 0 0 1px rgba(212,191,125,.14),inset 0 0 0 1px rgba(255,255,255,.05);transform-origin:center center}
+.screen{position:relative;width:100%;height:100%;border-radius:42px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;isolation:isolate}
+.island{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:112px;height:30px;border-radius:16px;background:#000;z-index:120;pointer-events:none}
+.home{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:132px;height:5px;border-radius:3px;background:rgba(222,222,222,.55);z-index:120;pointer-events:none}
+.stage-bg{position:absolute;inset:0;z-index:0;background:url("https://www.transparenttextures.com/patterns/dark-leather.png"),radial-gradient(130% 80% at 50% 30%,#242321 0%,#1a1a1a 55%,#0e0e0e 100%);background-blend-mode:overlay,normal}
+.scanlines{pointer-events:none;position:absolute;inset:0;z-index:100;background-image:repeating-linear-gradient(to bottom,rgba(255,255,255,.025) 0px,rgba(255,255,255,.025) 1px,transparent 1px,transparent 3px);mix-blend-mode:overlay}
+.vignette{pointer-events:none;position:absolute;inset:0;z-index:101;background:radial-gradient(120% 100% at 50% 50%,transparent 52%,rgba(0,0,0,.5) 92%,rgba(0,0,0,.8) 100%)}
+.sweep{pointer-events:none;position:absolute;left:0;right:0;top:0;height:2px;z-index:105;background:linear-gradient(to bottom,transparent,rgba(0,166,214,.55) 50%,transparent);box-shadow:0 0 24px rgba(0,166,214,.45);opacity:0}
+.sweep.run{animation:sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards}
+@keyframes sweep-run{0%{opacity:0;transform:translateY(-20px)}8%{opacity:.9}100%{opacity:0;transform:translateY(844px)}}
+
+/* ---------- iOS status bar ---------- */
+.sysbar{position:relative;z-index:60;flex:0 0 auto;height:var(--sb-h);display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 5px;font-family:var(--font-mono);font-size:12px;font-weight:500;letter-spacing:.02em;color:var(--text)}
+.sysbar .rgt{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text)}
+
+/* ---------- app top bar ---------- */
+.topbar{position:relative;z-index:60;flex:0 0 auto;height:var(--top-h);display:flex;align-items:center;gap:10px;padding:0 14px;background:linear-gradient(to bottom,rgba(15,15,15,.95),rgba(22,22,22,.92));border-bottom:1px solid var(--beige);box-shadow:0 1px 0 rgba(212,191,125,.15),0 8px 20px -10px rgba(0,0,0,.7)}
+.topbar::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 4px);mix-blend-mode:overlay}
+.tb-id{position:relative;z-index:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.tb-name{font-family:var(--font-display);font-weight:600;font-size:13px;letter-spacing:.24em;text-transform:uppercase;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-name .cursor{color:var(--cyan);animation:blink 1s steps(2,end) infinite;margin-left:2px}
+.tb-sub{font-family:var(--font-mono);font-size:8px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.tb-sub .sep{color:var(--beige-dim);margin:0 5px}
+.tb-stats{position:relative;z-index:1;margin-left:auto;display:flex;gap:8px;flex:0 0 auto}
+.tb-chip{--cut:5px;position:relative;padding:5px 8px;min-width:66px;background:rgba(0,0,0,.4);border:1px solid rgba(212,191,125,.4);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+.tb-chip .v{font-family:var(--font-display);font-size:12px;line-height:1;color:var(--beige);letter-spacing:.04em}
+.tb-chip .k{font-family:var(--font-mono);font-size:7px;letter-spacing:.2em;color:var(--cyan);text-transform:uppercase;line-height:1}
+.tb-chip.load .v{color:var(--cyan-hot)}
+
+/* ---------- app body ---------- */
+main.inv{position:relative;z-index:20;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:9px;padding:10px 10px 0}
+
+.col-header{display:flex;align-items:baseline;gap:9px;padding:0 2px 5px;border-bottom:1px solid rgba(212,191,125,.35);flex:0 0 auto}
+.col-header .ch-num{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.24em;color:var(--cyan)}
+.col-header .ch-title{font-family:var(--font-mono);font-size:10px;letter-spacing:.34em;color:var(--beige);text-transform:uppercase}
+.col-header .ch-meta{margin-left:auto;font-family:var(--font-mono);font-size:8px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.col-header .ch-meta .acc{color:var(--cyan)}
+.col-header .ch-meta .dim{color:var(--beige-dim)}
+
+.region{--cut:13px;position:relative;flex:1 1 auto;min-height:236px}
+.region .r-frame{position:absolute;inset:0;background:var(--beige);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+.region .r-gap{position:absolute;inset:1.5px;background:var(--bg);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px))}
+.region .r-line{position:absolute;inset:3.5px;background:var(--beige);opacity:.42;clip-path:polygon(calc(var(--cut) - 3px) 0,100% 0,100% calc(100% - var(--cut) + 3px),calc(100% - var(--cut) + 3px) 100%,0 100%,0 calc(var(--cut) - 3px))}
+.region .r-inner{position:absolute;inset:5px;background:radial-gradient(130% 100% at 50% 0%,rgba(0,166,214,.05),transparent 60%),linear-gradient(180deg,#151515,#0e0e0e);clip-path:polygon(calc(var(--cut) - 4px) 0,100% 0,100% calc(100% - var(--cut) + 4px),calc(100% - var(--cut) + 4px) 100%,0 100%,0 calc(var(--cut) - 4px));overflow:hidden;display:flex;flex-direction:column}
+.region .r-inner::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;background:repeating-linear-gradient(to bottom,rgba(0,166,214,.035) 0px,rgba(0,166,214,.035) 1px,transparent 1px,transparent 4px);mix-blend-mode:screen;opacity:.6}
+.region .r-corner{position:absolute;width:11px;height:11px;border-color:var(--cyan);opacity:.7;z-index:5;pointer-events:none}
+.region .r-corner.tl{top:8px;left:8px;border-top:1px solid;border-left:1px solid}
+.region .r-corner.br{bottom:8px;right:8px;border-bottom:1px solid;border-right:1px solid}
+
+.cargo-pad{position:relative;z-index:1;flex:1;min-height:0;padding:10px 10px 11px;display:flex;flex-direction:column;gap:8px}
+
+/* --- container switcher: horizontal scroll strip --- */
+.seg{display:flex;gap:6px;flex:0 0 auto;height:42px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.seg::-webkit-scrollbar{display:none}
+.seg-btn{--cut:7px;position:relative;flex:0 0 auto;height:40px;min-width:104px;padding:0;background:transparent;border:0;cursor:pointer;font-family:var(--font-mono)}
+.seg-btn .sg-frame{position:absolute;inset:0;background:rgba(212,191,125,.4);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));transition:background 180ms ease}
+.seg-btn .sg-inner{position:absolute;inset:1.5px;background:linear-gradient(180deg,#191919,#101010);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));display:flex;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;white-space:nowrap;padding:0 10px;transition:color 180ms ease,box-shadow 180ms ease,background 180ms ease}
+.seg-btn .sg-inner i{font-size:11px;opacity:.9}
+.seg-btn .sg-n{color:var(--beige-dim);font-size:8px;letter-spacing:.1em}
+.seg-btn.on .sg-frame{background:var(--cyan)}
+.seg-btn.on .sg-inner{color:var(--cyan-hot);background:radial-gradient(120% 90% at 50% 60%,rgba(0,166,214,.16),transparent 60%),linear-gradient(180deg,#16252b,#0f1b21);box-shadow:inset 0 0 20px rgba(0,166,214,.26)}
+.seg-btn.on .sg-n{color:var(--cyan)}
+.seg-btn.locked .sg-frame{background:rgba(212,191,125,.18)}
+.seg-btn.locked .sg-inner{color:var(--beige-dim);opacity:.65;background:repeating-linear-gradient(115deg,transparent 0 7px,rgba(212,191,125,.045) 7px 8px),linear-gradient(180deg,#141414,#0d0d0d)}
+.seg-btn.deny{animation:segDeny 320ms ease}
+@keyframes segDeny{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+
+.ctr-line{flex:0 0 auto;min-height:22px;display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);border-bottom:1px dashed rgba(212,191,125,.22);padding-bottom:4px}
+.ctr-line .nm{color:var(--beige)}
+.ctr-line .sep{color:var(--beige-dim)}
+.ctr-line .v{color:var(--text)}
+.ctr-line .sys{margin-left:auto;color:var(--cyan);opacity:.85;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.ctr-line .sys .tick{width:5px;height:5px;background:var(--cyan);box-shadow:0 0 7px rgba(0,166,214,.8);animation:blink 2.4s steps(2,end) infinite}
+.ctr-line .unequip{margin-left:auto;display:flex;align-items:center;gap:5px;background:transparent;border:1px solid rgba(212,191,125,.3);color:var(--beige-dim);font-family:var(--font-mono);font-size:8px;letter-spacing:.16em;text-transform:uppercase;padding:6px 9px;cursor:pointer;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+.ctr-line .sys+.unequip{margin-left:10px}
+
+.util-bar{flex:0 0 auto;min-height:30px;display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.util-bar::-webkit-scrollbar{display:none}
+.chip{--cut:5px;position:relative;flex:0 0 auto;height:28px;padding:0 11px;background:rgba(0,0,0,.35);border:1px solid rgba(212,191,125,.28);color:var(--muted);font-family:var(--font-mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;cursor:pointer;clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+.chip.on{color:var(--cyan-hot);border-color:var(--cyan);box-shadow:inset 0 0 14px rgba(0,166,214,.18),0 0 10px rgba(0,166,214,.22)}
+.chip .n{color:var(--beige-dim);margin-left:5px}
+.chip.on .n{color:var(--cyan)}
+.sort-sel{flex:0 0 auto;height:28px;background:rgba(0,0,0,.45);border:1px solid rgba(212,191,125,.3);color:var(--text);font-family:var(--font-mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;padding:0 6px;cursor:pointer;outline:none;margin-left:auto}
+.sort-sel:focus{border-color:var(--cyan)}
+.reach-read{flex:0 0 auto;display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:8.5px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.reach-read .k{color:var(--beige-dim)}
+.reach-read .acc{color:var(--cyan)}
+.reach-read.free{margin-left:auto}
+
+/* --- ON PERSON grid: 5x4 kept, cells scaled to phone width --- */
+.pane{flex:1;min-height:0;display:flex;flex-direction:column}
+.grid-wrap{flex:1;min-height:0;display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:none}
+.grid-wrap::-webkit-scrollbar{display:none}
+.op-grid{display:grid;width:100%;margin:auto 0;grid-template-columns:repeat(5,1fr);grid-auto-rows:56px;gap:5px}
+.cell-empty{border:1px solid rgba(212,191,125,.10);background:radial-gradient(circle at 50% 50%,rgba(0,166,214,.10) .5px,transparent 1.6px),rgba(0,0,0,.22)}
+.cell-item{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,.3);-webkit-tap-highlight-color:transparent;transition:transform 140ms ease,filter 160ms ease}
+.cell-item .glyph{color:var(--text);filter:drop-shadow(0 0 5px rgba(0,0,0,.6));line-height:1;font-size:21px}
+.cell-item.fp-l .glyph{font-size:26px}
+.cell-item .cat-corner{position:absolute;top:3px;left:4px;font-size:8.5px;color:var(--muted);opacity:.85;z-index:3;line-height:1}
+.cell-item .stack{position:absolute;right:4px;bottom:3px;font-family:var(--font-mono);font-size:9px;font-weight:500;color:var(--text);text-shadow:0 0 4px rgba(0,0,0,.9);z-index:3;line-height:1}
+.cell-item .stack.cap{color:var(--cyan)}
+.cell-item:active{transform:scale(.96);filter:brightness(1.2)}
+.cat-weapon{background:rgba(0,166,214,.07)}.cat-armor{background:rgba(212,191,125,.07)}.cat-consumable{background:rgba(63,199,180,.07)}
+.cat-quest{background:rgba(122,106,140,.11)}.cat-tool{background:rgba(170,170,170,.05)}.cat-misc{background:rgba(0,0,0,.3)}
+.rar-common{border:1px solid rgba(212,191,125,.42)}
+.rar-common .cat-corner{color:var(--beige-dim)}
+.rar-uncommon{border:1px solid var(--cyan);box-shadow:0 0 8px rgba(0,166,214,.22),inset 0 0 10px rgba(0,166,214,.08)}
+.rar-uncommon .glyph{color:var(--cyan-hot)}
+.rar-uncommon .cat-corner{color:var(--cyan)}
+.rar-rare{border:1px solid var(--cyan-hot);box-shadow:0 0 12px rgba(77,214,255,.3);animation:rarePulse 9s ease-in-out infinite}
+.rar-rare .glyph{color:var(--cyan-hot);text-shadow:0 0 8px rgba(77,214,255,.5)}
+@keyframes rarePulse{0%,100%{box-shadow:0 0 12px rgba(77,214,255,.3)}50%{box-shadow:0 0 18px rgba(77,214,255,.5),inset 0 0 16px rgba(77,214,255,.2)}}
+.rar-quest{border:1px solid var(--violet);box-shadow:inset 0 0 12px rgba(122,106,140,.16)}
+.rar-quest .glyph{color:var(--violet-hot)}
+.rar-quest .cat-corner{color:var(--violet)}
+.cell-item.shimmer::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;background:radial-gradient(120% 120% at 50% 50%,rgba(0,166,214,0) 40%,rgba(0,166,214,.22) 100%);animation:shardShimmer 6s ease-in-out infinite;mix-blend-mode:screen}
+@keyframes shardShimmer{0%,100%{opacity:.15}50%{opacity:.7}}
+.cell-item.flash{animation:cellFlash 900ms ease}
+@keyframes cellFlash{0%{box-shadow:0 0 0 rgba(0,166,214,0)}25%{box-shadow:0 0 22px rgba(0,166,214,.75),inset 0 0 18px rgba(0,166,214,.35)}100%{box-shadow:0 0 0 rgba(0,166,214,0)}}
+
+/* --- container lists --- */
+.clist{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:3px;padding-right:3px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.clist::-webkit-scrollbar{width:4px}
+.clist::-webkit-scrollbar-track{background:rgba(0,0,0,.4)}
+.clist::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--cyan-dim),rgba(212,191,125,.5))}
+.crow{display:grid;grid-template-columns:30px 1fr auto;grid-template-rows:auto auto;column-gap:9px;row-gap:2px;align-items:center;min-height:54px;padding:8px 10px 8px 0;background:rgba(0,0,0,.24);border:1px solid rgba(212,191,125,.13);border-left:2px solid var(--rowc,rgba(212,191,125,.4));cursor:pointer;text-align:left;font-family:var(--font-mono);-webkit-tap-highlight-color:transparent}
+.crow:active{background:rgba(0,166,214,.09);border-color:rgba(0,166,214,.4)}
+.crow .ri{grid-row:1 / span 2;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--beige)}
+.crow .rn{font-family:var(--font-prose);font-size:16px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
+.crow .rq{font-size:9.5px;letter-spacing:.1em;color:var(--muted);text-align:right;white-space:nowrap}
+.crow .rq.none{opacity:.35}
+.crow .rmeta{grid-column:2 / span 2;display:flex;align-items:center;gap:8px;font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--beige-dim)}
+.crow .rmeta .w{color:var(--muted)}
+.crow[data-rar="uncommon"]{--rowc:var(--cyan)}.crow[data-rar="uncommon"] .rn{color:var(--cyan-hot)}.crow[data-rar="uncommon"] .ri{color:var(--cyan)}
+.crow[data-rar="rare"]{--rowc:var(--cyan-hot)}.crow[data-rar="rare"] .rn{color:var(--cyan-hot);text-shadow:0 0 9px rgba(77,214,255,.4)}.crow[data-rar="rare"] .ri{color:var(--cyan-hot)}
+.crow[data-rar="quest"]{--rowc:var(--violet)}.crow[data-rar="quest"] .rn{color:var(--violet-hot)}.crow[data-rar="quest"] .ri{color:var(--violet)}
+.list-none{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-family:var(--font-mono);color:var(--muted);text-align:center;padding:0 18px}
+.list-none .p{font-size:11px;letter-spacing:.34em;text-transform:uppercase}
+.list-none .h{font-size:8.5px;letter-spacing:.2em;color:var(--beige-dim);text-transform:uppercase;line-height:1.6}
+
+/* ---------- LOAD / COIN accordion ---------- */
+.loadacc{flex:0 0 auto;position:relative;--cut:11px;margin-bottom:9px}
+.loadacc .a-frame{position:absolute;inset:0;background:rgba(212,191,125,.55);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+.loadacc .a-inner{position:relative;margin:1.5px;background:linear-gradient(180deg,#151515,#0d0d0d);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));display:flex;flex-direction:column;overflow:hidden}
+.loadacc.open .a-frame{background:var(--cyan)}
+.acc-head{flex:0 0 auto;height:52px;display:grid;grid-template-columns:auto auto 1fr auto auto;align-items:center;gap:10px;padding:0 13px;background:transparent;border:0;cursor:pointer;text-align:left;-webkit-tap-highlight-color:transparent}
+.acc-head .ah-num{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.24em;color:var(--cyan)}
+.acc-head .ah-title{font-family:var(--font-mono);font-size:10px;letter-spacing:.3em;color:var(--beige);text-transform:uppercase}
+.loadacc.open .acc-head .ah-title{color:var(--cyan-hot)}
+.acc-head .ah-read{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.08em;color:var(--cyan-hot);white-space:nowrap}
+.acc-head .ah-read .u{color:var(--beige-dim);font-size:8px;letter-spacing:.18em;margin-left:3px}
+.acc-head .ah-chev{color:var(--beige);font-size:11px;transition:transform 240ms cubic-bezier(.2,.7,.2,1)}
+.loadacc.open .acc-head .ah-chev{transform:rotate(180deg);color:var(--cyan)}
+.mini-bar{position:relative;height:5px;border:1px solid rgba(212,191,125,.7);background:rgba(0,0,0,.55);min-width:70px}
+.mini-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));box-shadow:0 0 6px rgba(0,166,214,.5);transition:width 320ms cubic-bezier(.2,.7,.2,1)}
+.acc-body{max-height:0;overflow:hidden;transition:max-height 300ms cubic-bezier(.2,.7,.2,1)}
+.loadacc.open .acc-body{max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.acc-pad{padding:2px 14px 15px;border-top:1px solid rgba(212,191,125,.22)}
+.sub-head{font-family:var(--font-mono);font-size:9px;letter-spacing:.26em;color:var(--cyan);text-transform:uppercase;display:flex;align-items:center;gap:8px;padding:13px 0 7px}
+.sub-head::after{content:"";flex:1;height:1px;background:rgba(0,166,214,.25)}
+.burden-readout{display:flex;align-items:baseline;gap:6px;font-family:var(--font-mono);margin:2px 0 8px}
+.burden-readout .cur{font-size:32px;font-weight:500;color:var(--cyan-hot);line-height:1;text-shadow:0 0 14px rgba(0,166,214,.4)}
+.burden-readout .slash{font-size:17px;color:var(--beige-dim)}
+.burden-readout .max{font-size:18px;color:var(--muted)}
+.burden-readout .unit{font-size:10px;color:var(--cyan);letter-spacing:.18em}
+.burden-readout .state{margin-left:auto;font-size:8.5px;letter-spacing:.2em;color:var(--beige);text-transform:uppercase;align-self:flex-end}
+.burden-bar{position:relative;height:8px;border:1px solid var(--beige);background:rgba(0,0,0,.5);margin:3px 0 2px}
+.burden-bar .fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));box-shadow:0 0 8px rgba(0,166,214,.5);transition:width 320ms cubic-bezier(.2,.7,.2,1)}
+.burden-bar .tick{position:absolute;top:-3px;bottom:-3px;width:1px;background:rgba(212,191,125,.7)}
+.burden-ticks{position:relative;height:13px;font-family:var(--font-mono);font-size:7.5px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.burden-ticks span{position:absolute;transform:translateX(-50%);top:3px}
+.burden-note{margin-top:10px;font-family:var(--font-prose);font-style:italic;font-size:14px;line-height:1.45;color:var(--muted);text-wrap:pretty}
+.coin-row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:4px}
+.coin-badge{--cut:5px;position:relative;border:1px solid var(--beige-dim);background:rgba(0,0,0,.35);padding:8px 2px;display:flex;flex-direction:column;align-items:center;gap:4px;clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+.coin-badge .ci{width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:8px;line-height:1}
+.coin-badge .cval{font-family:var(--font-mono);font-size:11.5px;font-weight:500;color:var(--text);line-height:1}
+.coin-badge .clab{font-family:var(--font-mono);font-size:6.5px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.coin-badge.pt{border-color:rgba(212,191,125,.6)}.coin-badge.pt .ci{border:1px solid var(--beige);color:var(--beige)}
+.coin-badge.gp{border-color:rgba(212,191,125,.6)}.coin-badge.gp .ci{background:var(--beige);color:#1d1d1d}
+.coin-badge.ep{border-color:rgba(0,166,214,.4)}.coin-badge.ep .ci{border:1px solid var(--cyan-dim);color:var(--cyan)}
+.coin-badge.sp{border-color:rgba(170,170,170,.45)}.coin-badge.sp .ci{border:1px solid var(--muted);color:var(--muted)}
+.coin-badge.cp{border-color:rgba(138,122,74,.55)}.coin-badge.cp .ci{border:1px solid var(--beige-dim);color:var(--beige-dim)}
+.coin-total{margin-top:10px;font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:7px}
+.coin-total .v{color:var(--beige)}
+.coin-total .approx{color:var(--beige-dim)}
+.stow-log{margin-top:13px;padding-top:11px;border-top:1px dashed rgba(212,191,125,.22);font-family:var(--font-mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--beige-dim);display:flex;align-items:center;gap:7px;line-height:1.5}
+.stow-log .acc-i{color:var(--cyan)}
+.sys-foot{margin-top:9px;display:flex;flex-wrap:wrap;gap:5px 12px;font-family:var(--font-mono);font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.sys-foot .k{color:var(--beige)}
+.sys-foot .v{color:var(--cyan)}
+.sys-foot .dot{width:5px;height:5px;border-radius:50%;background:var(--cyan);box-shadow:0 0 7px rgba(0,166,214,.7);display:inline-block;margin-right:4px}
+
+/* ---------- bottom: Equipment sub-strip + tab bar ---------- */
+.subnav{position:relative;z-index:60;flex:0 0 auto;height:var(--sub-h);display:flex;align-items:center;gap:6px;padding:0 10px;background:linear-gradient(to bottom,rgba(13,19,22,.95),rgba(16,16,16,.95));border-top:1px solid rgba(0,166,214,.35)}
+.subnav .sn-lab{font-family:var(--font-mono);font-size:7.5px;letter-spacing:.2em;color:var(--beige-dim);text-transform:uppercase;flex:0 0 auto}
+.sub-btn{flex:1 1 0;height:24px;background:rgba(0,0,0,.35);border:1px solid rgba(0,166,214,.3);color:var(--muted);font-family:var(--font-mono);font-size:8px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px);-webkit-tap-highlight-color:transparent}
+.sub-btn i{font-size:9px}
+.sub-btn.on{color:var(--cyan-hot);border-color:var(--cyan);background:radial-gradient(120% 90% at 50% 60%,rgba(0,166,214,.2),transparent 60%),linear-gradient(180deg,#16252b,#0f1b21);box-shadow:inset 0 0 16px rgba(0,166,214,.28)}
+
+.tabbar{position:relative;z-index:60;flex:0 0 auto;height:calc(var(--tab-h) + var(--home-h));padding-bottom:var(--home-h);display:flex;background:linear-gradient(to top,rgba(12,12,12,.98),rgba(22,22,22,.94));border-top:1px solid var(--beige);box-shadow:0 -1px 0 rgba(212,191,125,.15),0 -10px 24px -10px rgba(0,0,0,.7)}
+.tabbar::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 4px);mix-blend-mode:overlay}
+.tab{position:relative;flex:1 1 0;background:transparent;border:0;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--muted);font-family:var(--font-mono);-webkit-tap-highlight-color:transparent;min-height:44px}
+.tab i{font-size:17px;color:var(--beige);transition:color 160ms ease,text-shadow 160ms ease}
+.tab span{font-size:7.5px;letter-spacing:.16em;text-transform:uppercase}
+.tab.on i{color:var(--cyan-hot);text-shadow:0 0 12px rgba(0,166,214,.9)}
+.tab.on span{color:var(--cyan-hot)}
+.tab.on::before{content:"";position:absolute;top:0;left:22%;right:22%;height:2px;background:var(--cyan);box-shadow:0 0 10px var(--cyan),0 0 20px rgba(0,166,214,.6)}
+.tab:active i{color:#fff}
+
+/* ---------- item popup: bottom sheet inside the device ---------- */
+.imodal{position:absolute;inset:0;z-index:200;display:none;align-items:flex-end}
+.imodal.open{display:flex}
+.im-scrim{position:absolute;inset:0;background:rgba(10,10,10,.78);animation:fadeIn 200ms ease forwards}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.im-panel{--cut:18px;position:relative;width:100%;max-height:78%;display:flex;animation:sheetIn 300ms cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes sheetIn{from{transform:translateY(70px);opacity:0}to{transform:translateY(0);opacity:1}}
+.im-panel::before{content:"";position:absolute;inset:0;background:var(--beige);clip-path:polygon(var(--cut) 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,0 100%,0 var(--cut));filter:drop-shadow(0 -14px 40px rgba(0,0,0,.7))}
+.im-panel .pn-gap{position:absolute;inset:4px;background:#0a0a0a;clip-path:polygon(calc(var(--cut) - 3px) 0,calc(100% - var(--cut) + 3px) 0,100% calc(var(--cut) - 3px),100% 100%,0 100%,0 calc(var(--cut) - 3px))}
+.im-panel .pn-line{position:absolute;inset:2.5px;background:var(--beige);opacity:.5;clip-path:polygon(calc(var(--cut) - 2px) 0,calc(100% - var(--cut) + 2px) 0,100% calc(var(--cut) - 2px),100% 100%,0 100%,0 calc(var(--cut) - 2px))}
+.im-inner{position:relative;flex:1;min-width:0;margin:6px;background:radial-gradient(120% 90% at 50% 0%,rgba(0,166,214,.08),transparent 55%),linear-gradient(180deg,#151515,#0d0d0d);clip-path:polygon(calc(var(--cut) - 5px) 0,calc(100% - var(--cut) + 5px) 0,100% calc(var(--cut) - 5px),100% 100%,0 100%,0 calc(var(--cut) - 5px));display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.im-inner::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;background:repeating-linear-gradient(to bottom,rgba(0,166,214,.03) 0px,rgba(0,166,214,.03) 1px,transparent 1px,transparent 4px);mix-blend-mode:screen;opacity:.6}
+.im-grab{position:relative;z-index:4;flex:0 0 auto;display:flex;align-items:center;justify-content:center;height:22px;cursor:grab;touch-action:none}
+.im-grab::after{content:"";width:52px;height:3px;background:rgba(212,191,125,.5);border-radius:2px}
+.im-head{position:relative;z-index:3;flex:0 0 auto;display:flex;align-items:center;gap:11px;padding:6px 14px 12px;border-bottom:1px solid rgba(212,191,125,.32)}
+.im-head::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:rgba(0,166,214,.35);box-shadow:0 0 9px rgba(0,166,214,.3)}
+.im-crystal{flex:0 0 auto;width:40px;height:40px;display:flex;align-items:center;justify-content:center;color:var(--cyan-hot);font-size:18px;border:1px solid rgba(0,166,214,.5);background:radial-gradient(120% 90% at 50% 40%,rgba(0,166,214,.18),transparent 65%),rgba(0,0,0,.45);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)}
+.im-titles{display:flex;flex-direction:column;gap:6px;min-width:0}
+.im-name{font-family:var(--font-display);font-weight:600;font-size:16px;letter-spacing:.08em;color:var(--text);text-transform:uppercase;line-height:1.1}
+.im-panel[data-rar="uncommon"] .im-name,.im-panel[data-rar="rare"] .im-name{color:var(--cyan-hot);text-shadow:0 0 14px rgba(0,166,214,.25)}
+.im-panel[data-rar="quest"] .im-name{color:var(--violet-hot)}
+.im-tags{display:flex;flex-wrap:wrap;gap:5px}
+.im-tag{font-family:var(--font-mono);font-size:7.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--beige);border:1px solid rgba(212,191,125,.45);padding:3px 7px;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+.im-tag.acc{color:var(--cyan);border-color:rgba(0,166,214,.5)}
+.im-tag.quest{color:var(--violet-hot);border-color:rgba(122,106,140,.7)}
+.im-close{margin-left:auto;flex:0 0 auto;width:44px;height:44px;background:rgba(0,0,0,.4);border:1px solid rgba(212,191,125,.4);color:var(--beige);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+.im-body{position:relative;z-index:2;flex:1 1 auto;min-height:0;overflow-y:auto;padding:14px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.im-body::-webkit-scrollbar{width:4px}
+.im-body::-webkit-scrollbar-thumb{background:rgba(0,166,214,.4)}
+.im-facts{display:grid;grid-template-columns:repeat(2,1fr);gap:7px 14px;padding-bottom:12px;border-bottom:1px dashed rgba(212,191,125,.25)}
+.im-facts .f{display:flex;flex-direction:column;gap:3px;font-family:var(--font-mono);font-size:10px}
+.im-facts .f .k{color:var(--beige-dim);font-size:8px;letter-spacing:.18em;text-transform:uppercase}
+.im-facts .f .v{color:var(--text)}
+.im-desc{margin-top:12px;font-family:var(--font-prose);font-style:italic;font-size:15px;line-height:1.55;color:var(--muted);text-wrap:pretty}
+.im-sec{margin-top:15px}
+.im-sec-h{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.26em;color:var(--cyan);text-transform:uppercase;display:flex;align-items:center;gap:8px;padding-bottom:7px}
+.im-sec-h::after{content:"";flex:1;height:1px;background:rgba(0,166,214,.22)}
+.im-fx{display:flex;flex-direction:column;gap:5px}
+.im-fx .row{display:flex;flex-wrap:wrap;align-items:center;gap:4px 9px;font-family:var(--font-mono);font-size:9.5px;color:var(--text);background:rgba(0,0,0,.28);border-left:2px solid var(--cyan);padding:7px 9px}
+.im-fx .row .k{color:var(--beige);font-size:8px;letter-spacing:.18em;text-transform:uppercase;min-width:62px}
+.im-fx .row .s{margin-left:auto;color:var(--muted);font-size:8px;letter-spacing:.16em;text-transform:uppercase}
+.im-actions{position:relative;z-index:3;flex:0 0 auto;display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px 22px;border-top:1px solid rgba(212,191,125,.28)}
+.ia{--cut:8px;position:relative;background:transparent;border:0;padding:0;height:50px;cursor:pointer;font-family:var(--font-mono);flex:1 1 132px;-webkit-tap-highlight-color:transparent}
+.ia .af{position:absolute;inset:0;background:var(--cyan);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+.ia .ai{position:absolute;inset:1.5px;background:linear-gradient(180deg,#141a1d,#0e1316);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));display:flex;align-items:center;justify-content:center;gap:7px;color:var(--cyan-hot);font-size:9px;letter-spacing:.2em;text-transform:uppercase}
+.ia:active .ai{color:#fff;box-shadow:inset 0 0 20px rgba(0,166,214,.3)}
+.ia.ghost .af{background:rgba(212,191,125,.45)}
+.ia.ghost .ai{color:var(--beige)}
+.ia.drop .af{background:rgba(185,58,58,.55)}
+.ia.drop .ai{color:var(--danger)}
+.ia[disabled]{cursor:not-allowed;opacity:.42}
+.stow-pick{flex:1 1 100%;height:46px;background:rgba(0,0,0,.45);border:1px solid rgba(212,191,125,.35);color:var(--text);font-family:var(--font-mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;padding:0 10px;cursor:pointer;outline:none}
+.stow-pick:focus{border-color:var(--cyan)}
+.im-warn{padding:0 14px 10px;font-family:var(--font-mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--danger-hot);display:none}
+.im-warn.show{display:block}
+
+/* toast for nav taps */
+.toast{position:absolute;left:50%;bottom:calc(var(--tab-h) + var(--sub-h) + var(--home-h) + 14px);transform:translate(-50%,8px);z-index:150;padding:9px 14px;background:rgba(8,8,8,.95);border:1px solid var(--beige);font-family:var(--font-mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--beige);opacity:0;pointer-events:none;transition:opacity 180ms ease,transform 180ms ease;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);white-space:nowrap}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast .acc-i{color:var(--cyan)}
+
+/* real phones: drop the desk + bezel, go full-bleed */
+@media (max-width:520px){
+  .desk{display:block}
+  .device{width:100%;height:100%;border-radius:0;padding:0;box-shadow:none;background:var(--bg);transform:none!important}
+  .screen{border-radius:0}
+  .island{display:none}
+  .home{display:none}
+  .sysbar{display:none}
+  .tabbar{padding-bottom:max(var(--home-h),env(safe-area-inset-bottom))}
+}
+</style>
+</head>
+<body class="coarse">
+
+<div class="desk">
+<div class="device" id="device">
+  <div class="screen" id="screen">
+    <div class="stage-bg"></div>
+    <div class="island"></div>
+
+    <div class="sysbar">
+      <span id="sys-time">9:41</span>
+      <span class="rgt"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-three-quarters"></i></span>
+    </div>
+
+    <header class="topbar">
+      <div class="tb-id">
+        <div class="tb-name">Ros Chrisstone<span class="cursor">█</span></div>
+        <div class="tb-sub">LVL 08<span class="sep">/</span>Fighter<span class="sep">/</span>Castella-08</div>
+      </div>
+      <div class="tb-stats">
+        <div class="tb-chip load"><span class="v" id="tb-load">59.2</span><span class="k">Burden</span></div>
+        <div class="tb-chip"><span class="v">1,247</span><span class="k">Gold</span></div>
+      </div>
+    </header>
+
+    <main class="inv">
+      <div class="col-header">
+        <span class="ch-num">01</span>
+        <span class="ch-title">Carried</span>
+        <span class="ch-meta" id="carried-meta">On Person <span class="dim">·</span> <span class="acc">Within Reach</span></span>
+      </div>
+
+      <section class="region cargo" aria-label="Carried items">
+        <div class="r-frame"></div>
+        <div class="r-gap"></div>
+        <div class="r-line"></div>
+        <div class="r-inner">
+          <span class="r-corner tl"></span>
+          <span class="r-corner br"></span>
+          <div class="cargo-pad">
+            <div class="seg" id="seg" role="tablist" aria-label="Container"></div>
+            <div class="ctr-line" id="ctr-line"></div>
+            <div class="util-bar" id="util-bar"></div>
+            <div class="pane" id="pane"></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="loadacc" id="acc">
+        <div class="a-frame"></div>
+        <div class="a-inner">
+          <button class="acc-head" id="acc-head" aria-expanded="false" aria-controls="acc-body">
+            <span class="ah-num">02</span>
+            <span class="ah-title">Load / Coin</span>
+            <span class="mini-bar" aria-hidden="true"><i id="mini-fill" style="width:0%"></i></span>
+            <span class="ah-read"><span id="mini-cur">0</span><span class="u">/ 120 lb</span></span>
+            <span class="ah-chev"><i class="fa-solid fa-chevron-up"></i></span>
+          </button>
+          <div class="acc-body" id="acc-body">
+            <div class="acc-pad">
+              <div class="sub-head">Burden Manifest</div>
+              <div class="burden-readout">
+                <span class="cur" id="bd-cur">0</span><span class="slash">/</span><span class="max">120</span><span class="unit">lb</span>
+                <span class="state" id="bd-state">Unencumbered</span>
+              </div>
+              <div class="burden-bar">
+                <div class="fill" id="bd-fill" style="width:0%"></div>
+                <div class="tick" style="left:50%"></div>
+                <div class="tick" style="left:75%"></div>
+              </div>
+              <div class="burden-ticks"><span style="left:50%">Enc · 60</span><span style="left:75%">Heavy · 90</span></div>
+              <div class="burden-note">Weight slows the march; it never stops a hand from closing on a thing. Past sixty pounds the Castellan stride shortens — past ninety, it drags.</div>
+
+              <div class="sub-head">Coin Purse</div>
+              <div class="coin-row">
+                <div class="coin-badge pt"><span class="ci">PT</span><span class="cval">12</span><span class="clab">Plat</span></div>
+                <div class="coin-badge gp"><span class="ci">GP</span><span class="cval">1,247</span><span class="clab">Gold</span></div>
+                <div class="coin-badge ep"><span class="ci">EP</span><span class="cval">4</span><span class="clab">Elec</span></div>
+                <div class="coin-badge sp"><span class="ci">SP</span><span class="cval">88</span><span class="clab">Silv</span></div>
+                <div class="coin-badge cp"><span class="ci">CP</span><span class="cval">152</span><span class="clab">Copp</span></div>
+              </div>
+              <div class="coin-total"><span class="approx">≈</span><span class="v">1,310 gp</span><span>Total Value Carried</span></div>
+
+              <div class="stow-log" id="stow-log"><span class="acc-i">◇</span> Manifest synced · no pending transfers</div>
+              <div class="sys-foot">
+                <span><span class="dot"></span><span class="k">Link</span> <span class="v">Stable</span></span>
+                <span><span class="k">Shard</span> <span class="v">98.2%</span></span>
+                <span><span class="k">Sync</span> <span class="v">0.07 ms</span></span>
+                <span><span class="k">Codex</span> <span class="v">v2.4.7</span></span>
+                <span id="save-auto"><span class="k">Save</span> <span class="v">00:44</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <nav class="subnav" aria-label="Equipment sub-screens">
+      <span class="sn-lab">01 ◇</span>
+      <button class="sub-btn" data-nav="equipment"><i class="fa-solid fa-khanda"></i>Loadout</button>
+      <button class="sub-btn on" data-nav="inventory" aria-current="page"><i class="fa-solid fa-bag-shopping"></i>Inventory</button>
+      <button class="sub-btn" data-nav="stat-panel"><i class="fa-solid fa-chart-simple"></i>Stats</button>
+    </nav>
+
+    <nav class="tabbar" aria-label="Primary">
+      <button class="tab on" data-nav="equipment" aria-current="page"><i class="fa-solid fa-khanda"></i><span>Equip</span></button>
+      <button class="tab" data-nav="lore"><i class="fa-solid fa-book-open"></i><span>Lore</span></button>
+      <button class="tab" data-nav="spellbook"><i class="fa-solid fa-scroll"></i><span>Spells</span></button>
+      <button class="tab" data-nav="character"><i class="fa-solid fa-user-shield"></i><span>Char</span></button>
+      <button class="tab" data-nav="journal"><i class="fa-solid fa-clipboard"></i><span>Journal</span></button>
+    </nav>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="imodal" id="imodal" role="dialog" aria-modal="true" aria-label="Item detail">
+      <div class="im-scrim" data-close="1"></div>
+      <div class="im-panel" id="im-panel" data-rar="common">
+        <div class="pn-gap"></div>
+        <div class="pn-line"></div>
+        <div class="im-inner">
+          <div class="im-grab" id="im-grab"></div>
+          <div class="im-head" id="im-head"></div>
+          <div class="im-body" id="im-body"></div>
+          <div class="im-warn" id="im-warn"></div>
+          <div class="im-actions" id="im-actions"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div class="sweep" id="sweep"></div>
+  </div>
+  <div class="home"></div>
+</div>
+</div>
+
+<script>
+/* ============================================================
+   Data is identical to the desktop Inventory screen.
+   ============================================================ */
+const CAT = {
+  weapon:{corner:'fa-khanda',label:'Weapon'}, ammo:{corner:'fa-location-arrow',label:'Ammunition'},
+  armor:{corner:'fa-shield-halved',label:'Armor'}, consumable:{corner:'fa-flask-vial',label:'Consumable'},
+  tool:{corner:'fa-screwdriver-wrench',label:'Tool'}, quest:{corner:'fa-scroll',label:'Quest'},
+  misc:{corner:'fa-circle-dot',label:'Misc'},
+};
+const CAT_ORDER = ['weapon','ammo','armor','consumable','tool','quest','misc'];
+const RAR_LABEL = { common:'Common', uncommon:'Uncommon', rare:'Rare', quest:'Quest' };
+
+const EQUIPPED = ['backpack','cache'];
+const UNOWNED  = ['sack'];
+
+const CONTAINERS = {
+  person:   { label:'On Person',    icon:'fa-hand-fist',     mode:'grid' },
+  backpack: { label:'Backpack',     icon:'fa-bag-shopping',  mode:'list' },
+  cache:    { label:'Remote Cache', icon:'fa-database',      mode:'list', weightless:true, sys:'Sync 0.07 ms' },
+  quiver:   { label:'Quiver',       icon:'fa-arrow-up-long', mode:'inline', accepts:['ammo'], cap:20, unit:'Arrows', carrier:'p17' },
+  sack:     { label:'Sack',         icon:'fa-sack-xmark',    mode:'list', locked:true, owned:false },
+};
+
+const COLS = 5, ROWS = 4;
+
+const PERSON = [
+  { id:'p1', name:'Hand Crossbow', col:1, row:1, w:2, h:1, cat:'weapon', rar:'common', icon:'fa-crosshairs',
+    wt:3, value:75, stat:'1d6 piercing', equipSlot:'Off Hand',
+    desc:"A compact, spring-loaded crossbow for close quarters. Ros keeps it belted for the rare moment a blade won't reach." },
+  { id:'p2', name:'Healing Potion', col:3, row:1, w:1, h:1, cat:'consumable', rar:'uncommon', icon:'fa-flask', qty:3,
+    wt:0.5, value:50, stat:'Restores 2d4+2',
+    desc:"Ruby fluid in a stoppered vial. Restores vitality the instant it touches the tongue. Three ride in the belt loops where a hand finds them without looking.",
+    fx:[{ k:'Heal', v:'2d4 + 2', s:'Instant' }] },
+  { id:'p3', name:'Antitoxin', col:4, row:1, w:1, h:1, cat:'consumable', rar:'uncommon', icon:'fa-vial', qty:1,
+    wt:0, value:50, stat:'Adv. vs. poison',
+    desc:"A bitter draught that grants advantage on saves against poison for one hour. The last of the field-kit's supply.",
+    fx:[{ k:'Save', v:'Advantage vs. poison', s:'1 hour' }] },
+  { id:'p4', name:'Oil Flask', col:5, row:1, w:1, h:1, cat:'consumable', rar:'common', icon:'fa-oil-can', qty:2,
+    wt:1, value:1, stat:'1d5 fire (thrown)',
+    desc:"Lamp oil in a clay flask — fuel for the lantern, or a thrown improvisation when something needs to burn." },
+  { id:'p5', name:'Iron Rations', col:1, row:2, w:1, h:1, cat:'consumable', rar:'common', icon:'fa-drumstick-bite', qty:3,
+    wt:1, value:5, stat:'1 day each',
+    desc:"Dried meat, hardtack, and salt enough to keep one soldier moving for a day. Three days of marching in the belt pouch." },
+  { id:'p6', name:'Waterskin', col:2, row:2, w:1, h:2, cat:'tool', rar:'common', icon:'fa-bottle-water',
+    wt:4, value:2, stat:'4 pints',
+    desc:"A full skin of water — four pints, near enough. The leather is patched at the seam where a thorn found it." },
+  { id:'p7', name:'Tinderbox', col:3, row:2, w:1, h:1, cat:'tool', rar:'common', icon:'fa-fire-flame-simple',
+    wt:1, value:5, stat:'1 min. to light',
+    desc:"Flint, steel, and tinder in a tin. A minute's work to coax a flame on a still night." },
+  { id:'p8', name:'Whetstone', col:4, row:2, w:1, h:1, cat:'tool', rar:'common', icon:'fa-cube',
+    wt:1, value:1, stat:'Edge upkeep',
+    desc:"A worn block of grit-stone. Ros draws an edge across it most evenings, more from habit than need." },
+  { id:'p9', name:'Signal Whistle', col:5, row:2, w:1, h:1, cat:'tool', rar:'common', icon:'fa-bell',
+    wt:0, value:1, stat:'Carries 300 ft',
+    desc:"A bone whistle on a leather cord. Two short blasts means fall back; one long blast, all clear." },
+  { id:'p10', name:'Unknown Shard Fragment', col:1, row:3, w:1, h:1, cat:'quest', rar:'quest', icon:'fa-gem', shimmer:true,
+    wt:0.2, value:0, stat:'Unbound',
+    desc:"A sliver of something that hums when no one is listening. It is not soulbound — not yet — and the G.U.I.D.E. socket grows warm whenever it is near.",
+    fx:[{ k:'Resonance', v:'Socket warms within 5 ft', s:'Passive' }] },
+  { id:'p11', name:'Brettany Guard Insignia', col:3, row:3, w:1, h:1, cat:'quest', rar:'quest', icon:'fa-certificate',
+    wt:0, value:0, stat:'Faction token',
+    desc:"A tarnished brass sigil of the fallen Brettany Guard. To the right person, in the right city, it still opens doors." },
+  { id:'p12', name:'Sealed Letter (Home)', col:4, row:3, w:1, h:1, cat:'misc', rar:'common', icon:'fa-envelope',
+    wt:0, value:0, stat:'Unopened',
+    desc:"Folded parchment, sealed in pale wax. Addressed in a careful hand to someone in Castella. Ros has not broken it open." },
+  { id:'p13', name:'Castellan Silver Token', col:5, row:3, w:1, h:1, cat:'misc', rar:'common', icon:'fa-coins', qty:3,
+    wt:0, value:10, stat:'Marker of favor',
+    desc:"Stamped silver chits used as markers of favor among the Castellan ranks. Three jingle in the bottom of the pouch." },
+  { id:'p14', name:'Chalk Pouch', col:1, row:4, w:1, h:1, cat:'misc', rar:'common', icon:'fa-bag-shopping',
+    wt:0, value:1, stat:'Marks stone',
+    desc:"A small sack of soft chalk sticks. For marking turns in the dark, or counting the days on a cell wall." },
+  { id:'p15', name:'Coil of Wire', col:2, row:4, w:1, h:1, cat:'tool', rar:'common', icon:'fa-circle-notch',
+    wt:1, value:5, stat:'10 ft brass',
+    desc:"A loop of thin brass wire — for snares, repairs, or rigging a tripline across a doorway." },
+  { id:'p16', name:'Mess Kit', col:3, row:4, w:1, h:1, cat:'tool', rar:'common', icon:'fa-utensils',
+    wt:1, value:2, stat:'Cup · plate · irons',
+    desc:"A tin cup, plate, and folding utensils that nest into one another. Dented, but it has fed three campaigns." },
+  { id:'p17', name:'Castellan Quiver', col:4, row:4, w:2, h:1, cat:'tool', rar:'common', icon:'fa-arrow-up-long',
+    wt:1, value:12, stat:'Holds 20 arrows', equipSlot:'Belt', containerId:'quiver',
+    desc:"Stiffened leather, cut for a hip draw. Twenty shafts fit the throat; fourteen are in it. Ros has not been anywhere lately that sells arrows." },
+];
+
+const BACKPACK = [
+  { id:'b1', name:'Padded Gambeson', cat:'armor', rar:'common', icon:'fa-shirt', wt:6.5, value:50, stat:'AC 11 + DEX', equipSlot:'Armor',
+    desc:"A quilted underlayer, oiled against rust where it meets the plate. Worth its weight if the Brettany harness is ever breached." },
+  { id:'b2', name:'Backup Longsword', cat:'weapon', rar:'common', icon:'fa-khanda', wt:3, value:15, stat:'1d8 slashing', equipSlot:'Main Hand',
+    desc:"A serviceable arming sword, edge kept keen on the whetstone. Lashed along the pack's spine for the day a Castellan blade finally fails." },
+  { id:'b3', name:'Hempen Rope, 25 ft', cat:'tool', rar:'common', icon:'fa-link', wt:5, value:1, stat:'Holds 600 lb',
+    desc:"Coarse hemp, coiled and lashed. It has held a body's weight over a ravine more than once." },
+  { id:'b4', name:'Bedroll', cat:'tool', rar:'common', icon:'fa-mattress-pillow', wt:4, value:1, stat:'Camp gear',
+    desc:"Oilcloth and wool, rolled tight. Smells of every campfire it has ever sat beside." },
+  { id:'b5', name:'Hooded Lantern', cat:'tool', rar:'common', icon:'fa-fire', wt:2, value:5, stat:'30 ft bright',
+    desc:"A shuttered lantern that throws a thirty-foot pool of light, or a dim hood when the dark is best left undisturbed." },
+  { id:'b6', name:'Oil Flask', cat:'consumable', rar:'common', icon:'fa-oil-can', qty:3, wt:1, value:1, stat:'1d5 fire (thrown)',
+    desc:"Reserve fuel for the lantern. Three flasks, straw-packed against the pack wall." },
+  { id:'b7', name:'Pressed Rations', cat:'consumable', rar:'common', icon:'fa-drumstick-bite', qty:4, wt:1, value:5, stat:'1 day each',
+    desc:"Four days of hard tack and salted fish, wrapped in waxcloth against the coast damp." },
+  { id:'b8', name:'Healing Potion', cat:'consumable', rar:'uncommon', icon:'fa-flask', qty:2, wt:0.5, value:50, stat:'Restores 2d4+2',
+    desc:"The deep reserve — two vials kept in the pack so the belt supply is never the last of it.",
+    fx:[{ k:'Heal', v:'2d4 + 2', s:'Instant' }] },
+  { id:'b9', name:'Antitoxin', cat:'consumable', rar:'uncommon', icon:'fa-vial', wt:0, value:50, stat:'Adv. vs. poison',
+    desc:"A spare draught, stoppered and waxed." },
+  { id:'b10', name:"Necromancer's Tome", cat:'quest', rar:'quest', icon:'fa-book-skull', wt:4, value:0, stat:'Unreadable',
+    desc:"A leather-bound volume recovered from the southern thicket. The pages resist being read; the ink seems to drink the lamplight rather than reflect it.",
+    fx:[{ k:'Anomaly', v:'Ink absorbs light', s:'Unresolved' }] },
+  { id:'b11', name:"Thieves' Tools", cat:'tool', rar:'uncommon', icon:'fa-screwdriver-wrench', wt:1, value:25, stat:'DEX check',
+    desc:"Picks, tension wrenches and a mirror on a folding arm. Not Ros's trade, but the last man to carry them is not using them." },
+  { id:'b12', name:"Healer's Kit", cat:'tool', rar:'common', icon:'fa-kit-medical', qty:1, wt:3, value:5, stat:'10 uses',
+    desc:"Bandage, needle, catgut and a tin of tallow salve. Ten uses left by the notches scratched in the lid." },
+  { id:'b13', name:'Crossbow Bolts', cat:'weapon', rar:'common', icon:'fa-location-arrow', qty:20, wt:0.075, value:1, stat:'Ammunition',
+    desc:"A case of twenty, fletched in Castellan grey." },
+  { id:'b14', name:'Grappling Hook', cat:'tool', rar:'common', icon:'fa-anchor', wt:2, value:2, stat:'Pairs with rope',
+    desc:"Three iron flukes on a welded ring. Bent slightly out of true from a harbour wall." },
+  { id:'b15', name:'Chalk Sticks', cat:'misc', rar:'common', icon:'fa-pen', qty:6, wt:0, value:1, stat:'Marks stone',
+    desc:"Six soft sticks in a paper sleeve — resupply for the belt pouch." },
+  { id:'b16', name:'Wax Seal & Signet', cat:'misc', rar:'common', icon:'fa-stamp', wt:0, value:5, stat:'Castellan mark',
+    desc:"A brass signet and a block of oxblood wax. Field dispatches must still look official." },
+  { id:'b17', name:'Spare Bowstring', cat:'misc', rar:'common', icon:'fa-slash', qty:2, wt:0, value:1, stat:'Crossbow fit',
+    desc:"Waxed cord in an oilcloth twist, kept dry against the coast air." },
+  { id:'b18', name:'Sewing Kit', cat:'tool', rar:'common', icon:'fa-hands-bound', wt:0, value:1, stat:'Field repair',
+    desc:"Needle, thread and a scrap of the old surcoat for patches." },
+  { id:'b19', name:'Map Case — Brettany Coast', cat:'quest', rar:'quest', icon:'fa-map', wt:0.5, value:0, stat:'3 charts',
+    desc:"A brass tube holding three charts of a coastline that no longer has the towns drawn on it." },
+  { id:'b20', name:'Soap Cake', cat:'misc', rar:'common', icon:'fa-soap', wt:0, value:1, stat:'Half used',
+    desc:"Lye and ash, half worn away. A small dignity." },
+  { id:'b21', name:'Empty Vial', cat:'misc', rar:'common', icon:'fa-vial-circle-check', qty:3, wt:0, value:1, stat:'Stoppered',
+    desc:"Three clean vials. Something is always worth sampling." },
+  { id:'b22', name:'Campaign Journal', cat:'misc', rar:'common', icon:'fa-book', wt:0.5, value:0, stat:'41 pages used',
+    desc:"Dates, names, and the odd sketch of a coast road. The last four entries are in a hand that shakes." },
+  { id:'b23', name:'Boot Nails', cat:'misc', rar:'common', icon:'fa-thumbtack', wt:0, value:1, stat:'Resole set',
+    desc:"A twist of paper holding two dozen hobnails." },
+  { id:'b24', name:'Field Splint', cat:'tool', rar:'common', icon:'fa-bone', wt:0.5, value:1, stat:'One use',
+    desc:"Two shaped laths and a roll of linen tape." },
+];
+
+const CACHE = [
+  { id:'c1', name:'Ceremonial Greatsword', cat:'weapon', rar:'rare', icon:'fa-khanda', wt:6, value:400, stat:'2d6 slashing', equipSlot:'Main Hand',
+    desc:"The parade blade of the Brettany Guard — gilt, balanced, and never once blooded. Too fine to carry, too heavy with meaning to sell.",
+    fx:[{ k:'Presence', v:'+1 to Castellan-facing checks', s:'While drawn' }] },
+  { id:'c2', name:'Brettany Standard (Furled)', cat:'quest', rar:'quest', icon:'fa-flag', wt:8, value:0, stat:'Faction relic',
+    desc:"The company colours, furled around a broken pole and tied with the cord of a dead man's cloak." },
+  { id:'c3', name:'Cask of Castellan Brandy', cat:'misc', rar:'common', icon:'fa-wine-bottle', wt:24, value:60, stat:'12 servings',
+    desc:"A small cask, wax-sealed. Currency, medicine, and apology, depending on the evening." },
+  { id:'c4', name:'Iron Strongbox', cat:'misc', rar:'common', icon:'fa-box-archive', wt:30, value:20, stat:'Locked · DC 15',
+    desc:"Banded iron with a Castellan lock. The key is not in the cache, which is either caution or an oversight." },
+  { id:'c5', name:'Siege Ledger — Brettany', cat:'quest', rar:'quest', icon:'fa-scroll', wt:3, value:0, stat:'Sealed evidence',
+    desc:"Requisitions, headcounts and the last week of supply orders. Someone signed for grain that never arrived." },
+  { id:'c6', name:'Iron Chain, 200 ft', cat:'tool', rar:'common', icon:'fa-link', wt:100, value:40, stat:'AC 19 · 10 HP',
+    desc:"Two hundred feet of chain, coiled into a drum. Weightless in the cache; ruinous the moment it leaves." },
+  { id:'c7', name:'Portable Ram', cat:'tool', rar:'common', icon:'fa-hammer', wt:35, value:4, stat:'+4 to force doors',
+    desc:"Two-hand handles, iron head. It has opened more doors than any key Ros has ever held." },
+  { id:'c8', name:'Winter Furs', cat:'armor', rar:'common', icon:'fa-mitten', qty:2, wt:9, value:25, stat:'Cold resistance', equipSlot:'Cloak',
+    desc:"Bear and oiled wool. The eastern passes are still months away, but they are coming." },
+  { id:'c9', name:"Alchemist's Supplies", cat:'tool', rar:'uncommon', icon:'fa-flask-vial', wt:8, value:50, stat:'INT check',
+    desc:"Glass, burners, and a mortar stained a colour that will not scrub out." },
+  { id:'c10', name:'Bag of Caltrops', cat:'tool', rar:'common', icon:'fa-star', qty:3, wt:2, value:1, stat:'5 ft square',
+    desc:"Three bags, each enough to salt a corridor." },
+  { id:'c11', name:'Bronze Reliquary', cat:'quest', rar:'quest', icon:'fa-box', wt:5, value:0, stat:'Sealed · warm',
+    desc:"A hand-sized bronze box with no visible seam. It is warm, and it has been warm since the thicket.",
+    fx:[{ k:'Anomaly', v:'Holds body heat indefinitely', s:'Unresolved' }] },
+  { id:'c12', name:'Shard Casing (Empty)', cat:'misc', rar:'uncommon', icon:'fa-gem', wt:0.5, value:0, stat:'Class IV socket',
+    desc:"An empty soulbond housing. The interior is scored with wear from a shard that is no longer accounted for.",
+    fx:[{ k:'Cache Note', v:'Casing reports as present · contents null', s:'Sync flag' }] },
+];
+
+const QUIVER = [
+  { id:'q1', name:'Standard Arrows', cat:'ammo', rar:'common', icon:'fa-location-arrow', qty:10, wt:0.05, value:1, stat:'1d8 piercing',
+    desc:"Ash shafts, grey fletching, Castellan issue. Ten left in the throat of the quiver." },
+  { id:'q2', name:'Barbed Arrows', cat:'ammo', rar:'common', icon:'fa-location-arrow', qty:3, wt:0.06, value:2, stat:'1d8 + bleed',
+    desc:"Reverse-barbed heads that do more coming out than going in. Three, kept separate at the back of the quiver." },
+  { id:'q3', name:'Signal Arrow', cat:'ammo', rar:'uncommon', icon:'fa-fire-flame-curved', qty:1, wt:0.1, value:15, stat:'Bright flare · 200 ft',
+    desc:"A hollow head packed with flare compound. Fired high, it burns long enough for a company to find its own line.",
+    fx:[{ k:'Signal', v:'Visible for 1 mile at night', s:'1 round' }] },
+];
+
+const STORE = { person:PERSON, backpack:BACKPACK, cache:CACHE, quiver:QUIVER, sack:[] };
+
+let active = 'person', filter = 'all', sortBy = 'name', lastMoved = null, openItem = null, openFrom = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const totalWt = it => (it.wt || 0) * (it.qty || 1);
+const fmtWt = n => n <= 0 ? '—' : (Math.round(n*10)/10).toFixed(Math.round(n*10)%10 ? 1 : 0) + ' lb';
+const fmtVal = v => v ? v.toLocaleString() + ' gp' : '—';
+const bagWeight = id => CONTAINERS[id].weightless ? 0 : STORE[id].reduce((s,it) => s + totalWt(it), 0);
+const bagCount = id => STORE[id].reduce((s,it) => s + (it.qty || 1), 0);
+const tabs = () => ['person', ...EQUIPPED.filter(id => CONTAINERS[id]), ...UNOWNED.filter(id => CONTAINERS[id])];
+
+/* ---------- switcher ---------- */
+function renderSeg() {
+  const seg = $('seg');
+  seg.innerHTML = tabs().map(id => {
+    const c = CONTAINERS[id];
+    if (c.locked) return '<button class="seg-btn locked" role="tab" aria-selected="false" data-tab="' + id + '">' +
+      '<span class="sg-frame"></span><span class="sg-inner"><i class="fa-solid ' + c.icon + '"></i>' + esc(c.label) +
+      '<span class="sg-n"><i class="fa-solid fa-lock"></i></span></span></button>';
+    return '<button class="seg-btn ' + (active === id ? 'on' : '') + '" role="tab" aria-selected="' + (active === id) + '" data-tab="' + id + '">' +
+      '<span class="sg-frame"></span><span class="sg-inner"><i class="fa-solid ' + c.icon + '"></i>' + esc(c.label) +
+      '<span class="sg-n">' + (c.cap ? bagCount(id) + '/' + c.cap : STORE[id].length) + '</span></span></button>';
+  }).join('');
+  seg.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.tab, c = CONTAINERS[id];
+    if (c.locked) {
+      if (c.owned === false) {
+        b.classList.remove('deny'); void b.offsetWidth; b.classList.add('deny');
+        logLine('<span style="color:var(--beige-dim)">Sack not carried — no container equipped in that slot</span>');
+        toast('Sack not carried');
+        return;
+      }
+      equipContainer(id); return;
+    }
+    if (active === id) return;
+    active = id; filter = 'all';
+    renderSeg(); renderPanel();
+    b.scrollIntoViewIfNeeded ? null : null;
+  }));
+}
+
+/* ---------- header line + utility bar ---------- */
+function renderHeadLines() {
+  const c = CONTAINERS[active], items = STORE[active];
+  const w = c.weightless ? 'Weightless' : fmtWt(bagWeight(active));
+  $('ctr-line').innerHTML =
+    '<span class="nm">' + esc(c.label) + '</span><span class="sep">·</span>' +
+    (c.cap ? '<span class="v">' + bagCount(active) + ' / ' + c.cap + '</span> ' + esc(c.unit || 'Held')
+           : '<span class="v">' + items.length + '</span> Items') +
+    '<span class="sep">·</span><span class="v">' + w + '</span>' +
+    (c.sys ? '<span class="sys"><span class="tick"></span>' + esc(c.sys) + '</span>' : '') +
+    (active !== 'person' ? '<button class="unequip" id="unequip-btn"><i class="fa-solid fa-link-slash"></i>Unequip</button>' : '');
+  const ub = $('unequip-btn');
+  if (ub) ub.addEventListener('click', () => unequipContainer(active));
+  $('carried-meta').innerHTML = esc(c.label) + ' <span class="dim">·</span> <span class="acc">' +
+    (c.mode === 'grid' ? 'Within Reach' : (c.weightless ? 'Off-Device' : 'Stowed')) + '</span>';
+
+  const bar = $('util-bar');
+  if (c.mode === 'grid') {
+    const used = items.reduce((s,it) => s + it.w * it.h, 0);
+    bar.innerHTML = '<span class="reach-read"><span class="k">Reach</span> Belt <span class="k">·</span> Pockets <span class="k">·</span> Quick</span>' +
+      '<span class="reach-read free"><span class="k">Cells</span> <span class="acc">' + used + ' / ' + (COLS*ROWS) + '</span></span>';
+  } else {
+    const counts = {};
+    items.forEach(it => { counts[it.cat] = (counts[it.cat] || 0) + 1; });
+    const chip = (key,label,n) => '<button class="chip ' + (filter === key ? 'on' : '') + '" data-filter="' + key + '">' + label +
+      (n != null ? '<span class="n">' + n + '</span>' : '') + '</button>';
+    bar.innerHTML = chip('all','All',items.length) +
+      CAT_ORDER.filter(k => counts[k]).map(k => chip(k, CAT[k].label, counts[k])).join('') +
+      '<select class="sort-sel" id="sort-sel" aria-label="Sort">' +
+      [['name','Sort · Name'],['weight','Sort · Weight'],['value','Sort · Value'],['category','Sort · Category']]
+        .map(([v,l]) => '<option value="' + v + '"' + (sortBy === v ? ' selected' : '') + '>' + l + '</option>').join('') +
+      '</select>';
+    bar.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => {
+      filter = b.dataset.filter; renderHeadLines(); renderPane();
+    }));
+    $('sort-sel').addEventListener('change', e => { sortBy = e.target.value; renderPane(); });
+  }
+}
+
+/* ---------- pane ---------- */
+function renderPane() { CONTAINERS[active].mode === 'grid' ? renderGrid() : renderList(); }
+
+function renderGrid() {
+  const items = STORE.person;
+  const occ = Array.from({ length: ROWS+1 }, () => new Array(COLS+1).fill(false));
+  let cells = '';
+  items.forEach(it => {
+    for (let r = it.row; r < it.row + it.h; r++)
+      for (let c = it.col; c < it.col + it.w; c++) if (r <= ROWS && c <= COLS) occ[r][c] = true;
+    cells += '<div class="cell-item cat-' + it.cat + ' rar-' + it.rar + (it.w * it.h >= 2 ? ' fp-l' : '') +
+      (it.shimmer ? ' shimmer' : '') + (lastMoved === it.id ? ' flash' : '') +
+      '" style="grid-column:' + it.col + ' / span ' + it.w + ';grid-row:' + it.row + ' / span ' + it.h +
+      '" data-item="' + it.id + '" role="button" tabindex="0" aria-label="' + esc(it.name) + '">' +
+      '<i class="cat-corner fa-solid ' + CAT[it.cat].corner + '"></i>' +
+      '<i class="glyph fa-solid ' + it.icon + '"></i>' +
+      (it.containerId && CONTAINERS[it.containerId].cap
+        ? '<span class="stack cap">' + bagCount(it.containerId) + '/' + CONTAINERS[it.containerId].cap + '</span>'
+        : it.qty > 1 ? '<span class="stack">×' + it.qty + '</span>' : '') + '</div>';
+  });
+  for (let r = 1; r <= ROWS; r++) for (let c = 1; c <= COLS; c++)
+    if (!occ[r][c]) cells += '<div class="cell-empty" style="grid-column:' + c + ';grid-row:' + r + '"></div>';
+  $('pane').innerHTML = '<div class="grid-wrap"><div class="op-grid">' + cells + '</div></div>';
+  wirePicks();
+}
+
+function renderList() {
+  let items = STORE[active].slice();
+  if (filter !== 'all') items = items.filter(it => it.cat === filter);
+  items.sort((a,b) => {
+    if (sortBy === 'weight')   return totalWt(b) - totalWt(a) || a.name.localeCompare(b.name);
+    if (sortBy === 'value')    return (b.value||0)*(b.qty||1) - (a.value||0)*(a.qty||1) || a.name.localeCompare(b.name);
+    if (sortBy === 'category') return CAT_ORDER.indexOf(a.cat) - CAT_ORDER.indexOf(b.cat) || a.name.localeCompare(b.name);
+    return a.name.localeCompare(b.name);
+  });
+  const weightless = CONTAINERS[active].weightless;
+  const rows = items.map(it =>
+    '<button class="crow" data-item="' + it.id + '" data-rar="' + it.rar + '">' +
+      '<span class="ri"><i class="fa-solid ' + it.icon + '"></i></span>' +
+      '<span class="rn">' + esc(it.name) + '</span>' +
+      '<span class="rq' + (it.qty > 1 ? '' : ' none') + '">' + (it.qty > 1 ? '×' + it.qty : '×1') + '</span>' +
+      '<span class="rmeta"><span class="w">' + (weightless ? 'Cached' : fmtWt(totalWt(it))) + '</span>·<span>' + CAT[it.cat].label + '</span>' +
+      (it.stat ? '<span>·</span><span>' + esc(it.stat) + '</span>' : '') + '</span>' +
+    '</button>').join('');
+  $('pane').innerHTML = items.length
+    ? '<div class="clist">' + rows + '</div>'
+    : '<div class="list-none"><div class="p">Nothing Here</div><div class="h">// ' +
+      (STORE[active].length ? 'No ' + CAT[filter].label + ' items in this container' : 'Container is empty — stow something from On Person') + '</div></div>';
+  wirePicks();
+}
+
+function renderPanel() { renderHeadLines(); renderPane(); }
+
+/* ---------- burden ---------- */
+function renderBurden() {
+  const carried = bagWeight('person') + bagWeight('quiver') + EQUIPPED.reduce((s,id) => s + bagWeight(id), 0);
+  const pct = Math.min(100, carried / 120 * 100);
+  const txt = (Math.round(carried*10)/10).toFixed(1);
+  $('bd-cur').textContent = txt;
+  $('mini-cur').textContent = txt;
+  $('tb-load').textContent = txt;
+  $('bd-fill').style.width = pct + '%';
+  $('mini-fill').style.width = pct + '%';
+  const state = carried > 90 ? 'Heavily Laden' : carried > 60 ? 'Encumbered' : 'Unencumbered';
+  const col = carried > 90 ? 'var(--danger-hot)' : carried > 60 ? 'var(--gold-rare)' : 'var(--beige)';
+  $('bd-state').textContent = state;
+  $('bd-state').style.color = col;
+}
+
+function logLine(html) { $('stow-log').innerHTML = '<span class="acc-i">◇</span> ' + html; }
+
+let toastT = null;
+function toast(msg) {
+  const t = $('toast');
+  t.innerHTML = '<span class="acc-i">◇</span> ' + msg;
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 1700);
+}
+
+function findItem(id) {
+  for (const k in STORE) { const it = STORE[k].find(x => x.id === id); if (it) return [it,k]; }
+  return [null,null];
+}
+
+function wirePicks() {
+  $('pane').querySelectorAll('[data-item]').forEach(el => {
+    el.addEventListener('click', () => openPopup(el.dataset.item));
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPopup(el.dataset.item); } });
+  });
+}
+
+/* ---------- item sheet ---------- */
+function openPopup(id) {
+  const [it,from] = findItem(id);
+  if (!it) return;
+  openItem = it; openFrom = from;
+  $('im-panel').setAttribute('data-rar', it.rar);
+  const weightless = CONTAINERS[from].weightless;
+
+  $('im-head').innerHTML =
+    '<span class="im-crystal"><i class="fa-solid ' + it.icon + '"></i></span>' +
+    '<span class="im-titles"><span class="im-name">' + esc(it.name) + '</span>' +
+      '<span class="im-tags"><span class="im-tag' + (it.rar === 'quest' ? ' quest' : '') + '">' + CAT[it.cat].label + '</span>' +
+      '<span class="im-tag' + (it.rar === 'quest' ? ' quest' : it.rar !== 'common' ? ' acc' : '') + '">' + RAR_LABEL[it.rar] + '</span>' +
+      (it.qty > 1 ? '<span class="im-tag">×' + it.qty + '</span>' : '') +
+      '<span class="im-tag acc">' + CONTAINERS[from].label + '</span></span></span>' +
+    '<button class="im-close" id="im-close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>';
+
+  const fx = (it.fx || []).map(f =>
+    '<div class="row"><span class="k">' + esc(f.k) + '</span><span>' + esc(f.v) + '</span><span class="s">' + esc(f.s) + '</span></div>').join('');
+  const cc = it.containerId ? CONTAINERS[it.containerId] : null;
+  const inlineC = cc && cc.mode === 'inline';
+  const ccOn = cc && EQUIPPED.includes(it.containerId);
+
+  $('im-body').innerHTML =
+    '<div class="im-facts">' +
+      '<div class="f"><span class="k">Weight</span><span class="v">' + (weightless ? '— cached' : fmtWt(totalWt(it))) + '</span></div>' +
+      '<div class="f"><span class="k">Value</span><span class="v">' + fmtVal(it.value) + '</span></div>' +
+      '<div class="f"><span class="k">' + (it.cat === 'weapon' ? 'Damage' : it.cat === 'armor' ? 'Armor' : 'Key Stat') + '</span><span class="v">' + esc(it.stat || '—') + '</span></div>' +
+      '<div class="f"><span class="k">Slot</span><span class="v">' + esc(it.equipSlot || 'Not equippable') + '</span></div>' +
+      (cc ? '<div class="f"><span class="k">' + esc(cc.unit || 'Contents') + '</span><span class="v">' + bagCount(it.containerId) + ' / ' + (cc.cap || '∞') + '</span></div>' +
+            '<div class="f"><span class="k">Access</span><span class="v">' + (inlineC ? 'Drawn automatically' : ccOn ? 'Opens as a tab' : 'Unequipped') + '</span></div>' : '') +
+    '</div>' +
+    '<div class="im-desc">' + esc(it.desc) + '</div>' +
+    (inlineC ? '<div class="im-sec"><div class="im-sec-h">' + esc(cc.unit || 'Contents') + '</div><div class="im-fx">' +
+        STORE[it.containerId].map(a => '<div class="row"><span class="k">' + esc(a.name) + '</span><span>×' + a.qty +
+          '</span><span class="s">' + esc(a.stat || '') + '</span></div>').join('') +
+      '</div><div class="im-desc" style="font-size:14px;margin-top:9px">Ammunition is drawn from here by whichever ranged weapon is equipped — the quiver is never opened as a page.</div></div>' : '') +
+    (fx ? '<div class="im-sec"><div class="im-sec-h">Granted Effects</div><div class="im-fx">' + fx + '</div></div>' : '');
+
+  const dests = EQUIPPED.filter(d => { const c = CONTAINERS[d]; return !c.accepts || c.accepts.includes(it.cat); });
+  let acts = '';
+  if (cc && !inlineC) {
+    acts += ccOn
+      ? '<button class="ia" data-act="open"><span class="af"></span><span class="ai"><i class="fa-solid fa-folder-open"></i>Open ' + esc(cc.label) + '</span></button>' +
+        '<button class="ia ghost" data-act="unequip"><span class="af"></span><span class="ai"><i class="fa-solid fa-link-slash"></i>Unequip</span></button>'
+      : '<button class="ia" data-act="equipctr"><span class="af"></span><span class="ai"><i class="fa-solid fa-link"></i>Equip ' + esc(cc.label) + '</span></button>';
+  } else if (it.equipSlot) acts += '<button class="ia" data-act="equip"><span class="af"></span><span class="ai"><i class="fa-solid fa-circle-up"></i>Equip</span></button>';
+  if (from === 'person') {
+    if (dests.length > 1) acts += '<select class="stow-pick" id="stow-pick">' + dests.map(d => '<option value="' + d + '">Stow to ' + CONTAINERS[d].label + '</option>').join('') + '</select>';
+    acts += '<button class="ia' + (it.equipSlot ? ' ghost' : '') + '" data-act="stow"' + (dests.length ? '' : ' disabled') + '><span class="af"></span><span class="ai"><i class="fa-solid fa-box-archive"></i>Stow</span></button>';
+  } else {
+    acts += '<button class="ia' + (it.equipSlot ? ' ghost' : '') + '" data-act="retrieve"><span class="af"></span><span class="ai"><i class="fa-solid fa-hand"></i>Retrieve</span></button>';
+  }
+  if (it.rar !== 'quest') acts += '<button class="ia drop" data-act="drop"><span class="af"></span><span class="ai"><i class="fa-solid fa-trash-can"></i>Drop</span></button>';
+  $('im-actions').innerHTML = acts;
+  $('im-warn').className = 'im-warn';
+
+  $('imodal').classList.add('open');
+  $('im-panel').style.transform = '';
+  $('im-close').addEventListener('click', closePopup);
+  $('im-actions').querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => act(b.dataset.act)));
+  $('im-body').scrollTop = 0;
+}
+
+function closePopup() {
+  $('imodal').classList.remove('open');
+  $('im-panel').style.transform = '';
+  openItem = null;
+}
+
+function freeCell() {
+  const occ = Array.from({ length: ROWS+1 }, () => new Array(COLS+1).fill(false));
+  STORE.person.forEach(it => {
+    for (let r = it.row; r < it.row + it.h; r++)
+      for (let c = it.col; c < it.col + it.w; c++) if (r <= ROWS && c <= COLS) occ[r][c] = true;
+  });
+  for (let r = 1; r <= ROWS; r++) for (let c = 1; c <= COLS; c++) if (!occ[r][c]) return { col:c, row:r };
+  return null;
+}
+
+function act(kind) {
+  const it = openItem, from = openFrom;
+  if (kind === 'open')     { active = it.containerId; filter = 'all'; closePopup(); refresh(); return; }
+  if (kind === 'unequip')  { closePopup(); unequipContainer(it.containerId); return; }
+  if (kind === 'equipctr') { closePopup(); equipContainer(it.containerId); return; }
+  if (kind === 'equip')    { console.log('EQUIP:', it.name); logLine('Equip requested <span style="color:var(--text)">' + esc(it.name) + '</span> · ' + esc(it.equipSlot)); toast('Equip · ' + it.name); closePopup(); return; }
+  if (kind === 'drop')     { console.log('DROP:', it.name); STORE[from].splice(STORE[from].indexOf(it),1); logLine('Dropped <span style="color:var(--text)">' + esc(it.name) + '</span>'); toast('Dropped · ' + it.name); closePopup(); refresh(); return; }
+  if (kind === 'stow') {
+    const pick = $('stow-pick');
+    const dest = pick ? pick.value : EQUIPPED[0];
+    STORE.person.splice(STORE.person.indexOf(it),1);
+    delete it.col; delete it.row; delete it.w; delete it.h;
+    STORE[dest].push(it);
+    lastMoved = it.id;
+    logLine('Stowed <span style="color:var(--text)">' + esc(it.name) + '</span> → ' + esc(CONTAINERS[dest].label));
+    toast('Stowed → ' + CONTAINERS[dest].label);
+    console.log('STOW:', it.name, '->', dest);
+    closePopup(); refresh(); return;
+  }
+  if (kind === 'retrieve') {
+    const cell = freeCell();
+    if (!cell) { const w = $('im-warn'); w.textContent = '// No reachable space — free a cell on person first'; w.className = 'im-warn show'; return; }
+    STORE[from].splice(STORE[from].indexOf(it),1);
+    it.col = cell.col; it.row = cell.row; it.w = 1; it.h = 1;
+    STORE.person.push(it);
+    lastMoved = it.id;
+    logLine('Retrieved <span style="color:var(--text)">' + esc(it.name) + '</span> → On Person');
+    toast('Retrieved → On Person');
+    console.log('RETRIEVE:', it.name, 'from', from);
+    closePopup(); refresh();
+  }
+}
+
+function unequipContainer(id) {
+  if (!EQUIPPED.includes(id)) return;
+  EQUIPPED.splice(EQUIPPED.indexOf(id),1);
+  if (!UNOWNED.includes(id)) UNOWNED.push(id);
+  CONTAINERS[id].locked = true;
+  if (active === id) active = 'person';
+  logLine('Unequipped <span style="color:var(--text)">' + esc(CONTAINERS[id].label) + '</span> · ' + STORE[id].length + ' items held in stow');
+  toast('Unequipped · ' + CONTAINERS[id].label);
+  refresh();
+}
+function equipContainer(id) {
+  if (EQUIPPED.includes(id)) return;
+  if (UNOWNED.includes(id)) UNOWNED.splice(UNOWNED.indexOf(id),1);
+  CONTAINERS[id].locked = false;
+  EQUIPPED.push(id);
+  active = id; filter = 'all';
+  logLine('Equipped <span style="color:var(--text)">' + esc(CONTAINERS[id].label) + '</span> · tab restored');
+  toast('Equipped · ' + CONTAINERS[id].label);
+  refresh();
+}
+
+function refresh() { renderSeg(); renderPanel(); renderBurden(); }
+
+$('imodal').addEventListener('click', e => { if (e.target.dataset.close) closePopup(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('imodal').classList.contains('open')) closePopup(); });
+
+/* swipe-down dismiss */
+(function sheetDrag(){
+  const grab = $('im-grab'), panel = $('im-panel');
+  let y0 = null;
+  grab.addEventListener('pointerdown', e => { y0 = e.clientY; grab.setPointerCapture(e.pointerId); });
+  grab.addEventListener('pointermove', e => {
+    if (y0 == null) return;
+    panel.style.transform = 'translateY(' + Math.max(0, e.clientY - y0) + 'px)';
+  });
+  grab.addEventListener('pointerup', e => {
+    if (y0 == null) return;
+    const dy = e.clientY - y0; y0 = null;
+    if (dy > 70) closePopup(); else panel.style.transform = '';
+  });
+})();
+
+/* accordion */
+(function accordion(){
+  const acc = $('acc'), head = $('acc-head');
+  head.addEventListener('click', () => {
+    const open = acc.classList.toggle('open');
+    head.setAttribute('aria-expanded', open);
+  });
+})();
+
+/* nav placeholders */
+document.querySelectorAll('[data-nav]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const t = btn.getAttribute('data-nav');
+    const label = (btn.querySelector('span')?.textContent || btn.textContent || t).trim();
+    if (t === 'inventory') return;
+    console.log(`Navigating to ${label}... [data-nav="${t}"]`);
+    toast('Nav · ' + label);
+  });
+});
+
+/* auto-fit the phone to the window (desk view only) */
+(function fitDevice(){
+  const dev = $('device');
+  const fit = () => {
+    if (innerWidth <= 520) { dev.style.transform = ''; return; }
+    const s = Math.min(1, (innerHeight - 36) / 844, (innerWidth - 36) / 390);
+    dev.style.transform = 'scale(' + s + ')';
+  };
+  fit(); addEventListener('resize', fit);
+})();
+
+/* atmosphere */
+(function sweepLoop(){
+  const sweep = $('sweep');
+  const trigger = () => { sweep.classList.remove('run'); void sweep.offsetWidth; sweep.classList.add('run'); };
+  const schedule = () => setTimeout(() => { trigger(); schedule(); }, 7000 + Math.random()*4000);
+  setTimeout(() => { trigger(); schedule(); }, 2500);
+})();
+(function clocks(){
+  const el = $('save-auto'), t0 = $('sys-time');
+  let t = 44;
+  setInterval(() => { t = (t+1) % 60; el.innerHTML = '<span class="k">Save</span> <span class="v">00:' + String(t).padStart(2,'0') + '</span>'; }, 700);
+  const tick = () => { const d = new Date(); t0.textContent = ((d.getHours()%12)||12) + ':' + String(d.getMinutes()).padStart(2,'0'); };
+  tick(); setInterval(tick, 20000);
+})();
+
+refresh();
+</script>
+</body>
+</html>

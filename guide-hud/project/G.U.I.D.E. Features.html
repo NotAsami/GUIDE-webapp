@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G.U.I.D.E. — FEATURES // ROS CHRISSTONE</title>
+<!--
+  FEATURES screen — player-facing. Sibling to Spellbook / Character / Equipment.
+  Shared chrome kept verbatim (top bar, tickers, navbar, side rails, bottom bar).
+
+  Architecture: the whole screen renders FROM the FEATURES object below the
+  JSON-SWAP POINT. Tabs, group counts, activation badges, use counters, effect
+  sub-rows and the reverse-lookup "AFFECTED BY" section all derive from it.
+
+  Two rules the renderer enforces, not the author:
+    • gated:false features and gated:false effect nodes DO NOT RENDER at all.
+      No greyed rows, no locked cards. Hidden count only, never a list.
+    • Gear features are DERIVED from equipped items — they live on the item,
+      never on the character. Unequip and they vanish (DEV toggle demonstrates).
+
+  Palette: #1d1d1d base · #dedede text · #aaaaaa muted · #d4bf7d beige ·
+  #00a6d6 cyan (all feature state + interactivity) · #b93a3a red sparingly.
+  #e2b021 amber is G.U.I.D.E./system-truth ONLY and is not used for state.
+  Feature prose is original placeholder flavor, not rulebook text.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<style>
+  /* ===== SHARED CHROME (verbatim with prior phases) ===== */
+  :root{--bg:#1d1d1d;--bg-2:#161616;--beige:#d4bf7d;--beige-dim:#8a7a4a;--cyan:#00a6d6;--cyan-dim:#0d6e8c;--cyan-hot:#4dd6ff;--gold-rare:#e2b021;--text:#dedede;--muted:#aaaaaa;--danger:#b93a3a;--bar-top-h:62px;--bar-bottom-h:50px;--nav-h:72px;--nav-top-gap:26px;--font-display:"Cinzel",serif;--font-prose:"EB Garamond",serif;--font-mono:"JetBrains Mono",ui-monospace,monospace}
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;width:100%;background:var(--bg);color:var(--text);font-family:var(--font-prose);overflow:hidden;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  .stage{position:fixed;inset:0;background:url("https://www.transparenttextures.com/patterns/dark-leather.png"),radial-gradient(120% 90% at 50% 50%,#232220 0%,#1a1a1a 60%,#0e0e0e 100%);background-blend-mode:overlay,normal}
+  .scanlines{pointer-events:none;position:fixed;inset:0;z-index:90;background-image:repeating-linear-gradient(to bottom,rgba(255,255,255,0.025) 0px,rgba(255,255,255,0.025) 1px,transparent 1px,transparent 3px);mix-blend-mode:overlay}
+  .vignette{pointer-events:none;position:fixed;inset:0;z-index:91;background:radial-gradient(120% 110% at 50% 50%,transparent 55%,rgba(0,0,0,0.55) 95%,rgba(0,0,0,0.85) 100%)}
+  .sweep{pointer-events:none;position:fixed;left:0;right:0;top:0;height:2px;z-index:95;background:linear-gradient(to bottom,transparent,rgba(0,166,214,0.55) 50%,transparent);box-shadow:0 0 24px rgba(0,166,214,0.45);opacity:0}
+  .sweep.run{animation:sweep-run 1.3s cubic-bezier(.32,.06,.18,1) forwards}
+  @keyframes sweep-run{0%{opacity:0;transform:translateY(-20px)}8%{opacity:.9}100%{opacity:0;transform:translateY(100vh)}}
+  @keyframes blink{50%{opacity:0}}
+  @keyframes deniedShakeX{0%,100%{transform:translateX(0)}20%{transform:translateX(-3px)}40%{transform:translateX(3px)}60%{transform:translateX(-2px)}80%{transform:translateX(2px)}}
+
+  .topbar{position:fixed;top:0;left:0;right:0;height:var(--bar-top-h);z-index:50;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 36px;background:linear-gradient(to bottom,rgba(15,15,15,0.95) 0%,rgba(22,22,22,0.92) 100%);border-bottom:1px solid var(--beige);box-shadow:0 1px 0 rgba(212,191,125,0.15),0 8px 24px -8px rgba(0,0,0,0.6)}
+  .topbar::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(255,255,255,0.04) 0px,rgba(255,255,255,0.04) 1px,transparent 1px,transparent 4px);mix-blend-mode:overlay}
+  .topbar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--beige);box-shadow:0 0 8px rgba(212,191,125,0.4)}
+  .top-left,.top-right{display:flex;align-items:center;gap:28px;position:relative;z-index:1}
+  .top-right{justify-content:flex-end}
+  .stat-block{display:flex;flex-direction:column;gap:4px;min-width:110px}
+  .stat-row{display:flex;align-items:baseline;gap:8px}
+  .stat-num{font-family:var(--font-display);font-weight:600;color:var(--beige);font-size:22px;line-height:1;letter-spacing:.04em}
+  .stat-label{font-family:var(--font-mono);font-size:10px;color:var(--cyan);letter-spacing:.22em;text-transform:uppercase}
+  .bar{height:3px;width:110px;border:1px solid var(--beige);background:rgba(0,0,0,0.5);position:relative;overflow:hidden}
+  .bar>i{position:absolute;top:0;bottom:0;left:0;background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));box-shadow:0 0 6px rgba(0,166,214,0.6);display:block}
+  .top-center{text-align:center;position:relative;z-index:1;padding:0 24px}
+  .char-name{font-family:var(--font-display);font-weight:600;font-size:18px;letter-spacing:.4em;color:var(--text);text-transform:uppercase;line-height:1}
+  .char-name .cursor{display:inline-block;color:var(--cyan);transform:translateY(-1px);margin-left:4px;animation:blink 1s steps(2,end) infinite}
+  .char-sub{font-family:var(--font-mono);font-size:9px;letter-spacing:.3em;color:var(--muted);margin-top:4px;text-transform:uppercase}
+  .char-sub .sep{color:var(--beige-dim);margin:0 8px}
+  .gold-block,.weight-block{display:flex;align-items:baseline;gap:10px}
+  .gold-block .ic,.weight-block .ic{font-family:var(--font-display);color:var(--beige);font-size:20px;line-height:1}
+  .gold-block .val,.weight-block .val{font-family:var(--font-display);color:var(--beige);font-size:18px;letter-spacing:.06em;line-height:1}
+  .gold-block .lab,.weight-block .lab{font-family:var(--font-mono);color:var(--cyan);font-size:9px;letter-spacing:.22em;text-transform:uppercase}
+  .ticker{position:fixed;left:0;right:0;height:12px;z-index:51;display:flex;align-items:center;padding:0 24px;font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:rgba(0,166,214,0.55);pointer-events:none;overflow:hidden;white-space:nowrap}
+  .ticker.above{top:calc(var(--bar-top-h) - 12px);justify-content:flex-end}
+  .ticker.below{top:calc(var(--bar-top-h) + 2px);justify-content:flex-start;color:rgba(212,191,125,0.45)}
+  .ticker .gap{width:32px;display:inline-block}
+  .ticker .dim{color:rgba(170,170,170,0.4)}
+  .bottombar{position:fixed;bottom:0;left:0;right:0;height:var(--bar-bottom-h);z-index:50;display:flex;align-items:center;padding:0 32px;background:linear-gradient(to top,rgba(15,15,15,0.96) 0%,rgba(22,22,22,0.92) 100%);border-top:1px solid var(--beige);box-shadow:0 -1px 0 rgba(212,191,125,0.15),0 -8px 24px -8px rgba(0,0,0,0.6);overflow:hidden}
+  .bottombar::before{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to bottom,rgba(255,255,255,0.04) 0px,rgba(255,255,255,0.04) 1px,transparent 1px,transparent 4px);mix-blend-mode:overlay}
+  .bb-line{display:flex;align-items:center;gap:14px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;width:100%;color:var(--muted);position:relative;z-index:1}
+  .bb-line .lab{color:var(--beige)}.bb-line .val{color:var(--cyan)}.bb-line .dim{color:var(--muted)}
+  .bb-line .sep{color:var(--beige-dim);margin:0 4px}
+  .bb-line .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px rgba(0,166,214,0.7);display:inline-block}
+  .bb-line .save-cursor{color:var(--cyan);animation:blink 1s steps(2,end) infinite;margin-left:2px}
+  .bb-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+
+  .navbar{position:fixed;top:calc(var(--bar-top-h) + var(--nav-top-gap));left:50%;transform:translateX(-50%);display:flex;gap:14px;z-index:45}
+  .nav-slot{position:relative;width:156px;display:flex;justify-content:center}
+  .nav-btn{--w:156px;--h:var(--nav-h);--cut:11px;width:var(--w);height:var(--h);background:transparent;border:0;padding:0;color:var(--text);font-family:var(--font-mono);cursor:pointer;position:relative;transition:transform 180ms ease}
+  .nav-btn .nb-frame{position:absolute;inset:0;background:var(--beige);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));transition:background 180ms ease}
+  .nav-btn .nb-inner{position:absolute;inset:1.5px;background:radial-gradient(120% 90% at 50% 60%,rgba(212,191,125,0.04),transparent 60%),linear-gradient(180deg,#1c1c1c,#141414);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:box-shadow 180ms ease,background 180ms ease}
+  .nav-btn .nb-icon{color:var(--beige);font-size:20px;line-height:1;transition:color 180ms ease,text-shadow 180ms ease}
+  .nav-btn .nb-label{font-family:var(--font-mono);font-size:10px;letter-spacing:.26em;color:var(--text);text-transform:uppercase}
+  .nav-btn .nb-marker{position:absolute;top:6px;left:12px;font-family:var(--font-mono);font-size:8px;letter-spacing:.2em;color:var(--cyan);opacity:.7}
+  .nav-btn:hover{transform:translateY(-2px)}
+  .nav-btn:hover .nb-inner{box-shadow:inset 0 0 24px rgba(0,166,214,0.18),0 0 18px rgba(0,166,214,0.35)}
+  .nav-btn:hover .nb-icon{color:#fff;text-shadow:0 0 10px rgba(0,166,214,0.7)}
+  .nav-btn.is-active .nb-frame{background:var(--cyan)}
+  .nav-btn.is-active .nb-inner{background:radial-gradient(120% 90% at 50% 60%,rgba(0,166,214,0.18),transparent 60%),linear-gradient(180deg,#16252b,#0f1b21);box-shadow:inset 0 0 28px rgba(0,166,214,0.30),0 0 22px rgba(0,166,214,0.55)}
+  .nav-btn.is-active .nb-icon{color:var(--cyan-hot);text-shadow:0 0 12px rgba(0,166,214,0.9)}
+  .nav-btn.is-active .nb-label{color:var(--cyan-hot)}
+  .nav-btn.is-active .nb-marker{color:var(--beige);opacity:1}
+  .nav-btn.is-active::after{content:"";position:absolute;top:-6px;left:14%;right:14%;height:2px;background:var(--cyan);box-shadow:0 0 10px var(--cyan),0 0 20px rgba(0,166,214,0.6);z-index:2}  .nav-meta{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 8px);font-family:var(--font-mono);font-size:9.5px;letter-spacing:.32em;color:var(--muted);text-transform:uppercase;z-index:44;display:flex;align-items:center;gap:12px;white-space:nowrap}
+  .nav-meta .acc{color:var(--cyan)}.nav-meta .dim{color:var(--beige-dim)}
+  .side-label{position:fixed;font-family:var(--font-mono);font-size:9.5px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;pointer-events:none;z-index:12}
+  .side-label.left{left:10px;top:50%;writing-mode:vertical-rl;transform:rotate(180deg) translateY(50%)}
+  .side-label.right{right:10px;top:50%;writing-mode:vertical-rl;transform:translateY(-50%)}
+  .side-label .acc{color:var(--cyan)}
+
+  /* framed region */
+  .region{--cut:16px;position:relative;flex:1 1 auto;min-height:0}
+  .region .r-frame{position:absolute;inset:0;background:var(--beige);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+  .region .r-gap{position:absolute;inset:1.5px;background:var(--bg);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px))}
+  .region .r-line{position:absolute;inset:4px;background:var(--beige);opacity:.42;clip-path:polygon(calc(var(--cut) - 4px) 0,100% 0,100% calc(100% - var(--cut) + 4px),calc(100% - var(--cut) + 4px) 100%,0 100%,0 calc(var(--cut) - 4px))}
+  .region .r-inner{position:absolute;inset:5.5px;background:radial-gradient(130% 100% at 50% 0%,rgba(0,166,214,0.05),transparent 60%),linear-gradient(180deg,#151515,#0e0e0e);clip-path:polygon(calc(var(--cut) - 5px) 0,100% 0,100% calc(100% - var(--cut) + 5px),calc(100% - var(--cut) + 5px) 100%,0 100%,0 calc(var(--cut) - 5px));overflow:hidden;display:flex;flex-direction:column}
+  .region .r-inner::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;background:repeating-linear-gradient(to bottom,rgba(0,166,214,0.035) 0px,rgba(0,166,214,0.035) 1px,transparent 1px,transparent 4px);mix-blend-mode:screen;opacity:.6}
+  .region .r-corner{position:absolute;width:14px;height:14px;border-color:var(--cyan);opacity:.7;z-index:5;pointer-events:none}
+  .region .r-corner.tl{top:9px;left:9px;border-top:1px solid;border-left:1px solid}
+  .region .r-corner.br{bottom:9px;right:9px;border-bottom:1px solid;border-right:1px solid}
+  .scroll-y{overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--cyan-dim) transparent}
+  .scroll-y::-webkit-scrollbar{width:7px}
+  .scroll-y::-webkit-scrollbar-track{background:rgba(0,0,0,0.4)}
+  .scroll-y::-webkit-scrollbar-thumb{background:linear-gradient(180deg,var(--cyan-dim),rgba(212,191,125,0.45));border:2px solid #111}
+
+  /* ===== FEATURES MAIN ===== */
+  main.features{position:fixed;top:calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);bottom:calc(var(--bar-bottom-h) + 18px);left:0;right:0;display:flex;flex-direction:column;gap:14px;padding:0 34px;z-index:10}
+  .col-header{display:flex;align-items:baseline;gap:14px;padding:0 2px 7px;border-bottom:1px solid rgba(212,191,125,0.35);flex:0 0 auto}
+  .col-header .ch-num{font-family:var(--font-mono);font-size:10px;letter-spacing:.28em;color:var(--cyan);opacity:.85}
+  .col-header .ch-title{font-family:var(--font-mono);font-size:12px;letter-spacing:.4em;color:var(--beige);text-transform:uppercase}
+  .col-header .ch-meta{margin-left:auto;font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:10px}
+  .col-header .ch-meta .acc{color:var(--cyan)}.col-header .ch-meta .dim{color:var(--beige-dim)}
+
+  /* tab strip */
+  .tabrow{flex:0 0 auto;display:flex;align-items:flex-end;gap:10px}
+  .tab{--cut:10px;position:relative;background:transparent;border:0;padding:0;width:214px;height:46px;cursor:pointer}
+  .tab .t-frame{position:absolute;inset:0;background:rgba(212,191,125,0.55);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));transition:background 160ms ease}
+  .tab .t-inner{position:absolute;inset:1.5px;background:linear-gradient(180deg,#1a1a1a,#121212);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));display:flex;align-items:center;justify-content:center;gap:11px;transition:box-shadow 160ms ease,background 160ms ease}
+  .tab .t-lab{font-family:var(--font-mono);font-size:11px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase}
+  .tab .t-count{font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--beige);line-height:1}
+  .tab:hover .t-inner{box-shadow:inset 0 0 22px rgba(0,166,214,0.16)}
+  .tab:hover .t-lab{color:var(--text)}
+  .tab.is-active .t-frame{background:var(--cyan)}
+  .tab.is-active .t-inner{background:linear-gradient(180deg,#16252b,#0f1b21);box-shadow:inset 0 0 26px rgba(0,166,214,0.26),0 0 18px rgba(0,166,214,0.35)}
+  .tab.is-active .t-lab{color:var(--cyan-hot)}
+  .tab.is-active .t-count{color:var(--cyan-hot)}
+  .tabrow .tr-right{margin-left:auto;display:flex;align-items:center;gap:14px;padding-bottom:6px}
+  .grp-toggle{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:9px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase}
+  .grp-toggle .gt-btn{background:transparent;border:1px solid rgba(212,191,125,0.4);color:var(--muted);font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;padding:5px 10px;cursor:pointer;transition:all 140ms ease}
+  .grp-toggle .gt-btn:hover{color:var(--text);border-color:var(--cyan-dim)}
+  .grp-toggle .gt-btn.on{color:var(--cyan-hot);border-color:var(--cyan);box-shadow:inset 0 0 14px rgba(0,166,214,0.2)}
+  .hidden-note{font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;color:var(--beige-dim);text-transform:uppercase;display:flex;align-items:center;gap:7px}
+  .hidden-note i{font-size:9px;opacity:.8}
+
+  /* source filter row */
+  .filterrow{flex:0 0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .chips{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .chip{--cut:6px;position:relative;display:inline-flex;background:transparent;border:0;padding:1px;height:28px;cursor:pointer}
+  .chip .cf{position:absolute;inset:0;background:rgba(212,191,125,0.32);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));transition:background 150ms ease}
+  .chip .ci{position:relative;background:linear-gradient(180deg,#1a1a1a,#131313);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));display:flex;align-items:center;gap:8px;padding:0 11px;font-family:var(--font-mono);font-size:9px;letter-spacing:.24em;color:var(--muted);text-transform:uppercase;white-space:nowrap;transition:color 150ms ease,box-shadow 150ms ease}
+  .chip .ci b{font-family:var(--font-display);font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--beige-dim)}
+  .chip:hover .ci{color:var(--text);box-shadow:inset 0 0 18px rgba(0,166,214,0.14)}
+  .chip.on .cf{background:var(--cyan)}
+  .chip.on .ci{color:var(--cyan-hot);box-shadow:inset 0 0 20px rgba(0,166,214,0.22)}
+  .chip.on .ci b{color:var(--cyan-hot)}
+  .chip.zero{opacity:.45}
+  .gear-note{display:none;margin-left:auto;align-items:center;gap:8px;font-family:var(--font-mono);font-size:8.5px;letter-spacing:.2em;color:var(--cyan);text-transform:uppercase}
+  .gear-note.show{display:flex}
+  .gear-note .lk{width:5px;height:5px;background:var(--cyan);box-shadow:0 0 7px rgba(0,166,214,.8);transform:rotate(45deg)}
+  .gear-note .dim{color:var(--beige-dim)}
+
+  /* body scroll + continuous masonry stream */
+  .feat-scroll{position:relative;z-index:1;flex:1 1 auto;min-height:0;padding:16px 20px 22px}
+  .g-grid{column-count:2;column-gap:10px}
+  @media (max-width:1180px){.g-grid{column-count:1}}
+  .g-grid>.fcard{break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid;display:block;margin-bottom:10px}
+  .stream-empty{padding:26px 20px}
+
+  /* ---- feature card ---- */
+  .fcard{--cut:9px;position:relative;text-align:left;width:100%;background:transparent;border:0;padding:1.5px;font:inherit;color:inherit;cursor:pointer}
+  .fcard .fc-frame{position:absolute;inset:0;background:rgba(212,191,125,0.34);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));transition:background 160ms ease}
+  .fcard .fc-inner{position:relative;margin:0;background:linear-gradient(180deg,#191919,#131313);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));padding:11px 14px 12px;transition:background 160ms ease}
+  .fcard:hover .fc-frame{background:rgba(0,166,214,0.6)}
+  .fcard:hover .fc-inner{background:linear-gradient(180deg,#1b1f21,#131617)}
+  .fcard.is-open .fc-frame{background:var(--cyan)}
+  .fcard.is-on .fc-frame{background:var(--cyan);box-shadow:0 0 16px rgba(0,166,214,0.35)}
+  .fcard.is-on .fc-inner{background:linear-gradient(180deg,#16252b,#101719)}
+  .fcard.spent .fc-inner{background:linear-gradient(180deg,#161616,#111)}
+  .fcard.denied{animation:deniedShakeX 260ms ease}
+
+  .fc-top{display:grid;grid-template-columns:40px minmax(0,1fr) 104px;gap:13px;align-items:start}
+  /* hexagon icon — doubles as the USE affordance on usable features */
+  .fc-hex{position:relative;width:40px;height:44px;background:transparent;border:0;padding:0;display:block;font:inherit;color:inherit}
+  .fc-hex .hx-frame{position:absolute;inset:0;background:rgba(212,191,125,0.5);clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);transition:background 150ms ease,box-shadow 150ms ease}
+  .fc-hex .hx-inner{position:absolute;inset:1.5px;background:linear-gradient(180deg,#1a1a1a,#121212);clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);display:flex;align-items:center;justify-content:center;transition:background 150ms ease,box-shadow 150ms ease}
+  .fc-icon{font-size:15px;color:var(--beige);line-height:1;transition:color 150ms ease,text-shadow 150ms ease}
+  .fc-hex.usable{cursor:pointer}
+  .fc-hex.usable .hx-frame{background:var(--cyan)}
+  .fc-hex.usable .hx-inner{background:linear-gradient(180deg,#16252b,#0e1316)}
+  .fc-hex.usable .fc-icon{color:var(--cyan)}
+  .fc-hex.usable:hover .hx-frame{background:var(--cyan-hot);box-shadow:0 0 16px rgba(0,166,214,.55)}
+  .fc-hex.usable:hover .hx-inner{box-shadow:inset 0 0 22px rgba(0,166,214,.4)}
+  .fc-hex.usable:hover .fc-icon{color:#fff;text-shadow:0 0 10px rgba(0,166,214,.85)}
+  .fc-hex .hx-pip{position:absolute;left:50%;bottom:-13px;transform:translateX(-50%);font-family:var(--font-mono);font-size:7.5px;letter-spacing:.14em;color:var(--cyan);text-transform:uppercase;white-space:nowrap}
+  .fc-hex.exhausted .hx-frame{background:rgba(185,58,58,0.55);box-shadow:none}
+  .fc-hex.exhausted .hx-inner{background:linear-gradient(180deg,#1a1414,#121010)}
+  .fc-hex.exhausted .fc-icon{color:rgba(222,222,222,0.35)}
+  .fc-hex.exhausted:hover .hx-frame{background:var(--danger);box-shadow:none}
+  .fc-hex.exhausted:hover .hx-inner{box-shadow:none}
+  .fc-hex.exhausted:hover .fc-icon{color:var(--danger);text-shadow:none}
+  .fc-hex .hx-pip.off{color:var(--danger)}
+  .fc-hex.held .hx-frame{background:var(--cyan-hot);box-shadow:0 0 18px rgba(0,166,214,.6)}
+  .fc-hex.held .fc-icon{color:var(--cyan-hot);text-shadow:0 0 10px rgba(0,166,214,.8)}
+  .fc-hex.used-flash .hx-inner{box-shadow:inset 0 0 30px rgba(0,166,214,.6)}
+  .fcard.is-on .fc-icon{color:var(--cyan-hot);text-shadow:0 0 10px rgba(0,166,214,.7)}
+  .fc-name{font-family:var(--font-display);font-weight:600;font-size:15.5px;letter-spacing:.05em;color:var(--text);line-height:1.15}
+  .fcard.is-on .fc-name{color:var(--cyan-hot)}
+  .fc-summary{font-family:var(--font-prose);font-size:14.5px;line-height:1.3;color:var(--muted);margin-top:3px;text-wrap:pretty}
+  .fc-meta{display:flex;align-items:center;gap:9px;margin-top:7px;flex-wrap:wrap}
+  .src-tag{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.2em;color:var(--beige);text-transform:uppercase;white-space:nowrap;border:1px solid rgba(212,191,125,0.35);padding:2px 6px}
+  .src-tag.gear{color:var(--cyan);border-color:rgba(0,166,214,0.45)}
+  .act-badge{font-family:var(--font-mono);font-size:8.5px;font-weight:500;letter-spacing:.24em;text-transform:uppercase;white-space:nowrap;padding:3px 8px;color:#0b1114;background:var(--beige);clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+  .act-badge.reaction{background:var(--cyan);color:#08171c}
+  .act-badge.free{background:transparent;color:var(--beige);box-shadow:inset 0 0 0 1px var(--beige)}
+  .pass-badge{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted);border-left:1px solid rgba(212,191,125,0.4);padding-left:10px;white-space:nowrap}
+
+  /* right rail: uses + spend */
+  .fc-use{display:flex;flex-direction:column;align-items:flex-end;gap:3px;width:104px;text-align:right}
+  .use-count{font-family:var(--font-display);font-weight:600;font-size:19px;letter-spacing:.04em;color:var(--cyan-hot);line-height:1}
+  .use-count .of{font-family:var(--font-mono);font-size:11px;font-weight:400;color:var(--muted);letter-spacing:.08em}
+  .use-count.empty{color:var(--danger)}
+  .use-lab{font-family:var(--font-mono);font-size:8px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase}
+  .atwill{font-family:var(--font-mono);font-size:8.5px;letter-spacing:.24em;color:var(--cyan);text-transform:uppercase;display:flex;align-items:center;gap:6px}
+  .atwill .inf{font-size:13px;line-height:1;color:var(--cyan-hot)}
+  .spend{--cut:7px;position:relative;background:transparent;border:0;padding:0;width:96px;height:29px;cursor:pointer;flex:0 0 auto}
+  .spend .sp-frame{position:absolute;inset:0;background:var(--cyan);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));transition:background 150ms ease}
+  .spend .sp-inner{position:absolute;inset:1.5px;background:linear-gradient(180deg,#16252b,#0e1316);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));display:flex;align-items:center;justify-content:center;gap:7px;font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;color:var(--cyan-hot);text-transform:uppercase;transition:box-shadow 150ms ease}
+  .spend:hover .sp-inner{box-shadow:inset 0 0 20px rgba(0,166,214,0.34),0 0 14px rgba(0,166,214,0.4);color:#fff}
+  .spend.is-off .sp-frame{background:var(--beige)}
+  .spend.is-off .sp-inner{color:var(--beige)}
+  .spend.exhausted .sp-frame{background:rgba(185,58,58,0.5)}
+  .spend.exhausted .sp-inner{color:rgba(222,222,222,0.45);background:linear-gradient(180deg,#1a1414,#121010)}
+  .spend.exhausted:hover .sp-inner{box-shadow:none;color:var(--danger)}
+
+  /* effect sub-rows */
+  .fx{margin-top:10px;border-top:1px solid rgba(212,191,125,0.18);padding-top:8px;display:flex;flex-direction:column;gap:0}
+  .fx-row{display:grid;grid-template-columns:16px 1fr auto;gap:10px;align-items:baseline;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.045)}
+  .fx-row:last-child{border-bottom:0}
+  .fx-op{font-family:var(--font-mono);font-size:11px;color:var(--cyan);opacity:.85;text-align:center;line-height:1}
+  .fx-txt{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .fx-txt b{color:var(--text);font-weight:500}
+  .fx-tag{font-family:var(--font-mono);font-size:8px;letter-spacing:.2em;color:var(--beige-dim);text-transform:uppercase}
+
+  /* expanded body removed — detail lives in the popup */
+  .fc-hint{margin-top:9px;font-family:var(--font-mono);font-size:8px;letter-spacing:.24em;color:var(--beige-dim);text-transform:uppercase}
+
+  /* ===== FEATURE POPUP — same frame language as the item / shard modals ===== */
+  .imodal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;padding:34px}
+  .imodal.open{display:flex}
+  .im-scrim{position:absolute;inset:0;background:rgba(10,10,10,0.78);backdrop-filter:blur(2px);animation:fadeIn 200ms ease forwards}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .im-panel{--cut:22px;position:relative;width:min(600px,100%);max-height:min(620px,100%);display:flex;transform:translateY(10px) scale(.985);opacity:0;animation:panelIn 300ms cubic-bezier(.2,.7,.2,1) 30ms forwards}
+  @keyframes panelIn{to{transform:translateY(0) scale(1);opacity:1}}
+  .im-panel::before{content:"";position:absolute;inset:0;background:var(--beige);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut));filter:drop-shadow(0 22px 50px rgba(0,0,0,0.7)) drop-shadow(0 0 34px rgba(0,166,214,0.2))}
+  .im-panel .pn-gap{position:absolute;inset:5px;background:#0a0a0a;clip-path:polygon(calc(var(--cut) - 4px) 0,100% 0,100% calc(100% - var(--cut) + 4px),calc(100% - var(--cut) + 4px) 100%,0 100%,0 calc(var(--cut) - 4px))}
+  .im-panel .pn-line{position:absolute;inset:3.5px;background:var(--beige);opacity:.5;clip-path:polygon(calc(var(--cut) - 2px) 0,100% 0,100% calc(100% - var(--cut) + 2px),calc(100% - var(--cut) + 2px) 100%,0 100%,0 calc(var(--cut) - 2px))}
+  .im-inner{position:relative;flex:1;min-width:0;margin:7px;background:radial-gradient(120% 90% at 50% 0%,rgba(0,166,214,0.08),transparent 55%),linear-gradient(180deg,#151515,#0d0d0d);clip-path:polygon(calc(var(--cut) - 6px) 0,100% 0,100% calc(100% - var(--cut) + 6px),calc(100% - var(--cut) + 6px) 100%,0 100%,0 calc(var(--cut) - 6px));box-shadow:inset 0 0 50px rgba(0,166,214,0.06);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .im-inner::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;background:repeating-linear-gradient(to bottom,rgba(0,166,214,0.03) 0px,rgba(0,166,214,0.03) 1px,transparent 1px,transparent 4px);mix-blend-mode:screen;opacity:.6}
+  .im-corner{position:absolute;width:16px;height:16px;border-color:var(--cyan);opacity:.75;z-index:6;pointer-events:none}
+  .im-corner.tl{top:12px;left:12px;border-top:1px solid;border-left:1px solid}
+  .im-corner.br{bottom:12px;right:12px;border-bottom:1px solid;border-right:1px solid}
+  .im-head{position:relative;z-index:3;flex:0 0 auto;display:flex;align-items:flex-start;gap:9px;padding:18px 18px 14px;border-bottom:1px solid rgba(212,191,125,0.32)}
+  .im-head::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:rgba(0,166,214,0.35);box-shadow:0 0 9px rgba(0,166,214,0.3)}
+  .im-crystal{flex:0 0 auto;width:44px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--cyan-hot);font-size:20px;border:1px solid rgba(0,166,214,0.5);background:radial-gradient(120% 90% at 50% 40%,rgba(0,166,214,0.18),transparent 65%),rgba(0,0,0,0.45);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);filter:drop-shadow(0 0 9px rgba(0,166,214,0.4))}
+  .im-crystal.passive{color:var(--beige);border-color:rgba(212,191,125,0.5);background:rgba(0,0,0,0.45);filter:none}
+  .im-titles{display:flex;flex-direction:column;gap:7px;min-width:0;margin-left:5px}
+  .im-name{font-family:var(--font-display);font-weight:600;font-size:20px;letter-spacing:.1em;color:var(--text);text-transform:uppercase;line-height:1.05}
+  .im-name.on{color:var(--cyan-hot);text-shadow:0 0 14px rgba(0,166,214,0.25)}
+  .im-tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .im-close{margin-left:auto;flex:0 0 auto;width:34px;height:34px;background:rgba(0,0,0,0.4);border:1px solid rgba(212,191,125,0.4);color:var(--beige);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);transition:color 150ms ease,border-color 150ms ease,box-shadow 150ms ease}
+  .im-close:hover{color:var(--cyan-hot);border-color:var(--cyan);box-shadow:0 0 12px rgba(0,166,214,0.3)}
+  .im-back{margin-left:auto;flex:0 0 auto;align-self:flex-start;width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.4);border:1px solid rgba(0,166,214,0.45);color:var(--cyan);font-family:var(--font-mono);font-size:15px;line-height:1;cursor:pointer;clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);transition:color 150ms ease,border-color 150ms ease,box-shadow 150ms ease}
+  .im-back+.im-close{margin-left:0}
+  .im-back:hover{color:var(--cyan-hot);border-color:var(--cyan-hot);box-shadow:0 0 12px rgba(0,166,214,0.3)}
+  .aff-link{background:transparent;border:0;padding:0;font:inherit;color:var(--cyan-hot);text-transform:uppercase;letter-spacing:.1em;cursor:pointer;border-bottom:1px solid rgba(0,166,214,0.45)}
+  .aff-link:hover{color:#fff;border-bottom-color:var(--cyan-hot)}
+  .im-fx .row.aff .op.link{color:var(--cyan)}
+  .im-body{position:relative;z-index:2;flex:1 1 auto;min-height:0;overflow-y:auto;padding:15px 18px 18px;scrollbar-width:thin}
+  .im-body::-webkit-scrollbar{width:6px}
+  .im-body::-webkit-scrollbar-track{background:rgba(0,0,0,0.4)}
+  .im-body::-webkit-scrollbar-thumb{background:rgba(0,166,214,0.4)}
+  /* origin breadcrumb chain */
+  .im-origin{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding-bottom:13px;border-bottom:1px dashed rgba(212,191,125,0.25)}
+  .im-origin .ok{font-family:var(--font-mono);font-size:8px;letter-spacing:.24em;color:var(--beige-dim);text-transform:uppercase;width:100%;margin-bottom:3px}
+  .im-origin .step{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;white-space:nowrap;border:1px solid rgba(212,191,125,0.28);padding:3px 8px;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+  .im-origin .step.last{color:var(--cyan-hot);border-color:rgba(0,166,214,0.55)}
+  .im-origin .arw{font-family:var(--font-mono);font-size:10px;color:var(--beige-dim)}
+  .im-facts{display:flex;flex-wrap:wrap;gap:9px 26px;margin-top:13px}
+  .im-facts .f{display:flex;flex-direction:column;gap:4px}
+  .im-facts .f .k{color:var(--beige-dim);font-family:var(--font-mono);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase}
+  .im-facts .f .v{color:var(--text);font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+  .im-facts .f .v.acc{color:var(--cyan-hot)}
+  .im-facts .f .v.empty{color:var(--danger)}
+  .im-sum{margin-top:15px;font-family:var(--font-prose);font-size:16px;line-height:1.4;color:var(--text);text-wrap:pretty}
+  .im-desc{margin-top:9px;font-family:var(--font-prose);font-size:15px;line-height:1.55;color:var(--muted);text-wrap:pretty}
+  .im-sec{margin-top:17px}
+  .im-sec-h{font-family:var(--font-mono);font-size:9px;letter-spacing:.28em;color:var(--cyan);text-transform:uppercase;display:flex;align-items:center;gap:8px;padding-bottom:8px}
+  .im-sec-h .dim{color:var(--beige-dim);letter-spacing:.2em;font-size:8.5px}
+  .im-sec-h::after{content:"";flex:1;height:1px;background:rgba(0,166,214,0.22)}
+  .im-fx{display:flex;flex-direction:column;gap:5px}
+  .im-fx .row{display:grid;grid-template-columns:16px 1fr auto;gap:10px;align-items:center;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;background:rgba(0,0,0,0.28);border-left:2px solid var(--cyan);padding:7px 10px}
+  .im-fx .row b{color:var(--text);font-weight:500}
+  .im-fx .row .op{color:var(--cyan);text-align:center}
+  .im-fx .row .s{color:var(--beige-dim);font-size:8.5px;letter-spacing:.18em}
+  .im-fx .row.aff{border-left-color:var(--beige)}
+  .im-fx .row.aff .op{color:var(--beige)}
+  .im-actions{position:relative;z-index:3;flex:0 0 auto;display:flex;gap:9px;padding:13px 18px 16px;border-top:1px solid rgba(212,191,125,0.28)}
+  .ia{--cut:8px;position:relative;background:transparent;border:0;padding:0;height:40px;cursor:pointer;font-family:var(--font-mono);flex:1}
+  .ia .af{position:absolute;inset:0;background:var(--cyan);clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+  .ia .ai{position:absolute;inset:1.5px;background:linear-gradient(180deg,#141a1d,#0e1316);clip-path:polygon(calc(var(--cut) - 1px) 0,100% 0,100% calc(100% - var(--cut) + 1px),calc(100% - var(--cut) + 1px) 100%,0 100%,0 calc(var(--cut) - 1px));display:flex;align-items:center;justify-content:center;gap:8px;color:var(--cyan-hot);font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;transition:box-shadow 160ms ease,color 160ms ease}
+  .ia:hover .ai{color:#fff;box-shadow:inset 0 0 20px rgba(0,166,214,0.3),0 0 15px rgba(0,166,214,0.4)}
+  .ia.ghost .af{background:rgba(212,191,125,0.45)}
+  .ia.ghost .ai{color:var(--beige)}
+  .ia.ghost:hover .ai{color:var(--text);box-shadow:inset 0 0 18px rgba(212,191,125,0.14)}
+  .ia.out .af{background:rgba(185,58,58,0.55)}
+  .ia.out .ai{color:var(--danger)}
+  .ia.out:hover .ai{color:var(--danger);box-shadow:none}
+
+  /* gear empty state */
+  .gear-empty{padding:20px 18px;text-align:center;background:repeating-linear-gradient(135deg,rgba(212,191,125,0.045) 0 6px,transparent 6px 12px);box-shadow:inset 0 0 0 1px rgba(212,191,125,0.2)}
+  .gear-empty .ge-glyph{font-size:17px;color:var(--beige-dim);margin-bottom:8px}
+  .gear-empty .ge-t{font-family:var(--font-mono);font-size:10px;letter-spacing:.28em;color:var(--beige);text-transform:uppercase}
+  .gear-empty .ge-s{font-family:var(--font-prose);font-size:14px;color:var(--muted);margin-top:6px}
+  .gear-empty .ge-s a{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(0,166,214,0.4)}
+  .gear-empty .ge-s a:hover{color:var(--cyan-hot)}
+  a{color:var(--cyan);text-decoration:none}a:hover{color:var(--cyan-hot)}
+
+  /* dev strip */
+  .devbar{position:fixed;right:26px;bottom:calc(var(--bar-bottom-h) + 12px);z-index:60;display:flex;gap:8px;align-items:center;font-family:var(--font-mono);font-size:8.5px;letter-spacing:.2em;color:var(--beige-dim);text-transform:uppercase}
+  .devbar button{background:rgba(10,10,10,.8);border:1px solid rgba(212,191,125,0.32);color:var(--muted);font-family:var(--font-mono);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;padding:5px 9px;cursor:pointer}
+  .devbar button:hover{color:var(--cyan-hot);border-color:var(--cyan)}
+
+
+  /* ---- Sub-buttons: original pill stack, now a single column hanging BELOW
+     the parent button (was an above/below pair centred on the active item,
+     which clipped against the top bar). ---- */
+  .nav-sub {
+    position: absolute; left: 50%; top: 100%; padding-top: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transform: translate(-50%, -6px) scale(0.95);
+    opacity: 0; pointer-events: none;
+    transition: opacity 180ms ease, transform 240ms cubic-bezier(.2,.7,.2,1);
+    z-index: 46;
+  }
+  .nav-sub .nav-btn { --w: 122px; --h: 56px; --cut: 9px; }
+  .nav-sub .nav-btn .nb-frame { background: var(--cyan); }
+  .nav-sub .nav-btn .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%),
+                linear-gradient(180deg, #141a1d, #0e1316);
+  }
+  .nav-sub .nav-btn .nb-icon { color: var(--cyan); font-size: 14px; }
+  .nav-sub .nav-btn .nb-label { font-size: 8.5px; letter-spacing: 0.22em; }
+  .nav-sub .nav-btn:hover .nb-inner {
+    box-shadow: inset 0 0 24px rgba(0,166,214,0.3),
+                0 0 18px rgba(0,166,214,0.5);
+  }
+  .nav-sub .nav-btn:hover .nb-icon { color: #fff; text-shadow: 0 0 10px rgba(0,166,214,0.85); }
+  .nav-sub .nav-btn.is-sub-active .nb-inner {
+    background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.22), transparent 60%),
+                linear-gradient(180deg, #16252b, #0f1b21);
+    box-shadow: inset 0 0 22px rgba(0,166,214,0.34),
+                0 0 16px rgba(0,166,214,0.45);
+  }
+  .nav-sub .nav-btn.is-sub-active .nb-icon  { color: var(--cyan-hot); text-shadow: 0 0 10px rgba(0,166,214,0.9); }
+  .nav-sub .nav-btn.is-sub-active .nb-label { color: var(--cyan-hot); }
+  .nav-slot:hover .nav-sub,
+  .nav-slot:focus-within .nav-sub,
+  .nav-slot:has(.is-sub-active) .nav-sub { opacity: 1; pointer-events: auto; transform: translate(-50%, 0) scale(1); }
+  .nav-slot.equipment, .nav-slot.rolls { position: relative; }
+  .navbar { overflow: visible; }
+
+
+</style>
+</head>
+<body>
+
+<div class="stage"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<div class="sweep" id="sweep"></div>
+
+<header class="topbar" role="banner">
+  <div class="top-left">
+    <div class="stat-block" aria-label="Level">
+      <div class="stat-row"><span class="stat-num">08</span><span class="stat-label">Level</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:62%"></i></div>
+    </div>
+    <div class="stat-block" aria-label="Reputation">
+      <div class="stat-row"><span class="stat-num">35</span><span class="stat-label">Reputation</span></div>
+      <div class="bar" aria-hidden="true"><i style="width:48%"></i></div>
+    </div>
+  </div>
+  <div class="top-center">
+    <div class="char-name">Ros Chrisstone<span class="cursor">█</span></div>
+    <div class="char-sub"><span>Half-Elf · Fighter</span><span class="sep">/</span><span>Champion Archetype</span><span class="sep">/</span><span>Brettany Reclamation</span></div>
+  </div>
+  <div class="top-right">
+    <div class="weight-block"><span class="ic">⚖</span><span class="val">45 / 120</span><span class="lab">Burden</span></div>
+    <div class="gold-block"><span class="ic">⊙</span><span class="val">1,247</span><span class="lab">Gold</span></div>
+  </div>
+</header>
+
+<div class="ticker above" aria-hidden="true">
+  <span>TASK_MANAGER_SD11S</span><span class="gap"></span>
+  <span class="dim">// AURUM_LEDGER_OK</span><span class="gap"></span>
+  <span>PROTOCOL: 6920-A44</span><span class="gap"></span>
+  <span class="dim">0001 0110 1001 0011 1100</span>
+</div>
+<div class="ticker below" aria-hidden="true">
+  <span>FRAME 08 // FEATURE.GRAPH</span><span class="gap"></span>
+  <span class="dim">GATES_RESOLVED</span><span class="gap"></span>
+  <span>NODES 0x2C7</span><span class="gap"></span>
+  <span class="dim">LOADOUT_BOUND</span>
+</div>
+
+<div class="side-label left"><span class="acc">FEATURES</span> &nbsp;//&nbsp; GRAPH RESOLVED &nbsp;//&nbsp; GATES OK</div>
+<div class="side-label right">Nodes 2C7 &nbsp;//&nbsp; <span class="acc">GEAR :: BOUND</span> &nbsp;//&nbsp; Live Derive</div>
+
+<nav class="navbar" aria-label="Primary">
+  <div class="nav-slot equipment">
+    <button class="nav-btn" data-nav="equipment">
+      <span class="nb-frame"></span><span class="nb-marker">01 ◇</span>
+      <span class="nb-inner"><span class="nb-icon"><i class="fa-solid fa-khanda"></i></span><span class="nb-label">Equipment</span></span>
+    </button>
+    <div class="nav-sub">
+      <button class="nav-btn" data-nav="inventory">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-bag-shopping"></i></span>
+          <span class="nb-label">Inventory</span>
+        </span>
+      </button>
+      <button class="nav-btn" data-nav="stat-panel">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-chart-simple"></i></span>
+          <span class="nb-label">Stat Panel</span>
+        </span>
+      </button>
+    </div>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="lore">
+      <span class="nb-frame"></span><span class="nb-marker">02 ◇</span>
+      <span class="nb-inner"><span class="nb-icon"><i class="fa-solid fa-book-open"></i></span><span class="nb-label">Lore</span></span>
+    </button>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="spellbook">
+      <span class="nb-frame"></span><span class="nb-marker">03 ◇</span>
+      <span class="nb-inner"><span class="nb-icon"><i class="fa-solid fa-scroll"></i></span><span class="nb-label">Spellbook</span></span>
+    </button>
+  </div>
+  <div class="nav-slot rolls">
+    <button class="nav-btn" data-nav="character">
+      <span class="nb-frame"></span><span class="nb-marker">04 ◇</span>
+      <span class="nb-inner"><span class="nb-icon"><i class="fa-solid fa-dice-d20"></i></span><span class="nb-label">Rolls</span></span>
+    </button>
+    <div class="nav-sub">
+      <button class="nav-btn is-sub-active" data-nav="features" aria-current="page">
+        <span class="nb-frame"></span>
+        <span class="nb-marker">◇</span>
+        <span class="nb-inner">
+          <span class="nb-icon"><i class="fa-solid fa-diagram-project"></i></span>
+          <span class="nb-label">Features</span>
+        </span>
+      </button>
+    </div>
+  </div>
+  <div class="nav-slot">
+    <button class="nav-btn" data-nav="journal">
+      <span class="nb-frame"></span><span class="nb-marker">05 ◇</span>
+      <span class="nb-inner"><span class="nb-icon"><i class="fa-solid fa-clipboard"></i></span><span class="nb-label">Journal</span></span>
+    </button>
+  </div>
+</nav>
+
+<div class="nav-meta">
+  <span class="dim">◇</span><span>Section</span><span class="acc">/ Features</span>
+  <span class="dim">·</span><span>Resolved Graph</span>
+</div>
+
+<main class="features">
+  <div class="col-header">
+    <span class="ch-num">01</span>
+    <span class="ch-title">Features</span>
+    <span class="ch-meta">
+      <span>Resolved <span class="acc">17</span> of 28 nodes</span>
+      <span class="dim">|</span>
+      <span>Loadout <span class="acc">Bound</span></span>
+    </span>
+  </div>
+
+  <div class="tabrow">
+    <button class="tab is-active" data-tab="usable">
+      <span class="t-frame"></span>
+      <span class="t-inner"><span class="t-lab">Usable</span><span class="t-count" id="cnt-usable">6</span></span>
+    </button>
+    <button class="tab" data-tab="passive">
+      <span class="t-frame"></span>
+      <span class="t-inner"><span class="t-lab">Passive</span><span class="t-count" id="cnt-passive">11</span></span>
+    </button>
+    <div class="tr-right">
+      <div class="hidden-note"><i class="fa-solid fa-eye-slash"></i><span id="hidden-count">11 not currently available</span></div>
+    </div>
+  </div>
+
+  <div class="filterrow">
+    <div class="chips" id="filters"></div>
+    <div class="gear-note" id="gear-note"><span class="lk"></span> Derived from equipped items <span class="dim">· never stored on the character</span></div>
+  </div>
+
+  <div class="region">
+    <div class="r-frame"></div><div class="r-gap"></div><div class="r-line"></div>
+    <div class="r-inner">
+      <div class="r-corner tl"></div><div class="r-corner br"></div>
+      <div class="feat-scroll scroll-y" id="feat-scroll"></div>
+    </div>
+  </div>
+</main>
+
+<div class="devbar">
+  <span>DEV</span>
+  <button id="dev-gear">Unequip feature gear</button>
+  <button id="dev-rest">Short rest</button>
+</div>
+
+<div class="imodal" id="imodal" role="dialog" aria-modal="true" aria-label="Feature detail">
+  <div class="im-scrim" data-close="1"></div>
+  <div class="im-panel" id="im-panel">
+    <div class="pn-gap"></div>
+    <div class="pn-line"></div>
+    <div class="im-inner">
+      <span class="im-corner tl"></span>
+      <span class="im-corner br"></span>
+      <div class="im-head" id="im-head"></div>
+      <div class="im-body" id="im-body"></div>
+      <div class="im-actions" id="im-actions"></div>
+    </div>
+  </div>
+</div>
+
+<footer class="bottombar" role="contentinfo">
+  <div class="bb-line">
+    <span class="dot"></span>
+    <span class="lab">Neural Link:</span><span class="val">Stable</span>
+    <span class="sep">|</span>
+    <span class="lab">Graph Nodes:</span><span class="val">28</span>
+    <span class="sep">|</span>
+    <span class="lab">Gates Resolved:</span><span class="val">0.04 ms</span>
+    <span class="sep">|</span>
+    <span class="lab">Loadout:</span><span class="dim" id="bb-loadout">Sunward Halberd · Beacon Shield</span>
+    <div class="bb-right">
+      <span class="lab">Codex</span><span class="val">v 2.4.7</span>
+      <span class="sep">|</span>
+      <span class="dot"></span><span class="val">DM Online</span>
+      <span class="sep">|</span>
+      <span class="lab" id="save-auto">SAVE · 00:44</span><span class="save-cursor">█</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ============================================================================
+   JSON-SWAP POINT  ▸▸▸  FEATURES
+   The screen renders entirely from FEATURES. Swap the object (later: per
+   character + per equipped item) and everything re-derives.
+
+   Per feature:
+     activation : 'action'|'bonus'|'reaction'|'free'  → usable tab
+                  null                                → passive tab
+     uses       : {max, left}  |  'at-will'  |  null
+     toggle     : true  → ON/OFF feature (Rage-like); `on` holds state
+     gated      : false → DOES NOT RENDER (counted in hiddenCount only)
+     effects[]  : derived from the feature's graph; each node may be gated
+     affectedBy[]: REVERSE lookup — other nodes targeting this feature.
+                   Omitted entirely when empty.
+   ============================================================================ */
+const GROUPS = {
+  class:      {name:'Class',      src:'Fighter 8'},
+  subclass:   {name:'Subclass',   src:'Champion'},
+  racial:     {name:'Racial',     src:'Half-Elf'},
+  feat:       {name:'Feat',       src:'2 taken'},
+  background: {name:'Background', src:'Brettany Reclamation'},
+  gear:       {name:'Gear Features', src:'', derived:true}
+};
+const ACTS = {action:'Action', bonus:'Bonus', reaction:'Reaction', free:'Free'};
+
+const FEATURES = {
+  hiddenCount: 11,
+  loadout: 'Sunward Halberd · Beacon Shield',
+  list: [
+    /* ---------- CLASS · usable ---------- */
+    {id:'second-wind', origin:["Fighter","Martial Reserve","Level 1","Second Wind"], reset:'Short rest', name:'Second Wind', icon:'fa-solid fa-heart-pulse', group:'class', tag:'Fighter 1',
+     activation:'bonus', uses:{max:2,left:2},
+     summary:'Draw on reserve to recover a burst of your own vitality.',
+     desc:'A trained breathing pattern the Reclamation drills into its line-holders. You reset your stance, force the ribs open, and buy back the wound you just took — once or twice a fight, no more.',
+     effects:[{op:'✚', txt:'Heals <b>1d10 + 8</b>', tag:'self'},{op:'⊕', txt:'+1 charge to <b>Reserve</b>', tag:'self'},{op:'⊘', txt:'Ends <b>Winded</b>', tag:'self', gated:false}],
+     affectedBy:[{src:'Vitalist Weave', from:'Beacon Shield', give:'+2 healed'}]},
+    {id:'action-surge', origin:["Fighter","Martial Reserve","Level 2","Action Surge"], reset:'Short rest', name:'Action Surge', icon:'fa-solid fa-bolt', group:'class', tag:'Fighter 2',
+     activation:'free', uses:{max:1,left:0},
+     summary:'Take one additional action on your turn, outside the count.',
+     desc:'The moment stretches. Nothing supernatural about it — just a body that has done this ten thousand times moving before the mind finishes deciding.',
+     effects:[{op:'⊕', txt:'+1 <b>action</b> this turn', tag:'self'}]},
+    {id:'ironhold', origin:["Fighter","Stance Training","Level 5","Ironhold Stance"], name:'Ironhold Stance', icon:'fa-solid fa-shield-halved', group:'class', tag:'Fighter 5',
+     activation:'bonus', uses:'at-will', toggle:true, on:true,
+     summary:'Hold ground: resist physical damage, but you may not move willingly.',
+     desc:'Feet planted, weight low, weapon braced against the hip. While held you are very hard to move and very hard to hurt — and you go nowhere.',
+     effects:[{op:'⊟', txt:'Resistance to <b>bludgeoning · piercing · slashing</b>'},{op:'⤒', txt:'Advantage on <b>Strength saves</b>'},{op:'⊘', txt:'Speed set to <b>0</b>'}],
+     affectedBy:[{src:'Polearm Drill', from:'Feat', give:'Reach 10 ft while held'}]},
+    {id:'riposte', origin:["Fighter","Reactive Drill","Level 3","Riposte Guard"], name:'Riposte Guard', icon:'fa-solid fa-reply', group:'class', tag:'Fighter 3',
+     activation:'reaction', uses:'at-will',
+     summary:'When a melee attack misses you, answer it immediately.',
+     desc:'Not a resource. A habit. If the swing misses, the counter is already moving — as often as your enemies are careless.',
+     effects:[{op:'⚔', txt:'Attack <b>1 target</b>', tag:'reach'},{op:'✖', txt:'Damage <b>1d10 + 4</b>'}]},
+
+    /* ---------- GEAR · usable (derived from equipped items) ---------- */
+    {id:'sunward-cleave', origin:["Equipped","Sunward Halberd","Reliquary Haft","Sunward Cleave"], reset:'Dawn', name:'Sunward Cleave', icon:'fa-solid fa-sun', group:'gear', tag:'Sunward Halberd',
+     activation:'action', uses:{max:3,left:2},
+     summary:'A wide radiant arc that catches everything in front of you.',
+     desc:'The halberd\'s edge takes light from wherever it can find it and gives it back all at once, in a line across the haft\'s full reach.',
+     effects:[{op:'⚔', txt:'Attack <b>all in 10 ft cone</b>'},{op:'✖', txt:'Damage <b>2d6 radiant</b>'},{op:'⌾', txt:'<b>DC 14 Dexterity</b> save', tag:'half'}],
+     affectedBy:[{src:'Radiant Empowerment', from:'Sunward Halberd', give:'+1d4 radiant'},{src:'Sanctity', from:'Background', give:'+1 DC vs undead'}]},
+    {id:'beacon-ward', origin:["Equipped","Beacon Shield","Ward Plate","Beacon Ward"], name:'Beacon Ward', icon:'fa-solid fa-tower-observation', group:'gear', tag:'Beacon Shield',
+     activation:'reaction', uses:'at-will',
+     summary:'Interpose the shield for an ally you can see within 5 feet.',
+     desc:'The shield answers proximity, not command. Step, turn, and the blow meant for someone beside you lands on brass instead.',
+     effects:[{op:'⊟', txt:'+3 <b>AC</b> to <b>1 ally</b>', tag:'5 ft'},{op:'⊕', txt:'+1 charge to <b>Ward</b>', tag:'self'}]},
+
+    /* ---------- CLASS · passive ---------- */
+    {id:'weapon-discipline', origin:["Fighter","Weapon Training","Level 1","Polearms"], name:'Weapon Discipline: Polearms', icon:'fa-solid fa-staff-snake', group:'class', tag:'Fighter 1',
+     activation:null, summary:'Polearm attacks that miss still graze for a small amount.',
+     desc:'Drilled reach work. Even a bad line of attack ends with the butt or the edge finding something.',
+     effects:[{op:'✖', txt:'On miss, <b>1d4</b> damage'}]},
+    {id:'combat-reflexes', origin:["Fighter","Level 2","Combat Reflexes"], name:'Combat Reflexes', icon:'fa-solid fa-stopwatch', group:'class', tag:'Fighter 2',
+     activation:null, summary:'You act earlier in the order and are rarely caught flat.',
+     desc:'The Reclamation grades this. Ros grades high.',
+     effects:[{op:'⤒', txt:'+5 <b>initiative</b>'},{op:'⊘', txt:'Cannot be <b>surprised</b> while conscious'}]},
+
+    /* ---------- SUBCLASS · passive ---------- */
+    {id:'decisive-strike', origin:["Fighter","Champion","Level 3","Decisive Strike"], name:'Decisive Strike', icon:'fa-solid fa-crosshairs', group:'subclass', tag:'Champion 3',
+     activation:null, summary:'Your weapon attacks land critically on a roll of 19 or 20.',
+     desc:'A widened window, earned by repetition rather than luck.',
+     effects:[{op:'⤒', txt:'Crit range <b>19–20</b>', tag:'weapon'}]},
+    {id:'athletic-cond', origin:["Fighter","Champion","Level 7","Athletic Conditioning"], name:'Athletic Conditioning', icon:'fa-solid fa-person-running', group:'subclass', tag:'Champion 7',
+     activation:null, summary:'Add half your proficiency to any physical check you are untrained in.',
+     desc:'Climbing, swimming, hauling, jumping a gap in a collapsing hold — all the same body.',
+     effects:[{op:'⤒', txt:'+2 to untrained <b>Str · Dex · Con</b> checks'}]},
+
+    /* ---------- RACIAL · passive ---------- */
+    {id:'fey-resolve', origin:["Half-Elf","Fey Ancestry","Fey Resolve"], name:'Fey Resolve', icon:'fa-solid fa-brain', group:'racial', tag:'Half-Elf',
+     activation:null, summary:'Charm slides off you, and you never sleep the fey sleep.',
+     desc:'A thin inheritance, but a reliable one.',
+     effects:[{op:'⤒', txt:'Advantage vs <b>charmed</b>'},{op:'⊘', txt:'Immune to magical <b>sleep</b>'}]},
+    {id:'duskvision', origin:["Half-Elf","Duskvision"], name:'Duskvision', icon:'fa-solid fa-eye', group:'racial', tag:'Half-Elf',
+     activation:null, summary:'You see in dim light out to sixty feet as if it were bright.',
+     desc:'Colour drains out past thirty feet, but shape and motion stay clean.',
+     effects:[{op:'⤒', txt:'Darkvision <b>60 ft</b>'}]},
+    {id:'adaptable', origin:["Half-Elf","Adaptable Bearing"], name:'Adaptable Bearing', icon:'fa-solid fa-comments', group:'racial', tag:'Half-Elf',
+     activation:null, summary:'Two extra skills of your choosing, kept sharp by circumstance.',
+     desc:'Belonging to two courts and neither teaches a person to read a room fast.',
+     effects:[{op:'⤒', txt:'Proficiency: <b>Insight · Persuasion</b>'}]},
+
+    /* ---------- FEAT · passive ---------- */
+    {id:'polearm-drill', origin:["Feats","Polearm Drill"], name:'Polearm Drill', icon:'fa-solid fa-ruler-combined', group:'feat', tag:'Feat',
+     activation:null, summary:'Your reach extends, and enemies entering it pay for the step.',
+     desc:'The oldest formation trick in Brettany: own the ten feet before the five.',
+     effects:[{op:'⤒', txt:'Reach <b>10 ft</b>', tag:'polearm'},{op:'⚔', txt:'Opportunity attack on <b>enter reach</b>'}]},
+
+    /* ---------- BACKGROUND · passive ---------- */
+    {id:'writ', origin:["Sanctity","Brettany Reclamation","10 Points","Writ of Reclamation"], name:'Writ of Reclamation', icon:'fa-solid fa-stamp', group:'background', tag:'Sanctity',
+     activation:null, summary:'Reclamation holdings owe you shelter, records access, and passage.',
+     desc:'A stamped writ, two witnesses, and a name the garrison clerks recognise. It opens doors that no amount of gold does.',
+     effects:[{op:'⤒', txt:'Advantage on <b>Reclamation</b> social checks'},{op:'⊙', txt:'Free lodging at <b>holdings</b>'}]},
+
+    /* ---------- GEAR · passive ---------- */
+    {id:'radiant-emp', origin:["Equipped","Sunward Halberd","Reliquary Haft","Radiant Empowerment"], name:'Radiant Empowerment', icon:'fa-solid fa-certificate', group:'gear', tag:'Sunward Halberd',
+     activation:null, summary:'Radiant damage you deal with this weapon is amplified.',
+     desc:'The reliquary set in the haft leaks. Usefully.',
+     effects:[{op:'✖', txt:'+1d4 <b>radiant</b>', tag:'→ sunward cleave'}]},
+    {id:'ward-anchor', origin:["Equipped","Beacon Shield","Salt Binding","Ward Anchor"], name:'Ward Anchor', icon:'fa-solid fa-anchor', group:'gear', tag:'Beacon Shield',
+     activation:null, summary:'The shield holds concentration steady when you are struck.',
+     desc:'Brass, salt-cured, older than the hold it came from.',
+     effects:[{op:'⤒', txt:'Advantage on <b>concentration</b> saves'}]},
+
+    /* ---------- GATED FALSE — these never render (Condemnation path) ---------- */
+    {id:'condemn-mark', name:'Mark of Condemnation', group:'class', tag:'Fighter 3', activation:'action', gated:false,
+     summary:'', desc:'', effects:[]},
+    {id:'condemn-sentence', name:'Sentence Unspoken', group:'subclass', tag:'Condemnation', activation:null, gated:false,
+     summary:'', desc:'', effects:[]}
+  ]
+};
+
+/* ---------------------------------------------------------------- state */
+const S = {tab:'usable', src:'all', popup:null, stack:[], gearEquipped:true};
+const live = () => FEATURES.list.filter(f => f.gated !== false && (f.group !== 'gear' || S.gearEquipped));
+const isUsable = f => !!f.activation;
+
+/* ---------------------------------------------------------------- render */
+const esc = s => (s||'');
+
+function useRail(f){
+  if (!isUsable(f)) return `<div class="fc-use"><span class="pass-badge">Passive</span></div>`;
+  if (f.toggle) return `<div class="fc-use"><span class="use-lab">${f.on ? 'Held · tap to end' : 'At will · tap to hold'}</span></div>`;
+  if (f.uses === 'at-will') return `<div class="fc-use"><span class="atwill"><span class="inf">∞</span> At will</span><span class="use-lab">Tap glyph</span></div>`;
+  if (f.uses){
+    const out = f.uses.left === 0;
+    return `<div class="fc-use"><span class="use-count ${out?'empty':''}">${f.uses.left}<span class="of">/${f.uses.max}</span></span><span class="use-lab">${out?'Spent':'Uses'}</span></div>`;
+  }
+  return `<div class="fc-use"></div>`;
+}
+
+/* the hexagon IS the use control: tap to spend / hold / release */
+function hex(f){
+  if (!isUsable(f)) return `<span class="fc-hex"><span class="hx-frame"></span><span class="hx-inner"><i class="fc-icon ${f.icon||'fa-solid fa-diamond'}"></i></span></span>`;
+  const out = f.uses && f.uses !== 'at-will' && f.uses.left === 0;
+  const attr = f.toggle ? `data-toggle="${f.id}"` : `data-spend="${f.id}"`;
+  const pip = f.toggle ? (f.on?'<span class="hx-pip">On</span>':'<span class="hx-pip">Hold</span>')
+            : out ? '<span class="hx-pip off">Spent</span>'
+            : (f.uses === 'at-will' ? '<span class="hx-pip">Use</span>' : '<span class="hx-pip">Spend</span>');
+  return `<button class="fc-hex usable ${f.on?'held':''} ${out?'exhausted':''}" ${attr} title="${f.toggle?(f.on?'End':'Hold'):'Use'} ${f.name}">
+    <span class="hx-frame"></span><span class="hx-inner"><i class="fc-icon ${f.icon||'fa-solid fa-diamond'}"></i></span>${pip}</button>`;
+}
+
+function card(f){
+  const fx = (f.effects||[]).filter(n => n.gated !== false);
+  return `<div class="fcard ${f.on?'is-on':''} ${(f.uses&&f.uses.left===0)?'spent':''}" data-card="${f.id}" role="button" tabindex="0" aria-haspopup="dialog">
+    <div class="fc-frame"></div>
+    <div class="fc-inner">
+      <div class="fc-top">
+        ${hex(f)}
+        <div>
+          <div class="fc-name">${f.name}</div>
+          <div class="fc-summary">${esc(f.summary)}</div>
+          <div class="fc-meta">
+            ${f.activation ? `<span class="act-badge ${f.activation}">${ACTS[f.activation]}</span>` : ''}
+            <span class="src-tag ${f.group==='gear'?'gear':''}">${f.tag}</span>
+            ${f.on ? `<span class="act-badge reaction"><i class="fa-solid fa-circle" style="font-size:6px;vertical-align:middle"></i> Active</span>` : ''}
+          </div>
+        </div>
+        ${useRail(f)}
+      </div>
+      ${fx.length ? `<div class="fx">${fx.map(n=>`<div class="fx-row"><span class="fx-op">${n.op}</span><span class="fx-txt">${n.txt}</span><span class="fx-tag">${n.tag||''}</span></div>`).join('')}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+/* Continuous stream: no group headers. Source is carried by each card's tag
+   and narrowed by the filter chips; the tabs remain the independent split. */
+const ACT_ORDER = ['action','bonus','reaction','free'];
+
+function gearEmpty(){
+  return `<div class="gear-empty stream-empty">
+    <div class="ge-glyph"><i class="fa-regular fa-square"></i></div>
+    <div class="ge-t">No feature-granting gear equipped</div>
+    <div class="ge-s">Gear features derive from your loadout. Equip an item that carries them and they appear here — <a href="G.U.I.D.E. Equipment.html">open Equipment</a>.</div>
+  </div>`;
+}
+
+function renderFilters(tabPool){
+  const keys = ['all', ...Object.keys(GROUPS)];
+  document.getElementById('filters').innerHTML = keys.map(k=>{
+    const n = k==='all' ? tabPool.length : tabPool.filter(f=>f.group===k).length;
+    const label = k==='all' ? 'All' : GROUPS[k].name.replace(' Features','');
+    return `<button class="chip ${S.src===k?'on':''} ${n===0?'zero':''}" data-src="${k}">
+      <span class="cf"></span><span class="ci">${label} <b>${n}</b></span></button>`;
+  }).join('');
+  document.getElementById('gear-note').classList.toggle('show', S.src==='gear' || (S.src==='all' && tabPool.some(f=>f.group==='gear')));
+}
+
+function render(){
+  const all = live();
+  const tabPool = all.filter(f => S.tab==='usable' ? isUsable(f) : !isUsable(f));
+  let pool = S.src==='all' ? tabPool : tabPool.filter(f=>f.group===S.src);
+
+  /* usable stream still clusters by activation so "what can I do as a reaction"
+     survives the loss of headers; passives keep source order */
+  if (S.tab==='usable') pool = pool.slice().sort((a,b)=>ACT_ORDER.indexOf(a.activation)-ACT_ORDER.indexOf(b.activation));
+
+  const showGearEmpty = !S.gearEquipped && (S.src==='gear' || (S.src==='all' && !pool.length));
+  document.getElementById('feat-scroll').innerHTML = pool.length
+    ? `<div class="g-grid">${pool.map(card).join('')}</div>`
+    : (showGearEmpty ? gearEmpty() : `<div class="gear-empty stream-empty"><div class="ge-t">Nothing here</div><div class="ge-s">No ${S.tab} features from this source are currently available.</div></div>`);
+
+  document.getElementById('cnt-usable').textContent  = all.filter(isUsable).length;
+  document.getElementById('cnt-passive').textContent = all.filter(f=>!isUsable(f)).length;
+  const hidden = FEATURES.hiddenCount + (S.gearEquipped?0:FEATURES.list.filter(f=>f.group==='gear'&&f.gated!==false).length);
+  document.getElementById('hidden-count').textContent = `${hidden} not currently available`;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('is-active', t.dataset.tab===S.tab));
+  renderFilters(tabPool);
+}
+
+/* ---------------------------------------------------------------- popup */
+/* Features reach other features through AFFECTED BY, so the popup keeps a
+   navigation stack: opening a contributor pushes, BACK pops. */
+const byName = n => live().find(f => f.name.toLowerCase() === String(n).toLowerCase());
+
+function openPopup(id, push){
+  const f = byId(id); if (!f) return;
+  if (push && S.popup && S.popup !== id) S.stack.push(S.popup);
+  S.popup = id;
+  const prev = S.stack.length ? byId(S.stack[S.stack.length-1]) : null;
+  const fx  = (f.effects||[]).filter(n=>n.gated!==false);
+  const aff = (f.affectedBy||[]).filter(n=>n.gated!==false);
+  const out = f.uses && f.uses !== 'at-will' && f.uses.left === 0;
+
+  document.getElementById('im-head').innerHTML = `
+    <div class="im-crystal ${isUsable(f)?'':'passive'}"><i class="${f.icon||'fa-solid fa-diamond'}"></i></div>
+    <div class="im-titles">
+      <div class="im-name ${f.on?'on':''}">${f.name}</div>
+      <div class="im-tags">
+        ${f.activation ? `<span class="act-badge ${f.activation}">${ACTS[f.activation]}</span>` : `<span class="pass-badge" style="border-left:0;padding-left:0">Passive</span>`}
+        <span class="src-tag ${f.group==='gear'?'gear':''}">${f.tag}</span>
+        ${f.on ? `<span class="act-badge reaction">Active</span>` : ''}
+      </div>
+    </div>
+    ${prev ? `<button class="im-back" id="im-back" title="Back to ${prev.name}" aria-label="Back to ${prev.name}">&lt;</button>` : ''}
+    <button class="im-close" id="im-close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>`;
+
+  const facts = [];
+  if (isUsable(f)) facts.push(`<div class="f"><span class="k">Activation</span><span class="v acc">${ACTS[f.activation]}</span></div>`);
+  if (f.uses === 'at-will' || f.toggle) facts.push(`<div class="f"><span class="k">Uses</span><span class="v acc">∞ At will</span></div>`);
+  else if (f.uses) facts.push(`<div class="f"><span class="k">Uses</span><span class="v ${out?'empty':'acc'}">${f.uses.left} / ${f.uses.max}</span></div>`);
+  if (f.reset) facts.push(`<div class="f"><span class="k">Resets on</span><span class="v">${f.reset}</span></div>`);
+  if (f.toggle) facts.push(`<div class="f"><span class="k">State</span><span class="v ${f.on?'acc':''}">${f.on?'Held · on':'Off'}</span></div>`);
+  if (f.group === 'gear') facts.push(`<div class="f"><span class="k">Derived from</span><span class="v">Equipped · ${f.tag}</span></div>`);
+
+  const chain = (f.origin||[f.tag, f.name]);
+  document.getElementById('im-body').innerHTML = `
+    <div class="im-origin">
+      <span class="ok">Origin</span>
+      ${chain.map((s,i)=>`<span class="step ${i===chain.length-1?'last':''}">${s}</span>${i<chain.length-1?'<span class="arw">→</span>':''}`).join('')}
+    </div>
+    ${facts.length?`<div class="im-facts">${facts.join('')}</div>`:''}
+    <div class="im-sum">${esc(f.summary)}</div>
+    <div class="im-desc">${esc(f.desc)}</div>
+    ${fx.length?`<div class="im-sec">
+      <div class="im-sec-h">Effects <span class="dim">· resolved nodes · ${fx.length}</span></div>
+      <div class="im-fx">${fx.map(n=>`<div class="row"><span class="op">${n.op}</span><span>${n.txt}</span><span class="s">${n.tag||''}</span></div>`).join('')}</div>
+    </div>`:''}
+    ${aff.length?`<div class="im-sec">
+      <div class="im-sec-h">Affected by <span class="dim">· reverse lookup · ${aff.length}</span></div>
+      <div class="im-fx">${aff.map(a=>{
+        const t = byName(a.src);
+        const label = t ? `<button class="aff-link" data-aff-open="${t.id}">${a.src}</button>` : `<b>${a.src}</b>`;
+        return `<div class="row aff"><span class="op ${t?'link':''}">↤</span><span>${label} · ${a.from}</span><span class="s">${a.give}</span></div>`;
+      }).join('')}</div>
+    </div>`:''}`;
+
+  let btns = '';
+  if (f.toggle) btns = `<button class="ia ${f.on?'ghost':''}" data-pop-toggle="${f.id}"><span class="af"></span><span class="ai">${f.on?'<i class="fa-solid fa-square-xmark"></i> End stance':'<i class="fa-solid fa-play"></i> Hold stance'}</span></button>`;
+  else if (f.uses === 'at-will') btns = `<button class="ia" data-pop-spend="${f.id}"><span class="af"></span><span class="ai"><i class="fa-solid fa-bolt"></i> Use · at will</span></button>`;
+  else if (f.uses) btns = `<button class="ia ${out?'out':''}" data-pop-spend="${f.id}"><span class="af"></span><span class="ai">${out?'<i class="fa-solid fa-ban"></i> No uses left':`<i class="fa-solid fa-bolt"></i> Spend · ${f.uses.left} left`}</span></button>`;
+  btns += `<button class="ia ghost" ${btns?'style="flex:0 0 116px"':''} data-close="1"><span class="af"></span><span class="ai">Close</span></button>`;
+  document.getElementById('im-actions').innerHTML = btns;
+
+  document.getElementById('imodal').classList.add('open');
+  document.getElementById('im-body').scrollTop = 0;
+  document.getElementById('im-close').addEventListener('click', closePopup);
+  if (prev) document.getElementById('im-back').addEventListener('click', popBack);
+}
+function popBack(){
+  const id = S.stack.pop();
+  if (!id) return closePopup();
+  S.popup = null; openPopup(id);
+}
+function closePopup(){ document.getElementById('imodal').classList.remove('open'); S.popup = null; S.stack = []; }
+
+/* ---------------------------------------------------------------- events */
+const byId = id => FEATURES.list.find(f=>f.id===id);
+
+document.addEventListener('click', e=>{
+  const affo = e.target.closest('[data-aff-open]');
+  if (affo){ openPopup(affo.dataset.affOpen, true); return; }
+
+  if (e.target.closest('[data-close]')){ closePopup(); return; }
+
+  const tab = e.target.closest('.tab');
+  if (tab){ S.tab = tab.dataset.tab; render(); return; }
+
+  const chip = e.target.closest('.chip[data-src]');
+  if (chip){ S.src = chip.dataset.src; render(); return; }
+
+  const ptg = e.target.closest('[data-pop-toggle]');
+  if (ptg){ const f = byId(ptg.dataset.popToggle); f.on = !f.on; render(); openPopup(f.id); return; }
+
+  const psp = e.target.closest('[data-pop-spend]');
+  if (psp){
+    const f = byId(psp.dataset.popSpend);
+    if (f.uses !== 'at-will' && f.uses.left > 0) f.uses.left--;
+    render(); openPopup(f.id); return;
+  }
+
+  const tg = e.target.closest('[data-toggle]');
+  if (tg){ const f = byId(tg.dataset.toggle); f.on = !f.on; render(); return; }
+
+  const sp = e.target.closest('[data-spend]');
+  if (sp){
+    const f = byId(sp.dataset.spend);
+    if (f.uses === 'at-will'){ flash(sp); return; }
+    if (f.uses.left > 0){ f.uses.left--; render(); }
+    else { const c = sp.closest('.fcard'); c.classList.add('denied'); setTimeout(()=>c.classList.remove('denied'), 300); }
+    return;
+  }
+
+  const c = e.target.closest('[data-card]');
+  if (c) openPopup(c.dataset.card);
+});
+
+document.addEventListener('keydown', e=>{
+  if (e.key === 'Escape' && S.popup){ S.stack.length ? popBack() : closePopup(); return; }
+  if (e.key!=='Enter' && e.key!==' ') return;
+  const c = document.activeElement && document.activeElement.closest('[data-card]');
+  if (c){ e.preventDefault(); openPopup(c.dataset.card); }
+});
+
+function flash(btn){
+  btn.classList.add('used-flash');
+  const pip = btn.querySelector('.hx-pip');
+  const was = pip ? pip.textContent : '';
+  if (pip) pip.textContent = 'Used';
+  setTimeout(()=>{ btn.classList.remove('used-flash'); if (pip) pip.textContent = was; }, 700);
+}
+
+document.getElementById('dev-gear').addEventListener('click', e=>{
+  S.gearEquipped = !S.gearEquipped;
+  e.target.textContent = S.gearEquipped ? 'Unequip feature gear' : 'Re-equip feature gear';
+  document.getElementById('bb-loadout').textContent = S.gearEquipped ? FEATURES.loadout : 'Fists · Traveller\'s clothes';
+  closePopup(); render();
+  document.getElementById('sweep').classList.remove('run');
+  void document.getElementById('sweep').offsetWidth;
+  document.getElementById('sweep').classList.add('run');
+});
+document.getElementById('dev-rest').addEventListener('click', ()=>{
+  FEATURES.list.forEach(f=>{ if (f.uses && f.uses !== 'at-will') f.uses.left = f.uses.max; });
+  render();
+});
+
+render();
+document.getElementById('sweep').classList.add('run');
+
+/* autosave ticker — shared chrome behaviour */
+let t = 44;
+setInterval(()=>{ t = (t+1)%60; document.getElementById('save-auto').textContent = 'SAVE · 00:'+String(t).padStart(2,'0'); }, 1000);
+</script>
+</body>
+</html>
