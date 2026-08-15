@@ -26,7 +26,7 @@ import type { CharacterRow, GraphEffect, GraphOp, ShardTree, VarDef } from './da
 import type { ExprScope, FormulaValue } from './expr.ts'
 import { ROLL_IDENTS, VAR_IDENTS, evalExpr, freeIdents } from './expr.ts'
 import { type ActiveSource, activeSources, effectiveSheet } from './effects.ts'
-import { OPS } from './opSchema.ts'
+import { IS_ACTIVATION, OPS } from './opSchema.ts'
 import { abilities, abilityMod, proficiency } from './dnd.ts'
 
 /** Lifted from ShardLattice.tsx so the engine and the lattice editor share one
@@ -586,6 +586,11 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     // lands on me", and no ResolveReq asks that. damageFlags() reads them.
     if (DAMAGE_FLAGS.includes(eff.op)) continue
 
+    // Activation outcomes run on a PRESS and they write. Folding one into a
+    // Resolution would fire it on every roll that matched — a `setVar` is not a
+    // contribution to a number. lib/graphState.ts runs them.
+    if (IS_ACTIVATION(eff.op)) continue
+
     const v = eff.op === 'add' ? value(e) : { flat: 0, dice: [] }
     if (!v) continue
 
@@ -722,12 +727,31 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
         out.push({ sev: 'err', id: eff.id, t: `Missing ${fd.label.toLowerCase()}`, s: `${eff.label || eff.id} is ${eff.op}, whose schema requires ${fd.label}.` })
       }
     }
-    if (eff.op !== 'add' && eff.value) {
+    if (eff.op !== 'add' && !IS_ACTIVATION(eff.op) && eff.value) {
       out.push({ sev: 'err', id: eff.id, t: 'Value on a flag', s: `${eff.label || eff.id} is ${eff.op}, which is a flag, never a number. Advantage is not a bonus.` })
     }
     if (eff.op === 'note' && eff.ask) {
       out.push({ sev: 'err', id: eff.id, t: 'Toggle on a note', s: `${eff.label || eff.id} is prose — there is nothing for the player to resolve. Use \`when\` if it should be conditional.` })
     }
+    if (IS_ACTIVATION(eff.op)) {
+      // An activation names a variable rather than a target: it writes state, it
+      // does not reach out at other nodes.
+      const v = (node.vars ?? []).find(x => x.name === eff.variable)
+      if (!v) {
+        out.push({ sev: 'err', id: eff.id, t: 'Unknown variable', s: `${eff.label || eff.id} writes "${eff.variable ?? ''}", which this node does not declare.` })
+      } else if (v.kind !== 'stored') {
+        out.push({ sev: 'err', id: eff.id, t: 'Writing a derived variable', s: `${label(v)} is derived — it is computed from its formula on every read, so writing it would be discarded.` })
+      } else if (v.scope === 'dm') {
+        // §31's whole point: writability is a LOCATION. A player presses this
+        // button, and migration 0015's trigger reverts a player write to dmVars —
+        // so without this check the activation would silently no-op at the table.
+        out.push({ sev: 'err', id: eff.id, t: 'Activation writes a DM variable', s: `${label(v)} is DM-only, and the player is the one pressing this. The write would be reverted by the database.` })
+      }
+      if (eff.target?.length) {
+        out.push({ sev: 'err', id: eff.id, t: 'Target on an activation', s: `${eff.label || eff.id} writes a variable on this character; it has no target to reach out at.` })
+      }
+    }
+
     if (DAMAGE_FLAGS.includes(eff.op)) {
       // The target IS the statement: with no selector, "resist" names no damage
       // kind and says nothing at all.

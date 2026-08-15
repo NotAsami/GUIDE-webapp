@@ -43,9 +43,10 @@ export type OpField = {
 
 export type OpDef = {
   label: string
-  /** Only passive contributions exist so far. Activation outcomes (§23) arrive
-   *  with the activation slice and will carry `group: 'activation'`. */
-  group: 'passive'
+  /** `passive` modifies a roll; `activation` runs on a press and writes state.
+   *  The palette groups them, and the two never mix in one code path — resolve()
+   *  reads only passives, runActivation() only activations. */
+  group: 'passive' | 'activation'
   icon: string
   blurb: string
   fields: OpField[]
@@ -98,16 +99,54 @@ export const OPS: Record<GraphOp, OpDef> = {
   resist: flag('resist', 'fa-shield-halved', 'Halves incoming damage of the matched kind. Target a tag — the tag names the damage type.'),
   vuln: flag('vuln', 'fa-heart-crack', 'Doubles incoming damage of the matched kind.'),
   immune: flag('immune', 'fa-shield', 'Nullifies incoming damage of the matched kind.'),
+  setVar: {
+    label: 'setVar', group: 'activation', icon: 'fa-equals',
+    blurb: 'On activation, writes a value into one of this feature’s variables. This is how a feature turns itself on.',
+    fields: [
+      {
+        key: 'variable', type: 'reference', ref: 'variable', label: 'Variable', required: true,
+        desc: 'A variable declared in this feature’s Variables block. DM-only variables cannot be written by an activation — the player would be the one pressing the button.',
+        example: 'isRaging',
+      },
+      {
+        key: 'value', type: 'formula', label: 'Value', required: true,
+        desc: 'Expression evaluated at activation and stored. Must match the variable’s type.',
+        example: 'true',
+      },
+    ],
+  },
+  addVar: {
+    label: 'addVar', group: 'activation', icon: 'fa-plus-minus',
+    blurb: 'On activation, increments one of this feature’s variables. Use a negative value to spend a charge.',
+    fields: [
+      {
+        key: 'variable', type: 'reference', ref: 'variable', label: 'Variable', required: true,
+        desc: 'A number variable declared in this feature’s Variables block.',
+        example: 'charges',
+      },
+      {
+        key: 'value', type: 'formula', label: 'Change by', required: true,
+        desc: 'Signed expression added to the current value.',
+        example: '-1',
+      },
+    ],
+  },
 }
 
 /** Palette order — what an author reaches for first, and what hides behind MORE. */
 export const PALETTE = ['add', 'adv', 'dis', 'crit', 'resist'] as const satisfies readonly GraphOp[]
 export const PALETTE_MORE = ['vuln', 'immune', 'note'] as const satisfies readonly GraphOp[]
-export const OP_ORDER: GraphOp[] = [...PALETTE, ...PALETTE_MORE]
+/** Activation outcomes get their own palette group — they answer a different
+ *  question ("what happens when I press this") from every op above. */
+export const PALETTE_ACT = ['setVar', 'addVar'] as const satisfies readonly GraphOp[]
+export const OP_ORDER: GraphOp[] = [...PALETTE, ...PALETTE_MORE, ...PALETTE_ACT]
+
+export const IS_ACTIVATION = (op: GraphOp) => OPS[op].group === 'activation'
 
 export const OP_TITLE: Record<GraphOp, string> = {
   add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', note: 'Note',
   resist: 'Resist', vuln: 'Vuln', immune: 'Immune',
+  setVar: 'Set Var', addVar: 'Add Var',
 }
 
 /** The ops whose target names a damage kind rather than a roll. Mirrors the

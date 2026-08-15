@@ -771,3 +771,40 @@ test('a broken cell in a level table is caught at author time', () => {
   const found = auditNode({ graph: [{ id: 'e1', op: 'add', value: '1', byLevel: table, label: 'T', target: ['roll:damage'] }] })
   assert.ok(found.some(a => a.t === 'Bad level table' && a.s.includes('5')))
 })
+
+test('auditNode holds an activation to its own shape', () => {
+  const vars: VarDef[] = [
+    { name: 'isRaging', kind: 'stored', type: 'bool' },
+    { name: 'mercy', kind: 'stored', type: 'num', scope: 'dm' },
+    { name: 'doubled', kind: 'derived', formula: 'level * 2' },
+  ]
+  const act = (over: Partial<GraphEffect>): GraphEffect =>
+    ({ id: 'a1', op: 'setVar', variable: 'isRaging', value: 'true', label: 'Rage', ...over })
+
+  // §31: writability is a LOCATION. A player presses this button, and migration
+  // 0015 reverts a player write to dmVars — so without this check the activation
+  // would look fine and silently no-op at the table.
+  assert.ok(auditNode({ vars, graph: [act({ variable: 'mercy', value: '5' })] })
+    .some(a => a.t === 'Activation writes a DM variable'))
+  assert.ok(auditNode({ vars, graph: [act({ variable: 'doubled', value: '5' })] })
+    .some(a => a.t === 'Writing a derived variable'))
+  assert.ok(auditNode({ vars, graph: [act({ variable: 'nope' })] })
+    .some(a => a.t === 'Unknown variable'))
+  assert.ok(auditNode({ vars, graph: [act({ target: ['roll:attack'] })] })
+    .some(a => a.t === 'Target on an activation'))
+  // A `value` on an activation is legal — it is the assigned value, not a
+  // contribution, so the "value on a flag" rule must not fire.
+  assert.deepEqual(auditNode({ vars, graph: [act({})] }), [])
+})
+
+test('an activation never reaches a Resolution', () => {
+  // It writes on a press. Folding it into resolve() would fire it on every roll
+  // that matched, which is not what "on activation" means.
+  const c = withFeatures([gfeat('Rage', [
+    { id: 'a1', op: 'setVar', variable: 'isRaging', value: 'true', label: 'Rage' },
+  ])])
+  const r = resolve(buildContext(c), { kind: 'damage' })
+  assert.equal(r.riders.length, 0)
+  assert.equal(r.flat, 0)
+  assert.deepEqual(r.problems, [])
+})

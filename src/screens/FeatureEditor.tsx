@@ -29,8 +29,8 @@ import { useLocalDraft } from '../lib/draft'
 import { useAutoGrow } from '../lib/textareaHooks'
 import { auditNode, matchCount, normalizeTag, gid, nodeGid, type AuditItem, type AuthoredNode } from '../lib/graph'
 import {
-  OPS, OP_ORDER, OP_TITLE, PALETTE, PALETTE_MORE, ROLL_SELECTORS, SOURCES,
-  ACTIVATIONS, ACT_ORDER, COLORS, DEFAULT_COLOR, IS_DAMAGE_FLAG,
+  OPS, OP_ORDER, OP_TITLE, PALETTE, PALETTE_MORE, PALETTE_ACT, ROLL_SELECTORS, SOURCES,
+  ACTIVATIONS, ACT_ORDER, COLORS, DEFAULT_COLOR, IS_ACTIVATION, IS_DAMAGE_FLAG,
   type OpField, type ActivationKind,
 } from '../lib/opSchema'
 import type {
@@ -1044,6 +1044,18 @@ function FeatureForm(p: FormProps) {
                       <i className="fa-solid fa-ellipsis" />More
                     </button>}
               </div>
+              {/* Activations answer a different question from everything above —
+                  "what happens when the player presses this" rather than "what
+                  modifies this roll" — so they get their own group. */}
+              <div className={styles.oppalGrp}><span className={cx(styles.gl, styles.act)}>Activation outcomes</span></div>
+              <div className={styles.oppalRow}>
+                {PALETTE_ACT.map(o => (
+                  <button key={o} type="button" className={cx(styles.opb, styles.act)} onClick={() => {
+                    update(x => ({ ...x, graph: [...(x.graph ?? []), blankEffect(o)] }))
+                    p.setOpenEffect(graph.length); p.setOpen({ ...p.open, effects: true })
+                  }}><i className="fa-solid fa-plus" />{OP_TITLE[o]}</button>
+                ))}
+              </div>
             </div>
 
             {graph.map((eff, ei) => (
@@ -1094,7 +1106,7 @@ function EffectRow({ eff, namesByGid, onOpen, onDelete }: {
   const val = opValueBit(eff)
   const flags = [eff.when?.trim() && 'when', eff.ask?.trim() && 'ask'].filter(Boolean)
   return (
-    <div className={cx(styles.efrow, IS_DAMAGE_FLAG(eff.op) && styles.flag, badLab && styles.bad)}
+    <div className={cx(styles.efrow, IS_DAMAGE_FLAG(eff.op) && styles.flag, IS_ACTIVATION(eff.op) && styles.act, badLab && styles.bad)}
       role="button" tabIndex={0} onClick={onOpen}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } }}>
       <i className={cx('fa-solid fa-chevron-right', styles.ch)} />
@@ -1127,6 +1139,7 @@ function EffectCard({ eff, ei, d, setEffect, update, nodes, namesByGid, setPop, 
   const badLab = !eff.label?.trim()
   const targets = eff.target ?? []
   const isFlag = IS_DAMAGE_FLAG(eff.op)
+  const isAct = IS_ACTIVATION(eff.op)
 
   const counts = targets.map(t => (t.startsWith('roll:') ? Infinity : matchCount(t, nodes)))
   const thingsAndTags = counts.filter(n => Number.isFinite(n)).reduce((a: number, b) => a + b, 0)
@@ -1166,16 +1179,23 @@ function EffectCard({ eff, ei, d, setEffect, update, nodes, namesByGid, setPop, 
         }}>
           {OP_ORDER.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
-        <span className={cx(styles.grpPill, isFlag && styles.flag)}>
-          <i className={`fa-solid ${isFlag ? 'fa-shield-halved' : 'fa-infinity'}`} />
-          {isFlag ? 'Damage flag' : 'Passive contribution'}
+        <span className={cx(styles.grpPill, isFlag && styles.flag, isAct && styles.act)}>
+          <i className={`fa-solid ${isAct ? 'fa-bolt' : isFlag ? 'fa-shield-halved' : 'fa-infinity'}`} />
+          {isAct ? 'Activation outcome' : isFlag ? 'Damage flag' : 'Passive contribution'}
         </span>
         <button type="button" className={cx('fa-solid fa-trash', styles.dx)}
           onClick={() => { update(x => ({ ...x, graph: (x.graph ?? []).filter((_, j) => j !== ei) })); onClose() }} />
       </div>
       <div className={styles.opBlurb}>{cfg?.blurb}</div>
 
-      {/* targets */}
+      {/* targets — activations have none: they write a variable on this
+          character rather than reaching out at another node. */}
+      {isAct ? (
+        <div className={styles.tgtOwn}>
+          <i className="fa-solid fa-bolt" />
+          <span>No target — this writes one of this feature’s own variables when the player presses Use.</span>
+        </div>
+      ) : (<>
       <div className={styles.subsec}>
         <span className={styles.sl}>Target</span>
         <span className={styles.qm} onClick={() => setPop({ k: 'help', which: 'target' })}>?</span>
@@ -1236,6 +1256,7 @@ function EffectCard({ eff, ei, d, setEffect, update, nodes, namesByGid, setPop, 
       <button type="button" className={styles.addmini} onClick={() => setEffect(ei, { target: [...targets, 'tag:'] })}>
         <i className="fa-solid fa-plus" /> Add selector
       </button>
+      </>)}
 
       {/* schema-driven parameters */}
       <div className={styles.subsec}><span className={styles.sl}>{cfg?.label} parameters</span></div>
