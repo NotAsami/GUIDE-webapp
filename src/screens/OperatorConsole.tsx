@@ -20,7 +20,7 @@ import type {
   QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow,
   CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity,
   ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
-  Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, CatalogFeatureData,
+  Feature, FeatureCategory, FeatureKind, CatalogFeatureRow,
   EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow,
   EffectDuration, EffectRef,
   Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData,
@@ -30,6 +30,7 @@ import { ITEM_SLOTS, PERSON, isRingSlot } from '../lib/equip'
 import { SKILLS, ABILITY_ORDER, ABILITY_ABBR } from '../lib/dnd'
 import { isStackable, place, routeItem } from '../lib/placement'
 import { OperatorInventory } from './OperatorInventory'
+import { normalizeTag } from '../lib/graph'
 import styles from './OperatorConsole.module.css'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -1185,7 +1186,7 @@ function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, mem
         {catTabs.map(t => (
           <button key={t.key} className={cx(styles.catTab, t.key === tab && styles.sel, t.soon && styles.stub)}
             disabled={t.soon} title={t.soon ? 'Its own later slice' : undefined}
-            onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else setTab(t.key as 'items' | 'features' | 'spells' | 'effects' | 'shops') }}>
+            onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setTab(t.key as 'items' | 'features' | 'spells' | 'effects' | 'shops') }}>
             <i className={`fa-solid ${t.icon}`} />{t.label}
             {t.n != null && <span className={styles.ctC}>{t.n}</span>}
           </button>
@@ -1197,8 +1198,6 @@ function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, mem
           <i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span>
           <span>{tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : error}</span>
         </div>
-      ) : tab === 'features' ? (
-        <FeatureLibrarySurface lib={featureLib} />
       ) : tab === 'spells' ? (
         <SpellLibrarySurface lib={spellLib} />
       ) : tab === 'effects' ? (
@@ -1709,17 +1708,6 @@ const FEAT_CATS: { key: FeatureCategory; label: string }[] = [
   { key: 'sense', label: 'Sense' },
   { key: 'other', label: 'Other' },
 ]
-const FEAT_KINDS: { key: FeatureKind | ''; label: string }[] = [
-  { key: '', label: 'Neutral' },
-  { key: 'levelup', label: 'Level-Up (cyan)' },
-  { key: 'equipment', label: 'Equipment (gold)' },
-  { key: 'corruption', label: 'Corruption (violet)' },
-]
-const FEATURE_ICONS = [
-  'fa-star', 'fa-bolt', 'fa-heart-pulse', 'fa-wind', 'fa-fire', 'fa-droplet',
-  'fa-eye', 'fa-moon', 'fa-shield-halved', 'fa-hand-fist', 'fa-user-ninja', 'fa-paw',
-  'fa-feather', 'fa-brain', 'fa-comments', 'fa-skull',
-]
 
 /** Stamp a library template into a grantable Feature copy (fresh instance id +
  *  back-ref), mirroring grantSnapshot for items. */
@@ -1904,189 +1892,11 @@ function ProficienciesCard({ member, row, onUpdate, log }: {
   )
 }
 
-/** The Features tab of the Catalog: author-once library of feats/perks/boons.
- *  Same index+form pattern as the Items tab; grants/embeds are snapshots. */
-function FeatureLibrarySurface({ lib }: { lib: DmFeaturesState }) {
-  const { features, createFeature, updateFeature, deleteFeature, loading } = lib
-  const [selId, setSelId] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
-
-  const activeId = creating ? null : (selId ?? features[0]?.id ?? null)
-  const selected = features.find(f => f.id === activeId) ?? null
-
-  async function handleSubmit(data: CatalogFeatureData) {
-    if (selected) {
-      await updateFeature(selected.id, { data })
-    } else {
-      const created = await createFeature({ data })
-      if (created) { setCreating(false); setSelId(created.id) }
-    }
-  }
-  async function handleDelete() {
-    if (!selected) return
-    await deleteFeature(selected.id)
-    setSelId(null)
-  }
-
-  return (
-    <div className={styles.catLayout}>
-      <div className={styles.catIndex}>
-        <div className={styles.catNew}>
-          <Btn tone="cyan" icon="fa-plus" label="New Feature" onClick={() => { setCreating(true); setSelId(null) }} />
-        </div>
-        {FEAT_CATS.map(cat => {
-          const rows = features.filter(f => (f.data?.category ?? 'other') === cat.key)
-          if (!rows.length) return null
-          return (
-            <div key={cat.key} className={styles.catGrp}>
-              <div className={styles.catGrpHead}><span className={styles.ghT}>{cat.label}</span><span className={styles.ghC}>{rows.length}</span></div>
-              <div className={styles.catRows}>
-                {rows.map(f => (
-                  <button key={f.id} className={cx(styles.catRow, f.id === activeId && !creating && styles.sel)}
-                    style={{ ['--rar' as string]: 'var(--amber)' }} onClick={() => { setCreating(false); setSelId(f.id) }}>
-                    <span className={styles.crIc}><i className={`fa-solid ${f.data?.icon ?? 'fa-star'}`} /></span>
-                    <span className={styles.crTx}>
-                      <span className={styles.crT}>{f.data?.name ?? 'Untitled'}</span>
-                      <span className={styles.crS}>{f.data?.source ?? cat.label}{f.data?.usage ? ` · ${f.data.usage}` : ''}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )
-        })}
-        {features.length === 0 && <div className={styles.catEmpty}>{loading ? '· loading ·' : '— library empty —'}</div>}
-      </div>
-
-      <div className={styles.catForm}>
-        <FeatureForm key={activeId ?? 'new'} feature={selected} onSubmit={handleSubmit} onDelete={selected ? handleDelete : undefined} />
-      </div>
-    </div>
-  )
-}
-
-function FeatureForm({ feature, onSubmit, onDelete }: {
-  feature: CatalogFeatureRow | null
-  onSubmit: (data: CatalogFeatureData) => Promise<void>
-  onDelete?: () => void
-}) {
-  const d = feature?.data
-  const [name, setName] = useState(d?.name ?? '')
-  const [category, setCategory] = useState<FeatureCategory>(d?.category ?? 'other')
-  const [kind, setKind] = useState<FeatureKind | ''>(d?.kind ?? 'equipment')
-  const [source, setSource] = useState(d?.source ?? '')
-  const [usage, setUsage] = useState(d?.usage ?? '')
-  const [icon, setIcon] = useState(d?.icon ?? 'fa-star')
-  const [light, setLight] = useState(d?.light_description ?? '')
-  const [deep, setDeep] = useState(d?.deep_description ?? '')
-  const [maxUses, setMaxUses] = useState(d?.uses?.max ?? 0)
-  const [recharge, setRecharge] = useState<'short' | 'long' | ''>(d?.recharge ?? '')
-  const [roll, setRoll] = useState(d?.roll ?? '')
-  const [rollLabel, setRollLabel] = useState(d?.rollLabel ?? '')
-  const [rollTone, setRollTone] = useState<'heal' | 'buff' | ''>(d?.rollTone ?? '')
-  const [busy, setBusy] = useState(false)
-
-  function build(): CatalogFeatureData {
-    return {
-      name: name.trim(), category, icon,
-      ...(kind ? { kind } : {}),
-      ...(source.trim() ? { source: source.trim() } : {}),
-      ...(usage.trim() ? { usage: usage.trim() } : {}),
-      ...(light.trim() ? { light_description: light.trim() } : {}),
-      ...(deep.trim() ? { deep_description: deep.trim() } : {}),
-      // Uses > 0 = a spendable counter (granted copies start full); 0 = passive.
-      ...(maxUses > 0 ? { uses: { current: maxUses, max: maxUses }, ...(recharge ? { recharge } : {}) } : {}),
-      ...(roll.trim() ? { roll: roll.trim(), ...(rollLabel.trim() ? { rollLabel: rollLabel.trim() } : {}), ...(rollTone ? { rollTone } : {}) } : {}),
-    }
-  }
-  async function submit() {
-    setBusy(true)
-    await onSubmit(build())
-    setBusy(false)
-  }
-
-  return (
-    <>
-      <div className={styles.catFormHead}>
-        <span className={styles.cfhT}>{feature ? 'Edit Feature' : 'New Feature'}</span>
-        <span className={styles.cfhId}>{feature ? feature.id : 'unsaved template'}</span>
-      </div>
-
-      <span className={styles.fieldLab}>Name</span>
-      <input className={styles.sessIn} value={name} onChange={e => setName(e.target.value)} placeholder="Name the feature…" />
-
-      <div className={styles.catGrid2}>
-        <div>
-          <span className={styles.fieldLab}>Category</span>
-          <select className={styles.selIn} value={category} onChange={e => setCategory(e.target.value as FeatureCategory)}>
-            {FEAT_CATS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
-        </div>
-        <div>
-          <span className={styles.fieldLab}>Card Tint</span>
-          <select className={styles.selIn} value={kind} onChange={e => setKind(e.target.value as FeatureKind | '')}>
-            {FEAT_KINDS.map(k => <option key={k.key} value={k.key}>{k.label}</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div className={styles.catGrid2}>
-        <div><span className={styles.fieldLab}>Source</span><input className={styles.sessIn} value={source} onChange={e => setSource(e.target.value)} placeholder="e.g. Cloak of Elvenkind" /></div>
-        <div><span className={styles.fieldLab}>Usage</span><input className={styles.sessIn} value={usage} onChange={e => setUsage(e.target.value)} placeholder="e.g. 1/short rest · passive" /></div>
-      </div>
-
-      <span className={styles.fieldLab}>Icon</span>
-      <div className={styles.catIcons}>
-        {FEATURE_ICONS.map(ic => (
-          <button key={ic} className={cx(styles.catIc, ic === icon && styles.sel)} onClick={() => setIcon(ic)} title={ic} aria-label={ic}>
-            <i className={`fa-solid ${ic}`} />
-          </button>
-        ))}
-      </div>
-
-      <div className={styles.qLabRow}>
-        <span className={styles.fieldLab}>Card Text</span>
-        <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing · **bold** *italics*</span>
-      </div>
-      <textarea className={styles.catProse} value={light} onChange={e => setLight(e.target.value)} placeholder="The short text on the feature card…" />
-
-      <span className={styles.fieldLab}>Detail Text</span>
-      <textarea className={styles.catProse} value={deep} onChange={e => setDeep(e.target.value)} placeholder="The fuller detail shown when the card is opened…" />
-
-      <div className={styles.catGrid3}>
-        <div><span className={styles.fieldLab}>Uses (0 = passive)</span><input className={styles.sessIn} type="number" min={0} value={maxUses} onChange={e => setMaxUses(Math.max(0, parseInt(e.target.value || '0', 10) || 0))} /></div>
-        <div>
-          <span className={styles.fieldLab}>Recharge</span>
-          <select className={styles.selIn} value={recharge} disabled={maxUses <= 0} onChange={e => setRecharge(e.target.value as 'short' | 'long' | '')}>
-            <option value="">Manual (DM)</option>
-            <option value="short">Short rest</option>
-            <option value="long">Long rest</option>
-          </select>
-        </div>
-        <div><span className={styles.fieldLab}>Roll</span><input className={styles.sessIn} value={roll} onChange={e => setRoll(e.target.value)} placeholder="e.g. 1d10 + 7" /></div>
-      </div>
-
-      {roll.trim() && (
-        <div className={styles.catGrid2}>
-          <div><span className={styles.fieldLab}>Roll Label</span><input className={styles.sessIn} value={rollLabel} onChange={e => setRollLabel(e.target.value)} placeholder="e.g. Healing" /></div>
-          <div>
-            <span className={styles.fieldLab}>Roll Tone</span>
-            <select className={styles.selIn} value={rollTone} onChange={e => setRollTone(e.target.value as 'heal' | 'buff' | '')}>
-              <option value="">Show-only</option>
-              <option value="heal">Heal (applies HP)</option>
-              <option value="buff">Buff (cyan)</option>
-            </select>
-          </div>
-        </div>
-      )}
-
-      <div className={styles.qActions}>
-        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : feature ? 'Save Feature' : 'Create Feature'} onClick={() => void submit()} disabled={busy || !name.trim()} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
-      </div>
-    </>
-  )
-}
+/* The Features tab now navigates to /dm/features — the standalone Feature
+   Editor. FeatureLibrarySurface + FeatureForm lived here and were deleted with
+   it: that form could only author prose, and rebuilt `data` field-by-field on
+   every save, so it silently dropped `vars`, `tags` and `graph` — the exact
+   fields the graph engine reads. */
 
 // ============================================================
 // EFFECT LIBRARY (Catalog · Effects tab) — the single source for what an
@@ -2259,7 +2069,9 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
   const tagHits = allTags.filter(t => t.includes(tagInput.trim().toLowerCase()) && !tags.includes(t)).slice(0, 8)
 
   function addTag(raw: string) {
-    const t = raw.trim().toLowerCase().replace(/\s+/g, '_')
+    // normalizeTag, not a local copy: the resolver matches tags through it, and
+    // two normalisers that disagree make targeting fail with no error at all.
+    const t = normalizeTag(raw)
     if (t && !tags.includes(t)) setTags(list => [...list, t])
     setTagInput('')
   }

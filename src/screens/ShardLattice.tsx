@@ -4,8 +4,10 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmFeatures, type DmFeaturesState } from '../lib/dm'
 import { useDmShards, type EditorNode, type EditorTree } from '../lib/dmShards'
+import { useLocalDraft } from '../lib/draft'
 import { RING_GAP, branchColor, nodeXY } from '../lib/shards'
 import { MOD_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '../lib/modEditor'
+import type { AuditItem } from '../lib/graph'
 import type { Feature, ItemEffects, ShardPerk } from '../lib/database.types'
 import styles from './ShardLattice.module.css'
 
@@ -82,8 +84,8 @@ function useAutoGrow(value: string) {
   }, [value])
   return ref
 }
-type AuditSev = 'err' | 'warn' | 'ok'
-type AuditItem = { sev: AuditSev; id: string | null; t: string; s: string }
+// AuditSev/AuditItem live in lib/graph.ts — the feature graph's audit and this
+// one report the same shape to the same UI, so they share one vocabulary.
 
 /** Lattice audit — a direct port of shard-lattice.js's audit(): orphan nodes,
  *  unreachable branches, dangling/inward-flow links, ring overlaps, a free-node
@@ -144,11 +146,24 @@ export function ShardLattice() {
   const { session, loading: authLoading } = useAuth()
   const { isDm, loading: dmLoading } = useDmStatus()
   const nav = useNavigate()
-  const { trees, loading, error, saveTree, publishTree, createTree, deleteTree } = useDmShards()
+  const { trees, drafts, loading, error, saveTree, publishTree, createTree, deleteTree } = useDmShards()
   const featureLib = useDmFeatures()
 
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [draft, setDraft] = useState<EditorTree | null>(null)
+  // The draft ladder, same as the Feature Editor: localStorage autosaves every
+  // keystroke, Save Draft parks it on the secrets row, Publish promotes it into
+  // the catalog. `base` is the parked draft if there is one, else the published
+  // tree — so reopening parked work reads clean rather than instantly dirty.
+  const base = activeId ? drafts[activeId] ?? trees.find(t => t.id === activeId) ?? null : null
+  const { draft, dirty, savedAt, update: updateDraft, reset, clear } =
+    useLocalDraft<EditorTree>(`shard:${activeId ?? 'none'}`, base)
+  // Shim so the sub-inspectors keep their existing `Dispatch<SetStateAction>`
+  // prop and none of them had to change: functional updates route to the
+  // autosaving path, direct assignment to the reverting one.
+  const setDraft = useCallback<React.Dispatch<React.SetStateAction<EditorTree | null>>>(v => {
+    if (typeof v === 'function') updateDraft(prev => v(prev) ?? prev)
+    else reset(v)
+  }, [updateDraft, reset])
   const [tab, setTab] = useState<'shard' | 'node'>('shard')
   const [tool, setTool] = useState<Tool>('select')
   const [selId, setSelId] = useState<string | null>(null)
@@ -171,28 +186,20 @@ export function ShardLattice() {
   const toastTimer = useRef<number | undefined>(undefined)
 
   useEffect(() => { if (!activeId && trees.length) setActiveId(trees[0].id) }, [trees, activeId])
+  // Selection changed: reset the view, but never the draft — useLocalDraft
+  // re-seeds that from its key, so an unsaved edit survives a tab away and back.
   useEffect(() => {
-    const t = trees.find(x => x.id === activeId)
-    if (t) {
-      setDraft(t)
-      setRings(Math.max(3, Math.max(0, ...t.nodes.map(n => n.tier)) + 1))
-      setSelId(null); setSelEdge(null); setLinkSrc(null); setTab('shard'); setTool('select'); setMode('author')
-    }
-  }, [activeId, trees])
-
-  const dirty = useMemo(() => {
-    const saved = trees.find(t => t.id === activeId)
-    return !!draft && !!saved && JSON.stringify(draft) !== JSON.stringify(saved)
-  }, [draft, trees, activeId])
+    const t = base
+    if (!t) return
+    setRings(Math.max(3, Math.max(0, ...t.nodes.map(n => n.tier)) + 1))
+    setSelId(null); setSelEdge(null); setLinkSrc(null); setTab('shard'); setTool('select'); setMode('author')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
 
   function fireToast(msg: string, warn?: boolean) {
     window.clearTimeout(toastTimer.current)
     setToast({ msg, warn })
     toastTimer.current = window.setTimeout(() => setToast(null), 2200)
-  }
-
-  function updateDraft(fn: (t: EditorTree) => EditorTree) {
-    setDraft(prev => (prev ? fn(prev) : prev))
   }
 
   const byId = useCallback((id: string) => draft?.nodes.find(n => n.id === id), [draft])
@@ -358,13 +365,18 @@ export function ShardLattice() {
   }
 
   /* ---------- save / publish / revert ---------- */
-  async function onSaveDraft() { if (!draft) return; setSaving(true); await saveTree(draft); setSaving(false); fireToast('Draft saved') }
+  async function onSaveDraft() {
+    if (!draft) return
+    setSaving(true); await saveTree(draft); setSaving(false)
+    fireToast('Draft saved · party still sees the published tree')
+  }
   async function onPublish() {
     if (!draft) return
     if (audit(draft).some(a => a.sev === 'err')) { fireToast('Blocking issues — cannot publish', true); return }
-    setSaving(true); await publishTree(draft); setSaving(false); fireToast('Published — live for the party')
+    setSaving(true); await publishTree(draft); setSaving(false); clear()
+    fireToast('Published — live for the party')
   }
-  function onRevert() { const saved = trees.find(t => t.id === activeId); if (saved) setDraft(saved) }
+  function onRevert() { reset(trees.find(t => t.id === activeId) ?? null) }
   async function onNewShard() { const t = await createTree(); if (t) setActiveId(t.id) }
   async function onDeleteShard() {
     if (!draft) return
@@ -602,6 +614,7 @@ export function ShardLattice() {
       <footer className={styles.botbar}>
         <div className={`${styles.status} ${errs ? styles.bad : ''}`}><span className={styles.dot} /><span>{errs ? `${errs} blocking issue${errs > 1 ? 's' : ''} — publish disabled` : warns ? `${warns} warning${warns > 1 ? 's' : ''} — publishable` : 'Lattice valid'}</span></div>
         <span className={`${styles.dirty} ${dirty ? styles.on : ''}`}>● Unsaved changes</span>
+        <span className={styles.autosv}>{savedAt ? `Draft autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}</span>
         <span className={styles.tel}>Lattice Stream <span className={styles.sep}>::</span> Sandboxed <span className={styles.sep}>//</span> Party unaffected until publish</span>
         <div className={styles.acts}>
           <button type="button" className={`${styles.btn} ${styles.ghost}`} disabled={!dirty} onClick={onRevert}><span className={styles.bf} /><span className={styles.bi}><i className="fa-solid fa-rotate-left" /> Revert</span></button>
@@ -611,7 +624,7 @@ export function ShardLattice() {
       </footer>
 
       {error && <div className={styles.canvasHint} style={{ position: 'fixed', bottom: 44, left: 12, color: 'var(--danger-hot)' }}>{error}</div>}
-      {toast && <div className={`${styles.toastEl} ${styles.on} ${toast.warn ? styles.warn : ''}`}><i className="fa-solid fa-circle-check" /><span>{toast.msg}</span></div>}
+      {toast && <div className={`${styles.toastEl} ${toast.warn ? styles.warn : ''}`}><i className={`fa-solid ${toast.warn ? 'fa-circle-exclamation' : 'fa-circle-check'}`} /><span>{toast.msg}</span></div>}
       <div className={styles.scanlines} /><div className={styles.vignette} />
     </div>
   )

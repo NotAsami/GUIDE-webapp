@@ -14,7 +14,7 @@
  * mixing the two conventions silently shifts every item one cell.)
  */
 
-import type { EquippedGear, EquippedItem, InventoryItem, ItemCategory } from './database.types'
+import type { EquippedGear, EquippedItem, InventoryItem, ItemCategory } from './database.types.ts'
 
 /** The on-person loadout. Fixed on every platform: placements are coordinates, so
  *  a grid 10 wide on desktop and 5 on mobile would strand items in columns that

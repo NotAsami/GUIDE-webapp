@@ -5,7 +5,7 @@ import type {
   QuestRow, QuestInsert, QuestUpdate, QuestSecret, QuestSecretUpdate,
   SessionRow, SessionInsert, SessionUpdate,
   CatalogItemRow, CatalogItemInsert, CatalogItemUpdate,
-  CatalogFeatureRow, CatalogFeatureInsert, CatalogFeatureUpdate,
+  CatalogFeatureRow, CatalogFeatureInsert, CatalogFeatureUpdate, CatalogFeatureData,
   CatalogEffectRow, CatalogEffectInsert, CatalogEffectUpdate,
   CatalogSpellRow, CatalogSpellInsert, CatalogSpellUpdate,
   ConfiscatedItemRow, ConfiscatedItemInsert, InventoryItem,
@@ -470,6 +470,44 @@ export interface DmFeaturesState {
   createFeature: (f: CatalogFeatureInsert) => Promise<CatalogFeatureRow | null>
   updateFeature: (id: string, patch: CatalogFeatureUpdate) => Promise<void>
   deleteFeature: (id: string) => Promise<void>
+  /** Park an in-progress edit. Writes `draft`, never `data`, so a granted
+   *  feature's template can be rewritten without disturbing what the Grant
+   *  picker offers. `id` null mints a row for a feature that has never been
+   *  published — the returned id is the one it keeps forever. */
+  saveDraft: (id: string | null, data: CatalogFeatureData) => Promise<string | null>
+  /** Promote a draft into `data` with `published: true` and clear the draft
+   *  slot. The id is minted here on FIRST publish and never again: other
+   *  features target this one by id, so renaming must not touch it. */
+  publishFeature: (id: string | null, data: CatalogFeatureData) => Promise<string | null>
+  /** Copy everything under a fresh id. What makes 46 near-identical Sanctity
+   *  features tractable. */
+  duplicateFeature: (id: string) => Promise<string | null>
+}
+
+/** The editable payload: the parked draft if there is one, else what is
+ *  published. Every list, count and audit in the editor reads through this;
+ *  only the Grant picker reads `data` directly. */
+export const featureContent = (r: CatalogFeatureRow): CatalogFeatureData => r.draft ?? r.data
+
+/** One past the last `order` in this folder — where a newly created feature
+ *  goes. Folders are compared on their stored value, so undefined (unfiled) is
+ *  its own bucket rather than colliding with a folder literally named it. */
+function nextOrder(rows: CatalogFeatureRow[], folder: string | undefined): number {
+  const orders = rows
+    .map(featureContent)
+    .filter(d => d.folder === folder && typeof d.order === 'number')
+    .map(d => d.order as number)
+  return orders.length ? Math.max(...orders) + 1 : 0
+}
+
+/** Ids are derived from the name ONCE and then frozen (§11 — no slug field, so
+ *  the id is the stable name). Lowercase, underscores, deduped against the rest
+ *  of the catalog. */
+function mintId(name: string, taken: Set<string>): string {
+  const base = name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') || `feature_${Date.now()}`
+  let id = base
+  for (let n = 2; taken.has(id); n++) id = `${base}_${n}`
+  return id
 }
 
 /** The DM's feature-authoring library (`feature_catalog`, migration 0005) —
@@ -518,7 +556,54 @@ export function useDmFeatures(): DmFeaturesState {
     if (err) { setError(err.message); setFeatures(snapshot) }
   }, [features])
 
-  return { features, loading, error, refetch: fetchAll, createFeature, updateFeature, deleteFeature }
+  /** One write path for both rungs of the ladder. `promote` decides whether the
+   *  payload lands in the published slot or the draft slot — the difference
+   *  between the two buttons is one boolean, which is the point. */
+  const write = useCallback(async (id: string | null, data: CatalogFeatureData, promote: boolean): Promise<string | null> => {
+    const patch = promote
+      ? { data: { ...data, published: true }, draft: null }
+      : { draft: data }
+    if (id) {
+      const { data: row, error: err } = await supabase.from('feature_catalog').update(patch).eq('id', id).select().single<CatalogFeatureRow>()
+      if (err) { setError(err.message); return null }
+      setFeatures(prev => prev.map(f => (f.id === id ? row : f)).sort(byName))
+      return id
+    }
+    // Never published: mint the id now. A draft-only row still needs `data`,
+    // which is not null in the schema — '{}' is the honest value for "nothing
+    // has been published yet", and the Grant picker skips it for want of
+    // `published`.
+    const fresh = mintId(data.name ?? '', new Set(features.map(f => f.id)))
+    // A new feature lands at the END of its folder. Assigning `order` here is
+    // what keeps every later drag a single row write: the drop handler picks the
+    // midpoint between two neighbours, which needs both of them to have one.
+    const seeded = data.order !== undefined ? data : { ...data, order: nextOrder(features, data.folder) }
+    const body = { ...patch, ...(promote ? { data: { ...seeded, published: true } } : { draft: seeded }) }
+    const { data: row, error: err } = await supabase.from('feature_catalog')
+      .insert({ id: fresh, ...body, ...(promote ? {} : { data: {} as CatalogFeatureData }) })
+      .select().single<CatalogFeatureRow>()
+    if (err) { setError(err.message); return null }
+    setFeatures(prev => [...prev, row].sort(byName))
+    return fresh
+  }, [features])
+
+  const saveDraft = useCallback<DmFeaturesState['saveDraft']>((id, data) => write(id, data, false), [write])
+  const publishFeature = useCallback<DmFeaturesState['publishFeature']>((id, data) => write(id, data, true), [write])
+
+  const duplicateFeature = useCallback<DmFeaturesState['duplicateFeature']>(async (id) => {
+    const src = features.find(f => f.id === id)
+    if (!src) return null
+    const content = featureContent(src)
+    const copy: CatalogFeatureData = { ...content, name: `${content.name ?? 'Untitled'} (copy)`, published: false }
+    // A copy starts as a draft: it is a starting point to edit, not something to
+    // put in front of the DM's grant list before it has been looked at.
+    return write(null, copy, false)
+  }, [features, write])
+
+  return {
+    features, loading, error, refetch: fetchAll, createFeature, updateFeature, deleteFeature,
+    saveDraft, publishFeature, duplicateFeature,
+  }
 }
 
 export interface DmEffectsState {

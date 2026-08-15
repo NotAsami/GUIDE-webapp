@@ -187,7 +187,7 @@ detailed specs come per slice.
 |---|---|
 | **Attacks** | The reference implementation. Roll kinds `attack`, `damage`. |
 | **Spells** | Spellbook slice landed (`Spell`/`CharacterSpellbook` in database.types.ts, `Spellbook.tsx`). No stable `spell:<id>` graph ids yet — `spell_catalog` rows use a `spell_<base36>`/UUID id, not a slug — and this engine itself is still unbuilt, so nothing consumes them yet. |
-| **Saves & checks** | Blocked on the Character (Rolls) screen, still a router stub. Once it rolls, `save` and `check` become real targets and roll context applies unchanged. |
+| **Saves & checks** | ~~Blocked on the Character (Rolls) screen, still a router stub.~~ **Stale — corrected in §41.** `Character.tsx` rolls ability checks, saving throws and skills today (`rollAbilityCheck` / `rollSave` / `rollSkill` → `pushCheck`), so `save` and `check` are real targets NOW and roll context applies unchanged. |
 | **Items** | Item-granted features participate in targeting. Scoped to equipped only. |
 | **Shards** | Shard node features participate. The retype-a-spell case lives here. |
 | **Backgrounds / racial** | Same mechanism, no special handling. |
@@ -492,11 +492,10 @@ Additive to the existing `resources` shape (§8 #3), which already holds `active
 
 ```ts
 resources.graph = {
-  /** gids of features currently ON (Rage). Keyed by gid, NOT stored on the
-   *  feature object — a gear- or shard-granted feature is a snapshot living on the
-   *  item, and gearFeatures() strips its `uses` and rewrites its `id`. There is
-   *  nowhere on the object for state to live. */
-  active: Gid[],
+  /** Stored variable values, split by who may write them (§30, §31). A feature
+   *  being ON lives here as an ordinary bool — see the note below. */
+  vars: Record<string, number | boolean>,
+  dmVars: Record<string, number | boolean>,
   /** One-shot modifiers awaiting a matching roll. Keyed by ROLL KIND from the
    *  start (§3), never attack-only. */
   armed: {
@@ -507,6 +506,18 @@ resources.graph = {
   }[],
 }
 ```
+
+> **`active: Gid[]` is deleted; a feature being ON is a stored bool variable.**
+> This section originally carried `active` because §12's `when: 'active:<gid>'`
+> read it. §32 replaced that with an expression over variables, so "while raging"
+> is `isRaging` — and §16's own reason for keying by gid, *"a gear- or shard-granted
+> feature is a snapshot living on the item… there is nowhere on the object for state
+> to live"*, is satisfied identically by `resources.graph.vars`. Keeping both would
+> put two records of one fact in the same blob, free to disagree.
+>
+> Consequences: `resolve()` reads only the variable scope (`lib/graph.ts`
+> `buildContext`), and slice 5's "active toggles" become `setVar`. The DM console
+> panel of §8 #4 renders the bools.
 
 **Consumption (§8 #1 made concrete).** An armed modifier applies to the number
 automatically, and the roll card shows it as a chip. Consuming it is **one tap on that
@@ -560,7 +571,7 @@ separate step §3's build order implies.
 | **3** | Feature editor rebuild (§5) + validation (§17) | Effect block collapsed by default; tag input with autocomplete; live match count; audit blocks save. |
 | **4** | **Attacks** — the reference integration | `rollWeaponAttack` takes a `Resolution`; riders render in the roll toast; a `+1d4 while raging` feature works end to end. |
 | **5** | State: `active` toggles, armed queue, rest clearing, DM console `active` panel (§8 #4) | |
-| **6** | Spells, saves & checks, items, shards (§6) | Each ~20 lines of wiring. Saves/checks stay blocked on the Character screen. |
+| **6** | Spells, saves & checks, items, shards (§6) | Each ~20 lines of wiring. ~~Saves/checks stay blocked on the Character screen.~~ **Stale — they are not blocked; see §41.** |
 
 Slice 1 is genuinely testable with no UI — do not skip ahead to slice 4 to "see it work".
 Attack-shaped assumptions baking into the resolver is the one failure mode §3 names.
@@ -675,10 +686,10 @@ a stored numeric with +/- and a log line. Mercy and condemnation reuse it. No ne
 Two consequences of the DAG that would otherwise be hand-maintained:
 
 - **Locked path (20+ points).** `judgementBias` becomes
-  `(mercy >= 20 or condemnation >= 20) ? 10 : 5`. Everything downstream updates.
-- **Tiers.** `mercyTier = isMercy ? floor(mercy / 5) : 0`. Features gate on
-  `mercyTier >= 2` instead of needing per-tier flags. Floor division is already in §14
-  for exactly this.
+  `(mercy >= 20 || condemnation >= 20) ? 10 : 5`. Everything downstream updates.
+- **Tiers.** `mercyTier = isMercy ? mercy / 5 : 0`. Features gate on
+  `mercyTier >= 2` instead of needing per-tier flags. `/` already floor-divides (§14),
+  which is exactly why there is no `floor()` — see §39.
 
 ### Don't hardcode a formula twice
 
@@ -1258,7 +1269,8 @@ than a tidy-up that could slip.
 Slice 1a's tests are §36's rejection table in full, plus precedence, parens, floor
 division, and array clamping at both ends. 1b's are the collision phases, a variable cycle,
 a roll-context identifier rejected in a variable formula (§33), and each row of §30's
-missing-variable table. 1c's are §18's existing list, unchanged.
+missing-variable table. 1c's are §18's existing list, plus the two obligations 1a hands
+it — the negated-dice roll path and the null contribution — spelled out in §39.
 
 ---
 
@@ -1282,3 +1294,269 @@ missing-variable table. 1c's are §18's existing list, unchanged.
 AND/negation in selectors, a `graph_nodes` table, auto-consuming armed modifiers, manual-
 toggle state inside `resolve()`, suppressing identical stacked effects, a combat tracker, a
 target registry, and inferring triggers.
+
+---
+
+# Part V — Slice 1a as built
+
+**Precedence: §39 wins over Parts I–IV**, on the same terms Part IV set. It is the first
+section written *after* code exists, so where it disagrees with an earlier passage, the
+earlier passage was a guess and this one was compiled.
+
+## 39. What 1a settled, and what it hands to 1c
+
+Built as `src/lib/expr.ts` + `src/lib/expr.test.ts`. §37's contents in full: precedence-
+climbing parser with parens, the three §36 value types, arrays, comparisons/booleans/
+ternaries, the dice rules, and §33's two whitelists.
+
+### Settled
+
+| Question | Settled |
+|---|---|
+| Where the code lives | `src/lib/expr.ts`, **not** §10's `lib/graph.ts`. `graph.ts` arrives with 1b/1c and imports it. §10's one-file, ~250-line estimate predates §28's doubling and §37's re-cut. |
+| Negated dice | **Legal.** `1d8 - 1d4` → `dice: ['1d8','-1d4']`; unary `-2d6` likewise. Bane forces it: §12 has only an `add` op, so `-1d4` has no other spelling. Obligation 1 below. |
+| Array elements | §35's "numeric literals only" is a **type** restriction, not a syntax one. An element may be any dice-free `num` expression (`[level, level * 2]`); bools and dice in arrays stay rejected. |
+| Roll-context identifiers | `ROLL_IDENTS = ['cast']` **alone**. §33's "subject, roll kind" cannot be identifiers — §36 has no string type, and a gid contains `:`. If 1c needs them, the shape is a **predicate** (`isSave`, `isAttack`), which the language already expresses; a value would need a fourth `FormulaValue` variant. |
+| `floor()` and `or` | **Neither exists, and neither is missing.** §21's examples predate §14's floor-division rule: `/` already floors, so `floor()` is redundant. §22 names `&&`/`||`/`!` exclusively. §21's two examples are corrected in place. **The language has no functions and no word operators** — parens (§29) were the only reversal. |
+| Division by zero, fractional dice counts | **Rejections.** §36 leaves both open; `Infinity` and `4.5d6` are exactly the wrong-number-at-the-table outcome §29 exists to prevent. |
+
+### Obligation 1 — `parseDice()` must learn a leading sign
+
+`dice.ts:13`'s regex is anchored with no sign, so it returns null for `-1d4`. A Bane rider
+authored today therefore **passes the audit and then fails at the roller** — a silently
+missing contribution rather than a parse error, which is the worst failure shape in this
+document.
+
+> **The test must run the whole path** — author `-1d4`, through `evalExpr`, through
+> `resolve()`, to the rolled number — and assert the total goes *down*. A
+> `parseDice('-1d4')` unit test in isolation passes while the rider still never reaches
+> the number.
+
+### Obligation 2 — what `resolve()` does with a null contribution
+
+**Not decided. 1c decides it**, and this is the shape of the problem.
+
+Author-time coverage is real but partial:
+
+| Formula | Caught by the audit? |
+|---|---|
+| `5 / 0` | **Yes** — null in every scope, so §17's "formula doesn't parse" row blocks it |
+| `x / mercy` | **No, and it cannot be.** It passes at `mercy = 12` and returns null mid-session the moment `mercy` hits 0 |
+
+So a null contribution will reach `resolve()` eventually, and **dropping it silently is not
+available**: §16 already settled the analogous case — *"a pending bonus the player can't see
+is worse than no bonus, because they roll without it and never learn why the number was
+low."* That argument is stronger here, since a dropped contribution leaves no chip to
+notice. The proposal is a visible broken rider carrying its `label` and source into
+`Resolution.notes`; recorded so 1c makes it a decision rather than inheriting a default.
+
+**A second-order trap in the audit's own scope.** Whichever values the audit evaluates
+against, one of the two errors above is possible. Against §30's type-zeros, `x / mercy`
+rejects at author time on *every* character, since `mercy` is 0 there — the false positive
+is now the blocking one. Pick which error the audit prefers deliberately; there is no scope
+that avoids both.
+
+---
+
+## 40. Slice 1c as built — the engine is complete
+
+Built as the second half of `src/lib/graph.ts` (`gid`, selectors, `buildContext`,
+`resolve`, `total`, `auditNode`, `matchCount`) plus `src/lib/dice.ts`. **§39's precedence
+rule applies here too**: this section was written after the code, so where it disagrees with
+an earlier passage, the earlier passage was a guess.
+
+### Both of §39's obligations are discharged
+
+**Obligation 1 — done.** `parseDice()` takes an optional leading sign and returns a signed
+`count`. The test runs the whole path §39 demanded — authored `-1d4` → `resolve()` →
+`parseDice` → `rollDice` — and asserts the applied number is *negative*. A `parseDice('-1d4')`
+unit test would have passed while the rider still never reached the roll.
+
+**Obligation 2 — settled as `Resolution.problems: AuditItem[]`.** §39 proposed folding the
+failure into `notes`; that was wrong and the code does not. `notes` is where authored `note`
+ops land, so a broken formula rendered there is indistinguishable from rule text the DM
+wrote. A separate field also matches what 1b already does (`characterVars → { scope, audit }`)
+and gives the DM console the same surface §30 uses for variable collisions. The rest of the
+roll resolves normally around the failure.
+
+### Settled while building
+
+| Decision | Why |
+|---|---|
+| **`Rider` carries `op`** | §13's shape had `flat`/`dice` only, so a toggled `adv` or `crit` had no way to say what it granted. A pre-existing gap — §12's `when: 'manual'` always applied to every op — surfaced by §32 making toggles first-class. |
+| **`shardnode:` gids are `shardnode:<shardId>.<nodeId>`** | A shard node has no catalog back-ref and node ids are unique only within a tree. `installShard()` seeds every shard with `core`, so the unqualified form collides across slots. |
+| **One `normalizeTag()`, shared** | Free-text tags fragment silently. The effect form already normalises to `trim → lowercase → \s+ → _`; if the matcher used a different rule, targeting would fail with **no error at all**. Exported from `graph.ts`; the editor slice should adopt it rather than keep its inline copy. |
+| **`total(res)` composes** | `flat`/`dice` hold only the unconditional fold; a resolved (`when`-true) rider carries its own value. A caller summing both would double count, so the composition is done once in the engine. |
+| **`ask` on a `note` is an authoring error** | A note is prose — there is nothing to resolve. Caught by `auditNode` rather than half-honoured at roll time. |
+| **`value` on a flag op is an authoring error** | `adv`/`dis`/`crit` are flags, never numbers. This is the `ItemEffects` rule, now enforced. |
+
+### What §17's "condition references a node's value" check turned out to cost
+
+**Nothing — it needs no code.** There is no `contribution(gid)` syntax, and a gid contains
+`:` so it could never be an identifier. `expr.ts`'s existing unknown-identifier rejection
+already covers the whole class. This is §33's "enforcement is by grammar, and is therefore
+free — if it is taken now" paying out exactly as predicted.
+
+### What is still owed
+
+| Owed | To whom |
+|---|---|
+| Nothing consumes a `Resolution` yet — every breakdown in the app is a preformatted string (`CheckRoll.breakdown` is `"14 + 2 DEX + 3 PROF"`), and `RollEntry` has no field for structured contributions. Slice 4 needs a `toBreakdown()` at the boundary or a new `RollEntry` variant. | Slice 4 |
+| `once: true` is parsed and ignored — the armed queue. | Slice 5 |
+| §31's `guard_dm_vars` trigger. Still no writer, so still not urgent; it must land **before** the first one, not before the first reader. | Activations |
+| `catalogTypes` has no source on a player client (§30 row 2). | Whoever hits it |
+| The editor's inline tag normaliser should call `normalizeTag()`. | Slice 3 |
+
+---
+
+## 41. Slice 3 as built — the editor, and what it forced
+
+Built as `src/screens/FeatureEditor.tsx` + `.module.css`, `src/lib/opSchema.ts`,
+`src/lib/draft.ts`, migration `0014_feature_drafts.sql`, plus changes to `graph.ts`,
+`dm.ts`, `dmShards.ts` and `ShardLattice.tsx`. **§39's precedence rule applies here too**:
+written after the code, so where it disagrees with an earlier passage, the earlier passage
+was a guess.
+
+### §39's second-order trap, resolved — and it was worse than §39 said
+
+§39 left open "what scope `auditNode` evaluates against" and named one failure. **There
+were two**, and both were live in shipped 1c code, which bound every identifier to the
+number `0`:
+
+| Formula | Was | Why |
+|---|---|---|
+| `x / mercy` | **blocked on every character** | `mercy = 0` → division by zero. §39's named trap. |
+| `isRaging && hasCharge` | **blocked** | Both bound to the NUMBER `0`; `&&` on nums is a §36 rejection. **§39 did not name this one**, and it sits on the single most likely thing a DM writes — a `when` gate over two bools. |
+
+Settled as **`probeScope()`: type-correct, and non-zero.** Stored variables read their
+declared `type`, derived ones are resolved by the same walk `characterVars` uses, and the
+numeric probe is **`1`**.
+
+- **Non-zero draws the line where §39 said it had to be drawn.** A *literal* `5 / 0` is
+  wrong in every scope and still blocks. A division by a *variable* is only wrong at some
+  values, is not knowable at author time, and is no longer reported here — because §40
+  already built the runtime answer for it in `Resolution.problems`. Author time and roll
+  time now cover **disjoint** cases instead of the former swallowing content it cannot
+  judge.
+- **Type-correct is why `VarDef.type` was made required in the first place (§30).** An
+  audit that discards it re-introduces exactly the error the field exists to prevent.
+
+The walk itself was factored out of `characterVars` into `walkDerived` — one traversal,
+two callers, so runtime and author time cannot drift. A variable **cycle** is now caught in
+`auditVars` as a by-product; it used to reach the table before anyone heard about it.
+
+### Settled while building
+
+| Decision | Why |
+|---|---|
+| **Three damage-flag ops** — `resist`/`vuln`/`immune` join `GraphOp` | §25 named them; the editor is the first thing that could author them. |
+| **They do NOT ride on `Resolution`** | `Resolution` answers "what modifies *this roll*". Being hit by fire is not a roll the player makes, and there is no `ResolveReq` that means it — overloading `kind: 'damage'` (a damage roll the player rolls) would make the two indistinguishable. They are read by `damageFlags(ctx, dmgType)`: same matcher, same `when` gate, separate question. `resolve()` skips them. |
+| **`ask` on a damage flag is an authoring error** | Same reasoning as §40's `ask`-on-a-note: incoming damage raises no roll, so there is no surface for the checkbox. |
+| **A damage flag with no target is an error** | Its target names the damage kind. With none it says nothing at all — the one case where "no selector = own roll" is meaningless. |
+| **`auditNode` reads required-ness from the op schema** | §26 asked for validation beside the schema entry so the audit and the renderer walk one declaration. The hardcoded `add`-with-no-value branch is gone; `crit`'s threshold and `note`'s text are required because the schema says so, and the next op needs no audit branch. |
+| **`crit` carries a `threshold`, `note` carries `text`** | §12's shape had nowhere for either. Improved Critical could not say *19*; a note's breakdown line and its rule text were the same string. **Lowest crit threshold wins** — a crit range is a threshold, not a stacking bonus. |
+| **`byLevel` is honoured, not just parsed** | §35's level table. Sparse means STEP: a table filled at 1/5/11 reads "3 from level 11 up", so an empty slot walks down to the last filled one. Out of range clamps. Anything less would have been an authoring surface the engine ignores — the failure this document exists to prevent. |
+
+### The draft ladder, and the RLS asymmetry that shapes it
+
+Three tiers, shared by both editors via `lib/draft.ts`:
+
+```
+localStorage  ──autosave──>  the row's draft slot  ──publish──>  the published payload
+ (keystroke)                    (Save Draft)                        (Publish)
+```
+
+**"Sandboxed" had three incompatible meanings before this slice.** `ShardLattice` had no
+autosave and no sandbox at all — `Save Draft` wrote the live row, and only RLS hid
+unpublished trees. The editor mockup autosaved into an in-memory map that never survived a
+refresh. Neither matched the telemetry line both of them displayed. Now the claim is
+literal: **nothing a player reads moves until Publish.**
+
+Where the draft is parked differs, and RLS forces it:
+
+| | Draft lives in | Why |
+|---|---|---|
+| **Features** | a `draft jsonb` column on `feature_catalog` (migration 0014) | The table has *no player policy at all* — a non-DM select matches nothing. Every column is already DM-only. |
+| **Shards** | `shard_tree_secrets.data.draft` | `player_read_published_shards` grants players SELECT on the **catalog row**, and RLS is row-level — a `draft` column there would hand them the DM's unpublished work. Concealed node text already lives in secrets for exactly this reason. |
+
+Shard drafts are stored **merged**, not split: `splitForSave()` exists to protect the
+player-readable catalog, and nothing in secrets is player-readable.
+
+### What `published` gates on a feature
+
+**The Grant picker.** Players never read `feature_catalog`, and a granted feature is a
+snapshot — so editing a template already could not reach a sheet, and publishing it still
+cannot. The only path from catalog to player is a DM grant, so that is the gate: an
+unpublished feature is not offerable.
+
+### Owed by this slice, paid
+
+§40's last row — *"the editor's inline tag normaliser should call `normalizeTag()`"* — is
+discharged: `EffectForm.addTag` imports it, and the Feature Editor never had a second copy.
+
+### Deliberately not built
+
+| | Why |
+|---|---|
+| **Pane 02, the dependency graph** | §27 defers it by name; its own build order says panes 1 and 3 first. Ships as the reserved overlay the mockup specifies, so its absence is a stated decision rather than an oversight. |
+| **The five activation ops** (`heal`, `tempHp`, `grantEffect`, `setVar`, `addVar`) | Activations are a later slice. `grantEffect` additionally needs `EffectRef`'s shape and a snapshot-on-grant, because players cannot read `effect_catalog` either. The `reference` field type is declared in the schema and has no control yet — the type costs a union member; the control waits for a caller. |
+| **Persisted empty folders** | `folder` is a name on the feature and the folder list is derived from its members, so there is no second store to drift. The cost is that a folder emptied of its last member stops existing. |
+
+### Still owed
+
+| Owed | To whom |
+|---|---|
+| Nothing consumes a `Resolution` yet — unchanged from §40. | Slice 4 |
+| `once: true` — the armed queue. | Slice 5 |
+| §31's `guard_dm_vars` trigger. **This slice authors `scope: 'dm'` variables but still writes no values**, so the trigger is still not urgent — it must land before the first *writer*, which is the activation slice. | Activations |
+| `catalogTypes` has no source on a player client (§30 row 2). | Whoever hits it |
+| `auditNode` runs over the whole catalog on every keystroke to count Issues; memoized on the library, not indexed per row. | Whoever feels it |
+
+---
+
+## 42. Corrections found by using the editor
+
+Both of these were caught by the DM driving the thing rather than by a test, which is the
+point of shipping a slice and then opening it.
+
+### The Rolls screen is not a stub — §6 and §18 were stale
+
+§6's integration table and §18's slice 6 row both said saves and checks were "blocked on
+the Character (Rolls) screen, still a router stub". **They are not, and have not been for
+some time.** `src/screens/Character.tsx` is a full screen that rolls ability checks
+(`rollAbilityCheck`), saving throws (`rollSave`) and skills (`rollSkill`), all funnelling
+through `pushCheck`.
+
+The consequence is not cosmetic: **`roll:save`, `roll:save.dex`, `roll:check` and
+`roll:check.stealth` are live targets today.** A feature authored against them in the editor
+resolves the moment slice 4's boundary lands — saves and checks do not have to wait for a
+screen that already exists. It also means `pushCheck`'s `parts: string[]` is a second
+consumer for whatever `toBreakdown()` shape slice 4 settles on, not a later port; §13
+already noted that `rollSave` folds two distinct sources into one `PROF` label, so
+attribution is being lost there *now*.
+
+Both rows are struck through in place rather than rewritten, so it stays visible that the
+claim was made and why it was wrong.
+
+### `order` shipped inert, and that is the failure this document exists to prevent
+
+Slice 3 added `Feature.order` and a plan that described fractional reordering — and then
+implemented **drag-to-refile only**. Dropping a feature onto a folder moved it; dropping it
+between two siblings did nothing. The field was written by nothing and read by nothing: an
+authoring surface that silently does nothing, which §41 had just finished rejecting for
+`byLevel` and the activation ops. Shipping it here was the same mistake, one slice later.
+
+Fixed, and the shape is worth recording because it is the reason `order` is a **number**
+rather than an index:
+
+- The drop handler writes the **midpoint between the two neighbours** the row lands
+  between. One row write per drag — a folder of 46 Sanctity features does not get
+  renumbered because one moved.
+- That requires every sibling to already have a number, so `order` is assigned on create
+  (`nextOrder` — one past the last in that folder) and was **backfilled** for existing rows
+  in migration 0014, seeded from the alphabetical order they already displayed in.
+- Sort is `order` ascending, ties broken by name; a row with no `order` sorts last, which is
+  exactly where it sat before ordering existed.
+
+Both backfills in 0014 are guarded (`where … is null`), so re-running the file cannot
+flatten an arrangement the DM has since made by hand.

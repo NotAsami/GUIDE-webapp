@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import type { CharacterRow, CharacterSection, EquippedGear, EquippedItem, Feature, FeatureCategory, ShardPerk, ShardTree } from '../lib/database.types'
-import { ITEM_SLOTS } from '../lib/equip'
+import type { CharacterRow, CharacterSection, Feature, FeatureCategory, ShardPerk, ShardTree } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { rollHeal } from '../lib/dice'
 import { useRollLog, type RollLine } from '../lib/rolls'
-import { effectiveSheet } from '../lib/effects'
+import { effectiveSheet, gearFeatures } from '../lib/effects'
 import { shardFeatures, shardPerks } from '../lib/shards'
 import { Prose } from '../lib/markdown'
 import styles from './Features.module.css'
@@ -33,30 +32,6 @@ const COLS = 3
 /** A feature can be "used" when it rolls something or tracks limited uses. */
 function isUsable(f: Feature): boolean {
   return !!f.roll || !!f.uses
-}
-
-/** Features granted by EQUIPPED items (worn gear slots + wielded weapons + the
- *  bound shard) — the derived Gear Features group. Copies live ON the item and
- *  travel with it, so this is read-only derivation: unequip and they vanish.
- *  `uses` counters are stripped — use-tracking writes to `sheet.features`,
- *  where these don't live (the `usage` text still tells the story). */
-function gearFeatures(character: CharacterRow): Feature[] {
-  const eq = (character.equipped ?? {}) as EquippedGear
-  const slots: (EquippedItem | null | undefined)[] = [
-    ...ITEM_SLOTS.map(k => eq[k]),
-    ...(eq.weapons ?? []), eq.guideShard,
-  ]
-  return slots
-    .filter((i): i is EquippedItem => !!i)
-    .flatMap(item => (item.features ?? []).map((f, idx) => ({
-      ...f,
-      // Namespace the id per item instance so two copies of the same item
-      // can't collide as React keys; never written back anywhere.
-      id: `gear-${item.id ?? item.name}-${f.id ?? idx}`,
-      uses: undefined,
-      kind: f.kind ?? 'equipment',
-      source: f.source ?? item.name,
-    })))
 }
 
 /** The short text shown on the card (scales the card). Falls back to the legacy

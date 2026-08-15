@@ -1,7 +1,7 @@
 import { Outlet, useNavigate } from 'react-router-dom'
 import { useCharacter } from '../lib/character'
 import { useAuth } from '../lib/auth'
-import { useShardCatalog } from '../lib/shards'
+import { useShardCatalog } from '../lib/shardCatalog'
 import { useOpenShop } from '../lib/shops'
 import { Topbar } from './Topbar'
 import { Bottombar } from './Bottombar'

@@ -12,8 +12,8 @@
 import type {
   CharacterRow, CharacterSection, ContainerKind, EquippedGear, EquippedItem,
   EquippedWeapon, InventoryItem, ItemSlot, Json, WeaponHand,
-} from './database.types'
-import { PERSON, place, routeItem } from './placement'
+} from './database.types.ts'
+import { PERSON, place, routeItem } from './placement.ts'
 
 export { PERSON }
 
