@@ -1560,3 +1560,129 @@ rather than an index:
 
 Both backfills in 0014 are guarded (`where … is null`), so re-running the file cannot
 flatten an arrangement the DM has since made by hand.
+
+---
+
+## 43. Slice 4 as built — the first number a player sees
+
+Built as `src/lib/useGraph.ts`, `src/components/Riders.tsx`, changes to
+`weapons.ts` / `rolls.tsx` / `Equipment.tsx` / `Character.tsx` / `RollToast`, and
+`src/lib/weapons.test.ts`. §39's precedence rule applies: written after the code.
+
+### Saves and checks came forward out of slice 6
+
+§18 scoped this slice to attacks. They were pulled in because §3 names
+"attack-shaped assumptions baking in" as the one failure mode of this work, and
+**the only way to prove a boundary is not attack-shaped is to run something that
+is not an attack through it in the same slice.** A save has no subject at all —
+`resolve(ctx, { kind: 'save', sub: 'dex' })` — which is exactly the case that
+would have been awkward to retrofit. It was not awkward, which is the result the
+test was for.
+
+### Riders are grouped by roll, not concatenated
+
+The first cut merged attack and damage riders into one array and lost which was
+which before anything could render it. `+1d4 to the attack` and `+1d4 to the
+damage` are different statements. `RollEntry.riderGroups: { label, riders }[]`.
+`notes` and `problems` stay flat — a note is prose about the action, a problem is
+the engine failing; neither belongs to a sub-roll.
+
+### `ask` renders, and deliberately does not yet toggle
+
+§32's `manual` riders show their **formula** and an unresolved marker. They are
+not flippable, and that is a decision rather than an omission: the roll toast
+lives 4.8 s, dismisses on any click, and **retires for rolls once the Roll
+Context Panel is built**. Wiring toggles into it would be work thrown away.
+`RollLogValue` still has no update path, which is the missing piece when the
+panel lands — note that `addRoll` already returns the created entry including its
+id, which is the handle that flow will need.
+
+The `Riders` component is shared by the toast and the Character roll log
+precisely so the two cannot drift.
+
+### Settled while building
+
+| Decision | Why |
+|---|---|
+| **adv/dis COMPOSES with the player's manual toggle** | `Character.tsx` has a player-set adv/dis. A feature granting advantage and a player asking for it are the same request: effective adv = manual OR graph, same for dis, then one of each cancels. Overriding the player would have been the engine front-running a decision. |
+| **Graph dice on a d20 roll are rolled immediately; graph dice on damage are not** | A d20 total is one number with nowhere for an unrolled term to live. Damage dice must stay unrolled so a crit can double them — which is the whole reason `resolve()` returns `dice: string[]`. |
+| **§13's attribution loss fixed** | `rollSave` folded `proficiency(view)` and `saveBonuses[key]` into one `PROF` label; a player could not tell +3 proficiency from +2 proficiency plus a +1 ring. They print as separate terms now. Same for skills. |
+| **The toast got a height cap** | It is anchored by `bottom` with no `max-height`, so riders grew it upward without limit and would eventually push the head off screen. |
+
+### What the tests pin, and one they caught
+
+`weapons.test.ts` stubs `Math.random` with an ordered queue rather than asserting
+on ranges — a range-tolerant test passes while a contribution silently goes
+missing, which is the failure this document exists to prevent. The queue throws
+when it runs dry, and it **caught a real ordering assumption during writing**: a
+nat 20 doubles the weapon's damage dice, so the crit path consumes more dice than
+the normal one.
+
+### The gid gap, pinned rather than discovered at a table
+
+`gid('weapon', w)` reads the catalog back-ref first (§11) and falls back to the
+instance id — and **`EquippedItem.item_id` is optional**. Checked against the
+live database:
+
+| Character | Weapons | `item_id` | `tags` |
+|---|---|---|---|
+| Ros Chrisstone | Dagger, Hand Crossbow | **none** | none |
+| Cornelius the III. | Shortbow | `cat-shortbow` | none |
+
+So one authored `weapon:` target reaches Cornelius and can never reach Ros, and
+`tag:` targeting weapons matches nothing at all because equipped instances carry
+no tags. **The editor shows "1 match" in every case**, correctly — `matchCount`
+counts against the catalog by design (§17), so it is not lying; the two simply
+answer different questions. There is now a test asserting both halves, so the
+behaviour is known.
+
+**Owed to slice 6 (items):** propagate `item_id` and the catalog's `tags` onto
+equipped instances at grant time, or `weapon:`/`tag:` targeting stays a coin flip
+depending on how the gear got there.
+
+### `AmmoBonus` survives, and §19 underestimated it
+
+§19 expected slice 4 to delete `AmmoBonus` and the ammo special case. It cannot,
+and the reason is not the one first given (the item editor exists —
+`OperatorConsole.tsx:1250` — it simply does not author `graph`/`tags`/`vars`).
+The real blocker: **a nocked arrow is an `InventoryItem`, not equipped**, so it is
+not in `activeSources()` and its contributions would never enter `resolve()` no
+matter what the item form could author. Ammo is contextual to *one attack*, which
+`ResolveReq` has no concept of. That is a design question — a per-roll source —
+not bookkeeping, and it wants answering when spells and items land and there are
+three cases to generalise from rather than one.
+
+### What the manual pass caught that 137 tests did not
+
+Slice 4 shipped green and then failed four times in front of a DM. Worth
+recording, because three of the four were in code the tests could not reach:
+
+| Found | Cause |
+|---|---|
+| The editor crashed on load | `foldered` was declared above `parsed` but calls it through `matches()` — a temporal dead zone. `tsc` does not model TDZ through a function reference, and there is no linter configured. |
+| **Riders applied but were invisible** | `RollToast` paints its card interior with an opaque `::before` and lifts only `.head`/`.line` above it. The rider block rendered behind the fill: correct, applied, unseeable. **Any new child of a layered card needs `position: relative; z-index: 1`.** |
+| Reordering felt impossibly precise | A midpoint rule gives only half a row: dragging down, "insert before the row I am already above" is a no-op, so only the lower half swapped. Replaced with direction — compare indices, and the whole row is a target. |
+| A save totalled one less than the sheet said | Splitting the save bonus into its own term for §13's attribution added it to the breakdown and **not to the sum**. |
+
+The last one is the instructive one. The fix was not the missing addition — it
+was that **the total and the breakdown were computed separately at all**, which
+is what allowed them to disagree. Both now derive from one `CheckTerm[]`; the
+display filters zeros, the sum does not.
+
+That arithmetic also moved out of `Character.tsx` into `lib/dnd.ts`
+(`saveTerms`/`skillTerms`/`abilityCheckTerms`/`composeCheck`/`effectiveMode`),
+next to `saveTotal`/`skillTotal`, because inside a component it was untestable —
+and it had taken two bugs in a day. `dnd.test.ts` now pins the invariant that
+would have caught it: **the named parts sum to the number the sheet shows**, for
+every ability and every skill.
+
+`rollDiceTerms` was lifted into `dice.ts` at the same time; the weapon path and
+the check path each had their own copy of the signed-count logic, and that sign
+is the whole of Bane — a caller reaching for `Math.abs` turns a penalty into a
+bonus.
+
+**Confirmed working by manual test:** a `when`-gated damage rider on a live
+character, riders rendering in both the toast and the roll log, a feature's
+advantage cancelling against a player's manual disadvantage, `ask` rendering
+unresolved without applying, and a broken formula surfacing in `problems` while
+the rest of the roll resolved.

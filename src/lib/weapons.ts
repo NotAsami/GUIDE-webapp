@@ -10,8 +10,11 @@
  */
 
 import type { AbilityKey, CharacterSheet, EquippedWeapon, WeaponHand } from './database.types'
-import { abilityMod, formatMod, proficiency } from './dnd'
-import { parseDice, rollDice, rollDie } from './dice'
+import { abilityMod, formatMod, proficiency } from './dnd.ts'
+import { parseDice, rollDice, rollDiceTerms, rollDie } from './dice.ts'
+// Safe direction: graph.ts → effects.ts → equip/burden/shards, none of which
+// reach back here, so this does not close a cycle.
+import { total, type Resolution } from './graph.ts'
 
 export function handLabel(hand?: WeaponHand): string {
   return hand === 'main' ? 'Main Hand' : hand === 'off' ? 'Off Hand' : 'Equipped'
@@ -77,17 +80,41 @@ export type AmmoBonus = { damage: number; label: string }
 
 /** Roll a weapon's attack AND damage together. A natural 20 doubles the damage
  *  DICE (not the modifier); a natural 1 flags a fumble. Damage is floored at 0.
- *  Nocked ammunition adds a flat, named bonus to the damage. */
+ *  Nocked ammunition adds a flat, named bonus to the damage.
+ *
+ *  `graph` carries the feature engine's contributions for this weapon. Only the
+ *  UNCONDITIONAL fold (`flat`/`dice`) is applied here — a rider the player still
+ *  has to decide on is deliberately NOT pre-rolled, because showing a value
+ *  before they choose puts a thumb on the decision. Riders travel on the
+ *  RollEntry for the panel to render; see §7's pre-roll rule.
+ *
+ *  Absent `graph` means "no engine", which resolves identically to "a character
+ *  with nothing authored" — both add zero. */
 export function rollWeaponAttack(
   weapon: EquippedWeapon, sheet: CharacterSheet, ammo?: AmmoBonus | null,
+  graph?: { attack?: Resolution; damage?: Resolution },
 ): { attack: AttackRoll; damage: DamageRoll } {
-  const atkBonus = weaponAttackBonus(weapon, sheet)
-  const d20 = rollDie(20)
-  const crit = d20 === 20
+  const atkRes = graph?.attack
+  // adv/dis from the graph decide the d20 set. Both at once cancel, which is
+  // the 5e rule and not something the engine should be opinionated about.
+  const advantage = !!atkRes?.adv && !atkRes?.dis
+  const disadvantage = !!atkRes?.dis && !atkRes?.adv
+  const atkGraph = atkRes ? total(atkRes) : { flat: 0, dice: [] as string[] }
+  // Graph dice on an ATTACK (Bless's 1d4) are rolled now: the d20 total is one
+  // number and there is nowhere for an unrolled term to live.
+  const atkDice = rollDiceTerms(atkGraph.dice)
+  const atkDiceSum = atkDice.reduce((a, b) => a + b, 0)
+  const atkBonus = weaponAttackBonus(weapon, sheet) + atkGraph.flat + atkDiceSum
+
+  const pair = [rollDie(20), rollDie(20)]
+  const d20 = advantage ? Math.max(...pair) : disadvantage ? Math.min(...pair) : pair[0]
+  // Threshold from the graph, else the printed 20. Fumble stays a natural 1.
+  const crit = d20 >= (atkRes?.critFrom ?? 20)
   const fumble = d20 === 1
   const attack: AttackRoll = {
     d20, bonus: atkBonus, total: d20 + atkBonus, crit, fumble,
-    breakdown: `d20(${d20}) ${formatMod(atkBonus)}`,
+    breakdown: `d20(${d20}) ${formatMod(atkBonus)}`
+      + (advantage ? ' adv' : disadvantage ? ' dis' : ''),
   }
 
   const dmgBonus = weaponDamageBonus(weapon, sheet)
@@ -107,11 +134,22 @@ export function rollWeaponAttack(
   // conditional ammunition is deliberately out of scope; that is the features
   // engine's roll-contribution mechanism (see the refactor doc §17).
   const ammoBonus = ammo?.damage ?? 0
-  const total = Math.max(0, diceSum + dmgBonus + ammoBonus)
+
+  // Graph damage. Its dice ride WITH the weapon's, so a crit doubles them too —
+  // which is why resolve() returns them unrolled instead of a number.
+  const dmgGraph = graph?.damage ? total(graph.damage) : { flat: 0, dice: [] as string[] }
+  const graphDice = rollDiceTerms(dmgGraph.dice, crit)
+  const graphDiceSum = graphDice.reduce((a, b) => a + b, 0)
+
+  const totalDmg = Math.max(0, diceSum + dmgBonus + ammoBonus + dmgGraph.flat + graphDiceSum)
   const damage: DamageRoll = {
-    diceExpr, dice, bonus: dmgBonus + ammoBonus, total, type: weapon.type, crit,
+    diceExpr, dice, bonus: dmgBonus + ammoBonus + dmgGraph.flat + graphDiceSum,
+    total: totalDmg, type: weapon.type, crit,
     breakdown: `${diceExpr}(${dice.join(' + ') || 0}) ${formatMod(dmgBonus)}`
-      + (ammoBonus ? ` ${formatMod(ammoBonus)} (${ammo!.label})` : ''),
+      + (ammoBonus ? ` ${formatMod(ammoBonus)} (${ammo!.label})` : '')
+      + (dmgGraph.flat ? ` ${formatMod(dmgGraph.flat)}` : '')
+      + (graphDice.length ? ` + ${dmgGraph.dice.join(' + ')}(${graphDice.join(' + ')})` : ''),
   }
   return { attack, damage }
 }
+

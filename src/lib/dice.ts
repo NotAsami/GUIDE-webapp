@@ -47,3 +47,21 @@ export function rollHeal(amount: number | string): { total: number; breakdown: s
   const modStr = mod ? ` ${mod > 0 ? '+' : '−'} ${Math.abs(mod)}` : ''
   return { total, breakdown: `${count}d${sides}(${dice.join(' + ')})${modStr}` }
 }
+
+/** Roll a list of graph dice terms ("1d4", "-1d4") to individual results.
+ *
+ *  The sign is the subtle part and the reason this is shared rather than
+ *  written per caller: parseDice returns a SIGNED count, so Bane's "-1d4" comes
+ *  back as negative numbers and subtracts when summed. A caller that took
+ *  Math.abs would silently turn a penalty into a bonus.
+ *
+ *  `double` re-rolls the same count again, for damage dice on a critical hit. */
+export function rollDiceTerms(exprs: string[], double = false): number[] {
+  return exprs.flatMap(expr => {
+    const p = parseDice(expr)
+    if (!p) return []
+    const sign = p.count < 0 ? -1 : 1
+    const rolled = rollDice(Math.abs(p.count) * (double ? 2 : 1), p.sides).map(v => v * sign)
+    return p.mod ? [...rolled, p.mod] : rolled
+  })
+}

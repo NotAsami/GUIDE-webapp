@@ -323,8 +323,8 @@ select.in option { background: #14130f; }
 .ac .hd { padding: 6px 10px; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--beige-dim); border-bottom: 1px solid rgba(212,191,125,.16); }
 
 /* ---------- collapsible blocks ---------- */
-.blk { margin: 9px 0 4px; background: rgba(0,0,0,.22); border: 1.5px solid rgba(212,191,125,.2); clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px); }
-.blk.open { border-color: rgba(226,176,33,.4); background: rgba(226,176,33,.03); }
+.blk { --cut: 9px; --bc: rgba(212,191,125,.2); margin: 9px 0 4px; background-color: rgba(0,0,0,.22); border: 1.5px solid var(--bc); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+.blk.open { --bc: rgba(226,176,33,.4); background-color: rgba(226,176,33,.03); }
 .blkHead { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; cursor: pointer; background: transparent; border: 0; padding: 12px 14px; }
 .blkHead .ch { font-size: 9px; color: var(--amber); width: 9px; transition: transform 160ms ease; }
 .blk.open .blkHead .ch { transform: rotate(90deg); }
@@ -384,7 +384,7 @@ select.in option { background: #14130f; }
 .kindnote { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .08em; color: var(--beige-dim); line-height: 1.6; margin: -4px 0 11px; }
 
 /* ---------- op palette + effect rows ---------- */
-.oppal { margin-bottom: 12px; background: rgba(0,0,0,.3); border: 1.5px solid rgba(212,191,125,.18); padding: 9px 11px 10px; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
+.oppal { --cut: 8px; --bc: rgba(212,191,125,.18); margin-bottom: 12px; background-color: rgba(0,0,0,.3); border: 1.5px solid var(--bc); padding: 9px 11px 10px; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
 .oppalGrp { display: flex; align-items: center; gap: 8px; margin: 0 0 7px; }
 .oppalGrp .gl { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--beige-dim); white-space: nowrap; }
 .oppalGrp::after { content: ""; flex: 1; height: 1px; background: rgba(212,191,125,.12); }
@@ -513,7 +513,23 @@ select.in option { background: #14130f; }
 
 /* ---------- popovers ---------- */
 .scrim { position: fixed; inset: 0; z-index: 100; background: rgba(6,6,5,.72); display: flex; align-items: center; justify-content: center; }
-.pop { width: 440px; max-width: 92vw; max-height: 76vh; display: flex; flex-direction: column; background: linear-gradient(180deg, #171512, #0f0e0c); border: 1.5px solid var(--amber); box-shadow: 0 30px 70px -20px #000; clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px); }
+.pop {
+  --cut: 12px; --bc: var(--amber);
+  width: 440px; max-width: 92vw; max-height: 76vh; display: flex; flex-direction: column;
+  border: 1.5px solid var(--bc); box-shadow: 0 30px 70px -20px #000;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  /* Keeps its own gradient fill, so it paints the two corner diagonals here
+     rather than joining the shared block — a second background-image would
+     overwrite the first. */
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(180deg, #171512, #0f0e0c);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right, 0 0;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px), 100% 100%;
+}
 .pop.small { width: 380px; }
 .popHead { display: flex; align-items: center; gap: 10px; padding: 13px 15px 11px; border-bottom: 1px solid rgba(212,191,125,.24); }
 .popHead .pt { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .26em; text-transform: uppercase; color: var(--amber-hot); }
@@ -567,12 +583,12 @@ select.in option { background: #14130f; }
 /* Rises on mount. A keyframe rather than a transition because the toast is
    conditionally rendered: an element that mounts already holding its final
    class has no "from" state, so a transition would never play. */
-.toastEl { position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 120; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: rgba(14,13,10,.96); border: 1.5px solid var(--amber); font-family: var(--font-mono); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--amber-hot); clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); animation: toastIn 200ms ease both; }
+.toastEl { --cut: 7px; --bc: var(--amber); position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 120; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background-color: rgba(14,13,10,.96); border: 1.5px solid var(--bc); font-family: var(--font-mono); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--amber-hot); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); animation: toastIn 200ms ease both; }
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(-50%) translateY(10px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
-.toastEl.warn { border-color: var(--danger); color: var(--danger-hot); }
+.toastEl.warn { --bc: var(--danger); color: var(--danger-hot); }
 
 .boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--amber); font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; text-transform: uppercase; }
 
@@ -592,7 +608,7 @@ select.in option { background: #14130f; }
    glitch rather than a missing style. */
 .opRootpill, .opBack, .auditItem, .in, .prose, .chip, .seg, .vname, .perm,
 .opb, .efrow, .opSel, .tgt, .flSrch, .rhKebab, .gpX, .swrow button,
-.icongrid button {
+.icongrid button, .blk, .oppal, .toastEl {
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
     linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);

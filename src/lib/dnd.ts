@@ -109,3 +109,71 @@ export function proficientSkillCount(sheet: CharacterSheet): number {
   const set = new Set([...(sheet.skillProficiencies ?? []), ...(sheet.skillExpertise ?? [])])
   return set.size
 }
+
+/* ---------- d20 checks: the named parts, and what they sum to ----------
+ *
+ * Split out of Character.tsx because it was untestable there and got two bugs
+ * in a day. The screen rolls dice and renders; everything arithmetic lives here,
+ * next to saveTotal/skillTotal so the two can be compared at a glance — and
+ * dnd.test.ts pins that they agree, which is exactly what silently stopped being
+ * true when the breakdown was split into separate terms and the sum was not.
+ */
+
+/** One named contribution to a d20 roll. */
+export type CheckTerm = { label: string; value: number }
+
+/** Advantage a feature grants and advantage the player asked for are the same
+ *  request, so they OR together; one of each cancels, per 5e. The engine never
+ *  overrides the player's toggle — it only adds a voice. */
+export function effectiveMode(
+  manual: 'normal' | 'adv' | 'dis', adv: boolean, dis: boolean,
+): 'normal' | 'adv' | 'dis' {
+  const a = manual === 'adv' || adv
+  const d = manual === 'dis' || dis
+  return a && !d ? 'adv' : d && !a ? 'dis' : 'normal'
+}
+
+/** The named parts of a saving throw, in breakdown order. MUST sum to
+ *  saveTotal(). `MISC` is deliberately not called `SAVE`: the hex label `SAV`
+ *  already means the whole save, so a term named the same thing reads as the
+ *  total and invites exactly the wrong comparison. */
+export function saveTerms(sheet: CharacterSheet, key: AbilityKey): CheckTerm[] {
+  return [
+    { label: ABILITY_ABBR[key].toUpperCase(), value: abilityMod(abilities(sheet)[key]) },
+    { label: 'PROF', value: (sheet.saveProficiencies ?? []).includes(key) ? proficiency(sheet) : 0 },
+    { label: 'MISC', value: sheet.saveBonuses?.[key] ?? 0 },
+  ]
+}
+
+/** An ability check: the modifier alone — proficiency does not apply. */
+export function abilityCheckTerms(sheet: CharacterSheet, key: AbilityKey): CheckTerm[] {
+  return [{ label: ABILITY_ABBR[key].toUpperCase(), value: abilityMod(abilities(sheet)[key]) }]
+}
+
+/** The named parts of a skill check. MUST sum to skillTotal().mod. */
+export function skillTerms(sheet: CharacterSheet, skill: Skill): CheckTerm[] {
+  const expertise = (sheet.skillExpertise ?? []).includes(skill.key)
+  const mult = expertise ? 2 : (sheet.skillProficiencies ?? []).includes(skill.key) ? 1 : 0
+  return [
+    { label: ABILITY_ABBR[skill.ability].toUpperCase(), value: abilityMod(abilities(sheet)[skill.ability]) },
+    { label: expertise ? 'PROF x2' : 'PROF', value: proficiency(sheet) * mult },
+    { label: 'MISC', value: sheet.skillBonuses?.[skill.key] ?? 0 },
+  ]
+}
+
+export const sumTerms = (terms: CheckTerm[]): number => terms.reduce((n, t) => n + t.value, 0)
+
+/** Total and breakdown from ONE list, so they cannot disagree. Zero-valued terms
+ *  are hidden from the text but still summed — which is free, and is the whole
+ *  reason this takes terms rather than a total plus a string. */
+export function composeCheck(pick: number, terms: CheckTerm[], critFrom = 20): {
+  total: number; breakdown: string; crit: boolean; fumble: boolean
+} {
+  return {
+    total: pick + sumTerms(terms),
+    breakdown: [String(pick), ...terms.filter(t => t.value !== 0).map(t => `${formatMod(t.value)} ${t.label}`)].join(' '),
+    crit: pick >= critFrom,
+    // A natural 1 is a fumble however low the crit range goes.
+    fumble: pick === 1,
+  }
+}
