@@ -1,0 +1,90 @@
+/* Rider rows, shared by the roll toast and the Character roll log. Sized to sit
+   inside either without imposing a width — both parents are already narrow
+   columns, so everything here is fluid. */
+
+.riders {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(212, 191, 125, 0.16);
+  /* Load-bearing, not decoration. RollToast paints its card interior with an
+     opaque absolutely-positioned ::before, and lifts only `.head` and `.line`
+     above it. Without this the rider block renders BEHIND that fill — present
+     in the DOM, applied to the roll, and completely invisible. */
+  position: relative;
+  z-index: 1;
+}
+
+.group { display: flex; flex-direction: column; gap: 3px; }
+
+.gLabel {
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--beige-dim);
+}
+
+.rider {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.28);
+  border-left: 2px solid var(--tone, var(--beige-dim));
+}
+/* Resolved by the app — it already applies, and its value is shown. */
+.rider.active { --tone: var(--good); }
+/* Waiting on a human. Shows its FORMULA, not a number (see Riders.tsx). */
+.rider.manual { --tone: var(--cyan); }
+
+.box { font-size: 9px; color: var(--tone, var(--beige-dim)); }
+
+.rLabel {
+  font-family: var(--font-prose);
+  font-size: 13.5px;
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rVal {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--tone, var(--beige));
+  white-space: nowrap;
+}
+
+/* Source sits under the label, quiet — it answers "where is this from?" without
+   competing with the number. */
+.rSrc {
+  grid-column: 2 / -1;
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.note,
+.problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+}
+.note { color: var(--muted); }
+.note i { color: var(--beige-dim); margin-top: 2px; font-size: 9px; }
+
+.problem { color: var(--danger-hot); }
+.problem i { margin-top: 2px; font-size: 9px; }
+.problem b { color: var(--text); font-weight: 400; }

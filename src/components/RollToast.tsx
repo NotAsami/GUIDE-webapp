@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRollLog } from '../lib/rolls'
+import { Riders } from './Riders'
 import styles from './RollToast.module.css'
 
 const VISIBLE_MS = 4800
@@ -66,6 +67,7 @@ export function RollToast() {
           <span className={styles.bd}>{d.breakdown}</span>
         </div>
       )}
+      <Riders groups={show.riderGroups} notes={show.notes} problems={show.problems} />
       {(show.lines ?? []).map((l, i) => (
         <div key={i} className={`${styles.line}${l.tone === 'heal' ? ' ' + styles.heal : l.tone === 'buff' ? ' ' + styles.buff : ''}`}>
           <span className={styles.lab}>{l.label}</span>

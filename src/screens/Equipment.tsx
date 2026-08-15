@@ -24,6 +24,8 @@ import { PERSON } from '../lib/placement'
 import { useRollLog } from '../lib/rolls'
 import { useItemTooltip, type Bind, type TooltipData } from '../components/ItemTooltip'
 import { SHARD_SLOT_KEYS, shardSlots } from '../lib/shards'
+import { useGraph } from '../lib/useGraph'
+import { gid, resolve } from '../lib/graph'
 import styles from './Equipment.module.css'
 
 interface RouteContext {
@@ -40,6 +42,8 @@ interface RouteContext {
  *  pass: editing HP stays in the Stat Panel; equipping needs Inventory first. */
 export function Equipment() {
   const { character, updateSection, updateSections, shardTrees = {} } = useOutletContext<RouteContext>()
+  // Built once per character, not per roll — see lib/useGraph.ts.
+  const graph = useGraph(character, shardTrees)
   const sheet = effectiveSheet(character, shardTrees)
   const gear = (character.equipped ?? {}) as EquippedGear
   const weapons = gear.weapons ?? []
@@ -132,7 +136,18 @@ export function Equipment() {
       return
     }
     const stack = isRanged(weapon) ? activeAmmo : null
-    const { attack: atk, damage } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack))
+
+    // Two resolutions, because a feature can target one without the other:
+    // "advantage on attacks with fire weapons" is not "+2 fire damage". The
+    // subject and its tags are the same for both; only the roll kind differs.
+    const subject = gid('weapon', weapon)
+    const tags = weapon.tags
+    const atkRes = resolve(graph, { kind: 'attack', subject, tags })
+    const dmgRes = resolve(graph, { kind: 'damage', subject, tags })
+
+    const { attack: atk, damage } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack), {
+      attack: atkRes, damage: dmgRes,
+    })
     addRoll({
       kind: 'weapon',
       title: weapon.name,
@@ -142,6 +157,16 @@ export function Equipment() {
       icon: weapon.icon ?? 'fa-khanda',
       attack: atk,
       damage,
+      // Grouped, not concatenated: a rider on the attack and one on the damage
+      // are different statements, and a flat list cannot tell them apart.
+      riderGroups: [
+        { label: 'Attack', riders: atkRes.riders },
+        { label: 'Damage', riders: dmgRes.riders },
+      ].filter(g => g.riders.length),
+      // Notes and problems stay flat — a note is prose about the action and a
+      // problem is an engine failure; neither needs attributing to a sub-roll.
+      notes: [...atkRes.notes, ...dmgRes.notes],
+      problems: [...atkRes.problems, ...dmgRes.problems],
     })
     // Firing spends a shaft. The count is derived from quiver contents, so this
     // is an ordinary inventory write — no separate ammo counter to drift.

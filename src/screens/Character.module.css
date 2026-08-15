@@ -142,15 +142,29 @@
   line-height: 1;
   letter-spacing: 0.18em; color: var(--beige); margin-top: 2px;
 }
+/* The whole hex is already a button (it rolls the check) and `cursor: pointer`
+   is inherited, so the cursor says nothing about SAV being its own target. The
+   underline is the affordance: dashed at rest = "there is something here",
+   solid on hover = "press this". Colour alone could not carry it, because the
+   cyan below already means PROFICIENT — state and affordance have to be two
+   different signals or a proficient save looks like a label. */
 .hSav {
   margin-top: 4px;
   display: inline-flex; align-items: center; gap: 4px;
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em;
   color: var(--muted); text-transform: uppercase;
-  background: transparent; border: 0; padding: 0;
-  transition: color 140ms ease;
+  background: transparent; padding: 0 0 1px;
+  border: 0; border-bottom: 1px dashed rgba(212, 191, 125, 0.45);
+  transition: color 140ms ease, border-color 140ms ease;
 }
-.hSav:hover, .hSav:focus-visible { color: var(--text); }
+/* Brightens on hover. It used to resolve to var(--text), which is DIMMER than
+   the proficient cyan — so hovering a proficient save made it look less
+   interactive, the exact opposite of the intent. */
+.hSav:hover, .hSav:focus-visible {
+  color: var(--cyan-hot);
+  border-bottom-color: var(--cyan-hot);
+  border-bottom-style: solid;
+}
 .hSav:focus-visible { outline: 1.5px solid var(--cyan); outline-offset: 1px; }
 .profShield {
   width: 7px; height: 7px; flex: 0 0 auto;

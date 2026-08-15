@@ -230,29 +230,6 @@ export default function FeatureEditor() {
     return [...set].sort()
   }, [lib.features, draft?.folder])
 
-  /** Rows grouped by folder and sorted WITHIN it by `order`, which is the whole
-   *  point — the hook returns them alphabetically, and a catalog of 46
-   *  near-identical Sanctity features needs the DM's ordering, not the
-   *  alphabet's. A row with no `order` sorts last, alphabetically among its
-   *  peers, which is exactly where it sat before ordering existed. */
-  const foldered = useMemo(() => {
-    const out: Record<string, { r: CatalogFeatureRow; m: { hit: boolean; via?: string } }[]> = {}
-    for (const r of lib.features) {
-      const d = featureContent(r)
-      const key = d.folder || UNFILED
-      ;(out[key] ??= []).push({ r, m: matches(r) })
-    }
-    for (const key of Object.keys(out)) {
-      out[key].sort((a, b) => {
-        const ao = featureContent(a.r).order ?? Number.MAX_SAFE_INTEGER
-        const bo = featureContent(b.r).order ?? Number.MAX_SAFE_INTEGER
-        return ao !== bo ? ao - bo : (featureContent(a.r).name ?? '').localeCompare(featureContent(b.r).name ?? '')
-      })
-    }
-    return out
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lib.features, query])
-
   const parsed = useMemo(() => {
     const m = /^(tag|roll):(.*)$/i.exec(query.trim())
     return m ? { mode: m[1].toLowerCase() as 'tag' | 'roll', value: normalizeTag(m[2]) } : { mode: 'text' as const, value: query.trim().toLowerCase() }
@@ -280,6 +257,29 @@ export default function FeatureEditor() {
     if (parsed.mode === 'tag' && (d.tags ?? []).some(t => normalizeTag(t) === parsed.value)) return { hit: true, via: 'carries tag' }
     return { hit: false }
   }
+
+  /** Rows grouped by folder and sorted WITHIN it by `order`, which is the whole
+   *  point — the hook returns them alphabetically, and a catalog of 46
+   *  near-identical Sanctity features needs the DM's ordering, not the
+   *  alphabet's. A row with no `order` sorts last, alphabetically among its
+   *  peers, which is exactly where it sat before ordering existed. */
+  const foldered = useMemo(() => {
+    const out: Record<string, { r: CatalogFeatureRow; m: { hit: boolean; via?: string } }[]> = {}
+    for (const r of lib.features) {
+      const d = featureContent(r)
+      const key = d.folder || UNFILED
+      ;(out[key] ??= []).push({ r, m: matches(r) })
+    }
+    for (const key of Object.keys(out)) {
+      out[key].sort((a, b) => {
+        const ao = featureContent(a.r).order ?? Number.MAX_SAFE_INTEGER
+        const bo = featureContent(b.r).order ?? Number.MAX_SAFE_INTEGER
+        return ao !== bo ? ao - bo : (featureContent(a.r).name ?? '').localeCompare(featureContent(b.r).name ?? '')
+      })
+    }
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lib.features, query])
 
   /* ---- actions ---- */
   function select(id: string) {
@@ -373,7 +373,7 @@ export default function FeatureEditor() {
   }
 
   /* ---- drag to refile AND reorder ---- */
-  const dragId = useRef<string | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
   const [dropFolder, setDropFolder] = useState<string | null>(null)
   const [dropRow, setDropRow] = useState<{ id: string; after: boolean } | null>(null)
 
@@ -384,9 +384,9 @@ export default function FeatureEditor() {
    *  Fractions are why `order` is a number rather than an index — halving a gap
    *  survives far more drags than a campaign will ever produce. */
   async function onDrop(folder: string) {
-    const id = dragId.current
+    const id = dragId
     const at = dropRow
-    dragId.current = null; setDropFolder(null); setDropRow(null)
+    setDragId(null); setDropFolder(null); setDropRow(null)
     if (!id) return
     const r = lib.features.find(f => f.id === id)
     if (!r) return
@@ -496,7 +496,7 @@ export default function FeatureEditor() {
                   const isOpen = openFolders[fl] !== false || selectorMode
                   return (
                     <div key={fl} className={cx(styles.fold, dropFolder === fl && styles.drop)}
-                      onDragOver={e => { if (dragId.current) { e.preventDefault(); setDropFolder(fl) } }}
+                      onDragOver={e => { if (dragId) { e.preventDefault(); setDropFolder(fl) } }}
                       onDragLeave={() => setDropFolder(c => (c === fl ? null : c))}
                       onDrop={e => { e.preventDefault(); void onDrop(fl) }}>
                       <button type="button" className={cx(styles.foldHead, !isOpen && styles.closed)}
@@ -515,18 +515,33 @@ export default function FeatureEditor() {
                                 className={cx(
                                   styles.frow,
                                   r.id === selId && styles.sel,
-                                  dragId.current === r.id && styles.dragging,
+                                  dragId === r.id && styles.dragging,
                                   dropRow?.id === r.id && (dropRow.after ? styles.dropafter : styles.dropbefore),
                                 )}
                                 style={{ ['--fc' as string]: d.color || DEFAULT_COLOR }}
-                                onDragStart={() => { dragId.current = r.id }}
-                                onDragEnd={() => { dragId.current = null; setDropFolder(null); setDropRow(null) }}
+                                onDragStart={() => setDragId(r.id)}
+                                onDragEnd={() => { setDragId(null); setDropFolder(null); setDropRow(null) }}
                                 onDragOver={e => {
-                                  if (!dragId.current || dragId.current === r.id) return
-                                  // Above or below the midpoint of the row under
-                                  // the cursor — the insertion caret the CSS draws.
-                                  const b = e.currentTarget.getBoundingClientRect()
-                                  setDropRow({ id: r.id, after: e.clientY > b.top + b.height / 2 })
+                                  if (!dragId || dragId === r.id) return
+                                  e.preventDefault()
+                                  // DIRECTION, not the midpoint. A midpoint rule
+                                  // means only half a row swaps — drag down and
+                                  // only the lower half counts, because inserting
+                                  // "before" a row you are already above is a
+                                  // no-op. Comparing indices makes the WHOLE row
+                                  // a target, which is what "drag it onto that
+                                  // one" is supposed to mean.
+                                  const list = foldered[fl] ?? []
+                                  const from = list.findIndex(x => x.r.id === dragId)
+                                  const over = list.findIndex(x => x.r.id === r.id)
+                                  const after = from >= 0
+                                    ? over > from
+                                    // Arriving from another folder: no index to
+                                    // compare against, so fall back to the half
+                                    // of the row the cursor is actually in.
+                                    : e.clientY > e.currentTarget.getBoundingClientRect().top
+                                        + e.currentTarget.getBoundingClientRect().height / 2
+                                  setDropRow({ id: r.id, after })
                                 }}
                                 onClick={() => select(r.id)}>
                                 <span className={styles.frIcFrame}><i className={`fa-solid ${d.icon || 'fa-star'}`} /></span>

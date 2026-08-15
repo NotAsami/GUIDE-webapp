@@ -11,6 +11,11 @@
   bottom: calc(var(--bar-bottom-h) + 18px);
   z-index: 120;
   width: 300px;
+  /* Anchored by `bottom`, so extra rows grow the card UPWARD. Riders make that
+     unbounded — a feature-heavy character would push the head off the top of
+     the viewport. Cap it and let the card scroll instead. */
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
   cursor: pointer;
   padding: 14px 16px 12px;
   background: var(--beige);

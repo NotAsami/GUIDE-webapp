@@ -6,13 +6,17 @@ import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import {
   ABILITY_ABBR, ABILITY_NAMES, SKILLS,
-  abilityMod, abilities, formatMod, proficiency, saveTotal, skillTotal,
+  abilityCheckTerms, abilityMod, abilities, composeCheck, effectiveMode, formatMod,
+  proficiency, saveTerms, saveTotal, skillTerms, skillTotal, type CheckTerm,
 } from '../lib/dnd'
 import type { Skill } from '../lib/dnd'
 import { effectiveSheet } from '../lib/effects'
-import { rollDie } from '../lib/dice'
+import { rollDiceTerms, rollDie } from '../lib/dice'
 import { useRollLog } from '../lib/rolls'
 import type { RollEntry, CheckRoll } from '../lib/rolls'
+import { Riders } from '../components/Riders'
+import { useGraph } from '../lib/useGraph'
+import { resolve, total } from '../lib/graph'
 import styles from './Character.module.css'
 
 interface RouteContext {
@@ -39,8 +43,9 @@ const FLASH_MS = 2000
 export function Character() {
   const { character, shardTrees = {} } = useOutletContext<RouteContext>()
   const view = effectiveSheet(character, shardTrees)
-  const scores = abilities(view)
   const { rolls, addRoll } = useRollLog()
+  // Built once per character, not per roll — see lib/useGraph.ts.
+  const graph = useGraph(character, shardTrees)
   const [mode, setMode] = useState<Mode>('normal')
   const [flash, setFlash] = useState<Partial<Record<AbilityKey, FlashState>>>({})
   const flashTimers = useRef<Partial<Record<AbilityKey, number>>>({})
@@ -54,11 +59,12 @@ export function Character() {
   const scalerRef = useRef<HTMLDivElement>(null)
   useRingScale(stageRef, scalerRef)
 
-  function rollD20Set(): { rolls: number[]; pick: number } {
-    if (mode === 'normal') { const r = rollDie(20); return { rolls: [r], pick: r } }
+  /** `eff` is the mode AFTER the graph has had its say — see pushCheck. */
+  function rollD20Set(eff: 'normal' | 'adv' | 'dis'): { rolls: number[]; pick: number } {
+    if (eff === 'normal') { const r = rollDie(20); return { rolls: [r], pick: r } }
     const a = rollDie(20)
     const b = rollDie(20)
-    return { rolls: [a, b], pick: mode === 'adv' ? Math.max(a, b) : Math.min(a, b) }
+    return { rolls: [a, b], pick: eff === 'adv' ? Math.max(a, b) : Math.min(a, b) }
   }
 
   function flashHex(key: AbilityKey, value: number, crit: boolean, fumble: boolean) {
@@ -70,48 +76,60 @@ export function Character() {
     }, FLASH_MS)
   }
 
+  /** Roll and render. Every number in here comes from lib/dnd.ts — this
+   *  function owns the dice and the log entry, nothing arithmetic. */
   function pushCheck(opts: {
     key: AbilityKey; kind: 'check' | 'save'; title: string; subtitle: string
-    mod: number; profBonus: number; profLabel?: string
+    /** The named parts, from saveTerms/skillTerms/abilityCheckTerms. */
+    terms: CheckTerm[]
+    /** Sub-key for `roll:<kind>.<sub>` — the ability for a save or an ability
+     *  check, the skill for a skill check. */
+    sub: string
   }) {
-    const { rolls: dice, pick } = rollD20Set()
-    const total = pick + opts.mod + opts.profBonus
-    const crit = pick === 20
-    const fumble = pick === 1
-    const parts: string[] = [String(pick)]
-    if (opts.mod !== 0) parts.push(`${formatMod(opts.mod)} ${ABILITY_ABBR[opts.key].toUpperCase()}`)
-    if (opts.profBonus !== 0) parts.push(`${formatMod(opts.profBonus)} ${opts.profLabel ?? 'PROF'}`)
-    const check: CheckRoll = { mode, rolls: dice, pick, breakdown: parts.join(' '), total, crit, fumble }
-    flashHex(opts.key, total, crit, fumble)
-    addRoll({ kind: opts.kind, title: opts.title, subtitle: opts.subtitle, icon: 'fa-dice-d20', check })
+    // The same boundary the weapon roller uses, on a roll kind that has no
+    // subject at all — which is the point of doing both in one slice.
+    const res = resolve(graph, { kind: opts.kind, sub: opts.sub })
+    const bonus = total(res)
+
+    const eff = effectiveMode(mode, res.adv, res.dis)
+    const { rolls: dice, pick } = rollD20Set(eff)
+    // Graph dice on a d20 roll are rolled now — the total is one number and an
+    // unrolled term has nowhere to live. (Damage dice stay unrolled so a crit
+    // can double them; that is why this is not shared with the weapon path.)
+    const graphSum = bonus.flat + rollDiceTerms(bonus.dice).reduce((a, b) => a + b, 0)
+
+    const terms = [...opts.terms, { label: 'FEAT', value: graphSum }]
+    const { total: totalRoll, breakdown, crit, fumble } = composeCheck(pick, terms, res.critFrom)
+
+    const check: CheckRoll = { mode: eff, rolls: dice, pick, breakdown, total: totalRoll, crit, fumble }
+    flashHex(opts.key, totalRoll, crit, fumble)
+    addRoll({
+      kind: opts.kind, title: opts.title, subtitle: opts.subtitle, icon: 'fa-dice-d20', check,
+      riderGroups: res.riders.length ? [{ label: opts.kind === 'save' ? 'Save' : 'Check', riders: res.riders }] : undefined,
+      notes: res.notes.length ? res.notes : undefined,
+      problems: res.problems.length ? res.problems : undefined,
+    })
   }
 
   function rollAbilityCheck(key: AbilityKey) {
     pushCheck({
-      key, kind: 'check', title: `${ABILITY_NAMES[key].toUpperCase()} CHECK`, subtitle: 'Ability Check',
-      mod: abilityMod(scores[key]), profBonus: 0,
+      key, kind: 'check', sub: key, title: `${ABILITY_NAMES[key].toUpperCase()} CHECK`,
+      subtitle: 'Ability Check', terms: abilityCheckTerms(view, key),
     })
   }
 
   function rollSave(key: AbilityKey) {
-    const prof = (view.saveProficiencies ?? []).includes(key)
-    const profBonus = (prof ? proficiency(view) : 0) + (view.saveBonuses?.[key] ?? 0)
     pushCheck({
-      key, kind: 'save', title: `${ABILITY_NAMES[key].toUpperCase()} SAVE`, subtitle: 'Saving Throw',
-      mod: abilityMod(scores[key]), profBonus,
+      key, kind: 'save', sub: key, title: `${ABILITY_NAMES[key].toUpperCase()} SAVE`,
+      subtitle: 'Saving Throw', terms: saveTerms(view, key),
     })
   }
 
   function rollSkill(skill: Skill) {
-    const proficient = (view.skillProficiencies ?? []).includes(skill.key)
-    const expertise = (view.skillExpertise ?? []).includes(skill.key)
-    const mult = expertise ? 2 : proficient ? 1 : 0
-    const profBonus = proficiency(view) * mult + (view.skillBonuses?.[skill.key] ?? 0)
     pushCheck({
-      key: skill.ability, kind: 'check', title: skill.name.toUpperCase(),
+      key: skill.ability, kind: 'check', sub: skill.key, title: skill.name.toUpperCase(),
       subtitle: `${ABILITY_ABBR[skill.ability].toUpperCase()} · Skill Check`,
-      mod: abilityMod(scores[skill.ability]), profBonus,
-      profLabel: expertise ? 'PROF x2' : 'PROF',
+      terms: skillTerms(view, skill),
     })
   }
 
@@ -419,6 +437,11 @@ function RollLogEntry({ entry }: { entry: RollEntry }) {
             {(entry.lines ?? []).map(l => `${l.label}: ${l.total}`).join(' · ')}
           </span>
         )}
+
+        {/* Riders get their own row rather than squeezing into the fixed
+            3-row grid above. This log is the better rider surface than the
+            toast: it persists and it already scrolls. */}
+        <Riders groups={entry.riderGroups} notes={entry.notes} problems={entry.problems} />
 
         <span className={styles.reStamp}>{stampOf(entry.at)}</span>
       </div>
