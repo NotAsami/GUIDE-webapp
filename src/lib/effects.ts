@@ -20,11 +20,11 @@
 
 import type {
   AbilityKey, AbilityScores, ActiveEffect, CharacterRow, EffectiveSheet,
-  EquippedItem, ItemEffects, ItemSlot, ShardTree,
-} from './database.types'
-import { ITEM_SLOTS } from './equip'
-import { burdenTier, capacityForStr, currentBurden } from './burden'
-import { shardEffects } from './shards'
+  EquippedItem, EquippedWeapon, Feature, ItemEffects, ItemSlot, ShardNode, ShardTree, Spell,
+} from './database.types.ts'
+import { ITEM_SLOTS, getGear, getWeapons } from './equip.ts'
+import { burdenTier, capacityForStr, currentBurden } from './burden.ts'
+import { shardFeatures, shardSlots } from './shards.ts'
 
 const GEAR_SLOT_KEYS: readonly ItemSlot[] = ITEM_SLOTS
 const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
@@ -42,6 +42,33 @@ export function wornGear(character: CharacterRow): EquippedItem[] {
 export function activeEffects(character: CharacterRow): ActiveEffect[] {
   const r = character.resources as { activeEffects?: ActiveEffect[] } | undefined
   return r?.activeEffects ?? []
+}
+
+/** Features granted by EQUIPPED items (worn gear slots + wielded weapons + the
+ *  bound shard) — the derived Gear Features group. Copies live ON the item and
+ *  travel with it, so this is read-only derivation: unequip and they vanish.
+ *  `uses` counters are stripped — use-tracking writes to `sheet.features`,
+ *  where these don't live (the `usage` text still tells the story).
+ *
+ *  Note the slot list is deliberately WIDER than wornGear()'s: a weapon and the
+ *  guide shard grant features even though their `effects` are not passive. */
+export function gearFeatures(character: CharacterRow): Feature[] {
+  const eq = getGear(character)
+  const slots: (EquippedItem | null | undefined)[] = [
+    ...ITEM_SLOTS.map(k => eq[k]),
+    ...(eq.weapons ?? []), eq.guideShard,
+  ]
+  return slots
+    .filter((i): i is EquippedItem => !!i)
+    .flatMap(item => (item.features ?? []).map((f, idx) => ({
+      ...f,
+      // Namespace the id per item instance so two copies of the same item
+      // can't collide as React keys; never written back anywhere.
+      id: `gear-${item.id ?? item.name}-${f.id ?? idx}`,
+      uses: undefined,
+      kind: f.kind ?? 'equipment',
+      source: f.source ?? item.name,
+    })))
 }
 
 /** Short human summary of an effect bundle, e.g. "+2 STR, +1 AC". For status
@@ -69,16 +96,75 @@ function sum(fx: ItemEffects[], pick: (e: ItemEffects) => number | undefined): n
   return fx.reduce((n, e) => n + (pick(e) ?? 0), 0)
 }
 
-/** Every effect bundle currently active on the character: worn gear, temporary
- *  applied effects, and slotted-shard mods. Shared by effectiveSheet() and
- *  burden.ts's carryMultiplier() so the two can't drift onto different lists
- *  of "what's active right now". */
-export function effectSources(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): ItemEffects[] {
-  return [
-    ...wornGear(character).map(i => i.effects),
-    ...activeEffects(character).map(e => e.effects),
-    ...shardEffects(character, shardTrees),
-  ].filter((e): e is ItemEffects => !!e)
+/** One entity that exists on this character right now. `fx` is the effect bundle
+ *  it contributes PASSIVELY — set only where a bundle applies without a roll.
+ *
+ *  `fx?: never` on the kinds that contribute nothing passively is the gate, not a
+ *  formality: it makes `{ kind: 'weapon', …, fx }` a compile error, so a magic
+ *  weapon's to-hit bonus cannot be wired into the effective sheet by accident. */
+export type ActiveSource =
+  | { kind: 'feature'; obj: Feature; fx?: never }
+  | { kind: 'shard'; obj: ShardTree; fx?: ItemEffects }
+  | { kind: 'shardnode'; obj: ShardNode; fx?: ItemEffects }
+  | { kind: 'spell'; obj: Spell; fx?: never }
+  | { kind: 'weapon'; obj: EquippedWeapon; fx?: never }
+  | { kind: 'item'; obj: EquippedItem; fx?: ItemEffects }
+  | { kind: 'effect'; obj: ActiveEffect; fx: ItemEffects }
+
+/** Everything active on this character, as objects — the single answer to "what
+ *  exists for targeting/effect purposes right now". Unequipped items and their
+ *  features are absent by construction, not by a filter downstream.
+ *
+ *  ORDER IS LOAD-BEARING: sheet features → gear → shards → spells. Two active
+ *  sources declaring the same variable name resolve to the FIRST in this order,
+ *  so a collision stays deterministic while it is broken.
+ *
+ *  `fx` is set for exactly three groups — slotted shards, worn gear, and applied
+ *  effects — which is what effectiveSheet() layers. A weapon and the guide shard
+ *  carry real `effects` bundles that are per-attack, never passive, so they are
+ *  sources WITHOUT `fx`. Collecting the effect list by "has an effects field"
+ *  instead of by kind would silently apply every magic weapon's to-hit bonus to
+ *  AC, saves and skills.
+ *
+ *  ponytail: rebuilt per call, and effectiveSheet() is called unmemoized from
+ *  ~11 render paths. Memoize per character row when the resolver lands — it
+ *  needs the same list and is the first thing to make the cost visible. */
+export function activeSources(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): ActiveSource[] {
+  const out: ActiveSource[] = []
+
+  for (const obj of character.sheet?.features ?? []) out.push({ kind: 'feature', obj })
+  for (const obj of gearFeatures(character)) out.push({ kind: 'feature', obj })
+  for (const obj of shardFeatures(character, shardTrees)) out.push({ kind: 'feature', obj })
+
+  // Slotted shards: the tree's base grant, then every attuned node. A concealed
+  // node reaches a player session as bare geometry (its mods/features live in
+  // shard_tree_secrets), so there is deliberately no `revealed` check here —
+  // filtering client-side would be a no-op for players and would drop real
+  // contributions on the DM side, where the secrets are merged back in.
+  for (const slot of Object.values(shardSlots(character))) {
+    if (!slot.shardId) continue
+    const tree = shardTrees[slot.shardId]
+    if (!tree) continue
+    out.push({ kind: 'shard', obj: tree, fx: tree.baseMods })
+    for (const id of slot.attuned) {
+      const node = tree.nodes.find(n => n.id === id)
+      if (node) out.push({ kind: 'shardnode', obj: node, fx: node.mods })
+    }
+  }
+
+  for (const obj of character.spellbook?.spells ?? []) out.push({ kind: 'spell', obj })
+  for (const obj of getWeapons(getGear(character))) out.push({ kind: 'weapon', obj })
+  for (const obj of wornGear(character)) out.push({ kind: 'item', obj, fx: obj.effects })
+  for (const obj of activeEffects(character)) out.push({ kind: 'effect', obj, fx: obj.effects })
+
+  return out
+}
+
+/** The passive effect bundles out of `activeSources()`, in that order. Every
+ *  fold over this list is commutative (max / sum), so the order costs nothing
+ *  here — it exists for the variable-collision rule above. */
+function passiveEffects(character: CharacterRow, shardTrees: Record<string, ShardTree>): ItemEffects[] {
+  return activeSources(character, shardTrees).flatMap(s => s.fx ?? [])
 }
 
 /** Carrying-capacity multiplier (Powerful Build-style nodes). Takes the
@@ -86,14 +172,14 @@ export function effectSources(character: CharacterRow, shardTrees: Record<string
  *  5e's Powerful Build doesn't stack with itself, so two "doubled" sources
  *  still just double, not quadruple. */
 export function carryMultiplier(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): number {
-  return effectSources(character, shardTrees).reduce((m, e) => Math.max(m, e.carryMult ?? 1), 1)
+  return passiveEffects(character, shardTrees).reduce((m, e) => Math.max(m, e.carryMult ?? 1), 1)
 }
 
 /** Base sheet with all worn-gear + slotted-shard effects layered in. DERIVED,
  *  display-only. */
 export function effectiveSheet(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): EffectiveSheet {
   const base = character.sheet ?? {}
-  const fx = effectSources(character, shardTrees)
+  const fx = passiveEffects(character, shardTrees)
 
   // Abilities: max(base, highest set) + Σ flat.
   const baseAb = base.abilities ?? ZERO
@@ -128,7 +214,7 @@ export function effectiveSheet(character: CharacterRow, shardTrees: Record<strin
   // that doubles capacity also pushes the encumbrance thresholds out, not
   // just the Inventory/Topbar bar's displayed max. currentBurden/
   // capacityForStr/burdenTier/carryMultiplier are the pure half of lib/
-  // burden.ts + effectSources() (no effectiveSheet call), so this can't
+  // burden.ts + passiveEffects() (no effectiveSheet call), so this can't
   // recurse back into effectiveSheet the way burden()/maxBurden() do.
   const gearSpeed = (base.speed ?? 0) + sum(fx, e => e.speed)
   const carryMult = fx.reduce((m, e) => Math.max(m, e.carryMult ?? 1), 1)

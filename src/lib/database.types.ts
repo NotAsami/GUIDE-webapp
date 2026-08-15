@@ -155,6 +155,128 @@ export type Feature = {
   rollLabel?: string
   /** Optional toast tone for the roll line ('heal' green / 'buff' cyan). */
   rollTone?: 'heal' | 'buff'
+  /** Variables this feature introduces (lib/graph.ts). Shape only for now — no
+   *  authoring UI writes it yet. */
+  vars?: VarDef[]
+  /** Free-text targeting tags, normalised on save (lib/graph.ts normalizeTag).
+   *  Shape only for now. */
+  tags?: string[]
+  /** Structured roll contributions. Absent = a pure prose feature. */
+  graph?: GraphEffect[]
+  // ── Authoring-only fields (Feature Editor, slice 3). None of these reach a
+  //    player screen; they organise and tint the DM's catalog. ──
+  /** Folder name in the Feature Editor's list. The folder set is DERIVED from
+   *  the features in it — there is no folder store to drift out of sync, and the
+   *  cost is that a folder emptied of its last member stops existing.
+   *  ponytail: derived folders. Add a folder store if empty ones need to persist. */
+  folder?: string
+  /** Hex tint for the editor's list row and header. Distinct from `kind`, which
+   *  tints the PLAYER's card by provenance. */
+  color?: string
+  /** What the player spends to use it. Independent of `uses` — a passive feature
+   *  can still track uses, and an at-will action can have none. */
+  activation?: 'none' | 'action' | 'bonus' | 'reaction' | 'free'
+  /** Catalog templates only. False/absent = draft; the Grant picker hides it.
+   *  Players never read feature_catalog at all (migration 0005 has no player
+   *  policy), so a grant is the only path from catalog to sheet — which is
+   *  exactly what this gates. */
+  published?: boolean
+  /** Sort key within a folder. FRACTIONAL: dropping between two neighbours
+   *  writes the midpoint, so a reorder is one row write instead of renumbering
+   *  every sibling. */
+  order?: number
+}
+
+/** A variable declaration. Definitions ride on the node that introduces them, so
+ *  an unequipped item's variables stop existing exactly as its features do —
+ *  scoping falls out of lib/effects.ts activeSources() rather than needing a rule
+ *  of its own. Values live in `resources.graph.vars` / `.dmVars`, split by who may
+ *  write them; DERIVED variables are never stored, only computed.
+ *
+ *  The namespace is flat and global per character — `mercy` is `mercy`, not
+ *  `feature:arbiter.mercy`. That buys the authoring ergonomics the whole system
+ *  exists for; the price is collisions, which lib/graph.ts reports. */
+export type VarDef = {
+  /** Identifier: /^[a-z][a-zA-Z0-9]*$/. Referenced bare in formulas — `mercy`. */
+  name: string
+  kind: 'stored' | 'derived'
+  /** `stored` only, and REQUIRED there. `derived` variables omit it — their type
+   *  comes from their formula.
+   *
+   *  Not inferred from `initial`: the expression language is typed and its
+   *  rejections turn on type, so the audit cannot decide whether `mercy > 5` or
+   *  `isMercy && x` is legal without knowing what `mercy` is. It is also which
+   *  zero a character WITHOUT this variable reads — a `num` substituted for a
+   *  `bool` would make `isMercy && x` a type error on exactly those characters. */
+  type?: 'num' | 'bool'
+  /** `derived` only. Expression over the VARIABLE whitelist (lib/expr.ts
+   *  VAR_IDENTS) plus other variables — never roll context. */
+  formula?: string
+  /** `stored` only. Which bucket the value lands in, and therefore who may write
+   *  it. Absent = 'player'. */
+  scope?: 'player' | 'dm'
+  /** `stored` only. Value on first appearance. Absent = the type's zero. */
+  initial?: number | boolean
+  /** Editor + DM-console display name. */
+  label?: string
+}
+
+/** Deliberately a short list, not a kind×field matrix. Each exists because a
+ *  catalogued homebrew feature needs it; add the next one the same way.
+ *  Everything except `add` is a FLAG, never a number — advantage is not a bonus.
+ *
+ *  `resist`/`vuln`/`immune` are damage flags: their target names the damage kind
+ *  and they answer "what happens when fire lands on me", which is not a roll.
+ *  lib/graph.ts reads them through damageFlags(), never through resolve(). */
+export type GraphOp = 'add' | 'adv' | 'dis' | 'crit' | 'note' | 'resist' | 'vuln' | 'immune'
+
+/** One structured contribution a node makes to a roll. Absent `graph` = a pure
+ *  prose node, which stays a legitimate outcome — the effect block is opt-in per
+ *  feature and collapsed by default in the editor. */
+export type GraphEffect = {
+  id: string
+  /** OR across selectors — matching any one is enough. Absent/empty = this
+   *  node's own roll. Three namespaces and that is the whole language:
+   *  `feature:`/`spell:`/`item:`/`weapon:`/`shardnode:` (one thing, by gid),
+   *  `tag:<tag>` (anything active carrying it), `roll:<kind>[.<sub>]`. */
+  target?: string[]
+  op: GraphOp
+  /** `add` only. A formula (lib/expr.ts); dice terms allowed and returned
+   *  unrolled so a crit can still double them. */
+  value?: string
+  /** App-evaluated boolean expression over variables. Absent = always true.
+   *  Gates EXISTENCE — a false `when` means the effect does not surface at all. */
+  when?: string
+  /** A player toggle and its label — "at least one failed the save". Nothing can
+   *  evaluate this; only a human knows it. Gates RESOLUTION, and is orthogonal to
+   *  `when`: an effect may need an expression gate AND a toggle at once. Also
+   *  what decides pre-rolling — `when`-only riders pre-roll and show their value,
+   *  anything carrying `ask` shows the formula and rolls on tap. */
+  ask?: string
+  /** REQUIRED. An unlabelled number in a breakdown is exactly the bug the roll
+   *  context panel exists to prevent. */
+  label: string
+  /** `add` on a damage roll: the damage type, for the breakdown colour. */
+  dmgType?: string
+  /** Arms once instead of applying continuously. Parsed today, honoured when the
+   *  armed queue lands. */
+  once?: boolean
+  /** `note` only. The rule the player reads. `label` is the short line in a
+   *  breakdown; this is the sentence. Absent falls back to `label`, which is what
+   *  notes authored before this field existed relied on. */
+  text?: string
+  /** `crit` only. Lowest d20 face that counts as a critical hit, as a formula.
+   *  The LOWEST threshold across every applying node wins — two features that
+   *  both improve the range pick the better one rather than stacking. */
+  threshold?: string
+  /** `add` only. A level-indexed progression table: 21 slots, index 0 unused
+   *  because character levels start at 1. Sugar for an array-index expression,
+   *  kept as its own field so the editor can render the grid that makes the
+   *  off-by-one visible instead of hiding it in every authored formula.
+   *
+   *  SPARSE BY DESIGN — filling 1/5/11 means "3 from level 11 up", not "nothing
+   *  at 12". When any slot is filled the table overrides `value`. */
+  byLevel?: string[]
 }
 
 /** A CharacterSheet with equipped-item effects already layered in (lib/effects.ts).
@@ -332,6 +454,14 @@ export type EquippedItem = {
    *  It keeps its cell and still counts toward carry weight; it is in your pack and
    *  simply refusing you. Distinct from confiscation, which removes it outright. */
   locked?: boolean
+  /** Variables this item introduces while EQUIPPED (lib/graph.ts). Unequip and
+   *  they stop existing, exactly as `features` do. Shape only for now. */
+  vars?: VarDef[]
+  /** Free-text targeting tags, normalised on save (lib/graph.ts normalizeTag). */
+  tags?: string[]
+  /** Structured roll contributions while EQUIPPED. Distinct from `effects`,
+   *  which is the passive numeric layer — this is per-roll and conditional. */
+  graph?: GraphEffect[]
 }
 
 /** A temporary, player-applied effect (drank a potion, etc.). Layered over the
@@ -489,6 +619,16 @@ export type ShardNode = {
    *  the player's real Features screen (lib/shards.ts shardFeatures() never
    *  reads this). Use `features` instead for anything with real game rules. */
   perks?: ShardPerk[]
+  /** Variables this node introduces while ATTUNED (lib/graph.ts). Travels
+   *  through `shard_tree_secrets` for a concealed node, same as `mods` and
+   *  `features` — see lib/dmShards.ts splitForSave(). Shape only for now. */
+  vars?: VarDef[]
+  /** Free-text targeting tags. Secrets-routed for a concealed node, as above. */
+  tags?: string[]
+  /** Structured roll contributions while ATTUNED. Secrets-routed for a concealed
+   *  node — these are mechanics, and leaking them to the public catalog row
+   *  would spoil exactly what `concealed` hides. */
+  graph?: GraphEffect[]
 }
 
 export type ShardPerk = { name: string; description: string; icon?: string }
@@ -672,9 +812,15 @@ export type ConfiscatedItemInsert = {
 /** A catalog template's `data`: a Feature minus its instance id (stamped at
  *  grant/embed time along with the `feature_id` back-ref). */
 export type CatalogFeatureData = Omit<Feature, 'id' | 'feature_id'>
-export type CatalogFeatureRow = { id: string; data: CatalogFeatureData; updated_at: string }
-export type CatalogFeatureInsert = { id?: string; data: CatalogFeatureData }
-export type CatalogFeatureUpdate = { data?: CatalogFeatureData }
+/** `data` is the PUBLISHED content — the only thing a grant may copy. `draft`
+ *  is the DM's in-progress edit, which Publish promotes into `data`. Keeping
+ *  them in separate slots is what makes "nothing a player sees moves until
+ *  Publish" true rather than aspirational: editing a granted feature's template
+ *  never disturbs `data`. Safe as a plain column here because feature_catalog
+ *  has no player policy at all (migration 0005). */
+export type CatalogFeatureRow = { id: string; data: CatalogFeatureData; draft: CatalogFeatureData | null; updated_at: string }
+export type CatalogFeatureInsert = { id?: string; data?: CatalogFeatureData; draft?: CatalogFeatureData | null }
+export type CatalogFeatureUpdate = { data?: CatalogFeatureData; draft?: CatalogFeatureData | null }
 
 // ── Effect catalog (migration 0013): the DM's effect-authoring library. An
 //    effect DEFINITION is three things — Modifiers (numeric, `Mod[]`), Flags
@@ -789,6 +935,13 @@ export type Spell = {
   /** Effect-mode free-text flavor shown on the status chip (e.g. "speed x2,
    *  extra action") — deliberately not modelled as numbers (ItemEffects doc). */
   effectNote?: string
+  /** Variables this spell introduces while in the book (lib/graph.ts). Shape
+   *  only for now — no authoring UI writes it yet. */
+  vars?: VarDef[]
+  /** Free-text targeting tags, normalised on save (lib/graph.ts normalizeTag). */
+  tags?: string[]
+  /** Structured roll contributions. */
+  graph?: GraphEffect[]
 }
 
 export type SpellSlot = { level: number; total: number; expended: number }
@@ -852,8 +1005,24 @@ export type ShardTreeCatalogUpdate = { data?: ShardTree }
 
 export type ShardTreeSecretData = {
   dm?: string
-  nodes?: Record<string, { name: string; effect: string; dm?: string; mods?: ItemEffects; features?: Feature[]; perks?: ShardPerk[] }>
+  nodes?: Record<string, { name: string; effect: string; dm?: string; mods?: ItemEffects; features?: Feature[]; perks?: ShardPerk[]; vars?: VarDef[]; tags?: string[]; graph?: GraphEffect[] }>
+  /** The DM's in-progress edit of the WHOLE tree — "Save Draft".
+   *
+   *  It lives here, and not as a column on shard_tree_catalog, because RLS is
+   *  row-level: `player_read_published_shards` (migration 0008) grants players
+   *  SELECT on the catalog row, so any column added there is a column they can
+   *  read. This table has no player policy at all, for the same reason concealed
+   *  node text already lives in it.
+   *
+   *  Stored MERGED (concealed text and dm notes inline, exactly as the editor
+   *  holds it) rather than split — splitForSave exists to protect the player
+   *  catalog, and nothing here is player-readable. */
+  draft?: ShardTreeDraft
 }
+/** An EditorTree, structurally. Declared here rather than imported from
+ *  lib/dmShards so the stored shape stays defined alongside everything else
+ *  that is stored. */
+export type ShardTreeDraft = Omit<ShardTree, 'nodes'> & { dm?: string; nodes: (ShardNode & { dm?: string })[] }
 export type ShardTreeSecretRow = { shard_id: string; data: ShardTreeSecretData; updated_at: string }
 export type ShardTreeSecretInsert = { shard_id: string; data?: ShardTreeSecretData }
 export type ShardTreeSecretUpdate = { data?: ShardTreeSecretData }

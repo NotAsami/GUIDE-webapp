@@ -425,16 +425,26 @@ select.in { appearance: none; background-image: linear-gradient(45deg, transpare
 .status.bad { color: var(--danger-hot); } .status.bad .dot { background: var(--danger-hot); box-shadow: 0 0 7px rgba(255, 84, 84, 0.7); }
 .dirty { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--amber); opacity: 0; }
 .dirty.on { opacity: 1; }
+/* Local-autosave stamp — the first rung of the draft ladder (lib/draft.ts). */
+.autosv { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim); }
 .acts { margin-left: auto; display: flex; gap: 8px; }
 .acts .btn { width: 132px; flex: 0 0 auto; height: 28px; }
+/* Rises on mount. A keyframe, not a transition: the toast is conditionally
+   rendered and mounted with its final class already applied, so there was never
+   a "from" state for a transition to run from and the slide-up never played.
+   Matches FeatureEditor.module.css. */
 .toastEl {
   --cut: 7px; --bc: var(--amber);
-  position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%) translateY(10px); z-index: 120; opacity: 0; pointer-events: none; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background-color: rgba(14, 13, 10, 0.96); border: 1.5px solid var(--bc); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber-hot);
+  position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 120; pointer-events: none; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background-color: rgba(14, 13, 10, 0.96); border: 1.5px solid var(--bc); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber-hot);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
-  transition: opacity 200ms ease, transform 200ms ease;
+  animation: toastIn 200ms ease both;
 }
-.toastEl.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
 .toastEl.warn { --bc: var(--danger-hot); color: var(--danger-hot); }
+@media (prefers-reduced-motion: reduce) { .toastEl { animation: none; } }
 
 /* ---------- chamfered-border-corner fix (CLAUDE.md recipe) ----------
    A plain `border` physically cannot draw along an oblique clip-path edge —

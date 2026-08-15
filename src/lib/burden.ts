@@ -14,9 +14,9 @@
  * the character, it never blocks a pickup. There is no slot cap to run out of.
  */
 
-import type { CharacterRow, EquippedItem, EquippedGear, InventoryItem, ShardTree } from './database.types'
-import { ITEM_SLOTS, getGear, getInventory, getWeapons, getContainers } from './equip'
-import { carryMultiplier, effectiveSheet } from './effects'
+import type { CharacterRow, EquippedItem, EquippedGear, InventoryItem, ShardTree } from './database.types.ts'
+import { ITEM_SLOTS, getGear, getInventory, getWeapons, getContainers } from './equip.ts'
+import { carryMultiplier, effectiveSheet } from './effects.ts'
 
 /** Per-stack weight: per-unit weight × quantity (both default sensibly). */
 export function itemWeight(item: { weight?: number; qty?: number }): number {

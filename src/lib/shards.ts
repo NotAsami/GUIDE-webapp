@@ -10,12 +10,9 @@
  * Eject/re-slot on it.
  */
 
-import { useCallback, useEffect, useState } from 'react'
-import { useAuth } from './auth'
-import { supabase } from './supabase'
 import type {
-  CharacterRow, Feature, ItemEffects, ShardNode, ShardPerk, ShardSlot, ShardsField, ShardTree, ShardTreeCatalogRow,
-} from './database.types'
+  CharacterRow, Feature, ShardNode, ShardPerk, ShardSlot, ShardsField, ShardTree,
+} from './database.types.ts'
 
 export const SHARD_SLOT_KEYS = ['slot1', 'slot2', 'slot3'] as const
 export type ShardSlotKey = typeof SHARD_SLOT_KEYS[number]
@@ -117,24 +114,6 @@ export function nodeState(node: ShardNode, slot: ShardSlot): NodeState {
   return node.prereqs.every(p => slot.attuned.includes(p)) ? 'available' : 'locked'
 }
 
-/** ItemEffects contributed by every slotted shard: each tree's `baseMods`
- *  (granted on slot) plus every attuned node's `mods`. Feeds effectiveSheet()
- *  — read-only derivation, never written back. */
-export function shardEffects(character: CharacterRow, catalog: Record<string, ShardTree>): ItemEffects[] {
-  const out: ItemEffects[] = []
-  for (const slot of Object.values(shardSlots(character))) {
-    if (!slot.shardId) continue
-    const tree = catalog[slot.shardId]
-    if (!tree) continue
-    if (tree.baseMods) out.push(tree.baseMods)
-    for (const id of slot.attuned) {
-      const mods = tree.nodes.find(n => n.id === id)?.mods
-      if (mods) out.push(mods)
-    }
-  }
-  return out
-}
-
 /** Features granted by every slotted shard, namespaced like gearFeatures()
  *  (Features.tsx) so two shards can't collide as React keys. Copies live on
  *  the shard/node, not on the character — unslot or reset and they vanish. */
@@ -179,33 +158,4 @@ export function shardPerks(character: CharacterRow, catalog: Record<string, Shar
     }
   }
   return out.filter(p => typeof p === 'object' && !!p?.name)
-}
-
-export interface ShardCatalogState {
-  catalog: Record<string, ShardTree>
-  loading: boolean
-  refetch: () => Promise<void>
-}
-
-/** Player-side read of PUBLISHED shard trees (shard_tree_catalog, migration
- *  0008). A handful of small, rarely-changing rows — one fetch on mount, no
- *  realtime; a DM publish takes effect on the player's next reload/nav. */
-export function useShardCatalog(): ShardCatalogState {
-  const { session } = useAuth()
-  const [catalog, setCatalog] = useState<Record<string, ShardTree>>({})
-  const [loading, setLoading] = useState(true)
-
-  const fetchAll = useCallback(async () => {
-    if (!session) { setCatalog({}); setLoading(false); return }
-    setLoading(true)
-    const { data } = await supabase.from('shard_tree_catalog').select('*')
-    const map: Record<string, ShardTree> = {}
-    for (const row of (data as ShardTreeCatalogRow[] | null) ?? []) map[row.id] = row.data
-    setCatalog(map)
-    setLoading(false)
-  }, [session])
-
-  useEffect(() => { void fetchAll() }, [fetchAll])
-
-  return { catalog, loading, refetch: fetchAll }
 }

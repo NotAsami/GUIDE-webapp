@@ -13,6 +13,7 @@ import { Lore } from './screens/Lore'
 import { Spellbook } from './screens/Spellbook'
 import { Shard } from './screens/Shard'
 import { ShardLattice } from './screens/ShardLattice'
+import FeatureEditor from './screens/FeatureEditor'
 import { OperatorConsole } from './screens/OperatorConsole'
 
 export const router = createBrowserRouter([
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
   // dm_users membership and redirects non-DM users back to '/'.
   { path: '/dm', element: <OperatorConsole /> },
   { path: '/dm/shards', element: <ShardLattice /> },
+  { path: '/dm/features', element: <FeatureEditor /> },
   {
     path: '/',
     element: <Layout />,
