@@ -387,6 +387,15 @@ select.in option { background: #14130f; }
 .oppal { --cut: 8px; --bc: rgba(212,191,125,.18); margin-bottom: 12px; background-color: rgba(0,0,0,.3); border: 1.5px solid var(--bc); padding: 9px 11px 10px; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
 .oppalGrp { display: flex; align-items: center; gap: 8px; margin: 0 0 7px; }
 .oppalGrp .gl { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--beige-dim); white-space: nowrap; }
+/* Violet marks an ACTIVATION throughout the editor: it writes, where every
+   other op only reads. A different colour is the cheapest way to stop the two
+   being skimmed as the same kind of thing. */
+.oppalGrp .gl.act { color: var(--violet); }
+.opb.act { --bc: rgba(160,122,214,.35); }
+.opb.act i { color: var(--violet); }
+.opb.act:hover { color: #cbb4f0; --bc: var(--violet); background-color: rgba(160,122,214,.12); }
+.efrow.act { --og: var(--violet); }
+.grpPill.act { color: var(--violet); border-color: rgba(160,122,214,.45); }
 .oppalGrp::after { content: ""; flex: 1; height: 1px; background: rgba(212,191,125,.12); }
 .oppalRow { display: flex; flex-wrap: wrap; gap: 5px; }
 .opb {

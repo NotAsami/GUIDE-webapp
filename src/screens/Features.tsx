@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, Feature, FeatureCategory, ShardPerk, ShardTree } from '../lib/database.types'
@@ -9,11 +9,16 @@ import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet, gearFeatures } from '../lib/effects'
 import { shardFeatures, shardPerks } from '../lib/shards'
 import { Prose } from '../lib/markdown'
+import { useGraph } from '../lib/useGraph'
+import { applyOutcomes, planActivation, playerVars, setVars, type Outcome } from '../lib/graphState'
 import styles from './Features.module.css'
 
 interface RouteContext {
   character: CharacterRow
   updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  /** Needed when a use writes `sheet` AND `resources` — one round trip, not two
+   *  that could land apart. Provided by Layout; this screen used to ignore it. */
+  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
   shardTrees?: Record<string, ShardTree>
 }
 
@@ -29,9 +34,10 @@ const GROUPS: { key: FeatureCategory; label: string; icon: string }[] = [
 
 const COLS = 3
 
-/** A feature can be "used" when it rolls something or tracks limited uses. */
+/** A feature can be "used" when it rolls something, tracks limited uses, or has
+ *  activation outcomes to run. */
 function isUsable(f: Feature): boolean {
-  return !!f.roll || !!f.uses
+  return !!f.roll || !!f.uses || (f.graph ?? []).some(e => e.op === 'setVar' || e.op === 'addVar')
 }
 
 /** The short text shown on the card (scales the card). Falls back to the legacy
@@ -49,12 +55,17 @@ function cardText(f: Feature): string {
  *  too: it rolls, decrements the counter, and surfaces the result as a
  *  single-roll toast (the player applies the effect, as with an attack). */
 export function Features() {
-  const { character, updateSection, shardTrees = {} } = useOutletContext<RouteContext>()
+  const { character, updateSection, updateSections, shardTrees = {} } = useOutletContext<RouteContext>()
   const nav = useNavigate()
   const { addRoll } = useRollLog()
   const features = character.sheet?.features ?? []
   const [selected, setSelected] = useState<Feature | null>(null)
   const [busy, setBusy] = useState(false)
+  /** A pending activation awaiting the player's answers. Null = nothing to confirm. */
+  const [pending, setPending] = useState<{ feature: Feature; outcomes: Outcome[] } | null>(null)
+  const graph = useGraph(character, shardTrees)
+  // Every stored, player-writable variable on the active set, with its value.
+  const vars = playerVars(character, shardTrees)
 
   // Close the detail panel on Escape.
   useEffect(() => {
@@ -64,9 +75,30 @@ export function Features() {
     return () => window.removeEventListener('keydown', onKey)
   }, [selected])
 
+  /** Variables this feature declares that the player may write directly. */
+  const varsOf = (f: Feature) =>
+    vars.filter(v => (f.vars ?? []).some(d => d.name === v.def.name))
+
+  /** Flip or set one variable. Its own write — a toggle is not part of a use. */
+  async function writeVar(name: string, value: number | boolean) {
+    await updateSection('resources', setVars(character, { [name]: value }) as CharacterRow['resources'])
+  }
+
+  /** Pressing Use. Anything the feature would WRITE is shown first: an
+   *  activation is a deliberate press, so a confirm step costs nothing and is
+   *  the natural place to answer an `ask`. A feature with nothing to write skips
+   *  straight through — the old behaviour, unchanged. */
+  function onUse(f: Feature) {
+    if (busy) return
+    if (f.uses && f.uses.current <= 0) return
+    const outcomes = planActivation(f, graph, character)
+    if (outcomes.length) { setPending({ feature: f, outcomes }); return }
+    void useFeature(f, [])
+  }
+
   /** Spend/roll a feature: roll its expression (if any), decrement its use
-   *  counter (if any) in one write, then toast the result. */
-  async function useFeature(f: Feature) {
+   *  counter (if any), apply the accepted activation outcomes — in ONE write. */
+  async function useFeature(f: Feature, outcomes: Outcome[], answers = new Set<string>()) {
     if (busy) return
     if (f.uses && f.uses.current <= 0) return
     setBusy(true)
@@ -100,7 +132,16 @@ export function Features() {
         x.id === f.id ? { ...x, uses: { ...f.uses!, current: remaining! } } : x) }
     }
 
-    if (nextSheet !== sheet) await updateSection('sheet', nextSheet)
+    // The variable writes join the SAME write as the roll and the use counter —
+    // two writes could land apart and leave a feature spent but not activated.
+    const { resources, applied } = applyOutcomes(character, outcomes, answers)
+    for (const o of applied) lines.push({ label: o.def.label ?? o.def.name, total: String(o.delta !== undefined ? (o.current as number) + o.delta : o.set), breakdown: o.summary, tone: 'buff' })
+
+    if (applied.length) {
+      await updateSections({ ...(nextSheet !== sheet ? { sheet: nextSheet } : {}), resources: resources as CharacterRow['resources'] })
+    } else if (nextSheet !== sheet) {
+      await updateSection('sheet', nextSheet)
+    }
     setBusy(false)
 
     const subtitle = f.uses ? `${remaining} / ${f.uses.max} uses left` : (f.usage ?? 'Feature')
@@ -194,8 +235,9 @@ export function Features() {
                     {group.items.filter((_, i) => i % COLS === c).map(f => (
                       <FeatureCard
                         key={f.id} feature={f} busy={busy}
+                        on={varsOf(f).some(v => v.def.type === 'bool' && v.value === true)}
                         onOpen={() => setSelected(f)}
-                        onUse={() => useFeature(f)}
+                        onUse={() => onUse(f)}
                       />
                     ))}
                   </div>
@@ -227,9 +269,23 @@ export function Features() {
 
       {selected && createPortal(
         <FeatureDetail
-          feature={selected} busy={busy}
+          feature={selected} busy={busy} vars={varsOf(selected)}
           onClose={() => setSelected(null)}
-          onUse={() => { const f = selected; setSelected(null); useFeature(f) }}
+          onWriteVar={writeVar}
+          onUse={() => { const f = selected; setSelected(null); onUse(f) }}
+        />,
+        document.body,
+      )}
+
+      {pending && createPortal(
+        <ActivationConfirm
+          feature={pending.feature} outcomes={pending.outcomes} busy={busy}
+          onCancel={() => setPending(null)}
+          onConfirm={answers => {
+            const p = pending
+            setPending(null)
+            void useFeature(p.feature, p.outcomes, answers)
+          }}
         />,
         document.body,
       )}
@@ -237,8 +293,8 @@ export function Features() {
   )
 }
 
-function FeatureCard({ feature, busy, onOpen, onUse }: {
-  feature: Feature; busy: boolean; onOpen: () => void; onUse: () => void
+function FeatureCard({ feature, busy, on, onOpen, onUse }: {
+  feature: Feature; busy: boolean; on: boolean; onOpen: () => void; onUse: () => void
 }) {
   const tag = feature.usage ?? (feature.level ? `Lv ${feature.level}` : null)
   const exhausted = !!feature.uses && feature.uses.current <= 0
@@ -252,6 +308,10 @@ function FeatureCard({ feature, busy, onOpen, onUse }: {
         <span className={styles.cHead}>
           <span className={styles.cIcon}><i className={`fa-solid ${feature.icon ?? 'fa-bolt'}`} /></span>
           <span className={styles.cName}>{feature.name}</span>
+          {/* A feature being ON is a bool variable. Showing it on the closed card
+              is the same argument §16 makes for the armed chip: state the player
+              cannot see is worse than no state, because they act without it. */}
+          {on && <span className={styles.cOn} title="Active">ON</span>}
         </span>
         {text && <Prose text={text} className={styles.cDesc} />}
       </button>
@@ -287,8 +347,13 @@ function PerkCard({ perk }: { perk: ShardPerk }) {
   )
 }
 
-function FeatureDetail({ feature, busy, onClose, onUse }: {
-  feature: Feature; busy: boolean; onClose: () => void; onUse: () => void
+type VarRow = { def: { name: string; label?: string; type?: 'num' | 'bool' }; value: number | boolean }
+
+function FeatureDetail({ feature, busy, vars, onClose, onWriteVar, onUse }: {
+  feature: Feature; busy: boolean; vars: VarRow[]
+  onClose: () => void
+  onWriteVar: (name: string, value: number | boolean) => void | Promise<void>
+  onUse: () => void
 }) {
   const light = cardText(feature)
   const exhausted = !!feature.uses && feature.uses.current <= 0
@@ -324,6 +389,15 @@ function FeatureDetail({ feature, busy, onClose, onUse }: {
           {!light && !feature.deep_description && <p className={styles.pEmpty}>No description provided.</p>}
         </div>
 
+        {vars.length > 0 && (
+          <div className={styles.pState}>
+            <div className={styles.psHead}>State</div>
+            {vars.map(v => (
+              <VarControl key={v.def.name} row={v} disabled={busy} onWrite={onWriteVar} />
+            ))}
+          </div>
+        )}
+
         {isUsable(feature) && (
           <div className={styles.pFoot}>
             <button type="button" className={styles.pUse} onClick={onUse} disabled={busy || exhausted}>
@@ -331,6 +405,115 @@ function FeatureDetail({ feature, busy, onClose, onUse }: {
             </button>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+/** One player-writable variable. A bool is a toggle; a number is a stepper.
+ *
+ *  The stepper keeps its own value and writes on SETTLE, because updateSection
+ *  is optimistic but not debounced — holding `+` would otherwise fire one
+ *  `UPDATE … RETURNING *` per click. */
+function VarControl({ row, disabled, onWrite }: {
+  row: VarRow; disabled: boolean
+  onWrite: (name: string, value: number | boolean) => void | Promise<void>
+}) {
+  const name = row.def.label ?? row.def.name
+  const [local, setLocal] = useState<number | null>(null)
+  const timer = useRef<number | undefined>(undefined)
+
+  // A write from elsewhere (a rest, an activation, the DM) must win over a local
+  // draft that is no longer being edited.
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
+  if (row.def.type === 'bool') {
+    const on = row.value === true
+    return (
+      <button
+        type="button" className={`${styles.psRow} ${on ? styles.psOn : ''}`}
+        disabled={disabled} aria-pressed={on}
+        onClick={() => void onWrite(row.def.name, !on)}
+      >
+        <i className={`fa-${on ? 'solid fa-toggle-on' : 'regular fa-circle'}`} />
+        <span className={styles.psName}>{name}</span>
+        <span className={styles.psVal}>{on ? 'on' : 'off'}</span>
+      </button>
+    )
+  }
+
+  const shown = local ?? (typeof row.value === 'number' ? row.value : 0)
+  const bump = (by: number) => {
+    const next = shown + by
+    setLocal(next)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => { setLocal(null); void onWrite(row.def.name, next) }, 450)
+  }
+  return (
+    <div className={styles.psRow}>
+      <i className="fa-solid fa-hashtag" />
+      <span className={styles.psName}>{name}</span>
+      <button type="button" className={styles.psStep} disabled={disabled} onClick={() => bump(-1)} aria-label={`Decrease ${name}`}>−</button>
+      <span className={styles.psVal}>{shown}</span>
+      <button type="button" className={styles.psStep} disabled={disabled} onClick={() => bump(1)} aria-label={`Increase ${name}`}>+</button>
+    </div>
+  )
+}
+
+/** What pressing Use will do, before it does it.
+ *
+ *  Every outcome is listed, so a write is never invisible. Ones carrying an
+ *  `ask` are unticked checkboxes — §32 makes that a human's call, and unlike a
+ *  roll rider this is answered on a deliberate press, so it needs no panel. */
+function ActivationConfirm({ feature, outcomes, busy, onCancel, onConfirm }: {
+  feature: Feature; outcomes: Outcome[]; busy: boolean
+  onCancel: () => void; onConfirm: (answers: Set<string>) => void
+}) {
+  const [answers, setAnswers] = useState<Set<string>>(new Set())
+  const toggle = (label: string) =>
+    setAnswers(prev => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label); else next.add(label)
+      return next
+    })
+
+  return (
+    <div className={styles.overlay} onClick={onCancel}>
+      <div className={styles.confirm} onClick={e => e.stopPropagation()} role="dialog" aria-label={`Use ${feature.name}`}>
+        <div className={styles.cfHead}>
+          <span className={styles.pIcon}><i className={`fa-solid ${feature.icon ?? 'fa-bolt'}`} /></span>
+          <div className={styles.pTitles}>
+            <div className={styles.pName}>{feature.name}</div>
+            <div className={styles.pSub}>Will apply</div>
+          </div>
+        </div>
+
+        <div className={styles.cfList}>
+          {outcomes.map((o, i) => (
+            o.ask ? (
+              <button
+                key={i} type="button"
+                className={`${styles.cfRow} ${styles.cfAsk} ${answers.has(o.ask) ? styles.cfOn : ''}`}
+                aria-pressed={answers.has(o.ask)} onClick={() => toggle(o.ask!)}
+              >
+                <i className={`fa-${answers.has(o.ask) ? 'solid fa-square-check' : 'regular fa-square'}`} />
+                <span className={styles.cfLabel}>{o.ask}</span>
+                <span className={styles.cfVal}>{o.summary}</span>
+              </button>
+            ) : (
+              <div key={i} className={styles.cfRow}>
+                <i className="fa-solid fa-check" />
+                <span className={styles.cfLabel}>{o.eff.label}</span>
+                <span className={styles.cfVal}>{o.summary}</span>
+              </div>
+            )
+          ))}
+        </div>
+
+        <div className={styles.cfFoot}>
+          <button type="button" className={styles.cfCancel} onClick={onCancel}>Cancel</button>
+          <button type="button" className={styles.pUse} disabled={busy} onClick={() => onConfirm(answers)}>Confirm</button>
+        </div>
       </div>
     </div>
   )

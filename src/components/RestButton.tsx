@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { CharacterRow, CharacterSection, CharacterSheet, ShardTree } from '../lib/database.types'
+import type { CharacterRow, CharacterSection, ShardTree } from '../lib/database.types'
 import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet } from '../lib/effects'
 import { parseDice, rollDice } from '../lib/dice'
-import { longRestPatch, pactShortRestPatch } from '../lib/rest'
+import { longRestPatch, pactShortRestPatch, shortRestPatch } from '../lib/rest'
 import styles from './RestButton.module.css'
 
 interface Props {
@@ -56,43 +56,16 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
 
   async function confirmShort() {
     setBusy(true)
-    const rolls = rollDice(spend, hdSides)
-    const healed = Math.max(0, rolls.reduce((a, b) => a + b, 0) + conMod * spend)
-    const hp = character.sheet?.hp ?? { current: 0, max: 0 }
-    const baseMax = hp.max ?? 0
-    const healMax = effectiveSheet(character, shardTrees).hp?.max ?? baseMax
-    const nextHp = Math.min(healMax, (hp.current ?? 0) + healed)
-    const gained = nextHp - (hp.current ?? 0)
-    const nextSheet: CharacterSheet = { ...character.sheet, hp: { ...hp, current: nextHp, max: baseMax } }
-    if (hd) nextSheet.hitDice = { ...hd, current: Math.max(0, hdAvail - spend) }
-    const resources = character.resources ?? {}
-
-    const lines: RollLine[] = []
-
-    // Features that recharge on a short rest come back.
-    const features = character.sheet?.features
-    if (features && features.length) {
-      let recharged = 0
-      nextSheet.features = features.map(f => {
-        if (f.recharge === 'short' && f.uses && f.uses.current < f.uses.max) { recharged++; return { ...f, uses: { ...f.uses, current: f.uses.max } } }
-        return f
-      })
-      if (recharged > 0) lines.push({ label: 'Features', total: 'recharged', breakdown: `${recharged} restored` })
-    }
-    if (spend > 0) {
-      const modStr = conMod ? ` ${conMod > 0 ? '+' : '−'} ${Math.abs(conMod * spend)}` : ''
-      lines.push({ label: 'HP', total: `${nextHp} / ${healMax}`, breakdown: `+${gained} · rolled ${rolls.join(' + ')}${modStr}`, tone: 'heal' })
-      lines.push({ label: 'Hit Dice', total: `${Math.max(0, hdAvail - spend)}${hdDie}`, breakdown: `−${spend} spent` })
-    }
-    if (activeCount > 0) lines.push({ label: 'Effects Cleared', total: `${activeCount}`, breakdown: 'potions worn off', tone: 'buff' })
-    if (pactPatch) lines.push(...pactPatch.lines)
-
+    // The dice are rolled HERE, not in rest.ts: the player chooses how many hit
+    // dice to spend, and Math.random must never run somewhere a render could
+    // call twice.
+    const { patch, lines } = shortRestPatch(
+      character,
+      { spend, rolls: rollDice(spend, hdSides), conMod },
+      shardTrees,
+    )
     setOpen(false)
-    await updateSections({
-      sheet: nextSheet,
-      resources: { ...resources, activeEffects: [] },
-      ...(pactPatch ? pactPatch.patch : {}),
-    })
+    await updateSections(patch)
     setBusy(false)
     addRoll({ kind: 'custom', title: 'Short Rest', subtitle: 'One hour · hit dice spent', icon: 'fa-campground', lines })
   }

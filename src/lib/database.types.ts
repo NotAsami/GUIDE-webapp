@@ -219,6 +219,44 @@ export type VarDef = {
   initial?: number | boolean
   /** Editor + DM-console display name. */
   label?: string
+  /** `stored` only. When a rest returns this to `initial` (or the type's zero).
+   *  Mirrors Feature.recharge, which already means exactly this for uses:
+   *  'short' = short OR long rest, 'long' = long only, absent = never resets.
+   *
+   *  Forced by real content — "once per rest" state like `used_this_fight` is
+   *  otherwise true forever until someone remembers to flip it back. */
+  resetOn?: 'short' | 'long'
+}
+
+/** One-shot modifier awaiting a matching roll. Keyed by ROLL KIND from the
+ *  start, never attack-only. Declared here so the stored shape is complete;
+ *  nothing arms or consumes one until the armed-queue slice. */
+export type ArmedMod = {
+  id: string
+  source: string
+  label: string
+  kind: string
+  sub?: string
+  subject?: string
+  op: GraphOp
+  value?: string
+  at: number
+}
+
+/** Per-character graph state, at `resources.graph`.
+ *
+ *  The two buckets are a PERMISSION expressed as a LOCATION: Postgres RLS is
+ *  row-level and cannot allow writing one JSON path while refusing another, so
+ *  which object a value lives in is what decides who may write it. Migration
+ *  0015's guard_dm_vars trigger reverts any non-DM change to `dmVars`.
+ *
+ *  A feature being ON is an ordinary bool in `vars` — there is no separate
+ *  `active` list, because two records of one fact are free to disagree. */
+export type GraphState = {
+  vars?: Record<string, number | boolean>
+  /** DM-only. Guarded by migration 0015, not by client good behaviour. */
+  dmVars?: Record<string, number | boolean>
+  armed?: ArmedMod[]
 }
 
 /** Deliberately a short list, not a kind×field matrix. Each exists because a
@@ -228,7 +266,14 @@ export type VarDef = {
  *  `resist`/`vuln`/`immune` are damage flags: their target names the damage kind
  *  and they answer "what happens when fire lands on me", which is not a roll.
  *  lib/graph.ts reads them through damageFlags(), never through resolve(). */
-export type GraphOp = 'add' | 'adv' | 'dis' | 'crit' | 'note' | 'resist' | 'vuln' | 'immune'
+export type GraphOp =
+  | 'add' | 'adv' | 'dis' | 'crit' | 'note'
+  | 'resist' | 'vuln' | 'immune'
+  /** ACTIVATION outcomes. Unlike everything above, these do not modify a roll —
+   *  they run when the player presses Use, and they WRITE. resolve() skips them
+   *  for that reason: folding them into a Resolution would fire them on every
+   *  roll instead of on a press. */
+  | 'setVar' | 'addVar'
 
 /** One structured contribution a node makes to a roll. Absent `graph` = a pure
  *  prose node, which stays a legitimate outcome — the effect block is opt-in per
@@ -242,8 +287,11 @@ export type GraphEffect = {
   target?: string[]
   op: GraphOp
   /** `add` only. A formula (lib/expr.ts); dice terms allowed and returned
-   *  unrolled so a crit can still double them. */
+   *  unrolled so a crit can still double them. Also carries the assigned value
+   *  for `setVar` and the signed delta for `addVar`. */
   value?: string
+  /** `setVar` / `addVar` only. The name of a variable this node declares. */
+  variable?: string
   /** App-evaluated boolean expression over variables. Absent = always true.
    *  Gates EXISTENCE — a false `when` means the effect does not surface at all. */
   when?: string

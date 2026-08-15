@@ -1686,3 +1686,78 @@ character, riders rendering in both the toast and the roll log, a feature's
 advantage cancelling against a player's manual disadvantage, `ask` rendering
 unresolved without applying, and a broken formula surfacing in `problems` while
 the rest of the roll resolved.
+
+---
+
+## 44. Slice 5a as built — state becomes writable
+
+§18's slice 5 was split: **5a makes variables writable end to end**; the armed
+queue, the consumption chip and the DM console state panel are 5b. Built as
+`src/lib/graphState.ts`, migration `0015_guard_dm_vars.sql`, the `setVar`/`addVar`
+ops, and the Features screen's state block + activation confirm. §39's precedence
+rule applies: written after the code.
+
+### §31's trigger landed, and the hole it closes is real
+
+`guard_dm_vars` had never been migrated. It went in verbatim and was **tested
+against the database on a throwaway row**, not trusted:
+
+| Attack (as a non-DM) | Result |
+|---|---|
+| Edit `resources.graph.dmVars` directly | Reverted |
+| Write `resources` with **no `graph` key at all** | `dmVars` survived, and the legitimate part of the same write still landed |
+| Write the player's own `graph.vars` | Allowed — the guard does not over-reach |
+
+The middle row is why the doc's `coalesce` is there: `jsonb_set` creates only the
+last path element, so on a target with no `graph` key it silently no-ops and
+`dmVars` is simply gone. **Reverts, never raises** — a player's write succeeds
+and the DM's value wins, rather than the player getting an error for something
+their client did on its own.
+
+§40 said this had to land "before the first writer, not before the first reader".
+5a is that writer.
+
+### Settled while building
+
+| Decision | Why |
+|---|---|
+| **Two routes write the same key** | A direct toggle/stepper for every stored player-scope variable, AND `setVar`/`addVar` from Use. §16 says active toggles *become* `setVar`, but a DM can declare a bare bool with no activation authored, and then nothing could ever flip it. Both write `resources.graph.vars`, so they cannot disagree. |
+| **Use opens a confirm sheet** | Every write is listed before it happens, with `ask` outcomes as unticked boxes. §32 allows `ask` on activation outcomes and §24 needs it; unlike a roll rider this is answered on a deliberate press, so it needs no Roll Context Panel. **`ask` is therefore real for activations while still deferred for riders** — the two are not the same problem. |
+| **`VarDef.resetOn?: 'short' \| 'long'`** | Mirrors `Feature.recharge` exactly. Forced by content the editor mockup already seeds (`used_this_fight`, `ward_charges`). A long rest takes both, matching how `longRestPatch` already treats pact slots. |
+| **`addVar` is planned as a DELTA** | Not as a computed next value. Two `addVar`s on one variable then stack; a precomputed result would have to be un-applied to combine them. |
+| **Activations never reach a `Resolution`** | Same rule the damage flags get: `resolve()` skips them. Folding a `setVar` into a Resolution would fire it on every roll that matched, which is not what "on activation" means. |
+| **`graphState.ts` returns patches, never writes** | So a use folds its roll, its use counter and its variable writes into ONE `updateSections` call. Two writes could land apart and leave a feature spent but not activated. |
+
+### `shortRestPatch` had to be extracted first
+
+`longRestPatch` was shared by the player Rest button and the DM console, but the
+general short rest was **inlined in `RestButton.tsx`** and `rest.ts` never saw it.
+Adding `resetOn` handling would have meant writing the rule twice, in two shapes,
+with nothing keeping them in step — precisely the drift §16's Lifetime note warns
+about. Extracted, then the rule written once; the variable reset now rides in the
+**same** `resources` object that already carries `activeEffects: []`.
+
+### The audit gained §31's author-time half
+
+`auditNode` blocks an activation that writes a DM variable, a derived variable,
+an undeclared one, or that carries a target. `planActivation` refuses the same
+cases at runtime — not redundancy: a granted feature is a **snapshot**, so a copy
+on a character can predate a rule the catalog now enforces.
+
+### Caught during the build
+
+The activation palette was **written into the schema and never rendered** — a DM
+could not have added a `setVar` at all. Same inert-authoring-surface failure this
+document has now caught four times (`byLevel`, `order`, and twice here). The
+pattern is worth naming: *adding a thing to a schema is not adding it to the app.*
+
+### Still owed
+
+| Owed | To whom |
+|---|---|
+| The armed queue (`once: true`), the consumption chip, and the DM console state panel (§8 #4). | 5b |
+| `heal` / `tempHp` / `grantEffect` — activation outcomes that touch HP and effects rather than variables. `grantEffect` needs a snapshot, since players cannot read `effect_catalog`. | later |
+| Roll-rider `ask` toggles — still the Roll Context Panel's. | that slice |
+| `uses.current` lives on `sheet.features[]` while variables live in `resources.graph.vars`. Both are state, stored two ways. | unresolved |
+| §9's "per-character turn tick" is named as in scope and specified nowhere. | whoever wants it |
+| **Manual verification of 5a has not been run yet.** | next session |

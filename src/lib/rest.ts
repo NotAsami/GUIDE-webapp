@@ -1,6 +1,7 @@
 import type { CharacterRow, CharacterSection, CharacterSheet, ShardTree } from './database.types'
 import type { RollLine } from './rolls'
 import { effectiveSheet } from './effects'
+import { restVarPatch, withVars } from './graphState'
 
 /** Build the long-rest result: faithful 5e long-rest defaults, applied in ONE
  *  atomic write (both sections spread from the existing data — never replaced).
@@ -73,9 +74,20 @@ export function longRestPatch(character: CharacterRow, shardTrees: Record<string
   const ds = resources.deathSaves as { successes?: number; failures?: number } | undefined
   if (ds && ((ds.successes ?? 0) > 0 || (ds.failures ?? 0) > 0)) lines.push({ label: 'Death Saves', total: 'reset', breakdown: '0 / 0' })
 
+  // Graph variables whose author marked them resetOn. A long rest grants every
+  // short-rest benefit, so it takes both — the same rule already applied to pact
+  // slots below.
+  const { vars: resetVars, count: resetCount } = restVarPatch(character, shardTrees, 'long')
+  if (resetCount > 0) lines.push({ label: 'Feature State', total: 'reset', breakdown: `${resetCount} restored`, tone: 'buff' })
+
   const patch: Partial<Pick<CharacterRow, CharacterSection>> = {
     sheet: nextSheet,
-    resources: { ...resources, deathSaves: { successes: 0, failures: 0 }, exhaustion: nextExhaustion, activeEffects: [] },
+    // ONE resources object, per §16's Lifetime note: a second write path is what
+    // lets these drift.
+    resources: withVars(
+      { ...resources, deathSaves: { successes: 0, failures: 0 }, exhaustion: nextExhaustion, activeEffects: [] },
+      resetVars,
+    ),
   }
 
   const slots = spellbook.slots
@@ -101,6 +113,73 @@ export function longRestPatch(character: CharacterRow, shardTrees: Record<string
  *  short-rest-ONLY path (standard `slots[]` stay untouched — those still
  *  need a long rest). Returns null when there's nothing to restore (not a
  *  pact caster, or already full) so callers can skip the write/line cleanly. */
+/** Build the SHORT-rest result. Extracted from RestButton so both rests are
+ *  built by the same module: the graph-variable reset rule below has to be
+ *  written once, and §16's Lifetime note is explicit that a second write path is
+ *  what lets these drift.
+ *
+ *  Takes the dice already rolled, because rolling is the caller's (the modal
+ *  lets the player choose how many hit dice to spend, and Math.random must not
+ *  run inside something a render could call twice). */
+export function shortRestPatch(
+  character: CharacterRow,
+  opts: { spend: number; rolls: number[]; conMod: number },
+  shardTrees: Record<string, ShardTree> = {},
+): { patch: Partial<Pick<CharacterRow, CharacterSection>>; lines: RollLine[] } {
+  const sheet = character.sheet ?? {}
+  const resources = character.resources ?? {}
+  const lines: RollLine[] = []
+
+  const hp = sheet.hp ?? { current: 0, max: 0 }
+  const baseMax = hp.max ?? 0
+  const healMax = effectiveSheet(character, shardTrees).hp?.max ?? baseMax
+  const healed = Math.max(0, opts.rolls.reduce((a, b) => a + b, 0) + opts.conMod * opts.spend)
+  const nextHp = Math.min(healMax, (hp.current ?? 0) + healed)
+  const gained = nextHp - (hp.current ?? 0)
+
+  const nextSheet: CharacterSheet = { ...sheet, hp: { ...hp, current: nextHp, max: baseMax } }
+  const hd = sheet.hitDice
+  if (hd) nextSheet.hitDice = { ...hd, current: Math.max(0, (hd.current ?? 0) - opts.spend) }
+
+  // Features that recharge on a short rest come back.
+  const features = sheet.features
+  if (features && features.length) {
+    let recharged = 0
+    nextSheet.features = features.map(f => {
+      if (f.recharge === 'short' && f.uses && f.uses.current < f.uses.max) { recharged++; return { ...f, uses: { ...f.uses, current: f.uses.max } } }
+      return f
+    })
+    if (recharged > 0) lines.push({ label: 'Features', total: 'recharged', breakdown: `${recharged} restored` })
+  }
+
+  if (opts.spend > 0) {
+    const modStr = opts.conMod ? ` ${opts.conMod > 0 ? '+' : '−'} ${Math.abs(opts.conMod * opts.spend)}` : ''
+    lines.push({ label: 'HP', total: `${nextHp} / ${healMax}`, breakdown: `+${gained} · rolled ${opts.rolls.join(' + ')}${modStr}`, tone: 'heal' })
+    lines.push({ label: 'Hit Dice', total: `${nextSheet.hitDice?.current ?? 0}${hd?.die ?? ''}`, breakdown: `−${opts.spend} spent` })
+  }
+
+  const effects = Array.isArray(resources.activeEffects) ? resources.activeEffects : []
+  if (effects.length > 0) lines.push({ label: 'Effects Cleared', total: `${effects.length}`, breakdown: 'potions worn off', tone: 'buff' })
+
+  // Graph variables whose author marked them resetOn: 'short'.
+  const { vars, count } = restVarPatch(character, shardTrees, 'short')
+  if (count > 0) lines.push({ label: 'Feature State', total: 'reset', breakdown: `${count} restored`, tone: 'buff' })
+
+  const patch: Partial<Pick<CharacterRow, CharacterSection>> = {
+    sheet: nextSheet,
+    // ONE resources object — the variable reset rides with the effects clear
+    // rather than in a second write that could land separately.
+    resources: withVars({ ...resources, activeEffects: [] }, vars),
+  }
+
+  const pact = pactShortRestPatch(character)
+  if (pact) {
+    patch.spellbook = pact.patch.spellbook
+    lines.push(...pact.lines)
+  }
+  return { patch, lines }
+}
+
 export function pactShortRestPatch(character: CharacterRow): {
   patch: Partial<Pick<CharacterRow, CharacterSection>>
   lines: RollLine[]
