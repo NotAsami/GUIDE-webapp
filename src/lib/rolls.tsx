@@ -73,6 +73,14 @@ interface RollLogValue {
   rolls: RollEntry[]
   /** Append a roll (id + timestamp filled in). Call from event handlers only. */
   addRoll: (entry: Omit<RollEntry, 'id' | 'at'>) => RollEntry
+  /** Patch one entry in place.
+   *
+   *  Answering an `ask` and rolling its dice both mutate a roll that has ALREADY
+   *  happened, which an append-only log cannot express. Deliberately narrow: the
+   *  Roll Context Panel is the only caller, and every other producer stays
+   *  fire-and-forget. `addRoll` already returns the entry, so a caller that needs
+   *  to patch its own roll has the id. */
+  updateRoll: (id: string, patch: Partial<RollEntry>) => void
   clear: () => void
 }
 
@@ -88,9 +96,13 @@ export function RollLogProvider({ children }: { children: ReactNode }) {
     return full
   }, [])
 
+  const updateRoll = useCallback<RollLogValue['updateRoll']>((id, patch) => {
+    setRolls(prev => prev.map(r => (r.id === id ? { ...r, ...patch } : r)))
+  }, [])
+
   const clear = useCallback(() => setRolls([]), [])
 
-  const value = useMemo(() => ({ rolls, addRoll, clear }), [rolls, addRoll, clear])
+  const value = useMemo(() => ({ rolls, addRoll, updateRoll, clear }), [rolls, addRoll, updateRoll, clear])
   return <RollLogContext.Provider value={value}>{children}</RollLogContext.Provider>
 }
 

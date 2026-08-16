@@ -372,11 +372,34 @@ test('a contribution cycle is dropped and reported, never a hang', () => {
 
 // --- §32's when/ask table, all six rows -------------------------------------
 
-test('§32 row 1 — no when, no ask: folds into flat, no rider', () => {
+test('§32 row 1 — no when, no ask: folds into flat AND names itself', () => {
   const c = withFeatures([gfeat('F', [{ id: 'e1', op: 'add', value: '2', label: 'Always', target: ['roll:attack'] }])])
   const r = resolve(buildContext(c), ATTACK)
   assert.equal(r.flat, 2)
-  assert.equal(r.riders.length, 0)
+  // It surfaces as an `always` rider too, so the panel can say the +2 was
+  // "Always, from F" rather than showing an unattributed number. The fold is
+  // unchanged; the rider is additional.
+  assert.equal(r.riders.length, 1)
+  assert.equal(r.riders[0].when, 'always')
+  assert.equal(r.riders[0].on, true)
+  assert.equal(r.riders[0].label, 'Always')
+  assert.equal(r.riders[0].source, 'F')
+})
+
+test('total() does not count an `always` rider twice', () => {
+  // The dangerous line. `always` riders are already inside flat/dice; adding
+  // them again doubles every unconditional contribution, silently.
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '2', label: 'Flat', target: ['roll:damage'] },
+    { id: 'e2', op: 'add', value: '1d6', label: 'Dice', target: ['roll:damage'] },
+  ])])
+  const r = resolve(buildContext(c), { kind: 'damage' })
+  assert.equal(r.flat, 2)
+  assert.deepEqual(r.dice, ['1d6'])
+  assert.equal(r.riders.length, 2)
+  const t = total(r)
+  assert.equal(t.flat, 2)              // not 4
+  assert.deepEqual(t.dice, ['1d6'])    // not ['1d6','1d6']
 })
 
 test('§32 row 2 — when true, no ask: a resolved rider, not folded', () => {
@@ -452,7 +475,9 @@ test('adv/dis/crit are flags, and a resolved rider still sets its flag', () => {
   const r = resolve(buildContext(c), ATTACK)
   assert.equal(r.adv, true)
   assert.equal(r.crit, true)
-  assert.equal(r.riders[0].op, 'crit') // the panel is told WHAT the toggle grants
+  // Both surface now: `adv` unconditional is an `always` rider, `crit` with a
+  // true `when` is an `active` one. The panel is told WHAT each grants.
+  assert.deepEqual(r.riders.map(x => [x.op, x.when]), [['adv', 'always'], ['crit', 'active']])
 })
 
 test('an asked flag does not apply until the player says so', () => {
@@ -864,7 +889,8 @@ test('the authored Rage shape: when + ask stays an unresolved toggle, never appl
   // applies. This is the one way the two cases could diverge in stored data.
   const blank = roll({ ...rage(), graph: [{ id: 'e', op: 'add', value: '2', label: 'Rage', ask: '', target: ['roll:damage'] }] }, false)
   assert.equal(blank.flat, 2)
-  assert.equal(blank.riders.length, 0)
+  assert.equal(blank.riders[0].when, 'always')   // applied, and named
+  assert.equal(total(blank).flat, 2)             // counted once
 })
 
 test('a variable nothing reads or writes is a warning', () => {

@@ -58,6 +58,12 @@ export function weaponDamageString(weapon: EquippedWeapon, sheet: CharacterSheet
 
 export type AttackRoll = {
   d20: number
+  /** Every d20 rolled — two under adv/dis, one otherwise. `d20` says which one
+   *  was kept, so the panel can strike the loser through. The pair was always
+   *  rolled and the loser discarded; keeping it costs nothing and is the only
+   *  way a weapon attack renders the same die chips a check already can. */
+  rolls: number[]
+  mode: 'normal' | 'adv' | 'dis'
   bonus: number
   total: number
   crit: boolean
@@ -111,8 +117,14 @@ export function rollWeaponAttack(
   // Threshold from the graph, else the printed 20. Fumble stays a natural 1.
   const crit = d20 >= (atkRes?.critFrom ?? 20)
   const fumble = d20 === 1
+  const mode = advantage ? 'adv' as const : disadvantage ? 'dis' as const : 'normal' as const
   const attack: AttackRoll = {
-    d20, bonus: atkBonus, total: d20 + atkBonus, crit, fumble,
+    d20,
+    // Only keep the second die when it was actually contested — otherwise the
+    // panel would render a phantom "dropped" chip for a die nobody rolled against.
+    rolls: mode === 'normal' ? [pair[0]] : pair,
+    mode,
+    bonus: atkBonus, total: d20 + atkBonus, crit, fumble,
     breakdown: `d20(${d20}) ${formatMod(atkBonus)}`
       + (advantage ? ' adv' : disadvantage ? ' dis' : ''),
   }

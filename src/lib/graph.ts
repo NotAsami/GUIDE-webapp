@@ -400,9 +400,17 @@ export type Rider = {
   /** UNROLLED — the caller rolls, so a crit can still double these. */
   dice: string[]
   when: 'always' | 'manual' | 'active'
-  /** `active` riders arrive already resolved; `manual` ones start off. */
+  /** `active` and `always` riders arrive already resolved; `manual` ones start off. */
   on: boolean
   dmgType?: string
+  /** Set once the player has answered a `manual` rider and its dice were rolled.
+   *  Written by the Roll Context Panel, never by resolve() — which keeps the
+   *  engine pure and makes the lock trivial: once this is set the roll
+   *  affordance is gone and toggling reuses the value, so reopening the panel
+   *  can never re-roll (§8 #2). */
+  rolled?: boolean
+  /** The faces that came up, once `rolled`. `dice` stays the unrolled formula. */
+  rolledDice?: number[]
 }
 
 export type Resolution = {
@@ -594,13 +602,25 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     const v = eff.op === 'add' ? value(e) : { flat: 0, dice: [] }
     if (!v) continue
 
-    // Unconditional and undecided → fold straight in. This is the ONLY row of
-    // §32's table that does not surface as a rider.
+    // Unconditional and undecided → folds into flat/dice, AND surfaces as an
+    // `always` rider carrying its label and source.
+    //
+    // The fold alone used to be the whole story, which threw the attribution
+    // away: the roll knew it was +2 but not that the +2 was Rage. §7 asks every
+    // number to be traceable, and the panel's contribution lines are where that
+    // is finally read. `flat`/`dice` keep their exact previous meaning — the
+    // rider is additional, not a replacement — which is why total() must skip
+    // `always` riders or every one of these counts twice.
     if (eff.when === undefined && !eff.ask) {
       if (eff.op === 'add') { out.flat += v.flat; out.dice.push(...v.dice) }
       if (eff.op === 'adv') out.adv = true
       if (eff.op === 'dis') out.dis = true
       if (eff.op === 'crit') applyCrit(eff)
+      out.riders.push({
+        label: eff.label, source: from.obj.name, op: eff.op,
+        formula: eff.value ?? '', flat: v.flat, dice: v.dice,
+        when: 'always', on: true, dmgType: eff.dmgType,
+      })
       continue
     }
 
@@ -669,7 +689,10 @@ export function damageFlags(ctx: GraphContext, dmgType: string): { resist: boole
  *  renders each rider as its own line, and a caller that summed both would double
  *  count. Doing it here once means no caller can get that wrong. */
 export function total(res: Resolution): { flat: number; dice: string[] } {
-  const on = res.riders.filter(r => r.on && r.op === 'add')
+  // `always` riders are ALREADY inside flat/dice — they exist so the panel can
+  // name the source, not to be added a second time. Getting this wrong doubles
+  // every unconditional contribution silently, which is why it has its own test.
+  const on = res.riders.filter(r => r.on && r.op === 'add' && r.when !== 'always')
   return {
     flat: res.flat + on.reduce((n, r) => n + r.flat, 0),
     dice: [...res.dice, ...on.flatMap(r => r.dice)],
