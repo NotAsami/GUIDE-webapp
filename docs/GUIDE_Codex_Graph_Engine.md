@@ -592,6 +592,13 @@ Deletion is part of the work, not cleanup afterwards:
 
 ## 20. Rejected during planning
 
+Recorded so they stay rejected — but note the bar: several of these were
+rejected because *no catalogued feature needed one*, which is a condition, not a
+verdict. Two have since been revisited on evidence (parentheses in formulas,
+§14; `and` target lists, §54). A rejection whose reason has expired belongs in
+`GUIDE_Codex_Deferred.md`, where the design is worked out and waiting for its
+trigger.
+
 Recorded so they stay rejected:
 
 | Rejected | Why |
@@ -2767,3 +2774,9 @@ opening the card.
 chaining expression. `boost()` skips effects already considered, so an `and` that
 failed the roll match does not boost its named node either. Nothing authored
 wants that shape today; if one does, it wants naming rather than inferring.
+
+**What comes after this, if anything does:** `(A & B) | C` needs nesting, which
+a flat list plus one combinator cannot express. Designed and costed in
+`GUIDE_Codex_Deferred.md` — disjunctive normal form, `targetGroups: string[][]`,
+about ten engine lines and a real authoring UI. Not built, because the two-effect
+workaround covers it until the branches can overlap.

@@ -130,6 +130,12 @@ subject, so `roll:attack` and `roll:damage` cannot both hold, nor can two
 weapons. The audit calls that an error rather than letting it silently do
 nothing.
 
+**What you cannot write is a mix**: `(fire AND melee damage) OR epic spell` needs
+nesting, and a list has one mode. Write it as two effects with the same label and
+value — correct as long as the two branches cannot BOTH describe the same thing,
+because then it applies twice. If you hit that, see
+`GUIDE_Codex_Deferred.md`; the design is worked out and waiting.
+
 **A tag** — `tag:fire`. Free text, normalised on save (so `Fire`, `fire` and
 `FIRE` are one tag), matched across every catalog. Use it when the rule is about
 a *kind* of thing you will keep adding to: tag three weapons `fire` and one
