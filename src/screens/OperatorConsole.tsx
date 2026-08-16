@@ -2663,14 +2663,17 @@ function SpellForm({ spell, onSubmit, onDelete }: {
 
       <div className={styles.catSecLab}><span className={styles.fieldLab}>Saving throw (optional)</span></div>
       <div>
-        <span className={styles.fieldLab}>Target rolls</span>
+        <span className={styles.fieldLab}>Target’s saving throw</span>
         <select className={styles.selIn} value={save} onChange={e => setSave(e.target.value as AbilityKey | '')}>
           <option value="">— no save —</option>
           {ABILITY_ORDER.map(k => <option key={k} value={k}>{ABILITY_ABBR[k].toUpperCase()}</option>)}
         </select>
         <div className={styles.qHint}>
-          The DC is the caster’s, from their profile — this only says which save, and whether there is one.
-          The roll panel shows it in the slot an attack roll would fill.
+          Which save the <b>target</b> rolls — e.g. Fireball → DEX, Hold Person → WIS.
+          <br />
+          The <b>DC</b> is the caster’s, from their profile (8 + prof + their spellcasting ability),
+          so the same spell is a harder save from a caster with a better score. A spell never names
+          that ability — the class does.
         </div>
       </div>
 
