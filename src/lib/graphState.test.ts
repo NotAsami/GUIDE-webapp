@@ -8,7 +8,8 @@ import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.type
 import { buildContext } from './graph.ts'
 import { longRestPatch, shortRestPatch } from './rest.ts'
 import {
-  applyOutcomes, armableFor, consumeArmed, planActivation, playerVars, restVars, setVars, withArmedCleared,
+  applyOutcomes, armableFor, consumeArmed, planActivation, playerVars, restVars, scopedVars, setDmVars,
+  setVars, withArmedCleared,
 } from './graphState.ts'
 
 const VARS: VarDef[] = [
@@ -298,4 +299,45 @@ test('a feature with no `once` effect is never offered', () => {
   const f: Feature = { id: 'plain', name: 'Plain', graph: [{ id: 'e1', op: 'add', value: '2', label: 'Always', target: ['roll:attack'] }] }
   const c = withF([f])
   assert.deepEqual(armableFor(c, buildContext(c), { kind: 'attack' }), [])
+})
+
+// --- §31's split, one walk ---------------------------------------------------
+
+test('scopedVars splits on the bucket, and reads FROM that bucket', () => {
+  const c = character({}, { vars: { charges: 1 }, dmVars: { mercy: 12 } })
+  assert.deepEqual(scopedVars(c, 'player').map(v => v.def.name).sort(), ['charges', 'isRaging', 'legacy'])
+  assert.deepEqual(scopedVars(c, 'dm').map(v => v.def.name), ['mercy'])
+  assert.equal(scopedVars(c, 'dm')[0].value, 12)
+  assert.equal(scopedVars(c, 'player').find(v => v.def.name === 'charges')!.value, 1)
+  // playerVars is the same walk, so it cannot drift from it.
+  assert.deepEqual(playerVars(c).map(v => v.def.name), scopedVars(c, 'player').map(v => v.def.name))
+})
+
+test('a DM value is not visible in the player bucket, and vice versa', () => {
+  // The buckets ARE the permission (§31). A value in the wrong one must read as
+  // absent, not as the other one's number.
+  const crossed = character({}, { vars: { mercy: 999 }, dmVars: { charges: 999 } })
+  assert.equal(scopedVars(crossed, 'dm').find(v => v.def.name === 'mercy')!.value, 0)      // initial, not 999
+  assert.equal(scopedVars(crossed, 'player').find(v => v.def.name === 'charges')!.value, 3) // initial, not 999
+})
+
+test('setDmVars writes the DM bucket and leaves the player bucket alone', () => {
+  const c = character({}, { vars: { charges: 3 }, dmVars: { mercy: 1 } })
+  const next = setDmVars(c, { mercy: 18 })
+  assert.deepEqual(next.graph, { vars: { charges: 3 }, dmVars: { mercy: 18 } })
+  // …and the reverse, which is what migration 0015 actually enforces.
+  assert.deepEqual((setVars(c, { charges: 4 }).graph as { dmVars: unknown }).dmVars, { mercy: 1 })
+  // The rest of the shared blob survives either way.
+  assert.equal(next.exhaustion, 2)
+  assert.deepEqual(next.activeEffects, [{ id: 'e1' }])
+})
+
+test('the DM\u2019s clear and the player\u2019s consume are the same operation', () => {
+  // Card J removes an armed entry with consumeArmed — the function the panel's
+  // Consume tap already calls. Two implementations of "drop this entry" is how
+  // one of them ends up leaving the queue in a state the other cannot read.
+  const c = character({}, { armed: [{ id: 'a1' }, { id: 'a2' }], dmVars: { mercy: 12 } })
+  const g = consumeArmed(c, 'a2').graph as { armed: { id: string }[]; dmVars: Record<string, unknown> }
+  assert.deepEqual(g.armed.map(m => m.id), ['a1'])
+  assert.deepEqual(g.dmVars, { mercy: 12 })   // and the DM bucket is not disturbed
 })

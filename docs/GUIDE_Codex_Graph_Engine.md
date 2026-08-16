@@ -2297,3 +2297,70 @@ the property the original was reaching for: counted, and counted once.
 
 Verified by mutation: reinstating the old `always` filter fails 19 tests, letting
 the panel's half in as well fails 3, and rolling manual riders fails 1.
+
+---
+
+## 50. Slice 5d as built — the DM console state panel, and the bucket nobody could write
+
+§8 #4 asked for a read-out: "the per-character console panel surfaces which
+features are currently ON (e.g. Rage). QOL, non-blocking." Scoping it found
+something larger.
+
+### `dmVars` had no writer anywhere in the app
+
+DM-only variables were declared by authors, read by the engine (`storedValue`),
+and guarded by migration 0015's trigger — and **no surface could set one**.
+`mercy` and `condemnation` drive §21's entire Arbiter path and could only be
+changed by hand-editing JSON.
+
+That is §46's "in the type, not in the app" bug, one layer out from where the
+coverage guard looks: the guard checks that every `GraphEffect` field is
+authorable, and this was a `VarDef` *scope* with no editor. Worth remembering
+that the guard's shape, not just its contents, is the lesson.
+
+### The panel's shape IS §31
+
+| | |
+|---|---|
+| **Player state** | read-only chips. Theirs to change. |
+| **DM variables** | editable. Yours. |
+
+A card that let the DM edit both would make the split invisible exactly where it
+is being explained. The DM's RLS (`dm_all`) permits writing either, so this is a
+choice about legibility rather than a limitation — and the rarer "force a
+player's variable" case stays a conversation, which it should be.
+
+Also on the card: the armed queue with a Clear button, and §30's promised
+collision banner (`characterVars(row, …).audit`, filtered to errors).
+
+### Verified against the live database, both branches
+
+Migration 0015 reverts a `dmVars` change when `auth.uid()` is not in `dm_users`.
+The player-side revert was proven in 5a; the **DM-permitted** branch never was,
+and it is the entire premise of this card. Proven on a throwaway row by faking
+`request.jwt.claims`:
+
+| step | result |
+|---|---|
+| DM writes `dmVars.mercy = 18` | lands |
+| non-DM writes `999` | reverted, still 18 |
+| player's own `vars` bucket | untouched |
+
+RLS confirmed alongside it: `dm_all` is `ALL` on `characters` for any `dm_users`
+member, so the DM may write any row; `own_character` covers the player's own.
+
+### Settled while building
+
+| Decision | Why |
+|---|---|
+| **`scopedVars(character, scope, trees)`** | `playerVars` was the same walk with the filter one way. Two copies would be two places for §31's split to drift, when the whole point is that the bucket IS the permission. `playerVars` is now a one-line alias, so every existing caller is untouched. |
+| **`seen` spans both scopes** | A name declared twice — once player, once DM — must not appear in both lists. First wins, matching `collectVars`, and the collision is reported by the banner rather than re-reported per row. |
+| **`withVars` takes the bucket; `setDmVars` joins `setVars`** | `graphState.ts` stays the only writer of `resources.graph`. |
+| **Number edits write on SETTLE** | The console's realtime channel fans every write to every connected client, so a stepper firing per keystroke is not free. `VarControl` (Features.tsx) solved this player-side; the control here is written against the console's amber idiom rather than extracted, because the two layers deliberately do not look alike. |
+| **Clear reuses `consumeArmed`** | The DM's clear and the player's consume are the same operation. |
+
+### Slice 5 is closed
+
+5a state · 5b panel · 5b-fidelity · 5c armed queue + pre-roll offer · 5d this ·
+5e one record per contribution. Next is slice 6 — spells, items and shards
+reaching the graph, and multi-type damage with them.

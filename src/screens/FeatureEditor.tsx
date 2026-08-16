@@ -828,7 +828,12 @@ function FeatureForm(p: FormProps) {
         <span className={styles.fieldLab}>Card text</span>
         <span className={styles.facing}><i className="fa-solid fa-eye" /> Player-facing</span>
       </div>
-      <input className={cx(styles.in, styles.sumline)} value={d.light_description ?? ''} maxLength={160}
+      {/* No length cap. The card scales to whatever this says (Features.tsx's
+          masonry sizes each card to its own text), and the DM is the one who
+          knows how much a feature needs — a limit here just moved the overflow
+          into the deep description, where the player has to open the card to
+          find it. */}
+      <input className={cx(styles.in, styles.sumline)} value={d.light_description ?? ''}
         placeholder="One line — what the player reads while scanning the card…"
         onChange={e => set({ light_description: e.target.value })} />
       <div className={styles.subHint}>One line, on the collapsed card in play. Supports **bold** and *italics*.</div>

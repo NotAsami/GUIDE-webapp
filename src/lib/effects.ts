@@ -205,7 +205,14 @@ export function effectiveSheet(character: CharacterRow, shardTrees: Record<strin
   // sheet and must persist THIS max unchanged, only healing `current` up to
   // the effective ceiling computed here.
   const hpMax = (base.hp?.max ?? 0) + sum(fx, e => e.maxHp)
-  const hp = base.hp ? { ...base.hp, max: hpMax } : undefined
+  // CLAMPED ON READ, not on write. Losing a +maxHp source (unequipping the item,
+  // unslotting the shard) leaves a stored `current` above the new ceiling, and
+  // the stored value must not be rewritten to fix it: re-equipping has to give
+  // the hit points back, which it cannot do if the drop was persisted. So the
+  // sheet reads honestly and `sheet.hp.current` stays canon underneath.
+  const hp = base.hp
+    ? { ...base.hp, max: hpMax, current: Math.min(base.hp.current ?? 0, hpMax) }
+    : undefined
 
   // Speed: gear bonuses first, then the SRD encumbrance penalty (−10 ft
   // encumbered, −20 ft heavy) — off the effective STR computed just above, so
