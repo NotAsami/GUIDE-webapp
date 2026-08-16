@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, CharacterSpellbook, ShardTree, Spell, SpellSchool, SpellSlot } from '../lib/database.types'
-import { gid, resolve } from '../lib/graph'
+import { gid, resolve, rollResolution } from '../lib/graph'
 import { applyOutcomes, planActivation } from '../lib/graphState'
 import { useGraph } from '../lib/useGraph'
 import { Nav } from '../components/Nav'
@@ -201,7 +201,7 @@ export function Spellbook() {
     // The same boundary the weapon roller uses, on the roll kind a spell has:
     // the spell IS the subject, so a feature can target it by gid or by tag.
     const res = resolve(graph, { kind: 'damage', sub: 'spell', subject: gid('spell', sp), tags: sp.tags })
-    const roll = sp.hasDamage ? rollSpellDamage(sp, castLevel, charLevel, res) : null
+    const roll = sp.hasDamage ? rollSpellDamage(sp, castLevel, charLevel, rollResolution(res)) : null
     if (roll) {
       setLastRollById(prev => ({ ...prev, [sp.id]: roll }))
       setFreshId(sp.id)
@@ -213,12 +213,10 @@ export function Spellbook() {
         subtitle: cantrip ? 'Cantrip' : `Level ${castLevel} slot`,
         icon: spellIcon(sp),
         subject: { kind: 'spell', id: sp.id },
-        // The caster's save DC, in the slot an attack roll would fill. It is a
-        // property of the CASTER, not the spell — nothing on `Spell` says which
-        // save a spell calls for, or whether it calls for one at all — so this
-        // shows on every cast. A per-spell `save` (ability + whether it applies)
-        // is the proper fix and needs a SpellForm control in the same change.
-        saveDC: sb.saveDC,
+        // The DC the target rolls against, in the slot an attack roll would
+        // fill. Shown only when the SPELL says it calls for a save; the DC is
+        // the caster's, because 5e derives it once per caster.
+        ...(sp.save && sb.saveDC !== undefined ? { saveDC: sb.saveDC, saveAbility: sp.save } : {}),
         // A real DamageRoll rather than a prose line: that is what gives a spell
         // die chips, a rerollable die, the contribution list and the catalog
         // sheet. Every panel surface built in 5b–5e applies the moment the shape

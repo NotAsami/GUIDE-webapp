@@ -23,6 +23,7 @@ import type {
   EquippedItem, EquippedWeapon, Feature, ItemEffects, ItemSlot, ShardNode, ShardTree, Spell,
 } from './database.types.ts'
 import { ITEM_SLOTS, getGear, getWeapons } from './equip.ts'
+import { isPrepared } from './spells.ts'
 import { burdenTier, capacityForStr, currentBurden } from './burden.ts'
 import { shardFeatures, shardSlots } from './shards.ts'
 
@@ -155,7 +156,16 @@ export function activeSources(character: CharacterRow, shardTrees: Record<string
     }
   }
 
-  for (const obj of character.spellbook?.spells ?? []) out.push({ kind: 'spell', obj })
+  // READY spells only. A spell you know but have not prepared is not a thing you
+  // are carrying — its contributions should no more apply than an unequipped
+  // item's do, which is the rule one line below.
+  //
+  // isPrepared() is the one place that decides this, and it is why: cantrips are
+  // always ready, and a KNOWN-style caster (a Warlock's pact magic, or any
+  // caster with preparesSpells false) prepares nothing at all — reading
+  // `spell.prepared` directly would silence every spell they own.
+  const sb = character.spellbook
+  for (const obj of sb?.spells ?? []) if (isPrepared(obj, sb)) out.push({ kind: 'spell', obj })
   for (const obj of getWeapons(getGear(character))) out.push({ kind: 'weapon', obj })
   for (const obj of wornGear(character)) out.push({ kind: 'item', obj, fx: obj.effects })
   for (const obj of activeEffects(character)) out.push({ kind: 'effect', obj, fx: obj.effects })

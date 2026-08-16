@@ -233,7 +233,13 @@ export type VarDef = {
  *  nothing arms or consumes one until the armed-queue slice. */
 export type ArmedMod = {
   id: string
+  /** The gid of the node that armed it. IDENTITY, not display: `id` is built
+   *  from it, dedup keys on it, and the cards match on it. */
   source: string
+  /** That node's NAME, captured when it armed. Display only — a gid is not
+   *  something to show a player, and by the time this is read the source may be
+   *  unequipped or unprepared, so looking it up again could come back empty. */
+  sourceName?: string
   label: string
   kind: string
   sub?: string
@@ -953,6 +959,12 @@ export type Spell = {
   icon?: string
   /** CSS color for the icon (e.g. "#e2701c"). Absent = the default cyan. */
   iconColor?: string
+  /** The ability the TARGET rolls to resist this spell. Presence means "this
+   *  spell calls for a save" — absent is a spell that does not, so the roll
+   *  panel shows a DC only when there is one to show. The DC itself is the
+   *  caster's (`spellbook.saveDC`), not the spell's: 5e derives it once per
+   *  caster, and storing it per spell would be a second copy free to disagree. */
+  save?: AbilityKey
   hasDamage: boolean
   dice?: string      // e.g. "8d6", "3d4+3"
   scaling?: string   // added per upcast level (levelled) or per tier (cantrip)

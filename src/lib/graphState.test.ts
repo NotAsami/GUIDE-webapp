@@ -364,8 +364,10 @@ test('a spell arms its `once` contribution — planActivation is not feature-sha
 })
 
 test('a spell\u2019s `when` still gates the arming', () => {
+  // `prepared` matters now: an unready spell is not an active source, so its
+  // VARIABLES leave scope with it and `when: 'ready'` cannot resolve at all.
   const spell = (when: string) => ({
-    id: 'i1', spell_id: 'cat-x', name: 'X', level: 1,
+    id: 'i1', spell_id: 'cat-x', name: 'X', level: 1, prepared: true,
     vars: [{ name: 'ready', kind: 'stored' as const, type: 'bool' as const, initial: false }],
     graph: [{ id: 'e1', op: 'add' as const, value: '1d6', label: 'Charged', once: true, when, target: ['roll:attack'] }],
   })
@@ -373,4 +375,26 @@ test('a spell\u2019s `when` still gates the arming', () => {
   assert.deepEqual(planActivation(spell('ready'), buildContext(off), off, 'spell:cat-x'), [])
   const on = character({ spellbook: { spells: [spell('ready')] }, sheet: { features: [] } }, { vars: { ready: true } })
   assert.equal(planActivation(spell('ready'), buildContext(on), on, 'spell:cat-x').length, 1)
+})
+
+test('an UNPREPARED spell arms nothing — it is not something you are carrying', () => {
+  const spell = {
+    id: 'i1', spell_id: 'cat-x', name: 'X', level: 1, prepared: false,
+    graph: [{ id: 'e1', op: 'add' as const, value: '1d6', label: 'Charged', once: true, target: ['roll:attack'] }],
+  }
+  const c = character({ spellbook: { preparesSpells: true, spells: [spell] }, sheet: { features: [] } }, {})
+  // planActivation reads the node it is handed, so the arm is still PLANNED —
+  // the gate is upstream, at what counts as active. What matters is that its
+  // contributions never reach a roll, which activeSources decides.
+  assert.equal(buildContext(c).index.size, 0)
+})
+
+test('an armed modifier remembers its source\u2019s NAME, not just its gid', () => {
+  // `source` is identity — the dedup key and what the cards match on — so it
+  // stays a gid. But every other rider's `source` column is a human name, and a
+  // player should never be shown `spell:afab43d3-…`.
+  const c = character({}, {})
+  const [o] = planActivation(RAGE([ONCE]), buildContext(c), c, 'feature:rage')
+  assert.equal(o.kind === 'arm' && o.mod.source, 'feature:rage')
+  assert.equal(o.kind === 'arm' && o.mod.sourceName, 'Rage')
 })

@@ -12,6 +12,7 @@ import type { AttackRoll, DamageRoll } from './weapons'
 import type { AuditItem, Rider } from './graph'
 import type { RolledDie } from './dice'
 import type { CheckTerm } from './dnd'
+import type { AbilityKey } from './database.types'
 
 /** A d20 roll behind an ability check, saving throw, or skill check — rolled on
  *  the Character screen. `rolls` holds one entry normally, two under adv/dis. */
@@ -48,6 +49,9 @@ export type RollEntry = {
    *  and forcing it into CheckRoll would give it three fields that mean nothing.
    *  Fills the slot an attack roll would occupy. */
   saveDC?: number
+  /** Which save it is, so the line can say "DEX Save DC" rather than a bare
+   *  number. Set together with `saveDC` or not at all. */
+  saveAbility?: AbilityKey
   /** What this roll was ABOUT — the instance id on the character, so the panel's
    *  catalog sheet can look it up. Not a gid: a gid falls back to the instance id
    *  when `item_id` is absent (§43), and this lookup is local anyway. Absent for

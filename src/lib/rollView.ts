@@ -16,7 +16,7 @@
  */
 import type { Rider } from './graph.ts'
 import type { RollEntry } from './rolls.tsx'
-import type { CheckTerm } from './dnd.ts'
+import { ABILITY_ABBR, type CheckTerm } from './dnd.ts'
 import type { CharacterRow, ShardTree } from './database.types.ts'
 import { activeSources } from './effects.ts'
 import { rerollDie, type RolledDie } from './dice.ts'
@@ -158,9 +158,10 @@ export function lineViews(entry: RollEntry): RollLineView[] {
   // roll it — which the math line already renders as "15 = 15" rather than
   // "+ 15 = 15".
   if (entry.saveDC !== undefined) {
+    const label = entry.saveAbility ? `${ABILITY_ABBR[entry.saveAbility].toUpperCase()} Save DC` : 'Save DC'
     out.push({
-      kind: 'check', label: 'Save DC', formula: '', dice: [],
-      mods: entry.saveDC, modParts: [], total: entry.saveDC, totalLabel: 'Save DC',
+      kind: 'check', label, formula: '', dice: [],
+      mods: entry.saveDC, modParts: [], total: entry.saveDC, totalLabel: label,
     })
   }
 

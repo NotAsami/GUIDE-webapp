@@ -822,6 +822,7 @@ function FeatureStateCard({ member, row, shardCatalog, onUpdate, log }: {
               <div key={m.id} className={styles.dmVarRow}>
                 <span className={styles.dvName}>{m.label}</span>
                 <span className={styles.dvSrc}>
+                  {m.sourceName ? `${m.sourceName} · ` : ''}
                   next {m.sub ? `${m.kind} ${m.sub}` : m.kind}{m.value ? ` · ${m.value}` : ''}
                 </span>
                 <Btn tone="danger" sm icon="fa-xmark" label="Clear" onClick={() => void disarm(m.id, m.label)} />
@@ -2522,6 +2523,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
   const [concentration, setConcentration] = useState(d?.concentration ?? false)
   const [ritual, setRitual] = useState(d?.ritual ?? false)
   const [desc, setDesc] = useState(d?.desc ?? '')
+  const [save, setSave] = useState<AbilityKey | ''>(d?.save ?? '')
   const [hasDamage, setHasDamage] = useState(d?.hasDamage ?? false)
   const [dice, setDice] = useState(d?.dice ?? '')
   const [scaling, setScaling] = useState(d?.scaling ?? '')
@@ -2547,6 +2549,9 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       v, s, m,
       ...(m && material.trim() ? { material: material.trim() } : {}),
       duration: duration.trim(), concentration, ritual, desc: desc.trim(), hasDamage,
+      // Absent means "no save", which is what the roll panel reads to decide
+      // whether to show a DC at all.
+      ...(save ? { save } : {}),
       // Omitted when empty so a spell with no graph never grows the keys — the
       // same discipline withVars() keeps on `resources`.
       ...(graph.length ? { graph } : {}),
@@ -2655,6 +2660,19 @@ function SpellForm({ spell, onSubmit, onDelete }: {
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing · **bold** *italics*</span>
       </div>
       <textarea className={cx(styles.catProse, styles.player)} value={desc} onChange={e => setDesc(e.target.value)} placeholder="The prose the player reads in their Spellbook…" />
+
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Saving throw (optional)</span></div>
+      <div>
+        <span className={styles.fieldLab}>Target rolls</span>
+        <select className={styles.selIn} value={save} onChange={e => setSave(e.target.value as AbilityKey | '')}>
+          <option value="">— no save —</option>
+          {ABILITY_ORDER.map(k => <option key={k} value={k}>{ABILITY_ABBR[k].toUpperCase()}</option>)}
+        </select>
+        <div className={styles.qHint}>
+          The DC is the caster’s, from their profile — this only says which save, and whether there is one.
+          The roll panel shows it in the slot an attack roll would fill.
+        </div>
+      </div>
 
       <div className={styles.catSecLab}><span className={styles.fieldLab}>Damage (optional)</span></div>
       <div className={cx(styles.catTog, hasDamage && styles.on)} onClick={() => setHasDamage(h => !h)} role="switch" aria-checked={hasDamage}>

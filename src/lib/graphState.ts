@@ -162,8 +162,8 @@ export type ArmOutcome = OutcomeBase & {
  *
  *  One mod per roll selector, with the selector in the id: two selectors are two
  *  independent pending bonuses, and consuming one must not consume the other. */
-export function armedFrom(eff: GraphEffect, source: string, at = Date.now()): ArmedMod[] {
-  const base = { source, label: eff.label, op: eff.op, value: eff.value, dmgType: eff.dmgType, at }
+export function armedFrom(eff: GraphEffect, source: string, sourceName?: string, at = Date.now()): ArmedMod[] {
+  const base = { source, sourceName, label: eff.label, op: eff.op, value: eff.value, dmgType: eff.dmgType, at }
   const targets = eff.target?.length ? eff.target : []
   if (!targets.length) {
     return [{ ...base, id: `${source}:${eff.id}`, kind: 'feature', subject: source }]
@@ -182,7 +182,9 @@ export function armedFrom(eff: GraphEffect, source: string, at = Date.now()): Ar
  *  `when`-false outcome must not appear as an unticked box the player could
  *  wrongly enable. `ask` outcomes come back listed but undecided. */
 export function planActivation(
-  feature: { vars?: VarDef[]; graph?: GraphEffect[] },
+  /** `name` is display only, carried onto an armed modifier so the roll panel
+   *  can say "Sacred Flame" rather than `spell:<uuid>`. */
+  feature: { name?: string; vars?: VarDef[]; graph?: GraphEffect[] },
   ctx: GraphContext,
   character: CharacterRow,
   /** The node's gid — what an armed modifier records as its source, and half of
@@ -202,7 +204,7 @@ export function planActivation(
         const cond = evalExpr(eff.when, ctx.scope)
         if (cond === null || cond.t !== 'bool' || !cond.v) continue
       }
-      for (const mod of armedFrom(eff, source)) {
+      for (const mod of armedFrom(eff, source, feature.name)) {
         out.push({
           kind: 'arm', eff, ask: eff.ask, mod,
           summary: `${eff.label} armed${mod.value ? ` (${mod.value})` : ''} · next ${mod.sub ? `${mod.kind} ${mod.sub}` : mod.kind}`,

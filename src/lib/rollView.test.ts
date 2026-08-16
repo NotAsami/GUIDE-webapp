@@ -319,3 +319,14 @@ test('a roll with no save DC is unchanged', () => {
   assert.equal(lineViews(entry({ attack: ATTACK }))[0].label, 'Attack')
   assert.equal(lineViews(entry({ attack: ATTACK }))[0].totalLabel, undefined)
 })
+
+test('a save DC names its ability, and a spell with no save shows none', () => {
+  const withSave = entry({ kind: 'custom', saveDC: 15, saveAbility: 'dex', damage: DAMAGE })
+  const [first] = lineViews(withSave)
+  assert.equal(first.label, 'DEX Save DC')
+  assert.equal(first.totalLabel, 'DEX Save DC')
+  assert.equal(first.total, 15)
+  // No saveDC at all — the slot stays empty rather than showing a DC the spell
+  // never calls for, which is what it did before the spell could say.
+  assert.equal(lineViews(entry({ kind: 'custom', damage: DAMAGE })).length, 1)
+})

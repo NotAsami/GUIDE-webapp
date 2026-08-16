@@ -8,7 +8,12 @@
 import type { CharacterSpellbook, Spell, SpellSlot } from './database.types.ts'
 import { parseDice, rolledDice, type RolledDie } from './dice.ts'
 // One-way: graph.ts reaches effects/equip/shards, none of which import this.
-import { rollResolution, type Resolution, type Rider } from './graph.ts'
+// TYPE-ONLY, deliberately. effects.ts imports this module (isPrepared decides
+// which spells are active) and graph.ts imports effects.ts, so a runtime import
+// of graph.ts here would close a cycle. The caller rolls the contribution and
+// hands it over — a spell has no crit to decide, so there is nothing to roll
+// inside that the screen cannot roll outside.
+import type { Rider } from './graph.ts'
 
 /** A caster is anyone flagged `spellcasting` with at least one known spell —
  *  a caster with an empty spell list still renders the empty state, exactly
@@ -172,21 +177,20 @@ function nowStamp(): string {
 /** Roll a spell's damage at the given cast level. Returns null under the same
  *  conditions as `damageAt` (no damage, or an unparseable `dice` string).
  *
- *  `graph` carries the feature engine's contributions for this cast, resolved by
- *  the caller against `spell:<catalog id>` and the spell's tags. Handled exactly
- *  as the weapon roller handles its own: rollResolution folds every non-manual
- *  rider in and keeps each one's faces on it, so the panel can show what a +1d6
- *  actually rolled. A `manual` rider is left for the player to answer there.
+ *  `contrib` is the feature engine's contribution to this cast, already resolved
+ *  and rolled by the caller (`rollResolution`), so every non-manual rider is
+ *  folded into `flat` and carries its own faces. A `manual` rider stays for the
+ *  player to answer in the panel.
  *
- *  Absent `graph` is identical to "nothing targets this spell" — both add zero,
+ *  Omitting it is identical to "nothing targets this spell" — both add zero,
  *  which is why every existing caller keeps working untouched. */
 export function rollSpellDamage(
-  sp: Spell, castLevel: number, charLevel: number, graph?: Resolution,
+  sp: Spell, castLevel: number, charLevel: number,
+  contrib: { flat: number; riders: Rider[] } = { flat: 0, riders: [] },
 ): SpellRoll | null {
   const info = damageAt(sp, castLevel, charLevel)
   if (!info) return null
   const rolls = rolledDice(info.count, info.sides)
-  const contrib = graph ? rollResolution(graph) : { flat: 0, riders: [] as Rider[] }
   const total = Math.max(0, rolls.reduce((a, b) => a + b.v, 0) + info.mod + contrib.flat)
   return {
     rolls, sides: info.sides, mod: info.mod + contrib.flat, total, expr: info.expr, type: info.type,

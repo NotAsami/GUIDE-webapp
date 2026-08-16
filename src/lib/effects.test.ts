@@ -119,7 +119,7 @@ test('activeSources returns sheet features → gear → shards → spells, then 
     sheet: { ...BASE, features: [{ id: 'sf1', name: 'Second Wind' }] },
     equipped: { cloak: { ...cloak, features: [{ id: 'gf1', name: 'Ward' }] }, weapons: [{ id: 'w1', name: 'Axe' }] },
     shards: { slot1: { shardId: 'sh1', earned: 5, attuned: ['core', 'might'] } },
-    spellbook: { spells: [{ id: 'sp1', name: 'Bless', level: 1 }] },
+    spellbook: { spells: [{ id: 'sp1', name: 'Bless', level: 1, prepared: true }] },
     resources: { activeEffects: [{ id: 'e1', name: 'Bless', effects: { ac: 2 } }] },
   })
   assert.deepEqual(activeSources(c, trees).map(s => s.kind), [
@@ -161,4 +161,25 @@ test('effective HP is clamped on READ, and the stored value survives', () => {
   assert.equal(bare.hp?.current, 40)   // clamped for display…
   // …and the row underneath is unchanged, so re-equipping restores the 52.
   assert.equal(withShard.sheet?.hp?.current, 52)
+})
+
+test('only READY spells are active sources — and a Warlock owns no unready ones', () => {
+  // An unprepared spell is not a thing you are carrying. But `prepared` is
+  // meaningless for a known-style caster, so reading it directly would silence
+  // every spell a Warlock owns — the exact trap isPrepared() exists for.
+  const spells = [
+    { id: 'a', name: 'Cantrip', level: 0 },
+    { id: 'b', name: 'Readied', level: 1, prepared: true },
+    { id: 'c', name: 'Known only', level: 1, prepared: false },
+  ]
+  const kinds = (sb: object) =>
+    activeSources(character({ spellbook: { ...sb, spells } }))
+      .filter(s => s.kind === 'spell').map(s => s.obj.name)
+
+  // A prepared-style caster: the cantrip and the readied spell, not the third.
+  assert.deepEqual(kinds({ preparesSpells: true }), ['Cantrip', 'Readied'])
+  // A Warlock prepares nothing — every spell they own is ready.
+  assert.deepEqual(kinds({ pactMagic: true }), ['Cantrip', 'Readied', 'Known only'])
+  // …as is any explicitly known-style caster.
+  assert.deepEqual(kinds({ preparesSpells: false }), ['Cantrip', 'Readied', 'Known only'])
 })
