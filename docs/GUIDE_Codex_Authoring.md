@@ -109,6 +109,27 @@ roll:feature         a feature's own roll, and using an item
 > `roll:damage.melee` + `roll:damage.ranged`. There is no "weapon" roll kind,
 > and the list is an OR, so two entries say it exactly.
 
+### or / and
+
+With two or more selectors, a toggle beside the **Target** heading decides how
+they combine.
+
+**or** (the default) — any one is enough. `weapon:sword` or `weapon:axe`.
+
+**and** — every one must hold of the *same roll*. This is the one that catches
+people, so here is the case that forces it:
+
+> Tag a weapon `fire`, then write `add +1 fire → tag:fire`. You get **+1 to hit
+> AND +1 damage**, because a weapon carries its tags into both rolls and each is
+> resolved separately. `tag:fire` says *which weapon*, never *which roll*.
+>
+> `tag:fire` **and** `roll:damage` says both. That is the whole feature.
+
+An `and` list can be written so it never matches — a roll has one kind and one
+subject, so `roll:attack` and `roll:damage` cannot both hold, nor can two
+weapons. The audit calls that an error rather than letting it silently do
+nothing.
+
 **A tag** — `tag:fire`. Free text, normalised on save (so `Fire`, `fire` and
 `FIRE` are one tag), matched across every catalog. Use it when the rule is about
 a *kind* of thing you will keep adding to: tag three weapons `fire` and one

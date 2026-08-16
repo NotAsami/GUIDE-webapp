@@ -567,12 +567,21 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     req.sub ? `roll:${req.kind}.${req.sub}` : null,
   ].filter((k): k is string => !!k)
 
+  // The index is keyed the same way, so a tag target must be normalised before
+  // it can be compared against the request's keys.
+  const keySet = new Set(keys)
+  const asKey = (t: string) => (t.startsWith('tag:') ? `tag:${normalizeTag(t.slice(4))}` : t)
+
   const seen = new Set<GraphEffect>()
   const matched: IndexedEffect[] = []
   for (const k of keys) {
     for (const e of ctx.index.get(k) ?? []) {
       if (seen.has(e.eff)) continue // an OR across selectors applies once, not twice
       seen.add(e.eff)
+      // `and` means every selector must hold of THIS roll. It is what says "a
+      // fire weapon, on its damage roll": `tag:fire` alone rides into the attack
+      // roll too, because the weapon carries its tags into both resolves.
+      if (e.eff.match === 'and' && !(e.eff.target ?? []).every(t => keySet.has(asKey(t)))) continue
       matched.push(e)
     }
   }
@@ -956,6 +965,32 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
     if (eff.op === 'note' && eff.ask && !interpolations(eff.text || eff.label).length) {
       out.push({ sev: 'err', id: eff.id, t: 'Toggle on a note', s: `${eff.label || eff.id} is prose with nothing to reveal — there is nothing for the player to resolve. Use \`when\` if it should be conditional, or interpolate a value into the text if the toggle is what decides whether they see it.` })
     }
+    // An `and` list can be unsatisfiable, and silently: a roll has ONE kind and
+    // ONE subject, so naming two of either can never hold at once. That is the
+    // price of the toggle, and the audit is where it gets paid.
+    if (eff.match === 'and') {
+      const ts = eff.target ?? []
+      const kinds = new Set(ts.filter(t => t.startsWith('roll:')).map(t => t.slice(5).split('.')[0]))
+      const things = new Set(ts.filter(t => !t.startsWith('roll:') && !t.startsWith('tag:')))
+      const subs = new Set(ts.filter(t => t.startsWith('roll:') && t.includes('.')).map(t => t.slice(5)))
+      const clash = kinds.size > 1 ? `roll kinds (${[...kinds].join(', ')})`
+        : things.size > 1 ? `things (${[...things].join(', ')})`
+        : subs.size > 1 ? `sub-kinds (${[...subs].join(', ')})`
+        : null
+      if (clash) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'This AND can never match',
+          s: `${eff.label || eff.id} requires ALL of its targets at once, but a roll has one kind and one subject — ${clash} cannot both hold. Use OR, or split it into two nodes.`,
+        })
+      }
+      if (ts.length < 2) {
+        out.push({
+          sev: 'warn', id: eff.id, t: 'AND with one target',
+          s: `${eff.label || eff.id} is set to match ALL targets but has ${ts.length === 1 ? 'only one' : 'none'} — the toggle is doing nothing.`,
+        })
+      }
+    }
+
     // §16 keys the armed queue by ROLL KIND, so an armed effect's target has to
     // be expressible as one. A gid or a tag cannot be, and would arm something
     // that then matches no roll — a bonus the player was promised, sees on a

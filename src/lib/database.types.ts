@@ -301,6 +301,14 @@ export type GraphEffect = {
   value?: string
   /** `setVar` / `addVar` only. The name of a variable this node declares. */
   variable?: string
+  /** How the target list combines. Absent = `or`, which is what it has always
+   *  been and what most lists want: `weapon:sword` OR `weapon:axe`.
+   *
+   *  `and` requires EVERY selector to match the same roll, which is the only way
+   *  to say "a fire weapon, on its damage roll" — `tag:fire` alone matches the
+   *  attack and the damage roll both, since a weapon carries its tags into
+   *  either. §20 rejected this until a feature needed it; one did. */
+  match?: 'or' | 'and'
   /** App-evaluated boolean expression over variables. Absent = always true.
    *  Gates EXISTENCE — a false `when` means the effect does not surface at all. */
   when?: string

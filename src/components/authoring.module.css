@@ -362,6 +362,22 @@ select.in option { background: #14130f; }
 .seg button.on { color: var(--amber-hot); background: rgba(226,176,33,.16); box-shadow: inset 0 -2px 0 var(--amber); }
 .seg button.on.cy { color: var(--cyan-hot); background: rgba(0,166,214,.16); box-shadow: inset 0 -2px 0 var(--cyan); }
 .seg.tiny button { padding: 5px 8px; font-size: 7.5px; }
+
+/* How a target list combines. Borrows .seg's shape at the size of a label,
+   because it sits IN the section header beside "Target" rather than in the form
+   body — it qualifies the list rather than being a field of its own. */
+.matchSeg {
+  --cut: 4px; --bc: rgba(212,191,125,.3);
+  display: inline-flex; border: 1px solid var(--bc); margin-left: 2px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.matchSeg button {
+  background: rgba(0,0,0,.4); border: 0; cursor: pointer;
+  font-family: var(--font-mono); font-size: 7px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--muted); padding: 3px 7px;
+}
+.matchSeg button:hover { color: var(--text); }
+.matchSeg button.on { color: var(--cyan-hot); background: rgba(0,166,214,.16); box-shadow: inset 0 -2px 0 var(--cyan); }
 .vname {
   --cut: 5px; --bc: rgba(212,191,125,.3);
   flex: 0 0 190px; background-color: rgba(0,0,0,.5); border: 1.5px solid var(--bc); color: var(--amber-hot); font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; padding: 7px 10px;

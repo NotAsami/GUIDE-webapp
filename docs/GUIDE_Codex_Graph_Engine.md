@@ -2719,3 +2719,51 @@ anyone to retype it.
 That makes the extraction's final count **three components, four hosts** — and
 the feature editor's own tag block is now the shared one, so it cannot drift from
 the other three.
+
+---
+
+## 54. `and` target lists — §20's rejection, revisited on evidence
+
+§20 recorded "AND / negation in target selectors" as rejected: *"No catalogued
+feature needs one. OR-only keeps matching a single pass."* That rejection carried
+its own condition, and a feature met it.
+
+**The case.** Tag a weapon `fire`, author `add +1 fire → tag:fire`. It applies to
+the attack roll AND the damage roll — +1 twice for one swing. Not a bug in
+matching: a weapon carries its tags into both resolves, and `tag:fire` says
+*which weapon*, never *which roll*. There was no way to say the second half.
+
+**What was NOT built, and why it was offered.** "OR within an axis, AND across
+axes" — thing/tag selectors OR together, `roll:` selectors AND against them —
+gets every case right with no field and no control, and no authored list would
+have changed meaning (every one has a single selector). It was recommended and
+declined in favour of the explicit toggle, which is a legitimate preference: the
+implicit rule is invisible in the editor, and this one is a switch you can see.
+
+**`GraphEffect.match?: 'or' | 'and'`**, absent meaning `or` — so every stored
+effect keeps its meaning and the field is only written when set. Matching gained
+one condition on the existing single pass, so §20's performance reasoning still
+holds:
+
+```ts
+if (e.eff.match === 'and' && !(e.eff.target ?? []).every(t => keySet.has(asKey(t)))) continue
+```
+
+`asKey` normalises a tag target the way the index does, or `tag:Fire Damage`
+would never match a request carrying `fire_damage`.
+
+**The toggle's sharp edge, paid for in the audit.** A roll has one kind and one
+subject, so an `and` naming two roll kinds, two subjects, or two sub-kinds can
+never match. That is an **error**, naming both halves of the clash — the toggle's
+one way to fail silently, made loud. Broad-plus-narrow of the same kind
+(`roll:damage` + `roll:damage.melee`) is satisfiable and passes, because a melee
+damage roll carries both keys.
+
+The control appears only once a list has two selectors, and the collapsed effect
+row joins targets with ` + ` instead of ` | ` so the mode is readable without
+opening the card.
+
+**Known limit:** an `and` list mixing a node gid with a roll kind is not a
+chaining expression. `boost()` skips effects already considered, so an `and` that
+failed the roll match does not boost its named node either. Nothing authored
+wants that shape today; if one does, it wants naming rather than inferring.
