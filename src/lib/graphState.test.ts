@@ -6,7 +6,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.types.ts'
 import { buildContext } from './graph.ts'
-import { applyOutcomes, planActivation, playerVars, restVars, setVars } from './graphState.ts'
+import { longRestPatch, shortRestPatch } from './rest.ts'
+import {
+  applyOutcomes, consumeArmed, planActivation, playerVars, restVars, setVars, withArmedCleared,
+} from './graphState.ts'
 
 const VARS: VarDef[] = [
   { name: 'isRaging', kind: 'stored', type: 'bool', initial: false, resetOn: 'long' },
@@ -146,4 +149,106 @@ test('a type mismatch is refused rather than stored', () => {
   // the runtime zero. An activation must not be the one place it drifts.
   assert.equal(plan([{ id: 'a1', op: 'setVar', variable: 'isRaging', value: '3', label: 'X' }]).outcomes.length, 0)
   assert.equal(plan([{ id: 'a1', op: 'setVar', variable: 'charges', value: 'true', label: 'X' }]).outcomes.length, 0)
+})
+
+// --- §16 arming --------------------------------------------------------------
+
+const ONCE: GraphEffect = {
+  id: 'e1', op: 'add', value: '1d6', once: true, label: 'Boosted Cut', target: ['roll:attack'],
+}
+
+test('pressing Use arms a `once` contribution instead of applying it', () => {
+  const c = character({}, {})
+  const [o] = planActivation(RAGE([ONCE]), buildContext(c), c, 'feature:rage')
+  assert.equal(o.kind, 'arm')
+  assert.equal(o.kind === 'arm' && o.mod.kind, 'attack')
+  assert.equal(o.kind === 'arm' && o.mod.value, '1d6')
+  const { resources } = applyOutcomes(c, [o], new Set())
+  const g = resources.graph as { armed: { id: string; kind: string }[] }
+  assert.equal(g.armed.length, 1)
+  assert.equal(g.armed[0].kind, 'attack')
+})
+
+test('arming twice yields ONE entry, refreshed — never two', () => {
+  // A double-tap that silently doubled the next roll is the failure the roll
+  // panel exists to prevent.
+  const c = character({}, {})
+  const first = applyOutcomes(c, planActivation(RAGE([ONCE]), buildContext(c), c, 'feature:rage'), new Set())
+  const c2 = character({}, first.resources.graph as object)
+  const second = applyOutcomes(c2, planActivation(RAGE([ONCE]), buildContext(c2), c2, 'feature:rage'), new Set())
+  const g = second.resources.graph as { armed: { id: string; at: number }[] }
+  assert.equal(g.armed.length, 1)
+  assert.ok(g.armed[0].at >= (first.resources.graph as { armed: { at: number }[] }).armed[0].at)
+})
+
+test('an `ask` gates the arming, exactly as it gates a variable write', () => {
+  const c = character({}, {})
+  const outcomes = planActivation(RAGE([{ ...ONCE, ask: 'spend the charge?' }]), buildContext(c), c, 'feature:rage')
+  assert.equal(outcomes[0].ask, 'spend the charge?')
+  const declined = applyOutcomes(c, outcomes, new Set())
+  assert.equal(declined.applied.length, 0)
+  assert.equal((declined.resources.graph as { armed?: unknown[] } | undefined)?.armed, undefined)
+  const accepted = applyOutcomes(c, outcomes, new Set(['spend the charge?']))
+  assert.equal((accepted.resources.graph as { armed: unknown[] }).armed.length, 1)
+})
+
+test('a targetless `once` arms this node\u2019s own roll', () => {
+  const c = character({}, {})
+  const [o] = planActivation(RAGE([{ ...ONCE, target: undefined }]), buildContext(c), c, 'feature:rage')
+  assert.equal(o.kind === 'arm' && o.mod.kind, 'feature')
+  assert.equal(o.kind === 'arm' && o.mod.subject, 'feature:rage')
+})
+
+test('a caller with no gid cannot arm — it does not guess one', () => {
+  const c = character({}, {})
+  assert.deepEqual(planActivation(RAGE([ONCE]), buildContext(c), c), [])
+})
+
+test('one press writes variables and arms in ONE resources object', () => {
+  const c = character({}, {})
+  const feature = RAGE([ONCE, { id: 'e2', op: 'setVar', variable: 'isRaging', value: 'true', label: 'Rage' }])
+  const { resources } = applyOutcomes(c, planActivation(feature, buildContext(c), c, 'feature:rage'), new Set())
+  const g = resources.graph as { vars: Record<string, unknown>; armed: unknown[] }
+  assert.equal(g.vars.isRaging, true)
+  assert.equal(g.armed.length, 1)
+  assert.equal(resources.exhaustion, 2)          // and the rest of the blob survives
+})
+
+test('consuming drops exactly one armed modifier', () => {
+  const c = character({}, { armed: [{ id: 'a1' }, { id: 'a2' }], vars: { charges: 3 } })
+  const next = consumeArmed(c, 'a1')
+  const g = next.graph as { armed: { id: string }[]; vars: Record<string, unknown> }
+  assert.deepEqual(g.armed.map(m => m.id), ['a2'])
+  assert.deepEqual(g.vars, { charges: 3 })
+})
+
+test('withArmedCleared leaves a character who armed nothing untouched', () => {
+  // Resting must not grow an empty `graph` key just for having happened.
+  assert.deepEqual(withArmedCleared({ exhaustion: 1 }), { exhaustion: 1 })
+  assert.deepEqual(withArmedCleared(undefined), {})
+})
+
+// Rest lives in rest.ts, but what it does to the graph blob is this module's
+// contract — and §16 is explicit that a second write path is what lets the
+// armed queue and the effects clear drift apart.
+test('both rests clear the armed queue, in the same write as the effects', () => {
+  const armed = [{ id: 'a1', source: 's', label: 'l', kind: 'attack', op: 'add', at: 1 }]
+  const c = character({}, { armed, vars: { charges: 1, isRaging: true } })
+
+  const long = longRestPatch(c).patch.resources as { graph: { armed: unknown[]; vars: Record<string, unknown> }; activeEffects: unknown[] }
+  assert.deepEqual(long.graph.armed, [])
+  assert.deepEqual(long.activeEffects, [])
+  assert.equal(long.graph.vars.isRaging, false)   // and the long-rest variable reset still lands
+
+  const short = shortRestPatch(c, { spend: 0, rolls: [], conMod: 0 }).patch.resources as { graph: { armed: unknown[]; vars: Record<string, unknown> } }
+  assert.deepEqual(short.graph.armed, [])
+  assert.equal(short.graph.vars.charges, 3)       // resetOn: 'short'
+  assert.equal(short.graph.vars.isRaging, true)   // …and a long-rest variable is untouched
+})
+
+test('a damage type survives arming — an armed 2d6 radiant is still radiant', () => {
+  const c = character({}, {})
+  const [o] = planActivation(
+    RAGE([{ ...ONCE, dmgType: 'radiant', target: ['roll:damage'] }]), buildContext(c), c, 'feature:rage')
+  assert.equal(o.kind === 'arm' && o.mod.dmgType, 'radiant')
 })

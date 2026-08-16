@@ -25,7 +25,7 @@ import { useRollLog } from '../lib/rolls'
 import { useItemTooltip, type Bind, type TooltipData } from '../components/ItemTooltip'
 import { SHARD_SLOT_KEYS, shardSlots } from '../lib/shards'
 import { useGraph } from '../lib/useGraph'
-import { gid, resolve } from '../lib/graph'
+import { armedMatches, gid, resolve } from '../lib/graph'
 import styles from './Equipment.module.css'
 
 interface RouteContext {
@@ -117,6 +117,16 @@ export function Equipment() {
     if (!p) return
     setManageWeapon(null)
     await updateSections(p)
+  }
+
+  /** Armed modifiers that will land on this weapon's next roll. Asked with the
+   *  SAME requests attack() will resolve with, so the chip cannot promise a
+   *  bonus the roll then fails to apply — that is why armedMatches is exported
+   *  rather than living inside resolve(). */
+  const armedOn = (w: EquippedWeapon) => {
+    const subject = gid('weapon', w)
+    return graph.armed.filter(m =>
+      armedMatches(m, { kind: 'attack', subject }) || armedMatches(m, { kind: 'damage', subject })).length
   }
 
   /** Roll a weapon's attack AND damage as one action, pushing the combined result
@@ -254,6 +264,7 @@ export function Equipment() {
               return w ? (
                 <WeaponCard
                   key={hand} weapon={w} sheet={sheet} bind={bind}
+                  armed={armedOn(w)}
                   dry={isRanged(w) && !activeAmmo}
                   ammo={isRanged(w) ? ammoStacks : null}
                   active={activeAmmo}
@@ -472,8 +483,10 @@ function ActionBtn({ to, onClick, icon, label, active, count, soon }: {
 
 /* ---------- weapon card ---------- */
 
-function WeaponCard({ weapon, sheet, bind, dry, ammo, active, onNock, onAttack, onManage }: {
+function WeaponCard({ weapon, sheet, bind, dry, ammo, active, armed, onNock, onAttack, onManage }: {
   weapon: EquippedWeapon; sheet: CharacterSheet; bind: Bind
+  /** Armed modifiers that will land on this weapon's next roll (§16). */
+  armed: number
   /** Ranged, with nothing left to fire. */
   dry: boolean
   /** Stacks available to this weapon, or null when it takes no ammunition. */
@@ -510,6 +523,15 @@ function WeaponCard({ weapon, sheet, bind, dry, ammo, active, onNock, onAttack, 
         <div className={styles.wcDmg}><span className={styles.v}>{dmg}</span>{weapon.type ? <> · {weapon.type}</> : null}</div>
         <div className={styles.wcSlot}>
           <span className={styles.label}>{handLabel(weapon.hand)}</span>
+          {/* §16: a pending bonus the player cannot see is worse than no bonus,
+              because they roll without it and never learn why the number was
+              low. Inside the grid cell — the card is clip-pathed, so anything
+              overflowing gets sliced. */}
+          {armed > 0 && (
+            <span className={styles.wcArmed} title="Armed — applies to this roll">
+              <i className="fa-solid fa-bolt" />Armed{armed > 1 ? ` ${armed}` : ''}
+            </span>
+          )}
           <button
             className={`${styles.wcAttack}${dry ? ' ' + styles.dry : ''}`}
             onClick={e => { e.stopPropagation(); onAttack() }}

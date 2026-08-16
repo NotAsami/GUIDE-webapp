@@ -95,10 +95,13 @@ type ShowTip = (t: (TipData & { rect?: DOMRect }) | null) => void
 
 /* ---------------- the rail ---------------- */
 
-export function RollContextPanel({ onClose, character, shardTrees }: {
+export function RollContextPanel({ onClose, character, shardTrees, onConsumeArmed }: {
   onClose: () => void
   character?: CharacterRow | null
   shardTrees?: Record<string, ShardTree>
+  /** §8 #1's consumption tap. Absent = the panel renders armed riders read-only,
+   *  which is what a surface with no character to write to honestly is. */
+  onConsumeArmed?: (id: string) => void
 }) {
   const { rolls, updateRoll, clear } = useRollLog()
   const [folded, setFolded] = useState<Set<string>>(new Set())
@@ -154,6 +157,13 @@ export function RollContextPanel({ onClose, character, shardTrees }: {
   }
 
   const catView = cat ? catalogView(character ?? null, cat.subject, shardTrees) : null
+  // CONSUMED-NESS IS DERIVED, never stored twice: a rider carries the armed id,
+  // and still-armed means the id is still in the queue. One record answers it on
+  // every surface, including one consumed on another device.
+  const stillArmed = useMemo(
+    () => new Set((character?.resources as { graph?: { armed?: { id: string }[] } } | undefined)?.graph?.armed?.map(m => m.id) ?? []),
+    [character],
+  )
 
   return createPortal(
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Roll Context">
@@ -194,6 +204,7 @@ export function RollContextPanel({ onClose, character, shardTrees }: {
                   showTip={showTip}
                   onOpenCat={() => { if (entry.subject) setCat(entry) }}
                   hasCat={!!entry.subject}
+                  stillArmed={stillArmed} onConsumeArmed={onConsumeArmed}
                 />
               ))}
         </div>
@@ -208,7 +219,10 @@ export function RollContextPanel({ onClose, character, shardTrees }: {
 
 /* ---------------- one roll ---------------- */
 
-function Entry({ entry, latest, fresh, folded, onFold, onPatch, onReroll, showTip, onOpenCat, hasCat }: {
+function Entry({
+  entry, latest, fresh, folded, onFold, onPatch, onReroll, showTip, onOpenCat, hasCat,
+  stillArmed, onConsumeArmed,
+}: {
   entry: RollEntry; latest: boolean; fresh: boolean; folded: boolean
   onFold: () => void
   onPatch: (index: number, patch: Partial<RiderView['rider']>) => void
@@ -216,11 +230,14 @@ function Entry({ entry, latest, fresh, folded, onFold, onPatch, onReroll, showTi
   showTip: ShowTip
   onOpenCat: () => void
   hasCat: boolean
+  stillArmed: Set<string>
+  onConsumeArmed?: (id: string) => void
 }) {
   const views = useMemo(() => riderViews(entry), [entry])
   const lines = useMemo(() => lineViews(entry), [entry])
   const totals = useMemo(() => rollTotals(entry, views), [entry, views])
-  const resolved = resolvedOf(views)
+  const armed = views.filter(v => v.rider.armedId)
+  const resolved = resolvedOf(views).filter(v => !v.rider.armedId)
   const unresolved = unresolvedOf(views)
   // Rider fold state is local for the same reason entry fold state is: it is how
   // you are reading the list, not part of the roll.
@@ -281,6 +298,22 @@ function Entry({ entry, latest, fresh, folded, onFold, onPatch, onReroll, showTi
               <Line key={i} line={l} index={i} showTip={showTip} spin={spin}
                 onReroll={die => reroll({ line: i, die }, `${i}:${die}`)} />
             ))}
+
+            {/* Armed: already spent, already applied, and waiting for the player
+                to say the roll landed. Kept apart from the resolved list because
+                it is the one contribution here that is still SPENDABLE — §8 #1
+                is explicit that nothing burns implicitly. */}
+            {armed.length > 0 && (
+              <div className={styles.contribs}>
+                {armed.map(v => (
+                  <Contribution
+                    key={v.index} v={v} showTip={showTip}
+                    armedLive={stillArmed.has(v.rider.armedId!)}
+                    onConsume={onConsumeArmed && (() => onConsumeArmed(v.rider.armedId!))}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* Resolved: the engine already decided. No switch, nothing to do. */}
             {resolved.length > 0 && (
@@ -490,23 +523,44 @@ function Line({ line, index, showTip, spin, onReroll }: {
   )
 }
 
-/** RESOLVED — a contribution line. No switch, no button, nothing to decide. */
-function Contribution({ v, showTip }: { v: RiderView; showTip: ShowTip }) {
+/** RESOLVED — a contribution line. No switch, no button, nothing to decide.
+ *
+ *  Except one: an ARMED contribution is already applied but not yet spent, so it
+ *  carries the single control on this list. §8 #1 — only the player knows
+ *  whether the attack resolved, so an armed modifier does not burn on a miss. */
+function Contribution({ v, showTip, armedLive, onConsume }: {
+  v: RiderView; showTip: ShowTip
+  armedLive?: boolean
+  onConsume?: () => void
+}) {
   const r = v.rider
   const onAttack = v.group === 'Attack' || v.group === 'Check' || v.group === 'Save'
+  const isArmed = !!r.armedId
   return (
     <div className={styles.contrib} {...tipProps(showTip, () => ({
       k: r.label,
       v: (<>
-        <b style={{ color: 'var(--cyan-hot)' }}>Resolved by the engine</b><br />
-        {r.when === 'always' ? 'unconditional — always part of this roll' : 'condition met from your own state'}
+        <b style={{ color: 'var(--cyan-hot)' }}>{isArmed ? 'Armed earlier, applied here' : 'Resolved by the engine'}</b><br />
+        {isArmed
+          ? 'already spent on the activation that armed it'
+          : r.when === 'always' ? 'unconditional — always part of this roll' : 'condition met from your own state'}
         {r.dice.length > 0 && <><br />{r.dice.join(' + ')}</>}
       </>),
-      hint: 'Nothing to decide',
+      hint: isArmed
+        ? (armedLive ? 'Consume it once you know the roll landed' : 'Already consumed')
+        : 'Nothing to decide',
     }))}>
       <span className={styles.cName}>{r.label}</span>
       <span className={styles.cSrc}>{r.source}</span>
       <span className={styles.cRight}>
+        {isArmed && (armedLive
+          ? onConsume
+            ? <button type="button" className={styles.consume} onClick={onConsume}
+                title="Spend this — it stops applying to later rolls">
+                <i className="fa-solid fa-bolt" />Consume
+              </button>
+            : <span className={styles.armedTag}><i className="fa-solid fa-bolt" />Armed</span>
+          : <span className={styles.spentTag}>Spent</span>)}
         {v.kind === 'flag' && v.grants ? (
           <span className={styles.flag} data-f={v.grants.toLowerCase()}>
             <i className={`fa-solid ${FLAG_ICON[v.grants]}`} />{v.grants}
@@ -572,12 +626,18 @@ function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin }: {
               the player is actually being asked. */}
           {r.text && <div className={styles.rdText}>{renderInline(r.text)}</div>}
 
+          {/* What answering YES reveals. Rendered for ANY rider carrying it, not
+              just a note-kind one: a note grouped with a contribution becomes a
+              VALUE rider (the contribution outranks the prose), and gating this
+              on the kind is how the prose then vanished. §25's inline compute
+              already ran, so this is the sentence with its number in it. */}
+          {r.on && r.reveal && <div className={styles.rdReveal}>{renderInline(r.reveal)}</div>}
+
           {v.kind === 'note' ? (
-            // §25's inline compute already ran, so this is the sentence WITH its
-            // number in it. Held back until the player says the condition held:
-            // a DC for a hit that did not land is a number they should not have.
+            // Prose and nothing else — there is no value, so there is nothing to
+            // show until the player says the condition held.
             r.on
-              ? <div className={styles.rdReveal}>{renderInline(r.reveal ?? '')}</div>
+              ? null
               : <div className={styles.rdHint}><i className="fa-solid fa-diamond" />Toggle on to reveal</div>
           ) : v.kind === 'flag' ? (
             r.on

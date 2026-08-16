@@ -416,6 +416,20 @@
   padding: 1px 5px;
 }
 
+/* Armed pip, beside the ON pip and for the same reason (§16): a pending bonus
+   the player cannot see is worse than no bonus, because they roll without it and
+   never learn why the number was low. Gold, not cyan — cyan is state they are
+   holding, gold is a value already spent and waiting to land. */
+.cArmed {
+  margin-left: 6px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
+  color: var(--gold-rare);
+  border: 1px solid rgba(226, 176, 33, 0.55);
+  background: rgba(226, 176, 33, 0.12);
+  padding: 1px 5px;
+}
+.cArmed i { font-size: 7.5px; }
+
 .pState { padding: 0 20px 4px; display: flex; flex-direction: column; gap: 6px; }
 .psHead {
   font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em;

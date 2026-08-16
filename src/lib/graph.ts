@@ -22,7 +22,7 @@
  * `'num' | 'bool'`. One representation, no adapter.
  */
 
-import type { CharacterRow, GraphEffect, GraphOp, ShardTree, VarDef } from './database.types.ts'
+import type { ArmedMod, CharacterRow, GraphEffect, GraphOp, GraphState, ShardTree, VarDef } from './database.types.ts'
 import type { ExprScope, FormulaValue } from './expr.ts'
 import { ROLL_IDENTS, VAR_IDENTS, evalExpr, freeIdents, interpolate, interpolations } from './expr.ts'
 import { type ActiveSource, activeSources, effectiveSheet } from './effects.ts'
@@ -177,8 +177,6 @@ export function baseScope(character: CharacterRow, shardTrees: Record<string, Sh
     hpMax: view.hp?.max ?? character.sheet?.hp?.max ?? 0,
   }
 }
-
-type GraphState = { vars?: Record<string, number | boolean>; dmVars?: Record<string, number | boolean> }
 
 /** Stored values, split by who may write them. The split is a LOCATION, not a
  *  flag: Postgres RLS is row-level and cannot permit writing
@@ -349,6 +347,16 @@ export function normalizeTag(raw: string): string {
   return raw.trim().toLowerCase().replace(/\s+/g, '_')
 }
 
+/** The identity of an `ask`, for grouping. §32 makes effects sharing one ask into
+ *  ONE checkbox, which means the sentence is a KEY as well as prose — and a key
+ *  compared byte-for-byte fragments exactly the way free-text tags do. A trailing
+ *  space, a capital, a double space between words: two toggles for one decision,
+ *  looking identical on screen.
+ *
+ *  Only the key is normalised. The rider still carries the authored text
+ *  verbatim, because that is what the player reads. */
+export const askKey = (raw: string): string => raw.trim().toLowerCase().replace(/\s+/g, ' ')
+
 /** The ops whose target names a DAMAGE KIND rather than a roll. They never reach
  *  a Resolution — see damageFlags(). */
 const DAMAGE_FLAGS: GraphOp[] = ['resist', 'vuln', 'immune']
@@ -405,6 +413,11 @@ export type Rider = {
   when: 'always' | 'manual' | 'active'
   /** `active` and `always` riders arrive already resolved; `manual` ones start off. */
   on: boolean
+  /** Set on a rider that came from the armed queue rather than from the graph.
+   *  It is already applied — §8 #1 — and this is the handle the panel consumes
+   *  it by. Consumed-ness is NOT stored here: the panel asks whether this id is
+   *  still in `resources.graph.armed`, so one record answers it everywhere. */
+  armedId?: string
   /** What answering YES reveals — §25 inline compute already applied. A `note`
    *  carrying an interpolation is the one prose shape a toggle earns its place
    *  on: the DC exists only if the hit landed, so it is shown only once the
@@ -460,6 +473,28 @@ export type GraphContext = {
   index: Map<string, IndexedEffect[]>
   byOwner: Map<Gid, IndexedEffect[]>
   problems: AuditItem[]
+  /** §16's one-shot queue, as stored. Read here rather than passed per roll so
+   *  every caller of resolve() gets it without opting in — an armed modifier the
+   *  roller forgot to look up is a bonus the player was promised and did not
+   *  get. */
+  armed: ArmedMod[]
+}
+
+/** Does this armed modifier belong to this roll?
+ *
+ *  Exported because the pre-roll chips on the weapon and feature cards must give
+ *  the SAME answer resolve() will — §16's visibility rule is worthless if the
+ *  card promises a bonus the roll then does not apply. One predicate, three
+ *  readers.
+ *
+ *  Deliberately not tag-matched, unlike a graph selector: an armed mod is minted
+ *  by one activation naming one target, so it says what it hits rather than
+ *  describing it. An absent `sub`/`subject` is a WIDER match ("the next attack"),
+ *  not a narrower one. */
+export function armedMatches(m: ArmedMod, req: ResolveReq): boolean {
+  return m.kind === req.kind
+    && (!m.sub || m.sub === req.sub)
+    && (!m.subject || m.subject === req.subject)
 }
 
 /** The gid of an active source, or null for the kinds that have none — a potion
@@ -500,7 +535,10 @@ export function buildContext(
     }
   }
 
-  return { scope, index, byOwner, problems: audit }
+  // `resources` is Json-typed, so the graph blob needs the same narrowing
+  // lib/graphState.ts uses on the write side.
+  const graphState = (character.resources as { graph?: GraphState } | undefined)?.graph
+  return { scope, index, byOwner, problems: audit, armed: graphState?.armed ?? [] }
 }
 
 /* ---------- the walk ---------- */
@@ -634,6 +672,14 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     // contribution to a number. lib/graphState.ts runs them.
     if (IS_ACTIVATION(eff.op)) continue
 
+    // §16: a `once` effect ARMS, it does not apply. It waits in
+    // resources.graph.armed for the next matching roll, and the armed loop
+    // below is what puts it on a number. Skipping it here is the whole
+    // difference between "the next attack" and "every attack" — the field has
+    // existed since 1a with nothing reading it, so until now it meant the
+    // second.
+    if (eff.once) continue
+
     const v = eff.op === 'add' ? value(e) : { flat: 0, dice: [] }
     if (!v) continue
 
@@ -675,7 +721,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
 
     // One fact, one checkbox: effects sharing an `ask` label are one decision.
     if (eff.ask) {
-      const existing = askGroups.get(eff.ask)
+      const existing = askGroups.get(askKey(eff.ask))
       if (existing) {
         existing.flat += rider.flat
         existing.dice.push(...rider.dice)
@@ -684,9 +730,20 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
         if (rider.reveal) existing.reveal = existing.reveal ? `${existing.reveal}
 
 ${rider.reveal}` : rider.reveal
+
+        // ORDER MUST NOT DECIDE WHAT THE GROUP DOES. The group's op comes from
+        // its first member, and a `note` contributes prose and nothing else — so
+        // a note authored ABOVE its contribution made the whole group a note:
+        // the toggle revealed the text and silently dropped the dice, with no
+        // roll button and no way to notice. A real contribution outranks prose.
+        if (existing.op === 'note' && rider.op !== 'note') {
+          existing.op = rider.op
+          existing.formula = rider.formula
+          existing.dmgType = rider.dmgType
+        }
         continue
       }
-      askGroups.set(eff.ask, rider)
+      askGroups.set(askKey(eff.ask), rider)
       // The rider keeps the FIRST contributor's label as its name and carries the
       // ask sentence as its question. Effects sharing an ask are one decision, so
       // one of them has to speak for the group; the sentence is what they all
@@ -701,6 +758,35 @@ ${rider.reveal}` : rider.reveal
       if (eff.op === 'crit') applyCrit(eff)
     }
     out.riders.push(rider)
+  }
+
+  // 5. The armed queue. These are already the player's — spent on an activation
+  //    and waiting for this roll — so they apply to the number automatically and
+  //    are never a toggle. `when: 'always'` is the existing contract for exactly
+  //    that: folded into flat/dice, named as a rider, and skipped by total()'s
+  //    rider sum so it cannot be counted twice.
+  for (const m of ctx.armed) {
+    if (!armedMatches(m, req)) continue
+    const v = m.op === 'add' ? evalExpr(m.value ?? '', ctx.scope) : null
+    if (m.op === 'add') {
+      if (v === null || v.t !== 'num') {
+        out.problems.push({
+          sev: 'err', id: m.id, t: 'Armed modifier did not resolve',
+          s: `${m.label} = "${m.value ?? ''}" produced no usable value at these values. It stays armed.`,
+        })
+        continue
+      }
+      out.flat += v.flat
+      out.dice.push(...v.dice)
+    }
+    if (m.op === 'adv') out.adv = true
+    if (m.op === 'dis') out.dis = true
+    if (m.op === 'crit') out.crit = true
+    out.riders.push({
+      label: m.label, source: m.source, op: m.op,
+      formula: m.value ?? '', flat: v?.t === 'num' ? v.flat : 0, dice: v?.t === 'num' ? v.dice : [],
+      when: 'always', on: true, armedId: m.id, dmgType: m.dmgType,
+    })
   }
 
   return out
@@ -817,6 +903,17 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
     if (eff.op === 'note' && eff.ask && !interpolations(eff.text || eff.label).length) {
       out.push({ sev: 'err', id: eff.id, t: 'Toggle on a note', s: `${eff.label || eff.id} is prose with nothing to reveal — there is nothing for the player to resolve. Use \`when\` if it should be conditional, or interpolate a value into the text if the toggle is what decides whether they see it.` })
     }
+    // §16 keys the armed queue by ROLL KIND, so an armed effect's target has to
+    // be expressible as one. A gid or a tag cannot be, and would arm something
+    // that then matches no roll — a bonus the player was promised, sees on a
+    // chip, and never receives.
+    if (eff.once && (eff.target ?? []).some(t => !t.startsWith('roll:'))) {
+      out.push({
+        sev: 'err', id: eff.id, t: 'Armed modifier needs a roll target',
+        s: `${eff.label || eff.id} arms once, so every target must be a roll: kind — "roll:attack", not a thing or a tag. Leave the target empty to arm this node's own roll.`,
+      })
+    }
+
     if (IS_ACTIVATION(eff.op)) {
       // An activation names a variable rather than a target: it writes state, it
       // does not reach out at other nodes.
@@ -905,6 +1002,28 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
       .filter(({ cell, i }) => i > 0 && cell && (evalExpr(cell, scope) === null || freeIdents(cell).some(id => !allowed.has(id))))
     if (badCells.length) {
       out.push({ sev: 'err', id: eff.id, t: 'Bad level table', s: `${eff.label || eff.id}'s table does not evaluate at level ${badCells.map(b => b.i).join(', ')}.` })
+    }
+  }
+
+  // §32 folds effects sharing an `ask` into ONE rider, and a rider carries one
+  // op. A note merging with a contribution is fine — prose plus a number is
+  // exactly what the fold is for. TWO contributions of different kinds is not:
+  // one of them defines the group and the other's effect is silently dropped.
+  // Reported rather than blocked, because the fix is the author's call: two
+  // asks, or one op.
+  const byAsk = new Map<string, GraphEffect[]>()
+  for (const eff of node.graph ?? []) {
+    if (!eff.ask) continue
+    const k = askKey(eff.ask)
+    byAsk.set(k, [...(byAsk.get(k) ?? []), eff])
+  }
+  for (const [, group] of byAsk) {
+    const ops = [...new Set(group.map(e => e.op).filter(op => op !== 'note'))]
+    if (ops.length > 1) {
+      out.push({
+        sev: 'warn', id: group[0].id, t: 'One checkbox, two kinds of effect',
+        s: `"${group[0].ask}" groups ${ops.join(' and ')} into a single toggle, and a toggle carries one. ${ops[0]} will apply and the rest will not. Give them separate asks, or make them the same op.`,
+      })
     }
   }
 

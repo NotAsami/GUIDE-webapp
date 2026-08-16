@@ -20,7 +20,7 @@ import { buildContext, type GraphContext } from './graph.ts'
  *  a real object rather than null so a roll never has to branch on it — a
  *  character with no authored contributions and a character that has not loaded
  *  resolve identically, which is correct: both add nothing. */
-const EMPTY: GraphContext = { scope: {}, index: new Map(), byOwner: new Map(), problems: [] }
+const EMPTY: GraphContext = { scope: {}, index: new Map(), byOwner: new Map(), problems: [], armed: [] }
 
 export function useGraph(
   character: CharacterRow | null,

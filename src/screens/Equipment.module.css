@@ -208,6 +208,19 @@
 
 /* Inline Attack button (rolls attack + damage → toast). Lives on the card, not
    in the manage modal, so the toast isn't buried under a modal overlay. */
+/* §16's armed chip. Gold rather than the slot's cyan: cyan is what the weapon
+   IS, gold is a value already spent and waiting to land on it. Sits inside the
+   grid cell — the card is clip-pathed and anything overflowing gets sliced. */
+.wcArmed {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--gold-rare);
+  border: 1px solid rgba(226, 176, 33, 0.55);
+  background: rgba(226, 176, 33, 0.12);
+  padding: 2px 6px;
+}
+.wcArmed i { font-size: 7px; }
+
 .wcAttack {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%;

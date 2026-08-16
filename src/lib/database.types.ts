@@ -240,6 +240,9 @@ export type ArmedMod = {
   subject?: string
   op: GraphOp
   value?: string
+  /** Carried through arming, or an armed "+2d6 radiant" lands in the untyped
+   *  bucket and the damage split silently loses a colour. */
+  dmgType?: string
   at: number
 }
 

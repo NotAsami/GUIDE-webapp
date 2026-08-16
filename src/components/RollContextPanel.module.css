@@ -168,6 +168,28 @@
 .cVal[data-t="cold"] { color: var(--teal); }
 .cVal[data-t="atk"] { color: var(--cyan-hot); }
 
+/* §16's armed modifier: already applied, not yet spent. Gold, because it is a
+   value that has already cost something — and the only control on a list whose
+   whole point is that it has nothing to decide. */
+.consume {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--gold-rare); border: 1px solid rgba(226, 176, 33, 0.55);
+  background: rgba(226, 176, 33, 0.1); padding: 2px 7px;
+  transition: background 150ms ease, color 150ms ease;
+}
+.consume:hover { background: rgba(226, 176, 33, 0.24); color: #fff; }
+.consume i, .armedTag i { font-size: 7px; }
+.armedTag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--gold-rare); border: 1px solid rgba(226, 176, 33, 0.4); padding: 2px 7px;
+}
+.spentTag {
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--beige-dim); border: 1px solid rgba(212, 191, 125, 0.28); padding: 2px 7px;
+}
+
 /* ---------- granted flags ---------- */
 .flag { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; padding: 2px 7px; border: 1px solid var(--cyan); color: var(--cyan-hot); background: rgba(0, 166, 214, 0.1); }
 .flag i { font-size: 7.5px; }
