@@ -287,3 +287,14 @@ test('…and a manual rider IS added, because it was answered after the roll', (
   })
   assert.equal(rollTotals(e, riderViews(e)).attack, 23)
 })
+
+test('a rolled contribution reads as its result, not its expression', () => {
+  // §49: the roller now keeps each contribution's faces ON the contribution, so
+  // the row can show a number the player can check against the line above it.
+  const r = rider({ when: 'always', label: 'Boosted Cut', flat: 0, dice: ['1d6'], rolledDice: faces(6, 4) })
+  assert.equal(riderAmount(r), '+4')
+  // …and a flat riding along with the dice is included.
+  assert.equal(riderAmount(rider({ when: 'always', flat: 2, dice: ['1d6'], rolledDice: faces(6, 4) })), '+6')
+  // Unrolled still reads as the expression — nothing has happened yet.
+  assert.equal(riderAmount(rider({ when: 'always', flat: 0, dice: ['1d6'] })), '+1d6')
+})

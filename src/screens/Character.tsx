@@ -11,12 +11,12 @@ import {
 } from '../lib/dnd'
 import type { Skill } from '../lib/dnd'
 import { effectiveSheet } from '../lib/effects'
-import { rollDiceTerms, rolledDice, type RolledDie } from '../lib/dice'
+import { rolledDice, type RolledDie } from '../lib/dice'
 import { useRollLog } from '../lib/rolls'
 import type { RollEntry, CheckRoll } from '../lib/rolls'
 import { Riders } from '../components/Riders'
 import { useGraph } from '../lib/useGraph'
-import { resolve, total } from '../lib/graph'
+import { resolve, rollResolution } from '../lib/graph'
 import styles from './Character.module.css'
 
 interface RouteContext {
@@ -88,23 +88,23 @@ export function Character() {
     // The same boundary the weapon roller uses, on a roll kind that has no
     // subject at all — which is the point of doing both in one slice.
     const res = resolve(graph, { kind: opts.kind, sub: opts.sub })
-    const bonus = total(res)
+    // Graph dice on a d20 roll are rolled now — the total is one number and an
+    // unrolled term has nowhere to live. (Damage dice stay unrolled so a crit
+    // can double them; a check has no crit multiplier, so `double` is never set
+    // here.) The riders come back carrying the faces they rolled.
+    const contrib = rollResolution(res)
 
     const eff = effectiveMode(mode, res.adv, res.dis)
     const { rolls: dice, pick } = rollD20Set(eff)
-    // Graph dice on a d20 roll are rolled now — the total is one number and an
-    // unrolled term has nowhere to live. (Damage dice stay unrolled so a crit
-    // can double them; that is why this is not shared with the weapon path.)
-    const graphSum = bonus.flat + rollDiceTerms(bonus.dice).reduce((a, b) => a + b, 0)
 
-    const terms = [...opts.terms, { label: 'FEAT', value: graphSum }]
+    const terms = [...opts.terms, { label: 'FEAT', value: contrib.flat }]
     const { total: totalRoll, breakdown, crit, fumble } = composeCheck(pick, terms, res.critFrom)
 
     const check: CheckRoll = { mode: eff, rolls: dice, pick, breakdown, terms, total: totalRoll, crit, fumble }
     flashHex(opts.key, totalRoll, crit, fumble)
     addRoll({
       kind: opts.kind, title: opts.title, subtitle: opts.subtitle, icon: 'fa-dice-d20', check,
-      riderGroups: res.riders.length ? [{ label: opts.kind === 'save' ? 'Save' : 'Check', riders: res.riders }] : undefined,
+      riderGroups: contrib.riders.length ? [{ label: opts.kind === 'save' ? 'Save' : 'Check', riders: contrib.riders }] : undefined,
       notes: res.notes.length ? res.notes : undefined,
       problems: res.problems.length ? res.problems : undefined,
     })

@@ -2255,3 +2255,45 @@ arithmetic still holds — which is what makes this safe to do late.
 Its own slice. Not folded into 5c, because a refactor of the engine's core shape
 smuggled into a feature commit is how the next person loses the ability to bisect
 either.
+
+### As built
+
+Deleted: `Resolution.flat`, `Resolution.dice`, both writers, and the literal in
+`resolve()`. Riders are the only record now.
+
+**The split, and it is the whole of it:**
+
+> The **roller** folds every rider that is not `manual`.
+> The **panel** adds only the ones that are.
+
+A `manual` rider is answered and rolled AFTER the roll, which is the entire
+reason the panel can change a total. Everything else is already in the line's
+modifier before the roll entry exists. Between them each rider lands exactly
+once, and neither side needs to know what the other did. `total()` is keyed on
+`when` rather than on `r.on` — a non-manual rider is always on, so the two agree
+today, and naming the rule after the invariant means it keeps agreeing.
+
+`rollResolution(res, double)` is the roller half: it throws every non-manual
+contribution's dice ONCE and keeps the faces on the rider that owns them. It is
+the only function in `graph.ts` that touches randomness, and deliberately not
+`resolve()` — a crit doubles damage dice, so the engine hands them over unrolled
+and the roller decides. Both producers return their annotated riders, so
+`Equipment.tsx` and `Character.tsx` put those on the RollEntry instead of the
+raw ones.
+
+The contribution row now reads `1d6 → +4`, using the mockup's existing
+`.cForm` + `.cVal` shape; the individual faces are in the row's tooltip.
+
+**What made this safe to do late:** `total()`'s OUTPUT is unchanged. Every
+assertion about a roll's arithmetic still held; only the 33 that read
+`res.flat`/`res.dice` *directly* were retargeted at `total(res)`, which is the
+value they were always reaching for. Three production `total()` call sites needed
+zero edits, because no application code ever read the fold.
+
+Two tests changed MEANING rather than spelling — they existed to pin the
+two-record split (`assert.equal(r.flat, 0) // resolved riders are NOT in flat`).
+After this there is no "in flat" for a rider to be out of, so each now asserts
+the property the original was reaching for: counted, and counted once.
+
+Verified by mutation: reinstating the old `always` filter fails 19 tests, letting
+the panel's half in as well fails 3, and rolling manual riders fails 1.

@@ -175,7 +175,9 @@ export function Equipment() {
     const atkRes = resolve(graph, { kind: 'attack', subject, tags })
     const dmgRes = resolve(graph, { kind: 'damage', subject, tags })
 
-    const { attack: atk, damage } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack), {
+    // `riders` comes back ANNOTATED — each contribution carrying the faces it
+    // rolled — so the panel shows "1d6 → +4" rather than a promise.
+    const { attack: atk, damage, riders } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack), {
       attack: atkRes, damage: dmgRes,
     })
     addRoll({
@@ -192,8 +194,8 @@ export function Equipment() {
       // Grouped, not concatenated: a rider on the attack and one on the damage
       // are different statements, and a flat list cannot tell them apart.
       riderGroups: [
-        { label: 'Attack', riders: atkRes.riders },
-        { label: 'Damage', riders: dmgRes.riders },
+        { label: 'Attack', riders: riders.attack },
+        { label: 'Damage', riders: riders.damage },
       ].filter(g => g.riders.length),
       // Notes and problems stay flat — a note is prose about the action and a
       // problem is an engine failure; neither needs attributing to a sub-roll.

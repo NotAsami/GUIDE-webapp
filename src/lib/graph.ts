@@ -28,7 +28,7 @@ import { ROLL_IDENTS, VAR_IDENTS, evalExpr, freeIdents, interpolate, interpolati
 import { type ActiveSource, activeSources, effectiveSheet } from './effects.ts'
 import { IS_ACTIVATION, OPS } from './opSchema.ts'
 import { abilities, abilityMod, proficiency } from './dnd.ts'
-import type { RolledDie } from './dice.ts'
+import { rolledDiceTerms, type RolledDie } from './dice.ts'
 
 /** Lifted from ShardLattice.tsx so the engine and the lattice editor share one
  *  audit vocabulary rather than growing two. `t` is the title, `s` the sentence,
@@ -407,8 +407,11 @@ export type Rider = {
   op: GraphOp
   /** Shown when the player still has to decide. */
   formula: string
+  /** THE contribution — §49 removed the Resolution-level copy, so this and
+   *  `dice` are the only record of what this rider is worth. */
   flat: number
-  /** UNROLLED — the caller rolls, so a crit can still double these. */
+  /** UNROLLED — the caller rolls, so a crit can still double these. Once rolled,
+   *  the faces land on `rolledDice` beside them. */
   dice: string[]
   when: 'always' | 'manual' | 'active'
   /** `active` and `always` riders arrive already resolved; `manual` ones start off. */
@@ -442,9 +445,6 @@ export type Rider = {
 }
 
 export type Resolution = {
-  /** Unconditional contributions, already composed. */
-  flat: number
-  dice: string[]
   adv: boolean
   dis: boolean
   crit: boolean
@@ -452,7 +452,14 @@ export type Resolution = {
    *  Lowest wins: Improved Critical (19) and a hypothetical 18 node give 18, not
    *  17 — a crit range is a threshold, not a bonus that stacks. */
   critFrom?: number
-  /** Everything the panel renders. */
+  /** EVERY contribution, and the only record of one.
+   *
+   *  There used to be a second: `flat`/`dice` held an "unconditional fold" that
+   *  the `always` riders duplicated exactly. Two records of one fact do not stay
+   *  in agreement — that pair produced the same double-count twice (§45 in
+   *  total(), §48 in the panel's footer), each time fixed with a filter rather
+   *  than a removal, and it made a rolled face impossible to attribute back to
+   *  the contribution that owned it. See §49. */
   riders: Rider[]
   /** `note` ops — authored prose the player reads. */
   notes: string[]
@@ -544,7 +551,7 @@ export function buildContext(
 /* ---------- the walk ---------- */
 
 export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
-  const out: Resolution = { flat: 0, dice: [], adv: false, dis: false, crit: false, riders: [], notes: [], problems: [] }
+  const out: Resolution = { adv: false, dis: false, crit: false, riders: [], notes: [], problems: [] }
 
   // 2. Match: the subject itself, each of its tags, the roll kind, the sub-kind.
   const keys = [
@@ -693,7 +700,6 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     // rider is additional, not a replacement — which is why total() must skip
     // `always` riders or every one of these counts twice.
     if (eff.when === undefined && !eff.ask) {
-      if (eff.op === 'add') { out.flat += v.flat; out.dice.push(...v.dice) }
       if (eff.op === 'adv') out.adv = true
       if (eff.op === 'dis') out.dis = true
       if (eff.op === 'crit') applyCrit(eff)
@@ -762,9 +768,8 @@ ${rider.reveal}` : rider.reveal
 
   // 5. The armed queue. These are already the player's — spent on an activation
   //    and waiting for this roll — so they apply to the number automatically and
-  //    are never a toggle. `when: 'always'` is the existing contract for exactly
-  //    that: folded into flat/dice, named as a rider, and skipped by total()'s
-  //    rider sum so it cannot be counted twice.
+  //    are never a toggle. `when: 'always'` says exactly that: the roller folds
+  //    it in, the panel does not, and it needs no answer.
   for (const m of ctx.armed) {
     if (!armedMatches(m, req)) continue
     const v = m.op === 'add' ? evalExpr(m.value ?? '', ctx.scope) : null
@@ -776,8 +781,6 @@ ${rider.reveal}` : rider.reveal
         })
         continue
       }
-      out.flat += v.flat
-      out.dice.push(...v.dice)
     }
     if (m.op === 'adv') out.adv = true
     if (m.op === 'dis') out.dis = true
@@ -815,19 +818,55 @@ export function damageFlags(ctx: GraphContext, dmgType: string): { resist: boole
   return out
 }
 
-/** Compose what actually applies: the unconditional fold plus every rider the
- *  player has switched on. `flat`/`dice` deliberately exclude riders — the panel
- *  renders each rider as its own line, and a caller that summed both would double
- *  count. Doing it here once means no caller can get that wrong. */
+/** What this roll's contributions come to. Dice come back UNROLLED, because a
+ *  crit doubles damage dice and a pre-rolled term cannot be doubled.
+ *
+ *  THE SPLIT, and it is the whole of it:
+ *
+ *    > The ROLLER folds every rider that is not `manual`.
+ *    > The PANEL adds only the ones that are.
+ *
+ *  A `manual` rider is answered and rolled AFTER the roll — which is the entire
+ *  reason the panel can change a total at all. Everything else is already inside
+ *  the line's modifier before the roll entry exists. Between them each rider is
+ *  counted exactly once, and neither side needs to know what the other did.
+ *
+ *  Keyed on `when` rather than on `r.on`: a non-manual rider is always on, so
+ *  the two agree today, and naming the rule after the invariant means it keeps
+ *  agreeing. */
 export function total(res: Resolution): { flat: number; dice: string[] } {
-  // `always` riders are ALREADY inside flat/dice — they exist so the panel can
-  // name the source, not to be added a second time. Getting this wrong doubles
-  // every unconditional contribution silently, which is why it has its own test.
-  const on = res.riders.filter(r => r.on && r.op === 'add' && r.when !== 'always')
+  const on = res.riders.filter(r => r.op === 'add' && r.when !== 'manual')
   return {
-    flat: res.flat + on.reduce((n, r) => n + r.flat, 0),
-    dice: [...res.dice, ...on.flatMap(r => r.dice)],
+    flat: on.reduce((n, r) => n + r.flat, 0),
+    dice: on.flatMap(r => r.dice),
   }
+}
+
+/** `total()`, rolled — every contribution's dice thrown ONCE, with the faces
+ *  kept on the rider that owns them.
+ *
+ *  This is the only function here that touches randomness, and it is deliberately
+ *  not `resolve()`: a crit doubles damage dice, so the engine must hand them over
+ *  unrolled and let the roller decide. `double` is that decision.
+ *
+ *  Attribution is the point. The roller used to flatten first and roll the
+ *  resulting list, which summed correctly and lost track of which contribution
+ *  each face belonged to — so a rider could be named but its result could not be
+ *  shown, and the player was asked to trust a number they could not check. */
+export function rollResolution(res: Resolution, double = false): {
+  flat: number
+  riders: Rider[]
+} {
+  let flat = 0
+  const riders = res.riders.map(r => {
+    if (r.op !== 'add' || r.when === 'manual') return r
+    flat += r.flat
+    if (!r.dice.length) return r
+    const rolledDice = rolledDiceTerms(r.dice, double)
+    flat += rolledDice.reduce((n, d) => n + d.v, 0)
+    return { ...r, rolledDice }
+  })
+  return { flat, riders }
 }
 
 /* ---------- author-time (§17) ---------- */
