@@ -6,7 +6,7 @@ import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.type
 import { VAR_IDENTS, evalExpr } from './expr.ts'
 import { parseDice, rerollDie, rollDice } from './dice.ts'
 import {
-  auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid,
+  armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid,
   damageFlags, matchCount, nodeGid, normalizeTag, resolve, total, varCollisions, type ResolveReq,
 } from './graph.ts'
 import { activeSources } from './effects.ts'
@@ -1050,9 +1050,10 @@ test('every GraphEffect field is authorable, or is explicitly recorded as not ye
     when: 'universal', ask: 'universal',
     // Rendered from OPS[op].fields — asserted below.
     value: 'schema', byLevel: 'schema', variable: 'schema', text: 'schema',
-    threshold: 'schema', dmgType: 'schema',
-    // Parsed and stored, honoured when the armed queue lands (5c). §46.
-    once: 'deferred',
+    threshold: 'schema', dmgType: 'schema', once: 'schema',
+    // Nothing is deferred today. The category stays because it is the honest
+    // place to put a field that is stored but not yet authorable, and saying so
+    // out loud beats leaving it silently uncovered.
   }
 
   const authored = new Set(Object.values(OPS).flatMap(d => d.fields.map(f => f.key)))
@@ -1065,6 +1066,13 @@ test('every GraphEffect field is authorable, or is explicitly recorded as not ye
   // would render a control that writes to nothing.
   const stray = [...authored].filter(k => !(k in COVERAGE))
   assert.deepEqual(stray, [], `schema field(s) with no home on GraphEffect: ${stray.join(', ')}`)
+
+  // A classification can go stale in the other direction too: `once` was
+  // 'deferred' and then became authorable, and nothing would have noticed.
+  const stale = Object.entries(COVERAGE)
+    .filter(([k, kind]) => kind === 'deferred' && authored.has(k))
+    .map(([k]) => k)
+  assert.deepEqual(stale, [], `field(s) marked deferred that ARE authorable: ${stale.join(', ')}`)
 })
 
 test('a damage-typed contribution rides its type all the way to the rider', () => {
@@ -1074,4 +1082,123 @@ test('a damage-typed contribution rides its type all the way to the rider', () =
   const r = resolve(buildContext(c), { kind: 'damage' })
   assert.deepEqual(total(r).dice, ['2d6'])
   assert.equal(r.riders[0].dmgType, 'radiant')
+})
+
+// --- §16 the armed queue -----------------------------------------------------
+
+const armedChar = (armed: object[], features: Feature[] = []) =>
+  character({ sheet: { ...SHEET, features }, resources: { graph: { armed } } })
+
+test('a `once` contribution does NOT apply to a matching roll', () => {
+  // THE BUG THIS SLICE FIXES. `once` has been in the type since 1a with nothing
+  // reading it, so until now it meant "every attack" — the exact opposite of
+  // what it says. It applies only once ARMED.
+  const c = withFeatures([gfeat('Boost', [
+    { id: 'e1', op: 'add', value: '4', once: true, label: 'Boosted Cut', target: ['roll:attack'] },
+  ])])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(total(r).flat, 0)
+  assert.equal(r.riders.length, 0)
+})
+
+test('an armed modifier applies, and total() counts it exactly once', () => {
+  // The `always` double-count trap: it is folded into flat AND named as a rider.
+  const c = armedChar([{ id: 'a1', source: 'feature:Boost', label: 'Boosted Cut', kind: 'attack', op: 'add', value: '4', at: 1 }])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(total(r).flat, 4)
+  assert.equal(r.riders.length, 1)
+  assert.equal(r.riders[0].armedId, 'a1')
+  assert.equal(r.riders[0].when, 'always')
+})
+
+test('an armed flag sets the flag rather than a number', () => {
+  const c = armedChar([{ id: 'a1', source: 'feature:F', label: 'Sure Strike', kind: 'attack', op: 'adv', at: 1 }])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(r.adv, true)
+  assert.equal(total(r).flat, 0)
+})
+
+test('the armed predicate: kind must match, sub and subject narrow', () => {
+  const req: ResolveReq = { kind: 'save', sub: 'dex', subject: 'feature:F' }
+  const base = { id: 'a', source: 's', label: 'l', op: 'add' as const, at: 1 }
+  assert.equal(armedMatches({ ...base, kind: 'save' }, req), true)          // bare kind = "any save"
+  assert.equal(armedMatches({ ...base, kind: 'save', sub: 'dex' }, req), true)
+  assert.equal(armedMatches({ ...base, kind: 'save', sub: 'wis' }, req), false)
+  assert.equal(armedMatches({ ...base, kind: 'attack' }, req), false)
+  assert.equal(armedMatches({ ...base, kind: 'save', subject: 'feature:F' }, req), true)
+  assert.equal(armedMatches({ ...base, kind: 'save', subject: 'feature:Other' }, req), false)
+  // A sub on the mod but none on the request: the request is the wider one, so no.
+  assert.equal(armedMatches({ ...base, kind: 'save', sub: 'dex' }, { kind: 'save' }), false)
+})
+
+test('an armed modifier whose formula breaks is reported and STAYS armed', () => {
+  const c = armedChar([{ id: 'a1', source: 'feature:F', label: 'Broken', kind: 'attack', op: 'add', value: 'nope', at: 1 }])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(total(r).flat, 0)
+  assert.ok(r.problems.some(p => p.sev === 'err' && p.t === 'Armed modifier did not resolve'))
+})
+
+test('a `once` effect must target a roll kind, because the queue is keyed by one', () => {
+  assert.ok(auditNode({ graph: [
+    { id: 'e1', op: 'add', value: '4', once: true, label: 'Boost', target: ['tag:fire'] },
+  ] }).some(a => a.sev === 'err' && a.t === 'Armed modifier needs a roll target'))
+
+  assert.equal(auditNode({ graph: [
+    { id: 'e1', op: 'add', value: '4', once: true, label: 'Boost', target: ['roll:attack'] },
+  ] }).filter(a => a.t === 'Armed modifier needs a roll target').length, 0)
+})
+
+test('an ask groups on its MEANING, not on its bytes', () => {
+  // The ask is prose and a key at the same time. Byte-compared, a trailing space
+  // silently makes two toggles for one decision — identical on screen.
+  const c = withFeatures([gfeat('Sanctity', [
+    { id: 'e1', op: 'add', value: '2d8', label: 'A', ask: 'hit with Sanctity', target: ['roll:damage'] },
+    { id: 'e2', op: 'add', value: '1d4', label: 'B', ask: '  Hit  with sanctity ', target: ['roll:damage'] },
+  ])])
+  const r = resolve(buildContext(c), { kind: 'damage' })
+  assert.equal(r.riders.length, 1)
+  assert.deepEqual(r.riders[0].dice, ['2d8', '1d4'])
+  // The FIRST spelling is kept for display — normalisation is for the key only.
+  assert.equal(r.riders[0].text, 'hit with Sanctity')
+})
+
+test('genuinely different asks stay two decisions', () => {
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '2d8', label: 'A', ask: 'did it hit?', target: ['roll:damage'] },
+    { id: 'e2', op: 'add', value: '1d4', label: 'B', ask: 'is it undead?', target: ['roll:damage'] },
+  ])])
+  assert.equal(resolve(buildContext(c), { kind: 'damage' }).riders.length, 2)
+})
+
+test('a note authored ABOVE its contribution still rolls the contribution', () => {
+  // The order asymmetry that shipped broken: the group takes its op from its
+  // FIRST member, and a note contributes prose only — so a note listed first
+  // made the whole group a note. The toggle revealed the text and silently
+  // dropped the dice, with no roll button and nothing on screen to notice.
+  const effs = [
+    { id: 'e1', op: 'note' as const, label: 'Condemning Strike', text: 'DC {8 + prof}, Wisdom.', ask: 'hit with Sanctity', target: ['roll:damage'] },
+    { id: 'e2', op: 'add' as const, value: '2d6', dmgType: 'radiant', label: 'Condemning Strike', ask: 'hit with Sanctity', target: ['roll:damage'] },
+  ]
+  for (const graph of [effs, [effs[1], effs[0]]]) {
+    const r = resolve(buildContext(withFeatures([gfeat('Sanctity', graph)])), { kind: 'damage' })
+    assert.equal(r.riders.length, 1)
+    assert.equal(r.riders[0].op, 'add', 'the contribution defines what the group does')
+    assert.deepEqual(r.riders[0].dice, ['2d6'])
+    assert.equal(r.riders[0].dmgType, 'radiant')
+    assert.equal(r.riders[0].reveal, 'DC 11, Wisdom.')
+  }
+})
+
+test('one ask, two kinds of contribution, is reported rather than silently halved', () => {
+  const mixed = auditNode({ graph: [
+    { id: 'e1', op: 'add', value: '2d6', label: 'A', ask: 'did it hit?', target: ['roll:damage'] },
+    { id: 'e2', op: 'adv', label: 'B', ask: 'did it hit?', target: ['roll:attack'] },
+  ] })
+  assert.ok(mixed.some(a => a.sev === 'warn' && a.t === 'One checkbox, two kinds of effect'))
+
+  // A note joining a contribution is the SUPPORTED shape — prose plus a number.
+  assert.equal(auditNode({ graph: [
+    { id: 'e1', op: 'add', value: '2d6', label: 'A', ask: 'did it hit?', target: ['roll:damage'] },
+    { id: 'e2', op: 'note', text: 'DC {8 + prof}.', label: 'B', ask: 'did it hit?', target: ['roll:damage'] },
+  ] }).filter(a => a.t === 'One checkbox, two kinds of effect').length, 0)
 })

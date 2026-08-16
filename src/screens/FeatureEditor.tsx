@@ -1150,6 +1150,10 @@ function EffectCard({ eff, ei, d, setEffect, update, nodes, namesByGid, setPop, 
   setPop: (p: PopKind) => void; onClose: () => void
 }) {
   const cfg = OPS[eff.op]
+  // Every OTHER ask authored on this node — the set this effect could join.
+  const siblingAsks = [...new Set(
+    (d.graph ?? []).filter(x => x.id !== eff.id).map(x => x.ask?.trim()).filter((a): a is string => !!a),
+  )]
   const badLab = !eff.label?.trim()
   const targets = eff.target ?? []
   const isFlag = IS_DAMAGE_FLAG(eff.op)
@@ -1319,8 +1323,16 @@ function EffectCard({ eff, ei, d, setEffect, update, nodes, namesByGid, setPop, 
           <span className={styles.who}>prose · a human decides</span>
         </span>
         <span className={styles.askbox}><i className="fa-regular fa-square" /></span>
+        {/* The ask is also the GROUPING KEY — effects sharing one become a single
+            checkbox (§32). Retyping a sentence by hand to match is how you end up
+            with two toggles for one decision, so the asks already on this node
+            are offered rather than remembered. */}
         <input value={eff.ask ?? ''} placeholder="No checkbox — applies on its own"
+          list={`asks-${eff.id}`}
           onChange={e => setEffect(ei, { ask: e.target.value || undefined })} />
+        <datalist id={`asks-${eff.id}`}>
+          {siblingAsks.map(a => <option key={a} value={a} />)}
+        </datalist>
         <span className={styles.qm} onClick={() => setPop({ k: 'help', which: 'ask' })}>?</span>
       </div>
     </div>

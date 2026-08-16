@@ -61,6 +61,15 @@ export const DAMAGE_TYPES = [
   'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
 ] as const
 
+/** §16. Shared by every op that can be armed — a passive roll modifier and
+ *  nothing else. A note arms nothing (prose has no pending state) and the damage
+ *  flags are not roll modifiers at all. */
+const ONCE: OpField = {
+  key: 'once', type: 'boolean', label: 'Arms once',
+  desc: 'Instead of applying to every matching roll, this waits for the NEXT one. Pressing Use arms it; a chip shows on the target until the player taps to consume it. Needs a roll target — "your next attack", not "anything fiery".',
+  example: 'on, with target roll:attack',
+}
+
 const AMOUNT: OpField = {
   key: 'value', type: 'formula', label: 'Amount', required: true,
   desc: 'Number or expression contributed to every matched target. Dice are allowed and stay unrolled, so a crit can still double them.',
@@ -69,8 +78,8 @@ const AMOUNT: OpField = {
 
 /** Damage flags share a blurb shape: their target list IS the statement, so they
  *  declare no fields at all. */
-const flag = (label: string, icon: string, blurb: string): OpDef =>
-  ({ label, group: 'passive', icon, blurb, fields: [] })
+const flag = (label: string, icon: string, blurb: string, fields: OpField[] = []): OpDef =>
+  ({ label, group: 'passive', icon, blurb, fields })
 
 export const OPS: Record<GraphOp, OpDef> = {
   add: {
@@ -83,6 +92,7 @@ export const OPS: Record<GraphOp, OpDef> = {
         desc: 'What KIND of damage this adds, on a contribution that targets a damage roll. Splits the total by type in the breakdown and colours it. Leave blank on an attack roll, or when it rides along as the weapon’s own type.',
         example: 'radiant',
       },
+      ONCE,
       {
         key: 'byLevel', type: 'array', label: 'By level', wide: true,
         desc: 'Level-indexed progression. When any slot is filled it overrides Amount. Index 0 is unused — character levels start at 1.',
@@ -90,8 +100,8 @@ export const OPS: Record<GraphOp, OpDef> = {
       },
     ],
   },
-  adv: flag('adv', 'fa-angles-up', 'Grants advantage on the matched rolls. No parameters — the target list is the whole statement.'),
-  dis: flag('dis', 'fa-angles-down', 'Imposes disadvantage on the matched rolls.'),
+  adv: flag('adv', 'fa-angles-up', 'Grants advantage on the matched rolls. The target list is the whole statement.', [ONCE]),
+  dis: flag('dis', 'fa-angles-down', 'Imposes disadvantage on the matched rolls.', [ONCE]),
   crit: {
     label: 'crit', group: 'passive', icon: 'fa-burst',
     blurb: 'Lowers the critical-hit threshold on the matched attack rolls.',
@@ -99,7 +109,7 @@ export const OPS: Record<GraphOp, OpDef> = {
       key: 'threshold', type: 'formula', label: 'Crits on', required: true,
       desc: 'Lowest d20 face that counts as a critical hit. The lowest threshold across every applying node wins.',
       example: '19',
-    }],
+    }, ONCE],
   },
   note: {
     label: 'note', group: 'passive', icon: 'fa-comment',

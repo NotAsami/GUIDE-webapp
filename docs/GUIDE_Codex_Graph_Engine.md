@@ -2005,3 +2005,122 @@ rather than pretending to be a flag with no flag.
 is the reason it goes through the rider path instead of a list of its own: `+2d8
 radiant` and `DC 16, Wisdom` are one confirmation, and two checkboxes for one
 fact is the thing §32's grouping exists to prevent.
+
+---
+
+## 48. Slice 5c as built — the armed modifier queue
+
+### `once` meant the opposite of what it said
+
+`GraphEffect.once` landed in slice 1a documented as "arms once instead of
+applying continuously". Nothing ever read it. `resolve()` had no branch, so a
+`once: true` contribution applied to **every** matching roll — not a missing
+feature, a live wrong number, and the reason the coverage map added in §46
+recorded it as `'deferred'`.
+
+`resolve()` now skips it beside the existing `IS_ACTIVATION` skip, for the same
+reason: it is not a passive contribution. That fix lands before anything can arm.
+
+### One predicate, three readers
+
+`ArmedMod` already carried `kind`/`sub`/`subject` — the vocabulary `ResolveReq`
+matches on. `armedMatches(mod, req)` is exported rather than hidden inside
+`resolve()` because the pre-roll chips must give the **same** answer the roll
+will: §16's visibility rule is worthless if the card promises a bonus the roll
+then fails to apply.
+
+An absent `sub`/`subject` is a WIDER match ("your next attack"), not a narrower
+one. Deliberately not tag-matched, unlike a graph selector: an armed mod is
+minted by one activation naming one target, so it says what it hits rather than
+describing it.
+
+### Arming is a press, so it is planned like one
+
+`Outcome` became a discriminated union — `kind: 'var'` and `kind: 'arm'` over a
+shared `{ eff, ask, summary }`. One list, so the confirm sheet renders both with
+no change, `ask` gates an arming exactly as it gates a variable write (§32 does
+not care what is being resolved), and one press produces **one** `resources`
+object. Two lists would have meant two confirm sheets and two write paths.
+
+Selector translation, since the queue is keyed by roll kind:
+
+```
+roll:attack    -> { kind: 'attack' }             "your next attack"
+roll:save.dex  -> { kind: 'save', sub: 'dex' }
+(no target)    -> { kind: 'feature', subject }   this node's own roll
+anything else  -> an authoring error
+```
+
+A gid or a tag cannot be expressed as a queue key, and arming one would produce a
+chip promising a bonus that then matches no roll. `auditNode` blocks it.
+
+`isUsable()` counts a `once` effect, or a feature whose only effect is "arm your
+next attack" would have no button to arm it with.
+
+### The two decisions that are not §16's
+
+| Decision | Why |
+|---|---|
+| **A short rest clears `armed` too** | §16 says long only. An armed modifier is the pending effect of a use already spent; if a short rest hands the use back, letting the pending effect survive lets a "1/short rest" feature bank one armed bonus per rest. Both rests clear it in the SAME patch that clears `activeEffects` — §16's own Lifetime argument. |
+| **Re-arming refreshes, it does not stack** | One entry per `source:effect[:selector]`, which is what `ArmedMod.id` is built from. A doubled bonus from a double-tap is a silent wrong number, which is the entire class of bug the roll panel exists to prevent. Two genuinely independent bonuses come from two effects. |
+
+### Consumed-ness is derived, never stored twice
+
+An armed rider carries `Rider.armedId`. The panel asks whether that id is still
+in `resources.graph.armed`; gone means consumed. So `RollEntry` gains no state,
+and a modifier consumed on another surface — or another device — reads correctly
+everywhere without a second record to disagree.
+
+Consuming is one tap and nothing else triggers it. §8 #1: **only the player knows
+whether the attack resolved**, so an armed auto-crit does not burn on a miss.
+
+### Settled while building
+
+| Decision | Why |
+|---|---|
+| **`GraphContext` carries `armed`** | Rather than a per-roll parameter. An armed modifier the roller forgot to look up is a bonus the player was promised and did not get; making it opt-in guarantees that eventually happens. |
+| **Armed riders are `when: 'always'`** | That is already the contract for "folded into flat/dice, named as a rider, skipped by `total()`'s rider sum". Reusing it means no new double-count case in either `total()` or `rollTotals`. |
+| **A broken armed formula stays armed** | It reports a problem and applies nothing. Silently dropping a spent resource because its formula broke is the worst available outcome. |
+| **`ArmedMod.dmgType`** | Added while building: without it an armed "+2d6 radiant" lands in the untyped bucket. Shipping that would have been §46's damage-type bug a second time, one layer down. |
+| **Gold, not cyan, for both chips** | Cyan is the player's own voice — state they are holding. An armed modifier is a value already spent and waiting to land, which is what gold means everywhere else in this app. |
+| **`rest.ts` imports gained `.ts` extensions** | It was the one non-testable module in the chain; Node's runner could not load it, so "both rests clear the queue" could not be pinned. |
+
+### Still owed
+
+| Owed | Why |
+|---|---|
+| **Auto-consuming on a hit** | §8 #1, and the "Deliberately not built" list names it twice. Not an oversight. |
+| **An expiry or countdown** | Rest clearing is the lifetime. No chip in this app renders a countdown today, and no content needs one. |
+| **The armed queue on the DM console** | 5d, with the `active` bools. |
+
+### §32's fold, corrected (found in manual test)
+
+Three faults in the same eight lines, all found by authoring Condemning Strike
+for real rather than by reading the code.
+
+**1. Order decided what the group did.** A grouped rider takes its `op` from its
+FIRST member, and a `note` contributes prose and nothing else — so a note
+authored ABOVE its contribution made the whole group a note. The toggle revealed
+the text and silently dropped the dice: no roll button, no value, and nothing on
+screen to notice. A contribution now outranks prose on merge. Both orders are
+pinned by a test; the shipped bug only reproduced in one of them, which is
+exactly why the original test passed.
+
+**2. The revealed prose was gated on the rider's KIND**, so an upgraded group
+lost it. It now renders for any rider carrying `reveal`.
+
+**3. The ask is a KEY as well as prose**, and it was compared byte-for-byte.
+A trailing space, a capital, a double space: two toggles for one decision,
+identical on screen. `askKey()` normalises for grouping only — the rider still
+displays the authored text verbatim. Same lesson `normalizeTag()` already
+learned one field over, applied late.
+
+The editor now offers the asks already used on a node as a dropdown, because a
+grouping key you have to retype by hand is a key you will eventually mistype.
+
+**Still lossy, now loudly:** a rider carries ONE op, so two contributions of
+different kinds under one ask (an `add` and an `adv`) cannot both be represented
+— one applies and the other is dropped. That predates this slice. It is now a
+`warn` naming both ops rather than silence, and the fix is the author's call:
+two asks, or one op. Making it lossless means a rider carrying a SET of ops,
+which is a rider-model change and not worth one warning's worth of content.

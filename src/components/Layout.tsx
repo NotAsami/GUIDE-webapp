@@ -10,6 +10,8 @@ import { SystemToasts } from './SystemToasts'
 import { ShopTakeover } from './ShopTakeover'
 import { RollContextPanel } from './RollContextPanel'
 import { usePresenceAnnounce } from '../lib/presence'
+import { consumeArmed } from '../lib/graphState'
+import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
 import { useEffect, useRef, useState } from 'react'
 
@@ -147,6 +149,7 @@ export function Layout() {
       {rollPanelOpen && (
         <RollContextPanel
           character={character} shardTrees={shardTrees}
+          onConsumeArmed={id => void updateSection('resources', consumeArmed(character, id) as CharacterRow['resources'])}
           onClose={() => setRollPanelOpen(false)}
         />
       )}

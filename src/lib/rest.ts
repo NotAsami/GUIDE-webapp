@@ -1,7 +1,7 @@
-import type { CharacterRow, CharacterSection, CharacterSheet, ShardTree } from './database.types'
-import type { RollLine } from './rolls'
-import { effectiveSheet } from './effects'
-import { restVarPatch, withVars } from './graphState'
+import type { CharacterRow, CharacterSection, CharacterSheet, ShardTree } from './database.types.ts'
+import type { RollLine } from './rolls.tsx'
+import { effectiveSheet } from './effects.ts'
+import { restVarPatch, withArmedCleared, withVars } from './graphState.ts'
 
 /** Build the long-rest result: faithful 5e long-rest defaults, applied in ONE
  *  atomic write (both sections spread from the existing data — never replaced).
@@ -85,7 +85,7 @@ export function longRestPatch(character: CharacterRow, shardTrees: Record<string
     // ONE resources object, per §16's Lifetime note: a second write path is what
     // lets these drift.
     resources: withVars(
-      { ...resources, deathSaves: { successes: 0, failures: 0 }, exhaustion: nextExhaustion, activeEffects: [] },
+      withArmedCleared({ ...resources, deathSaves: { successes: 0, failures: 0 }, exhaustion: nextExhaustion, activeEffects: [] }),
       resetVars,
     ),
   }
@@ -169,7 +169,11 @@ export function shortRestPatch(
     sheet: nextSheet,
     // ONE resources object — the variable reset rides with the effects clear
     // rather than in a second write that could land separately.
-    resources: withVars({ ...resources, activeEffects: [] }, vars),
+    // A short rest clears the armed queue too. §16 says long only, but an armed
+    // modifier is the pending effect of a use already spent — if the rest hands
+    // the use back, letting the pending effect survive lets a "1/short rest"
+    // feature bank one armed bonus per rest. See §48.
+    resources: withVars(withArmedCleared({ ...resources, activeEffects: [] }), vars),
   }
 
   const pact = pactShortRestPatch(character)

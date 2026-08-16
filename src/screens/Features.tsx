@@ -9,6 +9,7 @@ import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet, gearFeatures } from '../lib/effects'
 import { shardFeatures, shardPerks } from '../lib/shards'
 import { Prose } from '../lib/markdown'
+import { gid } from '../lib/graph'
 import { useGraph } from '../lib/useGraph'
 import { applyOutcomes, planActivation, playerVars, setVars, type Outcome } from '../lib/graphState'
 import styles from './Features.module.css'
@@ -35,9 +36,12 @@ const GROUPS: { key: FeatureCategory; label: string; icon: string }[] = [
 const COLS = 3
 
 /** A feature can be "used" when it rolls something, tracks limited uses, or has
- *  activation outcomes to run. */
+ *  activation outcomes to run — where a `once` contribution counts, because
+ *  arming it IS the press (§16). Without this a feature whose only effect is
+ *  "arm your next attack" would have no button to arm it with. */
 function isUsable(f: Feature): boolean {
-  return !!f.roll || !!f.uses || (f.graph ?? []).some(e => e.op === 'setVar' || e.op === 'addVar')
+  return !!f.roll || !!f.uses
+    || (f.graph ?? []).some(e => e.op === 'setVar' || e.op === 'addVar' || e.once)
 }
 
 /** The short text shown on the card (scales the card). Falls back to the legacy
@@ -75,6 +79,14 @@ export function Features() {
     return () => window.removeEventListener('keydown', onKey)
   }, [selected])
 
+  /** Armed modifiers this feature put in the queue and nobody has spent yet.
+   *  Matched by SOURCE, not by roll: the card's job is "you armed this and it is
+   *  still pending", which is a fact about the feature, not about a roll. */
+  const armedOf = (f: Feature) => {
+    const src = gid('feature', f)
+    return graph.armed.filter(m => m.source === src).length
+  }
+
   /** Variables this feature declares that the player may write directly. */
   const varsOf = (f: Feature) =>
     vars.filter(v => (f.vars ?? []).some(d => d.name === v.def.name))
@@ -91,7 +103,7 @@ export function Features() {
   function onUse(f: Feature) {
     if (busy) return
     if (f.uses && f.uses.current <= 0) return
-    const outcomes = planActivation(f, graph, character)
+    const outcomes = planActivation(f, graph, character, gid('feature', f))
     if (outcomes.length) { setPending({ feature: f, outcomes }); return }
     void useFeature(f, [])
   }
@@ -135,7 +147,14 @@ export function Features() {
     // The variable writes join the SAME write as the roll and the use counter —
     // two writes could land apart and leave a feature spent but not activated.
     const { resources, applied } = applyOutcomes(character, outcomes, answers)
-    for (const o of applied) lines.push({ label: o.def.label ?? o.def.name, total: String(o.delta !== undefined ? (o.current as number) + o.delta : o.set), breakdown: o.summary, tone: 'buff' })
+    for (const o of applied) {
+      lines.push(o.kind === 'arm'
+        // An armed modifier has no number yet — it has a promise. Saying "armed"
+        // rather than a value is the honest line, and the chip on the target's
+        // card is where it becomes visible (§16).
+        ? { label: o.mod.label, total: 'armed', breakdown: o.summary, tone: 'buff' }
+        : { label: o.def.label ?? o.def.name, total: String(o.delta !== undefined ? (o.current as number) + o.delta : o.set), breakdown: o.summary, tone: 'buff' })
+    }
 
     if (applied.length) {
       await updateSections({ ...(nextSheet !== sheet ? { sheet: nextSheet } : {}), resources: resources as CharacterRow['resources'] })
@@ -236,6 +255,7 @@ export function Features() {
                       <FeatureCard
                         key={f.id} feature={f} busy={busy}
                         on={varsOf(f).some(v => v.def.type === 'bool' && v.value === true)}
+                        armed={armedOf(f)}
                         onOpen={() => setSelected(f)}
                         onUse={() => onUse(f)}
                       />
@@ -293,8 +313,9 @@ export function Features() {
   )
 }
 
-function FeatureCard({ feature, busy, on, onOpen, onUse }: {
-  feature: Feature; busy: boolean; on: boolean; onOpen: () => void; onUse: () => void
+function FeatureCard({ feature, busy, on, armed, onOpen, onUse }: {
+  feature: Feature; busy: boolean; on: boolean; armed: number
+  onOpen: () => void; onUse: () => void
 }) {
   const tag = feature.usage ?? (feature.level ? `Lv ${feature.level}` : null)
   const exhausted = !!feature.uses && feature.uses.current <= 0
@@ -308,6 +329,14 @@ function FeatureCard({ feature, busy, on, onOpen, onUse }: {
         <span className={styles.cHead}>
           <span className={styles.cIcon}><i className={`fa-solid ${feature.icon ?? 'fa-bolt'}`} /></span>
           <span className={styles.cName}>{feature.name}</span>
+          {/* §16's visibility rule, the other half: a bonus waiting in the armed
+              queue that the card does not mention is one the player rolls
+              without and never learns about. */}
+          {armed > 0 && (
+            <span className={styles.cArmed} title="Armed — applies to your next matching roll">
+              <i className="fa-solid fa-bolt" />{armed > 1 ? ` ${armed}` : ''}
+            </span>
+          )}
           {/* A feature being ON is a bool variable. Showing it on the closed card
               is the same argument §16 makes for the armed chip: state the player
               cannot see is worse than no state, because they act without it. */}
