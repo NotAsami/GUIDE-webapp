@@ -37,11 +37,21 @@ An **effect** answers five questions, and only the first three are required:
 | `crit` | lowers the crit threshold. Lowest across all applying nodes wins | `19` |
 | `note` | prose on the roll, no number. Can compute — see Inline compute | `DC {saveDc}, Wisdom save` |
 
-**Spells also have a Saving throw field**, beside Damage. Pick the ability the
-target rolls, or leave it at *no save*. It says *which* save and *whether there
-is one* — the DC itself is the caster's, from their profile, because 5e derives
-it once per caster. The roll panel then shows `DEX Save DC 15` in the slot an
-attack roll would fill, and shows nothing for a spell that calls for no save.
+**Spells also have a Saving throw field**, beside Damage. Two different abilities
+meet here, so it is worth being exact:
+
+| | whose | set where |
+|---|---|---|
+| **which save the target rolls** | the spell's — Fireball is DEX, Hold Person WIS | this field |
+| **the DC they must beat** | the caster's — `8 + prof + their spellcasting ability` | the caster profile |
+
+A spell never names WIS/CHA/INT, because that is the caster's class. It is why
+the same spell is a harder save cast by a Warlock with CHA 20 than by a Wizard
+with INT 16 — the DC moves, the target's save does not.
+
+Leave the field at *no save* for a spell that allows none, and the roll panel
+shows no DC at all. Otherwise it reads `DEX Save DC 15`, in the slot an attack
+roll would fill.
 
 **Damage flags** — these answer "what happens when damage hits *me*", so they
 target a damage *type*, not a roll:

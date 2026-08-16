@@ -959,11 +959,15 @@ export type Spell = {
   icon?: string
   /** CSS color for the icon (e.g. "#e2701c"). Absent = the default cyan. */
   iconColor?: string
-  /** The ability the TARGET rolls to resist this spell. Presence means "this
-   *  spell calls for a save" — absent is a spell that does not, so the roll
-   *  panel shows a DC only when there is one to show. The DC itself is the
-   *  caster's (`spellbook.saveDC`), not the spell's: 5e derives it once per
-   *  caster, and storing it per spell would be a second copy free to disagree. */
+  /** The ability the TARGET rolls to resist this spell — Fireball is `dex`,
+   *  Hold Person `wis`. Presence means "this spell calls for a save"; absent is
+   *  a spell that does not, so the roll panel shows a DC only when there is one.
+   *
+   *  NOT the caster's spellcasting ability, which a spell never names — that is
+   *  the class's, and it sets the DC rather than the save. The DC lives once on
+   *  `spellbook.saveDC` (8 + prof + that ability), which is why the same spell
+   *  is a different DC from a Warlock than from a Wizard. A per-spell copy would
+   *  be a second record free to disagree. */
   save?: AbilityKey
   hasDamage: boolean
   dice?: string      // e.g. "8d6", "3d4+3"
