@@ -16,6 +16,7 @@ export type FormulaValue =
   | { t: 'num'; flat: number; dice: string[] }
   | { t: 'bool'; v: boolean }
   | { t: 'arr'; v: number[] }
+  | { t: 'str'; v: string }
 
 /** The scope IS the whitelist — an identifier absent from it is a rejection.
  *  `number | boolean` mirrors `VarDef.type: 'num' | 'bool'` (§30). */
@@ -40,6 +41,7 @@ function reject(msg: string): never {
 
 const num = (flat: number, dice: string[] = []): FormulaValue => ({ t: 'num', flat, dice })
 const bool = (v: boolean): FormulaValue => ({ t: 'bool', v })
+const str = (v: string): FormulaValue => ({ t: 'str', v })
 
 function asNum(v: FormulaValue): { flat: number; dice: string[] } {
   if (v.t !== 'num') reject(`expected a number, got ${v.t}`)
@@ -110,7 +112,9 @@ function apply(op: string, l: FormulaValue, r: FormulaValue): FormulaValue {
     case '!=': {
       if (l.t !== r.t) reject('== operands differ in type')
       if (l.t === 'arr') reject('arrays are not comparable')
-      const eq = l.t === 'num' ? plain(l) === plain(r) : asBool(l) === asBool(r)
+      const eq = l.t === 'num' ? plain(l) === plain(r)
+        : l.t === 'str' ? l.v === (r as { t: 'str'; v: string }).v
+        : asBool(l) === asBool(r)
       return bool(op === '==' ? eq : !eq)
     }
     // Both sides forced through asBool: JS && would skip the right-hand type check.
@@ -130,7 +134,9 @@ function apply(op: string, l: FormulaValue, r: FormulaValue): FormulaValue {
 
 // --- lexer -----------------------------------------------------------------
 
-type Tok = { k: 'n'; v: number } | { k: 'd'; v: string } | { k: 'i'; v: string } | { k: 'p'; v: string }
+type Tok =
+  | { k: 'n'; v: number } | { k: 'd'; v: string } | { k: 'i'; v: string }
+  | { k: 's'; v: string } | { k: 'p'; v: string }
 
 /** Two-character operators first, so `<=` never lexes as `<` then `=`. */
 const OPS = ['<=', '>=', '==', '!=', '&&', '||', '+', '-', '*', '/', '<', '>', '!', '(', ')', '[', ']', ',', '?', ':']
@@ -156,6 +162,16 @@ function lex(src: string): Tok[] {
     if (n) {
       out.push({ k: 'n', v: parseFloat(n[0]) })
       i += n[0].length
+      continue
+    }
+    // §25's conditional phrase: {upgraded ? "and restrains the target." : "."}.
+    // Literals only — there is no string arithmetic, so a ternary choosing between
+    // two of them is the entire feature.
+    if (rest[0] === '"') {
+      const end = rest.indexOf('"', 1)
+      if (end < 0) reject('unterminated string')
+      out.push({ k: 's', v: rest.slice(1, end) })
+      i += end + 1
       continue
     }
     const id = /^[a-z][a-zA-Z0-9]*/.exec(rest) // §30's identifier shape
@@ -277,6 +293,7 @@ export function evalExpr(src: string, scope: ExprScope): FormulaValue | null {
     pos++
     if (t.k === 'n') return num(t.v)
     if (t.k === 'd') return num(0, [t.v])
+    if (t.k === 's') return str(t.v)
     if (t.k === 'i') {
       if (t.v === 'true' || t.v === 'false') return bool(t.v === 'true')
       // The scope IS the whitelist (§33): one lookup enforces both permitted sets,
@@ -312,4 +329,54 @@ export function evalExpr(src: string, scope: ExprScope): FormulaValue | null {
     if (e instanceof Reject) return null
     throw e
   }
+}
+
+// --- §25's inline compute --------------------------------------------------
+
+/** `{...}` spans, non-greedy and non-nesting. Prose is prose; an expression that
+ *  needs a brace inside a brace has outgrown being written in a sentence. */
+const INTERP = /\{([^{}]*)\}/g
+
+/** Every interpolated source in a piece of prose, in order.
+ *
+ *  The audit needs this for two things the author would otherwise only discover
+ *  at the table: an identifier that does not exist, and a variable that IS read —
+ *  only for display — being reported as never used. */
+export function interpolations(text: string): string[] {
+  return [...(text ?? '').matchAll(INTERP)].map(m => m[1])
+}
+
+/** How a value reads inside a sentence. A bare boolean is deliberately refused:
+ *  "you deal true damage" is not prose, and §25's own example routes booleans
+ *  through a ternary to a phrase. */
+function display(v: FormulaValue): string | null {
+  if (v.t === 'str') return v.v
+  if (v.t === 'num') {
+    if (!v.dice.length) return String(v.flat)
+    const d = v.dice.join(' + ')
+    return v.flat ? `${d} ${v.flat > 0 ? '+' : '−'} ${Math.abs(v.flat)}` : d
+  }
+  return null
+}
+
+/** §25: `{level * 2}` in rule text renders as `16`. Display only — this never
+ *  touches a number the engine computed, it only stops a description quietly
+ *  lying as the character levels.
+ *
+ *  A span that does not evaluate is left EXACTLY as it was written and named in
+ *  `bad`. Silently dropping it would hide the fault from author and player both;
+ *  the audit catches these at authoring time, and resolve() reports any that
+ *  still reach a roll. */
+export function interpolate(text: string, scope: ExprScope): { text: string; bad: string[] } {
+  const bad: string[] = []
+  const out = (text ?? '').replace(INTERP, (raw, src: string) => {
+    const v = evalExpr(src, scope)
+    const shown = v && display(v)
+    if (shown === null || shown === undefined) {
+      bad.push(src.trim())
+      return raw
+    }
+    return shown
+  })
+  return { text: out, bad }
 }

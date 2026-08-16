@@ -10,8 +10,8 @@
  */
 
 import type { AbilityKey, CharacterSheet, EquippedWeapon, WeaponHand } from './database.types'
-import { abilityMod, formatMod, proficiency } from './dnd.ts'
-import { parseDice, rollDice, rollDiceTerms, rollDie } from './dice.ts'
+import { abilityMod, formatMod, proficiency, type CheckTerm } from './dnd.ts'
+import { parseDice, rollDiceTerms, rolledDice, type RolledDie } from './dice.ts'
 // Safe direction: graph.ts → effects.ts → equip/burden/shards, none of which
 // reach back here, so this does not close a cycle.
 import { total, type Resolution } from './graph.ts'
@@ -58,11 +58,15 @@ export function weaponDamageString(weapon: EquippedWeapon, sheet: CharacterSheet
 
 export type AttackRoll = {
   d20: number
+  /** The named parts of `bonus`. The panel's modifier read-out is the only place
+   *  an itemised breakdown exists, and a lump sum cannot be checked. MUST sum to
+   *  `bonus`. */
+  terms?: CheckTerm[]
   /** Every d20 rolled — two under adv/dis, one otherwise. `d20` says which one
    *  was kept, so the panel can strike the loser through. The pair was always
    *  rolled and the loser discarded; keeping it costs nothing and is the only
    *  way a weapon attack renders the same die chips a check already can. */
-  rolls: number[]
+  rolls: RolledDie[]
   mode: 'normal' | 'adv' | 'dis'
   bonus: number
   total: number
@@ -72,8 +76,10 @@ export type AttackRoll = {
 }
 export type DamageRoll = {
   diceExpr: string
-  dice: number[]
+  dice: RolledDie[]
   bonus: number
+  /** Named parts of `bonus`, as on AttackRoll. */
+  terms?: CheckTerm[]
   total: number
   type?: string
   crit: boolean
@@ -112,14 +118,21 @@ export function rollWeaponAttack(
   const atkDiceSum = atkDice.reduce((a, b) => a + b, 0)
   const atkBonus = weaponAttackBonus(weapon, sheet) + atkGraph.flat + atkDiceSum
 
-  const pair = [rollDie(20), rollDie(20)]
-  const d20 = advantage ? Math.max(...pair) : disadvantage ? Math.min(...pair) : pair[0]
+  const pair = rolledDice(2, 20)
+  const faces = pair.map(d => d.v)
+  const d20 = advantage ? Math.max(...faces) : disadvantage ? Math.min(...faces) : faces[0]
   // Threshold from the graph, else the printed 20. Fumble stays a natural 1.
   const crit = d20 >= (atkRes?.critFrom ?? 20)
   const fumble = d20 === 1
   const mode = advantage ? 'adv' as const : disadvantage ? 'dis' as const : 'normal' as const
   const attack: AttackRoll = {
     d20,
+    terms: [
+      { label: weaponAbilityKey(weapon, sheet).toUpperCase(), value: abMod(weapon, sheet) },
+      { label: 'PROF', value: proficiency(sheet) },
+      { label: 'MAGIC', value: weapon.effects?.attack ?? 0 },
+      { label: 'FEAT', value: atkGraph.flat + atkDiceSum },
+    ],
     // Only keep the second die when it was actually contested — otherwise the
     // panel would render a phantom "dropped" chip for a die nobody rolled against.
     rolls: mode === 'normal' ? [pair[0]] : pair,
@@ -131,14 +144,17 @@ export function rollWeaponAttack(
 
   const dmgBonus = weaponDamageBonus(weapon, sheet)
   const parsed = parseDice(weapon.damageDice ?? '')
-  let dice: number[] = []
+  let dice: RolledDie[] = []
   let diceExpr = weapon.damageDice ?? '—'
   if (parsed) {
     const count = crit ? parsed.count * 2 : parsed.count
-    dice = rollDice(count, parsed.sides)
+    // The doubled half is marked, not just counted: "2d12" on a 1d12 weapon is
+    // only explicable if the panel can point at which dice the crit added.
+    dice = rolledDice(count, parsed.sides)
+      .map((d, i) => (crit && i >= parsed.count ? { ...d, crit: true } : d))
     diceExpr = `${count}d${parsed.sides}`
   }
-  const diceSum = dice.reduce((a, b) => a + b, 0)
+  const diceSum = dice.reduce((a, b) => a + b.v, 0)
 
   // Ammunition contributes a FLAT damage bonus, named in the breakdown so the
   // number stays checkable — "+1 (Silvered Arrows)" rather than a total that
@@ -156,8 +172,14 @@ export function rollWeaponAttack(
   const totalDmg = Math.max(0, diceSum + dmgBonus + ammoBonus + dmgGraph.flat + graphDiceSum)
   const damage: DamageRoll = {
     diceExpr, dice, bonus: dmgBonus + ammoBonus + dmgGraph.flat + graphDiceSum,
+    terms: [
+      { label: weaponAbilityKey(weapon, sheet).toUpperCase(), value: abMod(weapon, sheet) },
+      { label: 'MAGIC', value: weapon.effects?.damage ?? 0 },
+      { label: (ammo?.label ?? 'AMMO').toUpperCase(), value: ammoBonus },
+      { label: 'FEAT', value: dmgGraph.flat + graphDiceSum },
+    ],
     total: totalDmg, type: weapon.type, crit,
-    breakdown: `${diceExpr}(${dice.join(' + ') || 0}) ${formatMod(dmgBonus)}`
+    breakdown: `${diceExpr}(${dice.map(d => d.v).join(' + ') || 0}) ${formatMod(dmgBonus)}`
       + (ammoBonus ? ` ${formatMod(ammoBonus)} (${ammo!.label})` : '')
       + (dmgGraph.flat ? ` ${formatMod(dmgGraph.flat)}` : '')
       + (graphDice.length ? ` + ${dmgGraph.dice.join(' + ')}(${graphDice.join(' + ')})` : ''),

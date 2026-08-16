@@ -140,6 +140,8 @@ export function planActivation(
       continue
     }
 
+    // §25's strings are prose, not state — an activation cannot store one.
+    if (v.t === 'str') continue
     const set = v.t === 'bool' ? v.v : v.flat
     // A stored variable's declared type is load-bearing everywhere else; do not
     // let an activation be the one place it drifts.

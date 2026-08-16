@@ -10,15 +10,20 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import type { ReactNode } from 'react'
 import type { AttackRoll, DamageRoll } from './weapons'
 import type { AuditItem, Rider } from './graph'
+import type { RolledDie } from './dice'
+import type { CheckTerm } from './dnd'
 
 /** A d20 roll behind an ability check, saving throw, or skill check — rolled on
  *  the Character screen. `rolls` holds one entry normally, two under adv/dis. */
 export type CheckRoll = {
   mode: 'normal' | 'adv' | 'dis'
-  rolls: number[]
+  rolls: RolledDie[]
   pick: number
   /** e.g. "14 + 2 DEX + 3 PROF" — everything except the trailing "= total". */
   breakdown: string
+  /** The same parts, unjoined. The panel's modifier read-out itemises them, and
+   *  re-splitting the string to get there would be parsing our own output. */
+  terms?: CheckTerm[]
   total: number
   crit: boolean
   fumble: boolean
@@ -38,6 +43,11 @@ export type RollEntry = {
   damage?: DamageRoll
   /** Ability check / saving throw / skill check rolls (Character screen). */
   check?: CheckRoll
+  /** What this roll was ABOUT — the instance id on the character, so the panel's
+   *  catalog sheet can look it up. Not a gid: a gid falls back to the instance id
+   *  when `item_id` is absent (§43), and this lookup is local anyway. Absent for
+   *  a save or a check, which are about nothing you could open an entry on. */
+  subject?: { kind: 'weapon' | 'feature' | 'spell' | 'item'; id: string }
   /** Generic result lines (heal, buff applied, …) for non-weapon rolls. */
   lines?: RollLine[]
   /** Feature-graph contributions the player still has a say in, or that are

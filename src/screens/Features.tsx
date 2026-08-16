@@ -145,7 +145,7 @@ export function Features() {
     setBusy(false)
 
     const subtitle = f.uses ? `${remaining} / ${f.uses.max} uses left` : (f.usage ?? 'Feature')
-    addRoll({ kind: 'custom', title: f.name, subtitle, icon: f.icon, lines })
+    addRoll({ kind: 'custom', title: f.name, subtitle, icon: f.icon, lines, subject: { kind: 'feature', id: f.id } })
   }
 
   // Bucket features by category, preserving GROUPS order. Anything missing or

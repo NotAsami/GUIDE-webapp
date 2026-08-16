@@ -16,9 +16,16 @@
  */
 import type { Rider } from './graph.ts'
 import type { RollEntry } from './rolls.tsx'
-import { parseDice } from './dice.ts'
+import type { CheckTerm } from './dnd.ts'
+import type { CharacterRow, ShardTree } from './database.types.ts'
+import { activeSources } from './effects.ts'
+import { rerollDie, type RolledDie } from './dice.ts'
 
-export type Die = { v: number; sides: number; dropped?: boolean }
+/** `dropped` is a property of this LINE, not of the die — the same face is kept
+ *  under advantage and discarded under disadvantage — so it lives here and not
+ *  on `RolledDie`. Everything else the chip needs (sides, orig, rerolled) rides
+ *  with the die itself. */
+export type Die = RolledDie & { dropped?: boolean }
 
 export type RollLineView = {
   kind: 'attack' | 'damage' | 'check'
@@ -28,6 +35,9 @@ export type RollLineView = {
   /** 'vs' joins the dice under adv/dis — two contested rolls, not a sum. */
   mode?: 'adv' | 'dis'
   mods: number
+  /** `mods`, itemised, for the modifier read-out. Empty when the producer did
+   *  not name its parts — the chip still shows the sum. */
+  modParts: CheckTerm[]
   type?: string
   crit?: boolean
   total: number
@@ -41,7 +51,10 @@ export type RiderView = {
   /** Index within the entry's flattened rider list — the patch address. */
   index: number
   group: string
-  kind: 'value' | 'flag'
+  /** `note` contributes nothing and grants nothing: answering it REVEALS. It is
+   *  its own kind rather than a flag with no flag, which is what it would look
+   *  like otherwise. */
+  kind: 'value' | 'flag' | 'note'
   grants?: FlagName
   /** Contributing right now: resolved, or a flag the player switched on, or an
    *  answered value rider whose dice have been rolled. */
@@ -57,7 +70,7 @@ const FLAG: Partial<Record<Rider['op'], FlagName>> = {
  *  its formula — the formula is what it shows before the player answers. */
 export function riderValue(r: Rider): number {
   if (r.op !== 'add') return 0
-  if (r.when === 'manual') return r.rolled ? (r.rolledDice ?? []).reduce((a, b) => a + b, 0) + r.flat : 0
+  if (r.when === 'manual') return r.rolled ? (r.rolledDice ?? []).reduce((a, b) => a + b.v, 0) + r.flat : 0
   return r.flat
 }
 
@@ -66,10 +79,14 @@ export function riderViews(entry: RollEntry): RiderView[] {
   let i = 0
   for (const g of entry.riderGroups ?? []) {
     for (const rider of g.riders) {
-      const kind = rider.op === 'add' ? 'value' as const : 'flag' as const
+      const kind = rider.op === 'add' ? 'value' as const
+        : rider.op === 'note' ? 'note' as const
+        : 'flag' as const
+      // A flag and a note both settle the moment they are switched on — there is
+      // nothing left to roll. Only a value rider waits on dice.
       const live = rider.when !== 'manual'
         ? true
-        : rider.on && (kind === 'flag' || !!rider.rolled)
+        : rider.on && (kind !== 'value' || !!rider.rolled)
       out.push({ rider, index: i++, group: g.label, kind, grants: FLAG[rider.op], live, value: riderValue(rider) })
     }
   }
@@ -79,54 +96,200 @@ export function riderViews(entry: RollEntry): RiderView[] {
 export const resolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when !== 'manual')
 export const unresolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when === 'manual')
 
-/** Die list for a dice expression plus its rolled faces. `sides` is recovered
- *  from the expression rather than stored, so nothing else had to change. */
-function dice(expr: string | undefined, faces: number[]): Die[] {
-  const sides = parseDice(expr ?? '')?.sides ?? 20
-  return faces.map(v => ({ v, sides }))
-}
-
 /** The d20 line for a check or an attack: both dice, the loser struck through. */
 function d20Line(
   kind: 'attack' | 'check', label: string,
-  rolls: number[], pick: number, mods: number,
+  rolls: RolledDie[], pick: number, mods: number, modParts: CheckTerm[],
   mode: 'normal' | 'adv' | 'dis', crit: boolean,
 ): RollLineView {
   // Mark exactly ONE die as kept, even when both show the same face — otherwise
   // a double 17 under advantage renders as two dropped dice and no winner.
   let kept = false
-  const list: Die[] = rolls.map(v => {
-    const isPick = !kept && v === pick
+  const list: Die[] = rolls.map(d => {
+    const isPick = !kept && d.v === pick
     if (isPick) kept = true
-    return { v, sides: 20, dropped: rolls.length > 1 && !isPick }
+    return { ...d, dropped: rolls.length > 1 && !isPick }
   })
   return {
     kind, label, formula: rolls.length > 1 ? '2d20' : 'd20', dice: list,
     mode: mode === 'normal' ? undefined : mode,
-    mods, crit, total: pick + mods,
+    mods, modParts: modParts.filter(t => t.value !== 0), crit, total: pick + mods,
   }
 }
 
 export function lineViews(entry: RollEntry): RollLineView[] {
   const out: RollLineView[] = []
   const a = entry.attack
-  if (a) out.push(d20Line('attack', 'Attack', a.rolls ?? [a.d20], a.d20, a.bonus, a.mode ?? 'normal', a.crit))
+  if (a) {
+    const rolls = a.rolls ?? [{ v: a.d20, sides: 20 }]
+    out.push(d20Line('attack', 'Attack', rolls, a.d20, a.bonus, a.terms ?? [], a.mode ?? 'normal', a.crit))
+  }
 
   const d = entry.damage
   if (d) {
     out.push({
       kind: 'damage', label: 'Damage', formula: d.diceExpr,
-      dice: dice(d.diceExpr, d.dice), mods: d.bonus, type: d.type,
-      crit: d.crit, total: d.total,
+      dice: d.dice, mods: d.bonus, modParts: (d.terms ?? []).filter(t => t.value !== 0), type: d.type,
+      crit: d.crit, total: damageTotal(d.dice, d.bonus),
     })
   }
 
   const c = entry.check
   if (c) {
     const mods = c.total - c.pick
-    out.push(d20Line('check', entry.kind === 'save' ? 'Save' : 'Check', c.rolls, c.pick, mods, c.mode, c.crit))
+    out.push(d20Line('check', entry.kind === 'save' ? 'Save' : 'Check', c.rolls, c.pick, mods, c.terms ?? [], c.mode, c.crit))
   }
   return out
+}
+
+/* ---------------- reroll ----------------
+ *
+ * One die, rerolled in place, and every number above it moves. Totals are stored
+ * on the roll (they were computed when it happened), so this recomputes the ones
+ * the die feeds and returns them as a patch — the log stays the single writer.
+ *
+ * WHAT IT DELIBERATELY DOES NOT TOUCH: `crit` and `fumble`. The crit already
+ * decided how many damage dice exist; un-deciding it from a rerolled d20 would
+ * leave a doubled damage roll attached to a hit that is no longer a crit. The
+ * mockup freezes them at roll time for the same reason. */
+
+const damageTotal = (dice: RolledDie[], bonus: number) =>
+  Math.max(0, dice.reduce((a, b) => a + b.v, 0) + bonus)
+
+/** Which die the panel is pointing at — `line` indexes lineViews().
+ *
+ *  A rider's dice are deliberately NOT addressable: they only ever exist once
+ *  the rider is locked, and a locked value is settled (§8 #2). That is also why
+ *  the mockup's own reroll handler skips them. */
+export type DieAddr = { line: number; die: number }
+
+const pickOf = (rolls: RolledDie[], mode: 'normal' | 'adv' | 'dis') => {
+  const faces = rolls.map(d => d.v)
+  return mode === 'adv' ? Math.max(...faces) : mode === 'dis' ? Math.min(...faces) : faces[0]
+}
+
+/** Reroll one die and return the entry patch, or null if that die cannot be
+ *  rerolled — a dropped die never counted, and a locked rider's value is settled
+ *  (§8 #2). Pure: it rolls, but it does not write. */
+export function rerollAt(entry: RollEntry, addr: DieAddr): Partial<RollEntry> | null {
+  const line = lineViews(entry)[addr.line]
+  const die = line?.dice[addr.die]
+  if (!die || die.dropped) return null
+  const roll = (list: RolledDie[]) => list.map((d, k) => (k === addr.die ? rerollDie(d) : d))
+
+  if (line.kind === 'damage' && entry.damage) {
+    const dice = roll(entry.damage.dice)
+    return { damage: { ...entry.damage, dice, total: damageTotal(dice, entry.damage.bonus) } }
+  }
+  if (line.kind === 'attack' && entry.attack) {
+    const rolls = roll(entry.attack.rolls ?? [])
+    const d20 = pickOf(rolls, entry.attack.mode ?? 'normal')
+    return { attack: { ...entry.attack, rolls, d20, total: d20 + entry.attack.bonus } }
+  }
+  if (line.kind === 'check' && entry.check) {
+    const rolls = roll(entry.check.rolls)
+    const pick = pickOf(rolls, entry.check.mode)
+    return { check: { ...entry.check, rolls, pick, total: pick + line.mods } }
+  }
+  return null
+}
+
+/* ---------------- the catalog sheet ----------------
+ *
+ * WHY THIS READS THE CHARACTER AND NOT A CATALOG TABLE: every catalog
+ * (`item_catalog`, `spell_catalog`, `feature_catalog`, `effect_catalog`) is
+ * DM-only — checked across all 13 migrations, none of them carries a player
+ * policy. A player's client gets zero rows. So the sheet reads the snapshots on
+ * their own character row, which is the pattern the rest of the app already
+ * uses: "the player never reads the effect catalog, so this is the one copy
+ * their Effects panel has."
+ *
+ * A subject that is no longer active resolves to null — gear unequipped, a
+ * feature removed since the roll. The panel says so rather than drawing a blank
+ * sheet. */
+export type CatalogView = {
+  name: string
+  /** The line under the name — "Martial Weapon · Two-Handed". */
+  kind: string
+  icon: string
+  /** Second half of that line, when there is one (a spell's school). */
+  school?: string
+  stats: [string, string][]
+  damage: [string, string][]
+  /** Markdown; rendered with the app's own Prose. */
+  desc: string
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const joinKind = (...parts: (string | undefined)[]) => parts.filter(Boolean).join(' · ')
+
+export function catalogView(
+  character: CharacterRow | null,
+  subject: RollEntry['subject'],
+  shardTrees: Record<string, ShardTree> = {},
+): CatalogView | null {
+  if (!character || !subject) return null
+  const src = activeSources(character, shardTrees)
+    .find(s => s.kind === subject.kind && (s.obj as { id?: string }).id === subject.id)
+  if (!src) return null
+
+  if (src.kind === 'weapon') {
+    const w = src.obj
+    return {
+      name: w.name, icon: w.icon ?? 'fa-khanda',
+      kind: joinKind(w.rarity && cap(w.rarity), 'Weapon', ...(w.properties ?? [])),
+      stats: [
+        ['Hand', w.hand === 'main' ? 'Main Hand' : w.hand === 'off' ? 'Off Hand' : 'Equipped'],
+        ['Ability', (w.ability ?? 'str').toUpperCase()],
+        ...(w.weight ? [['Weight', `${w.weight} lb`] as [string, string]] : []),
+        ...(w.rows ?? []),
+      ],
+      damage: w.damageDice ? [[w.damageDice, w.type ?? '—']] : [],
+      desc: w.flavor ?? '',
+    }
+  }
+  if (src.kind === 'feature') {
+    const f = src.obj
+    return {
+      name: f.name, icon: f.icon ?? 'fa-star',
+      kind: joinKind(f.kind && cap(f.kind), f.source, f.level ? `Level ${f.level}` : undefined),
+      stats: [
+        ...(f.usage ? [['Usage', f.usage] as [string, string]] : []),
+        ...(f.uses ? [['Uses', `${f.uses.current} / ${f.uses.max}`] as [string, string]] : []),
+        ...(f.rows ?? []),
+      ],
+      damage: [],
+      desc: [f.light_description ?? f.summary, f.deep_description ?? f.description]
+        .filter(Boolean).join('\n\n'),
+    }
+  }
+  if (src.kind === 'spell') {
+    const s = src.obj
+    return {
+      name: s.name, icon: s.icon ?? 'fa-wand-sparkles', school: cap(s.school),
+      kind: s.level === 0 ? 'Cantrip · Level 0' : `Level ${s.level}`,
+      stats: [
+        ['Casting Time', s.castingTime], ['Range', s.range], ['Duration', s.duration],
+        ['Components', [s.v && 'V', s.s && 'S', s.m && 'M'].filter(Boolean).join(', ') || '—'],
+      ],
+      damage: s.hasDamage && s.dice ? [[s.dice, s.dmgType ?? '—']] : [],
+      desc: s.desc,
+    }
+  }
+  if (src.kind === 'item') {
+    const it = src.obj
+    return {
+      name: it.name, icon: it.icon ?? 'fa-cube',
+      kind: joinKind(it.rarity && cap(it.rarity), it.category && cap(it.category), it.attune),
+      stats: [
+        ...(it.weight ? [['Weight', `${it.weight} lb`] as [string, string]] : []),
+        ...(it.rows ?? []),
+      ],
+      damage: [],
+      desc: it.flavor ?? '',
+    }
+  }
+  return null
 }
 
 export type RollTotals = {

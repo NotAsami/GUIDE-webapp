@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ExprScope } from './expr.ts'
-import { evalExpr, ROLL_IDENTS, VAR_IDENTS } from './expr.ts'
+import { evalExpr, interpolate, interpolations, ROLL_IDENTS, VAR_IDENTS } from './expr.ts'
 
 /** A variable formula's scope (§33): the whitelist plus declared variables. The
  *  Arbiter path values are §21's, which is the content that forced this engine. */
@@ -182,4 +182,44 @@ test('arithmetic holes §36 leaves open are rejections, not Infinity or a fracti
   assert.equal(evalExpr('5 / 0', VARS), null)
   assert.equal(evalExpr('level / (prof - 3)', VARS), null) // zero divisor via an expression
   assert.equal(evalExpr('1.5 * 2d6', VARS), null) // would be 3d6 by luck, 4.5d6 in general
+})
+
+// --- §25 inline compute ------------------------------------------------------
+
+test('interpolate computes each span and leaves the rest of the sentence alone', () => {
+  const out = interpolate('DC {8 + prof + wis}, Wisdom save.', { prof: 3, wis: 4 })
+  assert.equal(out.text, 'DC 15, Wisdom save.')
+  assert.deepEqual(out.bad, [])
+})
+
+test('a dice value reads as its expression, not as a rolled number', () => {
+  // Display must not roll. §13: an unrolled term is the whole point.
+  assert.equal(interpolate('Deals {2d6 + 1}.', {}).text, 'Deals 2d6 + 1.')
+})
+
+test('a bare boolean is refused — prose needs a phrase, not "true"', () => {
+  const out = interpolate('It is {raging}.', { raging: true })
+  assert.equal(out.text, 'It is {raging}.')
+  assert.deepEqual(out.bad, ['raging'])
+  // §25's own shape: a ternary picking a phrase.
+  assert.equal(interpolate('It is{raging ? " raging" : " calm"}.', { raging: true }).text, 'It is raging.')
+})
+
+test('a failed span is left verbatim and named, never silently dropped', () => {
+  const out = interpolate('DC {8 + nope} and {2 * 3}.', {})
+  assert.equal(out.text, 'DC {8 + nope} and 6.')
+  assert.deepEqual(out.bad, ['8 + nope'])
+})
+
+test('interpolations() finds every source, for the audit and the usage scan', () => {
+  assert.deepEqual(interpolations('a {x} b {y + 1} c'), ['x', 'y + 1'])
+  assert.deepEqual(interpolations('no braces here'), [])
+})
+
+test('string literals exist only to be chosen between', () => {
+  assert.deepEqual(evalExpr('"held"', {}), { t: 'str', v: 'held' })
+  assert.deepEqual(evalExpr('true ? "a" : "b"', {}), { t: 'str', v: 'a' })
+  assert.equal(evalExpr('"a" + "b"', {}), null)        // no string arithmetic
+  assert.equal(evalExpr('true ? "a" : 1', {}), null)   // §36: branches share a type
+  assert.equal(evalExpr('"unterminated', {}), null)
 })

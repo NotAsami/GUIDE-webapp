@@ -24,10 +24,11 @@
 
 import type { CharacterRow, GraphEffect, GraphOp, ShardTree, VarDef } from './database.types.ts'
 import type { ExprScope, FormulaValue } from './expr.ts'
-import { ROLL_IDENTS, VAR_IDENTS, evalExpr, freeIdents } from './expr.ts'
+import { ROLL_IDENTS, VAR_IDENTS, evalExpr, freeIdents, interpolate, interpolations } from './expr.ts'
 import { type ActiveSource, activeSources, effectiveSheet } from './effects.ts'
 import { IS_ACTIVATION, OPS } from './opSchema.ts'
 import { abilities, abilityMod, proficiency } from './dnd.ts'
+import type { RolledDie } from './dice.ts'
 
 /** Lifted from ShardLattice.tsx so the engine and the lattice editor share one
  *  audit vocabulary rather than growing two. `t` is the title, `s` the sentence,
@@ -235,7 +236,9 @@ export function characterVars(
   walkDerived(
     [...bindings.values()].map(b => b.def),
     scope,
-    v => (v.t === 'arr' || (v.t === 'num' && v.dice.length) ? null : v.t === 'bool' ? v.v : v.flat),
+    // A variable is num or bool (§30). An array, an unrolled dice term, or §25's
+    // display-only string are all "not a value this can store".
+    v => (v.t === 'arr' || v.t === 'str' || (v.t === 'num' && v.dice.length) ? null : v.t === 'bool' ? v.v : v.flat),
     audit,
   )
 
@@ -402,6 +405,16 @@ export type Rider = {
   when: 'always' | 'manual' | 'active'
   /** `active` and `always` riders arrive already resolved; `manual` ones start off. */
   on: boolean
+  /** What answering YES reveals — §25 inline compute already applied. A `note`
+   *  carrying an interpolation is the one prose shape a toggle earns its place
+   *  on: the DC exists only if the hit landed, so it is shown only once the
+   *  player says it did. Absent on every other rider. */
+  reveal?: string
+  /** The QUESTION, for a `manual` rider — the authored `ask` sentence, verbatim.
+   *  It is prose ("at least one of them failed the save"), so it reads as prose
+   *  under the rider's name rather than being crushed into the uppercased,
+   *  letter-spaced name slot. */
+  text?: string
   dmgType?: string
   /** Set once the player has answered a `manual` rider and its dice were rolled.
    *  Written by the Roll Context Panel, never by resolve() — which keeps the
@@ -409,8 +422,10 @@ export type Rider = {
    *  affordance is gone and toggling reuses the value, so reopening the panel
    *  can never re-roll (§8 #2). */
   rolled?: boolean
-  /** The faces that came up, once `rolled`. `dice` stays the unrolled formula. */
-  rolledDice?: number[]
+  /** The faces that came up, once `rolled`. `dice` stays the unrolled formula.
+   *  Full dice, not bare numbers: a chip that does not know it is a d4 cannot
+   *  say whether a 4 was a maximum, and cannot be rerolled. */
+  rolledDice?: RolledDie[]
 }
 
 export type Resolution = {
@@ -582,12 +597,32 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
       if (!cond.v) continue // false → does not surface, with or without `ask`
     }
 
-    // A note is prose; there is nothing for the player to resolve, so it lands
-    // whenever its `when` holds. `ask` on a note is an authoring error, caught by
-    // auditNode rather than half-honoured here.
+    // A note is prose, and §25's inline compute is what keeps that prose from
+    // quietly lying: `{level * 2}` renders as the number, never as the source.
+    // This is display only — nothing here reaches a total.
+    //
+    // `ask` on a note is NOT always an authoring error. A note that only carries
+    // text has nothing to resolve, and §40 was right to refuse a toggle on it.
+    // A note whose text computes something is the opposite case: the value is
+    // worth revealing exactly when the player confirms the condition, and
+    // refusing that shape forces the author into a meaningless `add` of 0 to buy
+    // a checkbox. So it falls through to the rider path below and rides on the
+    // same `ask` group as any contribution sharing the question — one fact, one
+    // checkbox, whether the fact is a bonus or a DC.
+    let reveal: string | undefined
     if (eff.op === 'note') {
-      out.notes.push(eff.text || eff.label)
-      continue
+      const { text, bad } = interpolate(eff.text || eff.label, ctx.scope)
+      for (const src of bad) {
+        out.problems.push({
+          sev: 'err', id: eff.id, t: 'Note did not compute',
+          s: `${eff.label}'s text reads "{${src}}", which produced no value at these values.`,
+        })
+      }
+      if (!eff.ask) {
+        out.notes.push(text)
+        continue
+      }
+      reveal = text
     }
 
     // Damage flags are not roll modifiers — they answer "what happens when fire
@@ -633,6 +668,8 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
       dice: v.dice,
       when: eff.ask ? 'manual' : 'active',
       on: !eff.ask,
+      text: eff.ask,
+      reveal,
       dmgType: eff.dmgType,
     }
 
@@ -642,10 +679,18 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
       if (existing) {
         existing.flat += rider.flat
         existing.dice.push(...rider.dice)
+        // A note sharing the question with a contribution is the whole point of
+        // grouping: "+2d8 radiant" and "DC 16, Wisdom" are one confirmation.
+        if (rider.reveal) existing.reveal = existing.reveal ? `${existing.reveal}
+
+${rider.reveal}` : rider.reveal
         continue
       }
       askGroups.set(eff.ask, rider)
-      rider.label = eff.ask
+      // The rider keeps the FIRST contributor's label as its name and carries the
+      // ask sentence as its question. Effects sharing an ask are one decision, so
+      // one of them has to speak for the group; the sentence is what they all
+      // actually have in common and it is shown in full either way.
     }
 
     // An `active` rider is already resolved, so its value applies now — the
@@ -764,8 +809,13 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
         s: `${eff.label || eff.id} has both a condition and a toggle. While "${eff.when}" is false it does not surface at all — the player is not offered a choice they could not take.`,
       })
     }
-    if (eff.op === 'note' && eff.ask) {
-      out.push({ sev: 'err', id: eff.id, t: 'Toggle on a note', s: `${eff.label || eff.id} is prose — there is nothing for the player to resolve. Use \`when\` if it should be conditional.` })
+    // §40 refused every toggle on a note, on the grounds that prose has nothing
+    // to resolve. That holds for a note that only carries text — and NOT for one
+    // whose text computes something, where the toggle is what decides whether
+    // the player should see the number at all. The rule now asks the question it
+    // always meant: does answering this reveal anything?
+    if (eff.op === 'note' && eff.ask && !interpolations(eff.text || eff.label).length) {
+      out.push({ sev: 'err', id: eff.id, t: 'Toggle on a note', s: `${eff.label || eff.id} is prose with nothing to reveal — there is nothing for the player to resolve. Use \`when\` if it should be conditional, or interpolate a value into the text if the toggle is what decides whether they see it.` })
     }
     if (IS_ACTIVATION(eff.op)) {
       // An activation names a variable rather than a target: it writes state, it
@@ -834,6 +884,20 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
       }
     }
 
+    // §25's inline compute is a formula in a sentence, and gets the same two
+    // checks as one in a field. Without this the author discovers a typo when a
+    // player sees raw braces in their rule text.
+    if (eff.op === 'note') {
+      for (const src of interpolations(eff.text || eff.label)) {
+        const unknown = freeIdents(src).filter(id => !allowed.has(id))
+        if (unknown.length) {
+          out.push({ sev: 'err', id: eff.id, t: 'Unknown identifier', s: `${eff.label || eff.id}'s text reads "${unknown[0]}", which nothing declares.` })
+        } else if (evalExpr(src, scope) === null) {
+          out.push({ sev: 'err', id: eff.id, t: 'Bad note text', s: `${eff.label || eff.id}'s text computes "{${src}}", which does not evaluate.` })
+        }
+      }
+    }
+
     // Every filled cell of a level table is a formula too. Reported once rather
     // than twenty times — the author fixes the table, not each slot.
     const badCells = (eff.byLevel ?? [])
@@ -855,6 +919,15 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
     if (eff.variable) referenced.add(eff.variable)
     for (const src of [eff.value, eff.when, eff.threshold, ...(eff.byLevel ?? [])]) {
       for (const id of freeIdents(src ?? '')) referenced.add(id)
+    }
+    // A variable read ONLY by §25's inline compute is still read. Missing these
+    // would warn on most of what inline compute exists for — a value the player
+    // reads in prose and nothing else consults — and train the author to ignore
+    // the one warning that catches real dead state.
+    if (eff.op === 'note') {
+      for (const src of interpolations(eff.text || eff.label)) {
+        for (const id of freeIdents(src)) referenced.add(id)
+      }
     }
   }
   for (const d of node.vars ?? []) {

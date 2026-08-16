@@ -25,6 +25,11 @@
   --good:       #4fae6b;
   /* Shard branch palette (Shard Tree / Shard Lattice Editor) — grit/ash spoke. */
   --violet:     #a07ad6;
+  /* Damage-type accents (Roll Context Panel). Cold gets its own hue rather than
+     borrowing cyan: cyan is the player's own voice on that rail, so a cold damage
+     chip painted cyan reads as "yours" instead of "frost". */
+  --teal:       #3fc7b4;
+  --violet-hot: #a594ba;
 
   /* Extended rarity scale (Operator Console catalog). The player screens only
      needed common→legendary; the catalog also reads very-rare. */

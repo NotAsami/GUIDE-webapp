@@ -30,6 +30,33 @@ export function rollDice(count: number, sides: number): number[] {
   return Array.from({ length: Math.max(0, count) }, () => rollDie(sides))
 }
 
+/** One die as it sits in a roll record.
+ *
+ *  `sides` travels WITH the die rather than being recovered from the expression
+ *  that produced it — a d20 pair and a 2d6 damage roll end up in the same
+ *  renderer, and asking it to re-parse "2d6" to learn what a chip means is how
+ *  a 6 gets drawn as a maximum roll on a d8.
+ *
+ *  `orig` is the FIRST face this die showed, written once. Rerolling twice must
+ *  still be able to say what it originally was, so a reroll never overwrites an
+ *  `orig` that is already set.
+ *
+ *  `crit` marks a die that exists ONLY because the attack critted — the extra
+ *  half of a doubled damage roll. The panel paints those apart so "why is this
+ *  2d12" answers itself. */
+export type RolledDie = {
+  v: number; sides: number
+  orig?: number; rerolled?: boolean
+  crit?: boolean
+}
+
+export const rolledDice = (count: number, sides: number): RolledDie[] =>
+  rollDice(count, sides).map(v => ({ v, sides }))
+
+/** Reroll one die, preserving the face it first showed. */
+export const rerollDie = (d: RolledDie): RolledDie =>
+  ({ ...d, v: rollDie(d.sides), orig: d.orig ?? d.v, rerolled: true })
+
 /** Roll a heal/amount expression: a flat number, "2d4", or "2d4 + 2". Returns the
  *  total (floored at 0) and a human breakdown for the toast. */
 export function rollHeal(amount: number | string): { total: number; breakdown: string } {
@@ -63,5 +90,22 @@ export function rollDiceTerms(exprs: string[], double = false): number[] {
     const sign = p.count < 0 ? -1 : 1
     const rolled = rollDice(Math.abs(p.count) * (double ? 2 : 1), p.sides).map(v => v * sign)
     return p.mod ? [...rolled, p.mod] : rolled
+  })
+}
+
+/** The same roll, as dice that remember what they are — for anything a player
+ *  will SEE as chips (rider results) rather than just add up.
+ *
+ *  A term's trailing `mod` is dropped rather than rendered as a die, because it
+ *  isn't one. Graph dice never carry one: lib/expr.ts splits a formula into a
+ *  flat part and dice terms before this ever sees it, and the flat part rides on
+ *  the rider itself. */
+export function rolledDiceTerms(exprs: string[], double = false): RolledDie[] {
+  return exprs.flatMap(expr => {
+    const p = parseDice(expr)
+    if (!p) return []
+    const sign = p.count < 0 ? -1 : 1
+    return rollDice(Math.abs(p.count) * (double ? 2 : 1), p.sides)
+      .map(v => ({ v: v * sign, sides: p.sides }))
   })
 }

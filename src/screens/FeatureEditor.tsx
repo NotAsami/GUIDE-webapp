@@ -1359,7 +1359,11 @@ function SchemaField({ fd, eff, ei, setEffect, vars }: {
       placeholder={fd.example} onChange={e => put(e.target.value)} /></>
   }
   if (fd.type === 'enum') {
-    return <>{label}<select className={styles.in} value={String(raw ?? '')} onChange={e => put(e.target.value)}>
+    // An OPTIONAL enum needs a way back to unset, or the first option becomes a
+    // value the author never chose. Stored as absent, not as an empty string.
+    return <>{label}<select className={styles.in} value={String(raw ?? '')}
+      onChange={e => put(e.target.value || undefined)}>
+      {!fd.required && <option value="">—</option>}
       {(fd.options ?? []).map(o => <option key={o}>{o}</option>)}
     </select></>
   }
@@ -1505,6 +1509,7 @@ const HELP = {
       <>
         <p><code>ask</code> turns the node into a toggle the <em>player</em> flips at the table. The text you write is the label on that toggle.</p>
         <p className={styles.mono}>Orthogonal to <code>when</code>. A node can have both: the app checks whether the choice is legal, the player chooses whether to spend it. Two effects sharing one <code>ask</code> label become one checkbox.</p>
+        <p className={styles.mono}>On a <code>note</code> it REVEALS rather than applies — legal only when the text computes something, so the DC shows once the player confirms the hit landed. A note with nothing to compute has nothing to resolve; use <code>when</code>.</p>
         <div className={styles.dl}>
           <span className={styles.k}>Example</span><span className={styles.v}>Spend a use to press the attack?</span>
           <span className={styles.k}>Empty</span><span className={styles.v}>No prompt — the node applies on its own.</span>
