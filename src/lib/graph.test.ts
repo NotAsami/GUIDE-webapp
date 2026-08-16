@@ -1460,3 +1460,31 @@ test('every roll selector the editor offers is one a roll surface can pass', () 
   const stray = ROLL_SELECTORS.filter(r => !PASSED_BY_A_SURFACE.has(r) && !KNOWN_DEAD.has(r))
   assert.deepEqual(stray, [], `selector(s) no roll surface passes: ${stray.join(', ')}`)
 })
+
+// --- §6b: the audit is kind-agnostic ----------------------------------------
+
+test('auditNode reads a spell-shaped node exactly as it reads a feature', () => {
+  // The extraction assumes this: the same block authors a spell, an item and a
+  // shard node, so the audit cannot be feature-shaped. Its signature is already
+  // `{ graph?, vars? }` — this pins that it stays that way.
+  const node = {
+    vars: [{ name: 'shardsHeld', kind: 'stored', type: 'num' }] as VarDef[],
+    graph: [
+      { id: 'e1', op: 'add', value: 'shardsHeld * 2', label: 'Zealot', target: ['roll:damage'] },
+    ] as GraphEffect[],
+  }
+  assert.deepEqual(auditNode(node), [])
+  // …and the same node with a typo reports against the same vocabulary.
+  assert.ok(auditNode({ ...node, graph: [{ ...node.graph[0], value: 'shardsHelt * 2' }] })
+    .some(a => a.sev === 'err' && a.t === 'Unknown identifier'))
+})
+
+test('a dangling target is reported only when there IS a catalog to check', () => {
+  // auditNode skips dangling detection on an empty node list, which is why every
+  // host must gate its audit on the libraries having loaded. A clean report from
+  // an unloaded catalog is a lie, and the spell form gates on `ready` for this.
+  const node = { graph: [{ id: 'e1', op: 'add', value: '2', label: 'X', target: ['spell:nope'] }] as GraphEffect[] }
+  assert.equal(auditNode(node).filter(a => a.t === 'Dangling target').length, 0)
+  assert.equal(auditNode(node, [{ gid: 'spell:real' }]).filter(a => a.t === 'Dangling target').length, 1)
+  assert.equal(auditNode(node, [{ gid: 'spell:nope' }]).filter(a => a.t === 'Dangling target').length, 0)
+})

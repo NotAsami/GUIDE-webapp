@@ -7,8 +7,10 @@ import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import { MOD_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
-import type { GraphState, ShardSlot, ShardTree } from '../lib/database.types'
-import { characterVars } from '../lib/graph'
+import type { GraphEffect, GraphState, ShardSlot, ShardTree, VarDef } from '../lib/database.types'
+import { auditNode, characterVars } from '../lib/graph'
+import { GraphEffects, VarsBlock } from '../components/GraphEffects'
+import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphState'
 import { longRestPatch } from '../lib/rest'
 import { effectiveSheet } from '../lib/effects'
@@ -2495,6 +2497,17 @@ function SpellForm({ spell, onSubmit, onDelete }: {
 }) {
   const d = spell?.data
   const [name, setName] = useState(d?.name ?? '')
+  // Roll contributions and the variables they read. Slice 6a made these resolve;
+  // until 6b nothing could write them, so `graph` was a field the engine read and
+  // no DM could set.
+  const [graph, setGraph] = useState<GraphEffect[]>(d?.graph ?? [])
+  const [vars, setVars] = useState<VarDef[]>(d?.vars ?? [])
+  const [gfxOpen, setGfxOpen] = useState(false)
+  const { nodes, namesByGid, ready } = useCatalogNodes()
+  // auditNode skips dangling-target detection on an empty catalog, so a clean
+  // report before the libraries load would be a lie. See lib/useCatalogNodes.ts.
+  const gAudit = ready ? auditNode({ graph, vars }, nodes) : []
+  const gErrs = gAudit.filter(a => a.sev === 'err')
   const [level, setLevel] = useState(d?.level ?? 0)
   const [school, setSchool] = useState<SpellSchool>(d?.school ?? 'Evocation')
   const [icon, setIcon] = useState(d?.icon ?? '')
@@ -2534,6 +2547,10 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       v, s, m,
       ...(m && material.trim() ? { material: material.trim() } : {}),
       duration: duration.trim(), concentration, ritual, desc: desc.trim(), hasDamage,
+      // Omitted when empty so a spell with no graph never grows the keys — the
+      // same discipline withVars() keeps on `resources`.
+      ...(graph.length ? { graph } : {}),
+      ...(vars.length ? { vars } : {}),
       ...(hasDamage ? {
         dice: dice.trim(), scaling: scaling.trim(), dmgType: dmgType.trim(),
         ...(dmgColor ? { dmgColor } : {}),
@@ -2717,8 +2734,41 @@ function SpellForm({ spell, onSubmit, onDelete }: {
         </div>
       )}
 
+      {/* ROLL CONTRIBUTIONS — the same block the feature editor authors, in the
+          fold idiom the item form's "Effects Granted" already uses. Collapsed by
+          default, because most spells have none.
+
+          Distinct from an item's `effects`: that is the passive numeric layer,
+          this is per-roll and conditional (database.types.ts:513). */}
+      <div className={cx(styles.catFx, styles.fold, gfxOpen && styles.open)}>
+        <div className={styles.fxfHead} onClick={() => setGfxOpen(o => !o)} role="button" tabIndex={0} aria-expanded={gfxOpen}>
+          <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
+          <i className="fa-solid fa-diagram-project" style={{ color: 'var(--cyan-hot)', fontSize: 11 }} />
+          <span className={styles.t}>Roll Contributions</span>
+          <span className={styles.s}>
+            {graph.length
+              ? `${graph.length} effect${graph.length === 1 ? '' : 's'}${gErrs.length ? ` · ${gErrs.length} error${gErrs.length === 1 ? '' : 's'}` : ''}`
+              : 'none · what this spell adds to a roll'}
+          </span>
+        </div>
+        {gfxOpen && (
+          <div className={styles.gfxBody}>
+            <GraphEffects graph={graph} vars={vars} nodes={nodes} namesByGid={namesByGid} onChange={setGraph} />
+            <VarsBlock vars={vars} onChange={setVars} />
+          </div>
+        )}
+      </div>
+
+      {/* An error means the node would not resolve. Same gate the feature editor
+          puts on Publish (§17) — an audit that does not block is a suggestion. */}
+      {gErrs.map((a, i) => (
+        <div key={i} className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" /> <b>{a.t}</b> — {a.s}
+        </div>
+      ))}
+
       <div className={styles.qActions}>
-        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : spell ? 'Save Spell' : 'Create Spell'} onClick={() => void submit()} disabled={busy || !name.trim()} />
+        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : spell ? 'Save Spell' : 'Create Spell'} onClick={() => void submit()} disabled={busy || !name.trim() || gErrs.length > 0} />
         {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
       </div>
     </>

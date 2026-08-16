@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, CharacterSpellbook, ShardTree, Spell, SpellSchool, SpellSlot } from '../lib/database.types'
 import { gid, resolve } from '../lib/graph'
+import { applyOutcomes, planActivation } from '../lib/graphState'
 import { useGraph } from '../lib/useGraph'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
@@ -19,6 +20,8 @@ import styles from './Spellbook.module.css'
 interface RouteContext {
   character: CharacterRow
   updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  /** Casting spends a slot AND may arm a modifier — two sections, one write. */
+  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
   /** Slotted shards are active sources, so their nodes can target a spell. */
   shardTrees?: Record<string, ShardTree>
 }
@@ -69,7 +72,7 @@ function pactInfoFor(sb: CharacterSpellbook, charLevel: number): PactInfo | null
  *  than a broken screen. Cantrips scale by CHARACTER level (CLAUDE.md canon)
  *  — no upcast stepper on them, unlike the mockup. */
 export function Spellbook() {
-  const { character, updateSection, shardTrees = {} } = useOutletContext<RouteContext>()
+  const { character, updateSection, updateSections, shardTrees = {} } = useOutletContext<RouteContext>()
   // Built once per character, not per cast — see lib/useGraph.ts.
   const graph = useGraph(character, shardTrees)
   const { addRoll } = useRollLog()
@@ -160,18 +163,39 @@ export function Spellbook() {
   function castSpell() {
     if (!selectedSpell) return
     const sp = selectedSpell
+    let nextSb: CharacterSpellbook | null = null
     if (!cantrip) {
       if (pactInfo) {
         if (pactInfo.avail <= 0) { pushNote('No Pact Slots Remaining'); return }
-        void updateSection('spellbook', { ...sb, pactExpended: (sb.pactExpended ?? 0) + 1 })
+        nextSb = { ...sb, pactExpended: (sb.pactExpended ?? 0) + 1 }
       } else {
         const slot = slots.find(s => s.level === castLevel)
         const avail = slot ? slot.total - slot.expended : 0
         if (avail <= 0) { pushNote(`No L${castLevel} Slots Remaining`); return }
         const nextSlots = slots.map(s => (s.level === castLevel ? { ...s, expended: s.expended + 1 } : s))
-        void updateSection('spellbook', { ...sb, slots: nextSlots })
+        nextSb = { ...sb, slots: nextSlots }
       }
     }
+
+    // CASTING IS AN ACTIVATION. A `once` contribution on a spell arms rather
+    // than applying, exactly as it does on a feature — but a feature arms from
+    // its Use button and nothing armed a spell, so ticking "Arms once" on one
+    // silently turned the effect off instead.
+    //
+    // Every outcome is accepted. A feature's Use shows a confirm sheet where an
+    // `ask` can be declined; casting has no second step to hang one on, because
+    // the cast IS the deliberate act — the slot is already spent by the time
+    // this runs.
+    const outcomes = planActivation(sp, graph, character, gid('spell', sp))
+    const answers = new Set(outcomes.map(o => o.ask).filter((a): a is string => !!a))
+    const { resources, applied } = applyOutcomes(character, outcomes, answers)
+
+    // ONE round trip. The slot spend and the armed modifier are the same press,
+    // and two writes could land apart — leaving a slot spent with nothing armed.
+    void updateSections({
+      ...(nextSb ? { spellbook: nextSb } : {}),
+      ...(applied.length ? { resources: resources as CharacterRow['resources'] } : {}),
+    })
 
     let noteMsg: string
     // The same boundary the weapon roller uses, on the roll kind a spell has:
@@ -210,7 +234,22 @@ export function Spellbook() {
       })
     } else {
       noteMsg = cantrip ? `${sp.name} cast · at-will` : `${sp.name} cast · L${castLevel} slot expended`
+      // A cast that only arms still deserves an entry — otherwise the player
+      // presses Cast, sees a note flash by, and has to trust that something
+      // happened. §16's visibility argument, on the surface that armed it.
+      if (applied.length) {
+        addRoll({
+          kind: 'custom', title: sp.name,
+          subtitle: cantrip ? 'Cantrip' : `Level ${castLevel} slot`,
+          icon: spellIcon(sp),
+          subject: { kind: 'spell', id: sp.id },
+          lines: applied.map(o => (o.kind === 'arm'
+            ? { label: o.mod.label, total: 'armed', breakdown: o.summary, tone: 'buff' as const }
+            : { label: o.def.label ?? o.def.name, total: String(o.set ?? ''), breakdown: o.summary, tone: 'buff' as const })),
+        })
+      }
     }
+    if (applied.some(o => o.kind === 'arm')) noteMsg = `${sp.name} — armed for your next roll`
     pushNote(noteMsg)
     setFlashOn(true)
     window.setTimeout(() => setFlashOn(false), 620)

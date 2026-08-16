@@ -454,6 +454,13 @@ select.in option { background: #14130f; }
 }
 .tgt.kThing { --tk: var(--beige); } .tgt.kTag { --tk: var(--amber); } .tgt.kRoll { --tk: var(--cyan); }
 .tgt .kseg { order: 1; flex: 0 0 auto; }
+/* The catalog-picker button: a transparent wrapper around the .in-styled span,
+   so the whole field reads as one control. It had no rule at all before slice
+   6b — harmless thanks to the global button reset, but it never showed it was
+   clickable. */
+.pickbtn { display: flex; cursor: pointer; padding: 0; border: 0; background: none; }
+.pickbtn:hover .in { border-color: var(--cyan); color: var(--cyan-hot); }
+
 .tgt .tval { order: 3; flex: 1 1 100%; min-width: 170px; display: flex; align-items: center; gap: 7px; }
 .tgt .n { order: 2; margin-left: auto; flex: 0 0 auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: .08em; color: var(--muted); min-width: 52px; text-align: right; }
 .tgt .n.zero { color: var(--amber); }

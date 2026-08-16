@@ -23,20 +23,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useDmStatus, useDmFeatures, useDmCatalog, useDmSpells, featureContent } from '../lib/dm'
-import { useShardCatalog } from '../lib/shardCatalog'
+import { useDmStatus, useDmFeatures, featureContent } from '../lib/dm'
 import { useLocalDraft } from '../lib/draft'
 import { useAutoGrow } from '../lib/textareaHooks'
-import { auditNode, matchCount, normalizeTag, gid, nodeGid, type AuditItem, type AuthoredNode } from '../lib/graph'
+import { GraphEffects, VarsBlock, splitSel } from '../components/GraphEffects'
+import { useCatalogNodes } from '../lib/useCatalogNodes'
+import { auditNode, gid, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
 import {
-  OPS, OP_ORDER, OP_TITLE, PALETTE, PALETTE_MORE, PALETTE_ACT, ROLL_SELECTORS, SOURCES,
-  ACTIVATIONS, ACT_ORDER, COLORS, DEFAULT_COLOR, IS_ACTIVATION, IS_DAMAGE_FLAG,
-  type OpField, type ActivationKind,
+  SOURCES, ACTIVATIONS, ACT_ORDER, COLORS, DEFAULT_COLOR,
+  type ActivationKind,
 } from '../lib/opSchema'
 import type {
-  CatalogFeatureData, CatalogFeatureRow, FeatureCategory, GraphEffect, GraphOp, VarDef,
+  CatalogFeatureData, CatalogFeatureRow, FeatureCategory, GraphEffect, VarDef,
 } from '../lib/database.types'
-import styles from './FeatureEditor.module.css'
+import styles from '../components/authoring.module.css'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
 
@@ -61,39 +61,10 @@ const RECHARGES: { v: '' | 'short' | 'long'; l: string }[] = [
   { v: '', l: 'Manual (DM)' }, { v: 'short', l: 'Short rest' }, { v: 'long', l: 'Long rest' },
 ]
 
-/** A target selector, split for editing. The stored form is one string
- *  (`tag:fire_damage`); the editor needs the kind and the value apart so the
- *  three-way toggle can swap between them without reparsing on every keystroke. */
-type SelKind = 'thing' | 'tag' | 'roll'
-const KINDS: { k: SelKind; ic: string; l: string }[] = [
-  { k: 'thing', ic: 'fa-crosshairs', l: 'Thing' },
-  { k: 'tag', ic: 'fa-tag', l: 'Tag' },
-  { k: 'roll', ic: 'fa-dice-d20', l: 'Roll kind' },
-]
-function splitSel(s: string): { kind: SelKind; value: string } {
-  if (s.startsWith('tag:')) return { kind: 'tag', value: s.slice(4) }
-  if (s.startsWith('roll:')) return { kind: 'roll', value: s.slice(5) }
-  return { kind: 'thing', value: s }
-}
-const joinSel = (kind: SelKind, value: string) =>
-  kind === 'tag' ? `tag:${value}` : kind === 'roll' ? `roll:${value}` : value
-
 /** The bucket a feature with no `folder` falls into. A display name, never
  *  stored — `folder: undefined` is what "unfiled" means on the row. */
 const UNFILED = 'Unfiled'
 
-const blankArr = () => new Array<string>(21).fill('')
-const newId = () => `e${Math.random().toString(36).slice(2, 8)}`
-
-function blankEffect(op: GraphOp): GraphEffect {
-  const eff: GraphEffect = { id: newId(), op, target: [], label: '' }
-  for (const fd of OPS[op].fields) {
-    if (fd.type === 'array') (eff as unknown as Record<string, unknown>)[fd.key] = blankArr()
-    else if (fd.type === 'boolean') (eff as unknown as Record<string, unknown>)[fd.key] = false
-    else (eff as unknown as Record<string, unknown>)[fd.key] = ''
-  }
-  return eff
-}
 
 const BLANK: CatalogFeatureData = {
   name: '', category: 'class', icon: 'fa-star', color: DEFAULT_COLOR, activation: 'none',
@@ -107,9 +78,6 @@ export default function FeatureEditor() {
   const { isDm, loading: dmLoading } = useDmStatus()
   const nav = useNavigate()
   const lib = useDmFeatures()
-  const itemLib = useDmCatalog()
-  const spellLib = useDmSpells()
-  const { catalog: shardCatalog } = useShardCatalog()
 
   const [selId, setSelId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -151,49 +119,10 @@ export default function FeatureEditor() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  /* ---- the catalog every selector is counted against ----
-     Built from all four libraries. Two traps live here:
-     - `weapon:` is a gid kind with no catalog of its own — weapons are item rows
-       with category 'weapon'. Emitting only `item:` would make every weapon:
-       target read as a dangling reference.
-     - auditNode SKIPS dangling detection entirely when this array is empty, so
-       the audit must not render until the libraries have loaded (see `ready`). */
-  const nodes: AuthoredNode[] = useMemo(() => [
-    ...lib.features.map(r => ({ gid: gid('feature', { feature_id: r.id }), tags: featureContent(r).tags })),
-    ...spellLib.spells.map(r => ({ gid: gid('spell', { spell_id: r.id }), tags: r.data?.tags })),
-    ...itemLib.items.flatMap(r => {
-      const t = r.data?.tags
-      const base = [{ gid: gid('item', { item_id: r.id }), tags: t }]
-      return r.data?.category === 'weapon' ? [...base, { gid: gid('weapon', { item_id: r.id }), tags: t }] : base
-    }),
-    ...Object.entries(shardCatalog).flatMap(([tid, tree]) =>
-      (tree.nodes ?? []).map(n => ({ gid: nodeGid(tid, n.id), tags: n.tags }))),
-  ], [lib.features, spellLib.spells, itemLib.items, shardCatalog])
-  const ready = !lib.loading && !itemLib.loading && !spellLib.loading
-
-  const namesByGid = useMemo(() => {
-    const m = new Map<string, { name: string; kind: string }>()
-    for (const r of lib.features) m.set(gid('feature', { feature_id: r.id }), { name: featureContent(r).name ?? r.id, kind: 'Feature' })
-    for (const r of spellLib.spells) m.set(gid('spell', { spell_id: r.id }), { name: r.data?.name ?? r.id, kind: 'Spell' })
-    for (const r of itemLib.items) {
-      const nm = { name: r.data?.name ?? r.id, kind: r.data?.category === 'weapon' ? 'Weapon' : 'Item' }
-      m.set(gid('item', { item_id: r.id }), nm)
-      if (r.data?.category === 'weapon') m.set(gid('weapon', { item_id: r.id }), nm)
-    }
-    for (const [tid, tree] of Object.entries(shardCatalog)) {
-      for (const n of tree.nodes ?? []) m.set(nodeGid(tid, n.id), { name: `${tree.name} · ${n.name || n.id}`, kind: 'Shard node' })
-    }
-    return m
-  }, [lib.features, spellLib.spells, itemLib.items, shardCatalog])
-
-  /** Every tag in use anywhere, with how many things carry it — the autocomplete
-   *  source. Counted across all four catalogs, because a tag's whole purpose is
-   *  to reach across them. */
-  const tagUse = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const n of nodes) for (const t of n.tags ?? []) m.set(normalizeTag(t), (m.get(normalizeTag(t)) ?? 0) + 1)
-    return m
-  }, [nodes])
+  // Every targetable thing, across all four catalogs. Shared with the spell
+  // form's graph block — see lib/useCatalogNodes.ts, including why `ready` is
+  // load-bearing rather than cosmetic.
+  const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
@@ -767,7 +696,7 @@ type FormProps = {
 }
 
 function FeatureForm(p: FormProps) {
-  const { d, set, setEffect, setVar, update } = p
+  const { d, set, update } = p
   const deepRef = useAutoGrow(d.deep_description ?? '')
   const act = ACTIVATIONS[(d.activation ?? 'none') as ActivationKind] ?? ACTIVATIONS.none
   const vars = d.vars ?? []
@@ -928,103 +857,7 @@ function FeatureForm(p: FormProps) {
         </button>
         {p.open.vars && (
           <div className={styles.blkBody}>
-            <div className={styles.blkOptin}>
-              <i className="fa-solid fa-circle-info" />
-              <span>Only needed when an effect must read or write state. Stored variables are saved on the character; derived ones are recomputed from a formula on every read.</span>
-            </div>
-            {vars.map((v, vi) => {
-              const stored = v.kind !== 'derived'
-              const dmOnly = v.scope === 'dm'
-              return (
-                <div key={vi} className={cx(styles.card, !v.name?.trim() && styles.err)}>
-                  <div className={styles.cardHead}>
-                    <input className={styles.vname} value={v.name ?? ''} placeholder="identifier" spellCheck={false}
-                      onChange={e => setVar(vi, { name: e.target.value })} />
-                    <span className={styles.seg}>
-                      <button type="button" className={cx(stored && styles.on)}
-                        onClick={() => setVar(vi, { kind: 'stored', formula: undefined, type: v.type ?? 'num' })}>
-                        <i className="fa-solid fa-database" /> Stored
-                      </button>
-                      <button type="button" className={cx(!stored && styles.on)}
-                        onClick={() => setVar(vi, { kind: 'derived', type: undefined, initial: undefined, scope: undefined })}>
-                        <i className="fa-solid fa-function" /> Derived
-                      </button>
-                    </span>
-                    <button type="button" className={cx('fa-solid fa-trash', styles.dx)}
-                      onClick={() => update(x => ({ ...x, vars: (x.vars ?? []).filter((_, j) => j !== vi) }))} />
-                  </div>
-                  {stored ? (
-                    <>
-                      <div className={styles.kindnote}>Stored — written on the character sheet and read back. Needs a type.</div>
-                      <div className={styles.grid3}>
-                        <div>
-                          <span className={styles.fieldLab}>Type<span className={styles.req}>*</span><span className={styles.ty}>enum</span></span>
-                          <select className={cx(styles.in, !v.type && styles.bad)} value={v.type ?? ''}
-                            onChange={e => setVar(vi, { type: (e.target.value || undefined) as 'num' | 'bool' | undefined })}>
-                            <option value="">— required —</option>
-                            <option value="num">Number</option>
-                            <option value="bool">Boolean</option>
-                          </select>
-                        </div>
-                        <div>
-                          <span className={styles.fieldLab}>Initial value</span>
-                          <input className={styles.in} value={v.initial === undefined ? '' : String(v.initial)}
-                            placeholder="optional — e.g. 0"
-                            onChange={e => {
-                              const raw = e.target.value.trim()
-                              const initial = raw === '' ? undefined
-                                : v.type === 'bool' ? raw === 'true'
-                                : Number.isFinite(Number(raw)) ? Number(raw) : undefined
-                              setVar(vi, { initial })
-                            }} />
-                        </div>
-                        <div>
-                          <span className={styles.fieldLab}>Resets on<span className={styles.ty}>enum</span></span>
-                          <select className={styles.in} value={v.resetOn ?? ''}
-                            onChange={e => setVar(vi, { resetOn: (e.target.value || undefined) as 'short' | 'long' | undefined })}>
-                            <option value="">Never</option>
-                            <option value="short">Short rest</option>
-                            <option value="long">Long rest</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className={styles.kindnote} style={{ margin: '-6px 0 11px' }}>
-                        Resets return the variable to its initial value on that rest — the same
-                        rule a feature’s uses follow. A long rest includes the short-rest ones.
-                        <b> Never</b> means only an activation or the player changes it.
-                      </div>
-                      <div className={cx(styles.perm, !dmOnly && styles.player)}>
-                        <i className={`fa-solid ${dmOnly ? 'fa-lock' : 'fa-user-pen'}`} />
-                        <span>
-                          <span className={styles.pt}>{dmOnly ? 'DM-only' : 'Player-writable'}</span><br />
-                          <span className={styles.ps}>{dmOnly
-                            ? 'permission · hidden from the player sheet, only this console writes it'
-                            : 'permission · the player can change this from their sheet'}</span>
-                        </span>
-                        <span className={cx(styles.seg, styles.tiny)}>
-                          <button type="button" className={cx(!dmOnly && styles.on, !dmOnly && styles.cy)} onClick={() => setVar(vi, { scope: 'player' })}>Player</button>
-                          <button type="button" className={cx(dmOnly && styles.on)} onClick={() => setVar(vi, { scope: 'dm' })}><i className="fa-solid fa-lock" /> DM-only</button>
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className={styles.kindnote}>Derived — never stored. Its type comes from the formula, so there is no type to pick.</div>
-                      <span className={styles.fieldLab}>Formula<span className={styles.req}>*</span></span>
-                      <input className={cx(styles.in, !v.formula?.trim() && styles.bad)} value={v.formula ?? ''} spellCheck={false}
-                        placeholder="level / 4 + 1" onChange={e => setVar(vi, { formula: e.target.value })} />
-                    </>
-                  )}
-                  <span className={styles.fieldLab}>Display label</span>
-                  <input className={styles.in} value={v.label ?? ''} style={{ marginBottom: 2 }}
-                    placeholder="optional — what the sheet calls it" onChange={e => setVar(vi, { label: e.target.value })} />
-                </div>
-              )
-            })}
-            <button type="button" className={styles.addbtn}
-              onClick={() => update(x => ({ ...x, vars: [...(x.vars ?? []), { name: '', kind: 'stored', type: 'num', scope: 'player' }] }))}>
-              <i className="fa-solid fa-plus" /> Add variable
-            </button>
+            <VarsBlock vars={vars} onChange={next => update(x => ({ ...x, vars: next }))} />
           </div>
         )}
       </div>
@@ -1039,394 +872,16 @@ function FeatureForm(p: FormProps) {
         </button>
         {p.open.effects && (
           <div className={styles.blkBody}>
-            <div className={styles.blkOptin}>
-              <i className="fa-solid fa-circle-info" />
-              <span>One op per node, collapsed by default — each row says what it does and where it goes. Click a row to edit it. Pick an op below to add a node.</span>
-            </div>
-            <div className={styles.oppal}>
-              <div className={styles.oppalGrp}><span className={styles.gl}>Contributions</span></div>
-              <div className={styles.oppalRow}>
-                {PALETTE.map(o => (
-                  <button key={o} type="button" className={styles.opb} onClick={() => {
-                    update(x => ({ ...x, graph: [...(x.graph ?? []), blankEffect(o)] }))
-                    p.setOpenEffect(graph.length); p.setOpen({ ...p.open, effects: true })
-                  }}><i className="fa-solid fa-plus" />{OP_TITLE[o]}</button>
-                ))}
-                {p.moreOps
-                  ? PALETTE_MORE.map(o => (
-                    <button key={o} type="button" className={styles.opb} onClick={() => {
-                      update(x => ({ ...x, graph: [...(x.graph ?? []), blankEffect(o)] }))
-                      p.setOpenEffect(graph.length); p.setOpen({ ...p.open, effects: true })
-                    }}><i className="fa-solid fa-plus" />{OP_TITLE[o]}</button>
-                  ))
-                  : <button type="button" className={cx(styles.opb, styles.more)} onClick={() => p.setMoreOps(true)}>
-                      <i className="fa-solid fa-ellipsis" />More
-                    </button>}
-              </div>
-              {/* Activations answer a different question from everything above —
-                  "what happens when the player presses this" rather than "what
-                  modifies this roll" — so they get their own group. */}
-              <div className={styles.oppalGrp}><span className={cx(styles.gl, styles.act)}>Activation outcomes</span></div>
-              <div className={styles.oppalRow}>
-                {PALETTE_ACT.map(o => (
-                  <button key={o} type="button" className={cx(styles.opb, styles.act)} onClick={() => {
-                    update(x => ({ ...x, graph: [...(x.graph ?? []), blankEffect(o)] }))
-                    p.setOpenEffect(graph.length); p.setOpen({ ...p.open, effects: true })
-                  }}><i className="fa-solid fa-plus" />{OP_TITLE[o]}</button>
-                ))}
-              </div>
-            </div>
-
-            {graph.map((eff, ei) => (
-              p.openEffect === ei
-                ? <EffectCard key={eff.id} eff={eff} ei={ei} d={d} setEffect={setEffect} update={update}
-                    nodes={p.nodes} namesByGid={p.namesByGid} setPop={p.setPop}
-                    onClose={() => p.setOpenEffect(null)} />
-                : <EffectRow key={eff.id} eff={eff} namesByGid={p.namesByGid}
-                    onOpen={() => p.setOpenEffect(ei)}
-                    onDelete={() => {
-                      update(x => ({ ...x, graph: (x.graph ?? []).filter((_, j) => j !== ei) }))
-                      p.setOpenEffect(null)
-                    }} />
-            ))}
+            <GraphEffects
+              graph={graph} vars={vars}
+              nodes={p.nodes} namesByGid={p.namesByGid}
+              onChange={next => update(x => ({ ...x, graph: next }))}
+            />
           </div>
         )}
       </div>
     </>
   )
-}
-
-/* ---------- collapsed effect row ---------- */
-
-function selLabel(t: string, namesByGid: Map<string, { name: string }>): string {
-  const s = splitSel(t)
-  if (s.kind === 'tag') return `tag:${normalizeTag(s.value) || '?'}`
-  if (s.kind === 'roll') return `roll:${s.value || '?'}`
-  return namesByGid.get(t)?.name ?? t
-}
-
-function opValueBit(eff: GraphEffect): string {
-  if (eff.op === 'add') {
-    const byL = (eff.byLevel ?? []).some((x, i) => i > 0 && String(x).trim())
-    return byL ? 'by level' : eff.value ? `+${eff.value}` : ''
-  }
-  if (eff.op === 'crit') return eff.threshold ? `on ${eff.threshold}+` : ''
-  if (eff.op === 'note') { const t = eff.text ?? ''; return t.length > 46 ? `${t.slice(0, 46)}…` : t }
-  return ''
-}
-
-function EffectRow({ eff, namesByGid, onOpen, onDelete }: {
-  eff: GraphEffect; namesByGid: Map<string, { name: string }>
-  onOpen: () => void; onDelete: () => void
-}) {
-  const cfg = OPS[eff.op]
-  const badLab = !eff.label?.trim()
-  const ts = eff.target ?? []
-  const val = opValueBit(eff)
-  const flags = [eff.when?.trim() && 'when', eff.ask?.trim() && 'ask'].filter(Boolean)
-  return (
-    <div className={cx(styles.efrow, IS_DAMAGE_FLAG(eff.op) && styles.flag, IS_ACTIVATION(eff.op) && styles.act, badLab && styles.bad)}
-      role="button" tabIndex={0} onClick={onOpen}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } }}>
-      <i className={cx('fa-solid fa-chevron-right', styles.ch)} />
-      <span className={styles.efGlFrame}><i className={`fa-solid ${cfg?.icon ?? 'fa-circle'}`} /></span>
-      <span className={styles.op}>{cfg?.label ?? eff.op}</span>
-      <span className={cx(styles.lab, badLab && styles.miss)}>{badLab ? 'no label' : eff.label}</span>
-      <span className={styles.sum}>
-        {val && <><span className={styles.v}>{val}</span><span className={styles.sep}>·</span></>}
-        <span className={cx(styles.tg, !ts.length && styles.own)}>
-          {ts.length ? ts.map(t => selLabel(t, namesByGid)).join(' | ') : 'own roll'}
-        </span>
-        {flags.length > 0 && <><span className={styles.sep}>·</span><span className={styles.fl}>{flags.join(' + ')}</span></>}
-      </span>
-      <button type="button" className={cx('fa-solid fa-trash', styles.dx)}
-        onClick={e => { e.stopPropagation(); onDelete() }} title="Delete node" />
-    </div>
-  )
-}
-
-/* ---------- expanded effect card ---------- */
-
-function EffectCard({ eff, ei, d, setEffect, update, nodes, namesByGid, setPop, onClose }: {
-  eff: GraphEffect; ei: number; d: CatalogFeatureData
-  setEffect: (i: number, p: Partial<GraphEffect>) => void
-  update: (fn: (t: CatalogFeatureData) => CatalogFeatureData) => void
-  nodes: AuthoredNode[]; namesByGid: Map<string, { name: string; kind: string }>
-  setPop: (p: PopKind) => void; onClose: () => void
-}) {
-  const cfg = OPS[eff.op]
-  // Every OTHER ask authored on this node — the set this effect could join.
-  const siblingAsks = [...new Set(
-    (d.graph ?? []).filter(x => x.id !== eff.id).map(x => x.ask?.trim()).filter((a): a is string => !!a),
-  )]
-  const badLab = !eff.label?.trim()
-  const targets = eff.target ?? []
-  const isFlag = IS_DAMAGE_FLAG(eff.op)
-  const isAct = IS_ACTIVATION(eff.op)
-
-  const counts = targets.map(t => (t.startsWith('roll:') ? Infinity : matchCount(t, nodes)))
-  const thingsAndTags = counts.filter(n => Number.isFinite(n)).reduce((a: number, b) => a + b, 0)
-  const rollCount = counts.filter(n => !Number.isFinite(n)).length
-  const summary = !targets.length
-    ? { own: true, text: 'this node’s own roll' }
-    : {
-        own: false,
-        zero: thingsAndTags === 0 && rollCount === 0,
-        text: [
-          (thingsAndTags || !rollCount) ? `targets ${thingsAndTags} thing${thingsAndTags === 1 ? '' : 's'}` : '',
-          rollCount ? `${rollCount} roll kind${rollCount === 1 ? '' : 's'}` : '',
-        ].filter(Boolean).join(' · '),
-      }
-
-  const setTarget = (ti: number, v: string) =>
-    setEffect(ei, { target: targets.map((t, j) => (j === ti ? v : t)) })
-
-  return (
-    <div className={cx(styles.card, badLab && styles.err)}>
-      <div className={styles.cardHead}>
-        <i className={cx('fa-solid fa-chevron-down', styles.ch)} onClick={onClose}
-          style={{ fontSize: 9, color: 'var(--amber)', cursor: 'pointer' }} />
-        <span className={styles.cix}>NODE {String(ei + 1).padStart(2, '0')}</span>
-        <select className={styles.opSel} value={eff.op} onChange={e => {
-          // Switching the op should feel like changing a verb, not losing your
-          // work: targets, label and both gates survive, and so does any field
-          // the new op shares with the old one.
-          const next = e.target.value as GraphOp
-          const fresh = blankEffect(next)
-          const keep: GraphEffect = { ...fresh, id: eff.id, target: eff.target, label: eff.label, when: eff.when, ask: eff.ask }
-          for (const fd of OPS[next].fields) {
-            const cur = (eff as unknown as Record<string, unknown>)[fd.key]
-            if (cur !== undefined) (keep as unknown as Record<string, unknown>)[fd.key] = cur
-          }
-          update(x => ({ ...x, graph: (x.graph ?? []).map((g, j) => (j === ei ? keep : g)) }))
-        }}>
-          {OP_ORDER.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-        <span className={cx(styles.grpPill, isFlag && styles.flag, isAct && styles.act)}>
-          <i className={`fa-solid ${isAct ? 'fa-bolt' : isFlag ? 'fa-shield-halved' : 'fa-infinity'}`} />
-          {isAct ? 'Activation outcome' : isFlag ? 'Damage flag' : 'Passive contribution'}
-        </span>
-        <button type="button" className={cx('fa-solid fa-trash', styles.dx)}
-          onClick={() => { update(x => ({ ...x, graph: (x.graph ?? []).filter((_, j) => j !== ei) })); onClose() }} />
-      </div>
-      <div className={styles.opBlurb}>{cfg?.blurb}</div>
-
-      {/* targets — activations have none: they write a variable on this
-          character rather than reaching out at another node. */}
-      {isAct ? (
-        <div className={styles.tgtOwn}>
-          <i className="fa-solid fa-bolt" />
-          <span>No target — this writes one of this feature’s own variables when the player presses Use.</span>
-        </div>
-      ) : (<>
-      <div className={styles.subsec}>
-        <span className={styles.sl}>Target</span>
-        <span className={styles.qm} onClick={() => setPop({ k: 'help', which: 'target' })}>?</span>
-        <span className={cx(styles.cnt, summary.own && styles.own, !summary.own && summary.zero && styles.zero)}>
-          <i className={`fa-solid ${summary.own ? 'fa-arrow-turn-down' : 'fa-crosshairs'}`} />{summary.text}
-        </span>
-      </div>
-      {targets.map((t, ti) => {
-        const s = splitSel(t)
-        const n = counts[ti]
-        return (
-          <div key={ti} className={cx(styles.tgt, s.kind === 'thing' ? styles.kThing : s.kind === 'tag' ? styles.kTag : styles.kRoll)}>
-            <span className={cx(styles.seg, styles.tiny, styles.kseg)}>
-              {KINDS.map(K => (
-                <button key={K.k} type="button" title={K.l}
-                  className={cx(s.kind === K.k && styles.on, s.kind === K.k && styles[K.k])}
-                  onClick={() => { if (s.kind !== K.k) setTarget(ti, joinSel(K.k, '')) }}>
-                  <i className={`fa-solid ${K.ic}`} /> {K.l}
-                </button>
-              ))}
-            </span>
-            <span className={styles.tval}>
-              {s.kind === 'thing' && (
-                <button type="button" className={styles.pickbtn} style={{ flex: 1 }}
-                  onClick={() => setPop({ k: 'thing', ei, ti })}>
-                  <span className={styles.in} style={{ margin: 0, display: 'block', textAlign: 'left' }}>
-                    {namesByGid.get(t)?.name ?? (t || 'Search the catalog…')}
-                  </span>
-                </button>
-              )}
-              {s.kind === 'tag' && (<>
-                <span className={styles.pfx}>tag:</span>
-                <input value={s.value} placeholder="fire_damage" spellCheck={false}
-                  onChange={e => setTarget(ti, joinSel('tag', e.target.value))} />
-              </>)}
-              {s.kind === 'roll' && (<>
-                <span className={styles.pfx}>roll:</span>
-                <select value={s.value} onChange={e => setTarget(ti, joinSel('roll', e.target.value))}>
-                  <option value="">— pick —</option>
-                  {ROLL_SELECTORS.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </>)}
-            </span>
-            <span className={cx(styles.n, n === 0 && styles.zero)}>
-              {Number.isFinite(n) ? `${n} match${n === 1 ? '' : 'es'}` : 'always live'}
-            </span>
-            <button type="button" className={cx('fa-solid fa-xmark', styles.dx)}
-              onClick={() => setEffect(ei, { target: targets.filter((_, j) => j !== ti) })} />
-          </div>
-        )
-      })}
-      {!targets.length && (
-        <div className={styles.tgtOwn}>
-          <i className="fa-solid fa-arrow-turn-down" />
-          <span>No selectors — this node applies to its own roll. Add one to reach out at other things. Multiple selectors are OR.</span>
-        </div>
-      )}
-      <button type="button" className={styles.addmini} onClick={() => setEffect(ei, { target: [...targets, 'tag:'] })}>
-        <i className="fa-solid fa-plus" /> Add selector
-      </button>
-      </>)}
-
-      {/* schema-driven parameters */}
-      <div className={styles.subsec}><span className={styles.sl}>{cfg?.label} parameters</span></div>
-      {cfg?.fields.length ? (
-        <>
-          {cfg.fields.filter(f => !f.wide).length > 0 && (
-            <div className={cfg.fields.filter(f => !f.wide).length > 1 ? styles.grid2 : undefined}>
-              {cfg.fields.filter(f => !f.wide).map(fd => (
-                <div key={fd.key}><SchemaField fd={fd} eff={eff} ei={ei} setEffect={setEffect} vars={d.vars ?? []} /></div>
-              ))}
-            </div>
-          )}
-          {cfg.fields.filter(f => f.wide).map(fd => (
-            <SchemaField key={fd.key} fd={fd} eff={eff} ei={ei} setEffect={setEffect} vars={d.vars ?? []} />
-          ))}
-        </>
-      ) : (
-        <div className={styles.blkOptin} style={{ marginBottom: 12 }}>
-          <i className="fa-solid fa-minus" /><span>None — this op is fully described by its target list.</span>
-        </div>
-      )}
-
-      {/* statement */}
-      <div className={styles.subsec}><span className={styles.sl}>Statement</span></div>
-      <span className={styles.fieldLab}>Label<span className={styles.req}>*</span><span className={styles.ty}>text</span></span>
-      <div className={styles.hlp}>
-        <span className={styles.d}>What the player sees for this node in a roll breakdown. Required on every effect.</span>
-        <span className={styles.e}><b>e.g.</b>Savage damage bonus</span>
-      </div>
-      <input className={cx(styles.in, badLab && styles.bad)} value={eff.label ?? ''}
-        placeholder="required — shown in the roll breakdown"
-        onChange={e => setEffect(ei, { label: e.target.value })} />
-
-      <div className={cx(styles.wa, styles.when)}>
-        <span className={styles.tagl}>
-          <span className={styles.k}><i className="fa-solid fa-code-branch" /> when</span>
-          <span className={styles.who}>formula · the app decides</span>
-        </span>
-        <input value={eff.when ?? ''} placeholder="hp < hpMax / 2" spellCheck={false}
-          onChange={e => setEffect(ei, { when: e.target.value || undefined })} />
-        <span className={styles.qm} onClick={() => setPop({ k: 'help', which: 'when' })}>?</span>
-      </div>
-      <div className={cx(styles.wa, styles.ask)}>
-        <span className={styles.tagl}>
-          <span className={styles.k}><i className="fa-regular fa-square-check" /> ask</span>
-          <span className={styles.who}>prose · a human decides</span>
-        </span>
-        <span className={styles.askbox}><i className="fa-regular fa-square" /></span>
-        {/* The ask is also the GROUPING KEY — effects sharing one become a single
-            checkbox (§32). Retyping a sentence by hand to match is how you end up
-            with two toggles for one decision, so the asks already on this node
-            are offered rather than remembered. */}
-        <input value={eff.ask ?? ''} placeholder="No checkbox — applies on its own"
-          list={`asks-${eff.id}`}
-          onChange={e => setEffect(ei, { ask: e.target.value || undefined })} />
-        <datalist id={`asks-${eff.id}`}>
-          {siblingAsks.map(a => <option key={a} value={a} />)}
-        </datalist>
-        <span className={styles.qm} onClick={() => setPop({ k: 'help', which: 'ask' })}>?</span>
-      </div>
-    </div>
-  )
-}
-
-/* ---------- the closed set of field types ---------- */
-
-function SchemaField({ fd, eff, ei, setEffect, vars }: {
-  fd: OpField; eff: GraphEffect; ei: number
-  setEffect: (i: number, p: Partial<GraphEffect>) => void; vars: VarDef[]
-}) {
-  const raw = (eff as unknown as Record<string, unknown>)[fd.key]
-  const put = (v: unknown) => setEffect(ei, { [fd.key]: v } as Partial<GraphEffect>)
-  const textRef = useAutoGrow(typeof raw === 'string' ? raw : '')
-
-  const label = (
-    <>
-      <span className={styles.fieldLab}>
-        {fd.label}{fd.required && <span className={styles.req}>*</span>}
-        <span className={styles.ty}>{fd.type}</span>
-      </span>
-      <div className={styles.hlp}>
-        <span className={styles.d}>{fd.desc}</span>
-        {fd.example && <span className={styles.e}><b>e.g.</b>{fd.example}</span>}
-      </div>
-    </>
-  )
-
-  if (fd.type === 'formula') {
-    return <>{label}<input className={styles.in} value={String(raw ?? '')} placeholder={fd.example}
-      spellCheck={false} onChange={e => put(e.target.value)} /></>
-  }
-  if (fd.type === 'text') {
-    return <>{label}<textarea ref={textRef} className={cx(styles.prose, styles.short)} value={String(raw ?? '')}
-      placeholder={fd.example} onChange={e => put(e.target.value)} /></>
-  }
-  if (fd.type === 'enum') {
-    // An OPTIONAL enum needs a way back to unset, or the first option becomes a
-    // value the author never chose. Stored as absent, not as an empty string.
-    return <>{label}<select className={styles.in} value={String(raw ?? '')}
-      onChange={e => put(e.target.value || undefined)}>
-      {!fd.required && <option value="">—</option>}
-      {(fd.options ?? []).map(o => <option key={o}>{o}</option>)}
-    </select></>
-  }
-  if (fd.type === 'boolean') {
-    return <>{label}<div className={styles.in} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-      onClick={() => put(!raw)}>
-      <i className={`fa-solid ${raw ? 'fa-square-check' : 'fa-square'}`} />{fd.label}
-    </div></>
-  }
-  if (fd.type === 'reference' && fd.ref !== 'variable') return null
-  if (fd.type === 'reference' && fd.ref === 'variable') {
-    const known = vars.some(v => v.name === raw)
-    const stale = !!raw && !known
-    return <>{label}<select className={cx(styles.in, stale && styles.bad)} value={String(raw ?? '')}
-      onChange={e => put(e.target.value)}>
-      <option value="">— pick a variable —</option>
-      {vars.filter(v => v.name).map(v => <option key={v.name} value={v.name}>{v.name}{v.label ? ` · ${v.label}` : ''}</option>)}
-      {stale && <option value={String(raw)}>{String(raw)} · UNDECLARED</option>}
-    </select></>
-  }
-  if (fd.type === 'array') {
-    const arr = Array.isArray(raw) ? (raw as string[]) : blankArr()
-    const filled = arr.filter((x, i) => i > 0 && String(x).trim()).length
-    return <>{label}
-      <div className={styles.arr}>
-        <div className={styles.arrGrid}>
-          {arr.map((x, i) => (
-            <div key={i} className={cx(styles.arrSlot, i === 0 && styles.zero)}>
-              <span className={styles.ix}>{i}</span>
-              {i === 0
-                ? <input disabled value="—" />
-                : <input value={x} onChange={e => put(arr.map((y, j) => (j === i ? e.target.value : y)))} />}
-            </div>
-          ))}
-        </div>
-        <div className={styles.arrNote}>
-          <i className="fa-solid fa-hashtag" />21 slots · <b>index 0 unused</b> · levels 1–20 · {filled} filled
-          {filled > 0 && ' · overrides Amount'}
-        </div>
-      </div>
-    </>
-  }
-  // `selector` is handled by the target list above — no op declares one as a
-  // parameter yet. Rendering nothing beats rendering a control that writes
-  // somewhere the engine does not read.
-  return null
 }
 
 /* ---------- the authoring guide ---------- */

@@ -341,3 +341,36 @@ test('the DM\u2019s clear and the player\u2019s consume are the same operation',
   assert.deepEqual(g.armed.map(m => m.id), ['a1'])
   assert.deepEqual(g.dmVars, { mercy: 12 })   // and the DM bucket is not disturbed
 })
+
+test('a spell arms its `once` contribution — planActivation is not feature-shaped', () => {
+  // Casting is an activation. A `once` effect on a spell used to be silently
+  // dead: resolve() skipped it (correct — it should arm) and nothing armed it,
+  // because arming ran only from a feature's Use button.
+  const spell = {
+    id: 'i1', spell_id: 'cat-flame', name: 'Sacred Flame', level: 0,
+    graph: [{ id: 'e1', op: 'add' as const, value: '2d6', dmgType: 'radiant',
+              label: 'Sanctified', once: true, target: ['roll:damage.melee'] }],
+  }
+  const c = character({ spellbook: { spells: [spell] }, sheet: { features: [] } }, {})
+  const [o] = planActivation(spell, buildContext(c), c, 'spell:cat-flame')
+  assert.equal(o.kind, 'arm')
+  assert.equal(o.kind === 'arm' && o.mod.source, 'spell:cat-flame')
+  assert.equal(o.kind === 'arm' && o.mod.kind, 'damage')
+  assert.equal(o.kind === 'arm' && o.mod.sub, 'melee')
+  assert.equal(o.kind === 'arm' && o.mod.dmgType, 'radiant')
+
+  const { resources } = applyOutcomes(c, [o], new Set())
+  assert.equal((resources.graph as { armed: unknown[] }).armed.length, 1)
+})
+
+test('a spell\u2019s `when` still gates the arming', () => {
+  const spell = (when: string) => ({
+    id: 'i1', spell_id: 'cat-x', name: 'X', level: 1,
+    vars: [{ name: 'ready', kind: 'stored' as const, type: 'bool' as const, initial: false }],
+    graph: [{ id: 'e1', op: 'add' as const, value: '1d6', label: 'Charged', once: true, when, target: ['roll:attack'] }],
+  })
+  const off = character({ spellbook: { spells: [spell('ready')] }, sheet: { features: [] } }, { vars: { ready: false } })
+  assert.deepEqual(planActivation(spell('ready'), buildContext(off), off, 'spell:cat-x'), [])
+  const on = character({ spellbook: { spells: [spell('ready')] }, sheet: { features: [] } }, { vars: { ready: true } })
+  assert.equal(planActivation(spell('ready'), buildContext(on), on, 'spell:cat-x').length, 1)
+})
