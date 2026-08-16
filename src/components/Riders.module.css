@@ -85,6 +85,10 @@
 .note { color: var(--muted); }
 .note i { color: var(--beige-dim); margin-top: 2px; font-size: 9px; }
 
+/* A manual rider is displayed but not counted — the marker has to be visible
+   enough that its number is never mistaken for part of the total. */
+.rPend { color: var(--cyan-hot); }
+
 .problem { color: var(--danger-hot); }
 .problem i { margin-top: 2px; font-size: 9px; }
 .problem b { color: var(--text); font-weight: 400; }
