@@ -1373,6 +1373,13 @@
 .catSecLab .fieldLab { margin-bottom: 0; }
 .catSecLab::after { content: ""; flex: 1; height: 1px; background: rgba(212,191,125,0.15); }
 
+/* A sentence under a field explaining what it does NOT control — the save
+   picker names which save, never the DC. */
+.qHint {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; line-height: 1.7;
+  color: var(--beige-dim); margin: 6px 0 12px; text-wrap: pretty;
+}
+
 .catDmg {
   border: 1px solid rgba(212,191,125,0.24); background: rgba(0,0,0,0.22); padding: 12px 13px; margin-bottom: 14px;
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);

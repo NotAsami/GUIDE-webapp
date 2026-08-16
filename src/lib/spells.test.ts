@@ -6,7 +6,7 @@ import {
   cantripTier, damageAt, isCaster, isPrepared, maxCastLevel,
   pactSlotCount, pactSlotLevel, pactSlotsAvail, preparedUsed, preparesSpells, rollSpellDamage,
 } from './spells.ts'
-import type { Resolution, Rider } from './graph.ts'
+import type { Rider } from './graph.ts'
 
 function spell(over: Partial<Spell>): Spell {
   return {
@@ -190,8 +190,19 @@ const FLAME: Spell = {
   concentration: false, ritual: false, desc: '', hasDamage: true, dice: '1d8', dmgType: 'radiant',
 } as Spell
 
-const RES = (over: Partial<Resolution> = {}): Resolution =>
-  ({ adv: false, dis: false, crit: false, riders: [], notes: [], problems: [], ...over })
+/** The caller rolls the contribution now, so the fixture hands over what
+ *  rollResolution would have produced. */
+const CONTRIB = (riders: Rider[] = []) => {
+  const rolled = riders.map(r => (r.when !== 'manual' && r.dice.length
+    ? { ...r, rolledDice: r.dice.flatMap(d => {
+        const n = parseInt(d, 10) || 1
+        return Array.from({ length: n }, () => ({ v: 3, sides: parseInt(d.split('d')[1], 10) }))
+      }) }
+    : r))
+  const flat = rolled.reduce((n, r) => n + (r.when === 'manual' ? 0
+    : r.flat + (r.rolledDice ?? []).reduce((a, b) => a + b.v, 0)), 0)
+  return { flat, riders: rolled }
+}
 
 const rider = (over: Partial<Rider>): Rider =>
   ({ label: 'R', source: 'F', op: 'add', formula: '', flat: 0, dice: [], when: 'always', on: true, ...over })
@@ -205,14 +216,14 @@ test('a spell with no graph rolls exactly as it always did', () => {
 })
 
 test('a flat contribution lands in the cast\u2019s total and is named', () => {
-  const r = rollSpellDamage(FLAME, 0, 7, RES({ riders: [rider({ label: 'Zealot\u2019s Ember', flat: 2 })] }))!
+  const r = rollSpellDamage(FLAME, 0, 7, CONTRIB([rider({ label: 'Zealot’s Ember', flat: 2 })]))!
   assert.equal(r.mod, 2)
   assert.equal(r.total, r.rolls.reduce((a, b) => a + b.v, 0) + 2)
   assert.equal(r.riders[0].label, 'Zealot\u2019s Ember')
 })
 
 test('a dice contribution is rolled ONCE and its faces stay on the rider', () => {
-  const r = rollSpellDamage(FLAME, 0, 7, RES({ riders: [rider({ label: 'Searing', dice: ['2d6'] })] }))!
+  const r = rollSpellDamage(FLAME, 0, 7, CONTRIB([rider({ label: 'Searing', dice: ['2d6'] })]))!
   const faces = r.riders[0].rolledDice!
   assert.equal(faces.length, 2)
   assert.equal(faces[0].sides, 6)
@@ -221,9 +232,9 @@ test('a dice contribution is rolled ONCE and its faces stay on the rider', () =>
 
 test('an unanswered `manual` rider does NOT apply to the cast', () => {
   // §7: the panel asks; the roller must not pre-apply it.
-  const r = rollSpellDamage(FLAME, 0, 7, RES({
-    riders: [rider({ label: 'Judged', when: 'manual', on: false, formula: '1d6', dice: ['1d6'] })],
-  }))!
+  const r = rollSpellDamage(FLAME, 0, 7, CONTRIB([
+    rider({ label: 'Judged', when: 'manual', on: false, formula: '1d6', dice: ['1d6'] }),
+  ]))!
   assert.equal(r.mod, 0)
   assert.equal(r.riders[0].rolledDice, undefined)
 })

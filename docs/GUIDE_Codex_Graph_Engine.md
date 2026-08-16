@@ -2580,3 +2580,49 @@ than a bug — an empty target scopes it to the spell's own casts — but it is 
 easiest mistake to make with the whole engine, and it is now the first thing
 `docs/GUIDE_Codex_Authoring.md` says about scope. Whether an UNPREPARED spell
 should contribute at all is a real design question, still open.
+
+### Readiness, and the save a spell actually calls for
+
+Two follow-ups the user asked for after 6b.
+
+**Only ready spells contribute.** `activeSources` pushed every row in
+`spellbook.spells`, so a spell you merely knew contributed to every roll. It now
+filters on `isPrepared(sp, sb)` — which already existed and already encoded the
+rule, including the trap its own comment names: cantrips are always ready, and a
+known-style caster (pact magic, or `preparesSpells: false`) prepares nothing, so
+reading `spell.prepared` directly would silence every spell a Warlock owns.
+
+An unready spell's `vars` leave scope with it, which is correct and worth
+knowing — a `when` over one of them cannot resolve, so the effect does not merely
+fail to apply, it does not surface. One of this slice's own tests caught that.
+
+Checked before shipping: Ros's only spell is a cantrip (always ready) and
+Cornelius is pact magic, so no live data changed behaviour. No backfill needed.
+
+**The cycle this would have closed.** `effects.ts` → `spells.ts` → `graph.ts` →
+`effects.ts`, because 6a gave `rollSpellDamage` a runtime import of
+`rollResolution`. Broken by having it take the ALREADY-ROLLED contribution
+instead: `spells.ts` now imports only the `Rider` type, which is erased. Better
+shaped anyway — a spell has no crit to decide, so there is nothing to roll inside
+that the caller cannot roll outside, and `spells.ts` stays pure math.
+
+**`Spell.save`** — the ability the TARGET rolls. Presence means "this spell calls
+for a save"; absence means it does not, so the panel shows a DC only when there
+is one. The DC stays the caster's (`spellbook.saveDC`) because 5e derives it once
+per caster and a per-spell copy would be free to disagree.
+
+Shipped with its `SpellForm` control in the same change, per §46's rule — a
+picker beside Damage, defaulting to "no save". The panel's line and footer now
+read `DEX Save DC` rather than a bare number.
+
+**A gid is not a name.** An armed rider showed `spell:afab43d3-…` in the source
+column, where every other rider shows a human name (`from.obj.name`).
+`ArmedMod.source` cannot simply become the name — it is IDENTITY: `id` is built
+from it, dedup keys on it, and both cards match on it. So `sourceName` rides
+alongside, captured when the modifier arms.
+
+Captured rather than looked up, because by the time it is read the source may be
+unequipped or unprepared — exactly the states this slice just made matter — and a
+lookup would come back empty for a bonus that is still legitimately pending. An
+entry armed before the field existed falls back to the gid; any rest clears the
+queue, so those age out within a session.

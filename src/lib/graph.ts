@@ -798,7 +798,9 @@ ${rider.reveal}` : rider.reveal
     if (m.op === 'dis') out.dis = true
     if (m.op === 'crit') out.crit = true
     out.riders.push({
-      label: m.label, source: m.source, op: m.op,
+      // The NAME if it was captured, never the gid — every other rider's
+      // `source` is a human name, and this is the same column on screen.
+      label: m.label, source: m.sourceName || m.source, op: m.op,
       formula: m.value ?? '', flat: v?.t === 'num' ? v.flat : 0, dice: v?.t === 'num' ? v.dice : [],
       when: 'always', on: true, armedId: m.id, dmgType: m.dmgType,
     })

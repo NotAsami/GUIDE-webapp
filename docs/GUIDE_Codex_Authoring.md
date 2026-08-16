@@ -37,6 +37,12 @@ An **effect** answers five questions, and only the first three are required:
 | `crit` | lowers the crit threshold. Lowest across all applying nodes wins | `19` |
 | `note` | prose on the roll, no number. Can compute — see Inline compute | `DC {saveDc}, Wisdom save` |
 
+**Spells also have a Saving throw field**, beside Damage. Pick the ability the
+target rolls, or leave it at *no save*. It says *which* save and *whether there
+is one* — the DC itself is the caster's, from their profile, because 5e derives
+it once per caster. The roll panel then shows `DEX Save DC 15` in the slot an
+attack roll would fill, and shows nothing for a spell that calls for no save.
+
 **Damage flags** — these answer "what happens when damage hits *me*", so they
 target a damage *type*, not a roll:
 
@@ -183,9 +189,14 @@ difference is large:
 | `roll:damage.melee` | every melee weapon damage roll |
 | **(empty)** | **only this node's own roll** — for a spell, its own casts |
 
-> **A spell in your spellbook is always active**, prepared or not. So
-> `add 2d6 → roll:damage` on a spell you merely know adds 2d6 to every weapon
-> swing forever. If you meant "this spell hits harder", leave the target empty.
+> **Only READY spells contribute.** A cantrip is always ready, and a known-style
+> caster (a Warlock's pact magic, or any caster who does not prepare) is ready
+> for everything they own. A prepared-style caster's levelled spell contributes
+> only while prepared — an unprepared spell is not something you are carrying,
+> and its variables leave scope with it.
+>
+> Even so, `add 2d6 → roll:damage` on a *prepared* spell adds 2d6 to every
+> weapon swing. If you meant "this spell hits harder", leave the target empty.
 
 ---
 

@@ -1488,3 +1488,15 @@ test('a dangling target is reported only when there IS a catalog to check', () =
   assert.equal(auditNode(node, [{ gid: 'spell:real' }]).filter(a => a.t === 'Dangling target').length, 1)
   assert.equal(auditNode(node, [{ gid: 'spell:nope' }]).filter(a => a.t === 'Dangling target').length, 0)
 })
+
+test('an armed rider shows a name in the source column, falling back to the gid', () => {
+  const named = armedChar([{ id: 'a1', source: 'spell:cat-flame', sourceName: 'Sacred Flame',
+    label: 'Sanctified', kind: 'attack', op: 'add', value: '4', at: 1 }])
+  assert.equal(resolve(buildContext(named), ATTACK).riders[0].source, 'Sacred Flame')
+
+  // An entry armed before the name was captured still reads — badly, but the
+  // queue is cleared by any rest, so those age out within a session.
+  const bare = armedChar([{ id: 'a1', source: 'spell:cat-flame',
+    label: 'Sanctified', kind: 'attack', op: 'add', value: '4', at: 1 }])
+  assert.equal(resolve(buildContext(bare), ATTACK).riders[0].source, 'spell:cat-flame')
+})
