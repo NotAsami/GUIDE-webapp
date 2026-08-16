@@ -467,41 +467,4 @@ button.psRow:hover:not(:disabled) { background: rgba(0, 166, 214, 0.07); }
 
 /* ---------- activation confirm ----------
    Everything a press will WRITE, before it writes it. */
-.confirm {
-  position: relative;
-  width: 420px; max-width: 100%; max-height: 80vh; overflow: auto;
-  background:
-    radial-gradient(120% 80% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 60%),
-    rgba(10, 10, 10, 0.98);
-  border: 1.5px solid rgba(0, 166, 214, 0.45);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
-}
-.cfHead { display: flex; align-items: center; gap: 12px; padding: 18px 20px 12px; }
-.cfList { display: flex; flex-direction: column; gap: 5px; padding: 0 20px 14px; }
-.cfRow {
-  display: flex; align-items: center; gap: 10px;
-  width: 100%; text-align: left;
-  padding: 8px 11px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(212, 191, 125, 0.16);
-  border-left: 2px solid var(--good);
-  color: var(--text);
-  font-family: var(--font-prose); font-size: 14.5px;
-}
-.cfRow i { font-size: 11px; color: var(--good); width: 14px; }
 /* An `ask` starts UNTICKED and amber — it is a question, not a certainty. */
-.cfAsk { cursor: pointer; border-left-color: var(--amber); }
-.cfAsk i { color: var(--amber); }
-.cfAsk:hover { background: rgba(226, 176, 33, 0.08); }
-.cfOn { border-left-color: var(--cyan); background: rgba(0, 166, 214, 0.08); }
-.cfOn i { color: var(--cyan-hot); }
-.cfLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cfVal { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
-.cfFoot { display: flex; gap: 10px; padding: 0 20px 20px; }
-.cfFoot .pUse { flex: 1; }
-.cfCancel {
-  flex: 0 0 auto; padding: 12px 18px; cursor: pointer;
-  font-family: var(--font-display); font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase;
-  color: var(--muted); background: transparent; border: 1.5px solid var(--beige-dim);
-}
-.cfCancel:hover { color: var(--text); border-color: var(--beige); }

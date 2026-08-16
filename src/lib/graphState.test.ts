@@ -8,7 +8,7 @@ import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.type
 import { buildContext } from './graph.ts'
 import { longRestPatch, shortRestPatch } from './rest.ts'
 import {
-  applyOutcomes, consumeArmed, planActivation, playerVars, restVars, setVars, withArmedCleared,
+  applyOutcomes, armableFor, consumeArmed, planActivation, playerVars, restVars, setVars, withArmedCleared,
 } from './graphState.ts'
 
 const VARS: VarDef[] = [
@@ -251,4 +251,51 @@ test('a damage type survives arming — an armed 2d6 radiant is still radiant', 
   const [o] = planActivation(
     RAGE([{ ...ONCE, dmgType: 'radiant', target: ['roll:damage'] }]), buildContext(c), c, 'feature:rage')
   assert.equal(o.kind === 'arm' && o.mod.dmgType, 'radiant')
+})
+
+// --- the pre-roll offer ------------------------------------------------------
+
+/** A character whose feature list is exactly what the test cares about. */
+const withF = (features: Feature[], graph: object = {}) =>
+  character({ sheet: { abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 }, features } }, graph)
+
+test('a feature is offered for the roll its `once` effect would arm — and only that one', () => {
+  const f: Feature = { id: 'boost', name: 'Boost', graph: [ONCE] }   // targets roll:attack
+  const c = withF([f])
+  const ctx = buildContext(c)
+  assert.deepEqual(armableFor(c, ctx, { kind: 'attack' }).map(a => a.feature.name), ['Boost'])
+  assert.deepEqual(armableFor(c, ctx, { kind: 'damage' }), [])
+  assert.deepEqual(armableFor(c, ctx, { kind: 'save', sub: 'dex' }), [])
+})
+
+test('a spent feature is not offered', () => {
+  const f: Feature = { id: 'boost', name: 'Boost', uses: { current: 0, max: 1 }, graph: [ONCE] }
+  const c = withF([f])
+  assert.deepEqual(armableFor(c, buildContext(c), { kind: 'attack' }), [])
+})
+
+test('a feature already holding an armed entry is not offered again', () => {
+  // Re-arming refreshes, so offering it would quietly spend a second use for
+  // nothing — the player would be paying to replace a bonus they already have.
+  const f: Feature = { id: 'boost', name: 'Boost', graph: [ONCE] }
+  const c = withF([f], { armed: [{ id: 'feature:boost:e1:roll:attack', source: 'feature:boost', label: 'l', kind: 'attack', op: 'add', at: 1 }] })
+  assert.deepEqual(armableFor(c, buildContext(c), { kind: 'attack' }), [])
+})
+
+test('a `when` that is false is not offered — the offer routes through planActivation', () => {
+  const f: Feature = {
+    id: 'boost', name: 'Boost',
+    vars: [{ name: 'ready', kind: 'stored', type: 'bool', initial: false }],
+    graph: [{ ...ONCE, when: 'ready' }],
+  }
+  const off = withF([f], { vars: { ready: false } })
+  assert.deepEqual(armableFor(off, buildContext(off), { kind: 'attack' }), [])
+  const on = withF([f], { vars: { ready: true } })
+  assert.deepEqual(armableFor(on, buildContext(on), { kind: 'attack' }).map(a => a.feature.name), ['Boost'])
+})
+
+test('a feature with no `once` effect is never offered', () => {
+  const f: Feature = { id: 'plain', name: 'Plain', graph: [{ id: 'e1', op: 'add', value: '2', label: 'Always', target: ['roll:attack'] }] }
+  const c = withF([f])
+  assert.deepEqual(armableFor(c, buildContext(c), { kind: 'attack' }), [])
 })
