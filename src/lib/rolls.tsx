@@ -43,6 +43,11 @@ export type RollEntry = {
   damage?: DamageRoll
   /** Ability check / saving throw / skill check rolls (Character screen). */
   check?: CheckRoll
+  /** The DC the TARGET rolls against — a spell's save. Not a roll: it is a
+   *  static number the caster imposes, so it has no dice, no pick and no crit,
+   *  and forcing it into CheckRoll would give it three fields that mean nothing.
+   *  Fills the slot an attack roll would occupy. */
+  saveDC?: number
   /** What this roll was ABOUT — the instance id on the character, so the panel's
    *  catalog sheet can look it up. Not a gid: a gid falls back to the instance id
    *  when `item_id` is absent (§43), and this lookup is local anyway. Absent for

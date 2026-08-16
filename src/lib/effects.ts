@@ -105,7 +105,10 @@ function sum(fx: ItemEffects[], pick: (e: ItemEffects) => number | undefined): n
 export type ActiveSource =
   | { kind: 'feature'; obj: Feature; fx?: never }
   | { kind: 'shard'; obj: ShardTree; fx?: ItemEffects }
-  | { kind: 'shardnode'; obj: ShardNode; fx?: ItemEffects }
+  /** `shardId` because a node's own id is unique only WITHIN its tree — every
+   *  shard is seeded with a node called `core`, so two slotted shards would
+   *  otherwise share one graph id. See nodeGid(). */
+  | { kind: 'shardnode'; obj: ShardNode; shardId: string; fx?: ItemEffects }
   | { kind: 'spell'; obj: Spell; fx?: never }
   | { kind: 'weapon'; obj: EquippedWeapon; fx?: never }
   | { kind: 'item'; obj: EquippedItem; fx?: ItemEffects }
@@ -148,7 +151,7 @@ export function activeSources(character: CharacterRow, shardTrees: Record<string
     out.push({ kind: 'shard', obj: tree, fx: tree.baseMods })
     for (const id of slot.attuned) {
       const node = tree.nodes.find(n => n.id === id)
-      if (node) out.push({ kind: 'shardnode', obj: node, fx: node.mods })
+      if (node) out.push({ kind: 'shardnode', obj: node, shardId: slot.shardId, fx: node.mods })
     }
   }
 

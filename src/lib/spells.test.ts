@@ -4,8 +4,9 @@ import assert from 'node:assert/strict'
 import type { CharacterSpellbook, Spell } from './database.types.ts'
 import {
   cantripTier, damageAt, isCaster, isPrepared, maxCastLevel,
-  pactSlotCount, pactSlotLevel, pactSlotsAvail, preparedUsed, preparesSpells,
+  pactSlotCount, pactSlotLevel, pactSlotsAvail, preparedUsed, preparesSpells, rollSpellDamage,
 } from './spells.ts'
+import type { Resolution, Rider } from './graph.ts'
 
 function spell(over: Partial<Spell>): Spell {
   return {
@@ -179,4 +180,50 @@ test('maxUpcastLevel caps the ceiling below owned slots, but never below the spe
   assert.equal(maxCastLevel(capped, sb), 4) // capped well below the 9 it could otherwise reach
   const miscappedBelowOwnLevel = spell({ level: 5, hasDamage: true, dice: '3d6', maxUpcastLevel: 2 })
   assert.equal(maxCastLevel(miscappedBelowOwnLevel, sb), 5) // a bad DM cap never drops below the spell's own level
+})
+
+// --- §6a: the graph reaches a cast ------------------------------------------
+
+const FLAME: Spell = {
+  id: 'inst-1', spell_id: 'cat-flame', name: 'Sacred Flame', level: 0, school: 'evocation',
+  castingTime: '1 Action', range: '60 ft', v: true, s: true, m: false, duration: 'Instantaneous',
+  concentration: false, ritual: false, desc: '', hasDamage: true, dice: '1d8', dmgType: 'radiant',
+} as Spell
+
+const RES = (over: Partial<Resolution> = {}): Resolution =>
+  ({ adv: false, dis: false, crit: false, riders: [], notes: [], problems: [], ...over })
+
+const rider = (over: Partial<Rider>): Rider =>
+  ({ label: 'R', source: 'F', op: 'add', formula: '', flat: 0, dice: [], when: 'always', on: true, ...over })
+
+test('a spell with no graph rolls exactly as it always did', () => {
+  const r = rollSpellDamage(FLAME, 0, 7)!
+  assert.equal(r.mod, 0)
+  assert.equal(r.riders.length, 0)
+  assert.equal(r.total, r.rolls.reduce((a, b) => a + b.v, 0))
+  assert.equal(r.rolls[0].sides, 8)   // the die knows what it is (§46)
+})
+
+test('a flat contribution lands in the cast\u2019s total and is named', () => {
+  const r = rollSpellDamage(FLAME, 0, 7, RES({ riders: [rider({ label: 'Zealot\u2019s Ember', flat: 2 })] }))!
+  assert.equal(r.mod, 2)
+  assert.equal(r.total, r.rolls.reduce((a, b) => a + b.v, 0) + 2)
+  assert.equal(r.riders[0].label, 'Zealot\u2019s Ember')
+})
+
+test('a dice contribution is rolled ONCE and its faces stay on the rider', () => {
+  const r = rollSpellDamage(FLAME, 0, 7, RES({ riders: [rider({ label: 'Searing', dice: ['2d6'] })] }))!
+  const faces = r.riders[0].rolledDice!
+  assert.equal(faces.length, 2)
+  assert.equal(faces[0].sides, 6)
+  assert.equal(r.total, r.rolls.reduce((a, b) => a + b.v, 0) + faces.reduce((a, b) => a + b.v, 0))
+})
+
+test('an unanswered `manual` rider does NOT apply to the cast', () => {
+  // §7: the panel asks; the roller must not pre-apply it.
+  const r = rollSpellDamage(FLAME, 0, 7, RES({
+    riders: [rider({ label: 'Judged', when: 'manual', on: false, formula: '1d6', dice: ['1d6'] })],
+  }))!
+  assert.equal(r.mod, 0)
+  assert.equal(r.riders[0].rolledDice, undefined)
 })

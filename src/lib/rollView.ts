@@ -41,6 +41,9 @@ export type RollLineView = {
   type?: string
   crit?: boolean
   total: number
+  /** What the FOOTER calls this line's total. Absent = "Total <label>", which is
+   *  right for a roll and wrong for a DC — "Total Save DC" is not a total. */
+  totalLabel?: string
 }
 
 export type FlagName = 'ADVANTAGE' | 'DISADVANTAGE' | 'CRIT'
@@ -149,6 +152,18 @@ function d20Line(
 
 export function lineViews(entry: RollEntry): RollLineView[] {
   const out: RollLineView[] = []
+
+  // A save DC leads, because it occupies the slot an attack roll would: it is
+  // the number the roll is ABOUT. Dice-less on purpose — the caster does not
+  // roll it — which the math line already renders as "15 = 15" rather than
+  // "+ 15 = 15".
+  if (entry.saveDC !== undefined) {
+    out.push({
+      kind: 'check', label: 'Save DC', formula: '', dice: [],
+      mods: entry.saveDC, modParts: [], total: entry.saveDC, totalLabel: 'Save DC',
+    })
+  }
+
   const a = entry.attack
   if (a) {
     const rolls = a.rolls ?? [{ v: a.d20, sides: 20 }]

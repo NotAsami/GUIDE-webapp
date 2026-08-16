@@ -2364,3 +2364,116 @@ member, so the DM may write any row; `own_character` covers the player's own.
 5a state · 5b panel · 5b-fidelity · 5c armed queue + pre-roll offer · 5d this ·
 5e one record per contribution. Next is slice 6 — spells, items and shards
 reaching the graph, and multi-type damage with them.
+
+---
+
+## 51. Slice 6a as built — the read path
+
+§18 scopes slice 6 as "spells, saves & checks, items, shards — each ~20 lines of
+wiring". Saves and checks were already done. The rest splits in two, and this
+slice is the first half:
+
+- **the read path** — the roll surfaces resolving the graph, so an authored
+  contribution on a spell or item actually applies. *Built.*
+- **the authoring path** — a DM being able to author one. Deferred: ~375 lines of
+  `FeatureEditor` are portable (`EffectRow`, `EffectCard`, `SchemaField`, the
+  target picker) but sit behind a 61 KB CSS module and ~1200 lines of
+  feature-editor chrome that does not transfer.
+
+Doing the read path first was deliberate — it proves the plumbing before three
+editors are built on it, and it is where the silent failures were.
+
+### Shard nodes were dropped entirely
+
+`buildContext()` is kind-agnostic: it filters on having a gid, so spells, items
+and weapons were already indexed. `sourceGid()` returned **null** for
+`shardnode`, so an attuned node's authored graph reached the index nowhere — a
+third "authored, stored, doing nothing" after `once` and `dmVars`.
+
+`ActiveSource`'s shardnode variant now carries the owning `shardId`, because a
+node's own id is unique only within its tree: every shard is seeded with a node
+called `core`, so an unqualified id would make one shard's Core targetable
+through another's. `nodeGid(shardId, nodeId)` already existed for exactly this
+and is what the editor's targets were always built from.
+
+### A gid-targeted contribution was counted twice
+
+Exposed by this slice and the third double-count of the session. An effect
+targeting `spell:S` is ONE statement — "+4 to Sacred Flame" — and it landed
+twice when S also carried its own contribution:
+
+- directly, because the roll's `subject` IS `spell:S` and subject is a match key;
+- again as a **boost**, because `boost(owner)` reads the same index bucket.
+
+`boost()` now skips anything already in `seen` — the set of effects that matched
+the roll. Chaining is for nodes the roll did **not** name (§4's "B boosts A, A
+contributes"), which are exactly the ones not in `seen`. Reverting the fix fails
+3 tests.
+
+Only reachable once a roll's subject could carry its own graph. Before this slice
+that was weapons only, and no weapon was authored with one.
+
+### The three surfaces
+
+| | |
+|---|---|
+| **Spells** | `rollSpellDamage` takes a `Resolution`, mirroring `rollWeaponAttack`. The roll entry stops being a prose line and becomes a real `DamageRoll` + `riderGroups`, which is what gives a cast die chips, a rerollable die, the contribution list and the catalog sheet — every panel surface from 5b–5e applied the moment the shape was right, and none of it had to know spells existed. `SpellRoll.rolls` became `RolledDie[]` with it. |
+| **Items** | `consumeEffect` takes a `GraphContext` and resolves against `item:<gid>` and the item's tags, so "+2 to any potion you drink" lands on the heal. Both roll entries gained `subject`, so the panel can open the item's sheet — and the wasted-use entry carries the riders too, because the player should see what WOULD have applied. |
+| **A feature's own roll** | `ActivationSheet` resolves `{ kind: 'feature', subject: gid('feature', f) }`. A feature could contribute to every roll in the app except its own. |
+
+### Settled while building
+
+| Decision | Why |
+|---|---|
+| **A carried item's own graph does NOT apply** | `EquippedItem.graph` says "while EQUIPPED", and a potion in a bag is not equipped. What slice 6a wires is other nodes targeting the item, which is the useful half. |
+| **`SpellRoll.rolls` holds the spell's own dice only** | Graph contributions fold into `total` and are named in `riders`. That array is what the Spellbook's in-screen chips render as the spell's printed damage, and mixing a rider's dice into it would make the printed damage a lie. |
+| **A missing item `id` means no subject** | Rather than an unresolvable one. A catalog sheet that always reads "no longer carried" is worse than no book glyph. |
+
+### §6's spell-gid note is stale
+
+It says "No stable `spell:<id>` graph ids yet". §11 already contradicted it, and
+the code agrees: `spell_catalog.id` is a stable DB primary key, the grant path
+sets `spell_id`, `gid()` reads the back-ref first, and the editor targets by it.
+One residual hazard: a spell hand-seeded onto `spellbook.spells` **without**
+`spell_id` falls back to a per-character instance id that no cross-character
+authored target can name. Not a blocker; worth a check when seeding.
+
+### Still owed
+
+| Owed | Why |
+|---|---|
+| **The three catalog editors** | The authoring path — nothing can be authored on a spell, item or shard node yet, so this slice's read path has nothing to read until it lands. |
+| **Multi-type damage** | `RollEntry.damage` is singular at every layer AND `Spell` models one `dice`/`dmgType` pair, so "1d8 radiant + 1d6 fire" cannot be expressed in the type. A spell-model change, not a panel change. `RollTotals.byType` is already plural and waiting. |
+| **`AmmoBonus`** (§19) | Nocked ammunition is a carried item and not an active source, so this needs a decision about what "active" means for a nocked stack — the same question a consumable's own graph asks. |
+| **The lattice audit absorbing `auditNode`** | ~5 lines; pointless until a shard node can be authored with a graph. |
+
+### Two things manual testing added
+
+**`roll:damage.melee` / `.ranged` / `.spell`.** "Damage dealt by a weapon, not a
+spell" had no way to be said. The sub mechanism `roll:save.dex` already uses
+covers it with no new vocabulary: the sub NARROWS, so `roll:damage` still
+matches everything and `roll:damage.melee` matches only a melee weapon. Weapon
+damage is two selectors (`melee` + `ranged`), because the target list is an OR
+and there is no "weapon" roll kind to name.
+
+Wiring it exposed that **`attack.melee`, `attack.ranged` and `attack.spell` had
+sat in the editor's dropdown since slice 3 while no roll surface ever passed an
+attack sub** — authoring one matched nothing, silently. The fourth of this shape
+after `once`, `dmgType` and `dmgVars`. Both rolls now take a sub, and they narrow
+independently: "advantage on melee attacks" is `roll:attack.melee`, "+2 melee
+damage" is `roll:damage.melee`, and a bow gets neither.
+
+A guard test now asserts every entry in `ROLL_SELECTORS` is one some roll surface
+actually passes. `attack.spell` is named in it as the known exception — nothing
+in this app rolls a spell attack — so it cannot be quietly forgotten a second
+time.
+
+**A spell's save DC** fills the footer slot an attack roll would occupy, which
+was empty on every cast. It leads the lines, dice-less, so the math reads
+`15 = 15`; `RollLineView.totalLabel` exists so the footer can say "Save DC"
+rather than "Total Save DC", which a DC is not.
+
+It is the CASTER's DC (`spellbook.saveDC`), shown on every cast, because nothing
+on `Spell` records which save a spell calls for or whether it calls for one at
+all. A per-spell `save` field is the proper fix and needs a `SpellForm` control
+in the same change — the rule this project keeps relearning.

@@ -505,13 +505,19 @@ export function armedMatches(m: ArmedMod, req: ResolveReq): boolean {
 }
 
 /** The gid of an active source, or null for the kinds that have none — a potion
- *  and a shard tree are effect-only, and §12 refuses a tree-level graph. */
+ *  and a shard tree are effect-only, and §12 refuses a tree-level graph.
+ *
+ *  A shard NODE has one, and until slice 6a it did not: buildContext() skips any
+ *  source without a gid, so an attuned node's authored graph was indexed nowhere
+ *  and silently did nothing — while the feature editor happily offered
+ *  `shardnode:` targets and `GidKind` already listed the kind. */
 function sourceGid(s: ActiveSource): Gid | null {
   switch (s.kind) {
     case 'feature': return gid('feature', s.obj)
     case 'spell': return gid('spell', s.obj)
     case 'item': return gid('item', s.obj)
     case 'weapon': return gid('weapon', s.obj)
+    case 'shardnode': return nodeGid(s.shardId, s.obj.id)
     default: return null
   }
 }
@@ -587,7 +593,13 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     visiting.add(owner)
     const acc = { flat: 0, dice: [] as string[] }
     for (const e of ctx.index.get(owner) ?? []) {
-      if (e.eff.op !== 'add' || e.owner === owner) continue
+      // `seen` holds everything that already matched the ROLL. An effect
+      // targeting `spell:S` is one statement — "+4 to Sacred Flame" — and when
+      // the roll's subject IS S it lands directly; boosting S's own
+      // contributions with it as well counts the same +4 twice. Chaining is for
+      // nodes the roll did not name (§4's "B boosts A, A contributes"), which
+      // are exactly the ones not in `seen`.
+      if (e.eff.op !== 'add' || e.owner === owner || seen.has(e.eff)) continue
       const v = value(e)
       if (!v) continue
       acc.flat += v.flat
