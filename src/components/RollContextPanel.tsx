@@ -358,9 +358,10 @@ function Entry({
                 <div className={cx(styles.tot, styles.atk)}>
                   {/* The line's OWN label — "Total Save DC" vs "Total Check" is a
                       difference the footer must not guess at. */}
-                  <span className={styles.k}>
-                    Total {lines.find(l => l.kind === 'attack' || l.kind === 'check')?.label ?? 'Attack'}
-                  </span>
+                  <span className={styles.k}>{(() => {
+                    const l = lines.find(x => x.kind === 'attack' || x.kind === 'check')
+                    return l?.totalLabel ?? `Total ${l?.label ?? 'Attack'}`
+                  })()}</span>
                   <span className={styles.v}>{totals.attack}</span>
                 </div>
               )}</div>

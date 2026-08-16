@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
-import type { CharacterRow, CharacterSection, CharacterSpellbook, Spell, SpellSchool, SpellSlot } from '../lib/database.types'
+import type { CharacterRow, CharacterSection, CharacterSpellbook, ShardTree, Spell, SpellSchool, SpellSlot } from '../lib/database.types'
+import { gid, resolve } from '../lib/graph'
+import { useGraph } from '../lib/useGraph'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { Prose } from '../lib/markdown'
@@ -17,6 +19,8 @@ import styles from './Spellbook.module.css'
 interface RouteContext {
   character: CharacterRow
   updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  /** Slotted shards are active sources, so their nodes can target a spell. */
+  shardTrees?: Record<string, ShardTree>
 }
 
 const SLOT_LABEL = ['', '1ST', '2ND', '3RD', '4TH', '5TH', '6TH', '7TH', '8TH', '9TH']
@@ -65,7 +69,9 @@ function pactInfoFor(sb: CharacterSpellbook, charLevel: number): PactInfo | null
  *  than a broken screen. Cantrips scale by CHARACTER level (CLAUDE.md canon)
  *  — no upcast stepper on them, unlike the mockup. */
 export function Spellbook() {
-  const { character, updateSection } = useOutletContext<RouteContext>()
+  const { character, updateSection, shardTrees = {} } = useOutletContext<RouteContext>()
+  // Built once per character, not per cast — see lib/useGraph.ts.
+  const graph = useGraph(character, shardTrees)
   const { addRoll } = useRollLog()
   const sb: CharacterSpellbook = character.spellbook ?? {}
   const charLevel = character.identity?.level ?? 1
@@ -168,7 +174,10 @@ export function Spellbook() {
     }
 
     let noteMsg: string
-    const roll = sp.hasDamage ? rollSpellDamage(sp, castLevel, charLevel) : null
+    // The same boundary the weapon roller uses, on the roll kind a spell has:
+    // the spell IS the subject, so a feature can target it by gid or by tag.
+    const res = resolve(graph, { kind: 'damage', sub: 'spell', subject: gid('spell', sp), tags: sp.tags })
+    const roll = sp.hasDamage ? rollSpellDamage(sp, castLevel, charLevel, res) : null
     if (roll) {
       setLastRollById(prev => ({ ...prev, [sp.id]: roll }))
       setFreshId(sp.id)
@@ -180,7 +189,24 @@ export function Spellbook() {
         subtitle: cantrip ? 'Cantrip' : `Level ${castLevel} slot`,
         icon: spellIcon(sp),
         subject: { kind: 'spell', id: sp.id },
-        lines: [{ label: roll.type || 'Damage', total: String(roll.total), breakdown: `${roll.expr} = ${roll.total}` }],
+        // The caster's save DC, in the slot an attack roll would fill. It is a
+        // property of the CASTER, not the spell — nothing on `Spell` says which
+        // save a spell calls for, or whether it calls for one at all — so this
+        // shows on every cast. A per-spell `save` (ability + whether it applies)
+        // is the proper fix and needs a SpellForm control in the same change.
+        saveDC: sb.saveDC,
+        // A real DamageRoll rather than a prose line: that is what gives a spell
+        // die chips, a rerollable die, the contribution list and the catalog
+        // sheet. Every panel surface built in 5b–5e applies the moment the shape
+        // is right, and none of it had to know spells existed.
+        damage: {
+          diceExpr: roll.expr, dice: roll.rolls, bonus: roll.mod,
+          total: roll.total, type: roll.type, crit: false,
+          breakdown: `${roll.expr} = ${roll.total}`,
+        },
+        riderGroups: roll.riders.length ? [{ label: 'Damage', riders: roll.riders }] : undefined,
+        notes: res.notes.length ? res.notes : undefined,
+        problems: res.problems.length ? res.problems : undefined,
       })
     } else {
       noteMsg = cantrip ? `${sp.name} cast · at-will` : `${sp.name} cast · L${castLevel} slot expended`
@@ -657,8 +683,8 @@ function SpellDetail({
                   <span className={styles.drName}>{spell.name} · {roll.cantrip ? `Lvl ${roll.level}` : `L${roll.level}`}</span>
                   <span className={styles.drTotal}>{roll.total}</span>
                   <span className={styles.drDice}>
-                    {roll.rolls.map((v, i) => (
-                      <span key={i} className={`${styles.die} ${v === roll.sides ? styles.max : ''}`}>{v}</span>
+                    {roll.rolls.map((d, i) => (
+                      <span key={i} className={`${styles.die} ${d.v === d.sides ? styles.max : ''}`}>{d.v}</span>
                     ))}
                   </span>
                   <span className={styles.drBreak}>{roll.expr} <span className={styles.eq}>= {roll.total}</span> {roll.type}</span>

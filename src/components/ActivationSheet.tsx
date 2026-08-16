@@ -18,7 +18,7 @@ import type { CharacterRow, CharacterSection, Feature, ShardTree } from '../lib/
 import { rollHeal } from '../lib/dice'
 import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet } from '../lib/effects'
-import { gid, type GraphContext } from '../lib/graph'
+import { gid, resolve, rollResolution, type GraphContext } from '../lib/graph'
 import { applyOutcomes, planActivation, type Outcome } from '../lib/graphState'
 import styles from './ActivationSheet.module.css'
 
@@ -62,8 +62,15 @@ export function useActivation(host: ActivationHost) {
     let nextSheet = sheet
     const lines: RollLine[] = []
 
+    // A feature could contribute to every roll in the app except its own. Its
+    // `roll` is a roll like any other, and §4's "no target = this node's own
+    // roll" is exactly the selector that reaches it.
+    const res = resolve(graph, { kind: 'feature', subject: gid('feature', f), tags: f.tags })
+    const contrib = rollResolution(res)
+
     if (f.roll) {
-      const { total, breakdown } = rollHeal(f.roll)
+      const { total: rolled, breakdown } = rollHeal(f.roll)
+      const total = Math.max(0, rolled + contrib.flat)
       if (f.rollTone === 'heal') {
         // Heal-tagged rolls raise real HP, like a potion — clamped to the
         // EFFECTIVE max, but the persisted `max` stays the authored base.
@@ -107,7 +114,13 @@ export function useActivation(host: ActivationHost) {
     setBusy(false)
 
     const subtitle = f.uses ? `${remaining} / ${f.uses.max} uses left` : (f.usage ?? 'Feature')
-    addRoll({ kind: 'custom', title: f.name, subtitle, icon: f.icon, lines, subject: { kind: 'feature', id: f.id } })
+    addRoll({
+      kind: 'custom', title: f.name, subtitle, icon: f.icon, lines,
+      subject: { kind: 'feature', id: f.id },
+      riderGroups: contrib.riders.length ? [{ label: 'Feature', riders: contrib.riders }] : undefined,
+      notes: res.notes.length ? res.notes : undefined,
+      problems: res.problems.length ? res.problems : undefined,
+    })
   }
 
   const sheet = pending && createPortal(

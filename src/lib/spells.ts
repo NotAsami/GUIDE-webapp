@@ -6,7 +6,9 @@
  *  canon; the mockup's upcast stepper is dropped for cantrips). */
 
 import type { CharacterSpellbook, Spell, SpellSlot } from './database.types.ts'
-import { parseDice, rollDice } from './dice.ts'
+import { parseDice, rolledDice, type RolledDie } from './dice.ts'
+// One-way: graph.ts reaches effects/equip/shards, none of which import this.
+import { rollResolution, type Resolution, type Rider } from './graph.ts'
 
 /** A caster is anyone flagged `spellcasting` with at least one known spell —
  *  a caster with an empty spell list still renders the empty state, exactly
@@ -144,7 +146,10 @@ export function damageAt(sp: Spell, castLevel: number, charLevel: number): Damag
 }
 
 export type SpellRoll = {
-  rolls: number[]
+  /** The spell's OWN dice. Graph contributions are folded into `total` and
+   *  named in `riders`; they are not mixed in here, because this array is what
+   *  the Spellbook's in-screen chips render as the spell's printed damage. */
+  rolls: RolledDie[]
   sides: number
   mod: number
   total: number
@@ -153,6 +158,9 @@ export type SpellRoll = {
   level: number
   cantrip: boolean
   stamp: string
+  /** Feature-graph contributions to this cast, already rolled and attributed
+   *  (§49). Empty when nothing targets the spell. */
+  riders: Rider[]
 }
 
 function nowStamp(): string {
@@ -162,14 +170,26 @@ function nowStamp(): string {
 }
 
 /** Roll a spell's damage at the given cast level. Returns null under the same
- *  conditions as `damageAt` (no damage, or an unparseable `dice` string). */
-export function rollSpellDamage(sp: Spell, castLevel: number, charLevel: number): SpellRoll | null {
+ *  conditions as `damageAt` (no damage, or an unparseable `dice` string).
+ *
+ *  `graph` carries the feature engine's contributions for this cast, resolved by
+ *  the caller against `spell:<catalog id>` and the spell's tags. Handled exactly
+ *  as the weapon roller handles its own: rollResolution folds every non-manual
+ *  rider in and keeps each one's faces on it, so the panel can show what a +1d6
+ *  actually rolled. A `manual` rider is left for the player to answer there.
+ *
+ *  Absent `graph` is identical to "nothing targets this spell" — both add zero,
+ *  which is why every existing caller keeps working untouched. */
+export function rollSpellDamage(
+  sp: Spell, castLevel: number, charLevel: number, graph?: Resolution,
+): SpellRoll | null {
   const info = damageAt(sp, castLevel, charLevel)
   if (!info) return null
-  const rolls = rollDice(info.count, info.sides)
-  const total = Math.max(0, rolls.reduce((a, b) => a + b, 0) + info.mod)
+  const rolls = rolledDice(info.count, info.sides)
+  const contrib = graph ? rollResolution(graph) : { flat: 0, riders: [] as Rider[] }
+  const total = Math.max(0, rolls.reduce((a, b) => a + b.v, 0) + info.mod + contrib.flat)
   return {
-    rolls, sides: info.sides, mod: info.mod, total, expr: info.expr, type: info.type,
-    level: castLevel, cantrip: sp.level === 0, stamp: nowStamp(),
+    rolls, sides: info.sides, mod: info.mod + contrib.flat, total, expr: info.expr, type: info.type,
+    level: castLevel, cantrip: sp.level === 0, stamp: nowStamp(), riders: contrib.riders,
   }
 }

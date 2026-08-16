@@ -298,3 +298,24 @@ test('a rolled contribution reads as its result, not its expression', () => {
   // Unrolled still reads as the expression — nothing has happened yet.
   assert.equal(riderAmount(rider({ when: 'always', flat: 0, dice: ['1d6'] })), '+1d6')
 })
+
+test('a spell\u2019s save DC leads the lines and titles the footer honestly', () => {
+  // It fills the slot an attack roll would, but it is not a roll: no dice, and
+  // "Total Save DC" would be a lie — a DC is not a total of anything.
+  const e = entry({ kind: 'custom', saveDC: 15, damage: DAMAGE })
+  const [first] = lineViews(e)
+  assert.equal(first.label, 'Save DC')
+  assert.equal(first.totalLabel, 'Save DC')
+  assert.deepEqual(first.dice, [])
+  assert.equal(first.total, 15)
+  assert.equal(first.mods, 15)
+  // The footer reads it as the attack-slot line, and damage still totals apart.
+  const t = rollTotals(e, riderViews(e))
+  assert.equal(t.attack, 15)
+  assert.equal(t.damage, 8)
+})
+
+test('a roll with no save DC is unchanged', () => {
+  assert.equal(lineViews(entry({ attack: ATTACK }))[0].label, 'Attack')
+  assert.equal(lineViews(entry({ attack: ATTACK }))[0].totalLabel, undefined)
+})

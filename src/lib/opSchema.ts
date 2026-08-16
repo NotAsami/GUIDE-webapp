@@ -180,9 +180,13 @@ export const IS_DAMAGE_FLAG = (op: GraphOp) => op === 'resist' || op === 'vuln' 
 
 /** Roll kinds a selector may name. `RollKind` in lib/graph.ts is the authority for
  *  the left half; the sub-kinds are the ones the app actually raises today. */
+/** `roll:<kind>[.<sub>]`. The sub NARROWS: `roll:damage` is every damage roll,
+ *  `roll:damage.melee` only a melee weapon's. Weapon damage is
+ *  `damage.melee` + `damage.ranged` — two selectors, because the target list is
+ *  an OR and there is no "weapon" roll kind to name. */
 export const ROLL_SELECTORS = [
   'attack', 'attack.melee', 'attack.ranged', 'attack.spell',
-  'damage',
+  'damage', 'damage.melee', 'damage.ranged', 'damage.spell',
   'save', 'save.str', 'save.dex', 'save.con', 'save.int', 'save.wis', 'save.cha',
   'check', 'check.athletics', 'check.stealth', 'check.perception',
   'feature',

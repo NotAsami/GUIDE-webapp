@@ -10,7 +10,7 @@ import {
   damageFlags, matchCount, nodeGid, normalizeTag, resolve, total, varCollisions, type ResolveReq,
 } from './graph.ts'
 import { activeSources } from './effects.ts'
-import { OPS, OP_ORDER, OP_TITLE } from './opSchema.ts'
+import { OPS, OP_ORDER, OP_TITLE, ROLL_SELECTORS } from './opSchema.ts'
 import type { GraphOp } from './database.types.ts'
 
 function character(over: Partial<CharacterRow>): CharacterRow {
@@ -1280,4 +1280,183 @@ test('a negative contribution still subtracts once rolled', () => {
   const rolled = rollResolution(resolve(buildContext(c), ATTACK))
   assert.ok(rolled.flat <= -1 && rolled.flat >= -4, `expected a penalty, got ${rolled.flat}`)
   assert.equal(rolled.riders[0].rolledDice!.every(d => d.v < 0), true)
+})
+
+// --- §6a: the read path reaches spells, items and shard nodes ---------------
+
+/** A character with one shard slotted and one node attuned. */
+const withShard = (nodes: object[], attuned: string[], shardId = 'sh1') => ({
+  character: character({
+    sheet: SHEET,
+    shards: { slot1: { shardId, attuned } },
+  }),
+  trees: { [shardId]: { id: shardId, name: 'Test Shard', nodes } } as never,
+})
+
+test('an attuned shard node\u2019s graph reaches the roll — it was dropped entirely', () => {
+  // sourceGid() returned null for shardnode, and buildContext skips a source
+  // with no gid. So the node's contributions were indexed nowhere: authored,
+  // stored, and doing nothing, exactly like `once` before 5c.
+  const { character: c, trees } = withShard(
+    [{ id: 'core', name: 'Core', graph: [{ id: 'e1', op: 'add', value: '3', label: 'Shard Might', target: ['roll:attack'] }] }],
+    ['core'],
+  )
+  assert.equal(total(resolve(buildContext(c, trees), ATTACK)).flat, 3)
+})
+
+test('an UNattuned node contributes nothing', () => {
+  const { character: c, trees } = withShard(
+    [{ id: 'core', name: 'Core', graph: [{ id: 'e1', op: 'add', value: '3', label: 'Shard Might', target: ['roll:attack'] }] }],
+    [],
+  )
+  assert.equal(total(resolve(buildContext(c, trees), ATTACK)).flat, 0)
+})
+
+test('a shardnode: selector names one node, and two shards\u2019 cores do not collide', () => {
+  // Every shard is seeded with a node called `core`, so the gid has to be
+  // qualified by the tree — an unqualified id would make one shard's Core
+  // targetable through another's.
+  const c = character({
+    sheet: SHEET,
+    shards: { slot1: { shardId: 'sh1', attuned: ['core'] }, slot2: { shardId: 'sh2', attuned: ['core'] } },
+  })
+  const trees = {
+    sh1: { id: 'sh1', name: 'A', nodes: [{ id: 'core', name: 'Core',
+      graph: [{ id: 'e1', op: 'add', value: '2', label: 'A', target: ['roll:attack'] }] }] },
+    sh2: { id: 'sh2', name: 'B', nodes: [{ id: 'core', name: 'Core',
+      graph: [{ id: 'e2', op: 'add', value: '5', label: 'B', target: ['shardnode:sh1.core'] }] }] },
+  } as never
+  const r = resolve(buildContext(c, trees), ATTACK)
+  // A contributes 2 to the attack; B boosts A's contribution by 5 rather than
+  // applying to the roll itself — which only works if the two cores are distinct.
+  assert.equal(total(r).flat, 7)
+  assert.equal(nodeGid('sh1', 'core'), 'shardnode:sh1.core')
+  assert.notEqual(nodeGid('sh1', 'core'), nodeGid('sh2', 'core'))
+})
+
+test('a spell\u2019s own graph applies to its roll, keyed by the CATALOG id', () => {
+  const c = character({
+    sheet: SHEET,
+    spellbook: { spells: [{
+      id: 'inst-1', spell_id: 'cat-flame', name: 'Sacred Flame', level: 0, tags: ['fire'],
+      graph: [{ id: 'e1', op: 'add', value: '2', label: 'Searing', target: ['roll:damage'] }],
+    }] },
+  })
+  const ctx = buildContext(c)
+  assert.equal(total(resolve(ctx, { kind: 'damage', subject: 'spell:cat-flame' })).flat, 2)
+  // …and a feature can target that spell by the same gid.
+  const c2 = character({
+    sheet: { ...SHEET, features: [gfeat('Empower', [
+      { id: 'e1', op: 'add', value: '4', label: 'Empowered', target: ['spell:cat-flame'] },
+    ])] },
+    spellbook: c.spellbook,
+  })
+  assert.equal(total(resolve(buildContext(c2), { kind: 'damage', subject: 'spell:cat-flame' })).flat, 6)
+})
+
+test('a tag on a spell matches the same matcher a weapon\u2019s tags do', () => {
+  const c = character({
+    sheet: { ...SHEET, features: [gfeat('Pyromancer', [
+      { id: 'e1', op: 'add', value: '3', label: 'Fire Affinity', target: ['tag:fire'] },
+    ])] },
+    spellbook: { spells: [{ id: 'inst-1', spell_id: 'cat-flame', name: 'Flame', level: 0, tags: ['Fire'] }] },
+  })
+  assert.equal(total(resolve(buildContext(c), { kind: 'damage', subject: 'spell:cat-flame', tags: ['Fire'] })).flat, 3)
+})
+
+test('an equipped item\u2019s graph applies, and a contribution can target the item', () => {
+  const item = {
+    id: 'i1', item_id: 'cat-ring', name: 'Ring of Flame', slot: 'ring1',
+    graph: [{ id: 'e1', op: 'add', value: '1', label: 'Ring', target: ['roll:damage'] }],
+  }
+  const c = character({
+    sheet: { ...SHEET, features: [gfeat('Attuned', [
+      { id: 'e1', op: 'add', value: '2', label: 'Attunement', target: ['item:cat-ring'] },
+    ])] },
+    equipped: { ring1: item },
+  })
+  const r = resolve(buildContext(c), { kind: 'damage', subject: 'item:cat-ring' })
+  assert.equal(total(r).flat, 3)   // the ring's own 1, boosted by 2
+})
+
+test('an effect targeting a node counts ONCE when that node is the roll\u2019s subject', () => {
+  // "+4 to Sacred Flame" is one statement. It matched the roll directly (the
+  // subject IS the spell) AND boosted the spell's own contribution, so the same
+  // +4 landed twice. Only reachable once a subject can carry its own graph,
+  // which is what slice 6a wired — the third double-count of this family.
+  const c = character({
+    sheet: { ...SHEET, features: [gfeat('Empower', [
+      { id: 'e1', op: 'add', value: '4', label: 'Empowered', target: ['spell:cat-flame'] },
+    ])] },
+    spellbook: { spells: [{
+      id: 'inst-1', spell_id: 'cat-flame', name: 'Sacred Flame', level: 0,
+      graph: [{ id: 'e2', op: 'add', value: '2', label: 'Base', target: ['roll:damage'] }],
+    }] },
+  })
+  assert.equal(total(resolve(buildContext(c), { kind: 'damage', subject: 'spell:cat-flame' })).flat, 6)
+})
+
+test('…and chaining still works when the roll did NOT name the node', () => {
+  // §4's two-level chain: B boosts A, A contributes to a roll whose subject is
+  // something else entirely. B never matched the roll, so it must still boost.
+  const c = withFeatures([
+    gfeat('A', [{ id: 'a1', op: 'add', value: '2', label: 'A', target: ['roll:attack'] }]),
+    gfeat('B', [{ id: 'b1', op: 'add', value: '3', label: 'B', target: ['feature:A'] }]),
+  ])
+  assert.equal(total(resolve(buildContext(c), { kind: 'attack', subject: 'weapon:sword' })).flat, 5)
+})
+
+test('roll:damage.melee narrows to weapons; roll:damage still catches everything', () => {
+  // "damage dealt by a weapon, not a spell" is two selectors, because the target
+  // list is an OR and there is no "weapon" roll kind to name. The sub NARROWS:
+  // an unsubbed roll:damage keeps matching all three.
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '1', label: 'Any damage', target: ['roll:damage'] },
+    { id: 'e2', op: 'add', value: '2', label: 'Weapon only', target: ['roll:damage.melee', 'roll:damage.ranged'] },
+    { id: 'e3', op: 'add', value: '4', label: 'Melee only', target: ['roll:damage.melee'] },
+    { id: 'e4', op: 'add', value: '8', label: 'Spell only', target: ['roll:damage.spell'] },
+  ])])
+  const ctx = buildContext(c)
+  assert.equal(total(resolve(ctx, { kind: 'damage', sub: 'melee' })).flat, 1 + 2 + 4)
+  assert.equal(total(resolve(ctx, { kind: 'damage', sub: 'ranged' })).flat, 1 + 2)
+  assert.equal(total(resolve(ctx, { kind: 'damage', sub: 'spell' })).flat, 1 + 8)
+  // A damage roll carrying no sub matches only the unnarrowed one.
+  assert.equal(total(resolve(ctx, { kind: 'damage' })).flat, 1)
+  // And narrowing damage must not leak into the attack roll.
+  assert.equal(total(resolve(ctx, { kind: 'attack', sub: 'melee' })).flat, 0)
+})
+
+test('attack and damage narrow independently — one weapon, two statements', () => {
+  const c = withFeatures([gfeat('Duelist', [
+    { id: 'e1', op: 'adv', label: 'Melee finesse', target: ['roll:attack.melee'] },
+    { id: 'e2', op: 'add', value: '2', label: 'Melee bite', target: ['roll:damage.melee'] },
+  ])])
+  const ctx = buildContext(c)
+  // The melee weapon's attack gets advantage and nothing else; its damage gets
+  // the +2 and no advantage flag of its own.
+  assert.equal(resolve(ctx, { kind: 'attack', sub: 'melee' }).adv, true)
+  assert.equal(total(resolve(ctx, { kind: 'attack', sub: 'melee' })).flat, 0)
+  assert.equal(total(resolve(ctx, { kind: 'damage', sub: 'melee' })).flat, 2)
+  // A bow gets neither.
+  assert.equal(resolve(ctx, { kind: 'attack', sub: 'ranged' }).adv, false)
+  assert.equal(total(resolve(ctx, { kind: 'damage', sub: 'ranged' })).flat, 0)
+})
+
+test('every roll selector the editor offers is one a roll surface can pass', () => {
+  // The guard for the class of bug this slice kept finding: an option in the
+  // authoring UI that nothing downstream ever matches. `attack.spell` is the
+  // known exception — nothing in this app rolls a spell attack — and naming it
+  // here is the point, so it cannot be forgotten a second time.
+  const PASSED_BY_A_SURFACE = new Set([
+    'attack', 'attack.melee', 'attack.ranged',           // Equipment.attack()
+    'damage', 'damage.melee', 'damage.ranged',           // Equipment.attack()
+    'damage.spell',                                      // Spellbook.castSpell()
+    'feature',                                           // ActivationSheet, consume
+    'save', 'check',                                     // Character.pushCheck()
+    ...['str', 'dex', 'con', 'int', 'wis', 'cha'].map(a => `save.${a}`),
+    ...['athletics', 'stealth', 'perception'].map(s => `check.${s}`),
+  ])
+  const KNOWN_DEAD = new Set(['attack.spell'])
+  const stray = ROLL_SELECTORS.filter(r => !PASSED_BY_A_SURFACE.has(r) && !KNOWN_DEAD.has(r))
+  assert.deepEqual(stray, [], `selector(s) no roll surface passes: ${stray.join(', ')}`)
 })

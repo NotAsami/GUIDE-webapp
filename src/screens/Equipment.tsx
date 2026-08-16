@@ -172,8 +172,18 @@ export function Equipment() {
     // subject and its tags are the same for both; only the roll kind differs.
     const subject = gid('weapon', weapon)
     const tags = weapon.tags
-    const atkRes = resolve(graph, { kind: 'attack', subject, tags })
-    const dmgRes = resolve(graph, { kind: 'damage', subject, tags })
+    // The sub NARROWS the kind: `roll:damage` still matches this, and
+    // `roll:damage.melee` matches only a melee weapon — which is how "damage
+    // dealt by a weapon, not a spell" gets said, with no new vocabulary beyond
+    // the sub mechanism `roll:save.dex` already uses.
+    //
+    // Both rolls take it, and they are separate statements: "advantage on melee
+    // attacks" is `roll:attack.melee`, "+2 melee damage" is `roll:damage.melee`.
+    // The attack subs had sat in the editor's dropdown since slice 3 with
+    // nothing passing one, so authoring `roll:attack.melee` matched nothing.
+    const sub = isRanged(weapon) ? 'ranged' : 'melee'
+    const atkRes = resolve(graph, { kind: 'attack', subject, sub, tags })
+    const dmgRes = resolve(graph, { kind: 'damage', subject, sub, tags })
 
     // `riders` comes back ANNOTATED — each contribution carrying the faces it
     // rolled — so the panel shows "1d6 → +4" rather than a promise.

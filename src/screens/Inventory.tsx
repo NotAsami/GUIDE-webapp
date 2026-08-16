@@ -8,6 +8,7 @@ import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { useItemTooltip } from '../components/ItemTooltip'
 import { burden, burdenTier, fmtWeight, itemWeight } from '../lib/burden'
+import { useGraph } from '../lib/useGraph'
 import { consumeEffect } from '../lib/consume'
 import {
   TAB_KIND_ORDER, attunedCount, attunementCap, equipTargetPatch, freshItemId, getGear, getInventory,
@@ -77,6 +78,8 @@ export function Inventory() {
 
   const inventory = getInventory(character)
   const gear = getGear(character)
+  // Built once per character, not per use — see lib/useGraph.ts.
+  const graph = useGraph(character, shardTrees)
   const load = burden(character, shardTrees)
   const coins = character.sheet.coins ?? { gold: 0 }
 
@@ -286,9 +289,9 @@ export function Inventory() {
 
   async function use(item: InventoryItem) {
     if (busy) return
-    const outcome = consumeEffect(item, character, shardTrees)
+    const outcome = consumeEffect(item, character, shardTrees, graph)
     if (outcome.wasted) {
-      addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
+      addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', ...rollExtras(item, outcome) })
       return
     }
     setBusy(true); setPopupId(null)
@@ -301,8 +304,23 @@ export function Inventory() {
       : inventory.filter(i => i.id !== item.id)) as unknown as Json[]
     await updateSections(patch)
     setBusy(false)
-    addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', lines: outcome.lines })
+    addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', ...rollExtras(item, outcome) })
   }
+
+  /** The half of a consumable's roll entry that both call sites share: what the
+   *  roll was ABOUT (so the panel can open its catalog sheet) and what the graph
+   *  contributed. Built once so the wasted-use entry cannot drift from the real
+   *  one — the player should see what WOULD have applied either way. */
+  const rollExtras = (item: InventoryItem, outcome: ReturnType<typeof consumeEffect>) => ({
+    lines: outcome.lines,
+    // `id` is optional on an inventory item (pre-catalog seeds have none), and a
+    // subject that cannot be resolved is worse than no subject: the panel would
+    // offer a catalog sheet that always reads "no longer carried".
+    subject: item.id ? { kind: 'item' as const, id: item.id } : undefined,
+    riderGroups: outcome.riders?.length ? [{ label: 'Effect', riders: outcome.riders }] : undefined,
+    notes: outcome.notes,
+    problems: outcome.problems,
+  })
 
   /** Move an item between ON PERSON and a container. Both directions are the same
    *  write, which is why no dragging across a tab switch is ever needed.
