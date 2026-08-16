@@ -183,3 +183,23 @@ test('only READY spells are active sources — and a Warlock owns no unready one
   // …as is any explicitly known-style caster.
   assert.deepEqual(kinds({ preparesSpells: false }), ['Cantrip', 'Readied', 'Known only'])
 })
+
+test('a concealed, unrevealed node contributes nothing — even to the DM', () => {
+  // On a player's client this is already true: a concealed node arrives as bare
+  // geometry. The check exists for the DM, whose copy has the secrets merged —
+  // without it the console simulates contributions the player cannot have.
+  const node = { id: 'core', name: 'Core', concealed: true, mods: { ac: 2 } }
+  const trees = { sh1: { id: 'sh1', name: 'S', nodes: [node] } } as never
+  const c = (revealed?: object) => character({
+    shards: { slot1: { shardId: 'sh1', attuned: ['core'], ...(revealed ? { revealed } : {}) } },
+  })
+  const nodes = (ch: ReturnType<typeof c>) =>
+    activeSources(ch, trees).filter(s => s.kind === 'shardnode').length
+
+  assert.equal(nodes(c()), 0)
+  // Revealed by the DM, it counts again.
+  assert.equal(nodes(c({ core: { name: 'Core', effect: 'x' } })), 1)
+  // An unconcealed node never needed revealing.
+  const plain = { sh1: { id: 'sh1', name: 'S', nodes: [{ ...node, concealed: false }] } } as never
+  assert.equal(activeSources(c(), plain).filter(s => s.kind === 'shardnode').length, 1)
+})
