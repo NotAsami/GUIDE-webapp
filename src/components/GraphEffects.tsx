@@ -104,7 +104,7 @@ const HELP = {
     t: 'Target selectors',
     body: (
       <>
-        <p>A target list is a set of selectors, OR’d together. Three kinds, and they resolve differently:</p>
+        <p>A target list is a set of selectors. Three kinds, and they resolve differently:</p>
         <div className={styles.dl}>
           <span className={styles.k}>Thing</span><span className={styles.v}>One named entity from the catalog — a spell, item or feature. Picked by name; stored as an id.</span>
           <span className={styles.k}>Tag</span><span className={styles.v}>Every entity carrying the tag. <code>tag:fire_damage</code> follows the catalog as it grows.</span>
@@ -112,7 +112,14 @@ const HELP = {
           <span className={styles.k}>Empty</span><span className={styles.v}>The node’s own roll — the feature acting on itself.</span>
         </div>
         <p className={styles.mono}>The match count beside the list is the only thing that tells a typo from a selector that correctly matches nothing yet. Read it every time.</p>
-      </>
+              <p className={styles.mono}>
+          With two or more, the <b>or / and</b> toggle beside the heading decides how they combine.
+          <b> or</b> (the default) means any one is enough: <code>weapon:sword</code> or <code>weapon:axe</code>.
+          <b> and</b> means every one must hold of the SAME roll — which is the only way to say
+          “a fire weapon, on its damage roll”, because <code>tag:fire</code> on its own rides into the
+          attack roll too.
+        </p>
+</>
     ),
   },
 }
@@ -299,7 +306,7 @@ function EffectRow({ eff, namesByGid, onOpen, onDelete }: {
       <span className={styles.sum}>
         {val && <><span className={styles.v}>{val}</span><span className={styles.sep}>·</span></>}
         <span className={cx(styles.tg, !ts.length && styles.own)}>
-          {ts.length ? ts.map(t => selLabel(t, namesByGid)).join(' | ') : 'own roll'}
+          {ts.length ? ts.map(t => selLabel(t, namesByGid)).join(eff.match === 'and' ? ' + ' : ' | ') : 'own roll'}
         </span>
         {flags.length > 0 && <><span className={styles.sep}>·</span><span className={styles.fl}>{flags.join(' + ')}</span></>}
       </span>
@@ -387,6 +394,19 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, nodes, namesByG
       ) : (<>
       <div className={styles.subsec}>
         <span className={styles.sl}>Target</span>
+        {/* How the list combines. Only meaningful once there are two, so it
+            appears then — a toggle over one selector is noise, and the audit
+            says so if you set it anyway. */}
+        {targets.length > 1 && (
+          <span className={styles.matchSeg}>
+            <button type="button" className={cx(eff.match !== 'and' && styles.on)}
+              onClick={() => setEffect(ei, { match: undefined })}
+              title="Any one of these targets is enough">or</button>
+            <button type="button" className={cx(eff.match === 'and' && styles.on)}
+              onClick={() => setEffect(ei, { match: 'and' })}
+              title="Every target must hold of the same roll — e.g. a fire weapon, on its damage roll">and</button>
+          </span>
+        )}
         <span className={styles.qm} onClick={() => setPop({ k: 'help', which: 'target' })}>?</span>
         <span className={cx(styles.cnt, summary.own && styles.own, !summary.own && summary.zero && styles.zero)}>
           <i className={`fa-solid ${summary.own ? 'fa-arrow-turn-down' : 'fa-crosshairs'}`} />{summary.text}

@@ -1515,3 +1515,73 @@ test('a tag matches whatever carries it — feature, spell, item, shard node', (
   }
   assert.equal(total(resolve(ctx, { kind: 'damage', tags: ['cold'] })).flat, 0)
 })
+
+// --- the AND target list ----------------------------------------------------
+
+test('`and` is what says "a fire weapon, on its DAMAGE roll"', () => {
+  // The bug: a weapon carries its tags into BOTH resolves, so `tag:fire` alone
+  // applies to the attack roll and the damage roll — +1 twice for one swing.
+  const or = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '1', dmgType: 'fire', label: 'Ember', target: ['tag:fire'] },
+  ])])
+  const req = { subject: 'weapon:w', tags: ['fire'] }
+  assert.equal(total(resolve(buildContext(or), { kind: 'attack', ...req })).flat, 1)
+  assert.equal(total(resolve(buildContext(or), { kind: 'damage', ...req })).flat, 1)
+
+  const and = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '1', dmgType: 'fire', label: 'Ember',
+      match: 'and', target: ['tag:fire', 'roll:damage'] },
+  ])])
+  const ctx = buildContext(and)
+  assert.equal(total(resolve(ctx, { kind: 'attack', ...req })).flat, 0, 'not the attack roll')
+  assert.equal(total(resolve(ctx, { kind: 'damage', ...req })).flat, 1, 'only the damage roll')
+  // …and not a different weapon's damage.
+  assert.equal(total(resolve(ctx, { kind: 'damage', subject: 'weapon:x', tags: ['cold'] })).flat, 0)
+})
+
+test('`and` normalises tags the same way the index does', () => {
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '2', label: 'Ember', match: 'and', target: ['tag:Fire Damage', 'roll:damage'] },
+  ])])
+  assert.equal(total(resolve(buildContext(c), { kind: 'damage', tags: ['fire_damage'] })).flat, 2)
+})
+
+test('a sub-kind satisfies its parent inside an `and`', () => {
+  // A melee damage roll carries both `roll:damage` and `roll:damage.melee`, so
+  // an AND naming the broader one still holds.
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '2', label: 'X', match: 'and', target: ['tag:fire', 'roll:damage'] },
+  ])])
+  const ctx = buildContext(c)
+  assert.equal(total(resolve(ctx, { kind: 'damage', sub: 'melee', tags: ['fire'] })).flat, 2)
+})
+
+test('an `or` list is unchanged — it is still the default and still the common case', () => {
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '3', label: 'Either', target: ['weapon:sword', 'weapon:axe'] },
+  ])])
+  const ctx = buildContext(c)
+  assert.equal(total(resolve(ctx, { kind: 'attack', subject: 'weapon:sword' })).flat, 3)
+  assert.equal(total(resolve(ctx, { kind: 'attack', subject: 'weapon:axe' })).flat, 3)
+  assert.equal(total(resolve(ctx, { kind: 'attack', subject: 'weapon:bow' })).flat, 0)
+})
+
+test('an AND that can never match is an error, not a silent no-op', () => {
+  const bad = (target: string[]) => auditNode({ graph: [
+    { id: 'e1', op: 'add', value: '1', label: 'X', match: 'and', target },
+  ] }).filter(a => a.t === 'This AND can never match')
+
+  assert.equal(bad(['roll:attack', 'roll:damage']).length, 1)      // one kind per roll
+  assert.equal(bad(['weapon:sword', 'weapon:axe']).length, 1)      // one subject per roll
+  assert.equal(bad(['roll:save.dex', 'roll:save.wis']).length, 1)  // one sub per roll
+  // Legitimate ANDs pass.
+  assert.equal(bad(['tag:fire', 'roll:damage']).length, 0)
+  assert.equal(bad(['tag:fire', 'tag:magic', 'roll:damage']).length, 0)
+  assert.equal(bad(['weapon:sword', 'roll:damage']).length, 0)
+  // Broad + narrow of the SAME kind is satisfiable — a melee damage roll is both.
+  assert.equal(bad(['roll:damage', 'roll:damage.melee']).length, 0)
+
+  // And an AND with nothing to combine says so.
+  assert.ok(auditNode({ graph: [{ id: 'e1', op: 'add', value: '1', label: 'X', match: 'and', target: ['tag:fire'] }] })
+    .some(a => a.t === 'AND with one target'))
+})
