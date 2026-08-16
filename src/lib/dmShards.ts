@@ -11,61 +11,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './auth'
 import { supabase } from './supabase'
 import type {
-  ShardNode, ShardTree, ShardTreeCatalogRow, ShardTreeSecretData, ShardTreeSecretRow,
+  ShardTreeCatalogRow, ShardTreeSecretData, ShardTreeSecretRow,
 } from './database.types'
+// The concealed-node boundary lives apart so it can be tested — see the module.
+import { mergeTree, splitForSave, type EditorNode, type EditorTree } from './shardSecrets'
 
-/** Derived from the stored shape so the two can't drift — adding a field to
- *  ShardTreeSecretData is all it takes for splitForSave to be able to carry it. */
-type SecretNodes = NonNullable<ShardTreeSecretData['nodes']>
-
-/** The editor's working copy: a ShardTree with `dm` notes merged onto the
- *  tree and every node, straight from secrets. Never sent to the DB as-is —
- *  `splitForSave` below un-merges it first. */
-export type EditorNode = ShardNode & { dm?: string }
-export type EditorTree = Omit<ShardTree, 'nodes'> & { dm?: string; nodes: EditorNode[] }
-
-function mergeTree(tree: ShardTree, secret: ShardTreeSecretRow | undefined): EditorTree {
-  const secretNodes = secret?.data.nodes ?? {}
-  return {
-    ...tree,
-    dm: secret?.data.dm,
-    nodes: tree.nodes.map((n): EditorNode => {
-      const s = secretNodes[n.id]
-      if (!s) return n
-      return { ...n, name: s.name, effect: s.effect, dm: s.dm, mods: s.mods ?? n.mods, features: s.features ?? n.features, perks: s.perks ?? n.perks, vars: s.vars ?? n.vars, tags: s.tags ?? n.tags, graph: s.graph ?? n.graph }
-    }),
-  }
-}
-
-/** Reverse the merge for a write: concealed nodes lose name/effect/mods/
- *  features/perks/vars/dm from the catalog copy (geometry only survives there)
- *  and gain them back in the returned secrets payload; every OTHER node's `dm`
- *  note (if any) moves to secrets too, catalog keeps everything else.
- *
- *  The concealed branch rebuilds the node field-by-field rather than spreading,
- *  so that a field added to ShardNode can never leak to the player catalog by
- *  default. The cost is that every new MECHANICAL field must be added here too
- *  or it is silently dropped on save — `vars` is the most recent. */
-function splitForSave(tree: EditorTree): { catalog: ShardTree; secretsData: { dm?: string; nodes: SecretNodes } } {
-  const secretNodes: SecretNodes = {}
-  const catalogNodes: ShardNode[] = tree.nodes.map(n => {
-    const { dm, ...node } = n
-    if (n.concealed) {
-      secretNodes[n.id] = { name: node.name, effect: node.effect, dm, mods: node.mods, features: node.features, perks: node.perks, vars: node.vars, tags: node.tags, graph: node.graph }
-      // Geometry only — no name/effect/mods/features/perks/vars/tags/graph reach
-      // the catalog row.
-      const geometry: ShardNode = {
-        id: node.id, name: '', tier: node.tier, branch: node.branch, angle: node.angle,
-        cost: node.cost, icon: node.icon, prereqs: node.prereqs, effect: '', concealed: true,
-      }
-      return geometry
-    }
-    if (dm) secretNodes[n.id] = { name: node.name, effect: node.effect, dm }
-    return node
-  })
-  const { dm: treeDm, ...catalog } = tree
-  return { catalog: { ...catalog, nodes: catalogNodes }, secretsData: { dm: treeDm, nodes: secretNodes } }
-}
+export type { EditorNode, EditorTree }
 
 export interface DmShardsState {
   /** PUBLISHED trees, as players read them. */

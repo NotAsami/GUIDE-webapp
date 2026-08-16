@@ -14,6 +14,23 @@ A **node** is anything that can be granted: a feature, a spell, an item, a shard
 node. All four author identically — same block, same vocabulary — because "+2 to
 your next attack" means the same thing whatever granted it.
 
+### Which node to put it on
+
+The kind decides WHEN the rule is live, and that is the only difference:
+
+| put it on | live while | authored in |
+|---|---|---|
+| **feature** | always — it is the character's | Feature editor (`/dm/features`) |
+| **spell** | that spell's own casts, and only while the spell is READY | Spell form → *Roll Contributions* |
+| **item** | it is EQUIPPED | Item form → *Roll Contributions* |
+| **shard node** | it is ATTUNED | Shard lattice → node → *Roll Contributions* |
+
+> **A concealed shard node is DM-side only.** Its mechanics live in
+> `shard_tree_secrets`, which no player can read, so its contributions never
+> apply on their sheet — the same as its Effects and Features, and true even
+> after you reveal it (a reveal sends the name and prose, not the mechanics).
+> Unconceal the node when you want it to actually do something.
+
 An **effect** answers five questions, and only the first three are required:
 
 | | | |
@@ -92,8 +109,15 @@ roll:feature         a feature's own roll, and using an item
 > `roll:damage.melee` + `roll:damage.ranged`. There is no "weapon" roll kind,
 > and the list is an OR, so two entries say it exactly.
 
-**A tag** — `tag:fire`. Free text, normalised on save, matched across every
-catalog. Use it when the rule is about a *kind* of thing you will keep adding to.
+**A tag** — `tag:fire`. Free text, normalised on save (so `Fire`, `fire` and
+`FIRE` are one tag), matched across every catalog. Use it when the rule is about
+a *kind* of thing you will keep adding to: tag three weapons `fire` and one
+feature reaches all three, plus the fourth you add next month.
+
+Every node kind carries tags — feature, spell, item and shard node all have a
+**Targeting tags** field, with autocomplete over what is already in use
+elsewhere. Pick from that list rather than retyping; a tag that fragments matches
+nothing and looks like it should.
 
 **A specific thing** — picked from the catalog, never typed. Stored as an id, so
 renaming the target never breaks it.

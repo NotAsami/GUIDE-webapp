@@ -140,11 +140,18 @@ export function activeSources(character: CharacterRow, shardTrees: Record<string
   for (const obj of gearFeatures(character)) out.push({ kind: 'feature', obj })
   for (const obj of shardFeatures(character, shardTrees)) out.push({ kind: 'feature', obj })
 
-  // Slotted shards: the tree's base grant, then every attuned node. A concealed
-  // node reaches a player session as bare geometry (its mods/features live in
-  // shard_tree_secrets), so there is deliberately no `revealed` check here —
-  // filtering client-side would be a no-op for players and would drop real
-  // contributions on the DM side, where the secrets are merged back in.
+  // Slotted shards: the tree's base grant, then every attuned node.
+  //
+  // A CONCEALED, UNREVEALED node contributes nothing. On a player's client this
+  // is already true by construction — a concealed node arrives as bare geometry,
+  // its mechanics living in shard_tree_secrets, which has no player policy. The
+  // check exists for the DM, whose copy HAS the secrets merged: without it the
+  // operator console would simulate contributions the player's sheet cannot
+  // have, and the two would quietly disagree.
+  //
+  // shards.ts already gates perks and features exactly this way; slice 6a is
+  // what first let a node's graph into the index, so this is the same rule
+  // catching up.
   for (const slot of Object.values(shardSlots(character))) {
     if (!slot.shardId) continue
     const tree = shardTrees[slot.shardId]
@@ -152,7 +159,8 @@ export function activeSources(character: CharacterRow, shardTrees: Record<string
     out.push({ kind: 'shard', obj: tree, fx: tree.baseMods })
     for (const id of slot.attuned) {
       const node = tree.nodes.find(n => n.id === id)
-      if (node) out.push({ kind: 'shardnode', obj: node, shardId: slot.shardId, fx: node.mods })
+      if (!node || (node.concealed && !slot.revealed?.[id])) continue
+      out.push({ kind: 'shardnode', obj: node, shardId: slot.shardId, fx: node.mods })
     }
   }
 

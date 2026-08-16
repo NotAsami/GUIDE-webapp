@@ -26,7 +26,7 @@ import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmFeatures, featureContent } from '../lib/dm'
 import { useLocalDraft } from '../lib/draft'
 import { useAutoGrow } from '../lib/textareaHooks'
-import { GraphEffects, VarsBlock, splitSel } from '../components/GraphEffects'
+import { GraphEffects, TagsBlock, VarsBlock, splitSel } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { auditNode, gid, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
 import {
@@ -703,9 +703,6 @@ function FeatureForm(p: FormProps) {
   const graph = d.graph ?? []
   const varErr = vars.some(v => !v.name?.trim() || (v.kind === 'derived' && !v.formula?.trim()))
   const effErr = graph.some(e => !e.label?.trim())
-  const tagHits = [...p.tagUse.keys()]
-    .filter(t => t.includes(normalizeTag(p.tagInput)) && !(d.tags ?? []).includes(t))
-    .slice(0, 8)
 
   return (
     <>
@@ -815,37 +812,8 @@ function FeatureForm(p: FormProps) {
 
       {/* --- 02 tags --- */}
       <div className={styles.sec}><span className={styles.num}>02</span><span className={styles.fieldLab}>Tags</span></div>
-      <div className={styles.chips}>
-        {(d.tags ?? []).length
-          ? (d.tags ?? []).map((t, i) => (
-            <span key={t} className={styles.chip}>{t}
-              <i className={cx('fa-solid fa-xmark', styles.x)}
-                onClick={() => update(x => ({ ...x, tags: (x.tags ?? []).filter((_, j) => j !== i) }))} />
-            </span>
-          ))
-          : <span className={cx(styles.chip, styles.empty)}>no tags</span>}
-      </div>
-      <div className={styles.tagbox}>
-        <input className={styles.in} value={p.tagInput} placeholder="Add a tag — lowercased on save"
-          autoComplete="off" spellCheck={false}
-          onChange={e => { p.setTagInput(e.target.value); p.setTagAcOpen(true) }}
-          onBlur={() => setTimeout(() => p.setTagAcOpen(false), 140)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); p.addTag(p.tagInput) }
-            if (e.key === 'Escape') p.setTagAcOpen(false)
-          }} />
-        {p.tagAcOpen && p.tagInput.trim() && tagHits.length > 0 && (
-          <div className={styles.ac}>
-            <div className={styles.hd}>In use already</div>
-            {tagHits.map(t => (
-              <button key={t} type="button" onMouseDown={e => e.preventDefault()} onClick={() => p.addTag(t)}>
-                <i className="fa-solid fa-tag" style={{ fontSize: 8, color: 'var(--amber-dim)' }} />{t}
-                <span className={styles.n}>{p.tagUse.get(t)} in use</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <TagsBlock tags={d.tags ?? []} tagUse={p.tagUse}
+        onChange={next => update(x => ({ ...x, tags: next }))} />
 
       {/* --- 03 variables --- */}
       <div className={cx(styles.blk, p.open.vars && styles.open)}>

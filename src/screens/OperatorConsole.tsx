@@ -9,7 +9,7 @@ import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, 
 import { MOD_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
 import type { GraphEffect, GraphState, ShardSlot, ShardTree, VarDef } from '../lib/database.types'
 import { auditNode, characterVars } from '../lib/graph'
-import { GraphEffects, VarsBlock } from '../components/GraphEffects'
+import { GraphEffects, TagsBlock, VarsBlock } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphState'
 import { longRestPatch } from '../lib/rest'
@@ -1416,6 +1416,15 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
 }) {
   const d = item?.data
   const [name, setName] = useState(d?.name ?? '')
+  // Roll contributions, beside `effectRefs` and deliberately not the same thing:
+  // effects are the passive numeric layer, a graph is per-roll and conditional.
+  const [graph, setGraph] = useState<GraphEffect[]>(d?.graph ?? [])
+  const [vars, setVars] = useState<VarDef[]>(d?.vars ?? [])
+  const [tags, setTags] = useState<string[]>(d?.tags ?? [])
+  const [gfxOpen, setGfxOpen] = useState(false)
+  const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
+  const gAudit = ready ? auditNode({ graph, vars }, nodes) : []
+  const gErrs = gAudit.filter(a => a.sev === 'err')
   const [category, setCategory] = useState<ItemCategory>(d?.category ?? 'misc')
   const [rarity, setRarity] = useState<ItemRarity>(d?.rarity ?? 'common')
   const [w, setW] = useState(d?.w ?? 1)
@@ -1496,6 +1505,11 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
     if (effectRefs.length) data.effectRefs = effectRefs
     if (feats.length) data.features = feats
     if (rows.length) data.rows = rows
+    // Hand-enumerated, like everything above it — which is exactly why these two
+    // were dropped on every save until now.
+    if (graph.length) data.graph = graph
+    if (vars.length) data.vars = vars
+    if (tags.length) data.tags = tags
     return data
   }
   async function submit() {
@@ -1849,8 +1863,42 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
         <Btn tone="ghost" sm icon="fa-plus" label="Add" onClick={addRow} />
       </div>
 
+      {/* ROLL CONTRIBUTIONS — the same block the feature editor and the spell
+          form author. Beside Effects Granted and deliberately distinct from it:
+          `effects` is the passive numeric layer compiled from the effect
+          library, this is per-roll and conditional (database.types.ts:513).
+          Applies while the item is EQUIPPED. */}
+      <div className={cx(styles.catFx, styles.fold, gfxOpen && styles.open)}>
+        <div className={styles.fxfHead} onClick={() => setGfxOpen(o => !o)} role="button" tabIndex={0} aria-expanded={gfxOpen}>
+          <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
+          <i className="fa-solid fa-diagram-project" style={{ color: 'var(--cyan-hot)', fontSize: 11 }} />
+          <span className={styles.t}>Roll Contributions</span>
+          <span className={styles.s}>
+            {graph.length
+              ? `${graph.length} effect${graph.length === 1 ? '' : 's'}${gErrs.length ? ` · ${gErrs.length} error${gErrs.length === 1 ? '' : 's'}` : ''}`
+              : 'none · what this item adds to a roll while equipped'}
+          </span>
+        </div>
+        {gfxOpen && (
+          <div className={styles.gfxBody}>
+            <GraphEffects graph={graph} vars={vars} nodes={nodes} namesByGid={namesByGid} onChange={setGraph} />
+            <VarsBlock vars={vars} onChange={setVars} />
+            {/* An item's tags are what `tag:` selectors match, AND what
+                Equipment passes into every attack it rolls with this weapon. */}
+            <div className={styles.catSecLab}><span className={styles.fieldLab}>Targeting tags</span></div>
+            <TagsBlock tags={tags} tagUse={tagUse} onChange={setTags} />
+          </div>
+        )}
+      </div>
+
+      {gErrs.map((a, i) => (
+        <div key={i} className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" /> <b>{a.t}</b> — {a.s}
+        </div>
+      ))}
+
       <div className={styles.qActions}>
-        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : item ? 'Save Item' : 'Create Item'} onClick={() => void submit()} disabled={busy || !name.trim()} />
+        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : item ? 'Save Item' : 'Create Item'} onClick={() => void submit()} disabled={busy || !name.trim() || gErrs.length > 0} />
         {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
       </div>
     </>
@@ -2504,7 +2552,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
   const [graph, setGraph] = useState<GraphEffect[]>(d?.graph ?? [])
   const [vars, setVars] = useState<VarDef[]>(d?.vars ?? [])
   const [gfxOpen, setGfxOpen] = useState(false)
-  const { nodes, namesByGid, ready } = useCatalogNodes()
+  const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
   // auditNode skips dangling-target detection on an empty catalog, so a clean
   // report before the libraries load would be a lie. See lib/useCatalogNodes.ts.
   const gAudit = ready ? auditNode({ graph, vars }, nodes) : []
@@ -2523,6 +2571,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
   const [concentration, setConcentration] = useState(d?.concentration ?? false)
   const [ritual, setRitual] = useState(d?.ritual ?? false)
   const [desc, setDesc] = useState(d?.desc ?? '')
+  const [tags, setTags] = useState<string[]>(d?.tags ?? [])
   const [save, setSave] = useState<AbilityKey | ''>(d?.save ?? '')
   const [hasDamage, setHasDamage] = useState(d?.hasDamage ?? false)
   const [dice, setDice] = useState(d?.dice ?? '')
@@ -2556,6 +2605,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       // same discipline withVars() keeps on `resources`.
       ...(graph.length ? { graph } : {}),
       ...(vars.length ? { vars } : {}),
+      ...(tags.length ? { tags } : {}),
       ...(hasDamage ? {
         dice: dice.trim(), scaling: scaling.trim(), dmgType: dmgType.trim(),
         ...(dmgColor ? { dmgColor } : {}),
@@ -2776,6 +2826,10 @@ function SpellForm({ spell, onSubmit, onDelete }: {
           <div className={styles.gfxBody}>
             <GraphEffects graph={graph} vars={vars} nodes={nodes} namesByGid={namesByGid} onChange={setGraph} />
             <VarsBlock vars={vars} onChange={setVars} />
+            {/* Tags reach ACROSS catalogs — `tag:fire` should match this spell,
+                a weapon and a shard node alike. */}
+            <div className={styles.catSecLab}><span className={styles.fieldLab}>Targeting tags</span></div>
+            <TagsBlock tags={tags} tagUse={tagUse} onChange={setTags} />
           </div>
         )}
       </div>

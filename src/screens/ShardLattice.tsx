@@ -7,7 +7,9 @@ import { useDmShards, type EditorNode, type EditorTree } from '../lib/dmShards'
 import { useLocalDraft } from '../lib/draft'
 import { RING_GAP, branchColor, nodeXY } from '../lib/shards'
 import { MOD_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '../lib/modEditor'
-import type { AuditItem } from '../lib/graph'
+import { auditNode, type AuditItem, type AuthoredNode } from '../lib/graph'
+import { useCatalogNodes } from '../lib/useCatalogNodes'
+import { GraphEffects, TagsBlock, VarsBlock } from '../components/GraphEffects'
 import type { Feature, ItemEffects, ShardPerk } from '../lib/database.types'
 import styles from './ShardLattice.module.css'
 
@@ -90,7 +92,7 @@ function useAutoGrow(value: string) {
 /** Lattice audit — a direct port of shard-lattice.js's audit(): orphan nodes,
  *  unreachable branches, dangling/inward-flow links, ring overlaps, a free-node
  *  warning, and a total-cost-vs-capacity sanity check. */
-function audit(tree: EditorTree): AuditItem[] {
+function audit(tree: EditorTree, nodes: AuthoredNode[] = [], ready = false): AuditItem[] {
   const out: AuditItem[] = []
   const byId = (id: string) => tree.nodes.find(n => n.id === id)
   const roots = tree.nodes.filter(n => n.tier === 0).map(n => n.id)
@@ -121,6 +123,21 @@ function audit(tree: EditorTree): AuditItem[] {
   }
   const total = tree.nodes.reduce((s, n) => s + n.cost, 0)
   if (total > tree.capacity * 2.2) out.push({ sev: 'warn', id: null, t: 'Cost ceiling', s: `Total cost ${total} against capacity ${tree.capacity} — most of this tree is unreachable in a campaign.` })
+
+  // Each node's authored graph, through the SAME audit the feature editor and
+  // the spell/item forms run — auditNode takes `{ graph, vars }` and has never
+  // cared what declared them. Re-tagged with the node id so the existing
+  // click-to-select works on a graph finding too.
+  //
+  // Gated on `ready`: auditNode skips dangling-target detection when the
+  // catalog is empty, and a clean report from an unloaded catalog is a lie.
+  if (ready) {
+    for (const n of tree.nodes) {
+      for (const a of auditNode({ graph: n.graph, vars: n.vars }, nodes)) out.push({ ...a, id: n.id })
+    }
+  }
+
+  // LAST, or a graph error renders next to "Safe to publish".
   if (!out.length) out.push({ sev: 'ok', id: null, t: 'Lattice valid', s: 'All nodes resolve to the core. Safe to publish.' })
   return out
 }
@@ -148,6 +165,9 @@ export function ShardLattice() {
   const nav = useNavigate()
   const { trees, drafts, loading, error, saveTree, publishTree, createTree, deleteTree } = useDmShards()
   const featureLib = useDmFeatures()
+  // Every targetable thing, for the node's graph block and for the audit's
+  // dangling-target check. `ready` gates the audit — see lib/useCatalogNodes.ts.
+  const catalog = useCatalogNodes()
 
   const [activeId, setActiveId] = useState<string | null>(null)
   // The draft ladder, same as the Feature Editor: localStorage autosaves every
@@ -388,7 +408,7 @@ export function ShardLattice() {
   if (!session) return <Navigate to="/login" replace />
   if (!isDm) return <Navigate to="/" replace />
 
-  const auditList = draft ? audit(draft) : []
+  const auditList = draft ? audit(draft, catalog.nodes, catalog.ready) : []
   const errs = auditList.filter(a => a.sev === 'err').length
   const warns = auditList.filter(a => a.sev === 'warn').length
   const totalCost = draft?.nodes.reduce((s, n) => s + n.cost, 0) ?? 0
@@ -594,7 +614,7 @@ export function ShardLattice() {
                     ) : tab === 'shard' ? (
                       <ShardInspector draft={draft} setDraft={setDraft} onDelete={onDeleteShard} fireToast={fireToast} featureLib={featureLib} />
                     ) : selNode ? (
-                      <NodeInspector draft={draft} node={selNode} snap={snap} rings={rings} isRoot={isRoot} setDraft={setDraft} onDelete={deleteSel} featureLib={featureLib} />
+                      <NodeInspector draft={draft} node={selNode} snap={snap} rings={rings} isRoot={isRoot} setDraft={setDraft} onDelete={deleteSel} featureLib={featureLib} nodes={catalog.nodes} namesByGid={catalog.namesByGid} tagUse={catalog.tagUse} />
                     ) : (
                       <div className={styles.inspEmpty}>
                         <div className={styles.icBig}><span className={styles.icBigFrame} /><span className={styles.icBigInner}><i className="fa-solid fa-diagram-project" /></span></div>
@@ -757,12 +777,16 @@ function NewBranchRow({ draft, set }: { draft: EditorTree; set: (fn: (t: EditorT
 }
 
 /* ================= Node tab ================= */
-function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, featureLib }: {
+function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, featureLib, nodes, namesByGid, tagUse }: {
   draft: EditorTree; node: EditorNode; snap: boolean; rings: number
   isRoot: (n: EditorNode) => boolean
   setDraft: React.Dispatch<React.SetStateAction<EditorTree | null>>
   onDelete: () => void
   featureLib: DmFeaturesState
+  /** The catalog a target selector is picked from and counted against. */
+  nodes: AuthoredNode[]
+  namesByGid: Map<string, { name: string; kind: string }>
+  tagUse: Map<string, number>
 }) {
   const set = (fn: (t: EditorTree) => EditorTree) => setDraft(prev => (prev ? fn(prev) : prev))
   const setNode = (patch: Partial<EditorNode>) => set(t => ({ ...t, nodes: t.nodes.map(n => (n.id === node.id ? { ...n, ...patch } : n)) }))
@@ -832,6 +856,29 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
       <FeaturesWidget features={node.features ?? []} onChange={feats => setNode({ features: feats })} label="Features Granted" note="While attuned" library={featureLib} />
       <PerksWidget perks={node.perks ?? []} onChange={perks => setNode({ perks })} label="Perks Granted" note="While attuned" />
       <DetailsWidget rows={node.detailRows ?? []} onChange={rows => setNode({ detailRows: rows })} label="Detail Rows" />
+
+      {/* ROLL CONTRIBUTIONS — the same block the feature editor, the spell form
+          and the item form author. Applies while ATTUNED. On a CONCEALED node
+          these live in shard_tree_secrets and never reach a player's client, so
+          they are the DM's simulation only until the node is unconcealed. */}
+      <div className={styles.catFxHead} style={{ marginTop: 14 }}>
+        <i className="fa-solid fa-diagram-project" />
+        <span className={styles.t}>Roll Contributions</span>
+        <span className={styles.s}>
+          {node.concealed ? 'While attuned · concealed, so DM-side only' : 'While attuned'}
+        </span>
+      </div>
+      <GraphEffects
+        graph={node.graph ?? []} vars={node.vars ?? []}
+        nodes={nodes} namesByGid={namesByGid}
+        onChange={graph => setNode({ graph })}
+      />
+      <VarsBlock vars={node.vars ?? []} onChange={vars => setNode({ vars })} />
+      {/* Tags on a node are what `tag:` selectors match it by — the fourth and
+          last kind to get the control. Secrets-routed like the rest when the
+          node is concealed. */}
+      <div className={styles.sec} style={{ marginTop: 12 }}><span className={styles.fieldLab}>Targeting tags</span></div>
+      <TagsBlock tags={node.tags ?? []} tagUse={tagUse} onChange={tags => setNode({ tags })} />
 
       <div className={styles.sec} style={{ marginTop: 14 }}><span className={styles.fieldLab}>DM Note — never shown</span></div>
       <textarea ref={dmRef} className={`${styles.prose} ${styles.dm}`} placeholder="// operator only" value={node.dm ?? ''} onChange={e => setNode({ dm: e.target.value })} />

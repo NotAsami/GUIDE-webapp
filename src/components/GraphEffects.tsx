@@ -713,3 +713,71 @@ export function VarsBlock({ vars, onChange }: {
     </>
   )
 }
+
+/* ---------- tags ---------- */
+
+/** Free-text targeting tags, with autocomplete over what is already in use.
+ *
+ *  A tag's whole purpose is to reach ACROSS catalogs — `tag:fire` should match a
+ *  spell, a weapon and a shard node alike — so every node kind that can be
+ *  targeted needs this control. Until slice 6c only the feature editor had it,
+ *  which meant `tag:` matched features and nothing else while `Equipment` and
+ *  `Spellbook` were both dutifully passing tags into every resolve.
+ *
+ *  Normalised on save (lib/graph.ts normalizeTag), because free text fragments
+ *  silently: `radiant` / `Radiant` / `radient` all look right and match nothing. */
+export function TagsBlock({ tags, tagUse, onChange }: {
+  tags: string[]
+  /** Every tag in use anywhere, with a count — from useCatalogNodes. */
+  tagUse: Map<string, number>
+  onChange: (next: string[]) => void
+}) {
+  const [input, setInput] = useState('')
+  const [acOpen, setAcOpen] = useState(false)
+
+  const add = (raw: string) => {
+    const t = normalizeTag(raw)
+    if (!t) return
+    if (!tags.includes(t)) onChange([...tags, t])
+    setInput(''); setAcOpen(false)
+  }
+  const hits = [...tagUse.keys()]
+    .filter(t => t.includes(normalizeTag(input)) && !tags.includes(t))
+    .slice(0, 8)
+
+  return (
+    <>
+      <div className={styles.chips}>
+        {tags.length
+          ? tags.map((t, i) => (
+            <span key={t} className={styles.chip}>{t}
+              <i className={cx('fa-solid fa-xmark', styles.x)}
+                onClick={() => onChange(tags.filter((_, j) => j !== i))} />
+            </span>
+          ))
+          : <span className={cx(styles.chip, styles.empty)}>no tags</span>}
+      </div>
+      <div className={styles.tagbox}>
+        <input className={styles.in} value={input} placeholder="Add a tag — lowercased on save"
+          autoComplete="off" spellCheck={false}
+          onChange={e => { setInput(e.target.value); setAcOpen(true) }}
+          onBlur={() => setTimeout(() => setAcOpen(false), 140)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(input) }
+            if (e.key === 'Escape') setAcOpen(false)
+          }} />
+        {acOpen && input.trim() && hits.length > 0 && (
+          <div className={styles.ac}>
+            <div className={styles.hd}>In use already</div>
+            {hits.map(t => (
+              <button key={t} type="button" onMouseDown={e => e.preventDefault()} onClick={() => add(t)}>
+                <i className="fa-solid fa-tag" style={{ fontSize: 8, color: 'var(--amber-dim)' }} />{t}
+                <span className={styles.n}>{tagUse.get(t)} in use</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}

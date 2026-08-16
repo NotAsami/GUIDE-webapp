@@ -2626,3 +2626,96 @@ unequipped or unprepared — exactly the states this slice just made matter — 
 lookup would come back empty for a bonus that is still legitimately pending. An
 entry armed before the field existed falls back to the gid; any rest clears the
 queue, so those age out within a session.
+
+---
+
+## 53. Slice 6c as built — items and shard nodes
+
+The third and fourth hosts, and the slice that cashes in 6b's placement bet:
+**one component, three hosts** turned out to be one component, four. `SpellForm`,
+`CatalogForm` and `NodeInspector` render the same `GraphEffects` + `VarsBlock`
+the feature editor does, with no changes to the component in either addition.
+
+Greenfield data-wise, checked before starting: 20 item rows and 27 shard nodes,
+none carrying `graph` or `vars`.
+
+### The item form dropped them the same way the spell form did
+
+`CatalogForm.build()` (`OperatorConsole.tsx:1464`) rebuilds `CatalogItemData`
+field by field, so `graph` and `vars` were absent from every save — the second
+instance of that exact trap in two slices, and the codebase had already
+documented the first. Both now join the builder, omitted when empty.
+
+The fold sits beside "Effects Granted" and is deliberately not it:
+`effects`/`effectRefs` is the passive numeric layer compiled into `ItemEffects`;
+`graph` is per-roll and conditional. `database.types.ts:513` already drew that
+line, and now the UI does too.
+
+### The shard leak was already prevented — and now it is tested
+
+`splitForSave` already routed `graph`/`vars`/`tags` into secrets for a concealed
+node, because it rebuilds the concealed branch field-by-field rather than
+spreading, *"so that a field added to ShardNode can never leak to the player
+catalog by default"*. Nothing needed changing.
+
+What it did not have was a test, and `dmShards.ts` cannot have one — it imports
+the supabase client, which reads `import.meta.env` and does not load outside
+Vite. So `mergeTree`/`splitForSave` moved to **`lib/shardSecrets.ts`**: pure, no
+React, no network. Five tests, and the important one is mutation-verified —
+adding `graph` back to the geometry literal fails with
+`graph leaked to the public catalog`.
+
+That boundary is the one genuinely dangerous thing in this slice.
+`shard_tree_secrets` has no player policy ever (0008), so a field that reaches
+`shard_tree_catalog.data` is in every bound player's client, and a spoiler has
+no undo.
+
+### The asymmetry 6a created, closed
+
+A concealed node's mechanics never reach a player. But the DM's copy HAS the
+secrets merged, and 6a is what first let a shard node into the resolve index —
+so the operator console would have simulated contributions the player's sheet
+could not have, and the two would quietly disagree.
+
+`activeSources` now skips a concealed, unrevealed node, which `shards.ts:156`
+has always done for perks and features. A no-op on the player client (the data
+is already absent) and the thing that keeps the DM honest.
+
+### The lattice audit absorbed the graph audit
+
+`audit(tree)` already returned the shared `AuditItem[]` and already rendered it
+with click-to-select. It now appends `auditNode({ graph, vars }, nodes)` per
+node, re-tagged with the node id so a graph finding selects its node like any
+other. Appended BEFORE the clean-bill push, or an error renders beside "Safe to
+publish"; Publish was already gated on `errs > 0`, so a graph error blocks it
+with no new wiring.
+
+The lattice loaded no catalogs, so it gained `useCatalogNodes()` and gates the
+audit on its `ready` — without which `auditNode` skips dangling-target detection
+and reports a clean node that is not.
+
+### Still owed
+
+| Owed | Why |
+|---|---|
+| **A carried item's own graph** | `EquippedItem.graph` says "while EQUIPPED". Still gated on the open "what does active mean for a carried item" question, which also blocks §19's `AmmoBonus` deletion. |
+| **Concealed graphs for players** | Would mean sending mechanics they are not meant to have. A design question, not a slice. |
+| **Multi-type damage** | Still a `Spell`-model change first. |
+
+### Tags, on all four kinds
+
+Included after all: `tag:` was the last piece of the vocabulary that only worked
+on features. `Equipment` has always passed `weapon.tags` into every attack it
+rolls and `Spellbook` passes `sp.tags` into every cast, but nothing outside the
+feature editor could author one — so `tag:fire` matched a feature and nothing
+else, while looking like it should match everything.
+
+`TagsBlock` extracted alongside `GraphEffects` and `VarsBlock`, autocomplete
+included, and hosted by all four forms. Normalisation on save is the point:
+`radiant` / `Radiant` / `radient` all look right to an author and match nothing,
+which is why the autocomplete offers what is already in use rather than trusting
+anyone to retype it.
+
+That makes the extraction's final count **three components, four hosts** — and
+the feature editor's own tag block is now the shared one, so it cannot drift from
+the other three.

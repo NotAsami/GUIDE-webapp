@@ -1500,3 +1500,18 @@ test('an armed rider shows a name in the source column, falling back to the gid'
     label: 'Sanctified', kind: 'attack', op: 'add', value: '4', at: 1 }])
   assert.equal(resolve(buildContext(bare), ATTACK).riders[0].source, 'spell:cat-flame')
 })
+
+test('a tag matches whatever carries it — feature, spell, item, shard node', () => {
+  // A tag's whole purpose is to reach across catalogs. Until 6c only features
+  // could carry one, so `tag:fire` matched a feature and nothing else while
+  // Equipment and Spellbook were both passing tags into every resolve.
+  const c = withFeatures([gfeat('Pyromancer', [
+    { id: 'e1', op: 'add', value: '3', label: 'Fire Affinity', target: ['tag:fire'] },
+  ])])
+  const ctx = buildContext(c)
+  // Normalised on save, so the casing the roll passes cannot matter.
+  for (const tag of ['fire', 'Fire', 'FIRE']) {
+    assert.equal(total(resolve(ctx, { kind: 'damage', tags: [tag] })).flat, 3, tag)
+  }
+  assert.equal(total(resolve(ctx, { kind: 'damage', tags: ['cold'] })).flat, 0)
+})
