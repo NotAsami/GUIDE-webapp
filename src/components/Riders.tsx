@@ -51,7 +51,13 @@ export function Riders({ groups, notes, problems }: {
               </span>
               <span className={styles.rLabel}>{r.label}</span>
               <span className={styles.rVal}>{riderValue(r)}</span>
-              <span className={styles.rSrc}>{r.source}</span>
+              <span className={styles.rSrc}>
+                {r.source}
+                {/* Say so out loud. A manual rider is NOT in the total, and a
+                    number sitting in a list next to numbers that are counted
+                    reads as though it were. */}
+                {r.when === 'manual' && <span className={styles.rPend}> · not applied</span>}
+              </span>
             </div>
           ))}
         </div>

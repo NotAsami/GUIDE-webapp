@@ -730,6 +730,17 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
     if (eff.op !== 'add' && !IS_ACTIVATION(eff.op) && eff.value) {
       out.push({ sev: 'err', id: eff.id, t: 'Value on a flag', s: `${eff.label || eff.id} is ${eff.op}, which is a flag, never a number. Advantage is not a bonus.` })
     }
+    // Not an error — §32 makes the combination legal and §24 needs it. But the
+    // consequence is invisible from the editor: while the condition is false the
+    // node does not appear AT ALL, not even as an unticked toggle, because a
+    // toggle nobody can satisfy reads as a decision the player is getting wrong.
+    // An author who has not read §32 sees a node that silently does nothing.
+    if (eff.when && eff.ask) {
+      out.push({
+        sev: 'warn', id: eff.id, t: 'Vanishes when the condition is false',
+        s: `${eff.label || eff.id} has both a condition and a toggle. While "${eff.when}" is false it does not surface at all — the player is not offered a choice they could not take.`,
+      })
+    }
     if (eff.op === 'note' && eff.ask) {
       out.push({ sev: 'err', id: eff.id, t: 'Toggle on a note', s: `${eff.label || eff.id} is prose — there is nothing for the player to resolve. Use \`when\` if it should be conditional.` })
     }
@@ -808,6 +819,27 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
     if (badCells.length) {
       out.push({ sev: 'err', id: eff.id, t: 'Bad level table', s: `${eff.label || eff.id}'s table does not evaluate at level ${badCells.map(b => b.i).join(', ')}.` })
     }
+  }
+
+  // A variable nothing reads and nothing writes is state with no mechanism: the
+  // player gets a control that moves a value the engine never consults. This is
+  // the authoring-side twin of a field that never reaches the form. A warning,
+  // not an error — declaring the variable before wiring it is a legitimate order
+  // of work, and the DM should be told, not blocked.
+  const referenced = new Set<string>()
+  for (const d of node.vars ?? []) for (const id of freeIdents(d.formula ?? '')) referenced.add(id)
+  for (const eff of node.graph ?? []) {
+    if (eff.variable) referenced.add(eff.variable)
+    for (const src of [eff.value, eff.when, eff.threshold, ...(eff.byLevel ?? [])]) {
+      for (const id of freeIdents(src ?? '')) referenced.add(id)
+    }
+  }
+  for (const d of node.vars ?? []) {
+    if (referenced.has(d.name)) continue
+    out.push({
+      sev: 'warn', id: d.name, t: 'Variable is never used',
+      s: `${label(d)} is declared but no condition reads it and no activation writes it, so changing it does nothing.`,
+    })
   }
   return out
 }

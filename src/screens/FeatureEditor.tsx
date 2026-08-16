@@ -951,7 +951,7 @@ function FeatureForm(p: FormProps) {
                   {stored ? (
                     <>
                       <div className={styles.kindnote}>Stored — written on the character sheet and read back. Needs a type.</div>
-                      <div className={styles.grid2}>
+                      <div className={styles.grid3}>
                         <div>
                           <span className={styles.fieldLab}>Type<span className={styles.req}>*</span><span className={styles.ty}>enum</span></span>
                           <select className={cx(styles.in, !v.type && styles.bad)} value={v.type ?? ''}
@@ -973,6 +973,20 @@ function FeatureForm(p: FormProps) {
                               setVar(vi, { initial })
                             }} />
                         </div>
+                        <div>
+                          <span className={styles.fieldLab}>Resets on<span className={styles.ty}>enum</span></span>
+                          <select className={styles.in} value={v.resetOn ?? ''}
+                            onChange={e => setVar(vi, { resetOn: (e.target.value || undefined) as 'short' | 'long' | undefined })}>
+                            <option value="">Never</option>
+                            <option value="short">Short rest</option>
+                            <option value="long">Long rest</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className={styles.kindnote} style={{ margin: '-6px 0 11px' }}>
+                        Resets return the variable to its initial value on that rest — the same
+                        rule a feature’s uses follow. A long rest includes the short-rest ones.
+                        <b> Never</b> means only an activation or the player changes it.
                       </div>
                       <div className={cx(styles.perm, !dmOnly && styles.player)}>
                         <i className={`fa-solid ${dmOnly ? 'fa-lock' : 'fa-user-pen'}`} />

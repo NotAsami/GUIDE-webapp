@@ -10,6 +10,8 @@ import {
   damageFlags, matchCount, nodeGid, normalizeTag, resolve, total, varCollisions, type ResolveReq,
 } from './graph.ts'
 import { activeSources } from './effects.ts'
+import { OPS, OP_ORDER, OP_TITLE } from './opSchema.ts'
+import type { GraphOp } from './database.types.ts'
 
 function character(over: Partial<CharacterRow>): CharacterRow {
   return {
@@ -793,8 +795,9 @@ test('auditNode holds an activation to its own shape', () => {
   assert.ok(auditNode({ vars, graph: [act({ target: ['roll:attack'] })] })
     .some(a => a.t === 'Target on an activation'))
   // A `value` on an activation is legal — it is the assigned value, not a
-  // contribution, so the "value on a flag" rule must not fire.
-  assert.deepEqual(auditNode({ vars, graph: [act({})] }), [])
+  // contribution, so the "value on a flag" rule must not fire. Warnings are
+  // expected here: `mercy` and `doubled` are declared and unread by this node.
+  assert.deepEqual(auditNode({ vars, graph: [act({})] }).filter(a => a.sev === 'err'), [])
 })
 
 test('an activation never reaches a Resolution', () => {
@@ -807,4 +810,82 @@ test('an activation never reaches a Resolution', () => {
   assert.equal(r.riders.length, 0)
   assert.equal(r.flat, 0)
   assert.deepEqual(r.problems, [])
+})
+
+test('every op reaches the palette — a schema entry is not an app feature', () => {
+  // This slice has repeatedly added a thing to a type or a schema and forgotten
+  // the control that authors it (byLevel, order, the activation palette,
+  // resetOn). This catches the one instance of that class which IS mechanically
+  // checkable: an op the DM cannot add is an op that may as well not exist.
+  const ops = Object.keys(OPS) as GraphOp[]
+  for (const op of ops) {
+    assert.ok(OP_ORDER.includes(op), `${op} is in OPS but not in OP_ORDER — no palette button offers it`)
+    assert.ok(OP_TITLE[op], `${op} has no palette label`)
+  }
+  assert.equal(OP_ORDER.length, ops.length)
+})
+
+test('the authored Rage shape: when + ask stays an unresolved toggle, never applied', () => {
+  // Mirrors a real authored feature, field for field, because a report of "the
+  // +2 just shows up" is only answerable against the exact shape.
+  const rage = (when?: string): Feature => ({
+    id: 'rage', name: 'Rage',
+    vars: [{ name: 'isRaging', kind: 'stored', type: 'bool', scope: 'player', initial: false, resetOn: 'long' }],
+    graph: [{
+      id: 'elu4pl9', op: 'add', value: '2', label: 'Rage', ask: 'You mad?',
+      target: ['roll:damage'], byLevel: new Array(21).fill(''), ...(when ? { when } : {}),
+    }],
+  })
+  const roll = (f: Feature, isRaging: boolean) => {
+    const c = character({ sheet: { ...SHEET, features: [f] }, resources: { graph: { vars: { isRaging } } } })
+    return resolve(buildContext(c), { kind: 'damage' })
+  }
+
+  // ask + when TRUE — a toggle, not a bonus. `flat` stays 0: the +2 is NOT in
+  // the number, and total() excludes it too because `on` is false.
+  const on = roll(rage('isRaging'), true)
+  assert.equal(on.riders.length, 1)
+  assert.equal(on.riders[0].when, 'manual')
+  assert.equal(on.riders[0].on, false)
+  assert.equal(on.flat, 0)
+  assert.equal(total(on).flat, 0)
+
+  // ask + when FALSE — §32 row 6, gone entirely.
+  assert.equal(roll(rage('isRaging'), false).riders.length, 0)
+
+  // ask alone — identical to the when-true case, which is the point: `when`
+  // decides whether the toggle EXISTS, never whether it is already answered.
+  const askOnly = roll(rage(), false)
+  assert.equal(askOnly.riders.length, 1)
+  assert.equal(askOnly.riders[0].when, 'manual')
+  assert.equal(askOnly.flat, 0)
+
+  // An empty-string ask is NOT a toggle — it is no ask at all, and the +2
+  // applies. This is the one way the two cases could diverge in stored data.
+  const blank = roll({ ...rage(), graph: [{ id: 'e', op: 'add', value: '2', label: 'Rage', ask: '', target: ['roll:damage'] }] }, false)
+  assert.equal(blank.flat, 2)
+  assert.equal(blank.riders.length, 0)
+})
+
+test('a variable nothing reads or writes is a warning', () => {
+  // Rage declared `isRaging` with no `when` referencing it and no setVar writing
+  // it, so the player's toggle moved a value the engine never consults. Declaring
+  // state nothing uses is the authoring-side twin of a control nothing reads.
+  const orphan = auditNode({
+    vars: [{ name: 'isRaging', kind: 'stored', type: 'bool' }],
+    graph: [{ id: 'e1', op: 'add', value: '2', label: 'Rage', ask: 'You mad?', target: ['roll:damage'] }],
+  })
+  assert.ok(orphan.some(a => a.sev === 'warn' && a.t === 'Variable is never used'))
+
+  // Read by a condition → fine.
+  assert.equal(auditNode({
+    vars: [{ name: 'isRaging', kind: 'stored', type: 'bool' }],
+    graph: [{ id: 'e1', op: 'add', value: '2', label: 'R', when: 'isRaging', target: ['roll:damage'] }],
+  }).some(a => a.t === 'Variable is never used'), false)
+
+  // Written by an activation → also fine.
+  assert.equal(auditNode({
+    vars: [{ name: 'isRaging', kind: 'stored', type: 'bool' }],
+    graph: [{ id: 'e1', op: 'setVar', variable: 'isRaging', value: 'true', label: 'Rage' }],
+  }).some(a => a.t === 'Variable is never used'), false)
 })
