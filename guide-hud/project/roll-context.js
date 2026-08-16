@@ -1,5 +1,12 @@
 /* G.U.I.D.E. — Roll Context Panel
    Post-roll receipt rail. Every die, every modifier, every contributor.
+
+   Rider states (from the graph engine):
+     resolved   — engine decided it applies; renders as a breakdown line, never a control
+     unresolved — depends on something only the player knows; renders as a toggle
+     na         — renders nothing at all
+   Rider kinds: 'value' (dice/flat) or 'flag' (grants ADVANTAGE / CRIT / DISADVANTAGE).
+   Rolled unresolved riders LOCK: the value is fixed, toggling reuses it.
    State lives in memory; nothing is persisted. */
 (() => {
 "use strict";
@@ -21,33 +28,43 @@ const rollFormula = f => { const [n, s] = f.toLowerCase().split('d').map(Number)
 const kept = L => L.dice.filter(d => !d.dropped).reduce((a,d) => a + d.v, 0);
 const modSum = L => (L.mods||[]).reduce((a,m) => a + m.v, 0);
 const lineTotal = L => kept(L) + modSum(L);
-const riderLive = r => r.on && (!r.conditional || r.rolled);
 const riderValue = r => r.flat != null ? r.flat : r.dice.reduce((a,d) => a + d.v, 0);
+/* not-applicable riders never reach the panel */
+const shown = R => (R.riders||[]).filter(r => r.state !== 'na');
+const resolvedRiders   = R => shown(R).filter(r => r.state === 'resolved');
+const unresolvedRiders = R => shown(R).filter(r => r.state === 'unresolved');
+/* a rider is contributing when the engine resolved it, or the player confirmed it */
+const riderLive = r => r.state === 'resolved' || (r.on && (r.kind === 'flag' || r.rolled));
+const flagIcon = f => f === 'CRIT' ? 'fa-burst' : f === 'DISADVANTAGE' ? 'fa-angles-down' : 'fa-angles-up';
 
 function totals(R) {
   const atkLine = R.lines.find(l => l.kind === 'attack');
   let atk = atkLine ? lineTotal(atkLine) : null;
   const dmg = {};
   R.lines.filter(l => l.kind === 'damage').forEach(l => { dmg[l.type] = (dmg[l.type]||0) + lineTotal(l); });
-  (R.riders||[]).forEach(r => {
+  const flags = [];
+  shown(R).forEach(r => {
     if (!riderLive(r)) return;
+    if (r.kind === 'flag') { if (!flags.includes(r.grants)) flags.push(r.grants); return; }
     if (r.target === 'attack') { if (atk != null) atk += riderValue(r); }
     else dmg[r.dtype] = (dmg[r.dtype]||0) + riderValue(r);
   });
   const dmgTotal = Object.values(dmg).reduce((a,b) => a+b, 0);
-  const pending = (R.riders||[]).filter(r => r.on && r.conditional && !r.rolled).length;
-  return { atk, dmg, dmgTotal, pending, hasDamage: Object.keys(dmg).length > 0 };
+  const pending = unresolvedRiders(R).filter(r => !(r.on && (r.kind === 'flag' || r.rolled))).length;
+  return { atk, dmg, dmgTotal, pending, flags, hasDamage: Object.keys(dmg).length > 0 };
 }
 
 /* ---------------- render ---------------- */
-function dieHTML(R, li, di, d) {
+function dieHTML(R, li, di, d, locked) {
   const cls = ['die'];
   if (d.dropped) cls.push('dropped');
   else if (d.v === d.sides) cls.push('max');
   else if (d.v === 1) cls.push('min');
   if (d.crit) cls.push('critdie');
   if (d.rerolled) cls.push('rerolled');
-  return `<button class="${cls.join(' ')}" data-die="${R.id}:${li}:${di}"${d.dropped?' tabindex="-1"':''}>${d.v}</button>`;
+  if (locked) cls.push('locked');
+  const inert = d.dropped || locked;
+  return `<button class="${cls.join(' ')}" data-die="${R.id}:${li}:${di}"${inert?' tabindex="-1"':''}>${d.v}</button>`;
 }
 
 function mathHTML(R, li, L) {
@@ -73,22 +90,67 @@ function lineHTML(R, li, L) {
   </section>`;
 }
 
-function riderHTML(R, ri, r) {
-  const state = !r.on ? 'off' : (r.conditional && !r.rolled ? 'on' : (r.conditional ? 'rolled' : 'on'));
-  const val = riderLive(r) ? `<span class="rd-val">${r.target === 'attack' ? '' : '+'}${riderValue(r)}${r.target==='attack'?' atk':' '+r.dtype}</span>` : '';
-  let run = '';
-  if (r.conditional && !r.rolled) {
-    run = `<div class="rd-cond"><i class="fa-solid fa-diamond"></i>Condition is yours to judge</div>
-      <div class="rd-run"><span class="rd-form">${esc(r.formula)} ${esc(r.dtype)}</span>
-      <button class="rd-btn" data-roll="${R.id}:${ri}"><span class="b-frame"></span><span class="b-in"><i class="fa-solid fa-dice-d20"></i>Roll it</span></button></div>`;
-  } else if (r.conditional && r.rolled) {
-    run = `<div class="rd-result"><span class="form" style="color:var(--beige)">${esc(r.formula)}</span>${r.dice.map((d,i)=>dieHTML(R,'r'+ri,i,d)).join('<span class="op">+</span>')}<span class="eq" style="color:var(--cyan)">=</span><span class="res">${riderValue(r)}</span><span class="l-type" data-t="${r.dtype}" style="margin-left:4px">${esc(r.dtype)}</span></div>`;
-  } else if (r.dice.length) {
-    run = `<div class="rd-result"><span class="form" style="color:var(--beige)">${esc(r.formula)}</span>${r.dice.map((d,i)=>dieHTML(R,'r'+ri,i,d)).join('<span class="op">+</span>')}<span class="eq" style="color:var(--cyan)">=</span><span class="res">${riderValue(r)}</span></div>`;
+/* RESOLVED — a contribution line. No switch, no button, nothing to decide. */
+function contribHTML(R, r) {
+  const t = r.target === 'attack' ? 'atk' : r.dtype;
+  const right = r.kind === 'flag'
+    ? `<span class="flag" data-f="${r.grants.toLowerCase()}"><i class="fa-solid ${flagIcon(r.grants)}"></i>${r.grants}</span>`
+    : `${r.formula && r.formula !== 'flat' ? `<span class="c-form">${esc(r.formula)} →</span>` : ''}<span class="c-val" data-t="${t}">+${riderValue(r)}${r.target === 'attack' ? ' atk' : ' ' + r.dtype}</span>`;
+  return `<div class="contrib" data-contrib="${R.id}:${r.id}">
+    <span class="c-name">${esc(r.name)}</span><span class="c-src">${esc(r.src)}</span>
+    <span class="c-right">${right}</span>
+  </div>`;
+}
+
+/* UNRESOLVED — the toggle. Formula, never a pre-rolled number, until the player says yes. */
+function askHTML(R, r) {
+  const ri = R.riders.indexOf(r);
+  const locked = r.kind === 'value' && r.rolled;
+  const cls = ['rider'];
+  cls.push(!r.on ? 'off' : (locked ? 'locked' : 'on'));
+  if (r.folded) cls.push('folded');
+
+  let val = '';
+  if (r.kind === 'flag') {
+    val = r.on
+      ? `<span class="flag" data-f="${r.grants.toLowerCase()}"><i class="fa-solid ${flagIcon(r.grants)}"></i>${r.grants}</span>`
+      : `<span class="flag ghost">${r.grants}</span>`;
+  } else if (r.on && r.rolled) {
+    val = `<span class="rd-val">+${riderValue(r)}${r.target === 'attack' ? ' atk' : ' ' + r.dtype}</span>`;
   }
-  return `<div class="rider ${state}${r.folded ? ' folded' : ''}" data-rider="${R.id}:${ri}">
+
+  let run = '';
+  if (r.kind === 'flag') {
+    run = r.on
+      ? `<div class="rd-grant"><span class="flag" data-f="${r.grants.toLowerCase()}"><i class="fa-solid ${flagIcon(r.grants)}"></i>${r.grants}</span>granted to this roll</div>`
+      : `<div class="rd-cond"><i class="fa-solid fa-diamond"></i>Condition is yours to judge · grants ${r.grants}</div>`;
+  } else if (locked) {
+    run = `<div class="rd-result"><span class="form" style="color:var(--beige)">${esc(r.formula)}</span>${r.dice.map((d,i)=>dieHTML(R,'r'+ri,i,d,true)).join('<span class="op">+</span>')}<span class="eq" style="color:var(--beige-dim)">=</span><span class="res" style="color:var(--beige)">${riderValue(r)}</span>${r.dtype?`<span class="l-type" data-t="${r.dtype}" style="margin-left:4px">${esc(r.dtype)}</span>`:''}</div>
+      <div class="rd-grant"><span class="rd-lock"><i class="fa-solid fa-lock"></i>Rolled · locked</span>toggling reuses this value</div>`;
+  } else if (r.on) {
+    run = `<div class="rd-cond"><i class="fa-solid fa-diamond"></i>Condition is yours to judge</div>
+      <div class="rd-run"><span class="rd-form">${esc(r.formula)}${r.dtype ? ' ' + esc(r.dtype) : ''}</span>
+      <button class="rd-btn" data-roll="${R.id}:${ri}"><span class="b-frame"></span><span class="b-in"><i class="fa-solid fa-dice-d20"></i>Roll it</span></button></div>`;
+  } else {
+    run = `<div class="rd-run"><span class="rd-form">${esc(r.formula)}${r.dtype ? ' ' + esc(r.dtype) : ''}</span></div>
+      <div class="rd-hint"><i class="fa-solid fa-diamond"></i>Toggle on if it applies, then roll</div>`;
+  }
+
+  return `<div class="${cls.join(' ')}" data-rider="${R.id}:${ri}">
     <div class="rd-head"><span class="rd-sw" data-sw="${R.id}:${ri}"></span><span class="rd-name">${esc(r.name)}</span><span class="rd-src">${esc(r.src)}</span>${val}<span class="rd-fold"><i class="fa-solid fa-chevron-down"></i></span></div>
     <div class="rd-body"><div class="rd-text">${r.text}</div>${run}</div>
+  </div>`;
+}
+
+function problemsHTML(R) {
+  const p = R.problems || [];
+  if (!p.length) return '';
+  return `<div class="probs" role="alert">
+    <div class="probs-h"><i class="fa-solid fa-triangle-exclamation"></i>Problems<span class="n">${p.length} contribution${p.length>1?'s':''} dropped</span></div>
+    ${p.map(x => `<div class="prob">
+      <div class="p-top"><span class="p-name">${esc(x.name)}</span><span class="p-src">${esc(x.src)} · ${esc(x.fault)}</span><span class="p-drop">Not applied</span></div>
+      <div class="p-why">${esc(x.why)}</div>
+    </div>`).join('')}
   </div>`;
 }
 
@@ -100,11 +162,14 @@ function entryHTML(R) {
   if (R.fumble) cls.push('fumble');
   const tag = R.crit ? '<span class="e-tag">Critical</span>' : R.fumble ? '<span class="e-tag">Fumble</span>' : '';
   const dmgSplit = Object.entries(t.dmg).map(([k,v]) => `<span data-t="${k}">${k} <b>${v}</b></span>`).join('');
+  const res = resolvedRiders(R), ask = unresolvedRiders(R);
+
   const foot = `<footer class="e-foot">
       ${t.atk != null ? `<div class="tot atk"><span class="k">Total ${esc((R.lines.find(l => l.kind === 'attack') || {}).label || 'Attack')}</span><span class="v">${t.atk}</span></div>` : '<div></div>'}
       ${t.hasDamage ? `<div class="tot"><span class="k">Total Damage</span><span class="v">${t.dmgTotal}</span><div class="split">${dmgSplit}</div></div>` : '<div></div>'}
     </footer>
-    ${t.pending ? `<div class="pending-note" data-pending="${R.id}"><i class="fa-solid fa-triangle-exclamation"></i>${t.pending} conditional rider${t.pending>1?'s':''} not yet resolved</div>` : ''}`;
+    ${t.flags.length ? `<div class="granted-row"><span class="k">Granted</span>${t.flags.map(f => `<span class="flag" data-f="${f.toLowerCase()}"><i class="fa-solid ${flagIcon(f)}"></i>${f}</span>`).join('')}</div>` : ''}
+    ${t.pending ? `<div class="pending-note" data-pending="${R.id}"><i class="fa-solid fa-circle-question"></i>${t.pending} rider${t.pending>1?'s':''} still waiting on you</div>` : ''}`;
 
   return `<article class="${cls.join(' ')}" data-entry="${R.id}">
     ${tag}<span class="e-frame"></span>
@@ -116,8 +181,11 @@ function entryHTML(R) {
       </header>
       <div class="e-body">
         ${R.lines.map((L,i) => lineHTML(R, i, L)).join('')}
-        ${R.riders && R.riders.length ? `<div class="riders">${R.riders.map((r,i) => riderHTML(R, i, r)).join('')}</div>` : ''}
+        ${res.length ? `<div class="contribs">${res.map(r => contribHTML(R, r)).join('')}</div>` : ''}
+        ${ask.length ? `<div class="ask-h"><i class="fa-solid fa-diamond"></i>Your call<span class="sep"></span><span>${ask.length}</span></div>
+          <div class="riders">${ask.map(r => askHTML(R, r)).join('')}</div>` : ''}
         ${foot}
+        ${problemsHTML(R)}
       </div>
     </div>
   </article>`;
@@ -146,9 +214,11 @@ body.addEventListener('click', e => {
   const sw = e.target.closest('[data-sw]');
   if (sw) { const [id, ri] = sw.dataset.sw.split(':'); const R = find(id); R.riders[ri].on = !R.riders[ri].on; render(); return; }
 
+  // rolling is one-time: the value is fixed from here on
   const rb = e.target.closest('[data-roll]');
   if (rb) {
     const [id, ri] = rb.dataset.roll.split(':'); const R = find(id); const r = R.riders[ri];
+    if (r.rolled) return;
     r.dice = rollFormula(r.formula); r.rolled = true; r.folded = false; render();
     const el = body.querySelector(`[data-rider="${id}:${ri}"]`);
     if (el) el.querySelectorAll('.die').forEach(d => d.classList.add('spin'));
@@ -156,7 +226,7 @@ body.addEventListener('click', e => {
   }
 
   const d = e.target.closest('[data-die]');
-  if (d && !d.classList.contains('dropped')) {
+  if (d && !d.classList.contains('dropped') && !d.classList.contains('locked')) {
     const [id, li, di] = d.dataset.die.split(':'); const R = find(id);
     const L = String(li).startsWith('r') ? R.riders[li.slice(1)] : R.lines[li];
     const t = L.dice[di];
@@ -186,7 +256,16 @@ body.addEventListener('mouseover', e => {
     if (t.dropped) rows.push(`dropped — ${L.mode === 'dis' ? 'disadvantage keeps the low die' : 'advantage keeps the high die'}`);
     if (t.crit) rows.push('extra die from critical hit');
     if (t.rerolled) rows.push(`rerolled from <b>${t.orig}</b>`);
-    return showTip(d, `d${t.sides}`, rows.join('<br>'), t.dropped ? null : 'Click to reroll this die');
+    const lock = d.classList.contains('locked');
+    return showTip(d, `d${t.sides}`, rows.join('<br>'), lock ? 'Locked — rolled riders keep their value' : (t.dropped ? null : 'Click to reroll this die'));
+  }
+  const c = e.target.closest('[data-contrib]');
+  if (c) {
+    const [id, rid] = c.dataset.contrib.split(':'); const R = find(id);
+    const r = shown(R).find(x => x.id === rid);
+    const rows = ['<b style="color:var(--cyan-hot)">Resolved by the engine</b>', `condition met from your own state`];
+    if (r.dice && r.dice.length) rows.push(`${esc(r.formula)} → ${r.dice.map(x => x.v).join(' + ')}`);
+    return showTip(c, r.name, rows.join('<br>'), 'Nothing to decide');
   }
   const m = e.target.closest('[data-mod]');
   if (m) {
@@ -196,17 +275,17 @@ body.addEventListener('mouseover', e => {
   const pn = e.target.closest('[data-pending]');
   if (pn) {
     const R = find(pn.dataset.pending);
-    const rows = (R.riders||[]).filter(r => r.on && r.conditional && !r.rolled)
-      .map(r => `<b style="color:var(--gold-rare)">${esc(r.name)}</b> not rolled<br><span style="color:var(--beige-dim)">${esc(r.src)} · ${esc(r.formula)}${r.dtype ? ' ' + esc(r.dtype) : ''}</span>`);
-    return showTip(pn, 'Unresolved', rows.join('<br><br>'), 'Roll it on the rider above');
+    const rows = unresolvedRiders(R).filter(r => !(r.on && (r.kind === 'flag' || r.rolled)))
+      .map(r => `<b style="color:var(--cyan-hot)">${esc(r.name)}</b> ${r.on ? 'not rolled' : 'not confirmed'}<br><span style="color:var(--beige-dim)">${esc(r.src)} · ${esc(r.kind === 'flag' ? 'grants ' + r.grants : r.formula + (r.dtype ? ' ' + r.dtype : ''))}</span>`);
+    return showTip(pn, 'Your call', rows.join('<br><br>'), 'Answer them on the riders above');
   }
   hideTip();
 });
-body.addEventListener('mouseout', e => { if (!e.relatedTarget || !e.relatedTarget.closest('[data-die],[data-mod],[data-pending]')) hideTip(); });
+body.addEventListener('mouseout', e => { if (!e.relatedTarget || !e.relatedTarget.closest('[data-die],[data-mod],[data-pending],[data-contrib]')) hideTip(); });
 body.addEventListener('scroll', hideTip);
 
 function showTip(anchor, k, v, hint) {
-  tip.innerHTML = `<div class="t-k">${k}</div><div class="t-v">${v}</div>${hint ? `<div class="t-hint">${hint}</div>` : ''}`;
+  tip.innerHTML = `<div class="t-k">${esc(k)}</div><div class="t-v">${v}</div>${hint ? `<div class="t-hint">${hint}</div>` : ''}`;
   tip.classList.add('show');
   const r = anchor.getBoundingClientRect(), t = tip.getBoundingClientRect();
   let top = r.top - t.height - 8; if (top < 8) top = r.bottom + 8;
@@ -230,7 +309,11 @@ const CATALOG = {
     stats:[['Attack','Melee · STR'],['Reach','5 ft'],['Weight','6 lb'],['Properties','Heavy, Two-Handed']],
     damage:[['1d12','slashing']],
     desc:'<p>A blade long enough to need both hands and heavy enough to punish anyone who lets it build momentum. Attacks are made with <em>Strength</em>; its weight makes it unwieldy for small creatures.</p>',
-    riders:[['Condemning Strike','Oath · Lv 5','If this attack hits a creature affected by a <em>Curse</em>, add <em>+1d4 radiant</em> to the weapon’s damage roll.']],
+    riders:[
+      ['Condemning Strike','Oath · Lv 5','If this attack hits a creature affected by a <em>Curse</em>, add <em>+1d4 radiant</em> to the weapon’s damage roll.'],
+      ['Sworn Grip','Fighting Style','While wielding a two-handed weapon in both hands, add <em>+2</em> to its damage roll.'],
+      ['Marked Quarry','Oath · Lv 3','You have <em>advantage</em> on attacks against a creature you have sworn against.']
+    ],
     dm:'Ros carries her father’s sword. The pommel is stamped with a sigil no one in the party has been able to read.'
   },
   flame: {
@@ -240,7 +323,9 @@ const CATALOG = {
     desc:'<p>Radiance falls on a target you can see, and the air around it takes light. Because the flame is <em>called</em> rather than kindled, it burns in two ways at once — the judgement itself is <em>radiant</em>, while what it sets alight deals <em>fire</em>.</p><p>Cover offers no protection. A creature that succeeds on its save takes half of both damage types.</p>',
     riders:[
       ['Zealot’s Ember','Shard · Tier II','Your <em>fire</em> damage is increased by <em>+2</em> while at least one Shard is attuned.'],
-      ['Scourge of the Grave','Feat','If the target is <em>Undead</em> or a <em>Fiend</em>, add <em>+2d6 radiant</em> and it cannot regain hit points until your next turn.']
+      ['Scourge of the Grave','Feat','If the target is <em>Undead</em> or a <em>Fiend</em>, add <em>+2d6 radiant</em> and it cannot regain hit points until your next turn.'],
+      ['Verdict','Shard · Tier III','If the target is <em>judged</em>, this spell is treated as a <em>critical hit</em>.'],
+      ['Radiant Empowerment','Shard · Tier II','Radiant damage is scaled by <em>shards spent ÷ shards held</em>.']
     ],
     dm:'The two-type split is intentional — it lets the cantrip stay relevant against fire-immune undead without becoming the answer to everything.'
   },
@@ -249,7 +334,10 @@ const CATALOG = {
     stats:[['Ability','Dexterity'],['Proficiency','Not proficient'],['Armor','Heavy — disadvantage'],['Contest','vs passive Perception']],
     damage:[],
     desc:'<p>An attempt to move, hide, or act unnoticed. Heavy armor imposes <em>disadvantage</em> unless you are proficient with it — plate is not a subtle garment, and the GUIDE will not pretend otherwise.</p>',
-    riders:[['Lucky','Feat · 2 left','Spend a luck point to roll a third d20 and choose which one to use.']],
+    riders:[
+      ['Lucky','Feat · 2 left','Spend a luck point to roll a third d20 and choose which one to use.'],
+      ['Drawn Eye','Party · Nyx','If an ally is actively drawing attention elsewhere, you have <em>advantage</em> on this check.']
+    ],
     dm:''
   }
 };
@@ -289,11 +377,17 @@ function greatsword() {
       { kind:'attack', formula:'1d20', dice:[a], mods:[{k:'Strength',v:3},{k:'Proficiency',v:2}] },
       { kind:'damage', type:'slashing', formula: crit ? '2d12' : '1d12', dice: dmg, mods:[{k:'Strength',v:2}], crit }
     ],
-    riders: [{
-      id:'condemn', name:'Condemning Strike', src:'Oath · Lv 5', target:'damage', conditional:true,
-      formula:'1d4', dtype:'radiant', flat:null, on:true, rolled:false, dice:[], folded:false,
-      text:'If this attack hits a creature affected by a <em>Curse</em>, add <em>+1d4 radiant</em> to the weapon\u2019s damage roll.'
-    }]
+    riders: [
+      { id:'grip', name:'Sworn Grip', src:'Fighting Style', state:'resolved', kind:'value', target:'damage',
+        formula:'flat', dtype:'slashing', flat:2, on:true, rolled:true, dice:[], folded:true,
+        text:'While wielding a two-handed weapon in both hands, add <em>+2</em> to its damage roll.' },
+      { id:'condemn', name:'Condemning Strike', src:'Oath · Lv 5', state:'unresolved', kind:'value', target:'damage',
+        formula:'1d4', dtype:'radiant', flat:null, on:true, rolled:false, dice:[], folded:false,
+        text:'If this attack hits a creature affected by a <em>Curse</em>, add <em>+1d4 radiant</em> to the weapon\u2019s damage roll.' },
+      { id:'fury', name:'Bloodied Fury', src:'Oath · Lv 9', state:'na', kind:'value', target:'damage',
+        formula:'1d8', dtype:'slashing', flat:null, on:false, rolled:false, dice:[], folded:true,
+        text:'Never rendered — you are above half hit points, so the engine drops it entirely.' }
+    ]
   };
 }
 
@@ -308,12 +402,19 @@ function sacredFlame() {
       { kind:'damage', type:'fire',    formula:'1d6', dice:[d2], mods:[] }
     ],
     riders: [
-      { id:'zeal', name:'Zealot\u2019s Ember', src:'Shard · Tier II', target:'damage', conditional:false,
+      { id:'zeal', name:'Zealot\u2019s Ember', src:'Shard · Tier II', state:'resolved', kind:'value', target:'damage',
         formula:'flat', dtype:'fire', flat:2, on:true, rolled:true, dice:[], folded:true,
         text:'Your fire damage is increased by <em>+2</em> while at least one Shard is attuned.' },
-      { id:'undead', name:'Scourge of the Grave', src:'Feat', target:'damage', conditional:true,
+      { id:'undead', name:'Scourge of the Grave', src:'Feat', state:'unresolved', kind:'value', target:'damage',
         formula:'2d6', dtype:'radiant', flat:null, on:true, rolled:false, dice:[], folded:false,
-        text:'If the target is <em>Undead</em> or a <em>Fiend</em>, add <em>+2d6 radiant</em> and it cannot regain hit points until your next turn.' }
+        text:'If the target is <em>Undead</em> or a <em>Fiend</em>, add <em>+2d6 radiant</em> and it cannot regain hit points until your next turn.' },
+      { id:'verdict', name:'Verdict', src:'Shard · Tier III', state:'unresolved', kind:'flag', grants:'CRIT', target:'attack',
+        formula:'', dtype:'', flat:null, on:false, rolled:false, dice:[], folded:false,
+        text:'If the target is <em>judged</em>, this spell is treated as a <em>critical hit</em>.' }
+    ],
+    problems: [
+      { name:'Radiant Empowerment', src:'Shard · Tier II', fault:'formula failed',
+        why:'1d6 × (SHARDS_SPENT ÷ SHARDS_HELD) — division by zero, SHARDS_HELD = 0' }
     ]
   };
 }
@@ -326,9 +427,14 @@ function stealth() {
     id: String(++uid), name:'Stealth', cat:'stealth', flavor:'Plate mail is not a subtle garment.',
     icon:'fa-user-ninja', stamp: stamp(), crit: lo === 20, fumble: lo === 1,
     lines: [{ kind:'attack', label:'Check', formula:'2d20', dice:[a,b], mode:'dis', mods:[{k:'Dexterity',v:2},{k:'Armor (heavy)',v:-4}] }],
-    riders: [{ id:'lucky', name:'Lucky', src:'Feat · 2 left', target:'attack', conditional:true,
-      formula:'1d20', dtype:'', flat:null, on:false, rolled:false, dice:[], folded:false,
-      text:'Spend a luck point to roll a third d20 and choose which one to use. <em>Toggle on, then roll.</em>' }]
+    riders: [
+      { id:'drawn', name:'Drawn Eye', src:'Party · Nyx', state:'unresolved', kind:'flag', grants:'ADVANTAGE', target:'attack',
+        formula:'', dtype:'', flat:null, on:false, rolled:false, dice:[], folded:false,
+        text:'If an ally is actively drawing attention elsewhere, you have <em>advantage</em> on this check.' },
+      { id:'lucky', name:'Lucky', src:'Feat · 2 left', state:'unresolved', kind:'value', target:'attack',
+        formula:'1d20', dtype:'', flat:null, on:false, rolled:false, dice:[], folded:false,
+        text:'Spend a luck point to roll a third d20 and choose which one to use.' }
+    ]
   };
 }
 
@@ -336,6 +442,7 @@ const BUILD = { greatsword, flame: sacredFlame, stealth };
 function push(fn) {
   const R = fn();
   R.riders = R.riders || [];
+  R.problems = R.problems || [];
   rolls.unshift(R);
   if (rolls.length > 12) rolls.pop();
   render(R.id);
@@ -353,6 +460,9 @@ document.querySelectorAll('.act').forEach(b => b.addEventListener('click', () =>
   g.lines[0].dice = [die(20, 17)];
   g.lines[1] = { kind:'damage', type:'slashing', formula:'1d12', dice:[die(12, 8)], mods:[{k:'Strength',v:2}] };
   g.flavor = 'Stab an enemy with your sword.';
+  g.riders.splice(1, 0, { id:'quarry', name:'Marked Quarry', src:'Oath · Lv 3', state:'resolved', kind:'flag', grants:'ADVANTAGE',
+    target:'attack', formula:'', dtype:'', flat:null, on:true, rolled:true, dice:[], folded:true,
+    text:'You have <em>advantage</em> on attacks against a creature you have sworn against.' });
   rolls.unshift(g);
   render(g.id);
 })();

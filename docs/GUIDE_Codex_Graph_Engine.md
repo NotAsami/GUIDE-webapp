@@ -1761,3 +1761,75 @@ pattern is worth naming: *adding a thing to a schema is not adding it to the app
 | `uses.current` lives on `sheet.features[]` while variables live in `resources.graph.vars`. Both are state, stored two ways. | unresolved |
 | §9's "per-character turn tick" is named as in scope and specified nowhere. | whoever wants it |
 | **Manual verification of 5a has not been run yet.** | next session |
+
+---
+
+## 45. Slice 5b as built — the Roll Context Panel
+
+Built as `src/components/RollContextPanel.tsx` + `.module.css`, a pure view model
+in `src/lib/rollView.ts`, plus small changes to `graph.ts`, `rolls.tsx` and
+`weapons.ts`. §39's precedence rule applies.
+
+The panel is the surface two earlier slices were waiting on. Slice 4 deferred
+`ask` riders and slice 5b's armed queue is still deferred, both for the same
+reason: the toast lives 4.8 s, dismisses on any click, and the roll log was
+append-only. **`ask` riders are now answerable.**
+
+### `Rider.when === 'always'` had never been emitted
+
+`resolve()` folded unconditional contributions into `flat`/`dice` and returned
+before building a rider, so their **label and source were discarded** — the roll
+knew it was +2 but not that the +2 was Rage. The variant was declared in 1c for
+exactly this case and had sat unused since; the panel's contribution lines are
+the first thing that needed it.
+
+Now emitted alongside the fold. Two consequences, both load-bearing:
+
+- **`total()` must exclude `always` riders.** They are already inside
+  `flat`/`dice`; adding them again doubles every unconditional contribution,
+  silently. One filter, one test.
+- **`Riders.tsx` must exclude them too**, for a different reason: the toast and
+  the Character roll log print the breakdown string *and* the rider rows, so an
+  `always` rider would show the same number twice. The panel renders them in its
+  own contributions section, where they are explicitly labelled as part of the
+  breakdown.
+
+`flat`/`dice` keep their previous meaning exactly, so every slice-4 assertion
+still holds. The rider is additional, not a replacement.
+
+### The split the panel exists to draw
+
+| | Renders as | Because |
+|---|---|---|
+| **resolved** (`always`, `active`) | a breakdown line, never a control | the engine already decided; there is nothing to ask |
+| **unresolved** (`manual`) | a toggle showing its FORMULA | §7 — a pre-rolled `1d6 [6]` shown before the player decides whether the creature was judged puts a thumb on that decision |
+| §32's two non-surfacing rows | nothing | `resolve()` already dropped them, so the panel needs no third case |
+
+**Rolled riders lock.** Once answered and rolled, the roll button is gone and
+toggling reuses the value — §8 #2's "reopening the panel never re-rolls, that
+would be a free reroll and would undo the honesty property in §7". The lock falls
+out of storing the faces: `rolled` + `rolledDice` on `Rider`, written by the
+panel and never by `resolve()`, which keeps the engine pure.
+
+### Settled while building
+
+| Decision | Why |
+|---|---|
+| **`updateRoll` on the roll log** | Answering an `ask` mutates a roll that has already happened, which an append-only log cannot express. Deliberately narrow — the panel is the only caller; every other producer stays fire-and-forget. |
+| **Fold state is local to the panel** | It is how you are reading the list, not part of the roll. |
+| **`AttackRoll` keeps the d20 pair and its mode** | The pair was always rolled and the loser thrown away, so a weapon attack could not render the dropped-die chip a check already could. Two lines. |
+| **Exactly one die is marked kept** | Two 17s under advantage would otherwise render as two dropped dice and no winner, or as no drop at all. Pinned by a test. |
+| **Die sides recovered from `diceExpr`** | Rather than stored. Nothing else had to change. |
+| **The arithmetic lives in `rollView.ts`, not the component** | It is the part that can be silently wrong — a rider counted twice, or an answered `ask` that never reaches the total, is a number the player trusts and shouldn't. Thirteen tests, no renderer needed. |
+
+### What is still owed
+
+| Owed | Why deferred |
+|---|---|
+| **Per-die reroll** | Needs `{ sides, v, dropped, rerolled, orig }` on every die everywhere and touches every `addRoll` caller. It is also the one feature that lets a player change a number after the fact — a decision on its own merits, not something to inherit from a mockup. Chips render, inert. |
+| **The catalog sheet** | Needs a subject gid on `RollEntry` and a catalog lookup that does not exist app-side. |
+| **Tooltips** | Hand-rolled positioning, and largely redundant now the chips carry their own labels. |
+| **Multi-type damage** | `damage?: DamageRoll` is singular; `byType` is built to take more the moment it is. A spells problem. |
+| **The armed queue** (`once: true`) | 5c — now unblocked, since the chip has a surface to live on. `once` is still absent from the op schema, so it cannot yet be authored. |
+| **DM console state panel** | 5d. |
+| **The toast** | Still shows its read-only summary. It retires for rolls when this panel has been used in anger. |

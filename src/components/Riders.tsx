@@ -36,12 +36,20 @@ export function Riders({ groups, notes, problems }: {
   notes?: string[]
   problems?: AuditItem[]
 }) {
-  const hasGroups = (groups ?? []).some(g => g.riders.length)
+  // `always` riders are ALREADY inside the breakdown string above these rows —
+  // they exist so the Roll Context Panel can name the source of each folded-in
+  // contribution. Repeating them here would show the same number twice, once in
+  // the maths and once as a row. The panel renders them in its own contributions
+  // section, where they are explicitly labelled as part of the breakdown.
+  const shown = (groups ?? [])
+    .map(g => ({ ...g, riders: g.riders.filter(r => r.when !== 'always') }))
+    .filter(g => g.riders.length)
+  const hasGroups = shown.length > 0
   if (!hasGroups && !notes?.length && !problems?.length) return null
 
   return (
     <div className={styles.riders}>
-      {(groups ?? []).filter(g => g.riders.length).map(g => (
+      {shown.map(g => (
         <div key={g.label} className={styles.group}>
           <span className={styles.gLabel}>{g.label}</span>
           {g.riders.map((r, i) => (
