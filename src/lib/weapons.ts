@@ -11,10 +11,10 @@
 
 import type { AbilityKey, CharacterSheet, EquippedWeapon, WeaponHand } from './database.types'
 import { abilityMod, formatMod, proficiency, type CheckTerm } from './dnd.ts'
-import { parseDice, rollDiceTerms, rolledDice, type RolledDie } from './dice.ts'
+import { parseDice, rolledDice, type RolledDie } from './dice.ts'
 // Safe direction: graph.ts → effects.ts → equip/burden/shards, none of which
 // reach back here, so this does not close a cycle.
-import { total, type Resolution } from './graph.ts'
+import { rollResolution, type Resolution, type Rider } from './graph.ts'
 
 export function handLabel(hand?: WeaponHand): string {
   return hand === 'main' ? 'Main Hand' : hand === 'off' ? 'Off Hand' : 'Equipped'
@@ -94,29 +94,31 @@ export type AmmoBonus = { damage: number; label: string }
  *  DICE (not the modifier); a natural 1 flags a fumble. Damage is floored at 0.
  *  Nocked ammunition adds a flat, named bonus to the damage.
  *
- *  `graph` carries the feature engine's contributions for this weapon. Only the
- *  UNCONDITIONAL fold (`flat`/`dice`) is applied here — a rider the player still
- *  has to decide on is deliberately NOT pre-rolled, because showing a value
- *  before they choose puts a thumb on the decision. Riders travel on the
- *  RollEntry for the panel to render; see §7's pre-roll rule.
+ *  `graph` carries the feature engine's contributions for this weapon. Every
+ *  rider EXCEPT a `manual` one is applied here — a rider the player still has to
+ *  decide on is deliberately not pre-rolled, because showing a value before they
+ *  choose puts a thumb on the decision (§7). The panel adds those, and adds only
+ *  those; between the two halves each rider lands exactly once.
+ *
+ *  The riders come back out ANNOTATED: rollResolution keeps each contribution's
+ *  faces on the contribution, so the panel can show what a +1d6 actually rolled
+ *  instead of asking the player to trust a number they cannot check.
  *
  *  Absent `graph` means "no engine", which resolves identically to "a character
  *  with nothing authored" — both add zero. */
 export function rollWeaponAttack(
   weapon: EquippedWeapon, sheet: CharacterSheet, ammo?: AmmoBonus | null,
   graph?: { attack?: Resolution; damage?: Resolution },
-): { attack: AttackRoll; damage: DamageRoll } {
+): { attack: AttackRoll; damage: DamageRoll; riders: { attack: Rider[]; damage: Rider[] } } {
   const atkRes = graph?.attack
   // adv/dis from the graph decide the d20 set. Both at once cancel, which is
   // the 5e rule and not something the engine should be opinionated about.
   const advantage = !!atkRes?.adv && !atkRes?.dis
   const disadvantage = !!atkRes?.dis && !atkRes?.adv
-  const atkGraph = atkRes ? total(atkRes) : { flat: 0, dice: [] as string[] }
   // Graph dice on an ATTACK (Bless's 1d4) are rolled now: the d20 total is one
   // number and there is nowhere for an unrolled term to live.
-  const atkDice = rollDiceTerms(atkGraph.dice)
-  const atkDiceSum = atkDice.reduce((a, b) => a + b, 0)
-  const atkBonus = weaponAttackBonus(weapon, sheet) + atkGraph.flat + atkDiceSum
+  const atkGraph = atkRes ? rollResolution(atkRes) : { flat: 0, riders: [] as Rider[] }
+  const atkBonus = weaponAttackBonus(weapon, sheet) + atkGraph.flat
 
   const pair = rolledDice(2, 20)
   const faces = pair.map(d => d.v)
@@ -131,7 +133,7 @@ export function rollWeaponAttack(
       { label: weaponAbilityKey(weapon, sheet).toUpperCase(), value: abMod(weapon, sheet) },
       { label: 'PROF', value: proficiency(sheet) },
       { label: 'MAGIC', value: weapon.effects?.attack ?? 0 },
-      { label: 'FEAT', value: atkGraph.flat + atkDiceSum },
+      { label: 'FEAT', value: atkGraph.flat },
     ],
     // Only keep the second die when it was actually contested — otherwise the
     // panel would render a phantom "dropped" chip for a die nobody rolled against.
@@ -164,26 +166,23 @@ export function rollWeaponAttack(
   const ammoBonus = ammo?.damage ?? 0
 
   // Graph damage. Its dice ride WITH the weapon's, so a crit doubles them too —
-  // which is why resolve() returns them unrolled instead of a number.
-  const dmgGraph = graph?.damage ? total(graph.damage) : { flat: 0, dice: [] as string[] }
-  const graphDice = rollDiceTerms(dmgGraph.dice, crit)
-  const graphDiceSum = graphDice.reduce((a, b) => a + b, 0)
+  // which is why resolve() hands them over unrolled and `crit` is passed here.
+  const dmgGraph = graph?.damage ? rollResolution(graph.damage, crit) : { flat: 0, riders: [] as Rider[] }
 
-  const totalDmg = Math.max(0, diceSum + dmgBonus + ammoBonus + dmgGraph.flat + graphDiceSum)
+  const totalDmg = Math.max(0, diceSum + dmgBonus + ammoBonus + dmgGraph.flat)
   const damage: DamageRoll = {
-    diceExpr, dice, bonus: dmgBonus + ammoBonus + dmgGraph.flat + graphDiceSum,
+    diceExpr, dice, bonus: dmgBonus + ammoBonus + dmgGraph.flat,
     terms: [
       { label: weaponAbilityKey(weapon, sheet).toUpperCase(), value: abMod(weapon, sheet) },
       { label: 'MAGIC', value: weapon.effects?.damage ?? 0 },
       { label: (ammo?.label ?? 'AMMO').toUpperCase(), value: ammoBonus },
-      { label: 'FEAT', value: dmgGraph.flat + graphDiceSum },
+      { label: 'FEAT', value: dmgGraph.flat },
     ],
     total: totalDmg, type: weapon.type, crit,
     breakdown: `${diceExpr}(${dice.map(d => d.v).join(' + ') || 0}) ${formatMod(dmgBonus)}`
       + (ammoBonus ? ` ${formatMod(ammoBonus)} (${ammo!.label})` : '')
-      + (dmgGraph.flat ? ` ${formatMod(dmgGraph.flat)}` : '')
-      + (graphDice.length ? ` + ${dmgGraph.dice.join(' + ')}(${graphDice.join(' + ')})` : ''),
+      + (dmgGraph.flat ? ` ${formatMod(dmgGraph.flat)}` : ''),
   }
-  return { attack, damage }
+  return { attack, damage, riders: { attack: atkGraph.riders, damage: dmgGraph.riders } }
 }
 

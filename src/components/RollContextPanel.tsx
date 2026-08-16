@@ -544,7 +544,12 @@ function Contribution({ v, showTip, armedLive, onConsume }: {
         {isArmed
           ? 'already spent on the activation that armed it'
           : r.when === 'always' ? 'unconditional — always part of this roll' : 'condition met from your own state'}
-        {r.dice.length > 0 && <><br />{r.dice.join(' + ')}</>}
+        {/* The faces, beside the expression that asked for them — the whole
+            reason §49 removed the fold. */}
+        {r.dice.length > 0 && (<>
+          <br />{r.dice.join(' + ')}
+          {r.rolledDice?.length ? <> → <b style={{ color: 'var(--beige)' }}>{r.rolledDice.map(d => d.v).join(' + ')}</b></> : null}
+        </>)}
       </>),
       hint: isArmed
         ? (armedLive ? 'Consume it once you know the roll landed' : 'Already consumed')

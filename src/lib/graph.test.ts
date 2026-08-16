@@ -6,7 +6,7 @@ import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.type
 import { VAR_IDENTS, evalExpr } from './expr.ts'
 import { parseDice, rerollDie, rollDice } from './dice.ts'
 import {
-  armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid,
+  armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid, rollResolution,
   damageFlags, matchCount, nodeGid, normalizeTag, resolve, total, varCollisions, type ResolveReq,
 } from './graph.ts'
 import { activeSources } from './effects.ts'
@@ -307,10 +307,10 @@ test('roll: selectors match by kind and by sub-kind', () => {
     { id: 'e2', op: 'add', value: '3', label: 'Dex saves', target: ['roll:save.dex'] },
   ])])
   const ctx = buildContext(c)
-  assert.equal(resolve(ctx, { kind: 'save' }).flat, 2)
-  assert.equal(resolve(ctx, { kind: 'save', sub: 'dex' }).flat, 5) // both match
-  assert.equal(resolve(ctx, { kind: 'save', sub: 'con' }).flat, 2)
-  assert.equal(resolve(ctx, ATTACK).flat, 0)
+  assert.equal(total(resolve(ctx, { kind: 'save' })).flat, 2)
+  assert.equal(total(resolve(ctx, { kind: 'save', sub: 'dex' })).flat, 5) // both match
+  assert.equal(total(resolve(ctx, { kind: 'save', sub: 'con' })).flat, 2)
+  assert.equal(total(resolve(ctx, ATTACK)).flat, 0)
 })
 
 test('tag: selectors match the subject\'s tags, through one normalisation', () => {
@@ -318,30 +318,30 @@ test('tag: selectors match the subject\'s tags, through one normalisation', () =
   const ctx = buildContext(c)
   // Authored "Fire Damage", requested "fire_damage" — same tag or targeting is
   // silently broken, which is the whole reason normalizeTag is shared.
-  assert.equal(resolve(ctx, { kind: 'damage', tags: ['fire_damage'] }).flat, 4)
-  assert.equal(resolve(ctx, { kind: 'damage', tags: ['FIRE DAMAGE'] }).flat, 4)
-  assert.equal(resolve(ctx, { kind: 'damage', tags: ['cold'] }).flat, 0)
+  assert.equal(total(resolve(ctx, { kind: 'damage', tags: ['fire_damage'] })).flat, 4)
+  assert.equal(total(resolve(ctx, { kind: 'damage', tags: ['FIRE DAMAGE'] })).flat, 4)
+  assert.equal(total(resolve(ctx, { kind: 'damage', tags: ['cold'] })).flat, 0)
 })
 
 test('an id selector matches exactly one thing', () => {
   const c = withFeatures([gfeat('Buff', [{ id: 'e1', op: 'add', value: '5', label: 'Blessed blade', target: ['weapon:sword'] }])])
   const ctx = buildContext(c)
-  assert.equal(resolve(ctx, { kind: 'attack', subject: 'weapon:sword' }).flat, 5)
-  assert.equal(resolve(ctx, { kind: 'attack', subject: 'weapon:axe' }).flat, 0)
+  assert.equal(total(resolve(ctx, { kind: 'attack', subject: 'weapon:sword' })).flat, 5)
+  assert.equal(total(resolve(ctx, { kind: 'attack', subject: 'weapon:axe' })).flat, 0)
 })
 
 test('a target array is an OR, and a doubly-matching effect applies once', () => {
   const c = withFeatures([gfeat('F', [
     { id: 'e1', op: 'add', value: '2', label: 'Either', target: ['roll:attack', 'tag:fire'] },
   ])])
-  assert.equal(resolve(buildContext(c), { kind: 'attack', tags: ['fire'] }).flat, 2)
+  assert.equal(total(resolve(buildContext(c), { kind: 'attack', tags: ['fire'] })).flat, 2)
 })
 
 test('an effect with no target applies to its own node\'s roll', () => {
   const c = withFeatures([gfeat('SelfBuff', [{ id: 'e1', op: 'add', value: '3', label: 'Self' }])])
   const ctx = buildContext(c)
-  assert.equal(resolve(ctx, { kind: 'feature', subject: 'feature:SelfBuff' }).flat, 3)
-  assert.equal(resolve(ctx, { kind: 'feature', subject: 'feature:Other' }).flat, 0)
+  assert.equal(total(resolve(ctx, { kind: 'feature', subject: 'feature:SelfBuff' })).flat, 3)
+  assert.equal(total(resolve(ctx, { kind: 'feature', subject: 'feature:Other' })).flat, 0)
 })
 
 // --- chaining (§13 step 3) --------------------------------------------------
@@ -352,8 +352,8 @@ test('a two-level chain: B boosts A\'s contribution, A contributes to the roll',
     gfeat('B', [{ id: 'b1', op: 'add', value: '2', label: 'Empower', target: ['feature:A'] }]),
   ])
   const r = resolve(buildContext(c), { kind: 'damage' })
-  assert.equal(r.flat, 2)
-  assert.deepEqual(r.dice, ['1d6'])
+  assert.equal(total(r).flat, 2)
+  assert.deepEqual(total(r).dice, ['1d6'])
   assert.deepEqual(r.problems, [])
 })
 
@@ -367,18 +367,18 @@ test('a contribution cycle is dropped and reported, never a hang', () => {
   ])
   const r = resolve(buildContext(c), ATTACK)
   assert.ok(r.problems.some(p => p.sev === 'err' && p.t === 'Contribution cycle'))
-  assert.ok(Number.isFinite(r.flat))
+  assert.ok(Number.isFinite(total(r).flat))
 })
 
 // --- §32's when/ask table, all six rows -------------------------------------
 
-test('§32 row 1 — no when, no ask: folds into flat AND names itself', () => {
+test('§32 row 1 — no when, no ask: applies, and names itself', () => {
   const c = withFeatures([gfeat('F', [{ id: 'e1', op: 'add', value: '2', label: 'Always', target: ['roll:attack'] }])])
   const r = resolve(buildContext(c), ATTACK)
-  assert.equal(r.flat, 2)
-  // It surfaces as an `always` rider too, so the panel can say the +2 was
-  // "Always, from F" rather than showing an unattributed number. The fold is
-  // unchanged; the rider is additional.
+  assert.equal(total(r).flat, 2)
+  // The rider is the record. It is what total() sums AND what lets the panel say
+  // the +2 was "Always, from F" rather than showing an unattributed number —
+  // one fact serving both, which is the point of §49.
   assert.equal(r.riders.length, 1)
   assert.equal(r.riders[0].when, 'always')
   assert.equal(r.riders[0].on, true)
@@ -394,24 +394,28 @@ test('total() does not count an `always` rider twice', () => {
     { id: 'e2', op: 'add', value: '1d6', label: 'Dice', target: ['roll:damage'] },
   ])])
   const r = resolve(buildContext(c), { kind: 'damage' })
-  assert.equal(r.flat, 2)
-  assert.deepEqual(r.dice, ['1d6'])
+  assert.equal(total(r).flat, 2)
+  assert.deepEqual(total(r).dice, ['1d6'])
   assert.equal(r.riders.length, 2)
   const t = total(r)
   assert.equal(t.flat, 2)              // not 4
   assert.deepEqual(t.dice, ['1d6'])    // not ['1d6','1d6']
 })
 
-test('§32 row 2 — when true, no ask: a resolved rider, not folded', () => {
+test('§32 row 2 — when true, no ask: a resolved rider, counted once', () => {
   const c = withFeatures([gfeat('F', [
     { id: 'e1', op: 'add', value: '2', label: 'Raging', when: 'isRaging', target: ['roll:attack'] },
   ], { vars: [{ name: 'isRaging', kind: 'stored', type: 'bool' }] })], { vars: { isRaging: true } })
   const r = resolve(buildContext(c), ATTACK)
-  assert.equal(r.flat, 0) // resolved riders are NOT in flat
   assert.equal(r.riders.length, 1)
   assert.equal(r.riders[0].when, 'active')
   assert.equal(r.riders[0].on, true)
-  assert.equal(total(r).flat, 2) // ...but total() composes them
+  // This used to assert the contribution was NOT in `flat` and separately that
+  // total() added it back — the two-record split. There is one record now, so
+  // the property worth pinning is the one that split was protecting: it is
+  // counted, and counted once.
+  assert.equal(total(r).flat, 2)
+  assert.equal(r.riders[0].flat, 2)
 })
 
 test('§32 row 3 — when false, no ask: does not surface at all', () => {
@@ -419,7 +423,7 @@ test('§32 row 3 — when false, no ask: does not surface at all', () => {
     { id: 'e1', op: 'add', value: '2', label: 'Raging', when: 'isRaging', target: ['roll:attack'] },
   ], { vars: [{ name: 'isRaging', kind: 'stored', type: 'bool' }] })], { vars: { isRaging: false } })
   const r = resolve(buildContext(c), ATTACK)
-  assert.equal(r.flat, 0)
+  assert.equal(total(r).flat, 0)
   assert.equal(r.riders.length, 0)
 })
 
@@ -505,11 +509,11 @@ test('note ops are prose, gated by when only', () => {
 test('a -1d4 contribution survives all the way to a rolled number', () => {
   const c = withFeatures([gfeat('Bane', [{ id: 'e1', op: 'add', value: '-1d4', label: 'Bane', target: ['roll:attack'] }])])
   const r = resolve(buildContext(c), ATTACK)
-  assert.deepEqual(r.dice, ['-1d4'])
+  assert.deepEqual(total(r).dice, ['-1d4'])
 
   // The path that used to break: parseDice rejected the sign, so the rider
   // silently vanished at the roller instead of erroring at the audit.
-  const parsed = parseDice(r.dice[0])!
+  const parsed = parseDice(total(r).dice[0])!
   assert.equal(parsed.count, -1)
   assert.equal(parsed.sides, 4)
 
@@ -548,7 +552,7 @@ test('a contribution failing at these values is reported, and the roll still res
     { id: 'e2', op: 'add', value: 'level / denom', label: 'Broken', target: ['roll:attack'] },
   ], { vars: [{ name: 'denom', kind: 'stored', type: 'num' }] })], { vars: { denom: 0 } })
   const r = resolve(buildContext(c), ATTACK)
-  assert.equal(r.flat, 2) // the rest of the roll is unaffected
+  assert.equal(total(r).flat, 2) // the rest of the roll is unaffected
   assert.equal(r.notes.length, 0) // NOT prose — the player must not read it as rule text
   assert.ok(r.problems.some(p => p.sev === 'err' && p.t === 'Contribution did not resolve'))
 })
@@ -556,7 +560,7 @@ test('a contribution failing at these values is reported, and the roll still res
 test('a condition that is not a yes/no answer is reported, not guessed', () => {
   const c = withFeatures([gfeat('F', [{ id: 'e1', op: 'add', value: '2', label: 'X', when: 'level', target: ['roll:attack'] }])])
   const r = resolve(buildContext(c), ATTACK)
-  assert.equal(r.flat, 0)
+  assert.equal(total(r).flat, 0)
   assert.ok(r.problems.some(p => p.t === 'Condition did not resolve'))
 })
 
@@ -564,8 +568,8 @@ test('a condition that is not a yes/no answer is reported, not guessed', () => {
 
 test('an unequipped item\'s contributions do not exist', () => {
   const item = { id: 'i1', item_id: 'i1', name: 'Wand', slot: 'cloak', graph: [{ id: 'e1', op: 'add' as const, value: '3', label: 'Wand', target: ['roll:attack'] }] }
-  assert.equal(resolve(buildContext(character({ sheet: SHEET, inventory: [item] })), ATTACK).flat, 0)
-  assert.equal(resolve(buildContext(character({ sheet: SHEET, equipped: { cloak: item } })), ATTACK).flat, 3)
+  assert.equal(total(resolve(buildContext(character({ sheet: SHEET, inventory: [item] })), ATTACK)).flat, 0)
+  assert.equal(total(resolve(buildContext(character({ sheet: SHEET, equipped: { cloak: item } })), ATTACK)).flat, 3)
 })
 
 // --- gids -------------------------------------------------------------------
@@ -759,7 +763,7 @@ test('a damage flag never reaches a Resolution', () => {
   const c = withFeatures([gfeat('Ward', [{ id: 'e1', op: 'resist', label: 'Fire ward', target: ['tag:fire'] }])])
   const r = resolve(buildContext(c), { kind: 'damage', tags: ['fire'] })
   assert.equal(r.riders.length, 0)
-  assert.equal(r.flat, 0)
+  assert.equal(total(r).flat, 0)
   assert.deepEqual(r.problems, [])
 })
 
@@ -789,7 +793,7 @@ test('a level table steps, clamps, and overrides the flat amount', () => {
         { id: 'e1', op: 'add', value: '99', byLevel: table, label: 'Savage', target: ['roll:damage'] },
       ])] },
     })
-    return resolve(buildContext(c), { kind: 'damage' }).flat
+    return total(resolve(buildContext(c), { kind: 'damage' })).flat
   }
   assert.equal(at(1), 1)
   assert.equal(at(4), 1)   // steps down to the level-1 row
@@ -805,7 +809,7 @@ test('an empty level table leaves the flat amount alone', () => {
   const c = withFeatures([gfeat('Plain', [
     { id: 'e1', op: 'add', value: '4', byLevel: new Array(21).fill(''), label: 'Plain', target: ['roll:damage'] },
   ])])
-  assert.equal(resolve(buildContext(c), { kind: 'damage' }).flat, 4)
+  assert.equal(total(resolve(buildContext(c), { kind: 'damage' })).flat, 4)
 })
 
 test('a broken cell in a level table is caught at author time', () => {
@@ -849,7 +853,7 @@ test('an activation never reaches a Resolution', () => {
   ])])
   const r = resolve(buildContext(c), { kind: 'damage' })
   assert.equal(r.riders.length, 0)
-  assert.equal(r.flat, 0)
+  assert.equal(total(r).flat, 0)
   assert.deepEqual(r.problems, [])
 })
 
@@ -882,13 +886,12 @@ test('the authored Rage shape: when + ask stays an unresolved toggle, never appl
     return resolve(buildContext(c), { kind: 'damage' })
   }
 
-  // ask + when TRUE — a toggle, not a bonus. `flat` stays 0: the +2 is NOT in
-  // the number, and total() excludes it too because `on` is false.
+  // ask + when TRUE — a toggle, not a bonus. The +2 is NOT in the number: a
+  // `manual` rider is the panel's to add, never the roller's.
   const on = roll(rage('isRaging'), true)
   assert.equal(on.riders.length, 1)
   assert.equal(on.riders[0].when, 'manual')
   assert.equal(on.riders[0].on, false)
-  assert.equal(on.flat, 0)
   assert.equal(total(on).flat, 0)
 
   // ask + when FALSE — §32 row 6, gone entirely.
@@ -899,12 +902,11 @@ test('the authored Rage shape: when + ask stays an unresolved toggle, never appl
   const askOnly = roll(rage(), false)
   assert.equal(askOnly.riders.length, 1)
   assert.equal(askOnly.riders[0].when, 'manual')
-  assert.equal(askOnly.flat, 0)
+  assert.equal(total(askOnly).flat, 0)
 
   // An empty-string ask is NOT a toggle — it is no ask at all, and the +2
   // applies. This is the one way the two cases could diverge in stored data.
   const blank = roll({ ...rage(), graph: [{ id: 'e', op: 'add', value: '2', label: 'Rage', ask: '', target: ['roll:damage'] }] }, false)
-  assert.equal(blank.flat, 2)
   assert.equal(blank.riders[0].when, 'always')   // applied, and named
   assert.equal(total(blank).flat, 2)             // counted once
 })
@@ -1201,4 +1203,81 @@ test('one ask, two kinds of contribution, is reported rather than silently halve
     { id: 'e1', op: 'add', value: '2d6', label: 'A', ask: 'did it hit?', target: ['roll:damage'] },
     { id: 'e2', op: 'note', text: 'DC {8 + prof}.', label: 'B', ask: 'did it hit?', target: ['roll:damage'] },
   ] }).filter(a => a.t === 'One checkbox, two kinds of effect').length, 0)
+})
+
+// --- §49: one record, and the roller/panel split ----------------------------
+
+test('total() counts each contribution exactly once, whatever kind it is', () => {
+  // The property the deleted fold kept breaking, now true by construction: there
+  // is one record of a contribution, so there is nothing to add twice.
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '2', label: 'Always', target: ['roll:attack'] },
+    { id: 'e2', op: 'add', value: '3', label: 'Raging', when: 'isRaging', target: ['roll:attack'] },
+    { id: 'e3', op: 'add', value: '1d6', label: 'Dice', target: ['roll:attack'] },
+  ], { vars: [{ name: 'isRaging', kind: 'stored', type: 'bool' }] })], { vars: { isRaging: true } })
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(r.riders.length, 3)
+  assert.equal(total(r).flat, 5)                 // 2 + 3, each once
+  assert.deepEqual(total(r).dice, ['1d6'])
+})
+
+test('total() is the ROLLER half of the split: everything except `manual`', () => {
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '2', label: 'Always', target: ['roll:attack'] },
+    { id: 'e2', op: 'add', value: '9', label: 'Asked', ask: 'did it hit?', target: ['roll:attack'] },
+  ])])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(total(r).flat, 2, 'a manual rider is the panel\u2019s to add, never the roller\u2019s')
+  // Still true once the player has answered it: the roll already happened, and
+  // the panel adds it on top. Both sides adding it is the bug this pins.
+  const answered = { ...r, riders: r.riders.map(x => (x.when === 'manual' ? { ...x, on: true, rolled: true } : x)) }
+  assert.equal(total(answered).flat, 2)
+})
+
+test('an armed modifier is in total() exactly once', () => {
+  const c = armedChar([{ id: 'a1', source: 'feature:F', label: 'Boost', kind: 'attack', op: 'add', value: '4', at: 1 }])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(total(r).flat, 4)
+  assert.equal(r.riders.length, 1)
+})
+
+test('rollResolution keeps each contribution\u2019s faces ON that contribution', () => {
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '2', label: 'Flat', target: ['roll:attack'] },
+    { id: 'e2', op: 'add', value: '1d6', label: 'Dice', target: ['roll:attack'] },
+    { id: 'e3', op: 'add', value: '1d6', label: 'Asked', ask: 'did it hit?', target: ['roll:attack'] },
+  ])])
+  const rolled = rollResolution(resolve(buildContext(c), ATTACK))
+
+  const dice = rolled.riders.find(r => r.label === 'Dice')!
+  assert.equal(dice.rolledDice?.length, 1)
+  assert.equal(dice.rolledDice![0].sides, 6)
+  // The sum it reports IS the sum of what it attributed — the property that
+  // makes the panel's row checkable against the line.
+  assert.equal(rolled.flat, 2 + dice.rolledDice![0].v)
+
+  // A manual rider is NOT rolled here. §7: a value shown before the player
+  // decides puts a thumb on the decision.
+  assert.equal(rolled.riders.find(r => r.label === 'Asked')!.rolledDice, undefined)
+})
+
+test('rollResolution doubles dice for a crit, and never the flats', () => {
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '2', label: 'Flat', target: ['roll:damage'] },
+    { id: 'e2', op: 'add', value: '2d6', label: 'Dice', target: ['roll:damage'] },
+  ])])
+  const res = resolve(buildContext(c), { kind: 'damage' })
+  assert.equal(rollResolution(res, false).riders.find(r => r.label === 'Dice')!.rolledDice!.length, 2)
+  assert.equal(rollResolution(res, true).riders.find(r => r.label === 'Dice')!.rolledDice!.length, 4)
+  // The flat rider is untouched by doubling — a crit doubles dice, not modifiers.
+  assert.equal(rollResolution(res, true).riders.find(r => r.label === 'Flat')!.rolledDice, undefined)
+})
+
+test('a negative contribution still subtracts once rolled', () => {
+  const c = withFeatures([gfeat('Bane', [
+    { id: 'e1', op: 'add', value: '-1d4', label: 'Bane', target: ['roll:attack'] },
+  ])])
+  const rolled = rollResolution(resolve(buildContext(c), ATTACK))
+  assert.ok(rolled.flat <= -1 && rolled.flat >= -4, `expected a penalty, got ${rolled.flat}`)
+  assert.equal(rolled.riders[0].rolledDice!.every(d => d.v < 0), true)
 })

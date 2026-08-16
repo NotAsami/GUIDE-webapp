@@ -70,9 +70,11 @@ const FLAG: Partial<Record<Rider['op'], FlagName>> = {
  *  its formula — the formula is what it shows before the player answers. */
 export function riderValue(r: Rider): number {
   if (r.op !== 'add') return 0
-  if (r.when === 'manual') return r.rolled ? (r.rolledDice ?? []).reduce((a, b) => a + b.v, 0) + r.flat : 0
+  if (r.when === 'manual') return r.rolled ? faceSum(r) + r.flat : 0
   return r.flat
 }
+
+const faceSum = (r: Rider) => (r.rolledDice ?? []).reduce((a, b) => a + b.v, 0)
 
 /** What a rider contributes, as TEXT. Separate from riderValue because a dice
  *  contribution has no number here: `1d6` is rolled by the roller and folded into
@@ -89,6 +91,10 @@ export function riderAmount(r: Rider): string {
   // player decides puts a thumb on the decision.
   if (r.when === 'manual' && !r.rolled) return r.formula || '—'
   if (r.when === 'manual') return signed(String(riderValue(r)))
+  // Rolled by the roller (§49): the faces are on the rider, so say what came up
+  // rather than what could. "+1d6" is a promise; "+4" is a number the player can
+  // check against the line above.
+  if (r.rolledDice?.length) return signed(String(faceSum(r) + r.flat))
   const dice = r.dice.join(' + ')
   if (dice && r.flat) return `${signed(dice)} ${r.flat > 0 ? '+' : '−'} ${Math.abs(r.flat)}`
   if (dice) return signed(dice)
@@ -342,16 +348,11 @@ export function rollTotals(entry: RollEntry, views: RiderView[]): RollTotals {
       if (v.grants && !flags.includes(v.grants)) flags.push(v.grants)
       continue
     }
-    // ONLY a `manual` rider is added here, and the rule is not about `always`:
-    // it is about WHO FOLDED IT IN. Every roll producer builds its bonus from
-    // total(), which already contains the unconditional fold (`always`) AND
-    // every resolved rider (`active`). Both are inside the line's modifier
-    // before this entry existed, so adding either again doubles it.
-    //
-    // A `manual` rider is the one thing that is not: it is answered and rolled
-    // AFTER the roll happened, which is the whole reason this panel can change
-    // a total at all. The previous rule skipped only `always` and silently
-    // inflated every `active` contribution.
+    // The PANEL half of §49's split, and the mirror of total()'s: the roller
+    // folded in every rider that is not `manual`, so those are already inside
+    // the line's modifier and adding them again doubles them. A `manual` rider
+    // is answered and rolled AFTER the roll, which is the whole reason this
+    // panel can change a total at all.
     if (v.rider.when !== 'manual') continue
     if (v.group === 'Attack' || v.group === 'Check' || v.group === 'Save') {
       if (attack !== undefined) attack += v.value

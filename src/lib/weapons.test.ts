@@ -9,7 +9,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, CharacterSheet, EquippedWeapon } from './database.types.ts'
 import type { Resolution } from './graph.ts'
-import { buildContext, gid, resolve } from './graph.ts'
+import { buildContext, gid, resolve, total } from './graph.ts'
 import { rollWeaponAttack } from './weapons.ts'
 
 const SHEET = {
@@ -34,9 +34,17 @@ function pin<T>(faces: [number, number][], fn: () => T): T {
   try { return fn() } finally { Math.random = real }
 }
 
-const RES = (over: Partial<Resolution> = {}): Resolution => ({
-  flat: 0, dice: [], adv: false, dis: false, crit: false,
-  riders: [], notes: [], problems: [], ...over,
+/** A Resolution carrying at most one unconditional contribution.
+ *
+ *  `flat`/`dice` used to live on the Resolution itself; §49 deleted that second
+ *  record, so an unconditional contribution is now expressed the only way it
+ *  exists — as an `always` rider. Same fixture shorthand, one layer down. */
+const RES = ({ flat, dice, ...over }: Partial<Resolution> & { flat?: number; dice?: string[] } = {}): Resolution => ({
+  adv: false, dis: false, crit: false, notes: [], problems: [],
+  riders: flat || dice
+    ? [{ label: 'Graph', source: 'F', op: 'add', formula: '', flat: flat ?? 0, dice: dice ?? [], when: 'always', on: true }]
+    : [],
+  ...over,
 })
 
 // Roll order inside rollWeaponAttack: graph ATTACK dice → the d20 pair →
@@ -137,14 +145,14 @@ test('a weapon: target matches only a CATALOG-GRANTED weapon, never a hand-seede
   const granted = { ...SWORD, item_id: 'cat-longsword' } as EquippedWeapon
   assert.equal(gid('weapon', granted), 'weapon:cat-longsword')
   assert.equal(
-    resolve(buildContext(character(granted)), { kind: 'damage', subject: gid('weapon', granted) }).flat,
+    total(resolve(buildContext(character(granted)), { kind: 'damage', subject: gid('weapon', granted) })).flat,
     2,
   )
 
   // Hand-seeded: no back-ref, so its gid is the instance id and nothing matches.
   assert.equal(gid('weapon', SWORD), 'weapon:w1')
   assert.equal(
-    resolve(buildContext(character(SWORD)), { kind: 'damage', subject: gid('weapon', SWORD) }).flat,
+    total(resolve(buildContext(character(SWORD)), { kind: 'damage', subject: gid('weapon', SWORD) })).flat,
     0,
   )
 })
