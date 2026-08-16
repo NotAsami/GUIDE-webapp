@@ -2477,3 +2477,106 @@ It is the CASTER's DC (`spellbook.saveDC`), shown on every cast, because nothing
 on `Spell` records which save a spell calls for or whether it calls for one at
 all. A per-spell `save` field is the proper fix and needs a `SpellForm` control
 in the same change — the rule this project keeps relearning.
+
+---
+
+## 52. Slice 6b as built — spells can be authored
+
+6a made a spell's graph resolve. Nothing could write one: `graph`/`vars`/`tags`
+sat on `CatalogSpellData` marked "shape only for now", and `SpellForm.build()`
+enumerates every key by hand, so the fields were simply absent from the save.
+6a's read path was reachable only through a *feature* targeting a spell.
+
+### Placement: a fold, not a screen
+
+The DM side had two precedents pulling opposite ways — features and shards each
+have their own screen, while the item form hosts a collapsed "Effects Granted"
+fold. The fold won:
+
+```
+▸ Roll Contributions        2 effects · +1d6 radiant, adv
+▸ Effects Granted           none · references the effect library
+```
+
+Same `catFx`/`fold`/`fxfHead` idiom, a summary line when closed so it stays out
+of the way for the 90% of spells with no graph, and — the deciding argument —
+**one component, three hosts**: items and shard nodes get the identical block in
+6c. A `/dm/spells` screen would also have meant editing one spell in two places,
+since the 25 scalar fields stay in the console form regardless.
+
+An `err` from the audit **blocks save**, matching the gate the feature editor
+puts on Publish (§17). An audit that does not block is a suggestion.
+
+### The extraction
+
+`components/GraphEffects.tsx` — `GraphEffects` (palette, rows, one expanded card)
+and `VarsBlock`, plus `EffectRow`/`EffectCard`/`SchemaField` and the catalog
+picker. `FeatureEditor` went 1740 → 1291 lines and renders the same two blocks.
+
+**Self-contained on purpose.** It owns its expanded-card state and its own two
+popovers — the catalog picker and the when/ask/target help — so a host form can
+drop it in without learning what a `PopKind` is. The editor's other popovers
+(icon, delete, revert, folder) are chrome and stayed behind.
+
+`EffectCard`'s only coupling was `d: CatalogFeatureData`, used for exactly two
+things: sibling `ask` values and `vars`. Both are node properties, not feature
+properties, so it now takes `graph` and `vars` directly.
+
+`lib/useCatalogNodes.ts` lifts the cross-catalog target list — a second copy
+would be a second answer to "what can be targeted", and they would drift the
+first time a catalog gained a kind. Its `ready` flag is load-bearing:
+`auditNode` skips dangling-target detection on an empty node list, so an audit
+that runs before the libraries load reports a clean node that is not clean.
+
+### The CSS, measured rather than guessed
+
+The planned split did not survive measurement. The extracted components use 83
+classes: 45 are nested selectors and 27 are form atoms the editor's own chrome
+still needs, so a separate module would have **copied ~128 rules** and left them
+to drift.
+
+`FeatureEditor.module.css` moved to `components/authoring.module.css` and both
+hosts import it. It IS the DM authoring design language rather than one screen's
+private styling, the bytes already shipped, and nothing is duplicated. The
+console imports nothing new — it renders `GraphEffects`, which brings its own.
+
+One pre-existing find: `.pickbtn` had no rule at all. Harmless under the global
+`button` reset, but the catalog-picker button never showed it was clickable. It
+has a hover state now.
+
+### Still owed
+
+| Owed | Why |
+|---|---|
+| **Items and shard nodes** | 6c. The identical block, two more hosts, plus the lattice audit absorbing `auditNode` (~5 lines) with the shard half. |
+| **Draft/publish for spells** | Only `feature_catalog` has a `draft` column. Not needed while the graph saves with the form; a migration if that changes. |
+| **A per-spell `save` field** | 6a shows the caster's DC on every cast because nothing on `Spell` records whether a spell calls for a save. Its own change, with its own `SpellForm` control. |
+
+### Casting arms, too (6b follow-up)
+
+`once` on a SPELL was silently dead. `resolve()` skipped it — correct, a `once`
+contribution arms rather than applies — but nothing armed it: the queue was
+filled only by `planActivation`, reached only from a feature's Use button.
+Ticking "Arms once" on a spell effect therefore turned it off.
+
+Found by the user asking whether "cast the spell → next attack does +2d6" was
+expressible. It was the right shape and the app could not do it.
+
+`castSpell` now runs `planActivation` + `applyOutcomes`, which needed no change:
+the signature is `{ vars?, graph? }`, so a spell fits it structurally — the same
+kind-agnosticism that let `auditNode` serve a second host in 6b.
+
+**A cast accepts every outcome.** A feature's Use shows a confirm sheet where an
+`ask` can be declined; casting has no second step to hang one on, because the
+slot is spent by the time the outcomes are planned. The cast IS the confirmation.
+
+Slot spend and armed modifier land in ONE `updateSections` — two writes could
+leave a slot spent with nothing armed.
+
+Also surfaced while answering: **a spell in `spellbook.spells` is an active
+source unconditionally, prepared or not.** So `add 2d6 → roll:damage` on a known
+spell adds to every weapon swing. That is targeting working as specified rather
+than a bug — an empty target scopes it to the spell's own casts — but it is the
+easiest mistake to make with the whole engine, and it is now the first thing
+`docs/GUIDE_Codex_Authoring.md` says about scope. Whether an UNPREPARED spell
+should contribute at all is a real design question, still open.

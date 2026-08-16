@@ -1,0 +1,300 @@
+# Authoring the feature graph — a working guide
+
+For the DM. `docs/GUIDE_Codex_Graph_Engine.md` is the spec and says *why*; this
+says *how*, with recipes for the shapes real content keeps taking.
+
+---
+
+## The model, in one sentence
+
+> **A node carries effects. An effect adds something to a roll, when its
+> conditions hold.**
+
+A **node** is anything that can be granted: a feature, a spell, an item, a shard
+node. All four author identically — same block, same vocabulary — because "+2 to
+your next attack" means the same thing whatever granted it.
+
+An **effect** answers five questions, and only the first three are required:
+
+| | | |
+|---|---|---|
+| **op** | what kind of thing it does | `add`, `adv`, `crit`, `note`… |
+| **label** | what it is called in the breakdown | `Condemning Strike` |
+| **target** | which rolls it reaches | `roll:damage.melee` |
+| `when` | is it legal right now? | `hp < hpMax / 2` |
+| `ask` | did the thing happen? | `Hit with Sanctity` |
+
+---
+
+## The ops
+
+**Contributions** — these change a number or a roll:
+
+| op | does | example |
+|---|---|---|
+| `add` | adds to the roll. Dice allowed, and they stay unrolled so a crit can double them | `2d6`, `prof + wis`, `level / 2` |
+| `adv` / `dis` | advantage / disadvantage. Never a number — the target list IS the statement | — |
+| `crit` | lowers the crit threshold. Lowest across all applying nodes wins | `19` |
+| `note` | prose on the roll, no number. Can compute — see Inline compute | `DC {saveDc}, Wisdom save` |
+
+**Damage flags** — these answer "what happens when damage hits *me*", so they
+target a damage *type*, not a roll:
+
+| op | does |
+|---|---|
+| `resist` / `vuln` / `immune` | halves / doubles / nullifies incoming damage of the matched kind. Target a tag naming the type |
+
+**Activations** — these run when the player presses Use, and they write state:
+
+| op | does |
+|---|---|
+| `setVar` | stores a value into one of this node's variables |
+| `addVar` | adds a signed amount to one |
+
+---
+
+## Targeting
+
+Three namespaces, and that is the whole language. A target list is an **OR** —
+matching any one is enough.
+
+**A class of roll** — `roll:<kind>[.<sub>]`. The sub *narrows*; leaving it off
+matches every roll of that kind.
+
+```
+roll:attack          every attack roll
+roll:attack.melee    melee weapon attacks only
+roll:damage          every damage roll — weapon AND spell
+roll:damage.melee    melee weapon damage only
+roll:damage.spell    spell damage only
+roll:save.dex        DEX saving throws
+roll:check           every ability and skill check
+roll:feature         a feature's own roll, and using an item
+```
+
+> **Weapon damage but not spells** is two selectors:
+> `roll:damage.melee` + `roll:damage.ranged`. There is no "weapon" roll kind,
+> and the list is an OR, so two entries say it exactly.
+
+**A tag** — `tag:fire`. Free text, normalised on save, matched across every
+catalog. Use it when the rule is about a *kind* of thing you will keep adding to.
+
+**A specific thing** — picked from the catalog, never typed. Stored as an id, so
+renaming the target never breaks it.
+
+**No target at all** means *this node's own roll* — a feature's `roll`, or the
+spell/item it is authored on.
+
+---
+
+## `when` vs `ask` — the one that catches people
+
+They are **orthogonal** and they answer different questions:
+
+- **`when`** is a condition the app can check. It gates **existence**.
+- **`ask`** is a question only a human can answer. It gates **resolution**.
+
+| `when` | `ask` | what the player sees |
+|---|---|---|
+| — | — | applies, silently. Named in the breakdown |
+| true | — | applies, named as a resolved contribution |
+| false | — | does not surface at all |
+| — | set | a toggle in the roll panel, showing its formula |
+| true | set | a toggle |
+| false | set | **nothing** — no toggle either |
+
+That last row is the trap: a toggle whose `when` is false does not appear, on
+purpose. A choice the player could not legally take should not be offered. The
+editor warns you when a node has both.
+
+**Why an `ask` shows a formula and not a number:** seeing `1d6 [6]` before you
+decide whether the creature was judged puts a thumb on the decision. Answering
+rolls it — and once rolled it locks, so reopening the panel is never a free
+reroll.
+
+**Effects sharing one `ask` become one checkbox.** That is how "it hit, so deal
+the damage AND reveal the DC" is one decision instead of two. Type the same
+sentence in both — the editor now offers the ones already on the node in a
+dropdown, so you pick rather than retype.
+
+---
+
+## Variables
+
+State a node carries. Two axes:
+
+**Stored or derived**
+
+- **stored** — a value saved on the character. Needs a type (`num`/`bool`) and
+  usually an initial. Written by `setVar`/`addVar`, or by the player's toggle.
+- **derived** — recomputed from a formula on every read. Never stored, so it can
+  never go stale.
+
+**Player or DM**
+
+- **player** — the player can change it (a toggle on their Features screen).
+- **DM-only** — only you can, from the console's *Feature State* card. The
+  database enforces this; a player client's attempt is reverted.
+
+What a formula can read: `level`, `prof`, `str`…`cha` (modifiers), `hp`,
+`hpMax`, plus every variable in scope. Contribution formulas can also read
+`cast` (the level a spell was cast at).
+
+```
+saveDc          derived    8 + prof + wis
+isRaging        stored     bool, initial false, player
+mercy           stored     num, DM-only
+canSwitchMercy  derived    mercy - condemnation >= 5
+```
+
+Arithmetic is integer — `level / 2` at level 7 is 3, matching 5e's rounding.
+
+---
+
+## Inline compute
+
+`{...}` inside a **note's text** computes and renders the value. The player sees
+the number, never the expression.
+
+```
+DC {8 + prof + wis}, Wisdom save or be frightened.
+→  DC 15, Wisdom save or be frightened.
+
+Deals {2d6 + 1}.            →  Deals 2d6 + 1.     (display never rolls)
+held{upgraded ? " and restrained." : "."}
+```
+
+A bare boolean is refused — `{isRaging}` would read "true". Route it through a
+ternary to a phrase, as above.
+
+This is why a note can carry an `ask`: a DC that only matters if the hit landed
+should be revealed when you confirm it landed.
+
+---
+
+## When does an effect apply?
+
+Before reaching for `once`, get the **target** right — it decides scope, and the
+difference is large:
+
+| target | applies to |
+|---|---|
+| `roll:damage` | **every** damage roll you make, weapon and spell alike |
+| `roll:damage.melee` | every melee weapon damage roll |
+| **(empty)** | **only this node's own roll** — for a spell, its own casts |
+
+> **A spell in your spellbook is always active**, prepared or not. So
+> `add 2d6 → roll:damage` on a spell you merely know adds 2d6 to every weapon
+> swing forever. If you meant "this spell hits harder", leave the target empty.
+
+---
+
+## `once` — your next attack
+
+Tick **Arms once** on a contribution and it stops applying continuously.
+*Arming* it puts it in a queue; it lands on the next matching roll and waits
+there until you tap **Consume** on the roll panel.
+
+What arms it depends on the node:
+
+| node | armed by |
+|---|---|
+| feature | pressing **Use** |
+| spell | **casting** it |
+
+For a feature, Use shows a confirm sheet where an `ask` can be declined. Casting
+has no second step — the slot is already spent — so a cast accepts every
+outcome. The cast is the deliberate act.
+
+- It shows as a gold chip on the target's card, so a pending bonus is never
+  invisible.
+- It does **not** burn on a miss — only you know whether the attack resolved.
+- Re-arming refreshes rather than stacking.
+- Both rests clear the queue.
+- It needs a `roll:` target (`roll:attack`), because the queue is keyed by roll
+  kind. Leave the target empty to arm this node's own roll.
+
+---
+
+## Recipes
+
+**A flat bonus while a condition holds** — Bloodied Fury: below half HP, +1d4
+damage.
+
+```
+op      add
+value   1d4
+target  roll:damage.melee
+when    hp < hpMax / 2
+```
+
+**A rider the player judges** — Condemning Strike: on a hit against a cursed
+creature, +2d6 radiant and a save.
+
+```
+effect 1   add    2d6   radiant   roll:damage.melee   ask "Hit with Sanctity"
+effect 2   note   "DC {saveDc}, Wisdom save or be frightened."
+                                  roll:damage.melee   ask "Hit with Sanctity"
+variable   saveDc   derived   8 + prof + wis
+```
+
+Same `ask` on both → **one** checkbox that reveals the DC and applies the dice.
+
+**Scaling with level** — use the By level table rather than a formula when the
+progression is a 5e-style table. Filling slots 1, 5 and 11 means "3 from level 11
+up", not "nothing at 12".
+
+**A toggle the player flips** — Rage.
+
+```
+variable   isRaging   stored, bool, initial false, player
+effect     add   2   roll:damage.melee   when isRaging
+```
+
+The player toggles it on their Features screen; every melee damage roll picks it
+up while it is on. A `long` reset returns it to `false` on a rest.
+
+**Once per rest, spend a use** — pair `uses` + `recharge` on the node with an
+`ask` on the effect, so pressing Use spends the charge and the toggle decides
+whether it applied.
+
+**Cast a spell, then hit harder** — the armed shape.
+
+```
+op      add
+value   2d6      radiant
+target  roll:damage.melee
+once    ✓  Arms once
+```
+
+Casting arms it; a gold chip appears on the weapon card; your next melee hit
+gets the 2d6; you tap Consume once you know it landed. Without `once` this same
+effect would add 2d6 to every melee swing for as long as you know the spell.
+
+**Boost one specific thing** — target the thing itself, picked from the catalog.
+
+```
+op add   value 2   target  <Sacred Flame>     (picked, stored as an id)
+```
+
+This also **chains**: an effect targeting a node boosts that node's own
+contributions, so a shard node can amplify a feature that amplifies a weapon.
+
+**Damage resistance** — `resist` targeting `tag:fire`.
+
+---
+
+## Traps worth knowing
+
+| | |
+|---|---|
+| **A `when` that is false with an `ask` shows nothing** | Not a bug — see the table above. |
+| **`ask` is a grouping key** | Two effects group only if the sentence matches. Pick from the dropdown rather than retyping. |
+| **An unlabelled effect** | Blocked. An unattributed number in a breakdown is the thing the roll panel exists to prevent. |
+| **A dangling target** | An error. A target matching nothing *yet* is fine; one that can never match is a typo. |
+| **A variable nothing reads** | A warning. Declaring before wiring is a legitimate order of work. |
+| **Two contributions of different kinds under one `ask`** | A warning — a toggle carries one op, so only the first applies. Give them separate asks. |
+| **Damage type** | Set it on any `add` that targets a damage roll, or it lands in the untyped bucket and loses its colour in the split. |
+
+The audit rail tells you all of these while you author, and an **error blocks
+save** — on features, and now on spells.
