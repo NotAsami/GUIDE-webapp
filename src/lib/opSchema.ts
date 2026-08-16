@@ -52,6 +52,15 @@ export type OpDef = {
   fields: OpField[]
 }
 
+/** The SRD's thirteen. A closed list on purpose: the panel colours a damage
+ *  breakdown by this string, and free text fragments — `radiant` / `Radiant` /
+ *  `radient` all look identical to an author and none of them match each other.
+ *  Same reasoning as normalizeTag(), applied one step earlier. */
+export const DAMAGE_TYPES = [
+  'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic',
+  'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder',
+] as const
+
 const AMOUNT: OpField = {
   key: 'value', type: 'formula', label: 'Amount', required: true,
   desc: 'Number or expression contributed to every matched target. Dice are allowed and stay unrolled, so a crit can still double them.',
@@ -69,6 +78,11 @@ export const OPS: Record<GraphOp, OpDef> = {
     blurb: 'Adds a numeric contribution to every matched target. Stacks with other add nodes.',
     fields: [
       AMOUNT,
+      {
+        key: 'dmgType', type: 'enum', label: 'Damage type', options: [...DAMAGE_TYPES],
+        desc: 'What KIND of damage this adds, on a contribution that targets a damage roll. Splits the total by type in the breakdown and colours it. Leave blank on an attack roll, or when it rides along as the weapon’s own type.',
+        example: 'radiant',
+      },
       {
         key: 'byLevel', type: 'array', label: 'By level', wide: true,
         desc: 'Level-indexed progression. When any slot is filled it overrides Amount. Index 0 is unused — character levels start at 1.',
@@ -89,11 +103,11 @@ export const OPS: Record<GraphOp, OpDef> = {
   },
   note: {
     label: 'note', group: 'passive', icon: 'fa-comment',
-    blurb: 'Surfaces rules text on the target without changing a number. A note has nothing to resolve, so it takes when but never ask.',
+    blurb: 'Surfaces rules text on the target without changing a number. Takes ask only when the text computes something — then the toggle is what decides whether the player sees it.',
     fields: [{
       key: 'text', type: 'text', label: 'Note text', required: true, wide: true,
-      desc: 'The sentence the player reads on the matched targets. The Label above is the short line in the breakdown; this is the rule itself.',
-      example: 'Ignores half cover.',
+      desc: 'The sentence the player reads on the matched targets. The Label above is the short line in the breakdown; this is the rule itself. {braces} compute: the player sees the value, never the expression, so the text stays true as the character levels.',
+      example: 'DC {8 + prof + wis}, Wisdom save or be restrained.',
     }],
   },
   resist: flag('resist', 'fa-shield-halved', 'Halves incoming damage of the matched kind. Target a tag — the tag names the damage type.'),

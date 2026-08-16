@@ -179,6 +179,7 @@ export function Spellbook() {
         title: sp.name,
         subtitle: cantrip ? 'Cantrip' : `Level ${castLevel} slot`,
         icon: spellIcon(sp),
+        subject: { kind: 'spell', id: sp.id },
         lines: [{ label: roll.type || 'Damage', total: String(roll.total), breakdown: `${roll.expr} = ${roll.total}` }],
       })
     } else {

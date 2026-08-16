@@ -141,7 +141,15 @@ export function Layout() {
           (shop_catalog RLS scopes it to this character or the whole party) —
           no route, no nav entry, exists only while a shop is live. */}
       <ShopTakeover character={character} updateSection={updateSection} shop={shop} dismissed={shopDismissed} onDismiss={() => setShopDismissed(true)} />
-      {rollPanelOpen && <RollContextPanel onClose={() => setRollPanelOpen(false)} />}
+      {/* The character rides along so the panel's catalog sheet can resolve a
+          roll's subject: every catalog table is DM-only, so the player's copy of
+          the facts is the snapshot on their own row. */}
+      {rollPanelOpen && (
+        <RollContextPanel
+          character={character} shardTrees={shardTrees}
+          onClose={() => setRollPanelOpen(false)}
+        />
+      )}
     </>
   )
 }

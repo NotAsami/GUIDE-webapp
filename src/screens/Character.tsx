@@ -11,7 +11,7 @@ import {
 } from '../lib/dnd'
 import type { Skill } from '../lib/dnd'
 import { effectiveSheet } from '../lib/effects'
-import { rollDiceTerms, rollDie } from '../lib/dice'
+import { rollDiceTerms, rolledDice, type RolledDie } from '../lib/dice'
 import { useRollLog } from '../lib/rolls'
 import type { RollEntry, CheckRoll } from '../lib/rolls'
 import { Riders } from '../components/Riders'
@@ -60,11 +60,10 @@ export function Character() {
   useRingScale(stageRef, scalerRef)
 
   /** `eff` is the mode AFTER the graph has had its say — see pushCheck. */
-  function rollD20Set(eff: 'normal' | 'adv' | 'dis'): { rolls: number[]; pick: number } {
-    if (eff === 'normal') { const r = rollDie(20); return { rolls: [r], pick: r } }
-    const a = rollDie(20)
-    const b = rollDie(20)
-    return { rolls: [a, b], pick: eff === 'adv' ? Math.max(a, b) : Math.min(a, b) }
+  function rollD20Set(eff: 'normal' | 'adv' | 'dis'): { rolls: RolledDie[]; pick: number } {
+    const rolls = rolledDice(eff === 'normal' ? 1 : 2, 20)
+    const faces = rolls.map(d => d.v)
+    return { rolls, pick: eff === 'adv' ? Math.max(...faces) : eff === 'dis' ? Math.min(...faces) : faces[0] }
   }
 
   function flashHex(key: AbilityKey, value: number, crit: boolean, fumble: boolean) {
@@ -101,7 +100,7 @@ export function Character() {
     const terms = [...opts.terms, { label: 'FEAT', value: graphSum }]
     const { total: totalRoll, breakdown, crit, fumble } = composeCheck(pick, terms, res.critFrom)
 
-    const check: CheckRoll = { mode: eff, rolls: dice, pick, breakdown, total: totalRoll, crit, fumble }
+    const check: CheckRoll = { mode: eff, rolls: dice, pick, breakdown, terms, total: totalRoll, crit, fumble }
     flashHex(opts.key, totalRoll, crit, fumble)
     addRoll({
       kind: opts.kind, title: opts.title, subtitle: opts.subtitle, icon: 'fa-dice-d20', check,
@@ -410,7 +409,7 @@ function RollLogEntry({ entry }: { entry: RollEntry }) {
               {entry.check.rolls.length > 1 ? (
                 <>
                   {entry.check.rolls.map((r, i) => (
-                    <span key={i} className={styles.v}>{r}{i === 0 ? ', ' : ''}</span>
+                    <span key={i} className={styles.v}>{r.v}{i === 0 ? ', ' : ''}</span>
                   ))}
                   {' → '}
                   <span className={styles.pick}>{entry.check.pick}</span>{' '}

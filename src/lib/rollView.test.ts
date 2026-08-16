@@ -7,7 +7,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Rider } from './graph.ts'
 import type { RollEntry } from './rolls.tsx'
-import { lineViews, resolvedOf, riderViews, rollTotals, unresolvedOf } from './rollView.ts'
+import type { CharacterRow } from './database.types.ts'
+import { catalogView, lineViews, rerollAt, resolvedOf, riderViews, rollTotals, unresolvedOf } from './rollView.ts'
 
 const rider = (over: Partial<Rider>): Rider => ({
   label: 'R', source: 'Src', op: 'add', formula: '2', flat: 2, dice: [],
@@ -18,8 +19,12 @@ const entry = (over: Partial<RollEntry>): RollEntry => ({
   id: 'r1', at: 0, kind: 'weapon', title: 'Longsword', ...over,
 } as RollEntry)
 
-const ATTACK = { d20: 14, rolls: [14], mode: 'normal' as const, bonus: 6, total: 20, crit: false, fumble: false, breakdown: '' }
-const DAMAGE = { diceExpr: '1d8', dice: [5], bonus: 3, total: 8, type: 'slashing', crit: false, breakdown: '' }
+/** Faces → dice. `sides` travels with the die now, so every fixture states it. */
+const faces = (sides: number, ...vs: number[]) => vs.map(v => ({ v, sides }))
+const d20s = (...vs: number[]) => faces(20, ...vs)
+
+const ATTACK = { d20: 14, rolls: d20s(14), mode: 'normal' as const, bonus: 6, total: 20, crit: false, fumble: false, breakdown: '' }
+const DAMAGE = { diceExpr: '1d8', dice: faces(8, 5), bonus: 3, total: 8, type: 'slashing', crit: false, breakdown: '' }
 
 test('an `always` rider is named but NOT added again', () => {
   // The roller already folded it into the line's bonus. Counting it here would
@@ -73,7 +78,7 @@ test('a rolled manual rider adds its FACES, not its formula', () => {
   const e = entry({
     damage: DAMAGE,
     riderGroups: [{ label: 'Damage', riders: [
-      rider({ when: 'manual', on: true, dice: ['1d6'], flat: 0, rolled: true, rolledDice: [4] }),
+      rider({ when: 'manual', on: true, dice: ['1d6'], flat: 0, rolled: true, rolledDice: faces(6, 4) }),
     ] }],
   })
   const v = riderViews(e)
@@ -86,7 +91,7 @@ test('a rolled manual rider adds its FACES, not its formula', () => {
 
 test('an answered rider that is toggled back off stops counting but keeps its value', () => {
   // The lock: the number is settled, so toggling reuses it rather than rerolling.
-  const r = rider({ when: 'manual', on: false, dice: ['1d6'], flat: 0, rolled: true, rolledDice: [4] })
+  const r = rider({ when: 'manual', on: false, dice: ['1d6'], flat: 0, rolled: true, rolledDice: faces(6, 4) })
   const e = entry({ damage: DAMAGE, riderGroups: [{ label: 'Damage', riders: [r] }] })
   const v = riderViews(e)
   assert.equal(v[0].live, false)
@@ -133,7 +138,7 @@ test('an attack rider adds to the attack, a damage rider to the damage', () => {
 // --- die chips ---------------------------------------------------------------
 
 test('an adv attack keeps both dice and strikes the loser through', () => {
-  const e = entry({ attack: { ...ATTACK, d20: 18, rolls: [7, 18], mode: 'adv', total: 24 } })
+  const e = entry({ attack: { ...ATTACK, d20: 18, rolls: d20s(7, 18), mode: 'adv', total: 24 } })
   const [line] = lineViews(e)
   assert.deepEqual(line.dice, [{ v: 7, sides: 20, dropped: true }, { v: 18, sides: 20, dropped: false }])
   assert.equal(line.mode, 'adv')
@@ -142,7 +147,7 @@ test('an adv attack keeps both dice and strikes the loser through', () => {
 test('two identical faces still mark exactly one kept', () => {
   // Both dice show 17 under advantage. Naive "is this the pick" marks neither as
   // dropped, or both — either reads as a bug on screen.
-  const e = entry({ attack: { ...ATTACK, d20: 17, rolls: [17, 17], mode: 'adv' } })
+  const e = entry({ attack: { ...ATTACK, d20: 17, rolls: d20s(17, 17), mode: 'adv' } })
   const [line] = lineViews(e)
   assert.deepEqual(line.dice.map(d => d.dropped), [false, true])
 })
@@ -153,19 +158,82 @@ test('a normal attack shows one die and no mode', () => {
   assert.equal(line.mode, undefined)
 })
 
-test('damage die sides are recovered from the expression', () => {
-  const [line] = lineViews(entry({ damage: { ...DAMAGE, diceExpr: '2d6', dice: [3, 6] } }))
-  assert.deepEqual(line.dice, [{ v: 3, sides: 6 }, { v: 6, sides: 6 }])
+test('die sides come off the DIE, not off the expression', () => {
+  // The expression lies on purpose: re-parsing "2d6" is how a 6 gets drawn as a
+  // maximum roll on a d8. The die carries its own sides and wins.
+  const [line] = lineViews(entry({ damage: { ...DAMAGE, diceExpr: '2d6', dice: faces(8, 3, 6) } }))
+  assert.deepEqual(line.dice, [{ v: 3, sides: 8 }, { v: 6, sides: 8 }])
 })
 
 test('a check line derives its modifier from total minus the kept die', () => {
   const e = entry({
     kind: 'save',
-    check: { mode: 'adv', rolls: [4, 15], pick: 15, breakdown: '', total: 22, crit: false, fumble: false },
+    check: { mode: 'adv', rolls: d20s(4, 15), pick: 15, breakdown: '', total: 22, crit: false, fumble: false },
   })
   const [line] = lineViews(e)
   assert.equal(line.label, 'Save')
   assert.equal(line.mods, 7)
   assert.equal(line.total, 22)
   assert.deepEqual(line.dice.map(d => d.dropped), [true, false])
+})
+
+// --- reroll ------------------------------------------------------------------
+
+test('rerolling a damage die moves the line total AND the roll total', () => {
+  const e = entry({ damage: { ...DAMAGE, diceExpr: '2d6', dice: faces(6, 3, 4), bonus: 3, total: 10 } })
+  const patch = rerollAt(e, { line: 0, die: 0 })!
+  const next = { ...e, ...patch }
+  const [line] = lineViews(next)
+  const rolled = next.damage!.dice[0]
+  assert.equal(rolled.rerolled, true)
+  assert.equal(rolled.orig, 3)
+  assert.equal(next.damage!.dice[1].v, 4)                    // its neighbour is untouched
+  assert.equal(next.damage!.total, rolled.v + 4 + 3)         // the stored total moved
+  assert.equal(line.total, next.damage!.total)               // and the line agrees
+  assert.equal(rollTotals(next, riderViews(next)).damage, next.damage!.total)
+})
+
+test('rerolling the loser of an advantage pair is refused', () => {
+  // It did not count. Rerolling it would imply it could.
+  const e = entry({ attack: { ...ATTACK, d20: 18, rolls: d20s(7, 18), mode: 'adv', total: 24 } })
+  assert.equal(rerollAt(e, { line: 0, die: 0 }), null)
+  assert.notEqual(rerollAt(e, { line: 0, die: 1 }), null)
+})
+
+test('rerolling the kept d20 re-picks under advantage', () => {
+  const e = entry({ attack: { ...ATTACK, d20: 18, rolls: d20s(7, 18), mode: 'adv', bonus: 6, total: 24 } })
+  const next = { ...e, ...rerollAt(e, { line: 0, die: 1 })! }
+  const a = next.attack!
+  assert.equal(a.d20, Math.max(a.rolls![0].v, a.rolls![1].v)) // advantage still keeps the high die
+  assert.equal(a.total, a.d20 + 6)
+  // Frozen on purpose: the crit already decided how many damage dice exist.
+  assert.equal(a.crit, e.attack!.crit)
+})
+
+test('a die index that does not exist is refused rather than guessed at', () => {
+  assert.equal(rerollAt(entry({ damage: DAMAGE }), { line: 0, die: 9 }), null)
+  assert.equal(rerollAt(entry({ damage: DAMAGE }), { line: 3, die: 0 }), null)
+})
+
+// --- the catalog sheet -------------------------------------------------------
+
+test('a subject resolves against the character, and a missing one returns null', () => {
+  const weapon = { id: 'w1', name: 'Greatsword', damageDice: '1d12', type: 'slashing', category: 'weapon' as const }
+  const character = {
+    id: 'c1', sheet: { features: [{ id: 'f1', name: 'Second Wind', usage: '1/short rest' }] },
+    equipped: { weapons: [weapon] },
+  } as unknown as CharacterRow
+
+  const w = catalogView(character, { kind: 'weapon', id: 'w1' })!
+  assert.equal(w.name, 'Greatsword')
+  assert.deepEqual(w.damage, [['1d12', 'slashing']])
+
+  const f = catalogView(character, { kind: 'feature', id: 'f1' })!
+  assert.equal(f.name, 'Second Wind')
+  assert.ok(f.stats.some(([k, v]) => k === 'Usage' && v === '1/short rest'))
+
+  // Unequipped since the roll — the sheet says so instead of drawing a blank.
+  assert.equal(catalogView(character, { kind: 'weapon', id: 'gone' }), null)
+  assert.equal(catalogView(character, undefined), null)
+  assert.equal(catalogView(null, { kind: 'weapon', id: 'w1' }), null)
 })

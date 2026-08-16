@@ -155,6 +155,8 @@ export function Equipment() {
         ? `${handLabel(weapon.hand)} · ${stack.name}`
         : `${handLabel(weapon.hand)} · Attack`,
       icon: weapon.icon ?? 'fa-khanda',
+      // What the roll was ABOUT, so the panel can open its catalog entry.
+      subject: weapon.id ? { kind: 'weapon' as const, id: weapon.id } : undefined,
       attack: atk,
       damage,
       // Grouped, not concatenated: a rider on the attack and one on the damage

@@ -1833,3 +1833,175 @@ panel and never by `resolve()`, which keeps the engine pure.
 | **The armed queue** (`once: true`) | 5c — now unblocked, since the chip has a surface to live on. `once` is still absent from the op schema, so it cannot yet be authored. |
 | **DM console state panel** | 5d. |
 | **The toast** | Still shows its read-only summary. It retires for rolls when this panel has been used in anger. |
+
+---
+
+## 46. Slice 5b-fidelity — the panel as designed
+
+5b shipped the panel's structure and its arithmetic and deferred four things as
+"polish". They were not polish: the design was arrived at over many iterations,
+and the deferred list contained the two subsystems that make the panel readable
+(the catalog sheet and the tooltips), the one interaction it exists to allow (the
+reroll), and the frame that makes it look like this app at all.
+
+This slice worked a full gap list of the mockup against the port — every class,
+state and interaction — rather than the previous slice's summary of it.
+
+### The frame is two layers, not a border
+
+`.entry` had been flattened to a plain 1px rectangle. The design is a chamfered
+silhouette painted by `.e-frame` with `.e-inner` sitting 1.5px inside a slightly
+smaller one — a border cannot follow a `clip-path`, which is the recurring bug
+`docs/Chamfered_clip-path_corners_fix.md` exists for. `--edge` is the whole
+state machine: `latest`, `crit` and `fumble` each only repaint it.
+
+### The wiki cannot read the catalogs
+
+Checked across all 13 migrations rather than assumed:
+
+| Table | Player policy |
+|---|---|
+| `item_catalog`, `spell_catalog`, `feature_catalog`, `effect_catalog` | **none** |
+| `quests`, `sessions` | `player_read_*` (0007) |
+| `shard_tree_catalog` | published only (0008) |
+| `shop_catalog` | open shops only (0009) |
+
+A player's client gets **zero rows** from every catalog the sheet would want. So
+`catalogView()` reads the snapshots on their own character row, resolved through
+`activeSources()` — the same pattern `ApplyEffectCard` already states: *"the
+player never reads the effect catalog, so this is the one copy their Effects
+panel tooltip has."* A subject that is no longer active resolves to `null` and
+the sheet says "No longer carried" rather than drawing a blank.
+
+The mockup's authored "Interacts With" list becomes **this roll's riders**. That
+is not a substitution for missing data — it is the only version that cannot go
+stale against the character's actual state.
+
+`RollEntry.subject` is the INSTANCE id, not a gid: a gid falls back to the
+instance id when `item_id` is absent (§43's live gap), and the lookup is local.
+
+### `ask` was authored prose that nobody ever read
+
+`resolve()` set `rider.label = eff.ask`, so the ask sentence landed in the name
+slot — uppercased, letter-spaced, 9.5px — and `eff.label` was discarded. The
+feature's name was the thing the player could not see. Now the label stays the
+name and the sentence rides as `Rider.text`, rendered as prose under it, which
+is exactly the mockup's `.rd-text`. No schema change: `ask` was already required
+to be a sentence.
+
+### The two behavioural divergences
+
+| | Was | Is |
+|---|---|---|
+| `.rd-head` click | toggled the rider | **folds** it; only `.rd-sw` toggles |
+| rider die chips | built with `sides: 0` | real sides, so `.max` fires and a `-1d4` face of 1 no longer false-positives `.min` |
+
+The first matters because the switch is the gesture that changes the roll. It
+should take a deliberate hit, not the whole row.
+
+### Per-die reroll
+
+A die is a `<button>`. Clicking it rerolls, marks it `rerolled`, keeps the face
+it FIRST showed in `orig` (a second reroll never overwrites it), and moves every
+total above it. Refused for two dice: one dropped by adv/dis (it did not count —
+rerolling it would imply it could) and one belonging to a locked rider (§8 #2 —
+the value is settled; the mockup's own handler skips them for the same reason,
+which is why `DieAddr` has no rider case).
+
+**`crit` and `fumble` are frozen at roll time.** Recomputing them from a
+rerolled d20 would leave a doubled damage roll attached to a hit that is no
+longer a crit. The mockup freezes them too.
+
+This is not a contradiction of the lock. The lock is about the panel never
+re-rolling on its own; a reroll is the player spending something and saying so.
+
+### Settled while building
+
+| Decision | Why |
+|---|---|
+| **`RolledDie` everywhere** | `{ v, sides, orig?, rerolled?, crit? }` on `AttackRoll.rolls`, `DamageRoll.dice`, `CheckRoll.rolls` and `Rider.rolledDice`. 5b recovered `sides` by re-parsing `diceExpr` — which is how a 6 gets drawn as a maximum roll on a d8. The die knows now. |
+| **`dropped` stays on the view, not the die** | The same face is kept under advantage and discarded under disadvantage. It is a property of the line. |
+| **Named modifier parts** | `CheckTerm[]` on all three roll types. The modifier read-out is the only itemised breakdown anywhere in the design, and re-splitting our own breakdown string to get there is parsing our own output. |
+| **Only `sev: 'err'` reaches the Problems block** | It rendered every audit item, `ok` and `warn` included, as a red "Not applied". That is the panel lying about the roll. |
+| **Its own tooltip, not `useItemTooltip`** | That one is a facts-only item card positioned to the right; this is a key/value/hint strip that flips above. Same doctrine, different shape. |
+| **`--teal` and `--violet-hot` added to tokens** | Cold was borrowing `--cyan-hot`, and cyan is the player's own voice on this rail — a cold damage chip painted cyan reads as "yours" rather than "frost". |
+| **The rail stays a modal overlay** | The mockup docks it permanently with the host inset by `--rail-w`. No screen in this app reserves that gutter. The one deliberate divergence; everything inside the rail follows the mockup. |
+
+### Still owed
+
+| Owed | Why |
+|---|---|
+| **`.p-src`** | The mockup prints `source · fault` under a problem's name. `AuditItem` is `{ sev, id, t, s }` — `id` is a node id, not a name. Needs either extra fields on `AuditItem` or an id→source map. |
+| **`rh-num` ("07")** | A mockup-deck artifact. This app has no panel numbering to be the 7th of, so inventing one would be inventing lore. |
+| **A subject on Inventory rolls** | `activeSources()` covers equipped gear, not carried items, so a consumable's sheet would always resolve to "no longer carried". Wants a carried-item lookup, not a subject. |
+| **Multi-type damage** | Unchanged from 5b: `damage?: DamageRoll` is singular. Slice 6. |
+
+---
+
+## 47. Inline compute, and the toggle a note can earn
+
+§25 specified inline compute in prose and nothing ever implemented it. §40's owed
+list did not mention it either, so it fell between slices: `resolve()` pushed
+`eff.text` to `notes` verbatim, and a description written the way §25 describes
+would have shown a player raw braces.
+
+### `{...}` computes, at resolve time
+
+`interpolate(text, scope)` in `lib/expr.ts`. Display only — it touches no number
+the engine computed; it stops a description quietly lying as the character
+levels. It runs inside `resolve()` rather than in a renderer because the scope
+lives there: doing it later would mean handing every surface that shows a note
+the variable scope as well.
+
+| Input | Reads as |
+|---|---|
+| `DC {8 + prof + wis}, Wisdom save.` | `DC 15, Wisdom save.` |
+| `Deals {2d6 + 1}.` | `Deals 2d6 + 1.` — display must not roll (§13) |
+| `held{upgraded ? " and restrained." : "."}` | picks the phrase |
+| `It is {raging}.` | **refused** — "you deal true damage" is not prose |
+
+**A span that does not compute is left exactly as written and reported.**
+Silently dropping it hides the fault from author and player both. `auditNode`
+catches these at authoring time; `Resolution.problems` catches any that still
+reach a roll, exactly as a broken contribution formula does.
+
+§25's conditional phrase needed string values, so `FormulaValue` gained
+`{ t: 'str' }`. Literals only, chosen between by a ternary — there is no string
+arithmetic, and `evalExpr` still rejects everything else. A variable cannot hold
+one (`VarDef.type` is `num | bool`), so `characterVars` and `runActivation` both
+refuse a string the same way they refuse an array.
+
+### The usage scan had to learn to read prose
+
+`auditNode`'s "Variable is never used" warning scanned `value`, `when`,
+`threshold` and `byLevel`. A variable read only by an interpolation was reported
+as dead state — which is **most of what inline compute is for**: a number the
+player reads in a sentence and nothing else consults. A warning that fires on the
+correct case trains the author to ignore the one that catches the real one.
+
+### `ask` on a note: an error only when there is nothing to reveal
+
+§40 refused every toggle on a note: prose has nothing to resolve. That reasoning
+holds for a note that only carries text, and does not hold for one whose text
+**computes** something — the DC exists only if the hit landed, and the toggle is
+what decides whether the player sees it. Refusing that shape forced the author
+into an `add` of `0` purely to buy a checkbox, with a meaningless `+0` in the
+breakdown as the price. Sanctified Arrest and Judgement Cut are both this shape.
+
+The rule now asks the question it always meant: **does answering this reveal
+anything?**
+
+```
+op: note   ask: "hit with Sanctity"   text: "DC {8 + prof}, Wisdom save."   → legal
+op: note   ask: "did it hit?"         text: "Ignores half cover."           → error
+```
+
+An asked note becomes a `manual` rider carrying `Rider.reveal` — the sentence
+with its number already in it, held back until the player says yes. It
+contributes nothing and grants nothing, so `RiderView.kind` gained a third value
+rather than pretending to be a flag with no flag.
+
+**It rides the same `ask` group as any contribution sharing the question.** That
+is the reason it goes through the rider path instead of a list of its own: `+2d8
+radiant` and `DC 16, Wisdom` are one confirmation, and two checkboxes for one
+fact is the thing §32's grouping exists to prevent.

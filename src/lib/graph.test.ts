@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.types.ts'
 import { VAR_IDENTS, evalExpr } from './expr.ts'
-import { parseDice, rollDice } from './dice.ts'
+import { parseDice, rerollDie, rollDice } from './dice.ts'
 import {
   auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid,
   damageFlags, matchCount, nodeGid, normalizeTag, resolve, total, varCollisions, type ResolveReq,
@@ -431,7 +431,11 @@ test('§32 row 4 — ask, no when: an unresolved toggle', () => {
   assert.equal(r.riders.length, 1)
   assert.equal(r.riders[0].when, 'manual')
   assert.equal(r.riders[0].on, false)
-  assert.equal(r.riders[0].label, 'at least one failed the save')
+  // The NAME is the effect's label; the ask sentence is the question it asks.
+  // Crushing a sentence into the uppercased, letter-spaced name slot is how the
+  // player ends up reading the condition and never seeing whose it is.
+  assert.equal(r.riders[0].label, 'Smite')
+  assert.equal(r.riders[0].text, 'at least one failed the save')
   assert.equal(r.riders[0].formula, '1d6') // shows the formula, rolls on tap
   assert.deepEqual(total(r).dice, []) // off, so it contributes nothing yet
 })
@@ -522,6 +526,18 @@ test('parseDice still reads every unsigned form its existing callers pass', () =
   assert.deepEqual(parseDice('1d10 - 2'), { count: 1, sides: 10, mod: -2 })
   assert.equal(parseDice('not dice'), null)
   assert.equal(parseDice(''), null)
+})
+
+test('a rerolled die keeps its FIRST face through a second reroll', () => {
+  // "Rerolled from 12" has to mean what the player SAW, not the face it happened
+  // to hold one reroll ago — otherwise the tooltip quietly rewrites history.
+  const first = { v: 12, sides: 20 }
+  const twice = rerollDie(rerollDie(first))
+  assert.equal(twice.orig, 12)
+  assert.equal(twice.rerolled, true)
+  assert.equal(twice.sides, 20)
+  assert.ok(twice.v >= 1 && twice.v <= 20)
+  assert.equal(first.v, 12) // and never mutates the die it was given
 })
 
 // --- §39 obligation 2: the null contribution --------------------------------
@@ -914,4 +930,148 @@ test('a variable nothing reads or writes is a warning', () => {
     vars: [{ name: 'isRaging', kind: 'stored', type: 'bool' }],
     graph: [{ id: 'e1', op: 'setVar', variable: 'isRaging', value: 'true', label: 'Rage' }],
   }).some(a => a.t === 'Variable is never used'), false)
+})
+
+// --- §25 inline compute in prose --------------------------------------------
+
+test('note text computes its interpolations, and the player never sees the source', () => {
+  const c = withFeatures([gfeat('Judgement', [
+    { id: 'e1', op: 'note', label: 'Judgement', text: 'DC {8 + prof + 3}, Wisdom save.', target: ['roll:attack'] },
+  ])])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.deepEqual(r.notes, ['DC 14, Wisdom save.'])   // level 7 → prof 3
+  assert.equal(r.problems.length, 0)
+})
+
+test('a note reads its own feature\u2019s variables', () => {
+  const c = withFeatures([gfeat('Reserve', [
+    { id: 'e1', op: 'note', label: 'Reserve', text: 'You hold {karmicReserve} charges.', target: ['roll:attack'] },
+  ], { vars: [{ name: 'karmicReserve', kind: 'stored', type: 'num' }] })], { vars: { karmicReserve: 4 } })
+  assert.deepEqual(resolve(buildContext(c), ATTACK).notes, ['You hold 4 charges.'])
+})
+
+test('a conditional phrase picks a string, and both branches must be strings', () => {
+  const c = withFeatures([gfeat('Arrest', [
+    { id: 'e1', op: 'note', label: 'Arrest', target: ['roll:attack'],
+      text: 'The target is held{upgraded ? " and restrained." : "."}' },
+  ], { vars: [{ name: 'upgraded', kind: 'stored', type: 'bool' }] })], { vars: { upgraded: true } })
+  assert.deepEqual(resolve(buildContext(c), ATTACK).notes, ['The target is held and restrained.'])
+})
+
+test('an interpolation that does not compute keeps its source and reports a problem', () => {
+  // Silently dropping it would hide the fault from author and player both.
+  const c = withFeatures([gfeat('Broken', [
+    { id: 'e1', op: 'note', label: 'Broken', text: 'DC {8 / zero}.', target: ['roll:attack'] },
+  ], { vars: [{ name: 'zero', kind: 'stored', type: 'num' }] })], { vars: { zero: 0 } })
+  const r = resolve(buildContext(c), ATTACK)
+  assert.deepEqual(r.notes, ['DC {8 / zero}.'])
+  assert.ok(r.problems.some(p => p.sev === 'err' && p.t === 'Note did not compute'))
+})
+
+// --- §40's ask-on-a-note rule, relaxed --------------------------------------
+
+test('ask on a note is an error only when the note has nothing to reveal', () => {
+  const bare = auditNode({ graph: [
+    { id: 'e1', op: 'note', label: 'Cover', text: 'Ignores half cover.', ask: 'did it hit?', target: ['roll:attack'] },
+  ] })
+  assert.ok(bare.some(a => a.t === 'Toggle on a note'))
+
+  // The same shape, with something to reveal: the toggle is what decides whether
+  // the player gets the number at all.
+  const computes = auditNode({ graph: [
+    { id: 'e1', op: 'note', label: 'Sanctity', text: 'DC {8 + prof}, Wisdom.', ask: 'hit with Sanctity', target: ['roll:attack'] },
+  ] })
+  assert.equal(computes.filter(a => a.t === 'Toggle on a note').length, 0)
+})
+
+test('an asked note becomes a rider that reveals, and contributes nothing', () => {
+  const c = withFeatures([gfeat('Sanctity', [
+    { id: 'e1', op: 'note', label: 'Sanctity', text: 'DC {8 + prof}, Wisdom save.',
+      ask: 'hit with Sanctity', target: ['roll:attack'] },
+  ])])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(r.notes.length, 0)          // it is a toggle now, not a standing note
+  assert.equal(r.riders.length, 1)
+  const rd = r.riders[0]
+  assert.equal(rd.op, 'note')
+  assert.equal(rd.when, 'manual')
+  assert.equal(rd.on, false)
+  assert.equal(rd.label, 'Sanctity')
+  assert.equal(rd.text, 'hit with Sanctity')   // the question
+  assert.equal(rd.reveal, 'DC 11, Wisdom save.') // the answer, already computed
+  assert.equal(total(r).flat, 0)               // and it moves no number
+})
+
+test('a note and a contribution sharing one ask are ONE checkbox', () => {
+  // The whole reason the note rides the ask group instead of its own list:
+  // "+2d8 radiant" and "DC 16, Wisdom" are one confirmation, not two.
+  const c = withFeatures([gfeat('Sanctity', [
+    { id: 'e1', op: 'add', value: '2d8', dmgType: 'radiant', label: 'Sanctified Arrest',
+      ask: 'hit with Sanctity', target: ['roll:damage'] },
+    { id: 'e2', op: 'note', label: 'Sanctity', text: 'DC {8 + prof}, Wisdom save.',
+      ask: 'hit with Sanctity', target: ['roll:damage'] },
+  ])])
+  const r = resolve(buildContext(c), { kind: 'damage' })
+  assert.equal(r.riders.length, 1)
+  assert.deepEqual(r.riders[0].dice, ['2d8'])
+  assert.equal(r.riders[0].reveal, 'DC 11, Wisdom save.')
+})
+
+test('a variable read ONLY by note text is not reported as never used', () => {
+  // Display-only reads are most of what inline compute is for. Warning on them
+  // trains the author to ignore the warning that catches real dead state.
+  const node = {
+    vars: [{ name: 'karmicReserve', kind: 'stored', type: 'num' }] as VarDef[],
+    graph: [{ id: 'e1', op: 'note', label: 'Reserve', text: 'You hold {karmicReserve}.', target: ['roll:attack'] }] as GraphEffect[],
+  }
+  assert.equal(auditNode(node).filter(a => a.t === 'Variable is never used').length, 0)
+  // …and one nothing reads at all still is.
+  assert.ok(auditNode({ ...node, vars: [...node.vars, { name: 'dead', kind: 'stored', type: 'num' }] })
+    .some(a => a.t === 'Variable is never used' && a.id === 'dead'))
+})
+
+test('a typo inside note text is caught at author time, not by the player', () => {
+  const bad = auditNode({ graph: [
+    { id: 'e1', op: 'note', label: 'Reserve', text: 'You hold {karmicReserve}.', target: ['roll:attack'] },
+  ] })
+  assert.ok(bad.some(a => a.sev === 'err' && a.t === 'Unknown identifier'))
+})
+
+test('every GraphEffect field is authorable, or is explicitly recorded as not yet', () => {
+  // THE RECURRING BUG THIS EXISTS TO END: a field lands in the type, the engine
+  // reads it, and nothing ever renders a control — so it ships inert and the
+  // authoring surface silently cannot express what the engine supports. dmgType
+  // was the sixth. This map is `Record<keyof GraphEffect, …>`, so it is
+  // EXHAUSTIVE BY TYPE: add a field to GraphEffect and this stops compiling
+  // until you say which half it belongs to.
+  const COVERAGE: Record<keyof GraphEffect, 'universal' | 'schema' | 'deferred'> = {
+    // Rendered by the editor itself, on every node regardless of op.
+    id: 'universal', op: 'universal', target: 'universal', label: 'universal',
+    when: 'universal', ask: 'universal',
+    // Rendered from OPS[op].fields — asserted below.
+    value: 'schema', byLevel: 'schema', variable: 'schema', text: 'schema',
+    threshold: 'schema', dmgType: 'schema',
+    // Parsed and stored, honoured when the armed queue lands (5c). §46.
+    once: 'deferred',
+  }
+
+  const authored = new Set(Object.values(OPS).flatMap(d => d.fields.map(f => f.key)))
+  const missing = Object.entries(COVERAGE)
+    .filter(([k, kind]) => kind === 'schema' && !authored.has(k))
+    .map(([k]) => k)
+  assert.deepEqual(missing, [], `field(s) in the type with no control: ${missing.join(', ')}`)
+
+  // And the reverse: a schema field naming something GraphEffect does not carry
+  // would render a control that writes to nothing.
+  const stray = [...authored].filter(k => !(k in COVERAGE))
+  assert.deepEqual(stray, [], `schema field(s) with no home on GraphEffect: ${stray.join(', ')}`)
+})
+
+test('a damage-typed contribution rides its type all the way to the rider', () => {
+  const c = withFeatures([gfeat('Sear', [
+    { id: 'e1', op: 'add', value: '2d6', dmgType: 'radiant', label: 'Searing Light', target: ['roll:damage'] },
+  ])])
+  const r = resolve(buildContext(c), { kind: 'damage' })
+  assert.deepEqual(total(r).dice, ['2d6'])
+  assert.equal(r.riders[0].dmgType, 'radiant')
 })
