@@ -18,10 +18,11 @@ import type {
 } from './effects.ts'
 import { activeSources } from './effects.ts'
 import type {
-  ArmedMod, CharacterRow, GraphEffect, GraphState, Json, ShardTree, VarDef,
+  ArmedMod, CharacterRow, Feature, GraphEffect, GraphState, Json, ShardTree, VarDef,
 } from './database.types.ts'
 import { evalExpr } from './expr.ts'
-import type { GraphContext } from './graph.ts'
+import type { GraphContext, ResolveReq } from './graph.ts'
+import { armedMatches, gid } from './graph.ts'
 import { IS_ACTIVATION } from './opSchema.ts'
 
 const state = (character: CharacterRow): GraphState =>
@@ -291,6 +292,38 @@ export const consumeArmed = (character: CharacterRow, id: string): Record<string
 }
 
 /* ---------- rest ---------- */
+
+/** Features that could arm something for THIS roll, and can still be pressed.
+ *
+ *  §16's visibility rule, one step earlier: a bonus you have armed and cannot see
+ *  is worse than no bonus, and a bonus you COULD arm that the roll surface never
+ *  mentions is one you will forget exists. Arming is a pre-roll decision, so
+ *  making the player leave the weapon, find the feature, press Use and come back
+ *  puts the decision on a different screen from the roll.
+ *
+ *  Routed through planActivation rather than reading `once` directly, so `when`
+ *  gating, DM-variable refusal and every other rule are honoured once. A feature
+ *  already holding an armed entry is NOT offered: re-arming would refresh it and
+ *  quietly spend a second use for nothing. */
+export function armableFor(
+  character: CharacterRow,
+  ctx: GraphContext,
+  req: ResolveReq,
+  shardTrees: Record<string, ShardTree> = {},
+): { feature: Feature; source: string }[] {
+  const out: { feature: Feature; source: string }[] = []
+  for (const s of activeSources(character, shardTrees)) {
+    if (s.kind !== 'feature') continue
+    const feature = s.obj
+    if (feature.uses && feature.uses.current <= 0) continue
+    const source = gid('feature', feature)
+    if (ctx.armed.some(m => m.source === source)) continue
+    const arms = planActivation(feature, ctx, character, source)
+      .some(o => o.kind === 'arm' && armedMatches(o.mod, req))
+    if (arms) out.push({ feature, source })
+  }
+  return out
+}
 
 /** Variables a rest returns to their initial value.
  *

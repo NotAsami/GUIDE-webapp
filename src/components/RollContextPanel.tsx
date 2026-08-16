@@ -34,7 +34,7 @@ import { rolledDiceTerms } from '../lib/dice'
 import { Prose, renderInline } from '../lib/markdown'
 import type { CharacterRow, ShardTree } from '../lib/database.types'
 import {
-  catalogView, lineViews, rerollAt, resolvedOf, riderViews, rollTotals, unresolvedOf,
+  catalogView, lineViews, rerollAt, resolvedOf, riderAmount, riderViews, rollTotals, unresolvedOf,
   type CatalogView, type Die, type DieAddr, type RiderView, type RollLineView,
 } from '../lib/rollView'
 import styles from './RollContextPanel.module.css'
@@ -568,8 +568,11 @@ function Contribution({ v, showTip, armedLive, onConsume }: {
         ) : (<>
           {/* "flat →" is not a formula, it is the absence of one. */}
           {r.formula && r.formula !== 'flat' && <span className={styles.cForm}>{r.formula} →</span>}
+          {/* The AMOUNT, not the value: a dice contribution has no number here —
+              the roller rolled it into the line's modifier — so this prints
+              "+1d6", never "+0". */}
           <span className={styles.cVal} data-t={r.dmgType?.toLowerCase() ?? (onAttack ? 'atk' : '')}>
-            +{v.value}{onAttack ? ' atk' : r.dmgType ? ` ${r.dmgType}` : ''}
+            {riderAmount(r)}{onAttack ? ' atk' : r.dmgType ? ` ${r.dmgType}` : ''}
           </span>
         </>)}
       </span>
@@ -614,7 +617,7 @@ function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin }: {
           </span>
         )}
         {v.kind === 'value' && r.on && r.rolled && (
-          <span className={styles.rdVal}>+{v.value}{onAttack ? ' atk' : r.dmgType ? ` ${r.dmgType}` : ''}</span>
+          <span className={styles.rdVal}>{riderAmount(r)}{onAttack ? ' atk' : r.dmgType ? ` ${r.dmgType}` : ''}</span>
         )}
         {v.kind === 'note' && r.on && <span className={styles.rdVal}><i className="fa-solid fa-eye" /></span>}
         <span className={styles.rdFold}><i className="fa-solid fa-chevron-down" /></span>

@@ -2124,3 +2124,134 @@ different kinds under one ask (an `add` and an `adv`) cannot both be represented
 `warn` naming both ops rather than silence, and the fix is the author's call:
 two asks, or one op. Making it lossless means a rider carrying a SET of ops,
 which is a rider-model change and not worth one warning's worth of content.
+
+### The pre-roll offer
+
+§16 argues that a bonus you have armed and cannot see is worse than no bonus,
+because you roll without it and never learn why the number was low. The same
+argument one step earlier: a bonus you *could* arm, that the roll surface never
+mentions, is one you forget exists — and worse, because you spent nothing and got
+nothing.
+
+Arming is a **pre-roll decision**. Before this, making it meant leaving the
+weapon, finding the feature, pressing Use, and coming back — the decision on a
+different screen from the roll it belongs to.
+
+The weapon card now carries a **dashed ghost chip** per armable feature. Dashed
+is what a ghost flag already means in the roll panel: offered, not taken. Tapping
+it is the feature's Use in full — it spends the use and asks whatever the author
+attached — and the chip becomes the solid gold armed one.
+
+Not a sheet on pressing Attack. That would put a step between the player and
+every attack forever, including the overwhelming majority with nothing armable.
+
+**`armableFor()` routes through `planActivation`** rather than reading `once`
+directly, so `when` gating, DM-variable refusal and every other rule are honoured
+once rather than reimplemented for the offer. A feature already holding an armed
+entry is not offered: re-arming refreshes, so the player would be paying a second
+use to replace a bonus they already have.
+
+### One definition of "use a feature"
+
+The press moved out of the Features screen into `components/ActivationSheet.tsx`
+when the weapon card gained a reason to make it. A press does four things that
+must not drift — roll the expression, spend a use, apply the outcomes, and write
+all of it in ONE round trip — and two copies of that is eventually a feature
+spent on one screen and not the other. Same argument §16 makes about rests
+having one write path.
+
+The confirm sheet took its CSS with it, carrying its own `.overlay` rather than
+reaching into a screen's stylesheet: the Features detail panel still uses that
+one, and a shared component depending on a screen is backwards.
+
+**Not offered anywhere else yet.** A `once` targeting `roll:save.dex` has no
+chip beside the save on the Character screen. The query is the same call; the
+hex-grid layout has no obvious slot for it, which is a design question rather
+than a missing function.
+
+### Two arithmetic faults the armed queue exposed
+
+Reported as "consuming the charge doesn't roll the bonus dice — still +0". The
+engine was right: `total()` returned `dice: ["1d6"]` and the roller rolled it.
+The panel was wrong, twice, and neither fault was armed-specific.
+
+**1. A dice contribution read as "+0".** `riderValue()` is the number a rider
+adds to the panel's totals, and for a dice contribution that is genuinely zero —
+the roller already folded the dice into the line's modifier. Printing it as the
+contribution's amount said `+0` for a `+1d6`.
+
+`riderAmount()` now says what it is: `+1d6`, `+1d6 + 2`, `-1d4` (a dice term
+carries its own sign and must not gain a second). The toast had a correct copy of
+this while the panel had an incorrect one — two implementations of one sentence,
+and the wrong one was on the surface that exists to be trusted. One now, shared.
+
+**2. The footer double-counted every `active` rider.** §45 identified this trap
+for `always` riders and fixed only half of it. The rule was never about `always`
+— it is about **who folded it in**:
+
+> Every roll producer builds its bonus from `total()`, which contains the
+> unconditional fold (`always`) AND every resolved rider (`active`). Both are
+> inside the line's modifier before the entry exists. A `manual` rider is the
+> only one that is not, because it is answered and rolled AFTER the roll — which
+> is the entire reason this panel can change a total at all.
+
+So `rollTotals` adds **only** `manual` riders. Before this, a feature granting a
+flat `+3` on a true condition made the footer read three higher than the line
+directly above it. Pinned by a test asserting the two agree.
+
+---
+
+## 49. Owed: `Resolution` records every contribution twice
+
+Found while answering "it doesn't show the number that rolled — is that
+correct?" It is not, and the reason is structural rather than cosmetic.
+
+### The duplication
+
+An `always` rider's contribution is stored in two places:
+
+```ts
+if (eff.when === undefined && !eff.ask) {
+  out.flat += v.flat; out.dice.push(...v.dice)   // the fold
+  out.riders.push({ ...v, when: 'always' })      // …and the same numbers again
+}
+```
+
+Armed modifiers do the same. Every additive contribution that surfaces already
+becomes a rider, so `res.flat` and `res.dice` hold nothing the rider list does
+not — they are a second record of one fact, which is what
+`CLAUDE.md`'s opening rule exists to forbid.
+
+### What it has cost, twice
+
+| | |
+|---|---|
+| §45 | `total()` had to learn to skip `always` riders or every unconditional contribution doubled. |
+| §48 | The panel's footer did the same thing to `active` riders and read higher than the line directly above it. Fixed by "only `manual` riders are added" — a rule that is only necessary because the fold exists. |
+
+Both are the same bug wearing different clothes, and the fix each time was a
+filter rather than a removal.
+
+### What it blocks
+
+The roller flattens before it rolls: `total()` returns one dice list, the roller
+rolls it, and the faces are summed into the line's modifier with **no record of
+which rider each face belonged to**. So a `+1d6` contribution can be named but
+its result cannot be shown — a number the player is told to trust and cannot
+check, which is the failure this whole panel exists to prevent.
+
+### The change
+
+Delete the fold. `res.flat`/`res.dice` go; `total()` sums the riders, which are
+then the single record. The roller rolls **per rider** and writes the faces to
+`rolledDice`, the field manual riders already use — so the panel prints
+`1d6 → 4` with no new shape at all.
+
+Touches `resolve()`, `total()`, both roll producers (`rollWeaponAttack`,
+`Character.tsx`'s `pushCheck`) and the tests asserting `res.flat`/`res.dice`
+directly. `total()`'s OUTPUT is unchanged, so every assertion about a roll's
+arithmetic still holds — which is what makes this safe to do late.
+
+Its own slice. Not folded into 5c, because a refactor of the engine's core shape
+smuggled into a feature commit is how the next person loses the ability to bisect
+either.

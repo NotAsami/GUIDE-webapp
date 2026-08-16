@@ -15,21 +15,10 @@
  * away. Until then an `ask` rider renders as UNRESOLVED — visible, named, and
  * honestly not applied.
  */
-import type { Rider } from '../lib/graph'
 import type { AuditItem } from '../lib/graph'
+import { riderAmount } from '../lib/rollView'
 import type { RiderGroup } from '../lib/rolls'
 import styles from './Riders.module.css'
-
-/** What a rider contributes, as text. `manual` riders show the formula rather
- *  than a number — see the module note. */
-function riderValue(r: Rider): string {
-  if (r.op !== 'add') return r.op.toUpperCase()
-  if (r.when === 'manual') return r.formula || '—'
-  const dice = r.dice.join(' + ')
-  if (r.flat && dice) return `${dice} ${r.flat > 0 ? '+' : '−'} ${Math.abs(r.flat)}`
-  if (dice) return dice
-  return r.flat > 0 ? `+${r.flat}` : String(r.flat)
-}
 
 export function Riders({ groups, notes, problems }: {
   groups?: RiderGroup[]
@@ -58,7 +47,7 @@ export function Riders({ groups, notes, problems }: {
                 <i className={`fa-${r.when === 'manual' ? 'regular fa-square' : 'solid fa-square-check'}`} />
               </span>
               <span className={styles.rLabel}>{r.label}</span>
-              <span className={styles.rVal}>{riderValue(r)}</span>
+              <span className={styles.rVal}>{riderAmount(r)}</span>
               <span className={styles.rSrc}>
                 {r.source}
                 {/* Say so out loud. A manual rider is NOT in the total, and a

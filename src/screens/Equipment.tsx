@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link, useOutletContext } from 'react-router-dom'
 import type {
   CharacterRow, CharacterSection, CharacterSheet, ContainerKind,
-  EquippedGear, EquippedItem, EquippedWeapon, InventoryItem, ItemRarity, ItemSlot,
+  EquippedGear, EquippedItem, EquippedWeapon, Feature, InventoryItem, ItemRarity, ItemSlot,
   Json, ShardTree, WeaponHand,
 } from '../lib/database.types'
 import { Nav } from '../components/Nav'
@@ -26,6 +26,8 @@ import { useItemTooltip, type Bind, type TooltipData } from '../components/ItemT
 import { SHARD_SLOT_KEYS, shardSlots } from '../lib/shards'
 import { useGraph } from '../lib/useGraph'
 import { armedMatches, gid, resolve } from '../lib/graph'
+import { armableFor } from '../lib/graphState'
+import { useActivation } from '../components/ActivationSheet'
 import styles from './Equipment.module.css'
 
 interface RouteContext {
@@ -117,6 +119,24 @@ export function Equipment() {
     if (!p) return
     setManageWeapon(null)
     await updateSections(p)
+  }
+
+  // Using a feature from the weapon card — the same press the Features screen
+  // makes, so a use spent here spends exactly what it spends there.
+  const activation = useActivation({ character, graph, shardTrees, updateSection, updateSections })
+
+  /** Features that could arm something for this weapon's roll but have not been
+   *  pressed yet. Offered ON the card, because arming is a pre-roll decision and
+   *  making the player go find the feature puts it on another screen. */
+  const armableOn = (w: EquippedWeapon) => {
+    const subject = gid('weapon', w)
+    const seen = new Map<string, Feature>()
+    for (const kind of ['attack', 'damage'] as const) {
+      for (const a of armableFor(character, graph, { kind, subject, tags: w.tags }, shardTrees)) {
+        seen.set(a.source, a.feature)
+      }
+    }
+    return [...seen.values()]
   }
 
   /** Armed modifiers that will land on this weapon's next roll. Asked with the
@@ -264,7 +284,7 @@ export function Equipment() {
               return w ? (
                 <WeaponCard
                   key={hand} weapon={w} sheet={sheet} bind={bind}
-                  armed={armedOn(w)}
+                  armed={armedOn(w)} armable={armableOn(w)} onArm={activation.start}
                   dry={isRanged(w) && !activeAmmo}
                   ammo={isRanged(w) ? ammoStacks : null}
                   active={activeAmmo}
@@ -350,6 +370,7 @@ export function Equipment() {
       </div>
 
       {tooltip}
+      {activation.sheet}
 
       {openSlot && (
         <EquipModal
@@ -483,10 +504,13 @@ function ActionBtn({ to, onClick, icon, label, active, count, soon }: {
 
 /* ---------- weapon card ---------- */
 
-function WeaponCard({ weapon, sheet, bind, dry, ammo, active, armed, onNock, onAttack, onManage }: {
+function WeaponCard({ weapon, sheet, bind, dry, ammo, active, armed, armable, onArm, onNock, onAttack, onManage }: {
   weapon: EquippedWeapon; sheet: CharacterSheet; bind: Bind
   /** Armed modifiers that will land on this weapon's next roll (§16). */
   armed: number
+  /** Features that COULD arm one but have not been pressed. */
+  armable: Feature[]
+  onArm: (f: Feature) => void
   /** Ranged, with nothing left to fire. */
   dry: boolean
   /** Stacks available to this weapon, or null when it takes no ammunition. */
@@ -532,6 +556,18 @@ function WeaponCard({ weapon, sheet, bind, dry, ammo, active, armed, onNock, onA
               <i className="fa-solid fa-bolt" />Armed{armed > 1 ? ` ${armed}` : ''}
             </span>
           )}
+          {/* Offered, not taken — dashed, the same thing a ghost flag means in
+              the roll panel. Pressing it is the feature's Use, in full: it
+              spends the use and asks whatever the author attached. */}
+          {armable.map(f => (
+            <button
+              key={f.id} type="button" className={styles.wcArmable}
+              onClick={e => { e.stopPropagation(); onArm(f) }}
+              title={`Use ${f.name} — arms it for this roll`}
+            >
+              <i className="fa-regular fa-circle-dot" />{f.name}
+            </button>
+          ))}
           <button
             className={`${styles.wcAttack}${dry ? ' ' + styles.dry : ''}`}
             onClick={e => { e.stopPropagation(); onAttack() }}

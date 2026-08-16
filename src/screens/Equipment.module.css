@@ -221,6 +221,23 @@
 }
 .wcArmed i { font-size: 7px; }
 
+/* Offered, not taken. Dashed and dim is what a ghost flag means in the roll
+   panel, and it means the same here: this is available, you have not spent it. */
+.wcArmable {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--beige-dim);
+  border: 1px dashed rgba(212, 191, 125, 0.45); background: transparent;
+  padding: 2px 6px;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.wcArmable:hover {
+  color: var(--gold-rare); border-color: rgba(226, 176, 33, 0.6);
+  background: rgba(226, 176, 33, 0.1);
+}
+.wcArmable i { font-size: 7px; }
+
 .wcAttack {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%;

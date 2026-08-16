@@ -74,6 +74,30 @@ export function riderValue(r: Rider): number {
   return r.flat
 }
 
+/** What a rider contributes, as TEXT. Separate from riderValue because a dice
+ *  contribution has no number here: `1d6` is rolled by the roller and folded into
+ *  the line's modifier, so the rider itself carries an unrolled expression and a
+ *  flat of zero. Printing riderValue() for it says "+0", which is the one thing
+ *  it definitely is not.
+ *
+ *  Shared with the toast, which had its own correct copy while the panel had an
+ *  incorrect one — two implementations of the same sentence, and the wrong one
+ *  was on the surface that exists to be trusted. */
+export function riderAmount(r: Rider): string {
+  if (r.op !== 'add') return r.op.toUpperCase()
+  // Unanswered: the FORMULA, never a value. §7 — a number shown before the
+  // player decides puts a thumb on the decision.
+  if (r.when === 'manual' && !r.rolled) return r.formula || '—'
+  if (r.when === 'manual') return signed(String(riderValue(r)))
+  const dice = r.dice.join(' + ')
+  if (dice && r.flat) return `${signed(dice)} ${r.flat > 0 ? '+' : '−'} ${Math.abs(r.flat)}`
+  if (dice) return signed(dice)
+  return signed(String(r.flat))
+}
+
+/** Dice terms carry their own sign ("-1d4"); everything else needs one. */
+const signed = (s: string) => (s.startsWith('-') || s.startsWith('−') || s.startsWith('+') ? s : `+${s}`)
+
 export function riderViews(entry: RollEntry): RiderView[] {
   const out: RiderView[] = []
   let i = 0
@@ -318,10 +342,17 @@ export function rollTotals(entry: RollEntry, views: RiderView[]): RollTotals {
       if (v.grants && !flags.includes(v.grants)) flags.push(v.grants)
       continue
     }
-    // `always` riders are ALREADY inside the line's mods — the roller folded
-    // them in before the entry existed. Adding them here would double every
-    // unconditional contribution, exactly as it would in total().
-    if (v.rider.when === 'always') continue
+    // ONLY a `manual` rider is added here, and the rule is not about `always`:
+    // it is about WHO FOLDED IT IN. Every roll producer builds its bonus from
+    // total(), which already contains the unconditional fold (`always`) AND
+    // every resolved rider (`active`). Both are inside the line's modifier
+    // before this entry existed, so adding either again doubles it.
+    //
+    // A `manual` rider is the one thing that is not: it is answered and rolled
+    // AFTER the roll happened, which is the whole reason this panel can change
+    // a total at all. The previous rule skipped only `always` and silently
+    // inflated every `active` contribution.
+    if (v.rider.when !== 'manual') continue
     if (v.group === 'Attack' || v.group === 'Check' || v.group === 'Save') {
       if (attack !== undefined) attack += v.value
     } else {

@@ -8,7 +8,9 @@ import assert from 'node:assert/strict'
 import type { Rider } from './graph.ts'
 import type { RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
-import { catalogView, lineViews, rerollAt, resolvedOf, riderViews, rollTotals, unresolvedOf } from './rollView.ts'
+import {
+  catalogView, lineViews, rerollAt, resolvedOf, riderAmount, riderValue, riderViews, rollTotals, unresolvedOf,
+} from './rollView.ts'
 
 const rider = (over: Partial<Rider>): Rider => ({
   label: 'R', source: 'Src', op: 'add', formula: '2', flat: 2, dice: [],
@@ -236,4 +238,52 @@ test('a subject resolves against the character, and a missing one returns null',
   assert.equal(catalogView(character, { kind: 'weapon', id: 'gone' }), null)
   assert.equal(catalogView(character, undefined), null)
   assert.equal(catalogView(null, { kind: 'weapon', id: 'w1' }), null)
+})
+
+// --- what a rider READS as, versus what it is worth ---------------------------
+
+test('a dice contribution reads as its dice, not as "+0"', () => {
+  // THE BUG: riderValue() is the number a rider adds to the panel's totals, and
+  // for a dice contribution that is genuinely 0 — the roller already rolled it
+  // into the line's modifier. Printing it said "+0" for a +1d6.
+  const r = rider({ when: 'always', label: 'Boosted Cut', flat: 0, dice: ['1d6'] })
+  assert.equal(riderValue(r), 0)
+  assert.equal(riderAmount(r), '+1d6')
+
+  assert.equal(riderAmount(rider({ when: 'always', flat: 3, dice: [] })), '+3')
+  assert.equal(riderAmount(rider({ when: 'always', flat: -2, dice: [] })), '-2')
+  assert.equal(riderAmount(rider({ when: 'always', flat: 2, dice: ['1d6'] })), '+1d6 + 2')
+  // Bane: the dice term carries its own sign and must not gain a second one.
+  assert.equal(riderAmount(rider({ when: 'always', flat: 0, dice: ['-1d4'] })), '-1d4')
+  // Unanswered: the formula, never a value (§7).
+  assert.equal(riderAmount(rider({ when: 'manual', on: false, formula: '1d6', flat: 0, dice: ['1d6'] })), '1d6')
+  // Answered and rolled: a real number.
+  assert.equal(riderAmount(rider({ when: 'manual', on: true, rolled: true, rolledDice: faces(6, 4), flat: 0, dice: ['1d6'] })), '+4')
+  assert.equal(riderAmount(rider({ op: 'adv', when: 'always', flat: 0 })), 'ADV')
+})
+
+test('the panel adds ONLY manual riders — everything else is already in the line', () => {
+  // Every roll producer builds its bonus from total(), which contains both the
+  // unconditional fold AND every resolved rider. Adding an `active` rider here
+  // too inflated the footer past the line it was supposedly totalling.
+  const e = entry({
+    // bonus 9 = the weapon's 6 plus the active rider's 3, as the roller built it
+    attack: { ...ATTACK, bonus: 9, total: 23 },
+    riderGroups: [{ label: 'Attack', riders: [
+      rider({ when: 'active', on: true, label: 'Bloodied', flat: 3, dice: [] }),
+    ] }],
+  })
+  const t = rollTotals(e, riderViews(e))
+  assert.equal(lineViews(e)[0].total, 23)
+  assert.equal(t.attack, 23, 'the footer must agree with the line above it')
+})
+
+test('…and a manual rider IS added, because it was answered after the roll', () => {
+  const e = entry({
+    attack: { ...ATTACK, bonus: 6, total: 20 },
+    riderGroups: [{ label: 'Attack', riders: [
+      rider({ when: 'manual', on: true, rolled: true, rolledDice: [], flat: 3, dice: [] }),
+    ] }],
+  })
+  assert.equal(rollTotals(e, riderViews(e)).attack, 23)
 })
