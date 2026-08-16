@@ -143,3 +143,22 @@ test('carryMultiplier takes the largest granted value, never the product', () =>
   })
   assert.equal(carryMultiplier(c, trees), 2)
 })
+
+test('effective HP is clamped on READ, and the stored value survives', () => {
+  // Losing a +maxHp source leaves `current` above the new ceiling. The sheet must
+  // not show 52/40 — and must not fix it by writing, or re-equipping could never
+  // give the hit points back.
+  const withShard = character({
+    sheet: { hp: { current: 52, max: 40 } },
+    equipped: { cloak: { id: 'i1', name: 'Vitality Cloak', slot: 'cloak', effects: { maxHp: 12 } } },
+  })
+  const worn = effectiveSheet(withShard)
+  assert.equal(worn.hp?.max, 52)
+  assert.equal(worn.hp?.current, 52)   // at the ceiling, untouched
+
+  const bare = effectiveSheet(character({ sheet: { hp: { current: 52, max: 40 } } }))
+  assert.equal(bare.hp?.max, 40)
+  assert.equal(bare.hp?.current, 40)   // clamped for display…
+  // …and the row underneath is unchanged, so re-equipping restores the 52.
+  assert.equal(withShard.sheet?.hp?.current, 52)
+})

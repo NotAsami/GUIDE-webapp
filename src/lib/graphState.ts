@@ -40,14 +40,16 @@ const zero = (t: 'num' | 'bool' | undefined) => (t === 'bool' ? false : 0)
 export function withVars(
   resources: Record<string, Json> | undefined,
   next: Record<string, number | boolean>,
+  scope: VarScope = 'player',
 ): Record<string, Json> {
   // Nothing to write: hand back exactly what came in, so a character with no
   // variables never grows an empty `graph` key just for having rested.
   if (!Object.keys(next).length) return resources ?? {}
   const g = ((resources as { graph?: GraphState } | undefined)?.graph ?? {})
+  const key = bucket(scope)
   return {
     ...resources,
-    graph: { ...g, vars: { ...g.vars, ...next } },
+    graph: { ...g, [key]: { ...g[key], ...next } },
   } as Record<string, Json>
 }
 
@@ -55,28 +57,55 @@ export function withVars(
 export const setVars = (character: CharacterRow, next: Record<string, number | boolean>) =>
   withVars(character.resources, next)
 
+/** The DM's half. Only a `dm_users` session may land this — migration 0015's
+ *  trigger reverts it otherwise — which is the point of §31: the bucket a value
+ *  lives in IS the permission, because RLS is row-level and cannot guard a JSON
+ *  path. Nothing wrote this bucket until the console got a panel. */
+export const setDmVars = (character: CharacterRow, next: Record<string, number | boolean>) =>
+  withVars(character.resources, next, 'dm')
+
 /** Every stored variable a player may write, with its current value. Reads the
  *  ACTIVE set, so an unequipped item's variables are absent exactly as its
  *  features are. */
-export function playerVars(
+export type VarScope = 'player' | 'dm'
+export type VarRow = { def: VarDef; from: ActiveSource; value: number | boolean }
+
+const bucket = (scope: VarScope): 'vars' | 'dmVars' => (scope === 'dm' ? 'dmVars' : 'vars')
+
+/** Every stored variable of one SCOPE, with its current value.
+ *
+ *  One walk, both buckets. The player's screen and the DM's console want the
+ *  same list filtered the opposite way, and two copies of this would be two
+ *  places for the §31 split to drift — the whole point being that which bucket a
+ *  value lives in is who may write it. Reading the right bucket falls out of the
+ *  same argument that decides the filter. */
+export function scopedVars(
   character: CharacterRow,
+  scope: VarScope,
   shardTrees: Record<string, ShardTree> = {},
-): { def: VarDef; from: ActiveSource; value: number | boolean }[] {
+): VarRow[] {
   const g = state(character)
-  const out: { def: VarDef; from: ActiveSource; value: number | boolean }[] = []
+  const store = g[bucket(scope)]
+  const out: VarRow[] = []
   const seen = new Set<string>()
   for (const from of activeSources(character, shardTrees)) {
     const defs = 'vars' in from.obj ? from.obj.vars ?? [] : []
     for (const def of defs) {
       // First wins, matching collectVars — the collision itself is reported by
-      // characterVars, not re-reported here.
-      if (def.kind !== 'stored' || def.scope === 'dm' || seen.has(def.name)) continue
+      // characterVars, not re-reported here. `seen` spans both scopes so a name
+      // declared twice cannot appear once in each list.
+      if (def.kind !== 'stored' || seen.has(def.name)) continue
       seen.add(def.name)
-      out.push({ def, from, value: g.vars?.[def.name] ?? def.initial ?? zero(def.type) })
+      if ((def.scope === 'dm') !== (scope === 'dm')) continue
+      out.push({ def, from, value: store?.[def.name] ?? def.initial ?? zero(def.type) })
     }
   }
   return out
 }
+
+/** Every stored variable the PLAYER may write. */
+export const playerVars = (character: CharacterRow, shardTrees: Record<string, ShardTree> = {}) =>
+  scopedVars(character, 'player', shardTrees)
 
 /* ---------- activation ---------- */
 

@@ -7,7 +7,9 @@ import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import { MOD_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
-import type { ShardSlot, ShardTree } from '../lib/database.types'
+import type { GraphState, ShardSlot, ShardTree } from '../lib/database.types'
+import { characterVars } from '../lib/graph'
+import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphState'
 import { longRestPatch } from '../lib/rest'
 import { effectiveSheet } from '../lib/effects'
 import { pactSlotCount, pactSlotLevel } from '../lib/spells'
@@ -713,9 +715,164 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, sha
         {/* I — GRANT SPELL: snapshot a spell_catalog template onto this PC's
             spellbook.spells, mirroring Grant Feature (F). */}
         <GrantSpellCard member={member} row={row} spellLib={spellLib} onUpdate={onUpdate} onVoice={onVoice} log={log} />
+
+        {/* J — FEATURE STATE (wide): what the graph is holding for this PC, and
+            the DM's own variable bucket — which had no writer anywhere in the
+            app until this card, despite the engine reading it and migration
+            0015 guarding it. */}
+        <FeatureStateCard member={member} row={row} shardCatalog={shardCatalog} onUpdate={onUpdate} log={log} />
       </div>
 
     </>
+  )
+}
+
+// ============================================================
+// FEATURE STATE (Actions card J) — §8 #4 + §31's DM bucket
+// ============================================================
+
+/** What the feature graph is holding for this character, and the one bucket the
+ *  DM owns.
+ *
+ *  THE SHAPE IS THE PERMISSION (§31). Player variables read out; DM variables
+ *  edit. Postgres RLS is row-level and cannot allow writing
+ *  `resources.graph.vars` while refusing `…dmVars`, so which bucket a value
+ *  lives in is who may write it — and migration 0015's trigger enforces that
+ *  from the other side. A card that let the DM edit both would make the split
+ *  invisible exactly where it is being explained.
+ *
+ *  Live with no extra wiring: lib/dm.ts subscribes to postgres_changes on
+ *  `characters`, so a player toggling Rage lands here within a round trip. */
+function FeatureStateCard({ member, row, shardCatalog, onUpdate, log }: {
+  member: PartyMember
+  row: CharacterRow
+  shardCatalog: Record<string, ShardTree>
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const first = firstName(member.name)
+  const playerState = scopedVars(row, 'player', shardCatalog)
+  const dmState = scopedVars(row, 'dm', shardCatalog)
+  const armed = ((row.resources as { graph?: GraphState } | undefined)?.graph?.armed) ?? []
+  // The collisions §30 promises land here: deterministic and loud, so the DM
+  // sees the clash the session it happens rather than a value quietly winning.
+  const collisions = characterVars(row, shardCatalog).audit.filter(a => a.sev === 'err')
+
+  const nothing = !playerState.length && !dmState.length && !armed.length && !collisions.length
+
+  async function writeDm(name: string, value: number | boolean, label: string) {
+    const ok = await onUpdate({ resources: setDmVars(row, { [name]: value }) as CharacterRow['resources'] })
+    if (ok) log(<>Set <b>{label}</b> to <b>{String(value)}</b> on {first}</>)
+  }
+
+  async function disarm(id: string, label: string) {
+    // The DM's remove and the player's consume are the same operation.
+    const ok = await onUpdate({ resources: consumeArmed(row, id) as CharacterRow['resources'] })
+    if (ok) log(<>Cleared armed <b>{label}</b> from {first}</>, 'danger')
+  }
+
+  return (
+    <div className={cx(styles.actCard, styles.wide)}>
+      <div className={styles.acTitle}><i className="fa-solid fa-diagram-project lead" /><span className={styles.num}>J</span><span className={styles.t}>Feature State</span></div>
+
+      {collisions.map(a => (
+        <div key={a.id ?? a.t} className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" /> <b>{a.t}</b> — {a.s}
+        </div>
+      ))}
+
+      {nothing && (
+        <div className={styles.profRow}>
+          <span className={styles.profLab}>Nothing authored</span>
+          <span className={styles.dvSrc}>No feature on {first} declares a variable yet.</span>
+        </div>
+      )}
+
+      {playerState.length > 0 && (
+        <div className={styles.profRow}>
+          <span className={styles.profLab}>Player State</span>
+          <div className={styles.profGrid}>
+            {playerState.map(v => (
+              <span key={v.def.name} className={cx(styles.profChip, v.value !== false && v.value !== 0 && styles.on)}
+                title={`${v.def.name} · from ${v.from.obj.name} · theirs to change`}>
+                {v.def.label ?? v.def.name}
+                <span className={styles.ab}>{typeof v.value === 'boolean' ? (v.value ? 'on' : 'off') : v.value}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {dmState.length > 0 && (
+        <div className={styles.profRow}>
+          <span className={styles.profLab}>DM Variables</span>
+          <div className={styles.dmVarList}>
+            {dmState.map(v => <DmVarRow key={v.def.name} v={v} onWrite={writeDm} />)}
+          </div>
+        </div>
+      )}
+
+      {armed.length > 0 && (
+        <div className={styles.profRow}>
+          <span className={styles.profLab}>Armed</span>
+          <div className={styles.dmVarList}>
+            {armed.map(m => (
+              <div key={m.id} className={styles.dmVarRow}>
+                <span className={styles.dvName}>{m.label}</span>
+                <span className={styles.dvSrc}>
+                  next {m.sub ? `${m.kind} ${m.sub}` : m.kind}{m.value ? ` · ${m.value}` : ''}
+                </span>
+                <Btn tone="danger" sm icon="fa-xmark" label="Clear" onClick={() => void disarm(m.id, m.label)} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** One DM variable. A bool is a switch; a number is an input that writes when it
+ *  SETTLES — the console's realtime channel fans every write out to every
+ *  connected client, so a stepper firing per keystroke is not free. */
+function DmVarRow({ v, onWrite }: {
+  v: VarRow
+  onWrite: (name: string, value: number | boolean, label: string) => Promise<void>
+}) {
+  const label = v.def.label ?? v.def.name
+  const [local, setLocal] = useState<number | null>(null)
+  const timer = useRef<number>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
+  if (v.def.type === 'bool') {
+    const on = v.value === true
+    return (
+      <div className={cx(styles.catTog, on && styles.on)} onClick={() => void onWrite(v.def.name, !on, label)}
+        role="switch" aria-checked={on}>
+        <span className={styles.tgSw} />
+        <span className={styles.tgLab}>
+          <span className={styles.t}>{label}</span>
+          <span className={styles.s}>{v.def.name} · from {v.from.obj.name} · DM-only</span>
+        </span>
+      </div>
+    )
+  }
+
+  const shown = local ?? (typeof v.value === 'number' ? v.value : 0)
+  const set = (n: number) => {
+    setLocal(n)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => { setLocal(null); void onWrite(v.def.name, n, label) }, 450)
+  }
+  return (
+    <div className={styles.dmVarRow}>
+      <span className={styles.dvName}>{label}</span>
+      <span className={styles.dvSrc}>{v.def.name} · from {v.from.obj.name}</span>
+      <div className={styles.stepper}>
+        <input className={styles.numIn} type="number" value={shown}
+          onChange={e => set(parseInt(e.target.value || '0', 10) || 0)} />
+      </div>
+    </div>
   )
 }
 
