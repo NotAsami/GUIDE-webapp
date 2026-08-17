@@ -77,6 +77,12 @@ export type RollEntry = {
   problems?: AuditItem[]
   /** Authored `note` ops that matched this roll. */
   notes?: string[]
+  /** This entry's own surface already confirmed it, so the ROLLS button must not
+   *  ping for it — a rest shows its own toast, and one press earning two
+   *  notifications is the noise the roll toast was retired for. It still belongs
+   *  in the log: the panel is the history, and being quiet is about announcing,
+   *  not about recording. */
+  quiet?: boolean
 }
 
 /** Riders, labelled by the roll that produced them ("Attack", "Damage", "Save"). */
