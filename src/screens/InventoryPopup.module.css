@@ -228,14 +228,26 @@
 .ia.confirm .ai { color: var(--danger-hot); }
 .ia:disabled { cursor: not-allowed; opacity: 0.42; }
 
+/* `appearance: none` is the whole reason this looked like a stray OS widget
+   among the chamfered controls: without it Chrome draws its own select chrome
+   and ignores most of what is set here. Same arrow recipe as `select.in` in
+   authoring.module.css / ShardLattice — two gradients making a caret — and the
+   option list needs its own background or it drops down white. */
 .stowPick {
   flex: 0 0 132px; height: 40px;
-  background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(212, 191, 125, 0.35);
+  background-color: rgba(0, 0, 0, 0.45); border: 1px solid rgba(212, 191, 125, 0.35);
   color: var(--text); font-family: var(--font-mono); font-size: 8.5px;
-  letter-spacing: 0.14em; text-transform: uppercase; padding: 0 8px;
+  letter-spacing: 0.14em; text-transform: uppercase; padding: 0 22px 0 8px;
   cursor: pointer; outline: none;
+  appearance: none; -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--amber) 50%),
+    linear-gradient(135deg, var(--amber) 50%, transparent 50%);
+  background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
 }
 .stowPick:focus { border-color: var(--cyan); }
+.stowPick option { background: #14130f; color: var(--text); text-transform: none; }
 
 /* --- touch: the same component becomes a bottom sheet ---
    Gated on pointer CAPABILITY, never width, so a touchscreen laptop with a mouse

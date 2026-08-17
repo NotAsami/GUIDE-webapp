@@ -55,6 +55,7 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
   const inventory = getInventory(row)
   const [busy, setBusy] = useState(false)
   const [confirmTake, setConfirmTake] = useState<string | null>(null)
+  const [confirmDestroy, setConfirmDestroy] = useState<string | null>(null)
   const [note, setNote] = useState('')
 
   const held = useMemo(
@@ -180,6 +181,19 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
     await confiscated.release(rec.id)
     setBusy(false)
     log(<>Returned <span className={styles.obj}>{item.name}</span> to <span className={styles.who}>{first}</span></>, 'cyan')
+  }
+
+  /** Bin it for good — the counterpart to `restore`. Same single write (the
+   *  record is the only place a confiscated item exists), minus putting it back
+   *  on the character. For the item handed over by mistake, which otherwise
+   *  sits in Held forever because Return is the only way out. */
+  async function destroy(rec: ConfiscatedItemRow) {
+    if (busy) return
+    setBusy(true)
+    await confiscated.release(rec.id)
+    setBusy(false)
+    setConfirmDestroy(null)
+    log(<>Destroyed <span className={styles.obj}>{rec.item.name}</span>, taken from <span className={styles.who}>{first}</span></>, 'danger')
   }
 
   return (
@@ -321,6 +335,26 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
                 >
                   <i className="fa-solid fa-rotate-left" />Return
                 </button>
+
+                {confirmDestroy === rec.id ? (
+                  <button
+                    className={cx(styles.irAct, styles.danger)}
+                    disabled={busy}
+                    onClick={() => void destroy(rec)}
+                    title="Gone for good — this cannot be undone"
+                  >
+                    <i className="fa-solid fa-trash" />Confirm
+                  </button>
+                ) : (
+                  <button
+                    className={cx(styles.irAct, styles.take)}
+                    disabled={busy}
+                    onClick={() => setConfirmDestroy(rec.id)}
+                    title="Destroy it — for the item granted by mistake"
+                  >
+                    <i className="fa-solid fa-trash" />Destroy
+                  </button>
+                )}
               </div>
             ))}
           </div>

@@ -377,7 +377,9 @@ export default function FeatureEditor() {
           <div className={styles.opStat}><span className={cx(styles.v, styles.cyan)}>{nodeCount}</span><span className={styles.l}>Effect Nodes</span></div>
           <div className={styles.opStat}><span className={cx(styles.v, libErrs > 0 && styles.warn)}>{libErrs}</span><span className={styles.l}>Issues</span></div>
           <div className={styles.opRootpill}><span className={styles.dot} /> Root · Architect</div>
-          <button type="button" className={styles.opBack} onClick={() => nav('/dm')}>
+          {/* Back to the CATALOG, which is where this editor is opened from —
+              landing on the party overview loses the place you were working. */}
+          <button type="button" className={styles.opBack} onClick={() => nav('/dm', { state: { view: 'catalog' } })}>
             <i className="fa-solid fa-arrow-left-long" /> Console
           </button>
         </div>

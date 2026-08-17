@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState } from '../lib/dm'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
@@ -140,7 +140,10 @@ export function OperatorConsole() {
   const onlineIds = usePartyPresence()
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 
-  const [view, setView] = useState<View>('overview')
+  /** An editor that was opened from a surface here sends you back to it via
+      router state, so returning does not dump you on the overview. */
+  const navState = useLocation().state as { view?: View } | null
+  const [view, setView] = useState<View>(navState?.view ?? 'overview')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   /** Which per-character tab is showing when a PC is selected. */
   const [charTab, setCharTab] = useState<CharTab>('actions')

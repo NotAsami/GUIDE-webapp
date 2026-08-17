@@ -19,7 +19,7 @@ import { createPortal } from 'react-dom'
 import type { EquippedGear, EquippedItem, InventoryItem } from '../lib/database.types'
 import { fmtWeight, itemWeight } from '../lib/burden'
 import { getContainers, isRingSlot, type EquipTarget } from '../lib/equip'
-import { PERSON, freeCellFor } from '../lib/placement'
+import { PERSON, freeCellFor, preferredDest } from '../lib/placement'
 import { CAT_LABEL, rarityLabel } from '../lib/items'
 import styles from './InventoryPopup.module.css'
 
@@ -89,10 +89,11 @@ export function ItemPopup({
 }) {
   const [confirmDrop, setConfirmDrop] = useState(false)
   const dests = moveTargets(item, gear, inventory)
-  const [moveTo, setMoveTo] = useState<string>(dests[0]?.id ?? '')
+  const preferred = preferredDest(dests, gear)
+  const [moveTo, setMoveTo] = useState<string>(preferred)
 
   useEffect(() => { setConfirmDrop(false) }, [item.id])
-  useEffect(() => { setMoveTo(prev => (dests.some(d => d.id === prev) ? prev : dests[0]?.id ?? '')) }, [dests])
+  useEffect(() => { setMoveTo(prev => (dests.some(d => d.id === prev) ? prev : preferred)) }, [dests, preferred])
 
   const cat = item.category ?? 'misc'
   const rarity = item.rarity ?? 'common'
