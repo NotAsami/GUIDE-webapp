@@ -266,6 +266,11 @@
    scrollbar styled by the ::-webkit-scrollbar-thumb rule below — a stray amber/gold bar
    along the bottom of the panel that has nothing to do with an intentional design element. */
 .workBody { position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 13px; }
+/* The catalog rail hangs off region 01 and overlaps ~20px into this panel, so
+   the catalog's content has to start clear of it — the same reason the
+   authoring editor's .gp-body carries a 46px left padding under its .gbtn
+   tabs. Only on the catalog view; every other surface uses the full width. */
+.workBody.railed { padding-left: 30px; }
 .workBody::-webkit-scrollbar { width: 7px; }
 .workBody::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
 .workBody::-webkit-scrollbar-thumb { background: rgba(226,176,33,0.35); }
@@ -1867,24 +1872,29 @@
 .folderBody .actCard { width: 100%; }
 
 /* ============================================================
-   CATALOG RAIL — icon-only chamfered tabs down the side
+   CATALOG RAIL — icon-only tabs hung off region 01's right edge
    ============================================================
-   Same shape family as the authoring editor's `.gbtn` (authoring.module.css) —
-   a 34px chamfered square, beige frame over a dark inset well, amber fill on
-   hover/select. That one hardcodes `top: 62px / 100px / 138px` per index and
-   stops working past three; this one stays a flex column instead, so a
-   fourth or tenth catalog is just another entry in catTabs.
+   The authoring editor's `.gbtn` (authoring.module.css) verbatim in shape and
+   placement: a 34px chamfered square pinned to `left: calc(100% - 2px)` of the
+   panel it belongs to, so it sits ON the panel's border and overlaps whatever
+   is beside it. Rendered as a child of `.region` and NOT of `.rInner` — that
+   one is overflow:hidden, so nothing inside it can cross the panel edge.
 
-   Icon only, no inline label: at 34px there's no room for text anyway, so the
-   name (plus count, plus "opens its own screen" for Shards/Features) lives in
-   the native `title` tooltip, same as `.gbtn`.
+   The 2px overlap plus a ::before whose LEFT inset is 0 is what makes it read
+   as connected: with no beige down the left side, the tab's dark well runs
+   straight into the panel and the panel's own frame becomes the tab's frame.
+   Give the left edge a border and it detaches into a floating button.
+
+   Flex column rather than `.gbtn`'s hardcoded `top: 62/100/138px` per index —
+   that is exactly why `.gbtn` tops out at three.
 
    NOTE the glyph class is `crGlyph`, not `crIc`: `.crIc` is already taken by
    `.catRow` elsewhere in this file, and CSS-module class names are file-global,
    so the two would have styled each other. */
-.catShell { display: grid; grid-template-columns: 40px 1fr; align-items: start; }
-
-.catRail { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+.catRail {
+  position: absolute; left: calc(100% - 2px); top: 54px; z-index: 45;
+  display: flex; flex-direction: column; gap: 6px;
+}
 .crTab {
   --cut: 9px;
   position: relative; isolation: isolate; width: 34px; height: 34px; padding: 0; border: 0; cursor: pointer;
@@ -1893,8 +1903,9 @@
   display: flex; align-items: center; justify-content: center;
   transition: background-color 130ms ease, filter 130ms ease;
 }
+/* left inset 0 — see the note above; this is the join, not a rounding detail. */
 .crTab::before {
-  content: ""; position: absolute; inset: 1.5px; z-index: -1;
+  content: ""; position: absolute; inset: 1.5px 1.5px 1.5px 0; z-index: -1;
   background: #141311;
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
 }
@@ -1908,5 +1919,3 @@
 .crTab.stub { opacity: 0.4; cursor: not-allowed; }
 .crTab.stub:hover { background: var(--beige); }
 .crTab.stub:hover .crGlyph { color: var(--beige); }
-
-.catPage { min-width: 0; padding: 14px 0 0 18px; border-left: 1.5px solid var(--amber); }
