@@ -2,15 +2,19 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, Feature, ShardPerk, ShardTree } from '../lib/database.types'
+import type { CSSProperties } from 'react'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { gearFeatures } from '../lib/effects'
 import { shardFeatures, shardPerks } from '../lib/shards'
 import { Prose } from '../lib/markdown'
+import { interpolate } from '../lib/expr'
+import { colorOf } from '../lib/palette'
 import { affectedBy, gid, type Gid } from '../lib/graph'
 import { featureEffects, isUsable, originChain, toggleVar } from '../lib/featureView'
 import { useGraph } from '../lib/useGraph'
 import { playerVars, setVars, type VarRow } from '../lib/graphState'
+import type { ExprScope } from '../lib/expr'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Features.module.css'
 
@@ -52,9 +56,25 @@ const ACT_ORDER = ['action', 'bonus', 'reaction', 'free', '']
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
 
+/** The damage colour, as custom properties the stylesheet reads via `var(--dt)`.
+ *  Shared with the roll panel through lib/palette.ts, so radiant is the same gold
+ *  in a feature's effect row as in the roll that row produces. */
+function dt(type: string | undefined): CSSProperties | undefined {
+  const c = type ? colorOf(type.toLowerCase()) : null
+  return c ? ({ ['--dt' as string]: c } as CSSProperties) : undefined
+}
+
 /** The short text shown on the card. Falls back to the legacy summary/description
  *  fields so pre-migration data still renders. */
 const cardText = (f: Feature) => f.light_description ?? f.summary ?? f.description ?? ''
+
+/** Authored prose with `{...}` references resolved against the character.
+ *
+ *  Runs BEFORE markdown, so `**{saveDc}**` still bolds and `[x]{fire}` still
+ *  colours the substituted text. An unresolvable reference is left as the literal
+ *  source — a visible `{saveDc}` is how an author learns it did not resolve, and
+ *  blanking it would hide both the typo and the sentence. */
+const live = (text: string, scope: ExprScope) => interpolate(text, scope).text
 
 /**
  * Features — the character's abilities as a single continuous stream.
@@ -270,7 +290,7 @@ export function Features() {
                 <div className={styles.gGrid}>
                   {pool.map(r => (
                     <FeatureCard
-                      key={r.f.id} row={r} busy={busy}
+                      key={r.f.id} row={r} busy={busy} scope={graph.scope}
                       on={isOn(r.f)} armed={armedOf(r.f)} denied={denied === r.f.id}
                       onOpen={() => openPopup(r.f.id)} onPress={() => press(r.f)}
                     />
@@ -323,7 +343,7 @@ export function Features() {
 
       {openRow && createPortal(
         <FeaturePopup
-          row={openRow} busy={busy} on={isOn(openRow.f)} vars={varsOf(openRow.f)}
+          row={openRow} busy={busy} scope={graph.scope} on={isOn(openRow.f)} vars={varsOf(openRow.f)}
           back={stack.length ? byId.get(stack[stack.length - 1])?.f.name ?? null : null}
           affected={affectedBy(graph, gid('feature', openRow.f), openRow.f.tags)}
           resolveGid={g => byGid.get(g)?.f ?? null}
@@ -342,8 +362,8 @@ export function Features() {
 
 /* ---------------- card ---------------- */
 
-function FeatureCard({ row, busy, on, armed, denied, onOpen, onPress }: {
-  row: Row; busy: boolean; on: boolean; armed: number; denied: boolean
+function FeatureCard({ row, busy, scope, on, armed, denied, onOpen, onPress }: {
+  row: Row; busy: boolean; scope: ExprScope; on: boolean; armed: number; denied: boolean
   onOpen: () => void; onPress: () => void
 }) {
   const { f, group } = row
@@ -391,7 +411,7 @@ function FeatureCard({ row, busy, on, armed, denied, onOpen, onPress }: {
 
           <div className={styles.fcMid}>
             <div className={styles.fcName}>{f.name}</div>
-            {text && <Prose text={text} className={styles.fcSummary} />}
+            {text && <Prose text={live(text, scope)} className={styles.fcSummary} />}
             <div className={styles.fcMeta}>
               {f.activation && f.activation !== 'none' && (
                 <span className={cx(styles.actBadge, styles[f.activation])}>{ACTS[f.activation]}</span>
@@ -430,10 +450,13 @@ function FeatureCard({ row, busy, on, armed, denied, onOpen, onPress }: {
         {fx.length > 0 && (
           <div className={styles.fx}>
             {fx.map((n, i) => (
-              <div key={i} className={styles.fxRow}>
+              <div key={i} className={styles.fxRow} style={dt(n.dmgType)}>
                 <span className={styles.fxOp}>{n.glyph}</span>
-                <Prose text={n.text} className={styles.fxTxt} />
-                <span className={styles.fxTag}>{n.tag}</span>
+                <Prose text={live(n.text, scope)} className={styles.fxTxt} />
+                <span className={styles.fxTag}>
+                  {n.dmgType && <span className={styles.fxType}>{n.dmgType}</span>}
+                  {n.tag}
+                </span>
               </div>
             ))}
           </div>
@@ -445,8 +468,8 @@ function FeatureCard({ row, busy, on, armed, denied, onOpen, onPress }: {
 
 /* ---------------- popup ---------------- */
 
-function FeaturePopup({ row, busy, on, vars, back, affected, resolveGid, onOpenSource, onBack, onClose, onPress, onWriteVar }: {
-  row: Row; busy: boolean; on: boolean; vars: VarRow[]
+function FeaturePopup({ row, busy, scope, on, vars, back, affected, resolveGid, onOpenSource, onBack, onClose, onPress, onWriteVar }: {
+  row: Row; busy: boolean; scope: ExprScope; on: boolean; vars: VarRow[]
   back: string | null
   affected: ReturnType<typeof affectedBy>
   resolveGid: (g: Gid) => Feature | null
@@ -528,8 +551,8 @@ function FeaturePopup({ row, busy, on, vars, back, affected, resolveGid, onOpenS
               </div>
             )}
 
-            {text && <Prose text={text} className={styles.imSum} />}
-            {f.deep_description && <Prose text={f.deep_description} className={styles.imDesc} />}
+            {text && <Prose text={live(text, scope)} className={styles.imSum} />}
+            {f.deep_description && <Prose text={live(f.deep_description, scope)} className={styles.imDesc} />}
             {!text && !f.deep_description && <p className={styles.imDesc}>No description provided.</p>}
 
             {vars.length > 0 && (
@@ -546,10 +569,13 @@ function FeaturePopup({ row, busy, on, vars, back, affected, resolveGid, onOpenS
                 <div className={styles.imSecH}>Effects <span className="dim">· resolved nodes · {fx.length}</span></div>
                 <div className={styles.imFx}>
                   {fx.map((n, i) => (
-                    <div key={i} className={styles.imRow}>
+                    <div key={i} className={styles.imRow} style={dt(n.dmgType)}>
                       <span className={styles.op}>{n.glyph}</span>
-                      <Prose text={n.text} className={styles.imRowTxt} />
-                      <span className={styles.s}>{n.tag}</span>
+                      <Prose text={live(n.text, scope)} className={styles.imRowTxt} />
+                      <span className={styles.s}>
+                        {n.dmgType && <span className={styles.fxType}>{n.dmgType}</span>}
+                        {n.tag}
+                      </span>
                     </div>
                   ))}
                 </div>

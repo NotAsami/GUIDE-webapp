@@ -32,6 +32,42 @@ to `none` and the fix disappears again). Existing examples: `.qFacing` in
 `Inventory.module.css`, `Equipment.module.css`, `Stats.module.css`, `Codex.module.css` — grep
 `0.7071` for the full list before writing a new chamfered+bordered element from scratch.
 
+### The recipe above only works for 45° chamfers — a HEXAGON needs the two-layer fix
+`0.7071` is `1/√2`, the perpendicular offset of a **45°** line. A hexagon
+(`polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)`) has obliques at a
+different angle entirely, so the two gradients land in the wrong place and all four
+diagonals stay bare. Reaching for the recipe above and finding it "didn't work" is
+exactly how this came back on `.imCrystal` (the Features popup's crystal icon) after
+being fixed everywhere else.
+
+**For any polygon that is not a 45° chamfer, don't draw a border at all — paint two
+layers.** A filled shape, and the same shape inset by the border width on top:
+
+```css
+.hex {
+  --edge: rgba(0, 166, 214, 0.5);      /* the "border" colour */
+  position: relative;
+  background: var(--edge);             /* the fill IS the border */
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.hex::before {                          /* the interior, 1.5px smaller */
+  content: ""; position: absolute; inset: 1.5px; z-index: 0;
+  background: #0b0b0b;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.hex > * { position: relative; z-index: 1; }   /* content above the interior */
+```
+Variants override `--edge` and the `::before` background — never `border-color`,
+which no longer exists here. `inset: 1.5px` rather than `1px` for the same
+fractional-zoom reason as below. Existing examples: `.hxFrame`/`.hxInner` (the
+Features card hexagon, which does this with two real elements instead of a
+pseudo-element) and `.imCrystal`. This is also the technique the mockups use for
+every framed panel — a beige fill with a dark inset — so it is the house style
+rather than a workaround.
+
+**The mockups themselves contain the buggy version** (`.im-crystal` is `clip-path`
++ `border: 1px`), so porting one faithfully reproduces the bug. Fix it in the port.
+
 ### Recurring bug: `Btn` collapses to 0 height in a flex-COLUMN container
 The shared `Btn` component (`OperatorConsole.tsx`) is styled `.btn { height: 36px; flex: 1; ... }`
 (`.sm`/`.lg` override the height). `flex: 1` is shorthand for `flex-grow:1; flex-shrink:1;

@@ -9,7 +9,8 @@ import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, GraphOp } from './database.types.ts'
 import { OP_GLYPH, featureEffects, isUsable, originChain, toggleVar } from './featureView.ts'
 import { OPS } from './opSchema.ts'
-import { affectedBy, buildContext, gid } from './graph.ts'
+import { affectedBy, baseScope, buildContext, gid } from './graph.ts'
+import { interpolate } from './expr.ts'
 
 const feat = (over: Partial<Feature> = {}): Feature =>
   ({ id: 'f1', name: 'Test Feature', ...over }) as Feature
@@ -28,14 +29,16 @@ test('every op in the type has a glyph', () => {
   }
 })
 
-test('the value leads, with its damage type and label', () => {
+test('the value leads, and the damage type rides beside it', () => {
+  // dmgType is a FIELD, not part of the text: the renderer has to tint it, and it
+  // cannot colour half a string.
   const rows = featureEffects(feat({ graph: [eff({ value: '2d6', dmgType: 'radiant', label: 'Ember' })] }))
-  assert.deepEqual(rows, [{ glyph: OP_GLYPH.add, text: '**2d6** radiant · Ember', tag: '' }])
+  assert.deepEqual(rows, [{ glyph: OP_GLYPH.add, text: '**2d6** · Ember', tag: '', dmgType: 'radiant' }])
 })
 
 test('a flag op with no value is carried by its label alone', () => {
   const rows = featureEffects(feat({ graph: [eff({ op: 'adv', label: 'Steady Hand', value: undefined })] }))
-  assert.deepEqual(rows, [{ glyph: OP_GLYPH.adv, text: 'Steady Hand', tag: '' }])
+  assert.deepEqual(rows, [{ glyph: OP_GLYPH.adv, text: 'Steady Hand', tag: '', dmgType: undefined }])
 })
 
 test('ACTIVATION ops are not passive sub-rows', () => {
@@ -151,4 +154,35 @@ test('a node matching by BOTH gid and tag is reported once', () => {
   })
   const found = affectedBy(buildContext(character([TARGET, src])), gid('feature', TARGET), TARGET.tags)
   assert.equal(found.length, 1, 'one effect, one row')
+})
+
+/* ---------- prose interpolation (the {saveDc} case) ---------- */
+
+test('saveDc resolves from the spellbook, and is 0 when it has none', () => {
+  // Read, never recomputed: which ability backs the DC is the DM's answer and the
+  // spellbook already stores it. Deriving it here would be a second answer.
+  const withDc = { ...character([]), spellbook: { saveDC: 15 } } as CharacterRow
+  assert.equal(baseScope(withDc).saveDc, 15)
+  assert.equal(baseScope(character([])).saveDc, 0)
+})
+
+test('interpolation substitutes a scope value into prose', () => {
+  const scope = baseScope({ ...character([]), spellbook: { saveDC: 15 } } as CharacterRow)
+  const { text } = interpolate('Wisdom ({saveDc}) saving throw', scope)
+  assert.equal(text, 'Wisdom (15) saving throw')
+})
+
+test('an unresolvable reference survives as the literal source', () => {
+  // The whole safety story. A visible `{nope}` is how an author learns it did not
+  // resolve; silently blanking it would hide the typo AND the sentence.
+  const { text, bad } = interpolate('a {nope} b', baseScope(character([])))
+  assert.equal(text, 'a {nope} b')
+  assert.deepEqual(bad, ['nope'])
+})
+
+test('a ternary over a declared bool picks each branch', () => {
+  // The user's second case: prose that changes with character state.
+  const src = '{upgraded ? " and restrains the target." : "."}'
+  assert.equal(interpolate(src, { upgraded: true }).text, ' and restrains the target.')
+  assert.equal(interpolate(src, { upgraded: false }).text, '.')
 })

@@ -41,6 +41,11 @@ export type FeatureEffectRow = {
   /** The right-hand qualifier: what this effect is aimed at. Empty when the
    *  effect targets the feature's own roll, which is the unremarkable case. */
   tag: string
+  /** Kept SEPARATE from `text` rather than folded into it, so the row can be
+   *  tinted the damage colour. Radiant reading gold in a feature's effect row and
+   *  gold again in the roll it produces is the point — both go through
+   *  lib/palette.ts. */
+  dmgType?: string
 }
 
 /** How a target selector reads on a player's card.
@@ -72,6 +77,7 @@ export function featureEffects(f: Feature): FeatureEffectRow[] {
       glyph: OP_GLYPH[e.op] ?? '◇',
       text: effectText(e),
       tag: (e.target ?? []).map(targetLabel).filter(Boolean).join(' · '),
+      dmgType: e.dmgType?.trim() || undefined,
     }))
 }
 
@@ -84,7 +90,9 @@ function effectText(e: GraphEffect): string {
   const value = e.value?.trim()
   if (e.op === 'note') return label || value || ''
   if (!value) return label || ''
-  const amount = `**${value}**${e.dmgType ? ` ${e.dmgType}` : ''}`
+  // The damage type rides on the ROW, not in here — the renderer needs it apart
+  // from the prose to colour it.
+  const amount = `**${value}**`
   return label ? `${amount} · ${label}` : amount
 }
 

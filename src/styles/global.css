@@ -96,3 +96,19 @@ input {
   8%   { opacity: 0.9; }
   100% { opacity: 0; transform: translateY(100vh); }
 }
+
+/* ---- Bold means bold ----
+   `**text**` used to shift a shade of grey and nothing else, which in a UI where
+   almost everything is already some shade of beige or grey was indistinguishable
+   from body text. Authors reach for bold to mark the NUMBER in a sentence — the
+   damage, the DC, the range — so it takes the interactive cyan and a real weight.
+   One global rule rather than one per screen: bold should not mean something
+   different in a feature card than in a lore entry.
+
+   Surfaces that own a stronger claim still win by specificity — an effect row
+   tints its value with the damage colour (`--dt`), which is more specific than
+   this. */
+strong, b {
+  color: var(--cyan-hot);
+  font-weight: 600;
+}
