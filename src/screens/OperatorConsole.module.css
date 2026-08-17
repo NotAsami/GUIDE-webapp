@@ -1104,6 +1104,12 @@
    intrinsic width — blows the grid past its container and forces a horizontal scrollbar. */
 .catGrid2 > * { min-width: 0; }
 .catGrid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+/* The same guard .catGrid2 carries, and for the same reason — it was simply never
+   copied here. A grid item defaults to min-width:auto, which floors at the
+   intrinsic width of the unshrinkable <input>/<select> inside it; one long label
+   then pushes the whole form past its column and squeezes the 250px index beside
+   it, which reads as "the list is cut off". */
+.catGrid3 > * { min-width: 0; }
 
 .catPrev {
   display: flex; align-items: center; gap: 13px; padding: 12px 14px; margin-bottom: 14px;
@@ -1817,6 +1823,8 @@
 .catSpan3 { grid-column: 1 / -1; }
 .catCheck {
   display: flex; align-items: center; gap: 9px; cursor: pointer;
+  /* The explanatory half wraps rather than forcing the row wider. */
+  flex-wrap: wrap; min-width: 0;
   font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.14em;
   color: var(--beige); text-transform: uppercase;
 }
