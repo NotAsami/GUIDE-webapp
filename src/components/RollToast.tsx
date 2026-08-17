@@ -19,15 +19,16 @@ const VISIBLE_MS = 5200
  * show and where that lives: a tappable "2 unresolved · open panel". A badge
  * alone never tells anyone where to go.
  *
+ * ONE TOAST FOR EVERYTHING that reaches the roll log — a weapon swing, a potion,
+ * a rest. They are all "a thing happened, here is the result", so a second card
+ * for one of them would only be a second design to keep in step.
+ *
  * Only reacts to rolls created AFTER mount (so navigating to a screen doesn't
  * resurface a stale roll), and keys on entry id so two identical totals re-fire.
  */
 export function RollToast({ onOpen }: { onOpen: () => void }) {
   const { rolls } = useRollLog()
-  // `quiet` entries showed their own result already — a rest toasts from the
-  // button that caused it, and one press earning two toasts is the noise this
-  // file is otherwise here to avoid.
-  const latest = rolls.find(r => !r.quiet)
+  const latest = rolls[0]
   const mountRef = useRef(Date.now())
   const [dismissed, setDismissed] = useState<string | null>(null)
 

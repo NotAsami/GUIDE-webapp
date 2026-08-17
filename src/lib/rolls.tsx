@@ -1,11 +1,14 @@
 /**
  * Shared, ephemeral roll log. App-level state (mounted around the router) so dice
  * results survive screen navigation within a session — but it is NOT persisted to
- * Supabase (rolling is ephemeral, handoff §3). Every roll surface writes here.
- * Four readers, deliberately different jobs: RollToast is the glance, the Roll
+ * Supabase (rolling is ephemeral, handoff §3). Every roll surface writes here —
+ * weapons, spells, checks, potions and rests alike, which is what lets one toast
+ * and one panel serve all of them.
+ *
+ * Three readers, deliberately different jobs: RollToast is the glance, the Roll
  * Context Panel is the full history and the only place a roll can be ARGUED with,
- * the Character screen keeps its own log, and Bottombar watches the newest id to
- * decide whether the ROLLS button pings.
+ * and the Character screen keeps its own log. Bottombar reads it too, but only to
+ * count what is still unresolved.
  */
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
@@ -78,12 +81,6 @@ export type RollEntry = {
   problems?: AuditItem[]
   /** Authored `note` ops that matched this roll. */
   notes?: string[]
-  /** This entry's own surface already showed the result, so the generic toast
-   *  must skip it — a rest toasts from the button that caused it, and one press
-   *  earning two toasts is exactly the noise being avoided. It still belongs in
-   *  the log: the panel is the history, and being quiet is about ANNOUNCING, not
-   *  about recording. */
-  quiet?: boolean
   /** The player has seen this entry in the open panel — which settles it.
    *
    *  What stops the nav badge pulsing forever, and it covers an unanswered `ask`

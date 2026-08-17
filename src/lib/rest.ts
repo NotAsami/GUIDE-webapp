@@ -61,7 +61,7 @@ export function longRestPatch(character: CharacterRow, shardTrees: Record<string
       if (f.uses && f.uses.current < f.uses.max) { recharged++; return { ...f, uses: { ...f.uses, current: f.uses.max } } }
       return f
     })
-    if (recharged > 0) lines.push({ label: 'Features', total: 'recharged', breakdown: `${recharged} restored` })
+    if (recharged > 0) lines.push({ label: 'Features', total: `${recharged}`, breakdown: 'recharged' })
   }
 
   const exhaustion = typeof resources.exhaustion === 'number' ? resources.exhaustion : 0
@@ -72,13 +72,13 @@ export function longRestPatch(character: CharacterRow, shardTrees: Record<string
   if (effects.length > 0) lines.push({ label: 'Effects Cleared', total: `${effects.length}`, breakdown: 'potions worn off', tone: 'buff' })
 
   const ds = resources.deathSaves as { successes?: number; failures?: number } | undefined
-  if (ds && ((ds.successes ?? 0) > 0 || (ds.failures ?? 0) > 0)) lines.push({ label: 'Death Saves', total: 'reset', breakdown: '0 / 0' })
+  if (ds && ((ds.successes ?? 0) > 0 || (ds.failures ?? 0) > 0)) lines.push({ label: 'Death Saves', total: '0 / 0', breakdown: 'reset' })
 
   // Graph variables whose author marked them resetOn. A long rest grants every
   // short-rest benefit, so it takes both — the same rule already applied to pact
   // slots below.
   const { vars: resetVars, count: resetCount } = restVarPatch(character, shardTrees, 'long')
-  if (resetCount > 0) lines.push({ label: 'Feature State', total: 'reset', breakdown: `${resetCount} restored`, tone: 'buff' })
+  if (resetCount > 0) lines.push({ label: 'Feature State', total: `${resetCount}`, breakdown: 'reset', tone: 'buff' })
 
   const patch: Partial<Pick<CharacterRow, CharacterSection>> = {
     sheet: nextSheet,
@@ -94,13 +94,13 @@ export function longRestPatch(character: CharacterRow, shardTrees: Record<string
   if (slots && slots.length) {
     const recovered = slots.reduce((n, s) => n + s.expended, 0)
     patch.spellbook = { ...spellbook, slots: slots.map(s => ({ ...s, expended: 0 })) }
-    if (recovered > 0) lines.push({ label: 'Spell Slots', total: 'restored', breakdown: `${recovered} recovered`, tone: 'buff' })
+    if (recovered > 0) lines.push({ label: 'Spell Slots', total: `${recovered}`, breakdown: 'slots recovered', tone: 'buff' })
   }
 
   if (spellbook.pactMagic && (spellbook.pactExpended ?? 0) > 0) {
     const recovered = spellbook.pactExpended ?? 0
     patch.spellbook = { ...(patch.spellbook ?? spellbook), pactExpended: 0 }
-    lines.push({ label: 'Pact Magic', total: 'restored', breakdown: `${recovered} recovered`, tone: 'buff' })
+    lines.push({ label: 'Pact Magic', total: `${recovered}`, breakdown: 'slots recovered', tone: 'buff' })
   }
 
   return { patch, lines }
@@ -149,7 +149,7 @@ export function shortRestPatch(
       if (f.recharge === 'short' && f.uses && f.uses.current < f.uses.max) { recharged++; return { ...f, uses: { ...f.uses, current: f.uses.max } } }
       return f
     })
-    if (recharged > 0) lines.push({ label: 'Features', total: 'recharged', breakdown: `${recharged} restored` })
+    if (recharged > 0) lines.push({ label: 'Features', total: `${recharged}`, breakdown: 'recharged' })
   }
 
   if (opts.spend > 0) {
@@ -163,7 +163,7 @@ export function shortRestPatch(
 
   // Graph variables whose author marked them resetOn: 'short'.
   const { vars, count } = restVarPatch(character, shardTrees, 'short')
-  if (count > 0) lines.push({ label: 'Feature State', total: 'reset', breakdown: `${count} restored`, tone: 'buff' })
+  if (count > 0) lines.push({ label: 'Feature State', total: `${count}`, breakdown: 'reset', tone: 'buff' })
 
   const patch: Partial<Pick<CharacterRow, CharacterSection>> = {
     sheet: nextSheet,
@@ -193,6 +193,6 @@ export function pactShortRestPatch(character: CharacterRow): {
   if (!spellbook.pactMagic || expended <= 0) return null
   return {
     patch: { spellbook: { ...spellbook, pactExpended: 0 } },
-    lines: [{ label: 'Pact Magic', total: 'restored', breakdown: `${expended} recovered`, tone: 'buff' }],
+    lines: [{ label: 'Pact Magic', total: `${expended}`, breakdown: 'slots recovered', tone: 'buff' }],
   }
 }
