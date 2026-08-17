@@ -284,13 +284,21 @@
 .workBody.catBody > .ovBanner { flex: 0 0 auto; }
 .workBody.catBody > .catLayout { flex: 1 1 auto; min-height: 0; align-items: stretch; }
 .workBody.catBody .catIndex,
-.workBody.catBody .catForm { min-height: 0; overflow-y: auto; padding-right: 7px; }
+.workBody.catBody .catForm { min-height: 0; overflow-y: auto; }
+/* Only the form still has a bar to clear. */
+.workBody.catBody .catForm { padding-right: 7px; }
+
+/* With the index's scrollbar gone AND the clearance it needed, that strip is
+   dead space inside a fixed-width column, so the column gives it back and the
+   1fr editor absorbs it: 250 − 7 (bar) − 7 (clearance) = 236. The editor is
+   the pane that wants the room; the index holds short rows that were never
+   near 250px wide. */
+.workBody.catBody > .catLayout { grid-template-columns: 236px 1fr; }
 
 /* The index scrolls with no visible scrollbar — wheel, trackpad, keyboard and
    drag all still work; only the bar is gone. Both properties are needed: the
    standard one, and the -webkit pseudo-element, which otherwise reinstates a
-   bar of its own. The list keeps its right padding so rows do not sit flush
-   against the divider now that nothing occupies that strip.
+   bar of its own.
 
    What this costs is the only passive hint that there is more below, which is
    why the fade at the bottom of .catIndex replaces it. */
