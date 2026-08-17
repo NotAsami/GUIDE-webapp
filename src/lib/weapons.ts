@@ -16,6 +16,21 @@ import { parseDice, rolledDice, type RolledDie } from './dice.ts'
 // reach back here, so this does not close a cycle.
 import { rollResolution, type Resolution, type Rider } from './graph.ts'
 
+/** Is this weapon fired rather than swung?
+ *
+ *  Three things hang off it — the refusal to attack with an empty quiver, the
+ *  ammunition spend, and the `ranged` sub on both resolutions — so it is one
+ *  predicate rather than three regexes.
+ *
+ *  The `properties` fallback is for data authored before the flag existed: the
+ *  original rule was "the word ammunition appears somewhere in this free-text
+ *  list", which nothing in the UI could write and nothing documented. New
+ *  weapons set the flag; old ones keep firing. */
+export function isRanged(w: Pick<EquippedWeapon, 'ranged' | 'properties'>): boolean {
+  if (typeof w.ranged === 'boolean') return w.ranged
+  return (w.properties ?? []).some(p => /ammunition/i.test(p))
+}
+
 export function handLabel(hand?: WeaponHand): string {
   return hand === 'main' ? 'Main Hand' : hand === 'off' ? 'Off Hand' : 'Equipped'
 }

@@ -595,6 +595,15 @@ export type WeaponData = {
   type?: string
   /** Mirror the icon horizontally (off-hand twin). */
   flip?: boolean
+  /** Fired rather than swung: needs ammunition, spends a shaft per attack, and
+   *  its rolls carry the `ranged` sub so `roll:attack.ranged` matches.
+   *
+   *  Explicit, because this used to be INFERRED from `properties` containing the
+   *  word "ammunition" — a magic string in a free-text list that the item form
+   *  has no control for, so no weapon authored through the UI could ever be
+   *  ranged. `isRanged` still falls back to that string so hand-authored data
+   *  keeps working. */
+  ranged?: boolean
   properties?: string[]
 }
 

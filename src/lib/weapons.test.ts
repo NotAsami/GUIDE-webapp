@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import type { CharacterRow, CharacterSheet, EquippedWeapon } from './database.types.ts'
 import type { Resolution } from './graph.ts'
 import { buildContext, gid, resolve, total } from './graph.ts'
-import { rollWeaponAttack } from './weapons.ts'
+import { rollWeaponAttack, isRanged } from './weapons.ts'
 
 const SHEET = {
   abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 },
@@ -155,4 +155,26 @@ test('a weapon: target matches only a CATALOG-GRANTED weapon, never a hand-seede
     total(resolve(buildContext(character(SWORD)), { kind: 'damage', subject: gid('weapon', SWORD) })).flat,
     0,
   )
+})
+
+/* ---------- ranged ---------- */
+
+test('the ranged flag decides it, in both directions', () => {
+  assert.equal(isRanged({ ranged: true }), true)
+  // Explicit false WINS over a legacy property string: a DM who unticks the box
+  // on a converted weapon means it.
+  assert.equal(isRanged({ ranged: false, properties: ['Ammunition'] }), false)
+})
+
+test('a weapon with neither is melee', () => {
+  assert.equal(isRanged({}), false)
+  assert.equal(isRanged({ properties: ['Versatile', 'Heavy'] }), false)
+})
+
+test('the legacy "ammunition" property still fires', () => {
+  // The old rule was a regex over free text, with no control that could write it.
+  // Data authored that way has to keep working — the flag is the new way to say
+  // it, not a migration the DM has to run.
+  assert.equal(isRanged({ properties: ['Ammunition (range 80/320)'] }), true)
+  assert.equal(isRanged({ properties: ['ammunition'] }), true)
 })
