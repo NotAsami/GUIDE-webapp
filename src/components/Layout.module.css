@@ -313,30 +313,54 @@
 }
 .bbBtn i { font-size: 9px; }
 
-/* The unseen-roll ping. Sits on the button that OPENS the panel, because a
-   notification you cannot act on from where it appears is just noise. */
+/* THE UNRESOLVED BADGE. A count, on the button that opens the panel — a
+   notification you cannot act on from where it appears is just noise.
+
+   MOTION BY DISPLACEMENT, not brightness. Something changing size at the edge of
+   vision is what gets noticed; a colour breathing in place does not. So the badge
+   scales and a ring radiates out of it, both slow and small — this runs for a
+   whole session, and an urgent-looking pulse becomes an irritating one within ten
+   minutes. 2.6s, 18% growth: enough to catch a glance sideways, not enough to
+   read as an alarm. */
 .bbBtn { position: relative; }
-.bbPing {
+.bbBadge {
   position: absolute;
-  top: -3px; right: -3px;
-  width: 7px; height: 7px;
-  border-radius: 50%;
+  top: -7px; right: -7px;
+  min-width: 15px; height: 15px;
+  padding: 0 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px;
   background: var(--amber);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 7px var(--amber);
-  animation: bbPulse 1.8s ease-in-out infinite;
+  color: #17130a;
+  font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+  letter-spacing: 0;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 9px rgba(226, 176, 33, 0.75);
+  animation: bbBadgePulse 2.6s ease-in-out infinite;
 }
-/* Red = the roll is waiting on a decision the engine could not make. */
-.bbPing.urgent {
-  background: var(--danger-hot);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 8px var(--danger-hot);
-  animation-duration: 1.1s;
+/* The ring: same loop, larger displacement, no layout cost. Peripheral vision
+   picks up the travel over a wider area than the badge alone can cover. */
+.bbBadge::after {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  border: 1.5px solid var(--amber);
+  animation: bbBadgeRing 2.6s ease-out infinite;
+  pointer-events: none;
 }
-@keyframes bbPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.45; transform: scale(0.82); }
+@keyframes bbBadgePulse {
+  0%, 70%, 100% { transform: scale(1); }
+  35%           { transform: scale(1.18); }
 }
+@keyframes bbBadgeRing {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  70%  { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+/* The count is the part carrying the information, so it survives; only the motion
+   goes. */
 @media (prefers-reduced-motion: reduce) {
-  .bbPing { animation: none; }
+  .bbBadge, .bbBadge::after { animation: none; }
+  .bbBadge::after { opacity: 0; }
 }
 
 /* ---- Ticker fragments hugging the top divider ---- */

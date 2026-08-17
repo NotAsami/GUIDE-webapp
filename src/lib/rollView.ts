@@ -129,6 +129,49 @@ export function riderViews(entry: RollEntry): RiderView[] {
 export const resolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when !== 'manual')
 export const unresolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when === 'manual')
 
+/* ---------- what "unresolved" means, once ---------- */
+
+/** The count of things on one roll that still want the player.
+ *
+ *  ONE DEFINITION FOR THREE SURFACES: the toast's "2 unresolved · open panel"
+ *  line, the nav badge's number, and the panel itself. Three answers to "how many
+ *  things need me" is how a badge ends up pulsing at nothing, so the arithmetic
+ *  lives here with the rest of the read-model rather than in whichever component
+ *  asked first.
+ *
+ *  TWO KINDS, and they dismiss differently — that asymmetry is the whole rule:
+ *  an unanswered ask is a decision still OWED and survives being seen, while a
+ *  failed formula is NEWS and stops counting once it has been read. Acking a
+ *  decision away would hide the one thing the panel exists for; not acking the
+ *  news would pulse at the player for the rest of the session over something
+ *  they cannot act on. */
+export type Pending = {
+  /** Unanswered `ask` riders. Actionable — resolvable by answering. */
+  asks: number
+  /** `err` problems: a formula that resolved to nothing at these values.
+   *  Informational — zeroed by `acked`. */
+  problems: number
+  total: number
+}
+
+export function pendingOf(entry: RollEntry): Pending {
+  const asks = unresolvedOf(riderViews(entry)).filter(v => !v.rider.on).length
+  /* `err` ONLY. An AuditItem can be 'ok' or 'warn', and counting an authoring
+     note as something the player must deal with is the badge lying about the
+     roll — the same filter the panel makes for the same reason. */
+  const problems = entry.acked ? 0 : (entry.problems ?? []).filter(p => p.sev === 'err').length
+  /* A TURN TICK WOULD BELONG HERE. There is no such mechanic yet — `duration` on
+     an item or an active effect is a free-text reminder ("10 rounds") that
+     nothing counts down — so this contributes nothing today. When something does
+     tick, it is one more line here and all three surfaces pick it up unchanged. */
+  return { asks, problems, total: asks + problems }
+}
+
+/** Everything still waiting, across the whole log. What the nav badge counts:
+ *  "2" has to mean two things need you, not two rolls happened. */
+export const pendingTotal = (rolls: RollEntry[]) =>
+  rolls.reduce((n, r) => n + pendingOf(r).total, 0)
+
 /** The d20 line for a check or an attack: both dice, the loser struck through. */
 function d20Line(
   kind: 'attack' | 'check', label: string,

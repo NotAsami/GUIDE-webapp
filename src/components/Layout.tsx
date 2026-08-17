@@ -5,6 +5,7 @@ import { useShardCatalog } from '../lib/shardCatalog'
 import { useOpenShop } from '../lib/shops'
 import { Topbar } from './Topbar'
 import { Bottombar } from './Bottombar'
+import { RollToast } from './RollToast'
 import { SystemToasts } from './SystemToasts'
 import { ShopTakeover } from './ShopTakeover'
 import { RollContextPanel } from './RollContextPanel'
@@ -13,6 +14,14 @@ import { consumeArmed } from '../lib/graphState'
 import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
 import { useEffect, useRef, useState } from 'react'
+import { useRollLog } from '../lib/rolls'
+
+/** Session keys for the sticky panel. Two, not one: whether it is open, and
+ *  whether the player DECIDED it should be closed. Collapsing them would lose the
+ *  difference between "not open yet" and "shut on purpose", which is the only
+ *  thing stopping the auto-open from re-firing. */
+const PANEL_OPEN = 'guide.rollPanel.open'
+const PANEL_CLOSED = 'guide.rollPanel.closedByUser'
 
 export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
@@ -37,7 +46,38 @@ export function Layout() {
     wasShopVisibleRef.current = !!shop
   }, [shop])
 
-  const [rollPanelOpen, setRollPanelOpen] = useState(false)
+  /* THE PANEL IS STICKY — it is where rolls appear, not something summoned per
+     roll. It survives navigation for free (Layout outlives the routes) and a
+     reload via sessionStorage; "within a session" is the ask, so sessionStorage
+     rather than localStorage.
+
+     AND A DELIBERATE CLOSE IS RESPECTED, which is the load-bearing half. The
+     auto-open exists to teach by demonstration on the first roll of a session;
+     re-opening a panel someone just shut turns that from a helpful default into a
+     fight they cannot win. Once closed, only the player reopens it — the toast's
+     call-to-action and the nav badge cover them in the meantime. */
+  const { rolls } = useRollLog()
+  const [rollPanelOpen, setRollPanelOpen] = useState(() => sessionStorage.getItem(PANEL_OPEN) === '1')
+  const closedByUser = useRef(sessionStorage.getItem(PANEL_CLOSED) === '1')
+
+  function setPanel(open: boolean) {
+    setRollPanelOpen(open)
+    sessionStorage.setItem(PANEL_OPEN, open ? '1' : '0')
+    // Only a CLOSE is remembered as intent. Opening it again clears the veto, so
+    // a player who reopens the panel gets the sticky behaviour back.
+    closedByUser.current = !open
+    sessionStorage.setItem(PANEL_CLOSED, open ? '0' : '1')
+  }
+
+  // Auto-open on the first roll of a session. Keyed on the newest id so it fires
+  // once per roll rather than once per render, and gated on the veto above.
+  const newestRoll = rolls[0]?.id
+  const seenRoll = useRef(newestRoll)
+  useEffect(() => {
+    if (!newestRoll || seenRoll.current === newestRoll) return
+    seenRoll.current = newestRoll
+    if (!closedByUser.current) setPanel(true)
+  }, [newestRoll])
 
   async function handleSignOut() {
     await signOut()
@@ -130,15 +170,13 @@ export function Layout() {
         </main>
         <Bottombar
           shopOpen={!!shop} shopDismissed={shopDismissed} onReopenShop={() => setShopDismissed(false)}
-          rollPanelOpen={rollPanelOpen} onToggleRollPanel={() => setRollPanelOpen(v => !v)}
+          rollPanelOpen={rollPanelOpen} onToggleRollPanel={() => setPanel(!rollPanelOpen)}
         />
       </div>
 
+      <RollToast onOpen={() => setPanel(true)} />
       {/* Operator pushes (grants / effects / notices) arrive here via the
-          G.U.I.D.E. voice channel. The roll toast that used to share this corner
-          is gone: it was a second, worse copy of the Roll Context Panel reading
-          the same log, so the "a roll landed" signal moved to the ROLLS button
-          that opens the panel. */}
+          G.U.I.D.E. voice channel — top-right, clear of RollToast. */}
       <SystemToasts characterId={character.id} />
       {/* Shop feature part 1: appears the instant the DM fires a shop open
           (shop_catalog RLS scopes it to this character or the whole party) —
@@ -151,7 +189,7 @@ export function Layout() {
         <RollContextPanel
           character={character} shardTrees={shardTrees}
           onConsumeArmed={id => void updateSection('resources', consumeArmed(character, id) as CharacterRow['resources'])}
-          onClose={() => setRollPanelOpen(false)}
+          onClose={() => setPanel(false)}
         />
       )}
     </>

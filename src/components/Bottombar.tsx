@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useRollLog } from '../lib/rolls'
-import { riderViews, unresolvedOf } from '../lib/rollView'
+import { pendingTotal } from '../lib/rollView'
 import styles from './Layout.module.css'
 
 interface Props {
@@ -23,29 +23,20 @@ export function Bottombar({ shopOpen, shopDismissed, onReopenShop, rollPanelOpen
     return () => clearInterval(id)
   }, [])
 
-  /* THE ONLY ROLL NOTIFICATION. The panel shows strictly more than the old
-     bottom-right toast did, so the toast went and this took over the job of
-     saying "something landed" — on the button that opens the thing to look at.
+  /* THE REMINDER THAT OUTLIVES THE TOAST.
+     The toast is the glance — five seconds, gone whether or not anyone looked.
+     This is what remains, and it is a COUNT rather than a dot on purpose: "2"
+     reads as two things need you, where a dot reads as "something happened" and
+     is easy to defer. It counts things, not rolls, and `pendingOf` is the single
+     definition of what counts (lib/rollView.ts) so the toast's own line and this
+     number can never disagree.
 
-     Seeded with the newest roll already in the log, so arriving on a screen with
-     history behind you does not ping for rolls you have seen. */
-  // The newest entry that has NOT already announced itself. A rest toast is its
-  // own notification, so it neither raises the ping nor hides an earlier roll
-  // that is still unread.
-  const latest = rolls.find(r => !r.quiet)
-  const [seen, setSeen] = useState<string | null>(() => latest?.id ?? null)
-  useEffect(() => {
-    if (rollPanelOpen && latest) setSeen(latest.id)
-  }, [rollPanelOpen, latest?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const unseen = !!latest && latest.id !== seen
-  /* Two tones, because "a roll happened" and "the roll is waiting on you" are
-     different urgencies. Red means there is a decision the engine could not make
-     for you — an unanswered ask, or a formula that failed. */
-  const urgent = unseen && (
-    unresolvedOf(riderViews(latest)).some(v => !v.rider.on)
-    || (latest.problems ?? []).some(p => p.sev === 'err')
-  )
+     No seen/unseen memory: a count of what is still outstanding needs none. A
+     rest never reaches it either, having nothing unresolved to contribute. */
+  const pending = pendingTotal(rolls)
+  // Hidden while the panel is open — a badge on the button that opens the thing
+  // you are already looking at is noise.
+  const badge = rollPanelOpen ? 0 : pending
 
   return (
     <footer className={styles.bottombar} role="contentinfo">
@@ -72,10 +63,12 @@ export function Bottombar({ shopOpen, shopDismissed, onReopenShop, rollPanelOpen
           <button
             type="button" className={`${styles.bbBtn} ${rollPanelOpen ? styles.on : ''}`}
             onClick={onToggleRollPanel}
-            title={unseen ? (urgent ? 'Roll context — waiting on you' : 'Roll context — new roll') : 'Roll context'}
+            title={badge > 0 ? `Roll context — ${badge} unresolved` : 'Roll context'}
           >
             <i className="fa-solid fa-dice-d20" /> ROLLS
-            {unseen && <span className={`${styles.bbPing} ${urgent ? styles.urgent : ''}`} aria-hidden="true" />}
+            {badge > 0 && (
+              <span className={styles.bbBadge} aria-label={`${badge} unresolved`}>{badge}</span>
+            )}
           </button>
           <span className="sep">|</span>
           <span className="lab">Codex</span><span className="val">v 2.4.7</span>
