@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CharacterRow, CharacterSection, ShardTree } from '../lib/database.types'
 import { useRollLog, type RollLine } from '../lib/rolls'
@@ -22,19 +22,11 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
   const [busy, setBusy] = useState(false)
   /** Hit dice chosen to spend on a short rest. */
   const [spend, setSpend] = useState(0)
+  /* No private toast here. It existed only while the roll toast was deleted; now
+     that the roll toast is back, a rest goes through addRoll like everything else
+     and gets the same card in the same corner. Two toasts would be two designs
+     drifting apart for one job. */
   const { addRoll } = useRollLog()
-  /* ITS OWN TOAST, not the general roll one.
-     The roll toast was retired because the Roll Context Panel already showed
-     everything it did and the ROLLS button's ping says when to look. A rest is
-     the exception: it is a deliberate press that CHANGES the sheet — hit dice
-     spent, slots back, features recharged — and the confirmation belongs beside
-     the button you just pressed, not behind a panel you have to open. */
-  const [toast, setToast] = useState<{ title: string; sub: string; icon: string; lines: RollLine[] } | null>(null)
-  useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(() => setToast(null), 5200)
-    return () => clearTimeout(t)
-  }, [toast])
 
   // Short-rest inputs.
   const hd = character.sheet?.hitDice
@@ -63,8 +55,7 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
     setOpen(false) // close before the toast — a portaled modal would bury it (z120)
     await updateSections(longPatch)
     setBusy(false)
-    addRoll({ kind: 'custom', title: 'Long Rest', subtitle: 'Daily resources restored', icon: 'fa-moon', lines: longLines, quiet: true })
-    setToast({ title: 'Long Rest', sub: 'Daily resources restored', icon: 'fa-moon', lines: longLines })
+    addRoll({ kind: 'custom', title: 'Long Rest', subtitle: 'Daily resources restored', icon: 'fa-moon', lines: longLines })
   }
 
   async function confirmShort() {
@@ -80,8 +71,7 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
     setOpen(false)
     await updateSections(patch)
     setBusy(false)
-    addRoll({ kind: 'custom', title: 'Short Rest', subtitle: 'One hour · hit dice spent', icon: 'fa-campground', lines, quiet: true })
-    setToast({ title: 'Short Rest', sub: 'One hour · hit dice spent', icon: 'fa-campground', lines })
+    addRoll({ kind: 'custom', title: 'Short Rest', subtitle: 'One hour · hit dice spent', icon: 'fa-campground', lines })
   }
 
   return (
@@ -89,29 +79,6 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
       <button type="button" className={styles.restBtn} onClick={openModal}>
         <i className="fa-solid fa-moon" aria-hidden="true" /> Rest
       </button>
-
-      {toast && createPortal(
-        <div className={styles.toast} role="status" onClick={() => setToast(null)} title="Dismiss">
-          <div className={styles.tHead}>
-            <span className={styles.tIcon}><i className={`fa-solid ${toast.icon}`} /></span>
-            <div className={styles.tTitles}>
-              <span className={styles.tTitle}>{toast.title}</span>
-              <span className={styles.tSub}>{toast.sub}</span>
-            </div>
-            <span className={styles.tX}><i className="fa-solid fa-xmark" /></span>
-          </div>
-          {toast.lines.length === 0
-            ? <div className={styles.tEmpty}>Nothing left to restore.</div>
-            : toast.lines.map((l, i) => (
-              <div key={i} className={`${styles.tLine}${l.tone === 'heal' ? ' ' + styles.heal : l.tone === 'buff' ? ' ' + styles.buff : ''}`}>
-                <span className={styles.tLab}>{l.label}</span>
-                <span className={styles.tTot}>{l.total}</span>
-                {l.breakdown && <span className={styles.tBd}>{l.breakdown}</span>}
-              </div>
-            ))}
-        </div>,
-        document.body,
-      )}
 
       {open && createPortal(
         <div className={styles.overlay} onClick={() => setOpen(false)}>
