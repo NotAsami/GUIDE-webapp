@@ -182,6 +182,25 @@ export function routeItem(
   return { containerId: PERSON }
 }
 
+/** Which destination a move picker should open on, given the targets it is
+ *  offering.
+ *
+ *  The bag of holding wins whenever it is one of them: its contents cost no
+ *  carry weight, so with one equipped that is where things go by default and
+ *  every other choice is the exception. Identified by the `bagOfHolding` gear
+ *  slot — the same way `routeItem` picks its overflow container just above —
+ *  rather than by name or by the `weightless` flag, so there is one answer to
+ *  "which container is the bag of holding" and not three.
+ *
+ *  Falls back to the first target, which is On Person for anything currently
+ *  inside a container. */
+export function preferredDest(
+  dests: { id: string }[], gear: EquippedGear,
+): string {
+  const boh = containerOf(gear, 'bagOfHolding')
+  return dests.find(d => boh?.id && d.id === boh.id)?.id ?? dests[0]?.id ?? ''
+}
+
 /** Apply a routing decision to an item, clearing any stale position. */
 export function place<T extends InventoryItem>(item: T, dest: Destination): T {
   const next = { ...item, containerId: dest.containerId } as T

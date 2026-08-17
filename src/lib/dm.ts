@@ -399,7 +399,9 @@ export interface DmConfiscatedState {
   refetch: () => Promise<void>
   /** Take an item off a character. Returns the stored row so the caller can undo. */
   confiscate: (characterId: string, item: InventoryItem, note?: string) => Promise<ConfiscatedItemRow | null>
-  /** Give it back. The caller writes the character row; this only drops the record. */
+  /** Drop the record, which is the only place a confiscated item exists. Both
+   *  outcomes route through here: returning it (caller writes the character row
+   *  first) and destroying it outright (caller writes nothing). */
   release: (id: string) => Promise<void>
 }
 
