@@ -337,17 +337,33 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
                 </button>
 
                 {confirmDestroy === rec.id ? (
-                  <button
-                    className={cx(styles.irAct, styles.danger)}
-                    disabled={busy}
-                    onClick={() => void destroy(rec)}
-                    title="Gone for good — this cannot be undone"
-                  >
-                    <i className="fa-solid fa-trash" />Confirm
-                  </button>
+                  /* Cancel takes the armed Destroy's old position on purpose. The
+                     confirm used to sit exactly where the button you just pressed
+                     was, so a double-click ran straight through it and binned the
+                     item with no confirmation at all — and this is the one action
+                     here with nothing to undo it. It also gives the armed state a
+                     way out, which it did not have. */
+                  <>
+                    <button
+                      className={styles.irAct}
+                      disabled={busy}
+                      onClick={() => setConfirmDestroy(null)}
+                      title="Keep it"
+                    >
+                      <i className="fa-solid fa-xmark" />Cancel
+                    </button>
+                    <button
+                      className={cx(styles.irAct, styles.danger, styles.confirm)}
+                      disabled={busy}
+                      onClick={() => void destroy(rec)}
+                      title="Gone for good — this cannot be undone"
+                    >
+                      <i className="fa-solid fa-trash" />Destroy for good
+                    </button>
+                  </>
                 ) : (
                   <button
-                    className={cx(styles.irAct, styles.take)}
+                    className={cx(styles.irAct, styles.danger)}
                     disabled={busy}
                     onClick={() => setConfirmDestroy(rec.id)}
                     title="Destroy it — for the item granted by mistake"
