@@ -285,11 +285,26 @@
 .workBody.catBody > .catLayout { flex: 1 1 auto; min-height: 0; align-items: stretch; }
 .workBody.catBody .catIndex,
 .workBody.catBody .catForm { min-height: 0; overflow-y: auto; padding-right: 7px; }
-.workBody.catBody .catIndex::-webkit-scrollbar,
+
+/* The index scrolls with no visible scrollbar — wheel, trackpad, keyboard and
+   drag all still work; only the bar is gone. Both properties are needed: the
+   standard one, and the -webkit pseudo-element, which otherwise reinstates a
+   bar of its own. The list keeps its right padding so rows do not sit flush
+   against the divider now that nothing occupies that strip.
+
+   What this costs is the only passive hint that there is more below, which is
+   why the fade at the bottom of .catIndex replaces it. */
+.workBody.catBody .catIndex {
+  scrollbar-width: none;
+  /* A mask, not an overlaid gradient: an ::after would scroll away with the
+     rows, and a sibling overlay would have to sit outside the scroller and be
+     positioned back over it. This rides the element's own box. */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+}
+.workBody.catBody .catIndex::-webkit-scrollbar { width: 0; height: 0; }
+
 .workBody.catBody .catForm::-webkit-scrollbar { width: 7px; }
-.workBody.catBody .catIndex::-webkit-scrollbar-track,
 .workBody.catBody .catForm::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
-.workBody.catBody .catIndex::-webkit-scrollbar-thumb,
 .workBody.catBody .catForm::-webkit-scrollbar-thumb { background: rgba(226, 176, 33, 0.35); }
 .workBody::-webkit-scrollbar { width: 7px; }
 .workBody::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
