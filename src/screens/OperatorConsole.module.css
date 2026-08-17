@@ -1867,48 +1867,46 @@
 .folderBody .actCard { width: 100%; }
 
 /* ============================================================
-   CATALOG RAIL — file-divider tabs down the side
+   CATALOG RAIL — icon-only chamfered tabs down the side
    ============================================================
-   Replaces the horizontal .catTabs strip, which already needed an overflow-x
-   scrollbar at six entries and is heading for ten. A vertical rail never needs
-   one: it grows downward into space the page has, and each tab keeps a readable
-   label instead of being reduced to an icon.
+   Same shape family as the authoring editor's `.gbtn` (authoring.module.css) —
+   a 34px chamfered square, beige frame over a dark inset well, amber fill on
+   hover/select. That one hardcodes `top: 62px / 100px / 138px` per index and
+   stops working past three; this one stays a flex column instead, so a
+   fourth or tenth catalog is just another entry in catTabs.
 
-   The active tab JOINS the page — its background matches the content beside it
-   and the seam is painted over — which is the whole reason the metaphor reads.
-   A tab that stays visually separate is just a button in a column.
+   Icon only, no inline label: at 34px there's no room for text anyway, so the
+   name (plus count, plus "opens its own screen" for Shards/Features) lives in
+   the native `title` tooltip, same as `.gbtn`.
 
    NOTE the glyph class is `crGlyph`, not `crIc`: `.crIc` is already taken by
    `.catRow` elsewhere in this file, and CSS-module class names are file-global,
    so the two would have styled each other. */
-.catShell { display: grid; grid-template-columns: 172px 1fr; align-items: start; }
+.catShell { display: grid; grid-template-columns: 40px 1fr; align-items: start; }
 
-.catRail { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.catRail { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
 .crTab {
   --cut: 9px;
-  position: relative; display: flex; align-items: center; gap: 9px; cursor: pointer; text-align: left;
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--muted); background-color: rgba(0, 0, 0, 0.35);
-  border: 1.5px solid rgba(212, 191, 125, 0.24); border-right: 0;
-  padding: 10px 10px 10px 12px;
-  /* Only the top-right corner is cut: the tab points INTO the page it opens. */
+  position: relative; isolation: isolate; width: 34px; height: 34px; padding: 0; border: 0; cursor: pointer;
+  background: var(--beige);
   clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
-  transition: color 130ms ease, background-color 130ms ease, border-color 130ms ease;
+  display: flex; align-items: center; justify-content: center;
+  transition: background-color 130ms ease, filter 130ms ease;
 }
-.crTab:hover:not(:disabled) { color: var(--text); border-color: rgba(226, 176, 33, 0.45); background-color: rgba(226, 176, 33, 0.06); }
-.crGlyph { flex: 0 0 auto; width: 13px; text-align: center; font-size: 12px; color: var(--beige-dim); }
-.crLab { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.crC { flex: 0 0 auto; font-family: var(--font-display); font-size: 11px; color: var(--beige-dim); }
-.crOut { flex: 0 0 auto; font-size: 7px; color: var(--beige-dim); opacity: 0.7; }
+.crTab::before {
+  content: ""; position: absolute; inset: 1.5px; z-index: -1;
+  background: #141311;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+.crGlyph { font-size: 14px; color: var(--beige); transition: color 130ms ease; }
+.crTab:hover:not(:disabled) { background: var(--amber); }
+.crTab:hover:not(:disabled) .crGlyph { color: var(--amber-hot); }
 
-.crTab.sel { color: var(--amber-hot); background-color: rgba(226, 176, 33, 0.1); border-color: var(--amber); }
-.crTab.sel .crGlyph, .crTab.sel .crC { color: var(--amber); }
-.crTab.sel::after {
-  content: ""; position: absolute; top: var(--cut); right: -1.5px; bottom: 0; width: 2px;
-  background: rgba(226, 176, 33, 0.1);
-}
+.crTab.sel { background: var(--amber); filter: drop-shadow(3px 0 12px rgba(226, 176, 33, 0.4)); }
+.crTab.sel .crGlyph { color: var(--amber-hot); }
 
 .crTab.stub { opacity: 0.4; cursor: not-allowed; }
-.crTab.stub:hover { color: var(--muted); border-color: rgba(212, 191, 125, 0.24); background-color: rgba(0, 0, 0, 0.35); }
+.crTab.stub:hover { background: var(--beige); }
+.crTab.stub:hover .crGlyph { color: var(--beige); }
 
 .catPage { min-width: 0; padding: 14px 0 0 18px; border-left: 1.5px solid var(--amber); }

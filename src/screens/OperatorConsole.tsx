@@ -1359,30 +1359,29 @@ function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, mem
         <span className={styles.dmonly}><i className="fa-solid fa-box-archive" /> Templates — not a grant</span>
       </div>
 
-      {/* FILE-DIVIDER TABS, down the side rather than across the top. Six
-          catalogs already crowded a horizontal strip into a scrollbar, and the
-          list is heading for ten — classes, races, loot tables. A vertical rail
-          grows without ever needing one, and reads the way a drawer of dividers
-          does: the tab you are on joins the page it belongs to.
-
-          Stacked with flex, deliberately unlike the authoring editor's `.gbtn`,
-          which hardcodes a `top` per index and stops working at four. */}
+      {/* ICON-ONLY TABS down the side, in the `.gbtn` shape family (see
+          authoring.module.css) rather than across the top: six catalogs
+          already crowded a horizontal strip into a scrollbar, and the list is
+          heading for ten — classes, races, loot tables. Stacked with flex,
+          deliberately unlike `.gbtn`, which hardcodes a `top` per index and
+          stops working at four. No room for a label at 34px, so the name
+          (plus count, plus a note for the two that leave the catalog
+          entirely) lives in the tooltip instead. */}
       <div className={styles.catShell}>
         <nav className={styles.catRail} aria-label="Catalog sections">
-          {catTabs.map(t => (
-            <button key={t.key} className={cx(styles.crTab, t.key === tab && styles.sel, t.soon && styles.stub)}
-              disabled={t.soon} title={t.soon ? 'Its own later slice' : undefined}
-              onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setTab(t.key as 'items' | 'features' | 'spells' | 'effects' | 'shops') }}>
-              <i className={cx('fa-solid', t.icon, styles.crGlyph)} />
-              <span className={styles.crLab}>{t.label}</span>
-              {t.n != null && <span className={styles.crC}>{t.n}</span>}
-              {/* Leaves the catalog entirely, so say so rather than letting the
-                  tab look like the others and then swap the whole screen. */}
-              {(t.key === 'shards' || t.key === 'features') && (
-                <i className={cx('fa-solid fa-arrow-up-right-from-square', styles.crOut)} />
-              )}
-            </button>
-          ))}
+          {catTabs.map(t => {
+            const leaves = t.key === 'shards' || t.key === 'features';
+            const title = t.label
+              + (t.n != null ? ` (${t.n})` : '')
+              + (t.soon ? ' · its own later slice' : leaves ? ' · opens its own screen' : '');
+            return (
+              <button key={t.key} className={cx(styles.crTab, t.key === tab && styles.sel, t.soon && styles.stub)}
+                disabled={t.soon} title={title}
+                onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setTab(t.key as 'items' | 'features' | 'spells' | 'effects' | 'shops') }}>
+                <i className={cx('fa-solid', t.icon, styles.crGlyph)} />
+              </button>
+            );
+          })}
         </nav>
 
         <div className={styles.catPage}>
