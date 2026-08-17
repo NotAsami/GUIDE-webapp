@@ -364,11 +364,12 @@
    press by accident. */
 .turnBar {
   position: relative; z-index: 2; flex: 0 0 auto;
-  display: flex; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 5px;
   padding: 8px 18px 10px;
   border-bottom: 1px solid rgba(212, 191, 125, 0.16);
 }
 .turnBtn {
+  justify-content: center;
   /* Chamfer + border, so the diagonals need painting — a plain border draws
      nothing on a 45 degree clip-path edge. docs/Chamfered_clip-path_corners_fix.md */
   --cut: 6px; --bc: rgba(226, 176, 33, 0.45);
@@ -391,6 +392,24 @@
 .turnBtn:hover { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226, 176, 33, 0.2); }
 .turnBtn i { font-size: 10px; }
 .turnMeta {
+  text-align: center;
   font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
   color: var(--beige-dim); text-transform: uppercase;
 }
+
+/* A NON-DICE RESULT LINE — a rest's restored slots, a potion's healing, a turn's
+   countdown. Label, the muted middle taking the slack, then the value: the same
+   one-row shape the rest modal settled on, for the same reason. */
+.xLine {
+  display: flex; align-items: baseline; gap: 9px;
+  padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+.xLine:last-child { border-bottom: 0; }
+.xLab { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text); }
+.xBd {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige-dim);
+}
+.xVal { margin-left: auto; flex: 0 0 auto; font-family: var(--font-mono); font-size: 11px; color: var(--beige); }
+.xLine.heal .xVal { color: var(--good); }
+.xLine.buff .xVal { color: var(--cyan-hot); }
