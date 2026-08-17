@@ -1359,16 +1359,33 @@ function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, mem
         <span className={styles.dmonly}><i className="fa-solid fa-box-archive" /> Templates — not a grant</span>
       </div>
 
-      <div className={styles.catTabs}>
-        {catTabs.map(t => (
-          <button key={t.key} className={cx(styles.catTab, t.key === tab && styles.sel, t.soon && styles.stub)}
-            disabled={t.soon} title={t.soon ? 'Its own later slice' : undefined}
-            onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setTab(t.key as 'items' | 'features' | 'spells' | 'effects' | 'shops') }}>
-            <i className={`fa-solid ${t.icon}`} />{t.label}
-            {t.n != null && <span className={styles.ctC}>{t.n}</span>}
-          </button>
-        ))}
-      </div>
+      {/* FILE-DIVIDER TABS, down the side rather than across the top. Six
+          catalogs already crowded a horizontal strip into a scrollbar, and the
+          list is heading for ten — classes, races, loot tables. A vertical rail
+          grows without ever needing one, and reads the way a drawer of dividers
+          does: the tab you are on joins the page it belongs to.
+
+          Stacked with flex, deliberately unlike the authoring editor's `.gbtn`,
+          which hardcodes a `top` per index and stops working at four. */}
+      <div className={styles.catShell}>
+        <nav className={styles.catRail} aria-label="Catalog sections">
+          {catTabs.map(t => (
+            <button key={t.key} className={cx(styles.crTab, t.key === tab && styles.sel, t.soon && styles.stub)}
+              disabled={t.soon} title={t.soon ? 'Its own later slice' : undefined}
+              onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setTab(t.key as 'items' | 'features' | 'spells' | 'effects' | 'shops') }}>
+              <i className={cx('fa-solid', t.icon, styles.crGlyph)} />
+              <span className={styles.crLab}>{t.label}</span>
+              {t.n != null && <span className={styles.crC}>{t.n}</span>}
+              {/* Leaves the catalog entirely, so say so rather than letting the
+                  tab look like the others and then swap the whole screen. */}
+              {(t.key === 'shards' || t.key === 'features') && (
+                <i className={cx('fa-solid fa-arrow-up-right-from-square', styles.crOut)} />
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className={styles.catPage}>
 
       {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : error) ? (
         <div className={styles.soonPanel}>
@@ -1420,6 +1437,8 @@ function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, mem
           </div>
         </div>
       )}
+        </div>
+      </div>
     </>
   )
 }
