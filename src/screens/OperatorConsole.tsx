@@ -119,6 +119,7 @@ const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hp
 
 type View = 'overview' | 'character' | 'quests' | 'sessions' | 'catalog'
 type CharTab = 'actions' | 'inventory' | 'lore' | 'shards'
+type CatTab = 'items' | 'features' | 'spells' | 'effects' | 'shops'
 
 export function OperatorConsole() {
   const { session, loading: authLoading } = useAuth()
@@ -143,6 +144,20 @@ export function OperatorConsole() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   /** Which per-character tab is showing when a PC is selected. */
   const [charTab, setCharTab] = useState<CharTab>('actions')
+  /** Which catalog is showing. Lives here, not in CatalogSurface, because the
+      rail that switches it hangs off region 01 while the catalog renders in 02. */
+  const [catTab, setCatTab] = useState<CatTab>('items')
+  const nav = useNavigate()
+  const catTabs: { key: string; label: string; icon: string; n?: number; soon: boolean }[] = [
+    { key: 'items', label: 'Items', icon: 'fa-box-open', n: catalog.items.length, soon: false },
+    { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', n: spellLib.spells.length, soon: false },
+    { key: 'effects', label: 'Effects', icon: 'fa-bolt', n: effectLib.effects.length, soon: false },
+    { key: 'shops', label: 'Shopkeepers', icon: 'fa-shop', n: shopLib.shops.length, soon: false },
+    /* Last on purpose: these two LEAVE the catalog for their own editor, so they
+       are an exit rather than another tab, and reading order should say so. */
+    { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
+    { key: 'shards', label: 'Shards', icon: 'fa-gem', soon: false },
+  ]
 
   // The G.U.I.D.E. voice (slice 6): DM → player broadcast channel. Send-only here.
   const sendVoice = useGuideVoice()
@@ -325,6 +340,34 @@ export function OperatorConsole() {
               </div>
             </div>
           </div>
+
+          {/* CATALOG RAIL — icon-only chamfered tabs hung off THIS panel's
+              right edge, overlapping the work area beside it, exactly as the
+              authoring editor's `.gbtn` hangs off its Features panel. It sits
+              outside .rInner on purpose: that element is overflow:hidden, so a
+              child of it could never cross the panel edge.
+
+              Stacked with flex, deliberately unlike `.gbtn`, which hardcodes a
+              `top` per index and stops working at four. No room for a label at
+              34px, so the name, count, and a note for the two entries that
+              leave the catalog live in the tooltip instead. */}
+          {view === 'catalog' && (
+            <nav className={styles.catRail} aria-label="Catalog sections">
+              {catTabs.map(t => {
+                const leaves = t.key === 'shards' || t.key === 'features'
+                const title = t.label
+                  + (t.n != null ? ` (${t.n})` : '')
+                  + (t.soon ? ' · its own later slice' : leaves ? ' · opens its own screen' : '')
+                return (
+                  <button key={t.key} className={cx(styles.crTab, t.key === catTab && styles.sel, t.soon && styles.stub)}
+                    disabled={t.soon} title={title}
+                    onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setCatTab(t.key as CatTab) }}>
+                    <i className={cx('fa-solid', t.icon, styles.crGlyph)} />
+                  </button>
+                )
+              })}
+            </nav>
+          )}
         </section>
 
         {/* MAIN — WORK AREA */}
@@ -368,7 +411,7 @@ export function OperatorConsole() {
                 </div>
               </div>
             )}
-            <div className={styles.workBody}>
+            <div className={cx(styles.workBody, view === 'catalog' && styles.railed)}>
               {error ? (
                 <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
               ) : partyLoading ? (
@@ -378,7 +421,7 @@ export function OperatorConsole() {
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
               ) : view === 'catalog' ? (
-                <CatalogSurface catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} members={members} />
+                <CatalogSurface tab={catTab} catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} members={members} />
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
@@ -1314,12 +1357,13 @@ function BroadcastPanel({ selected, onSend, log }: {
  *  catalogs, shown as inert "soon" tabs to reserve their place (matches the mockup).
  *  Items are stored in the app's structured shape (NOT the mockup's string effects)
  *  so a granted copy is mechanically real the instant it lands. */
-function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, members }: {
+/** `tab` is owned by OperatorConsole: the rail that switches it hangs off
+    region 01, so the state has to live above both. */
+function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib, members }: {
+  tab: CatTab
   catalog: DmCatalogState; featureLib: DmFeaturesState; effectLib: DmEffectsState; spellLib: DmSpellsState; shopLib: DmShopsState; members: PartyMember[]
 }) {
   const { items, createItem, updateItem, deleteItem, loading, error } = catalog
-  const nav = useNavigate()
-  const [tab, setTab] = useState<'items' | 'features' | 'spells' | 'effects' | 'shops'>('items')
   const [selId, setSelId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -1340,17 +1384,6 @@ function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, mem
     setSelId(null)
   }
 
-  const catTabs: { key: string; label: string; icon: string; n?: number; soon: boolean }[] = [
-    { key: 'items', label: 'Items', icon: 'fa-box-open', n: items.length, soon: false },
-    { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', n: spellLib.spells.length, soon: false },
-    { key: 'effects', label: 'Effects', icon: 'fa-bolt', n: effectLib.effects.length, soon: false },
-    { key: 'shops', label: 'Shopkeepers', icon: 'fa-shop', n: shopLib.shops.length, soon: false },
-    /* Last on purpose: these two LEAVE the catalog for their own editor, so they
-       are an exit rather than another tab, and reading order should say so. */
-    { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
-    { key: 'shards', label: 'Shards', icon: 'fa-gem', soon: false },
-  ]
-
   return (
     <>
       <div className={styles.ovBanner}>
@@ -1358,33 +1391,6 @@ function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, mem
         <span>Content library · author once, grant from anywhere</span>
         <span className={styles.dmonly}><i className="fa-solid fa-box-archive" /> Templates — not a grant</span>
       </div>
-
-      {/* ICON-ONLY TABS down the side, in the `.gbtn` shape family (see
-          authoring.module.css) rather than across the top: six catalogs
-          already crowded a horizontal strip into a scrollbar, and the list is
-          heading for ten — classes, races, loot tables. Stacked with flex,
-          deliberately unlike `.gbtn`, which hardcodes a `top` per index and
-          stops working at four. No room for a label at 34px, so the name
-          (plus count, plus a note for the two that leave the catalog
-          entirely) lives in the tooltip instead. */}
-      <div className={styles.catShell}>
-        <nav className={styles.catRail} aria-label="Catalog sections">
-          {catTabs.map(t => {
-            const leaves = t.key === 'shards' || t.key === 'features';
-            const title = t.label
-              + (t.n != null ? ` (${t.n})` : '')
-              + (t.soon ? ' · its own later slice' : leaves ? ' · opens its own screen' : '');
-            return (
-              <button key={t.key} className={cx(styles.crTab, t.key === tab && styles.sel, t.soon && styles.stub)}
-                disabled={t.soon} title={title}
-                onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setTab(t.key as 'items' | 'features' | 'spells' | 'effects' | 'shops') }}>
-                <i className={cx('fa-solid', t.icon, styles.crGlyph)} />
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className={styles.catPage}>
 
       {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : error) ? (
         <div className={styles.soonPanel}>
@@ -1436,8 +1442,6 @@ function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, mem
           </div>
         </div>
       )}
-        </div>
-      </div>
     </>
   )
 }
