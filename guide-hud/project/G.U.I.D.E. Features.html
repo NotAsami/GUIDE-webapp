@@ -20,6 +20,10 @@
   Palette: #1d1d1d base · #dedede text · #aaaaaa muted · #d4bf7d beige ·
   #00a6d6 cyan (all feature state + interactivity) · #b93a3a red sparingly.
   #e2b021 amber is G.U.I.D.E./system-truth ONLY and is not used for state.
+  Feature tint: an optional per-feature colour set by the DM in the feature
+  editor. It owns the card/popup header wash and the hexagon fill only — never
+  state. Names render as a fixed-lightness mix of the tint toward warm white,
+  so every swatch stays legible; untinted features render exactly as before.
   Feature prose is original placeholder flavor, not rulebook text.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -243,6 +247,36 @@
   /* expanded body removed — detail lives in the popup */
   .fc-hint{margin-top:9px;font-family:var(--font-mono);font-size:8px;letter-spacing:.24em;color:var(--beige-dim);text-transform:uppercase}
 
+  /* ---- FEATURE TINT (DM-set colour, --tint) ----
+     Tint owns two things only: the header wash and the hexagon fill.
+     State (cyan interactive, red spent, cyan active-ON) always overrides on
+     top of it. Text stays light on dark on every swatch: the name is never
+     the raw hex but a fixed-lightness mix of it toward warm white. */
+  .fcard.tinted{--tint-name:color-mix(in oklab,var(--tint) 42%,#efeae0);--wash:25%}
+  .fcard .fc-top,.fcard .fx,.fcard .fc-hint{position:relative;z-index:1}
+  .fcard.tinted .fc-inner::before{content:"";position:absolute;left:0;right:0;top:0;height:62px;z-index:0;pointer-events:none;background:linear-gradient(180deg,color-mix(in srgb,var(--tint) var(--wash),transparent) 0%,color-mix(in srgb,var(--tint) calc(var(--wash) / 2.4),transparent) 46%,transparent 100%)}
+  .fcard.tinted .fc-name{color:var(--tint-name)}
+  .fcard.tinted .fc-hex .hx-frame{background:color-mix(in srgb,var(--tint) 70%,transparent)}
+  .fcard.tinted .fc-hex .hx-inner{background:linear-gradient(180deg,color-mix(in srgb,var(--tint) 26%,#161616),color-mix(in srgb,var(--tint) 11%,#101010))}
+  .fcard.tinted .fc-icon{color:var(--tint-name)}
+  .fcard.tinted .fc-hex.usable:hover .hx-frame{background:var(--cyan-hot);box-shadow:0 0 16px rgba(0,166,214,.55)}
+  .fcard.tinted .fc-hex.usable:hover .hx-inner{box-shadow:inset 0 0 22px rgba(0,166,214,.4)}
+  .fcard.tinted .fc-hex.usable:hover .fc-icon{color:#fff;text-shadow:0 0 10px rgba(0,166,214,.85)}
+  /* spent — red border, desaturated glyph and a quieter wash, tint kept as identity */
+  .fcard.tinted.spent{--wash:14%}
+  .fcard.tinted.spent .fc-inner::before{filter:saturate(.6)}
+  .fcard.tinted .fc-hex.exhausted .hx-frame{background:rgba(185,58,58,0.55)}
+  .fcard.tinted .fc-hex.exhausted .hx-inner{background:linear-gradient(180deg,#1a1414,#121010)}
+  .fcard.tinted .fc-hex.exhausted .fc-icon{color:rgba(222,222,222,0.35)}
+  .fcard.tinted .fc-hex.exhausted:hover .hx-frame{background:var(--danger)}
+  .fcard.tinted .fc-hex.exhausted:hover .fc-icon{color:var(--danger);text-shadow:none}
+  /* active-ON keeps its cyan treatment; tint drops back to a trace */
+  .fcard.tinted.is-on{--wash:15%}
+  .fcard.tinted.is-on .fc-name{color:var(--cyan-hot)}
+  .fcard.tinted.is-on .fc-hex .hx-frame{background:var(--cyan);box-shadow:0 0 18px rgba(0,166,214,.6)}
+  .fcard.tinted.is-on .fc-hex .hx-inner{background:linear-gradient(180deg,#16252b,#0e1316)}
+  .fcard.tinted.is-on .fc-icon{color:var(--cyan-hot);text-shadow:0 0 10px rgba(0,166,214,.7)}
+
   /* ===== FEATURE POPUP — same frame language as the item / shard modals ===== */
   .imodal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;padding:34px}
   .imodal.open{display:flex}
@@ -260,6 +294,11 @@
   .im-corner.br{bottom:12px;right:12px;border-bottom:1px solid;border-right:1px solid}
   .im-head{position:relative;z-index:3;flex:0 0 auto;display:flex;align-items:flex-start;gap:9px;padding:18px 18px 14px;border-bottom:1px solid rgba(212,191,125,0.32)}
   .im-head::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:rgba(0,166,214,0.35);box-shadow:0 0 9px rgba(0,166,214,0.3)}
+  .im-head.tinted{--tint-name:color-mix(in oklab,var(--tint) 42%,#efeae0);background:linear-gradient(180deg,color-mix(in srgb,var(--tint) 28%,transparent) 0%,color-mix(in srgb,var(--tint) 10%,transparent) 50%,transparent 100%)}
+  .im-head.tinted .im-name{color:var(--tint-name)}
+  .im-head.tinted .im-name.on{color:var(--cyan-hot)}
+  .im-head.tinted .im-crystal{color:var(--tint-name);border-color:color-mix(in srgb,var(--tint) 58%,transparent);background:radial-gradient(120% 90% at 50% 40%,color-mix(in srgb,var(--tint) 26%,transparent),transparent 65%),rgba(0,0,0,0.45);filter:drop-shadow(0 0 9px color-mix(in srgb,var(--tint) 32%,transparent))}
+  .im-head.tinted.spent .im-crystal{color:rgba(222,222,222,0.4);border-color:rgba(185,58,58,0.6);background:rgba(0,0,0,0.45);filter:none}
   .im-crystal{flex:0 0 auto;width:44px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--cyan-hot);font-size:20px;border:1px solid rgba(0,166,214,0.5);background:radial-gradient(120% 90% at 50% 40%,rgba(0,166,214,0.18),transparent 65%),rgba(0,0,0,0.45);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);filter:drop-shadow(0 0 9px rgba(0,166,214,0.4))}
   .im-crystal.passive{color:var(--beige);border-color:rgba(212,191,125,0.5);background:rgba(0,0,0,0.45);filter:none}
   .im-titles{display:flex;flex-direction:column;gap:7px;min-width:0;margin-left:5px}
@@ -592,18 +631,18 @@ const FEATURES = {
   loadout: 'Sunward Halberd · Beacon Shield',
   list: [
     /* ---------- CLASS · usable ---------- */
-    {id:'second-wind', origin:["Fighter","Martial Reserve","Level 1","Second Wind"], reset:'Short rest', name:'Second Wind', icon:'fa-solid fa-heart-pulse', group:'class', tag:'Fighter 1',
+    {id:'second-wind', color:'#4fae6b', origin:["Fighter","Martial Reserve","Level 1","Second Wind"], reset:'Short rest', name:'Second Wind', icon:'fa-solid fa-heart-pulse', group:'class', tag:'Fighter 1',
      activation:'bonus', uses:{max:2,left:2},
      summary:'Draw on reserve to recover a burst of your own vitality.',
      desc:'A trained breathing pattern the Reclamation drills into its line-holders. You reset your stance, force the ribs open, and buy back the wound you just took — once or twice a fight, no more.',
      effects:[{op:'✚', txt:'Heals <b>1d10 + 8</b>', tag:'self'},{op:'⊕', txt:'+1 charge to <b>Reserve</b>', tag:'self'},{op:'⊘', txt:'Ends <b>Winded</b>', tag:'self', gated:false}],
      affectedBy:[{src:'Vitalist Weave', from:'Beacon Shield', give:'+2 healed'}]},
-    {id:'action-surge', origin:["Fighter","Martial Reserve","Level 2","Action Surge"], reset:'Short rest', name:'Action Surge', icon:'fa-solid fa-bolt', group:'class', tag:'Fighter 2',
+    {id:'action-surge', color:'#e2b021', origin:["Fighter","Martial Reserve","Level 2","Action Surge"], reset:'Short rest', name:'Action Surge', icon:'fa-solid fa-bolt', group:'class', tag:'Fighter 2',
      activation:'free', uses:{max:1,left:0},
      summary:'Take one additional action on your turn, outside the count.',
      desc:'The moment stretches. Nothing supernatural about it — just a body that has done this ten thousand times moving before the mind finishes deciding.',
      effects:[{op:'⊕', txt:'+1 <b>action</b> this turn', tag:'self'}]},
-    {id:'ironhold', origin:["Fighter","Stance Training","Level 5","Ironhold Stance"], name:'Ironhold Stance', icon:'fa-solid fa-shield-halved', group:'class', tag:'Fighter 5',
+    {id:'ironhold', color:'#a07ad6', origin:["Fighter","Stance Training","Level 5","Ironhold Stance"], name:'Ironhold Stance', icon:'fa-solid fa-shield-halved', group:'class', tag:'Fighter 5',
      activation:'bonus', uses:'at-will', toggle:true, on:true,
      summary:'Hold ground: resist physical damage, but you may not move willingly.',
      desc:'Feet planted, weight low, weapon braced against the hip. While held you are very hard to move and very hard to hurt — and you go nowhere.',
@@ -616,7 +655,7 @@ const FEATURES = {
      effects:[{op:'⚔', txt:'Attack <b>1 target</b>', tag:'reach'},{op:'✖', txt:'Damage <b>1d10 + 4</b>'}]},
 
     /* ---------- GEAR · usable (derived from equipped items) ---------- */
-    {id:'sunward-cleave', origin:["Equipped","Sunward Halberd","Reliquary Haft","Sunward Cleave"], reset:'Dawn', name:'Sunward Cleave', icon:'fa-solid fa-sun', group:'gear', tag:'Sunward Halberd',
+    {id:'sunward-cleave', color:'#d4bf7d', origin:["Equipped","Sunward Halberd","Reliquary Haft","Sunward Cleave"], reset:'Dawn', name:'Sunward Cleave', icon:'fa-solid fa-sun', group:'gear', tag:'Sunward Halberd',
      activation:'action', uses:{max:3,left:2},
      summary:'A wide radiant arc that catches everything in front of you.',
      desc:'The halberd\'s edge takes light from wherever it can find it and gives it back all at once, in a line across the haft\'s full reach.',
@@ -639,7 +678,7 @@ const FEATURES = {
      effects:[{op:'⤒', txt:'+5 <b>initiative</b>'},{op:'⊘', txt:'Cannot be <b>surprised</b> while conscious'}]},
 
     /* ---------- SUBCLASS · passive ---------- */
-    {id:'decisive-strike', origin:["Fighter","Champion","Level 3","Decisive Strike"], name:'Decisive Strike', icon:'fa-solid fa-crosshairs', group:'subclass', tag:'Champion 3',
+    {id:'decisive-strike', color:'#b93a3a', origin:["Fighter","Champion","Level 3","Decisive Strike"], name:'Decisive Strike', icon:'fa-solid fa-crosshairs', group:'subclass', tag:'Champion 3',
      activation:null, summary:'Your weapon attacks land critically on a roll of 19 or 20.',
      desc:'A widened window, earned by repetition rather than luck.',
      effects:[{op:'⤒', txt:'Crit range <b>19–20</b>', tag:'weapon'}]},
@@ -649,7 +688,7 @@ const FEATURES = {
      effects:[{op:'⤒', txt:'+2 to untrained <b>Str · Dex · Con</b> checks'}]},
 
     /* ---------- RACIAL · passive ---------- */
-    {id:'fey-resolve', origin:["Half-Elf","Fey Ancestry","Fey Resolve"], name:'Fey Resolve', icon:'fa-solid fa-brain', group:'racial', tag:'Half-Elf',
+    {id:'fey-resolve', color:'#a07ad6', origin:["Half-Elf","Fey Ancestry","Fey Resolve"], name:'Fey Resolve', icon:'fa-solid fa-brain', group:'racial', tag:'Half-Elf',
      activation:null, summary:'Charm slides off you, and you never sleep the fey sleep.',
      desc:'A thin inheritance, but a reliable one.',
      effects:[{op:'⤒', txt:'Advantage vs <b>charmed</b>'},{op:'⊘', txt:'Immune to magical <b>sleep</b>'}]},
@@ -675,11 +714,11 @@ const FEATURES = {
      effects:[{op:'⤒', txt:'Advantage on <b>Reclamation</b> social checks'},{op:'⊙', txt:'Free lodging at <b>holdings</b>'}]},
 
     /* ---------- GEAR · passive ---------- */
-    {id:'radiant-emp', origin:["Equipped","Sunward Halberd","Reliquary Haft","Radiant Empowerment"], name:'Radiant Empowerment', icon:'fa-solid fa-certificate', group:'gear', tag:'Sunward Halberd',
+    {id:'radiant-emp', color:'#d4bf7d', origin:["Equipped","Sunward Halberd","Reliquary Haft","Radiant Empowerment"], name:'Radiant Empowerment', icon:'fa-solid fa-certificate', group:'gear', tag:'Sunward Halberd',
      activation:null, summary:'Radiant damage you deal with this weapon is amplified.',
      desc:'The reliquary set in the haft leaks. Usefully.',
      effects:[{op:'✖', txt:'+1d4 <b>radiant</b>', tag:'→ sunward cleave'}]},
-    {id:'ward-anchor', origin:["Equipped","Beacon Shield","Salt Binding","Ward Anchor"], name:'Ward Anchor', icon:'fa-solid fa-anchor', group:'gear', tag:'Beacon Shield',
+    {id:'ward-anchor', color:'#00a6d6', origin:["Equipped","Beacon Shield","Salt Binding","Ward Anchor"], name:'Ward Anchor', icon:'fa-solid fa-anchor', group:'gear', tag:'Beacon Shield',
      activation:null, summary:'The shield holds concentration steady when you are struck.',
      desc:'Brass, salt-cured, older than the hold it came from.',
      effects:[{op:'⤒', txt:'Advantage on <b>concentration</b> saves'}]},
@@ -725,7 +764,7 @@ function hex(f){
 
 function card(f){
   const fx = (f.effects||[]).filter(n => n.gated !== false);
-  return `<div class="fcard ${f.on?'is-on':''} ${(f.uses&&f.uses.left===0)?'spent':''}" data-card="${f.id}" role="button" tabindex="0" aria-haspopup="dialog">
+  return `<div class="fcard ${f.on?'is-on':''} ${(f.uses&&f.uses.left===0)?'spent':''} ${f.color?'tinted':''}"${f.color?` style="--tint:${f.color}"`:''} data-card="${f.id}" role="button" tabindex="0" aria-haspopup="dialog">
     <div class="fc-frame"></div>
     <div class="fc-inner">
       <div class="fc-top">
@@ -805,7 +844,10 @@ function openPopup(id, push){
   const aff = (f.affectedBy||[]).filter(n=>n.gated!==false);
   const out = f.uses && f.uses !== 'at-will' && f.uses.left === 0;
 
-  document.getElementById('im-head').innerHTML = `
+  const head = document.getElementById('im-head');
+  head.className = 'im-head' + (f.color?' tinted':'') + (out?' spent':'');
+  head.style.setProperty('--tint', f.color || '');
+  head.innerHTML = `
     <div class="im-crystal ${isUsable(f)?'':'passive'}"><i class="${f.icon||'fa-solid fa-diamond'}"></i></div>
     <div class="im-titles">
       <div class="im-name ${f.on?'on':''}">${f.name}</div>
@@ -817,6 +859,7 @@ function openPopup(id, push){
     </div>
     ${prev ? `<button class="im-back" id="im-back" title="Back to ${prev.name}" aria-label="Back to ${prev.name}">&lt;</button>` : ''}
     <button class="im-close" id="im-close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>`;
+
 
   const facts = [];
   if (isUsable(f)) facts.push(`<div class="f"><span class="k">Activation</span><span class="v acc">${ACTS[f.activation]}</span></div>`);
