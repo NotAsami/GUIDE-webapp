@@ -6,7 +6,7 @@ import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated,
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
-import { MOD_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
+import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
 import type { GraphEffect, GraphState, ShardSlot, ShardTree, VarDef } from '../lib/database.types'
 import { auditNode, characterVars } from '../lib/graph'
 import { GraphEffects, TagsBlock, VarsBlock } from '../components/GraphEffects'
@@ -2441,7 +2441,14 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
               <div key={i} className={styles.efRow}>
                 <select className={cx(styles.selIn, styles.st)} value={m.stat}
                   onChange={e => patchMod({ stat: e.target.value, set: isAbility(e.target.value) ? m.set : false })}>
-                  {MOD_STATS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {/* Grouped: eighteen skills would otherwise bury the fifteen stats
+                      above them in one flat list. */}
+                  <optgroup label="Stats">
+                    {MOD_STATS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </optgroup>
+                  <optgroup label="Skill bonus">
+                    {SKILL_STATS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </optgroup>
                 </select>
                 <span className={styles.efOps}>
                   {/* a debuff subtracts, not adds — the segment reads "−" and forces the

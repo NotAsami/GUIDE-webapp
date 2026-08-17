@@ -6,12 +6,26 @@
  * lists or two different "bonus vs. set" rules.
  */
 import type { AbilityKey, EffectDef, ItemEffects, Mod } from './database.types'
+import { SKILLS } from './dnd.ts'
 
 export type { Mod }
 
 /** The numeric modifiers the engine (lib/effects.ts) actually reads. `Note`
  *  and other descriptive perks are authored as Detail rows instead, not here. */
 export const MOD_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'AC', 'Attack', 'Damage', 'Saves', 'Speed', 'Initiative', 'Darkvision', 'Max HP', 'Carry Capacity ×'] as const
+
+/** Per-skill bonuses, as modifier rows.
+ *
+ *  `ItemEffects.skills` was readable by the engine and writable only by editing
+ *  JSON by hand — a field with no control, which is this project's most repeated
+ *  bug. A skill bonus IS a stat and a number, so it belongs in the row UI that
+ *  already exists rather than in a second editor beside it; the select groups
+ *  them so eighteen entries do not bury the fifteen above.
+ *
+ *  Labelled by NAME and stored by KEY, both from lib/dnd.ts, so this list cannot
+ *  drift from the one the Stats screen renders and skillRow scores. */
+export const SKILL_STATS: readonly string[] = SKILLS.map(s => s.name)
+const SKILL_KEY: Record<string, string> = Object.fromEntries(SKILLS.map(s => [s.name, s.key]))
 
 const ABIL_KEYS: Record<string, AbilityKey> = { STR: 'str', DEX: 'dex', CON: 'con', INT: 'int', WIS: 'wis', CHA: 'cha' }
 export const isAbility = (stat: string): boolean => stat in ABIL_KEYS
@@ -43,6 +57,7 @@ export function compileEffects(mods: Mod[], skills?: Pick<EffectDef, 'skillProfi
     else if (m.stat === 'Darkvision') eff.darkvision = n
     else if (m.stat === 'Max HP') eff.maxHp = n
     else if (m.stat === 'Carry Capacity ×') eff.carryMult = n
+    else if (SKILL_KEY[m.stat]) (eff.skills ??= {})[SKILL_KEY[m.stat]] = n
   }
   return Object.keys(eff).length ? eff : undefined
 }
@@ -65,5 +80,10 @@ export function effectsToMods(eff?: ItemEffects): Mod[] {
   if (eff.darkvision != null) mods.push({ stat: 'Darkvision', amt: eff.darkvision })
   if (eff.maxHp != null) mods.push({ stat: 'Max HP', amt: eff.maxHp })
   if (eff.carryMult != null) mods.push({ stat: 'Carry Capacity ×', amt: eff.carryMult })
+  // Keyed by skill key; the row shows the NAME, so map back through SKILLS.
+  for (const [k, v] of Object.entries(eff.skills ?? {})) {
+    const name = SKILLS.find(sk => sk.key === k)?.name
+    if (name && v != null) mods.push({ stat: name, amt: v as number })
+  }
   return mods
 }

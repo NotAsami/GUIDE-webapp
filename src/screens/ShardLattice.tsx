@@ -6,7 +6,7 @@ import { useDmStatus, useDmFeatures, type DmFeaturesState } from '../lib/dm'
 import { useDmShards, type EditorNode, type EditorTree } from '../lib/dmShards'
 import { useLocalDraft } from '../lib/draft'
 import { RING_GAP, branchColor, nodeXY } from '../lib/shards'
-import { MOD_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '../lib/modEditor'
+import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '../lib/modEditor'
 import { auditNode, type AuditItem, type AuthoredNode } from '../lib/graph'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { GraphEffects, TagsBlock, VarsBlock } from '../components/GraphEffects'
@@ -932,7 +932,14 @@ function EffectsWidget({ mods, onChange, label, note }: { mods: ItemEffects; onC
           <div key={i} className={styles.catFxRow}>
             <select className={`${styles.selIn} ${styles.fxStat}`} value={m.stat}
               onChange={e => patch(rows.map((x, j) => (j === i ? { ...x, stat: e.target.value, set: isAbility(e.target.value) ? x.set : false } : x)))}>
-              {MOD_STATS.map(s => <option key={s} value={s}>{s}</option>)}
+              {/* Grouped: eighteen skills would otherwise bury the fifteen stats
+                      above them in one flat list. */}
+                  <optgroup label="Stats">
+                    {MOD_STATS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </optgroup>
+                  <optgroup label="Skill bonus">
+                    {SKILL_STATS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </optgroup>
             </select>
             {isAbility(m.stat) && (
               <select className={`${styles.selIn} ${styles.fxMode}`} value={m.set ? 'set' : 'bonus'}
