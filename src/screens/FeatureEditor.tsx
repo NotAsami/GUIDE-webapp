@@ -990,7 +990,16 @@ function GuidePanel({ open, helpOn, setHelpOn, onClose }: { open: boolean; helpO
         <div className={styles.sec}><span className={styles.num}>01</span><span className={styles.fieldLab}>Prose is enough</span></div>
         <p className={styles.gtext}>Fill in identity, write the description, publish. <strong>Variables</strong> and <strong>Effects</strong> exist for features the app has to compute — they stay closed until you open them, and a feature that never opens them is a complete feature.</p>
 
-        <div className={styles.sec}><span className={styles.num}>02</span><span className={styles.fieldLab}>when vs ask</span></div>
+        <div className={styles.sec}><span className={styles.num}>02</span><span className={styles.fieldLab}>Prose that computes</span></div>
+        <p className={styles.gtext}>Every prose field runs through the character before it reaches the player. <code>{'{'}...{'}'}</code> is an expression; anything it cannot resolve is left on screen exactly as you typed it, so a visible <code>{'{'}saveDc{'}'}</code> is how you find out it did not resolve.</p>
+        <div className={styles.gdl}>
+          <span className={styles.k}>A value</span><span className={styles.v}><code>Wisdom ({'{'}saveDc{'}'}) saving throw</code> → <b>Wisdom (15) saving throw</b>. Reads <code>level prof str dex con int wis cha hp hpMax saveDc</code>, plus every variable this feature declares.</span>
+          <span className={cx(styles.k, styles.cy)}>A choice</span><span className={styles.v}>A ternary, so the sentence changes with the character: <code>{'{'}upgraded ? &quot; and restrains the target.&quot; : &quot;.&quot;{'}'}</code></span>
+          <span className={styles.k}>Colour</span><span className={styles.v}><code>[Fire Damage]{'{'}fire{'}'}</code>. Prefer a <b>name</b> — every damage type, plus <code>red gold amber cyan violet green</code> — because a name follows the theme and shares one palette with the roll panel, so radiant reads the same gold in both. <code>{'{'}--cyan-hot{'}'}</code> and <code>{'{'}#e2b021{'}'}</code> also work, in that order of preference.</span>
+          <span className={styles.k}>Emphasis</span><span className={styles.v}><code>**text**</code> is bold and reads cyan — reach for it on the <b>number</b> in a sentence. <code>*text*</code> is italic.</span>
+        </div>
+
+        <div className={styles.sec}><span className={styles.num}>03</span><span className={styles.fieldLab}>when vs ask</span></div>
         <p className={styles.gtext}>Two different kinds of thing, deliberately drawn as two different rows.</p>
         <div className={styles.gdl}>
           <span className={styles.k}>when</span><span className={styles.v}>A condition the <b>app</b> evaluates over variables and the sheet. False means the node contributes nothing and is never mentioned. <code>hp &lt; hpMax / 2</code></span>
@@ -998,23 +1007,59 @@ function GuidePanel({ open, helpOn, setHelpOn, onClose }: { open: boolean; helpO
           <span className={cx(styles.k, styles.be)}>Both</span><span className={styles.v}>Legal and common: the app checks whether the choice is available, the player decides whether to spend it.</span>
         </div>
 
-        <div className={styles.sec}><span className={styles.num}>03</span><span className={styles.fieldLab}>Target selectors</span></div>
-        <p className={styles.gtext}>A target list is a set of selectors, OR’d together. Empty means the node’s own roll.</p>
+        <div className={styles.sec}><span className={styles.num}>04</span><span className={styles.fieldLab}>“While the hood is up”</span></div>
+        <p className={styles.gtext}>Some conditions are not computable — <i>while your hood is up</i>, <i>while you are standing</i>. The app cannot know, and <code>when</code> takes a formula, so there is nothing to type. Press <strong>player toggle</strong> on the <code>when</code> row: it declares a stored boolean, points <code>when</code> at it, and leaves it visible in the variables block. Nothing hidden.</p>
+        <div className={styles.gdl}>
+          <span className={styles.k}>Player finds it</span><span className={styles.v}>Under <b>State</b> on the feature’s detail popup. A toggle declared on an item or shard node appears under <b>Gear &amp; Shard State</b> on the Features screen instead, grouped by what it came from.</span>
+          <span className={cx(styles.k, styles.cy)}>Not this</span><span className={styles.v}>Use <code>ask</code> when the condition is judged <b>per roll</b> rather than held — “did at least one of them fail?” is not a stance you leave switched on.</span>
+        </div>
+
+        <div className={styles.sec}><span className={styles.num}>05</span><span className={styles.fieldLab}>Target selectors</span></div>
+        <p className={styles.gtext}>A target list is a set of selectors. Empty means the node’s own roll.</p>
         <div className={styles.gdl}>
           <span className={cx(styles.k, styles.be)}>Thing</span><span className={styles.v}>One named entity from the catalog. Picked by name; the id is what gets stored.</span>
           <span className={styles.k}>Tag</span><span className={styles.v}><code>tag:fire_damage</code> — everything carrying the tag, following the catalog as it grows.</span>
           <span className={cx(styles.k, styles.cy)}>Roll kind</span><span className={styles.v}><code>roll:save.dex</code>, or <code>roll:save</code> for all of them. A class of roll, not a thing — so it has no match count; it is always live.</span>
+          <span className={styles.k}>or / and</span><span className={styles.v}>With two or more, the toggle beside the heading decides. <b>or</b> means any one is enough. <b>and</b> means every one must hold of the <b>same roll</b> — the only way to say “a fire weapon, on its damage roll”, because <code>tag:fire</code> alone rides into the attack roll too.</span>
           <span className={styles.k}>Match count</span><span className={styles.v}>Read it every time. It is the only signal that separates a typo from a selector that correctly matches nothing yet.</span>
         </div>
 
-        <div className={styles.sec}><span className={styles.num}>04</span><span className={styles.fieldLab}>Variables</span></div>
+        <div className={styles.sec}><span className={styles.num}>06</span><span className={styles.fieldLab}>Tags</span></div>
+        <p className={styles.gtext}>A tag’s whole purpose is to reach <b>across</b> catalogs: features, spells, items and shard nodes all carry them, so one effect can target every fire thing you own without naming any of it. Normalised on save — <code>Fire Damage</code> and <code>fire_damage</code> are the same tag.</p>
+
+        <div className={styles.sec}><span className={styles.num}>07</span><span className={styles.fieldLab}>Variables</span></div>
         <div className={styles.gdl}>
           <span className={cx(styles.k, styles.be)}>Stored</span><span className={styles.v}>Written on the character and read back. Needs a type — Number or Boolean — and takes an optional initial value.</span>
-          <span className={cx(styles.k, styles.be)}>Derived</span><span className={styles.v}>Never stored. Recomputed from its formula on every read, so it has no type to pick.</span>
+          <span className={cx(styles.k, styles.be)}>Derived</span><span className={styles.v}>Never stored. Recomputed from its formula on every read, so it has no type to pick — and a player cannot flip one, so a derived boolean is not a toggle.</span>
           <span className={styles.k}>DM-only</span><span className={styles.v}>A permission, not a style. Amber means the player cannot write it — only this console can.</span>
         </div>
 
-        <div className={styles.sec}><span className={styles.num}>05</span><span className={styles.fieldLab}>Field types</span></div>
+        <div className={styles.sec}><span className={styles.num}>08</span><span className={styles.fieldLab}>Activations &amp; arming</span></div>
+        <p className={styles.gtext}>Everything above modifies a roll. These two run when the player <b>presses</b> the feature, and they write.</p>
+        <div className={styles.gdl}>
+          <span className={cx(styles.k, styles.cy)}>Set / Add Var</span><span className={styles.v}>The press changes character state. Every outcome is listed on a confirm sheet first, so a write is never invisible; ones carrying an <code>ask</code> start ticked, and unticking is how the player declines.</span>
+          <span className={cx(styles.k, styles.cy)}>once</span><span className={styles.v}>Turns a contribution into <b>your next</b> one instead of <b>every</b> one. Pressing the feature arms it; it applies to the next matching roll and waits there. Never auto-consumed — only the player knows whether the attack landed, so they spend it from the roll panel.</span>
+          <span className={styles.k}>Usable</span><span className={styles.v}>A feature reaches the player’s <b>Usable</b> tab when it has uses, a roll, an activation outcome, a toggle, or an Activation set to something other than None.</span>
+        </div>
+
+        <div className={styles.sec}><span className={styles.num}>09</span><span className={styles.fieldLab}>What the player sees</span></div>
+        <div className={styles.gdl}>
+          <span className={styles.k}>Colour</span><span className={styles.v}>The feature’s tint: it washes the card and popup header and fills the hexagon. State always overrides it — red spent, cyan held — so a colour can never hide whether a feature is available.</span>
+          <span className={styles.k}>Origin chain</span><span className={styles.v}>The breadcrumb at the top of the popup. Leave it empty and one is derived from source, level and name; the panel beside this one edits it.</span>
+          <span className={styles.k}>Effect rows</span><span className={styles.v}>Built from this graph, one row per non-activation effect, with the damage type in the damage colour. Activation outcomes are <b>not</b> listed — they do nothing until pressed, and the confirm sheet already names them.</span>
+          <span className={cx(styles.k, styles.be)}>Affected by</span><span className={styles.v}>The reverse lookup: everything targeting this feature, by name or by tag. Nobody authors it — it is this index read backwards, so it cannot drift out of step.</span>
+        </div>
+
+        <div className={styles.sec}><span className={styles.num}>10</span><span className={styles.fieldLab}>Where to author what</span></div>
+        <p className={styles.gtext}>The same effect means the same thing on any node. What changes is <b>when it exists</b>.</p>
+        <div className={styles.gdl}>
+          <span className={styles.k}>Feature</span><span className={styles.v}>The rule is the character’s, permanently.</span>
+          <span className={styles.k}>Spell</span><span className={styles.v}>The rule belongs to that spell. An unprepared spell contributes nothing — except a Pact Magic caster’s, who never prepares.</span>
+          <span className={styles.k}>Item</span><span className={styles.v}>While it is <b>equipped</b>. Unequip and the rule and its variables stop existing.</span>
+          <span className={styles.k}>Shard node</span><span className={styles.v}>While it is <b>attuned</b>. A concealed node’s mechanics stay DM-side — they never reach the player’s client at all.</span>
+        </div>
+
+        <div className={styles.sec}><span className={styles.num}>11</span><span className={styles.fieldLab}>Field types</span></div>
         <p className={styles.gtext}>A closed set. Every op composes its parameters out of these, which is why an op you have never seen still renders as a form you already know.</p>
         <div className={styles.gdl}>
           <span className={styles.k}>formula</span><span className={styles.v}>Number or expression, evaluated by the app.</span>
@@ -1026,14 +1071,15 @@ function GuidePanel({ open, helpOn, setHelpOn, onClose }: { open: boolean; helpO
           <span className={styles.k}>array</span><span className={styles.v}>Level-indexed progression: 21 slots, index 0 unused, levels 1–20.</span>
         </div>
 
-        <div className={styles.sec}><span className={styles.num}>06</span><span className={styles.fieldLab}>Draft, save, publish</span></div>
+        <div className={styles.sec}><span className={styles.num}>12</span><span className={styles.fieldLab}>Draft, save, publish</span></div>
         <div className={styles.gdl}>
           <span className={styles.k}>Autosave</span><span className={styles.v}>Local to this browser, every keystroke. Survives a refresh; reaches nobody else.</span>
           <span className={styles.k}>Save Draft</span><span className={styles.v}>Parks the edit on the row without touching the published version. A granted feature keeps working exactly as it did.</span>
           <span className={styles.k}>Publish</span><span className={styles.v}>Promotes the draft. Only a published feature can be granted — and existing grants are snapshots, so they do not change underneath a player.</span>
+          <span className={styles.k}>Duplicate</span><span className={styles.v}>Copies everything, chain and graph included, as an unpublished draft.</span>
         </div>
 
-        <div className={styles.sec}><span className={styles.num}>07</span><span className={styles.fieldLab}>Audit</span></div>
+        <div className={styles.sec}><span className={styles.num}>13</span><span className={styles.fieldLab}>Audit</span></div>
         <div className={styles.gdl}>
           <span className={cx(styles.k, styles.er)}>Error</span><span className={styles.v}>Blocks Publish. Something the app cannot resolve.</span>
           <span className={styles.k}>Warning</span><span className={styles.v}>Informs only. Publish is allowed — an empty tag can be a tag nothing carries yet.</span>
@@ -1041,6 +1087,7 @@ function GuidePanel({ open, helpOn, setHelpOn, onClose }: { open: boolean; helpO
         </div>
         <p className={styles.gtext} style={{ color: 'var(--muted)', fontSize: 13.5 }}>
           Per-field help — each field’s schema description and example — lives behind <strong>Per-field help</strong> above.
+          The long-form version of this guide, with worked recipes, is <code>docs/GUIDE_Codex_Authoring.md</code>.
         </p>
       </div>
     </div>
