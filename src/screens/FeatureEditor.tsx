@@ -19,7 +19,7 @@
  * and 3 first, per the layout spec. The tab is there so its absence is a stated
  * decision rather than an oversight.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
@@ -88,7 +88,7 @@ export default function FeatureEditor() {
   const [openEffect, setOpenEffect] = useState<number | null>(null)
   const [moreOps, setMoreOps] = useState(false)
   const [helpOn, setHelpOn] = useState(false)
-  const [overlay, setOverlay] = useState<'graph' | 'guide' | null>(null)
+  const [overlay, setOverlay] = useState<'graph' | 'guide' | 'origin' | null>(null)
   const [menuOn, setMenuOn] = useState(false)
   const [pop, setPop] = useState<PopKind>(null)
   const [saving, setSaving] = useState(false)
@@ -573,7 +573,7 @@ export default function FeatureEditor() {
                     moreOps={moreOps} setMoreOps={setMoreOps}
                     folders={folders} nodes={nodes} namesByGid={namesByGid} tagUse={tagUse}
                     tagInput={tagInput} setTagInput={setTagInput} tagAcOpen={tagAcOpen} setTagAcOpen={setTagAcOpen}
-                    addTag={addTag} setPop={setPop}
+                    addTag={addTag} setPop={setPop} openOrigin={() => setOverlay('origin')}
                   />
                 )}
               </div>
@@ -614,6 +614,16 @@ export default function FeatureEditor() {
             </div>
           </div>
           <GuidePanel open={overlay === 'guide'} helpOn={helpOn} setHelpOn={setHelpOn} onClose={() => setOverlay(null)} />
+
+          {/* The origin chain gets a PANEL, not a modal: it is an editor for one
+              field, and it belongs in the same overlay slot as the graph and the
+              guide so it slides in over the list rather than covering the form
+              you are reading it against. */}
+          <OriginPanel
+            open={overlay === 'origin'} draft={draft}
+            onChange={origin => set({ origin: origin.length ? origin : undefined })}
+            onClose={() => setOverlay(null)}
+          />
         </section>
       </div>
 
@@ -671,7 +681,6 @@ type PopKind =
   | { k: 'delete' }
   | { k: 'revert' }
   | { k: 'folder' }
-  | { k: 'origin' }
 
 type FormProps = {
   d: CatalogFeatureData
@@ -695,6 +704,55 @@ type FormProps = {
   setTagAcOpen: (v: boolean) => void
   addTag: (raw: string) => void
   setPop: (p: PopKind) => void
+  openOrigin: () => void
+}
+
+/** The origin chain, as a slide-in panel. Same frame, geometry and animation as
+ *  the Authoring Guide — one panel style, three panels — so it arrives from the
+ *  same place and reads as the same kind of thing. */
+function OriginPanel({ open, draft, onChange, onClose }: {
+  open: boolean; draft: CatalogFeatureData | null
+  onChange: (next: string[]) => void; onClose: () => void
+}) {
+  const steps = draft?.origin ?? []
+  return (
+    <div className={cx(styles.gpanel, open && styles.on)} {...inertWhen(!open)}>
+      <div className={styles.gpHead}>
+        <span className={styles.n}><i className="fa-solid fa-diagram-project" /></span>
+        <span className={styles.t}>Origin Chain</span>
+        <button type="button" className={cx(styles.gpX, styles.plain)} onClick={onClose}>
+          <i className="fa-solid fa-xmark" /> Close
+        </button>
+      </div>
+      <div className={styles.gpBody}>
+        <p className={styles.gtext}>
+          The provenance breadcrumb in the player's feature popup. Leave it empty and one is
+          derived from the source, level and name — this is <strong>enrichment</strong>, not a
+          required field.
+        </p>
+
+        <div className={styles.sec}><span className={styles.num}>01</span><span className={styles.fieldLab}>Steps</span></div>
+        {draft
+          ? <OriginChain steps={steps} onChange={onChange} />
+          : <div className={styles.gtext}>Select a feature first.</div>}
+
+        {/* The player's view, live. The chain reads left to right with the last
+            step marked, so seeing it assembled is the only way to catch a
+            reversed one. */}
+        {draft && (<>
+          <div className={styles.sec}><span className={styles.num}>02</span><span className={styles.fieldLab}>As the player sees it</span></div>
+          <div className={styles.originLive}>
+            {originChain({ ...draft, name: draft.name || 'Unnamed' } as unknown as Feature).map((step, i, all) => (
+              <Fragment key={i}>
+                <span className={cx(styles.originStep, i === all.length - 1 && styles.originLast)}>{step}</span>
+                {i < all.length - 1 && <span className={styles.originArw}>&rarr;</span>}
+              </Fragment>
+            ))}
+          </div>
+        </>)}
+      </div>
+    </div>
+  )
 }
 
 /** The origin breadcrumb editor: an ordered list of free-text steps.
@@ -733,7 +791,7 @@ function OriginChain({ steps, onChange }: { steps: string[]; onChange: (next: st
         </div>
       ))}
       <button type="button" className={styles.originAdd} onClick={() => onChange([...steps, ''])}>
-        <i className="fa-solid fa-plus" />add step
+        <i className="fa-solid fa-plus" /><span>Add step</span>
       </button>
     </div>
   )
@@ -790,7 +848,7 @@ function FeatureForm(p: FormProps) {
           {/* A SUMMARY AND A BUTTON. The breadcrumb is an ordered list with three
               controls per step; inline in a form grid that was unusable, so the
               editing moved to its own panel like the icon and target pickers. */}
-          <button type="button" className={styles.originOpen} onClick={() => p.setPop({ k: 'origin' })}>
+          <button type="button" className={styles.originOpen} onClick={p.openOrigin}>
             <span className={styles.originPreview}>
               {(d.origin ?? []).filter(x => x.trim()).length
                 ? (d.origin ?? []).filter(x => x.trim()).join('  \u2192  ')
@@ -1189,36 +1247,6 @@ function Popover({ pop, onClose, draft, set, update, nodes, namesByGid, selId, r
               <button type="button" className={cx(styles.btn, styles.ghost)} style={{ height: 34 }} onClick={onClose}>
                 <span className={styles.bf} /><span className={styles.bi}>Keep editing</span>
               </button>
-            </div>
-          </div>
-        </>)}
-
-        {pop.k === 'origin' && draft && (<>
-          <div className={styles.popHead}>
-            <i className="fa-solid fa-diagram-project" style={{ color: 'var(--cyan)' }} />
-            <span className={styles.pt}>Origin chain</span>
-            <button type="button" className={styles.px} onClick={onClose}><i className="fa-solid fa-xmark" /></button>
-          </div>
-          <div className={styles.popBody}>
-            <div className={styles.mono} style={{ marginBottom: 10, color: 'var(--beige-dim)' }}>
-              The provenance breadcrumb in the player's feature popup. Leave it empty and one is
-              derived from the source, level and name — this is enrichment, not a required field.
-            </div>
-            <OriginChain
-              steps={draft.origin ?? []}
-              onChange={origin => set({ origin: origin.length ? origin : undefined })}
-            />
-            {/* The player's view, live. The chain is read left to right with the
-                last step marked, so seeing it assembled is the only way to catch
-                a reversed one. */}
-            <span className={styles.fieldLab} style={{ marginTop: 14 }}>As the player sees it</span>
-            <div className={styles.originLive}>
-              {originChain({ ...draft, name: draft.name || 'Unnamed' } as unknown as Feature).map((step, i, all) => (
-                <span key={i} style={{ display: 'contents' }}>
-                  <span className={cx(styles.originStep, i === all.length - 1 && styles.originLast)}>{step}</span>
-                  {i < all.length - 1 && <span className={styles.originArw}>&rarr;</span>}
-                </span>
-              ))}
             </div>
           </div>
         </>)}

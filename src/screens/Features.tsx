@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, Feature, ShardPerk, ShardTree } from '../lib/database.types'
@@ -455,6 +455,7 @@ function FeatureCard({ row, busy, scope, on, armed, denied, onOpen, onPress }: {
                 <Prose text={live(n.text, scope)} className={styles.fxTxt} />
                 <span className={styles.fxTag}>
                   {n.dmgType && <span className={styles.fxType}>{n.dmgType}</span>}
+                  {n.dmgType && n.tag && <span className={styles.fxSep}>·</span>}
                   {n.tag}
                 </span>
               </div>
@@ -532,11 +533,14 @@ function FeaturePopup({ row, busy, scope, on, vars, back, affected, resolveGid, 
           <div className={styles.imBody}>
             <div className={styles.imOrigin}>
               <span className={styles.ok}>Origin</span>
+              {/* A Fragment, not `display: contents` — a contents-display flex
+                  child makes `gap` unreliable, and the arrows rendered flush
+                  against the steps: "Class→Condeming Strike". */}
               {chain.map((s, i) => (
-                <span key={i} style={{ display: 'contents' }}>
+                <Fragment key={i}>
                   <span className={cx(styles.step, i === chain.length - 1 && styles.last)}>{s}</span>
                   {i < chain.length - 1 && <span className={styles.arw}>→</span>}
-                </span>
+                </Fragment>
               ))}
             </div>
 
@@ -574,6 +578,7 @@ function FeaturePopup({ row, busy, scope, on, vars, back, affected, resolveGid, 
                       <Prose text={live(n.text, scope)} className={styles.imRowTxt} />
                       <span className={styles.s}>
                         {n.dmgType && <span className={styles.fxType}>{n.dmgType}</span>}
+                        {n.dmgType && n.tag && <span className={styles.fxSep}>·</span>}
                         {n.tag}
                       </span>
                     </div>

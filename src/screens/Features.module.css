@@ -275,6 +275,11 @@
 /* The damage type, in the damage colour. `--dt` is set inline from lib/palette.ts,
    so this file names no damage types - the roll panel follows the same rule. */
 .fxType { color: var(--dt, var(--beige)); font-size: 8.5px; letter-spacing: 0.18em; }
+/* Without this the type ran straight into the target: "radiantmelee damage". */
+.fxSep { color: var(--beige-dim); opacity: 0.7; }
+/* The popup's qualifier column is a plain span, so it needs the same row layout
+   the card's `.fxTag` has, or the separator has nothing to space. */
+.imRow .s { display: inline-flex; align-items: center; gap: 6px; }
 /* The value takes the damage colour too, which is what makes a radiant row read
    as radiant at a glance rather than after reading the label. */
 .fxRow .fxTxt strong, .imRow .imRowTxt strong { color: var(--dt, var(--cyan-hot)); }

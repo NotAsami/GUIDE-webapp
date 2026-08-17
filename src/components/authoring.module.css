@@ -677,3 +677,61 @@ select.in, .opSel {
   background-origin: border-box;
 }
 .opSel { background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%, top left, bottom right; }
+
+
+/* ---- ORIGIN CHAIN ----
+   These lived in screens/FeatureEditor.module.css, which nothing has imported
+   since the 6b extraction moved the module here — so every class below resolved
+   to undefined and the editor rendered unstyled: the step number stacked above
+   its input, no gaps anywhere, no colour on the controls. The dead file is gone. */
+
+/* The field row: a preview of the chain, and a way into the panel. */
+.originOpen {
+  display: flex; align-items: center; gap: 9px; width: 100%; cursor: pointer; text-align: left;
+  background-color: rgba(0, 0, 0, .4); border: 1.5px solid rgba(212, 191, 125, .24);
+  color: var(--beige); padding: 7px 9px; min-height: 32px;
+}
+.originOpen:hover { border-color: var(--amber); color: var(--amber-hot); }
+.originOpen > i { margin-left: auto; flex: 0 0 auto; font-size: 10px; color: var(--beige-dim); }
+.originOpen:hover > i { color: var(--amber); }
+.originPreview {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+}
+.originAuto { color: var(--beige-dim); font-style: italic; text-transform: none; letter-spacing: .04em; }
+
+/* One step: number BESIDE the input, then the three controls, all spaced. */
+.originList { display: flex; flex-direction: column; gap: 7px; }
+.originRow { display: flex; align-items: center; gap: 8px; }
+.originN {
+  flex: 0 0 auto; width: 18px; text-align: center;
+  font-family: var(--font-display); font-size: 12px; color: var(--amber);
+}
+.originRow .in { flex: 1 1 auto; min-width: 0; margin: 0; }
+.originBtn {
+  flex: 0 0 auto; width: 26px; height: 26px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background-color: rgba(0, 0, 0, .4); border: 1.5px solid rgba(212, 191, 125, .24);
+  color: var(--amber); font-size: 9px;
+}
+.originBtn:hover:not(:disabled) { color: var(--amber-hot); border-color: var(--amber); background-color: rgba(226, 176, 33, .12); }
+.originBtn:last-child { color: var(--danger-hot); }
+.originBtn:last-child:hover:not(:disabled) { color: var(--danger-hot); border-color: var(--danger); background-color: rgba(185, 58, 58, .14); }
+.originBtn:disabled { opacity: .3; cursor: not-allowed; }
+.originAdd {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  background-color: rgba(0, 0, 0, .4); border: 1.5px dashed rgba(212, 191, 125, .3); color: var(--beige-dim);
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .18em; text-transform: uppercase;
+  padding: 7px 11px; margin-top: 3px;
+}
+.originAdd:hover { color: var(--amber-hot); border-color: var(--amber); }
+.originAdd i { color: var(--amber); }
+
+/* The player's view of the chain, live. */
+.originLive { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.originStep {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--beige-dim); border: 1.5px solid rgba(212, 191, 125, .28); padding: 4px 8px;
+}
+.originLast { color: var(--cyan-hot); border-color: rgba(0, 166, 214, .55); }
+.originArw { font-family: var(--font-mono); font-size: 11px; color: var(--amber); }
