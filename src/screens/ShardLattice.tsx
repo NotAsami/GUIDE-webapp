@@ -872,6 +872,7 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
         graph={node.graph ?? []} vars={node.vars ?? []}
         nodes={nodes} namesByGid={namesByGid}
         onChange={graph => setNode({ graph })}
+        onVarsChange={vars => setNode({ vars })}
       />
       <VarsBlock vars={node.vars ?? []} onChange={vars => setNode({ vars })} />
       {/* Tags on a node are what `tag:` selectors match it by — the fourth and

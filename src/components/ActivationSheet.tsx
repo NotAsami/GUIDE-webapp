@@ -144,7 +144,14 @@ function ActivationConfirm({ feature, outcomes, busy, onCancel, onConfirm }: {
   feature: Feature; outcomes: Outcome[]; busy: boolean
   onCancel: () => void; onConfirm: (answers: Set<string>) => void
 }) {
-  const [answers, setAnswers] = useState<Set<string>>(new Set())
+  /* PRE-TICKED. The sheet already lists everything the press will do, so
+     Confirm accepting it is the plain reading and unticking is how you decline —
+     §32 still holds, because each one is shown and each one can be refused. An
+     empty start meant Use → tick → Confirm for the common case of wanting the
+     whole thing. */
+  const [answers, setAnswers] = useState<Set<string>>(
+    () => new Set(outcomes.filter(o => o.ask).map(o => o.ask!)),
+  )
   const toggle = (label: string) =>
     setAnswers(prev => {
       const next = new Set(prev)

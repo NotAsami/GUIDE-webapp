@@ -313,6 +313,32 @@
 }
 .bbBtn i { font-size: 9px; }
 
+/* The unseen-roll ping. Sits on the button that OPENS the panel, because a
+   notification you cannot act on from where it appears is just noise. */
+.bbBtn { position: relative; }
+.bbPing {
+  position: absolute;
+  top: -3px; right: -3px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 7px var(--amber);
+  animation: bbPulse 1.8s ease-in-out infinite;
+}
+/* Red = the roll is waiting on a decision the engine could not make. */
+.bbPing.urgent {
+  background: var(--danger-hot);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 8px var(--danger-hot);
+  animation-duration: 1.1s;
+}
+@keyframes bbPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.82); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bbPing { animation: none; }
+}
+
 /* ---- Ticker fragments hugging the top divider ---- */
 
 .ticker {

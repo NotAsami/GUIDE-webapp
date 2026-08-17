@@ -844,6 +844,7 @@ function FeatureForm(p: FormProps) {
               graph={graph} vars={vars}
               nodes={p.nodes} namesByGid={p.namesByGid}
               onChange={next => update(x => ({ ...x, graph: next }))}
+              onVarsChange={next => update(x => ({ ...x, vars: next }))}
             />
           </div>
         )}

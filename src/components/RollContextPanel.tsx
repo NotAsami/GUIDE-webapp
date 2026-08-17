@@ -27,11 +27,12 @@
  * of the roll.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useRollLog, type RollEntry } from '../lib/rolls'
 import { rolledDiceTerms } from '../lib/dice'
 import { Prose, renderInline } from '../lib/markdown'
+import { colorOf } from '../lib/palette'
 import type { CharacterRow, ShardTree } from '../lib/database.types'
 import {
   catalogView, lineViews, rerollAt, resolvedOf, riderAmount, riderViews, rollTotals, unresolvedOf,
@@ -40,6 +41,19 @@ import {
 import styles from './RollContextPanel.module.css'
 
 const cx = (...v: (string | false | undefined)[]) => v.filter(Boolean).join(' ')
+
+/** The custom properties a damage-tinted element carries.
+ *
+ *  The stylesheet knows no damage types — it reads `var(--dt, <fallback>)` — so
+ *  this is the single point where a type becomes a colour on this screen, and it
+ *  shares lib/palette.ts with the `[text]{radiant}` prose syntax. An unknown
+ *  type yields nothing and the fallback stands, which is why the map returning
+ *  null matters more than it looks. */
+function dt(type: string | undefined): CSSProperties | undefined {
+  const c = type ? colorOf(type.toLowerCase()) : null
+  if (!c) return undefined
+  return { '--dt': c, '--dt-edge': `color-mix(in srgb, ${c} 45%, transparent)` } as CSSProperties
+}
 
 const FLAG_ICON: Record<string, string> = {
   ADVANTAGE: 'fa-angles-up', DISADVANTAGE: 'fa-angles-down', CRIT: 'fa-burst',
@@ -371,7 +385,7 @@ function Entry({
                   <span className={styles.v}>{totals.damage}</span>
                   <div className={styles.split}>
                     {Object.entries(totals.byType).map(([t, n]) => (
-                      <span key={t} data-t={t}>{t} <b>{n}</b></span>
+                      <span key={t} data-t={t} style={dt(t)}>{t} <b>{n}</b></span>
                     ))}
                   </div>
                 </div>
@@ -486,13 +500,13 @@ function Line({ line, index, showTip, spin, onReroll }: {
     <section className={cx(styles.line, line.crit && styles.critLine)}>
       <div className={styles.lHead}>
         <span className={cx(styles.lTag, !isAtk && styles.dmg)}>{line.label}</span>
-        {line.type && <span className={styles.lType} data-t={line.type.toLowerCase()}>{line.type}</span>}
+        {line.type && <span className={styles.lType} data-t={line.type.toLowerCase()} style={dt(line.type)}>{line.type}</span>}
         {line.mode && (
           <span className={styles.lType} data-t={line.mode}>
             {line.mode === 'adv' ? 'Advantage' : 'Disadvantage'}
           </span>
         )}
-        {line.crit && <span className={styles.lType} data-t="radiant">Crit ×2</span>}
+        {line.crit && <span className={styles.lType} data-t="radiant" style={dt('radiant')}>Crit ×2</span>}
         <span className={styles.lSum}>{line.total}</span>
       </div>
       <div className={styles.lMath}>
@@ -537,8 +551,19 @@ function Contribution({ v, showTip, armedLive, onConsume }: {
   const r = v.rider
   const onAttack = v.group === 'Attack' || v.group === 'Check' || v.group === 'Save'
   const isArmed = !!r.armedId
+  /* A resolved contribution needs no decision, so unlike an Ask it opens purely
+     to EXPLAIN. Two different questions, in the order you ask them: the prose
+     answers "should this have applied?", the derivation answers "where did the
+     number come from?". A rider with neither stays a flat row — a chevron that
+     opens onto nothing is worse than no chevron. */
+  const [open, setOpen] = useState(false)
+  const faces: Die[] = r.rolledDice ?? []
+  const canOpen = !!r.sourceText || !!r.parts?.length
   return (
-    <div className={styles.contrib} {...tipProps(showTip, () => ({
+    <div className={cx(styles.contribWrap, open && styles.cOpen)}>
+    <div className={cx(styles.contrib, canOpen && styles.cClick)}
+      onClick={canOpen ? () => setOpen(o => !o) : undefined}
+      {...tipProps(showTip, () => ({
       k: r.label,
       v: (<>
         <b style={{ color: 'var(--cyan-hot)' }}>{isArmed ? 'Armed earlier, applied here' : 'Resolved by the engine'}</b><br />
@@ -554,11 +579,12 @@ function Contribution({ v, showTip, armedLive, onConsume }: {
       </>),
       hint: isArmed
         ? (armedLive ? 'Consume it once you know the roll landed' : 'Already consumed')
-        : 'Nothing to decide',
+        : canOpen ? 'Nothing to decide — open it to see why' : 'Nothing to decide',
     }))}>
       <span className={styles.cName}>{r.label}</span>
       <span className={styles.cSrc}>{r.source}</span>
       <span className={styles.cRight}>
+        {canOpen && <span className={styles.cFold}><i className="fa-solid fa-chevron-down" /></span>}
         {isArmed && (armedLive
           ? onConsume
             ? <button type="button" className={styles.consume} onClick={onConsume}
@@ -577,11 +603,51 @@ function Contribution({ v, showTip, armedLive, onConsume }: {
           {/* The AMOUNT, not the value: a dice contribution has no number here —
               the roller rolled it into the line's modifier — so this prints
               "+1d6", never "+0". */}
-          <span className={styles.cVal} data-t={r.dmgType?.toLowerCase() ?? (onAttack ? 'atk' : '')}>
+          <span className={styles.cVal} data-t={r.dmgType?.toLowerCase() ?? (onAttack ? 'atk' : '')}
+            style={dt(r.dmgType ?? (onAttack ? 'atk' : undefined))}>
             {riderAmount(r)}{onAttack ? ' atk' : r.dmgType ? ` ${r.dmgType}` : ''}
           </span>
         </>)}
       </span>
+    </div>
+
+    {open && (
+      <div className={styles.cBody}>
+        {/* THE SUMMARY FIRST. The number is already on the row above; what the
+            row cannot tell you is whether the rule it came from was supposed to
+            fire on this roll. Prose, not renderInline, so authored paragraphs
+            and colours both survive. */}
+        {r.sourceText && <Prose text={r.sourceText} className={styles.cProse} />}
+
+        {/* Then the derivation, one level deep — the operands at the values this
+            roll used. A flat die has none and shows only its faces. */}
+        {!!r.parts?.length && (
+          <div className={styles.cDeriv}>
+            <span className={styles.form}>{r.formula}</span>
+            {r.parts.map(p => (
+              <span key={p.name} className={styles.cPart}>
+                <span className={styles.cpName}>{p.name}</span>
+                <span className={styles.cpVal}>{p.value < 0 ? p.value : `+${p.value}`}</span>
+              </span>
+            ))}
+            <span className={styles.eq}>=</span>
+            <span className={styles.res}>{r.flat}</span>
+          </div>
+        )}
+
+        {faces.length > 0 && (
+          <div className={styles.cDeriv}>
+            <span className={styles.form}>{r.dice.join(' + ')}</span>
+            {faces.map((d, i) => (
+              <span key={i}>
+                {i > 0 && <span className={styles.op}>+</span>}
+                <DieChip d={d} locked showTip={showTip} spinning={false} />
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
     </div>
   )
 }
@@ -666,7 +732,7 @@ function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin }: {
                 </span>
               ))}
               <span className={styles.eq}>=</span><span className={styles.res}>{v.value}</span>
-              {r.dmgType && <span className={styles.lType} data-t={r.dmgType.toLowerCase()} style={{ marginLeft: 4 }}>{r.dmgType}</span>}
+              {r.dmgType && <span className={styles.lType} data-t={r.dmgType.toLowerCase()} style={{ marginLeft: 4, ...dt(r.dmgType) }}>{r.dmgType}</span>}
             </div>
             {/* Says the quiet part: the number is settled. Toggling reuses it. */}
             <div className={styles.rdGrant}>
@@ -738,7 +804,7 @@ function CatalogSheet({ view, entry, onClose }: {
                 <div className={cx(styles.catCell, styles.span2)}>
                   <span className={styles.k}>Damage</span>
                   <div className={styles.catDmg}>
-                    {view.damage.map(([d, t], i) => <span key={i} data-t={t.toLowerCase()}>{d} {t}</span>)}
+                    {view.damage.map(([d, t], i) => <span key={i} data-t={t.toLowerCase()} style={dt(t)}>{d} {t}</span>)}
                   </div>
                 </div>
               )}

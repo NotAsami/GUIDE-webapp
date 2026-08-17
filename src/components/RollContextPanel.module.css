@@ -116,11 +116,13 @@
 .lHead { display: flex; align-items: baseline; gap: 9px; }
 .lTag { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan); }
 .lTag.dmg { color: var(--beige); }
-.lType { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige-dim); border: 1px solid rgba(212, 191, 125, 0.28); padding: 1px 6px; }
-.lType[data-t="radiant"] { color: var(--gold-rare); border-color: rgba(226, 176, 33, 0.45); }
-.lType[data-t="fire"] { color: var(--danger-hot); border-color: rgba(255, 84, 84, 0.45); }
-.lType[data-t="psychic"] { color: var(--violet-hot); border-color: rgba(165, 148, 186, 0.5); }
-.lType[data-t="cold"] { color: var(--teal); border-color: rgba(63, 199, 180, 0.45); }
+/* DAMAGE TINT, ONE SOURCE. These four used to carry a near-identical block of
+   `[data-t="radiant|fire|psychic|cold"]` rules — sixteen in all — which the
+   inline-colour table in lib/palette.ts then had to agree with by hand. The map
+   lives there now and the consumer sets `--dt`; this file knows no damage types.
+   `color-mix` derives the border from the same colour, so a type cannot end up
+   tinted one hue and outlined another. */
+.lType { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dt, var(--beige-dim)); border: 1px solid var(--dt-edge, rgba(212, 191, 125, 0.28)); padding: 1px 6px; }
 .lSum { margin-left: auto; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1; color: var(--text); letter-spacing: 0.02em; }
 .line.critLine .lSum { color: var(--gold-rare); text-shadow: 0 0 10px rgba(226, 176, 33, 0.45); }
 .lMath { margin-top: 7px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; color: var(--muted); }
@@ -161,12 +163,30 @@
 .cSrc { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige-dim); }
 .cRight { margin-left: auto; display: flex; align-items: center; gap: 7px; }
 .cForm { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; color: var(--beige-dim); }
-.cVal { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--beige); }
-.cVal[data-t="radiant"] { color: var(--gold-rare); }
-.cVal[data-t="fire"] { color: var(--danger-hot); }
-.cVal[data-t="psychic"] { color: var(--violet-hot); }
-.cVal[data-t="cold"] { color: var(--teal); }
-.cVal[data-t="atk"] { color: var(--cyan-hot); }
+.cVal { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--dt, var(--beige)); }
+
+/* An EXPANDED contribution. Deliberately quieter than an Ask's fold: an Ask is a
+   decision waiting on you, this is a footnote you chose to open. Same geometry,
+   half the contrast, and no switch. */
+.contribWrap { display: flex; flex-direction: column; }
+.cClick { cursor: pointer; }
+.cClick:hover .cName { color: var(--beige); }
+.cFold { color: var(--beige-dim); font-size: 8px; transition: transform 140ms ease; }
+.cOpen .cFold { transform: rotate(180deg); color: var(--beige); }
+.cBody {
+  display: flex; flex-direction: column; gap: 7px;
+  margin: 0 0 7px 12px; padding: 8px 10px;
+  border-left: 1px solid rgba(212, 191, 125, 0.22);
+  background: rgba(0, 0, 0, 0.22);
+}
+.cProse { font-family: var(--font-prose); font-size: 12px; line-height: 1.5; color: var(--muted); }
+.cProse p { margin: 0 0 5px; }
+.cProse p:last-child { margin-bottom: 0; }
+.cDeriv { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.cPart { display: inline-flex; align-items: baseline; gap: 4px; }
+.cpName { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim); }
+.cpVal { font-family: var(--font-mono); font-size: 10px; color: var(--beige); }
+
 
 /* §16's armed modifier: already applied, not yet spent. Gold, because it is a
    value that has already cost something — and the only control on a list whose
@@ -261,11 +281,7 @@
 .entry.fumble .tot.atk .v { color: var(--danger-hot); }
 .tot .split { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
 .tot .split span { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-.tot .split span b { font-weight: 500; color: var(--beige); }
-.tot .split span[data-t="radiant"] b { color: var(--gold-rare); }
-.tot .split span[data-t="fire"] b { color: var(--danger-hot); }
-.tot .split span[data-t="psychic"] b { color: var(--violet-hot); }
-.tot .split span[data-t="cold"] b { color: var(--teal); }
+.tot .split span b { font-weight: 500; color: var(--dt, var(--beige)); }
 .grantedRow { margin-top: 9px; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .grantedRow .k { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--beige-dim); }
 .pending { cursor: help; margin-top: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); display: flex; align-items: center; gap: 7px; background: none; border: 0; padding: 0; }
@@ -315,11 +331,7 @@
 .catCell .k { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan); }
 .catCell .v { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.05em; color: var(--text); }
 .catDmg { display: flex; flex-wrap: wrap; gap: 6px; }
-.catDmg span { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid rgba(212, 191, 125, 0.3); padding: 2px 7px; color: var(--beige); }
-.catDmg span[data-t="radiant"] { color: var(--gold-rare); border-color: rgba(226, 176, 33, 0.45); }
-.catDmg span[data-t="fire"] { color: var(--danger-hot); border-color: rgba(255, 84, 84, 0.45); }
-.catDmg span[data-t="psychic"] { color: var(--violet-hot); border-color: rgba(165, 148, 186, 0.5); }
-.catDmg span[data-t="cold"] { color: var(--teal); border-color: rgba(63, 199, 180, 0.45); }
+.catDmg span { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid var(--dt-edge, rgba(212, 191, 125, 0.3)); padding: 2px 7px; color: var(--dt, var(--beige)); }
 .catLbl { display: block; margin: 18px 0 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--cyan); }
 .catDesc { font-family: var(--font-prose); font-size: 15.5px; line-height: 1.68; color: var(--text); text-wrap: pretty; }
 .catDesc p { margin: 0 0 11px; }

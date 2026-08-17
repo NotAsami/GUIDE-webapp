@@ -70,6 +70,33 @@ silently match nothing. A parser hands both failure modes back.
 
 ---
 
+## Modifiers on another creature's roll
+
+**Trigger.** Content whose rule lands on somebody else's dice. The Cloak of
+Elvenkind is the canonical one and it is already in the catalog: *"Wisdom
+(Perception) checks made to see you have disadvantage."*
+
+**Why it does not work today.** `resolve()` answers "what modifies THIS
+character's roll". The disadvantage above is imposed on a creature the app has no
+row for, rolling dice the app never sees. The Stealth half of that same cloak is
+expressible and the Perception half is not, which is a confusing place for an
+author to land — the item reads like one rule.
+
+**The honest options, and they are design decisions rather than implementations:**
+
+1. **A note, which is what to do today.** `note` surfaces the sentence on the
+   roll it is relevant to, and the DM applies it. Costs nothing, already works,
+   and keeps the rule visible at the moment it matters.
+2. **An "imposes" list on the character** — a queryable set of effects the DM's
+   screen could read when rolling for a monster. Real, and it needs a DM-side
+   roller to consume it, which does not exist.
+
+Not built because option 1 is genuinely adequate for a four-player table where
+the DM rolls in the open. It stops being adequate the moment the DM's own screen
+rolls dice.
+
+---
+
 ## Negation in selectors — `NOT tag:cursed`
 
 **Trigger.** "Every fire weapon *except* that one", where the exception cannot

@@ -356,6 +356,67 @@ contributions, so a shard node can amplify a feature that amplifies a weapon.
 
 ---
 
+## "While the hood is up" — a condition only the player knows
+
+Some conditions are not computable. *While your hood is up*, *while you are
+standing*, *while the torch is lit* — the app cannot know, and `when` takes a
+formula over character state, so there is nothing to type.
+
+The shape that expresses it is a **stored bool the player flips**. Press
+**player toggle** on the `when` row and the editor declares it for you: a stored
+`bool`, player scope, named from the effect's label, with `when` already pointing
+at it. It then appears in the variables block like any other, so nothing is
+hidden — rename it, relabel it, set its initial value.
+
+The player finds the switch under **State**, on the feature's detail panel. For a
+toggle declared on an item or a shard node, it is under **Gear & Shard State** on
+the Features screen, grouped by what it came from.
+
+**Elven Concealment, end to end.** On the cloak (or on the feature the cloak
+grants):
+
+| | |
+|---|---|
+| effect | `adv`, label *Hood up*, target `roll:check.stealth` |
+| `when` | press **player toggle** → declares `hoodUp` |
+
+That is the whole thing. The player flips *Hood up* and Stealth checks roll with
+advantage until they flip it back.
+
+**What this cannot do**, and it is worth knowing before you try: the other half
+of that cloak — *Perception checks made to see you have disadvantage* — is a
+modifier on **someone else's roll**. The engine resolves this character's rolls
+and nothing else. Write it as a `note` so it surfaces on the roll and the DM
+applies it; see `GUIDE_Codex_Deferred.md`.
+
+Use `ask` instead when the condition is judged **per roll** rather than held —
+"did at least one of them fail the save?" is not a stance you leave switched on.
+
+---
+
+## Colouring prose
+
+Any prose field takes `[text]{colour}`:
+
+```
+Deals an extra [2d6 radiant]{radiant} damage.
+The [Castellan]{--cyan-hot} guard turns away.
+```
+
+Prefer a **name** — `radiant`, `fire`, `cold`, `necrotic`, `lightning`, and the
+rest of the damage types, plus `red`, `gold`, `amber`, `cyan`, `violet`, `green`.
+A name follows the palette, and a damage type named here is the same colour the
+Roll Context Panel tints that damage with, because both read `lib/palette.ts`.
+
+A design token (`{--cyan-hot}`) and a literal hex (`{#e2b021}`) also work, in
+that order of preference. A hex is frozen — it will not follow a theme change.
+
+Anything unrecognised renders **literally**, so `[x]{plaid}` shows as
+`[x]{plaid}` rather than silently losing its colour. That is deliberate: a typo
+you can see is worth more than one you cannot.
+
+---
+
 ## Traps worth knowing
 
 | | |

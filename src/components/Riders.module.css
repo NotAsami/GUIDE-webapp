@@ -1,6 +1,5 @@
-/* Rider rows, shared by the roll toast and the Character roll log. Sized to sit
-   inside either without imposing a width — both parents are already narrow
-   columns, so everything here is fluid. */
+/* Rider rows, used by the Character roll log. Sized to sit inside a narrow
+   column without imposing a width, so everything here is fluid. */
 
 .riders {
   grid-column: 1 / -1;
@@ -10,10 +9,11 @@
   margin-top: 9px;
   padding-top: 8px;
   border-top: 1px solid rgba(212, 191, 125, 0.16);
-  /* Load-bearing, not decoration. RollToast paints its card interior with an
-     opaque absolutely-positioned ::before, and lifts only `.head` and `.line`
-     above it. Without this the rider block renders BEHIND that fill — present
-     in the DOM, applied to the roll, and completely invisible. */
+  /* Load-bearing, not decoration. The layered cards this sits inside paint
+     their interior with an opaque absolutely-positioned ::before and lift only
+     their own known children above it. Without this the rider block renders
+     BEHIND that fill — present in the DOM, applied to the roll, and completely
+     invisible. */
   position: relative;
   z-index: 1;
 }
