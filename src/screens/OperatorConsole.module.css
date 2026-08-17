@@ -1003,7 +1003,17 @@
    with it), then snaps back when a search shrinks the list. With this cap the Vitals
    card always drives the row height, so nothing resizes when you search. */
 .catList {
-  max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding-right: 3px;
+  /* GROWS INTO THE CARD instead of leaving a hole above the button.
+     Cards in a row stretch to the tallest one, and .grantAction has
+     `margin-top: auto`, so a short card beside a tall neighbour collected all its
+     slack as dead space between a 140px list and the button — which reads as the
+     list being cut off when it is simply not using the room it has.
+
+     `flex-basis: 0` is what keeps this safe: the list contributes nothing to the
+     card's intrinsic height, so a long catalog cannot drive the row taller. It
+     only ever fills space the row already has, floored at the old 140px. */
+  flex: 1 1 0; min-height: 140px;
+  overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding-right: 3px;
   /* Once the list hits its own top/bottom, a wheel scroll must stop there —
      not chain to the card/page behind it (Firefox chains by default where
      Chrome sometimes doesn't, which read as "the whole screen scrolls"). */
