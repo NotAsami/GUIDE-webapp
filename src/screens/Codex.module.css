@@ -186,7 +186,7 @@
   transform: translateX(-50%) translateY(-4px);
   width: 280px;
   padding: 10px 14px;
-  background: rgba(10, 10, 10, 0.96);
+  background-color: rgba(10, 10, 10, 0.96);
   border: 1px solid var(--beige);
   box-shadow:
     0 0 0 1px rgba(212, 191, 125, 0.2),

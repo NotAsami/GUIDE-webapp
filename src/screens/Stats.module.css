@@ -183,7 +183,7 @@
 .hpSide { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; border-left: 1px dashed rgba(212, 191, 125, 0.22); padding-left: 12px; min-width: 124px; }
 .hpSteppers { display: flex; gap: 5px; }
 .hpStep {
-  --cut: 6px; flex: 1; background: rgba(0, 166, 214, 0.08); border: 1px solid var(--cyan-dim); color: var(--cyan-hot);
+  --cut: 6px; flex: 1; background-color: rgba(0, 166, 214, 0.08); border: 1px solid var(--cyan-dim); color: var(--cyan-hot);
   font-family: var(--font-mono); font-size: 17px; letter-spacing: 0.04em; padding: 9px 0; line-height: 1; cursor: pointer;
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
@@ -267,7 +267,7 @@
 .savesGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; flex: 1; align-content: center; }
 .saveCell {
   --cut: 6px; position: relative; padding: 7px 8px 7px 10px;
-  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(212, 191, 125, 0.3);
+  background-color: rgba(0, 0, 0, 0.3); border: 1px solid rgba(212, 191, 125, 0.3);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   display: grid; grid-template-columns: 10px 1fr auto; grid-template-rows: auto auto; gap: 1px 7px; align-items: center;
 }
@@ -292,7 +292,7 @@
 .deathDot.on::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, 0.45), transparent 70%); }
 .deathBanner {
   margin-top: 4px; padding: 6px 10px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.28em; text-transform: uppercase; text-align: center;
-  border: 1px solid transparent; background: rgba(0, 0, 0, 0.4); color: var(--muted); transition: all 220ms ease;
+  border: 1px solid transparent; background-color: rgba(0, 0, 0, 0.4); color: var(--muted); transition: all 220ms ease;
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
 }
 .deathBanner::before { content: "// "; opacity: 0.6; }
@@ -367,7 +367,7 @@
 .pgHead .lab { font-family: var(--font-mono); font-size: 8.5px; color: var(--beige); letter-spacing: 0.26em; text-transform: uppercase; }
 .pgHead .ct { margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; color: var(--muted); letter-spacing: 0.18em; text-transform: uppercase; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.chip { --cut: 4px; padding: 3px 8px; font-family: var(--font-mono); font-size: 9px; color: var(--text); letter-spacing: 0.1em; background: rgba(0, 166, 214, 0.08); border: 1px solid rgba(0, 166, 214, 0.35); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); text-transform: uppercase; transition: all 160ms ease; cursor: default; }
+.chip { --cut: 4px; padding: 3px 8px; font-family: var(--font-mono); font-size: 9px; color: var(--text); letter-spacing: 0.1em; background-color: rgba(0, 166, 214, 0.08); border: 1px solid rgba(0, 166, 214, 0.35); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); text-transform: uppercase; transition: all 160ms ease; cursor: default; }
 .chip:hover { color: var(--cyan-hot); --bc: var(--cyan); background-color: rgba(0, 166, 214, 0.18); box-shadow: 0 0 8px rgba(0, 166, 214, 0.3); }
 .chip.beige { background-color: rgba(212, 191, 125, 0.08); --bc: rgba(212, 191, 125, 0.35); color: var(--beige); }
 .chip.beige:hover { color: var(--text); --bc: var(--beige); box-shadow: 0 0 8px rgba(212, 191, 125, 0.3); }

@@ -519,7 +519,10 @@ select.in option { background: #14130f; }
    6b — harmless thanks to the global button reset, but it never showed it was
    clickable. */
 .pickbtn { display: flex; cursor: pointer; padding: 0; border: 0; background: none; }
-.pickbtn:hover .in { border-color: var(--cyan); color: var(--cyan-hot); }
+/* --bc, not border-color: .in's corner diagonals key off --bc too, so
+   border-color alone turned the straight edges cyan and left the two corners
+   beige. */
+.pickbtn:hover .in { --bc: var(--cyan); color: var(--cyan-hot); }
 
 .tgt .tval { order: 3; flex: 1 1 100%; min-width: 170px; display: flex; align-items: center; gap: 7px; }
 .tgt .n { order: 2; margin-left: auto; flex: 0 0 auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: .08em; color: var(--muted); min-width: 52px; text-align: right; }
@@ -684,7 +687,7 @@ select.in option { background: #14130f; }
    glitch rather than a missing style. */
 .opRootpill, .opBack, .auditItem, .in, .prose, .chip, .seg, .vname, .perm,
 .opb, .efrow, .opSel, .tgt, .flSrch, .rhKebab, .gpX, .swrow button,
-.icongrid button, .blk, .oppal, .toastEl {
+.icongrid button, .blk, .oppal, .toastEl, .matchSeg {
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
     linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
