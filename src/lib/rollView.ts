@@ -139,12 +139,15 @@ export const unresolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when === '
  *  lives here with the rest of the read-model rather than in whichever component
  *  asked first.
  *
- *  TWO KINDS, and they dismiss differently — that asymmetry is the whole rule:
- *  an unanswered ask is a decision still OWED and survives being seen, while a
- *  failed formula is NEWS and stops counting once it has been read. Acking a
- *  decision away would hide the one thing the panel exists for; not acking the
- *  news would pulse at the player for the rest of the session over something
- *  they cannot act on. */
+ *  SEEING THE PANEL SETTLES ALL OF IT (`acked`), asks included — and that is the
+ *  correction that matters. An unanswered ask looks like a decision still owed,
+ *  but LEAVING A TOGGLE OFF IS AN ANSWER: the attack missed, so the feature did
+ *  not apply, and the player is done. Counting that as outstanding would pulse
+ *  the badge for the rest of the session at someone who already dealt with it —
+ *  which is the failure the badge exists to avoid, not an edge case.
+ *
+ *  The two kinds are still counted apart because the toast words them
+ *  differently, not because they dismiss differently. */
 export type Pending = {
   /** Unanswered `ask` riders. Actionable — resolvable by answering. */
   asks: number
@@ -155,11 +158,12 @@ export type Pending = {
 }
 
 export function pendingOf(entry: RollEntry): Pending {
+  if (entry.acked) return { asks: 0, problems: 0, total: 0 }
   const asks = unresolvedOf(riderViews(entry)).filter(v => !v.rider.on).length
   /* `err` ONLY. An AuditItem can be 'ok' or 'warn', and counting an authoring
      note as something the player must deal with is the badge lying about the
      roll — the same filter the panel makes for the same reason. */
-  const problems = entry.acked ? 0 : (entry.problems ?? []).filter(p => p.sev === 'err').length
+  const problems = (entry.problems ?? []).filter(p => p.sev === 'err').length
   /* A TURN TICK WOULD BELONG HERE. There is no such mechanic yet — `duration` on
      an item or an active effect is a free-text reminder ("10 rounds") that
      nothing counts down — so this contributes nothing today. When something does

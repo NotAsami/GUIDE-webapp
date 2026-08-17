@@ -14,14 +14,9 @@ import { consumeArmed } from '../lib/graphState'
 import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
 import { useEffect, useRef, useState } from 'react'
-import { useRollLog } from '../lib/rolls'
 
-/** Session keys for the sticky panel. Two, not one: whether it is open, and
- *  whether the player DECIDED it should be closed. Collapsing them would lose the
- *  difference between "not open yet" and "shut on purpose", which is the only
- *  thing stopping the auto-open from re-firing. */
+/** Whether the roll panel is open, for the length of the session. */
 const PANEL_OPEN = 'guide.rollPanel.open'
-const PANEL_CLOSED = 'guide.rollPanel.closedByUser'
 
 export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
@@ -46,38 +41,19 @@ export function Layout() {
     wasShopVisibleRef.current = !!shop
   }, [shop])
 
-  /* THE PANEL IS STICKY — it is where rolls appear, not something summoned per
-     roll. It survives navigation for free (Layout outlives the routes) and a
-     reload via sessionStorage; "within a session" is the ask, so sessionStorage
-     rather than localStorage.
+  /* THE PANEL IS STICKY, and ONLY THE PLAYER OPENS IT. It survives navigation
+     for free (Layout outlives the routes) and a reload via sessionStorage —
+     "within a session" is the ask, so sessionStorage rather than localStorage.
 
-     AND A DELIBERATE CLOSE IS RESPECTED, which is the load-bearing half. The
-     auto-open exists to teach by demonstration on the first roll of a session;
-     re-opening a panel someone just shut turns that from a helpful default into a
-     fight they cannot win. Once closed, only the player reopens it — the toast's
-     call-to-action and the nav badge cover them in the meantime. */
-  const { rolls } = useRollLog()
+     It does NOT auto-open on a roll. A panel that appears on its own is an
+     interruption in the middle of the thing you were doing, and the toast plus
+     the counted badge already say a roll landed and where to read it. */
   const [rollPanelOpen, setRollPanelOpen] = useState(() => sessionStorage.getItem(PANEL_OPEN) === '1')
-  const closedByUser = useRef(sessionStorage.getItem(PANEL_CLOSED) === '1')
 
   function setPanel(open: boolean) {
     setRollPanelOpen(open)
     sessionStorage.setItem(PANEL_OPEN, open ? '1' : '0')
-    // Only a CLOSE is remembered as intent. Opening it again clears the veto, so
-    // a player who reopens the panel gets the sticky behaviour back.
-    closedByUser.current = !open
-    sessionStorage.setItem(PANEL_CLOSED, open ? '0' : '1')
   }
-
-  // Auto-open on the first roll of a session. Keyed on the newest id so it fires
-  // once per roll rather than once per render, and gated on the veto above.
-  const newestRoll = rolls[0]?.id
-  const seenRoll = useRef(newestRoll)
-  useEffect(() => {
-    if (!newestRoll || seenRoll.current === newestRoll) return
-    seenRoll.current = newestRoll
-    if (!closedByUser.current) setPanel(true)
-  }, [newestRoll])
 
   async function handleSignOut() {
     await signOut()

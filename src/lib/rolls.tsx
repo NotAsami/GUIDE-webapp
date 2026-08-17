@@ -84,12 +84,12 @@ export type RollEntry = {
    *  the log: the panel is the history, and being quiet is about ANNOUNCING, not
    *  about recording. */
   quiet?: boolean
-  /** The player has seen this entry in the open panel.
+  /** The player has seen this entry in the open panel — which settles it.
    *
-   *  What stops the nav badge pulsing forever. A failed contribution is news the
-   *  player cannot act on, so it has to be dismissible; an unanswered `ask` is a
-   *  decision still owed and deliberately survives this. See `pendingOf` in
-   *  lib/rollView.ts, which is the one place that asymmetry is decided. */
+   *  What stops the nav badge pulsing forever, and it covers an unanswered `ask`
+   *  too: leaving a toggle off IS an answer ("it missed, so it did not apply"),
+   *  and treating that as outstanding would pulse at someone already done. See
+   *  `pendingOf` in lib/rollView.ts. */
   acked?: boolean
 }
 

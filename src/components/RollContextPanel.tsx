@@ -139,16 +139,12 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
     bodyRef.current?.scrollTo({ top: 0 })
   }, [newestId])
 
-  /* ACK WHAT THE PLAYER CANNOT ACT ON.
-     A failed contribution is news, not work — nothing the player can do resolves
-     it — so if it kept counting toward the nav badge the badge would pulse for the
-     rest of the session over something already read. Being in the open panel IS
-     having been shown it. Unanswered asks deliberately survive this: those are
-     decisions still owed, and `pendingOf` is where that asymmetry is decided. */
+  /* SEEING IT SETTLES IT. Being in the open panel is having been shown every
+     entry in it, so nothing here still counts toward the nav badge afterwards —
+     including an ask the player left switched off, because leaving it off is an
+     answer ("it missed"). Anything else pulses at someone who is already done. */
   useEffect(() => {
-    for (const r of rolls) {
-      if (!r.acked && (r.problems ?? []).some(p => p.sev === 'err')) updateRoll(r.id, { acked: true })
-    }
+    for (const r of rolls) if (!r.acked) updateRoll(r.id, { acked: true })
   }, [rolls, updateRoll])
 
   // Escape backs OUT one layer at a time: the catalog sheet first, the rail only

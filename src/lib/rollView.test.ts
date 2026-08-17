@@ -352,13 +352,14 @@ test('only err problems count — a warn or an ok is not something the player mu
   assert.equal(pendingOf(entry({ problems: [err] })).total, 1)
 })
 
-test('acked zeroes a problem but NOT an unanswered ask', () => {
-  // The whole dismissal rule. A failed formula is news the player cannot act on,
-  // so being seen retires it. A decision still owed survives being looked at —
-  // acking it away would hide the one thing the panel exists for.
+test('acked settles everything, including an ask left switched off', () => {
+  // The dismissal rule, and the correction that matters: LEAVING A TOGGLE OFF IS
+  // AN ANSWER. The attack missed, so the feature did not apply and the player is
+  // done — counting it as outstanding pulses the badge for the rest of the
+  // session at someone who already dealt with it.
   const both = { riderGroups: [{ label: 'Damage', riders: [askRider(false)] }], problems: [err] }
   assert.deepEqual(pendingOf(entry(both)), { asks: 1, problems: 1, total: 2 })
-  assert.deepEqual(pendingOf(entry({ ...both, acked: true })), { asks: 1, problems: 0, total: 1 })
+  assert.deepEqual(pendingOf(entry({ ...both, acked: true })), { asks: 0, problems: 0, total: 0 })
 })
 
 test('a plain roll has nothing pending', () => {
