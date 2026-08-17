@@ -1641,13 +1641,20 @@
 /* a locked item is present and weighed — desaturated, never hidden */
 .invRow.isLocked { border-left-color: var(--danger); }
 .invRow.isLocked .irName { color: var(--muted); }
-/* The "Held" row has 5 children (icon/name/where/note/Return), not the 7 the
+/* The "Held" row has 5 children (icon/name/where/note/actions), not the 7 the
    base template above is tuned for (icon/name/where/cat/weight/lock/take) —
    reusing .invRow's 7-track template left grid auto-placement dropping the
    lone Return button into the 5th track (a fixed 60px column sized for a
    short weight string), which Firefox clipped and Chrome overflowed. Its own
-   column count fixes both. */
+   column count fixes both.
+
+   The buttons share ONE track via .irActs rather than taking a track each.
+   Adding Destroy as a sixth child is precisely the failure described above —
+   auto-placement wrapped it onto an implicit second row at the far left,
+   nowhere near Return. Grouping them keeps the child count at five whatever
+   the armed state adds. */
 .invRow.held { grid-template-columns: 26px minmax(0, 1.6fr) minmax(0, 1.1fr) minmax(0, 1fr) auto; }
+.irActs { display: flex; align-items: center; justify-content: flex-end; gap: 7px; }
 
 .irIcon { font-size: 13px; color: var(--beige); text-align: center; }
 .irName {

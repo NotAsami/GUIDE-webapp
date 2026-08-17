@@ -327,6 +327,8 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
                   {rec.from.col != null ? ` · ${rec.from.col},${rec.from.row}` : ''}
                 </span>
                 <span className={styles.irNote}>{rec.note || '—'}</span>
+                {/* One grid track for every button — see .invRow.held. */}
+                <span className={styles.irActs}>
                 <button
                   className={cx(styles.irAct, styles.on)}
                   disabled={busy}
@@ -371,6 +373,7 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
                     <i className="fa-solid fa-trash" />Destroy
                   </button>
                 )}
+                </span>
               </div>
             ))}
           </div>
