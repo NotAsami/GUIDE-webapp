@@ -1637,7 +1637,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
         </div>
       </div>
 
-      <div className={styles.catGrid3}>
+      <div className={cx(styles.catGrid3, styles.catGridDims)}>
         <div>
           <span className={styles.fieldLab}>Footprint</span>
           <div className={styles.catDim}>

@@ -1183,6 +1183,18 @@
    it, which reads as "the list is cut off". */
 .catGrid3 > * { min-width: 0; }
 
+/* Footprint/Weight/Value specifically. Equal thirds gave the first cell 174px
+   to hold 192px of content — two 64px number inputs, the ×, and the word
+   "cells" — and .catDim's children do not shrink, so the overflow spilled
+   rightward and "cells" sat under the Weight input. Sizing that track to its
+   content pushes Weight and Value clear; the row's 14px gap is then real space
+   rather than something the overflow had already eaten.
+
+   max-content rather than a fixed width so it stays correct if the inputs are
+   resized or the label changes — there is no number here to go stale. Only
+   this row needs it; the other .catGrid3 rows hold plain fields that fit. */
+.catGridDims { grid-template-columns: max-content 1fr 1fr; }
+
 .catPrev {
   display: flex; align-items: center; gap: 13px; padding: 12px 14px; margin-bottom: 14px;
   border: 1.5px solid var(--rar, var(--beige-dim)); background: rgba(0,0,0,0.3);
