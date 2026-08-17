@@ -244,7 +244,6 @@
 .rider.foldedRider .rdFold { transform: rotate(-90deg); }
 .rdBody { margin-top: 7px; }
 .rdText { font-family: var(--font-prose); font-size: 14px; line-height: 1.4; color: var(--muted); text-wrap: pretty; }
-.rdText em { color: var(--beige); font-style: italic; }
 .rdCond { margin-top: 7px; display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim); }
 .rdCond i { color: var(--cyan); }
 .rdRun { margin-top: 8px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
@@ -268,7 +267,6 @@
 /* What a note rider reveals. Prose weight, like .rdText, but lit rather than
    muted — it is the answer, not the question. */
 .rdReveal { margin-top: 8px; font-family: var(--font-prose); font-size: 14px; line-height: 1.45; color: var(--text); text-wrap: pretty; border-left: 2px solid rgba(0, 166, 214, 0.45); padding-left: 9px; }
-.rdReveal em { color: var(--beige); font-style: italic; }
 .rdHint { margin-top: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim); display: flex; align-items: center; gap: 7px; }
 
 /* ---------- footer totals ---------- */
@@ -336,7 +334,6 @@
 .catDesc { font-family: var(--font-prose); font-size: 15.5px; line-height: 1.68; color: var(--text); text-wrap: pretty; }
 .catDesc p { margin: 0 0 11px; }
 .catDesc p:last-child { margin: 0; }
-.catDesc em { color: var(--beige); font-style: italic; }
 .catRider { border-left: 2px solid rgba(212, 191, 125, 0.35); background: rgba(255, 255, 255, 0.016); padding: 9px 11px; margin-bottom: 8px; }
 .catRider .rn { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige); display: flex; align-items: center; gap: 8px; }
 .catRider .rn span { margin-left: auto; font-size: 7.5px; color: var(--beige-dim); }

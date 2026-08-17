@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { renderInline, Prose } from './markdown.ts'
+import { renderInline, Prose, toggleWrap } from './markdown.ts'
 
 function html(nodes: ReactNode): string {
   return renderToStaticMarkup(createElement('div', null, nodes))
@@ -108,4 +108,48 @@ test('an unclosed or empty colour renders literally', () => {
   assert.equal(html(renderInline('[x]{fire')), '<div>[x]{fire</div>')
   assert.equal(html(renderInline('[x]{}')), '<div>[x]{}</div>')
   assert.equal(html(renderInline('[]{fire}')), '<div>[]{fire}</div>')
+})
+
+/* ---------- Ctrl+B / Ctrl+I ---------- */
+
+const wrap = (t: string, a: number, b: number, m = '**') => toggleWrap(t, a, b, m)
+
+test('wrapping a selection puts the markers around it and keeps the selection', () => {
+  const r = wrap('deals fire damage', 6, 10)
+  assert.equal(r.text, 'deals **fire** damage')
+  assert.equal(r.text.slice(r.start, r.end), 'fire', 'the same words stay selected')
+})
+
+test('pressing it twice returns the original, rather than nesting', () => {
+  // The toggle is the whole point: **** is not bolder, it is broken.
+  const once = wrap('deals fire damage', 6, 10)
+  const twice = wrap(once.text, once.start, once.end)
+  assert.equal(twice.text, 'deals fire damage')
+  assert.equal(twice.text.slice(twice.start, twice.end), 'fire')
+})
+
+test('it unwraps whether the markers are inside or outside the selection', () => {
+  // Selecting the word and selecting the word-with-markers are both "this is
+  // already bold" to a human, so both have to undo it.
+  assert.equal(wrap('deals **fire** damage', 6, 14).text, 'deals fire damage')
+  assert.equal(wrap('deals **fire** damage', 8, 12).text, 'deals fire damage')
+})
+
+test('with nothing selected it opens an empty pair and lands the caret inside', () => {
+  const r = wrap('deals  damage', 6, 6)
+  assert.equal(r.text, 'deals **** damage')
+  assert.equal(r.start, 8)
+  assert.equal(r.start, r.end, 'a caret, not a selection')
+})
+
+test('italics use the same machinery with a single marker', () => {
+  const r = wrap('a whisper', 2, 9, '*')
+  assert.equal(r.text, 'a *whisper*')
+  assert.equal(wrap(r.text, r.start, r.end, '*').text, 'a whisper')
+})
+
+test('bold and italic nest rather than cancelling each other', () => {
+  const b = wrap('fire', 0, 4)
+  const i = wrap(b.text, b.start, b.end, '*')
+  assert.equal(i.text, '***fire***')
 })

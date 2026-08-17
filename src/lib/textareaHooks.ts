@@ -2,7 +2,8 @@
  *  the Feature Editor does not re-derive it. Both exist because a textarea inside
  *  an `overflow-y: auto` panel misbehaves in two ways that are not obvious until
  *  someone reports the panel "jumping". */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { toggleWrap } from './markdown'
 
 /** Stops a textarea's wheel gesture being stolen by the scroll panel around it.
  *
@@ -53,4 +54,32 @@ export function useAutoGrow(value: string) {
     el.style.height = `${target}px`
   }, [value, ref])
   return ref
+}
+
+/** Ctrl/Cmd + B and Ctrl/Cmd + I on any prose field, the way every editor does it.
+ *
+ *  The string work is `toggleWrap` in lib/markdown.ts, tested there; this is the
+ *  DOM half. Restoring the selection afterwards is the whole reason this is not
+ *  two lines inline: React re-renders from the new value, which resets the
+ *  caret to the end, so the selection has to be re-applied AFTER that paint or
+ *  every shortcut kicks you out of the sentence you were writing.
+ *
+ *  Returns undefined when the key was not ours, so callers can spread it onto a
+ *  field that already has its own onKeyDown. */
+export function markdownShortcuts(onChange: (next: string) => void) {
+  return (e: ReactKeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return
+    const key = e.key.toLowerCase()
+    const marker = key === 'b' ? '**' : key === 'i' ? '*' : null
+    if (!marker) return
+    e.preventDefault()
+
+    const el = e.currentTarget
+    const r = toggleWrap(el.value, el.selectionStart ?? 0, el.selectionEnd ?? 0, marker)
+    onChange(r.text)
+    requestAnimationFrame(() => {
+      el.setSelectionRange(r.start, r.end)
+      el.focus()
+    })
+  }
 }

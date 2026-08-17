@@ -112,3 +112,16 @@ strong, b {
   color: var(--cyan-hot);
   font-weight: 600;
 }
+
+/* Italic is the OTHER emphasis, and it had no colour of its own — so `*text*`
+   inherited whatever the surrounding block was and, in a muted-grey prose block,
+   read as plain text. The Roll Context Panel had already answered this for three
+   of its prose blocks with a local `em { color: var(--beige) }`; a fourth block
+   was added without one, which is how a feature's summary lost its italics there.
+   One rule instead of four, so the fifth block cannot forget.
+
+   `em` only, never `i` — `<i>` is a Font Awesome icon everywhere in this app. */
+em {
+  color: var(--beige);
+  font-style: italic;
+}
