@@ -381,7 +381,9 @@ export function ShardLattice() {
           <div className={styles.opStat}><span className={`${styles.v} ${styles.cyan}`}>{totalCost}</span><span className={styles.l}>Total Cost</span></div>
           <div className={styles.opStat}><span className={`${styles.v}${errs ? ' ' + styles.warn : ''}`}>{errs + warns}</span><span className={styles.l}>Issues</span></div>
           <div className={styles.opRootpill}><span className={styles.dot} /> Root · Architect</div>
-          <button type="button" className={styles.opBack} onClick={() => nav('/dm')}><i className="fa-solid fa-arrow-left-long" /> Console</button>
+          {/* Back to the CATALOG, which is where this editor is opened from —
+              landing on the party overview loses the place you were working. */}
+          <button type="button" className={styles.opBack} onClick={() => nav('/dm', { state: { view: 'catalog' } })}><i className="fa-solid fa-arrow-left-long" /> Console</button>
         </div>
       </header>
 
