@@ -363,6 +363,7 @@ export function OperatorConsole() {
                     disabled={t.soon} title={title}
                     onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setCatTab(t.key as CatTab) }}>
                     <i className={cx('fa-solid', t.icon, styles.crGlyph)} />
+                    <span className={styles.crLab}>{t.label}</span>
                   </button>
                 )
               })}
