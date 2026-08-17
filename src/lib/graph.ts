@@ -432,6 +432,19 @@ export type Rider = {
    *  letter-spaced name slot. */
   text?: string
   dmgType?: string
+  /** The source's own card text, so the panel can answer "should this have
+   *  applied?" without leaving the roll. `source` is a bare display NAME and a
+   *  roll entry is not a catalog row, so without this the prose is unreachable
+   *  from the panel — it lives on a DM-only table the player never reads. */
+  sourceText?: string
+  /** The operands a formula was built from, at the values it used. `formula`
+   *  says `level + wis`; this says level was 7 and wis was +3.
+   *
+   *  Captured at resolve time because it CANNOT be recovered later: the scope is
+   *  a snapshot of the character mid-roll, and by the time anything renders the
+   *  log the values may have moved. Absent for a flat number or a bare die,
+   *  which have no derivation worth showing. */
+  parts?: { name: string; value: number }[]
   /** Set once the player has answered a `manual` rider and its dice were rolled.
    *  Written by the Roll Context Panel, never by resolve() — which keeps the
    *  engine pure and makes the lock trivial: once this is set the roll
@@ -555,6 +568,40 @@ export function buildContext(
 }
 
 /* ---------- the walk ---------- */
+
+/** An active source's card text, whatever that source calls the field.
+ *
+ *  Four node kinds keep their prose under four different names — a feature's
+ *  precedence mirrors `cardText` in screens/Features.tsx, an item and a spell use
+ *  `description`, a shard node uses `effect`. One lookup, so the panel does not
+ *  have to know which kind it is holding. */
+function summaryOf(obj: unknown): string | undefined {
+  const o = obj as Record<string, unknown>
+  for (const k of ['light_description', 'summary', 'description', 'effect']) {
+    const v = o?.[k]
+    if (typeof v === 'string' && v.trim()) return v
+  }
+  return undefined
+}
+
+/** The operands of a formula at the values it actually used.
+ *
+ *  Only identifiers the scope resolves to a NUMBER: a boolean gate contributes
+ *  nothing a reader could add up, and an unresolved name is already reported as
+ *  a problem rather than shown as part of a sum. Undefined for a formula with no
+ *  identifiers at all — `2d6` derives from nothing. */
+function partsOf(formula: string | undefined, scope: ExprScope): Rider['parts'] {
+  if (!formula) return undefined
+  const seen = new Set<string>()
+  const parts: { name: string; value: number }[] = []
+  for (const id of freeIdents(formula)) {
+    if (seen.has(id)) continue
+    seen.add(id)
+    const v = scope[id]
+    if (typeof v === 'number') parts.push({ name: id, value: v })
+  }
+  return parts.length ? parts : undefined
+}
 
 export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
   const out: Resolution = { adv: false, dis: false, crit: false, riders: [], notes: [], problems: [] }
@@ -728,6 +775,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
         label: eff.label, source: from.obj.name, op: eff.op,
         formula: eff.value ?? '', flat: v.flat, dice: v.dice,
         when: 'always', on: true, dmgType: eff.dmgType,
+        sourceText: summaryOf(from.obj), parts: partsOf(eff.value, ctx.scope),
       })
       continue
     }
@@ -744,6 +792,8 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
       text: eff.ask,
       reveal,
       dmgType: eff.dmgType,
+      sourceText: summaryOf(from.obj),
+      parts: partsOf(eff.value, ctx.scope),
     }
 
     // One fact, one checkbox: effects sharing an `ask` label are one decision.
@@ -812,6 +862,9 @@ ${rider.reveal}` : rider.reveal
       label: m.label, source: m.sourceName || m.source, op: m.op,
       formula: m.value ?? '', flat: v?.t === 'num' ? v.flat : 0, dice: v?.t === 'num' ? v.dice : [],
       when: 'always', on: true, armedId: m.id, dmgType: m.dmgType,
+      // No `sourceText`: an armed mod is a stored snapshot naming its source,
+      // not a live handle on the node, so the prose is genuinely not in hand.
+      parts: partsOf(m.value, ctx.scope),
     })
   }
 

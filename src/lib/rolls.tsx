@@ -1,9 +1,10 @@
 /**
  * Shared, ephemeral roll log. App-level state (mounted around the router) so dice
  * results survive screen navigation within a session — but it is NOT persisted to
- * Supabase (rolling is ephemeral, handoff §3). The Equipment weapon roller writes
- * here; the toast (components/RollToast) surfaces the newest entry; the Character
- * screen will later render the full scrollable history from this same context.
+ * Supabase (rolling is ephemeral, handoff §3). Every roll surface writes here;
+ * the Roll Context Panel reads it as the full history and is the ONE place a roll
+ * is presented in detail; the Character screen renders its own log from it; and
+ * Bottombar watches the newest id to decide whether the ROLLS button pings.
  */
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'

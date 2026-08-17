@@ -1585,3 +1585,43 @@ test('an AND that can never match is an error, not a silent no-op', () => {
   assert.ok(auditNode({ graph: [{ id: 'e1', op: 'add', value: '1', label: 'X', match: 'and', target: ['tag:fire'] }] })
     .some(a => a.t === 'AND with one target'))
 })
+
+/* ---------- what the panel needs to EXPLAIN a contribution (§55) ---------- */
+
+test('a rider carries its source’s card text, so the panel can show why it applied', () => {
+  // `source` is a bare display NAME, and a roll entry is not a catalog row — the
+  // prose lives on a DM-only table the player never reads. Without this the
+  // panel cannot answer "should this have applied?" at all.
+  const c = withFeatures([gfeat('Zealot', [{ id: 'e1', op: 'add', value: '2', label: 'Ember', target: ['roll:attack'] }],
+    { light_description: 'While attuned, your strikes carry the ember.' })])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(r.riders[0].sourceText, 'While attuned, your strikes carry the ember.')
+})
+
+test('card text falls back through the four names a node can keep prose under', () => {
+  // A feature, an item, a spell and a shard node each call it something else.
+  // One lookup, so the panel never has to know which kind it is holding.
+  for (const [field, text] of [['light_description', 'a'], ['summary', 'b'], ['description', 'c'], ['effect', 'd']]) {
+    const c = withFeatures([gfeat('F', [{ id: 'e1', op: 'add', value: '1', label: 'L', target: ['roll:attack'] }],
+      { [field]: text } as Partial<Feature>)])
+    assert.equal(resolve(buildContext(c), ATTACK).riders[0].sourceText, text, `${field} should be found`)
+  }
+})
+
+test('a formula rider carries its operands at the values the roll used', () => {
+  // Captured at resolve time because it cannot be recovered later: the scope is
+  // a snapshot mid-roll, and by the time anything renders the log it has moved.
+  const c = withFeatures([gfeat('F', [{ id: 'e1', op: 'add', value: 'level + prof', label: 'L', target: ['roll:attack'] }])])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.deepEqual(r.riders[0].parts, [{ name: 'level', value: 7 }, { name: 'prof', value: 3 }])
+  assert.equal(r.riders[0].flat, 10)
+})
+
+test('a flat number and a bare die carry no derivation', () => {
+  // A chevron that opens onto nothing is worse than no chevron, so "there is
+  // nothing to show" has to be expressible.
+  for (const value of ['2', '2d6']) {
+    const c = withFeatures([gfeat('F', [{ id: 'e1', op: 'add', value, label: 'L', target: ['roll:attack'] }])])
+    assert.equal(resolve(buildContext(c), ATTACK).riders[0].parts, undefined, `${value} derives from nothing`)
+  }
+})

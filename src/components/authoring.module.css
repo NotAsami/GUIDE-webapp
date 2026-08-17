@@ -402,6 +402,20 @@ select.in option { background: #14130f; }
 /* ---------- op palette + effect rows ---------- */
 .oppal { --cut: 8px; --bc: rgba(212,191,125,.18); margin-bottom: 12px; background-color: rgba(0,0,0,.3); border: 1.5px solid var(--bc); padding: 9px 11px 10px; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
 .oppalGrp { display: flex; align-items: center; gap: 8px; margin: 0 0 7px; }
+/* A group heading that FOLLOWS a row of buttons needs air above it, or it reads
+   as a caption for the row it is actually separating itself from. */
+.oppalRow + .oppalGrp { margin-top: 13px; }
+
+/* The `when` row's shortcut to a player-flipped stance. Sits inside the row so
+   it reads as an alternative to typing a formula, not another field. */
+.whenTog {
+  display: inline-flex; align-items: center; gap: 5px; flex: none; cursor: pointer;
+  background-color: rgba(0,166,214,.08); border: 1.5px solid rgba(0,166,214,.35); color: var(--cyan);
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .16em; text-transform: uppercase;
+  padding: 5px 8px; white-space: nowrap;
+}
+.whenTog:hover { color: var(--cyan-hot); border-color: var(--cyan); background-color: rgba(0,166,214,.16); }
+.whenTog i { font-size: 9px; }
 .oppalGrp .gl { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--beige-dim); white-space: nowrap; }
 /* Violet marks an ACTIVATION throughout the editor: it writes, where every
    other op only reads. A different colour is the cheapest way to stop the two

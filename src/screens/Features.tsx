@@ -86,6 +86,19 @@ export function Features() {
   const varsOf = (f: Feature) =>
     vars.filter(v => (f.vars ?? []).some(d => d.name === v.def.name))
 
+  /* TOGGLES WITH NO FEATURE TO LIVE UNDER. `playerVars` walks every active
+     source — equipped items and attuned shard nodes included — but the only
+     surface that ever rendered a control filtered to vars a FEATURE declared.
+     A bool on the Cloak of Elvenkind was therefore authorable, resolvable, and
+     impossible for the player to flip: authored, and inert.
+
+     Grouped by source, because "hood up" means nothing without the cloak. */
+  const looseVars = vars.filter(v => !features.some(f => (f.vars ?? []).some(d => d.name === v.def.name)))
+  const looseBySource = [...looseVars.reduce((m, v) => {
+    const key = v.from.obj.name
+    return m.set(key, [...(m.get(key) ?? []), v])
+  }, new Map<string, typeof vars>())]
+
   /** Flip or set one variable. Its own write — a toggle is not part of a use. */
   async function writeVar(name: string, value: number | boolean) {
     await updateSection('resources', setVars(character, { [name]: value }) as CharacterRow['resources'])
@@ -196,6 +209,27 @@ export function Features() {
               </div>
             </section>
           ))
+        )}
+
+        {looseBySource.length > 0 && (
+          <section className={styles.group}>
+            <div className={styles.groupHead}>
+              <span className={styles.ghIcon}><i className="fa-solid fa-sliders" /></span>
+              <span className={styles.ghLabel}>Gear &amp; Shard State</span>
+              <span className={styles.ghCount}>{looseVars.length}</span>
+              <span className={styles.ghRule} />
+            </div>
+            <div className={styles.looseState}>
+              {looseBySource.map(([source, rows]) => (
+                <div key={source} className={styles.pState}>
+                  <div className={styles.psHead}>{source}</div>
+                  {rows.map(v => (
+                    <VarControl key={v.def.name} row={v} disabled={busy} onWrite={writeVar} />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
         {perks.length > 0 && (

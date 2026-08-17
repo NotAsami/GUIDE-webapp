@@ -124,6 +124,23 @@ const HELP = {
   },
 }
 
+/** A free identifier for a new variable, seeded from the effect's label.
+ *
+ *  Must satisfy VarDef's /^[a-z][a-zA-Z0-9]*$/ — so the label is stripped to
+ *  camelCase and falls back to `toggle` when it strips to nothing (an unlabelled
+ *  effect, or a label that is entirely punctuation). Suffixed until it is unique,
+ *  because collectVars is FIRST-WINS: a duplicate name would silently bind to
+ *  the other declaration instead of erroring. */
+function freeName(vars: VarDef[], label: string | undefined): string {
+  const words = (label ?? '').replace(/[^a-zA-Z0-9 ]+/g, ' ').trim().split(/\s+/).filter(Boolean)
+  const base = words.length
+    ? words.map((w, i) => (i ? w[0].toUpperCase() + w.slice(1) : w[0].toLowerCase() + w.slice(1))).join('')
+    : 'toggle'
+  const taken = new Set(vars.map(v => v.name))
+  if (!taken.has(base)) return base
+  for (let n = 2; ; n++) if (!taken.has(`${base}${n}`)) return `${base}${n}`
+}
+
 /* ---------- the block itself ---------- */
 
 /** The whole effect list for one node: the op palette, a collapsed row per
@@ -132,7 +149,7 @@ const HELP = {
  *  `graph` and `vars` come from the host and go back through `onChange` — this
  *  owns no node state of its own, so a form can keep saving exactly the way it
  *  already saves. */
-export function GraphEffects({ graph, vars, nodes, namesByGid, onChange }: {
+export function GraphEffects({ graph, vars, nodes, namesByGid, onChange, onVarsChange }: {
   graph: GraphEffect[]
   /** Declared variables, for the `reference` fields an op schema can ask for. */
   vars: VarDef[]
@@ -140,6 +157,11 @@ export function GraphEffects({ graph, vars, nodes, namesByGid, onChange }: {
   nodes: AuthoredNode[]
   namesByGid: Map<string, { name: string; kind: string }>
   onChange: (next: GraphEffect[]) => void
+  /** Lets an effect DECLARE a variable, not just read one — the `when` row's
+   *  player toggle is the only user. Optional so a host that does not own its
+   *  vars simply does not offer the shortcut, rather than offering a button that
+   *  silently does nothing. */
+  onVarsChange?: (next: VarDef[]) => void
 }) {
   const [openEffect, setOpenEffect] = useState<number | null>(null)
   const [moreOps, setMoreOps] = useState(false)
@@ -193,7 +215,7 @@ export function GraphEffects({ graph, vars, nodes, namesByGid, onChange }: {
       {graph.map((eff, ei) => (
         openEffect === ei
           ? <EffectCard key={eff.id} eff={eff} ei={ei} graph={graph} vars={vars}
-              setEffect={setEffect} setGraph={onChange}
+              setEffect={setEffect} setGraph={onChange} onVarsChange={onVarsChange}
               nodes={nodes} namesByGid={namesByGid} setPop={setPop}
               onClose={() => setOpenEffect(null)} />
           : <EffectRow key={eff.id} eff={eff} namesByGid={namesByGid}
@@ -317,13 +339,14 @@ function EffectRow({ eff, namesByGid, onOpen, onDelete }: {
 }
 /* ---------- expanded effect card ---------- */
 
-function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, nodes, namesByGid, setPop, onClose }: {
+function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, nodes, namesByGid, setPop, onClose }: {
   eff: GraphEffect; ei: number
   /** The whole list, for sibling lookups — an `ask` is a grouping key. */
   graph: GraphEffect[]
   vars: VarDef[]
   setEffect: (i: number, p: Partial<GraphEffect>) => void
   setGraph: (next: GraphEffect[]) => void
+  onVarsChange?: (next: VarDef[]) => void
   nodes: AuthoredNode[]; namesByGid: Map<string, { name: string; kind: string }>
   setPop: (p: PopKind) => void; onClose: () => void
 }) {
@@ -506,6 +529,26 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, nodes, namesByG
         </span>
         <input value={eff.when ?? ''} placeholder="hp < hpMax / 2" spellCheck={false}
           onChange={e => setEffect(ei, { when: e.target.value || undefined })} />
+        {/* A STANCE, not a formula. "While the hood is up" is not computable from
+            character state — only the player knows — and the shape that expresses
+            it is a stored bool they can flip. That was already possible and
+            nothing said so, which is how a prose condition ended up with no way
+            to author it at all. One press declares the variable and points `when`
+            at it; the variable then shows in the vars block like any other, so
+            there is no hidden state. */}
+        {onVarsChange && !eff.when?.trim() && (
+          <button type="button" className={styles.whenTog} title="Declare a stored toggle the player flips"
+            onClick={() => {
+              const name = freeName(vars, eff.label)
+              onVarsChange([...vars, {
+                name, kind: 'stored', type: 'bool', scope: 'player',
+                initial: false, label: eff.label?.trim() || undefined,
+              }])
+              setEffect(ei, { when: name })
+            }}>
+            <i className="fa-solid fa-toggle-on" />player toggle
+          </button>
+        )}
         <span className={styles.qm} onClick={() => setPop({ k: 'help', which: 'when' })}>?</span>
       </div>
       <div className={cx(styles.wa, styles.ask)}>

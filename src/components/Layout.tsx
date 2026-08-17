@@ -5,7 +5,6 @@ import { useShardCatalog } from '../lib/shardCatalog'
 import { useOpenShop } from '../lib/shops'
 import { Topbar } from './Topbar'
 import { Bottombar } from './Bottombar'
-import { RollToast } from './RollToast'
 import { SystemToasts } from './SystemToasts'
 import { ShopTakeover } from './ShopTakeover'
 import { RollContextPanel } from './RollContextPanel'
@@ -135,9 +134,11 @@ export function Layout() {
         />
       </div>
 
-      <RollToast />
       {/* Operator pushes (grants / effects / notices) arrive here via the
-          G.U.I.D.E. voice channel — top-right, clear of RollToast. */}
+          G.U.I.D.E. voice channel. The roll toast that used to share this corner
+          is gone: it was a second, worse copy of the Roll Context Panel reading
+          the same log, so the "a roll landed" signal moved to the ROLLS button
+          that opens the panel. */}
       <SystemToasts characterId={character.id} />
       {/* Shop feature part 1: appears the instant the DM fires a shop open
           (shop_catalog RLS scopes it to this character or the whole party) —

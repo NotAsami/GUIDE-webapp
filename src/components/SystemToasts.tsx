@@ -6,8 +6,9 @@
  * Operator Console mockup simulates in `toastLayer`.
  *
  * Mounted once in Layout with the bound character's id; messages targeted at
- * another PC are ignored client-side ('all' passes). RollToast lives bottom-right,
- * this layer lives top-right — they never collide.
+ * another PC are ignored client-side ('all' passes). Since the roll toast was
+ * retired in favour of the ROLLS button's ping, this is the only toast layer
+ * left, and it keeps the top-right corner to itself.
  */
 
 import { useEffect, useRef, useState } from 'react'

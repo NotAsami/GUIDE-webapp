@@ -1327,10 +1327,12 @@ function CatalogSurface({ catalog, featureLib, effectLib, spellLib, shopLib, mem
 
   const catTabs: { key: string; label: string; icon: string; n?: number; soon: boolean }[] = [
     { key: 'items', label: 'Items', icon: 'fa-box-open', n: items.length, soon: false },
-    { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
     { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', n: spellLib.spells.length, soon: false },
     { key: 'effects', label: 'Effects', icon: 'fa-bolt', n: effectLib.effects.length, soon: false },
     { key: 'shops', label: 'Shopkeepers', icon: 'fa-shop', n: shopLib.shops.length, soon: false },
+    /* Last on purpose: these two LEAVE the catalog for their own editor, so they
+       are an exit rather than another tab, and reading order should say so. */
+    { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
     { key: 'shards', label: 'Shards', icon: 'fa-gem', soon: false },
   ]
 
@@ -1881,7 +1883,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
         </div>
         {gfxOpen && (
           <div className={styles.gfxBody}>
-            <GraphEffects graph={graph} vars={vars} nodes={nodes} namesByGid={namesByGid} onChange={setGraph} />
+            <GraphEffects graph={graph} vars={vars} nodes={nodes} namesByGid={namesByGid} onChange={setGraph} onVarsChange={setVars} />
             <VarsBlock vars={vars} onChange={setVars} />
             {/* An item's tags are what `tag:` selectors match, AND what
                 Equipment passes into every attack it rolls with this weapon. */}
@@ -2824,7 +2826,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
         </div>
         {gfxOpen && (
           <div className={styles.gfxBody}>
-            <GraphEffects graph={graph} vars={vars} nodes={nodes} namesByGid={namesByGid} onChange={setGraph} />
+            <GraphEffects graph={graph} vars={vars} nodes={nodes} namesByGid={namesByGid} onChange={setGraph} onVarsChange={setVars} />
             <VarsBlock vars={vars} onChange={setVars} />
             {/* Tags reach ACROSS catalogs — `tag:fire` should match this spell,
                 a weapon and a shard node alike. */}

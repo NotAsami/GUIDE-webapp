@@ -1,5 +1,5 @@
 /* Rest control lives in the topbar; its modal is portaled to <body> so it
-   escapes the topbar/main z-index traps (same approach as RollToast). */
+   escapes the topbar/main z-index traps. */
 
 .restBtn {
   display: inline-flex;
