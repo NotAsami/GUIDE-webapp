@@ -1,5 +1,6 @@
-/* Rider rows, used by the Character roll log. Sized to sit inside a narrow
-   column without imposing a width, so everything here is fluid. */
+/* Rider rows, shared by the roll toast and the Character roll log. Sized to sit
+   inside either without imposing a width — both parents are already narrow
+   columns, so everything here is fluid. */
 
 .riders {
   grid-column: 1 / -1;

@@ -1,0 +1,130 @@
+/* Roll RESULT toast — bottom-right, above the bottombar. Rendered at Layout top
+   level (outside .main) so it isn't trapped in that stacking context.
+
+   Bounded by construction now. It used to carry riders, breakdowns and notes,
+   which made its height unbounded upward and forced a max-height with a scroll
+   inside a five-second toast. It shows totals and at most one call-to-action, so
+   a feature-heavy character cannot push the head off the viewport. */
+/* Angled corners WITH a stroked border on the diagonals: clip-path would clip a
+   plain `border` off the cut edges, so the toast paints a beige fill clipped to
+   the octagon and an inset ::before paints the dark interior 1px smaller — the
+   1px the fill shows through is the border (diagonals included). Same technique
+   as the Feature cards / Stat Panel frames. */
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: calc(var(--bar-bottom-h) + 18px);
+  z-index: 120;
+  width: 300px;
+  padding: 14px 16px 12px;
+  background: var(--beige);
+  box-shadow:
+    0 0 0 1px rgba(212, 191, 125, 0.15),
+    0 14px 28px rgba(0, 0, 0, 0.6),
+    0 0 24px rgba(0, 166, 214, 0.25);
+  clip-path: polygon(12px 0, 100% 0,
+    100% calc(100% - 12px), calc(100% - 12px) 100%,
+    0 100%, 0 12px);
+  animation: toastIn 220ms cubic-bezier(.2, .7, .2, 1);
+}
+.toast::before {
+  /* 1.5px, not 1px — the fractional-zoom rounding fix (see CLAUDE.md): this
+     inset is the whole visible border (the fill showing through), and a
+     strict 1px ring can round away on one edge at 110% zoom. */
+  content: "";
+  position: absolute; inset: 1.5px;
+  background: rgba(8, 8, 8, 0.97);
+  clip-path: polygon(11px 0, 100% 0,
+    100% calc(100% - 11px), calc(100% - 11px) 100%,
+    0 100%, 0 11px);
+  pointer-events: none;
+}
+/* keep content above the inset interior */
+.head, .res, .cta { position: relative; z-index: 1; }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* Only the HEAD dismisses. The card used to be one big dismiss target, which
+   cannot coexist with a button inside it — every tap on the call-to-action would
+   also be a tap on "close". */
+.head {
+  display: flex; align-items: center; gap: 12px;
+  padding-bottom: 10px;
+  cursor: pointer;
+  border-bottom: 1px dashed rgba(212, 191, 125, 0.3);
+}
+.icon {
+  width: 34px; height: 34px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--beige); font-size: 16px;
+  border: 1px solid rgba(212, 191, 125, 0.4);
+  background: rgba(0, 0, 0, 0.4);
+}
+.titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.title {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 15px; letter-spacing: 0.06em; color: var(--cyan-hot);
+  text-transform: uppercase; line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sub {
+  font-family: var(--font-mono); font-size: 8.5px;
+  letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase;
+}
+.dismiss { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
+.head:hover .dismiss { color: var(--beige); }
+
+/* One result row: what it is, and the number. No breakdown — that is the panel. */
+.res {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-top: 9px;
+}
+.lab {
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase;
+}
+.total {
+  margin-left: auto;
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 24px; line-height: 1; color: var(--cyan-hot);
+  text-shadow: 0 0 12px rgba(0, 166, 214, 0.4);
+  white-space: nowrap;
+}
+
+/* crit accent */
+.res.crit .total { color: #6fdc8c; text-shadow: 0 0 14px rgba(111, 220, 140, 0.55); }
+.res.crit .lab { color: #6fdc8c; }
+
+/* heal / buff accents (consumables, rests, activations) */
+.res.heal .total { color: #6fdc8c; text-shadow: 0 0 14px rgba(111, 220, 140, 0.55); }
+.res.heal .lab { color: #6fdc8c; }
+.res.buff .total { color: var(--cyan-hot); font-size: 14px; }
+.res.buff .lab { color: var(--cyan); }
+
+/* ---- the call-to-action ----
+   The only thing here that is not a result. It names what is waiting and where
+   to go, and it is the tap target for going there — a badge alone tells nobody
+   where the panel is. Amber, deliberately not the cyan the totals use: this is
+   the one row that is asking for something. */
+.cta {
+  display: flex; align-items: center; gap: 7px;
+  width: 100%; margin-top: 11px; padding: 7px 9px;
+  cursor: pointer; text-align: left;
+  background: rgba(226, 176, 33, 0.1);
+  border: 1.5px solid rgba(226, 176, 33, 0.45);
+  color: var(--amber);
+  font-family: var(--font-mono); font-size: 8.5px;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.cta:hover { background: rgba(226, 176, 33, 0.2); border-color: var(--amber); color: var(--amber-hot); }
+.cta:active { transform: translateY(1px); }
+.cta:focus-visible { outline: 2px solid var(--amber-hot); outline-offset: 2px; }
+.cta i { font-size: 10px; }
+.ctaN { font-family: var(--font-display); font-size: 14px; line-height: 1; letter-spacing: 0; }
+.ctaGo { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--beige); }
+.cta:hover .ctaGo { color: var(--beige); }
+.ctaGo i { font-size: 9px; }

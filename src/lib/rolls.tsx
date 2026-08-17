@@ -1,10 +1,11 @@
 /**
  * Shared, ephemeral roll log. App-level state (mounted around the router) so dice
  * results survive screen navigation within a session — but it is NOT persisted to
- * Supabase (rolling is ephemeral, handoff §3). Every roll surface writes here;
- * the Roll Context Panel reads it as the full history and is the ONE place a roll
- * is presented in detail; the Character screen renders its own log from it; and
- * Bottombar watches the newest id to decide whether the ROLLS button pings.
+ * Supabase (rolling is ephemeral, handoff §3). Every roll surface writes here.
+ * Four readers, deliberately different jobs: RollToast is the glance, the Roll
+ * Context Panel is the full history and the only place a roll can be ARGUED with,
+ * the Character screen keeps its own log, and Bottombar watches the newest id to
+ * decide whether the ROLLS button pings.
  */
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
@@ -77,12 +78,19 @@ export type RollEntry = {
   problems?: AuditItem[]
   /** Authored `note` ops that matched this roll. */
   notes?: string[]
-  /** This entry's own surface already confirmed it, so the ROLLS button must not
-   *  ping for it — a rest shows its own toast, and one press earning two
-   *  notifications is the noise the roll toast was retired for. It still belongs
-   *  in the log: the panel is the history, and being quiet is about announcing,
-   *  not about recording. */
+  /** This entry's own surface already showed the result, so the generic toast
+   *  must skip it — a rest toasts from the button that caused it, and one press
+   *  earning two toasts is exactly the noise being avoided. It still belongs in
+   *  the log: the panel is the history, and being quiet is about ANNOUNCING, not
+   *  about recording. */
   quiet?: boolean
+  /** The player has seen this entry in the open panel.
+   *
+   *  What stops the nav badge pulsing forever. A failed contribution is news the
+   *  player cannot act on, so it has to be dismissible; an unanswered `ask` is a
+   *  decision still owed and deliberately survives this. See `pendingOf` in
+   *  lib/rollView.ts, which is the one place that asymmetry is decided. */
+  acked?: boolean
 }
 
 /** Riders, labelled by the roll that produced them ("Attack", "Damage", "Save"). */

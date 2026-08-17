@@ -9,7 +9,8 @@ import type { Rider } from './graph.ts'
 import type { RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
 import {
-  catalogView, lineViews, rerollAt, resolvedOf, riderAmount, riderValue, riderViews, rollTotals, unresolvedOf,
+  catalogView, lineViews, pendingOf, pendingTotal, rerollAt, resolvedOf, riderAmount, riderValue,
+  riderViews, rollTotals, unresolvedOf,
 } from './rollView.ts'
 
 const rider = (over: Partial<Rider>): Rider => ({
@@ -329,4 +330,49 @@ test('a save DC names its ability, and a spell with no save shows none', () => {
   // No saveDC at all — the slot stays empty rather than showing a DC the spell
   // never calls for, which is what it did before the spell could say.
   assert.equal(lineViews(entry({ kind: 'custom', damage: DAMAGE })).length, 1)
+})
+
+/* ---------- pendingOf: one definition for three surfaces ---------- */
+
+const askRider = (on: boolean) => rider({ when: 'manual', on, dice: ['1d6'], flat: 0 })
+const err = { sev: 'err' as const, id: null, t: 'Broke', s: 'produced no value' }
+
+test('an unanswered ask counts, and answering it decrements', () => {
+  const groups = (on: boolean) => [{ label: 'Damage', riders: [askRider(on)] }]
+  assert.equal(pendingOf(entry({ riderGroups: groups(false) })).total, 1)
+  assert.equal(pendingOf(entry({ riderGroups: groups(true) })).total, 0)
+})
+
+test('only err problems count — a warn or an ok is not something the player must do', () => {
+  // An AuditItem can be 'ok' or 'warn'. Counting an authoring note as work is the
+  // badge lying about the roll.
+  for (const sev of ['warn', 'ok'] as const) {
+    assert.equal(pendingOf(entry({ problems: [{ ...err, sev }] })).total, 0, `${sev} must not count`)
+  }
+  assert.equal(pendingOf(entry({ problems: [err] })).total, 1)
+})
+
+test('acked zeroes a problem but NOT an unanswered ask', () => {
+  // The whole dismissal rule. A failed formula is news the player cannot act on,
+  // so being seen retires it. A decision still owed survives being looked at —
+  // acking it away would hide the one thing the panel exists for.
+  const both = { riderGroups: [{ label: 'Damage', riders: [askRider(false)] }], problems: [err] }
+  assert.deepEqual(pendingOf(entry(both)), { asks: 1, problems: 1, total: 2 })
+  assert.deepEqual(pendingOf(entry({ ...both, acked: true })), { asks: 1, problems: 0, total: 1 })
+})
+
+test('a plain roll has nothing pending', () => {
+  // The toast's "no second line" case and the badge's hidden case are the same
+  // fact, which is why they read the same function.
+  assert.equal(pendingOf(entry({ attack: ATTACK, damage: DAMAGE })).total, 0)
+})
+
+test('the badge counts things, not rolls', () => {
+  // "2" has to mean two things need you. Two rolls each owing one decision is 2,
+  // and one roll owing two is also 2.
+  const one = entry({ id: 'a', riderGroups: [{ label: 'Damage', riders: [askRider(false)] }] })
+  const two = entry({ id: 'b', riderGroups: [{ label: 'Damage', riders: [askRider(false), askRider(false)] }] })
+  assert.equal(pendingTotal([one, one]), 2)
+  assert.equal(pendingTotal([two]), 2)
+  assert.equal(pendingTotal([]), 0)
 })
