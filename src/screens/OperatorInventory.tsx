@@ -23,7 +23,10 @@ import { useMemo, useState } from 'react'
 import type {
   CharacterRow, CharacterUpdate, ConfiscatedItemRow, InventoryItem, Json,
 } from '../lib/database.types'
-import { getGear, getInventory } from '../lib/equip'
+import {
+  ITEM_SLOTS, getContainers, getGear, getInventory, getWeapons,
+  unequipContainerPatch, unequipGearPatch, unequipWeaponPatch,
+} from '../lib/equip'
 import { PERSON, freeCellFor, place, routeItem } from '../lib/placement'
 import { CAT_LABEL } from '../lib/items'
 import { fmtWeight, itemWeight } from '../lib/burden'
@@ -73,6 +76,62 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
       <>{item.locked ? 'Unlocked' : 'Locked'} <span className={styles.obj}>{item.name}</span> on <span className={styles.who}>{first}</span></>,
       item.locked ? 'cyan' : 'danger',
     )
+  }
+
+  /* WORN GEAR, WEAPONS AND CONTAINERS — everything confiscable that is not in
+     `inventory`. Each entry carries the patch that would unequip it, because
+     that is the only thing that differs between the three kinds. */
+  const gear = getGear(row)
+  const equippedEntries: { item: InventoryItem; where: string; patch: () => ReturnType<typeof unequipGearPatch> }[] = [
+    ...ITEM_SLOTS.flatMap(slot => {
+      const it = (gear as Record<string, InventoryItem | null | undefined>)[slot]
+      return it ? [{ item: it, where: slot, patch: () => unequipGearPatch(slot, gear, inventory) }] : []
+    }),
+    ...getWeapons(gear).map(w => ({
+      item: w as InventoryItem,
+      where: w.hand ? `${w.hand} hand` : 'weapon',
+      patch: () => (w.hand ? unequipWeaponPatch(w.hand, gear, inventory) : null),
+    })),
+    ...getContainers(gear).map(c => ({
+      item: c as InventoryItem,
+      where: c.container?.kind ?? 'container',
+      patch: () => (c.container?.kind ? unequipContainerPatch(c.container.kind, gear, inventory) : null),
+    })),
+  ]
+
+  /** Confiscate something the character is WEARING.
+   *
+   *  UNEQUIP FIRST, then take it from the pack — not a shortcut, the only shape
+   *  that works. `restore()` puts an item back into `inventory` and
+   *  ConfiscatedFrom models an inventory placement, so an item taken straight out
+   *  of a slot could never be given back to one. Unequipping is also the state
+   *  the app already understands: effects, granted features and variables stop
+   *  applying because the item left `equipped`, and a container's contents follow
+   *  it rather than being orphaned in a bag nobody is wearing.
+   *
+   *  One write: the unequip patch goes out with the item already removed from the
+   *  inventory it would have landed in, so the player never sees it in their pack. */
+  async function confiscateEquipped(entry: { item: InventoryItem; patch: () => ReturnType<typeof unequipGearPatch> }) {
+    if (busy) return
+    setBusy(true)
+    setConfirmTake(null)
+    const p = entry.patch()
+    if (!p) { setBusy(false); return }
+
+    // `toCarried` keeps the id, so the freshly-carried copy — footprint, contents
+    // and all — is the one to store and the one to drop.
+    const carried = ((p.inventory ?? []) as unknown as InventoryItem[]).find(i => i.id === entry.item.id) ?? entry.item
+    const stored = await confiscated.confiscate(row.id, carried, note.trim() || undefined)
+    if (!stored) { setBusy(false); return }
+
+    const ok = await onUpdate({
+      ...p,
+      inventory: ((p.inventory ?? []) as unknown as InventoryItem[]).filter(i => i.id !== entry.item.id) as unknown as Json[],
+    })
+    setBusy(false)
+    if (!ok) { await confiscated.release(stored.id); return }
+    setNote('')
+    log(<>Confiscated <span className={styles.obj}>{carried.name}</span> from <span className={styles.who}>{first}</span> <span className={styles.dim}>(worn)</span></>, 'danger')
   }
 
   /** Take it. Snapshot the placement, drop it from the character, store it. */
@@ -182,6 +241,41 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
           </div>
         )}
       </section>
+
+      {/* ---------- equipped ---------- */}
+      {equippedEntries.length > 0 && (
+        <section className={styles.invPanel}>
+          <header className={styles.invHead}>
+            <span className={styles.invTitle}>Equipped</span>
+            <span className={styles.invMeta}>{equippedEntries.length} worn · taking one unequips it first</span>
+          </header>
+          <div className={styles.invRows}>
+            {equippedEntries.map(entry => (
+              <div key={entry.item.id} className={styles.invRow}>
+                <span className={styles.irIcon}><i className={`fa-solid ${entry.item.icon ?? 'fa-cube'}`} /></span>
+                <span className={styles.irName}>{entry.item.name}</span>
+                <span className={styles.irWhere}>{entry.where}</span>
+                <span className={styles.irCat}>{CAT_LABEL[entry.item.category ?? 'misc']}</span>
+                <span className={styles.irWt}>{itemWeight(entry.item) ? `${fmtWeight(itemWeight(entry.item))} lb` : '—'}</span>
+                <span className={styles.irAct} style={{ visibility: 'hidden' }} aria-hidden="true" />
+                {confirmTake === entry.item.id ? (
+                  <button className={cx(styles.irAct, styles.danger)} disabled={busy}
+                    onClick={() => void confiscateEquipped(entry)}
+                    title="Unequips it, then removes it from the player's view entirely">
+                    <i className="fa-solid fa-hand" />Confirm
+                  </button>
+                ) : (
+                  <button className={cx(styles.irAct, styles.take)} disabled={busy}
+                    onClick={() => setConfirmTake(entry.item.id ?? null)}
+                    title="Confiscate — unequips it first, then takes it">
+                    <i className="fa-solid fa-hand" />Take
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ---------- held ---------- */}
       <section className={styles.invPanel}>

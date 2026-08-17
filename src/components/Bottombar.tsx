@@ -57,7 +57,7 @@ export function Bottombar({ shopOpen, shopDismissed, onReopenShop, rollPanelOpen
               closed it server-side, so it's still live for the taking. */}
           {shopOpen && shopDismissed && (
             <button type="button" className={styles.bbBtn} onClick={onReopenShop} title="Reopen the live shop">
-              <i className="fa-solid fa-shop" /> Shop
+              <i className="fa-solid fa-shop" /> SHOP
             </button>
           )}
           <button
