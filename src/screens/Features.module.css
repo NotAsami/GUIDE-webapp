@@ -42,7 +42,7 @@
   margin-left: 14px;
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em;
   color: var(--muted); text-transform: uppercase;
-  background: transparent; border: 1px solid rgba(212, 191, 125, 0.35);
+  background: transparent; border: 1.5px solid rgba(212, 191, 125, 0.35);
   padding: 4px 9px; cursor: pointer;
   transition: color 140ms ease, border-color 140ms ease;
 }
@@ -234,7 +234,7 @@
 
 .srcTag {
   font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; color: var(--beige);
-  text-transform: uppercase; white-space: nowrap; border: 1px solid rgba(212, 191, 125, 0.35); padding: 2px 6px;
+  text-transform: uppercase; white-space: nowrap; border: 1.5px solid rgba(212, 191, 125, 0.35); padding: 2px 6px;
 }
 .gearTag { color: var(--cyan); border-color: rgba(0, 166, 214, 0.45); }
 .actBadge {
@@ -252,7 +252,7 @@
 .armed {
   display: inline-flex; align-items: center; gap: 3px;
   font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em;
-  color: var(--amber); border: 1px solid rgba(226, 176, 33, 0.45); padding: 2px 6px;
+  color: var(--amber); border: 1.5px solid rgba(226, 176, 33, 0.45); padding: 2px 6px;
 }
 
 /* right rail: uses */
@@ -271,8 +271,13 @@
 .fxOp { font-family: var(--font-mono); font-size: 11px; color: var(--cyan); opacity: 0.85; text-align: center; line-height: 1; }
 .fxTxt { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
 .fxTxt p { margin: 0; }
-.fxTxt strong { color: var(--text); font-weight: 500; }
-.fxTag { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; }
+.fxTag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; }
+/* The damage type, in the damage colour. `--dt` is set inline from lib/palette.ts,
+   so this file names no damage types - the roll panel follows the same rule. */
+.fxType { color: var(--dt, var(--beige)); font-size: 8.5px; letter-spacing: 0.18em; }
+/* The value takes the damage colour too, which is what makes a radiant row read
+   as radiant at a glance rather than after reading the label. */
+.fxRow .fxTxt strong, .imRow .imRowTxt strong { color: var(--dt, var(--cyan-hot)); }
 
 /* ---- FEATURE TINT (DM-set colour, --tint) ----
    Tint owns two things only: the header wash and the hexagon fill. State (cyan
@@ -324,7 +329,7 @@
 .psHead { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; color: var(--beige-dim); text-transform: uppercase; }
 .psRow {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
-  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(212, 191, 125, 0.22);
+  background: rgba(0, 0, 0, 0.3); border: 1.5px solid rgba(212, 191, 125, 0.22);
   color: var(--muted); padding: 6px 9px; cursor: pointer;
   font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
   transition: color 140ms ease, border-color 140ms ease;
@@ -335,7 +340,7 @@
 .psVal { font-family: var(--font-display); font-size: 12px; color: var(--beige); }
 .psStep { display: inline-flex; align-items: center; gap: 6px; }
 .psStep button {
-  width: 18px; height: 18px; border: 1px solid var(--beige-dim); color: var(--beige);
+  width: 18px; height: 18px; border: 1.5px solid var(--beige-dim); color: var(--beige);
   background: rgba(0, 0, 0, 0.4); font-family: var(--font-display); font-size: 12px; line-height: 1; cursor: pointer;
 }
 .psStep button:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
@@ -401,34 +406,59 @@
 .imHead.tinted .imName { color: var(--tint-name); }
 .imHead.tinted .imName.on { color: var(--cyan-hot); }
 .imHead.tinted .imCrystal {
-  color: var(--tint-name); border-color: color-mix(in srgb, var(--tint) 58%, transparent);
-  background: radial-gradient(120% 90% at 50% 40%, color-mix(in srgb, var(--tint) 26%, transparent), transparent 65%), rgba(0, 0, 0, 0.45);
+  --edge: color-mix(in srgb, var(--tint) 58%, transparent);
+  color: var(--tint-name);
   filter: drop-shadow(0 0 9px color-mix(in srgb, var(--tint) 32%, transparent));
 }
-.imHead.tinted.spent .imCrystal { color: rgba(222, 222, 222, 0.4); border-color: rgba(185, 58, 58, 0.6); background: rgba(0, 0, 0, 0.45); filter: none; }
+.imHead.tinted .imCrystal::before {
+  background: radial-gradient(120% 90% at 50% 40%, color-mix(in srgb, var(--tint) 26%, transparent), transparent 65%), #0b0b0b;
+}
+.imHead.tinted.spent .imCrystal { --edge: rgba(185, 58, 58, 0.6); color: rgba(222, 222, 222, 0.4); filter: none; }
+.imHead.tinted.spent .imCrystal::before { background: #0b0b0b; }
 .imCrystal {
-  flex: 0 0 auto; width: 44px; height: 48px; display: flex; align-items: center; justify-content: center;
-  color: var(--cyan-hot); font-size: 20px; border: 1px solid rgba(0, 166, 214, 0.5);
-  background: radial-gradient(120% 90% at 50% 40%, rgba(0, 166, 214, 0.18), transparent 65%), rgba(0, 0, 0, 0.45);
+  --edge: rgba(0, 166, 214, 0.5);
+  position: relative; flex: 0 0 auto; width: 44px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--cyan-hot); font-size: 20px;
+  background: var(--edge);
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
   filter: drop-shadow(0 0 9px rgba(0, 166, 214, 0.4));
 }
-.imCrystal.passive { color: var(--beige); border-color: rgba(212, 191, 125, 0.5); background: rgba(0, 0, 0, 0.45); filter: none; }
+.imCrystal::before {
+  content: ""; position: absolute; inset: 1.5px; z-index: 0;
+  background: radial-gradient(120% 90% at 50% 40%, rgba(0, 166, 214, 0.18), transparent 65%), #0b0b0b;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.imCrystal i { position: relative; z-index: 1; }
+.imCrystal.passive { --edge: rgba(212, 191, 125, 0.5); color: var(--beige); filter: none; }
+.imCrystal.passive::before { background: #0b0b0b; }
 .imTitles { display: flex; flex-direction: column; gap: 7px; min-width: 0; margin-left: 5px; }
 .imName { font-family: var(--font-display); font-weight: 600; font-size: 20px; letter-spacing: 0.1em; color: var(--text); text-transform: uppercase; line-height: 1.05; }
 .imName.on { color: var(--cyan-hot); text-shadow: 0 0 14px rgba(0, 166, 214, 0.25); }
 .imTags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .imClose, .imBack {
+  --cut: 6px;
   flex: 0 0 auto; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.4); cursor: pointer;
-  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
-  transition: color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  background-color: rgba(0, 0, 0, 0.4); cursor: pointer;
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: color 150ms ease, box-shadow 150ms ease;
+  /* Chamfered border fix (docs/Chamfered_clip-path_corners_fix.md): a plain
+     border cannot draw on a clip-path's 45 degree edge, so two gradients paint
+     the diagonal stroke. Never override border-color or `background` shorthand. */
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
-.imClose { margin-left: auto; border: 1px solid rgba(212, 191, 125, 0.4); color: var(--beige); font-size: 13px; }
-.imClose:hover { color: var(--cyan-hot); border-color: var(--cyan); box-shadow: 0 0 12px rgba(0, 166, 214, 0.3); }
-.imBack { margin-left: auto; align-self: flex-start; border: 1px solid rgba(0, 166, 214, 0.45); color: var(--cyan); font-family: var(--font-mono); font-size: 15px; line-height: 1; }
+.imClose { --bc: rgba(212, 191, 125, 0.4); margin-left: auto; color: var(--beige); font-size: 13px; }
+.imClose:hover { --bc: var(--cyan); color: var(--cyan-hot); box-shadow: 0 0 12px rgba(0, 166, 214, 0.3); }
+.imBack { --bc: rgba(0, 166, 214, 0.45); margin-left: auto; align-self: flex-start; color: var(--cyan); font-family: var(--font-mono); font-size: 15px; line-height: 1; }
 .imBack + .imClose { margin-left: 0; }
-.imBack:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); box-shadow: 0 0 12px rgba(0, 166, 214, 0.3); }
+.imBack:hover { --bc: var(--cyan-hot); color: var(--cyan-hot); box-shadow: 0 0 12px rgba(0, 166, 214, 0.3); }
 
 .imBody {
   position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto;
@@ -441,11 +471,24 @@
 .imOrigin { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding-bottom: 13px; border-bottom: 1px dashed rgba(212, 191, 125, 0.25); }
 .ok { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; color: var(--beige-dim); text-transform: uppercase; width: 100%; margin-bottom: 3px; }
 .step {
+  --cut: 4px; --bc: rgba(212, 191, 125, 0.28);
   font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; color: var(--muted);
-  text-transform: uppercase; white-space: nowrap; border: 1px solid rgba(212, 191, 125, 0.28); padding: 3px 8px;
-  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  text-transform: uppercase; white-space: nowrap; padding: 3px 8px;
+  border: 1.5px solid var(--bc);
+  background-color: transparent;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  /* Chamfered border fix (docs/Chamfered_clip-path_corners_fix.md): a plain
+     border cannot draw on a clip-path's 45 degree edge, so two gradients paint
+     the diagonal stroke. Never override border-color or `background` shorthand. */
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
-.step.last { color: var(--cyan-hot); border-color: rgba(0, 166, 214, 0.55); }
+.step.last { --bc: rgba(0, 166, 214, 0.55); color: var(--cyan-hot); }
 .arw { font-family: var(--font-mono); font-size: 10px; color: var(--beige-dim); }
 
 .imFacts { display: flex; flex-wrap: wrap; gap: 9px 26px; margin-top: 13px; }
@@ -473,7 +516,6 @@
   background: rgba(0, 0, 0, 0.28); border-left: 2px solid var(--cyan); padding: 7px 10px;
 }
 .imRowTxt p { margin: 0; }
-.imRowTxt strong { color: var(--text); font-weight: 500; }
 .imRow .op { color: var(--cyan); text-align: center; }
 .imRow .s { color: var(--beige-dim); font-size: 8.5px; letter-spacing: 0.18em; }
 .imRow.aff { border-left-color: var(--beige); }

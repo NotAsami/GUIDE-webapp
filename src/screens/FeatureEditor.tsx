@@ -34,8 +34,9 @@ import {
   type ActivationKind,
 } from '../lib/opSchema'
 import type {
-  CatalogFeatureData, CatalogFeatureRow, FeatureCategory, GraphEffect, VarDef,
+  CatalogFeatureData, CatalogFeatureRow, Feature, FeatureCategory, GraphEffect, VarDef,
 } from '../lib/database.types'
+import { originChain } from '../lib/featureView'
 import styles from '../components/authoring.module.css'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
@@ -670,6 +671,7 @@ type PopKind =
   | { k: 'delete' }
   | { k: 'revert' }
   | { k: 'folder' }
+  | { k: 'origin' }
 
 type FormProps = {
   d: CatalogFeatureData
@@ -713,6 +715,9 @@ function OriginChain({ steps, onChange }: { steps: string[]; onChange: (next: st
   }
   return (
     <div className={styles.originList}>
+      {steps.length === 0 && (
+        <div className={styles.mono} style={{ color: 'var(--beige-dim)' }}>No steps — a chain will be derived.</div>
+      )}
       {steps.map((step, i) => (
         <div key={i} className={styles.originRow}>
           <span className={styles.originN}>{i + 1}</span>
@@ -780,13 +785,19 @@ function FeatureForm(p: FormProps) {
           <span className={styles.fieldLab}>Source detail</span>
           <input className={styles.in} value={d.source ?? ''} placeholder="Fighter 1" onChange={e => set({ source: e.target.value })} />
         </div>
-        <div className={styles.originCell}>
+        <div>
           <span className={styles.fieldLab}>Origin chain</span>
-          {/* The provenance breadcrumb the PLAYER sees in the feature popup. Left
-              empty it derives one from category / source detail / level / name,
-              so this is enrichment rather than another required field — which is
-              why it sits beside Source detail instead of replacing it. */}
-          <OriginChain steps={d.origin ?? []} onChange={origin => set({ origin: origin.length ? origin : undefined })} />
+          {/* A SUMMARY AND A BUTTON. The breadcrumb is an ordered list with three
+              controls per step; inline in a form grid that was unusable, so the
+              editing moved to its own panel like the icon and target pickers. */}
+          <button type="button" className={styles.originOpen} onClick={() => p.setPop({ k: 'origin' })}>
+            <span className={styles.originPreview}>
+              {(d.origin ?? []).filter(x => x.trim()).length
+                ? (d.origin ?? []).filter(x => x.trim()).join('  \u2192  ')
+                : <span className={styles.originAuto}>Derived from source &amp; name</span>}
+            </span>
+            <i className="fa-solid fa-pen-to-square" />
+          </button>
         </div>
         <div>
           <span className={styles.fieldLab}>Folder</span>
@@ -1178,6 +1189,36 @@ function Popover({ pop, onClose, draft, set, update, nodes, namesByGid, selId, r
               <button type="button" className={cx(styles.btn, styles.ghost)} style={{ height: 34 }} onClick={onClose}>
                 <span className={styles.bf} /><span className={styles.bi}>Keep editing</span>
               </button>
+            </div>
+          </div>
+        </>)}
+
+        {pop.k === 'origin' && draft && (<>
+          <div className={styles.popHead}>
+            <i className="fa-solid fa-diagram-project" style={{ color: 'var(--cyan)' }} />
+            <span className={styles.pt}>Origin chain</span>
+            <button type="button" className={styles.px} onClick={onClose}><i className="fa-solid fa-xmark" /></button>
+          </div>
+          <div className={styles.popBody}>
+            <div className={styles.mono} style={{ marginBottom: 10, color: 'var(--beige-dim)' }}>
+              The provenance breadcrumb in the player's feature popup. Leave it empty and one is
+              derived from the source, level and name — this is enrichment, not a required field.
+            </div>
+            <OriginChain
+              steps={draft.origin ?? []}
+              onChange={origin => set({ origin: origin.length ? origin : undefined })}
+            />
+            {/* The player's view, live. The chain is read left to right with the
+                last step marked, so seeing it assembled is the only way to catch
+                a reversed one. */}
+            <span className={styles.fieldLab} style={{ marginTop: 14 }}>As the player sees it</span>
+            <div className={styles.originLive}>
+              {originChain({ ...draft, name: draft.name || 'Unnamed' } as unknown as Feature).map((step, i, all) => (
+                <span key={i} style={{ display: 'contents' }}>
+                  <span className={cx(styles.originStep, i === all.length - 1 && styles.originLast)}>{step}</span>
+                  {i < all.length - 1 && <span className={styles.originArw}>&rarr;</span>}
+                </span>
+              ))}
             </div>
           </div>
         </>)}

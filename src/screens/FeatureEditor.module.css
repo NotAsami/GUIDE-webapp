@@ -2,7 +2,6 @@
 /* ---- Origin chain editor ----
    Spans the grid because a breadcrumb is a list, not a field: at one column wide
    the steps wrap mid-word and the reorder buttons collide with the input. */
-.originCell { grid-column: 1 / -1; }
 .originList { display: flex; flex-direction: column; gap: 5px; }
 .originRow { display: flex; align-items: center; gap: 6px; }
 .originN {
@@ -25,3 +24,29 @@
   padding: 5px 9px;
 }
 .originAdd:hover { color: var(--amber-hot); border-color: var(--amber); }
+
+/* The field row: a preview of the chain and a way in. The editing itself lives in
+   the origin popover, because three controls per step never fit a form column. */
+.originOpen {
+  display: flex; align-items: center; gap: 9px; width: 100%; cursor: pointer; text-align: left;
+  background-color: rgba(0, 0, 0, .4); border: 1.5px solid rgba(212, 191, 125, .24);
+  color: var(--beige); padding: 7px 9px; min-height: 32px;
+}
+.originOpen:hover { border-color: var(--amber); color: var(--amber-hot); }
+.originOpen i { margin-left: auto; flex: 0 0 auto; font-size: 10px; color: var(--beige-dim); }
+.originOpen:hover i { color: var(--amber); }
+.originPreview {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase;
+}
+.originAuto { color: var(--beige-dim); font-style: italic; }
+
+/* The player's view of the chain, live inside the panel. Reading it assembled is
+   the only way to catch a reversed one. */
+.originLive { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.originStep {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--beige-dim); border: 1.5px solid rgba(212, 191, 125, .28); padding: 3px 7px;
+}
+.originLast { color: var(--cyan-hot); border-color: rgba(0, 166, 214, .55); }
+.originArw { font-family: var(--font-mono); font-size: 9px; color: var(--beige-dim); }

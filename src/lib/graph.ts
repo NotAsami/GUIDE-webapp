@@ -175,6 +175,12 @@ export function baseScope(character: CharacterRow, shardTrees: Record<string, Sh
     int: abilityMod(ab.int), wis: abilityMod(ab.wis), cha: abilityMod(ab.cha),
     hp: character.sheet?.hp?.current ?? 0,
     hpMax: view.hp?.max ?? character.sheet?.hp?.max ?? 0,
+    /* The spell save DC the character IMPOSES. Read from the spellbook rather
+       than recomputed, because which ability backs it is the DM's answer and it
+       is already stored beside `attackBonus` — deriving it here would be a second
+       answer to a question the spellbook has already settled. Prose reaches it as
+       `{saveDc}`, which is what asked for it. */
+    saveDc: character.spellbook?.saveDC ?? 0,
   }
 }
 
