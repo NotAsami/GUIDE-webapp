@@ -59,17 +59,26 @@ export function Layout() {
   async function doAdvanceTurn() {
     if (!character) return
     const res = (character.resources ?? {}) as { activeEffects?: ActiveEffect[] }
-    const { next, expired, ticks, running } = advanceTurn(res.activeEffects ?? [])
+    const { next, expired, counted, ticks, running } = advanceTurn(res.activeEffects ?? [])
 
     await updateSection('resources', { ...res, activeEffects: next } as CharacterRow['resources'])
 
     addRoll({
       kind: 'custom', title: 'Turn Advanced', icon: 'fa-forward-step',
       subtitle: running ? `${running} still counting down` : 'nothing left on a timer',
+      /* EVERY countdown reports, not just the ones that ended. Seeing only
+         expiries means pressing the button four times in a row shows nothing at
+         all and then suddenly "cleared" — which reads as three broken presses
+         followed by one that worked. */
       lines: [
-        ...expired.map(e => ({ label: e.name, total: 'expired', breakdown: 'wore off', tone: 'buff' as const })),
-        ...(expired.length === 0 && ticks.length === 0
-          ? [{ label: 'No change', total: '—', breakdown: 'nothing expired or ticked' }]
+        ...counted.map(e => ({
+          label: e.name,
+          total: e.turns === 1 ? 'last turn' : `${e.turns} turns`,
+          breakdown: 'ticked down',
+        })),
+        ...expired.map(e => ({ label: e.name, total: 'cleared', breakdown: 'wore off', tone: 'buff' as const })),
+        ...(counted.length === 0 && expired.length === 0 && ticks.length === 0
+          ? [{ label: 'No change', total: '—', breakdown: 'nothing on a timer' }]
           : []),
       ],
       // A tick is a roll the PLAYER still owes, so it arrives as a manual rider —
