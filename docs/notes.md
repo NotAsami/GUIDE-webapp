@@ -73,7 +73,8 @@ The DM can define a list that would then parse these lists, choose what items to
 ## LEFT TO DO:
 COMPLETELY DESIGNED:
 - Party overview in the nav-bar or somewhere else, not sure where though, maybe a panel like the roll-context panel? (designed)
-- ~~Roll context panel, opens with a button in the bottom bar (only for decor currently) (designed)~~ ✔ **BUILT** — and it's now the sticky home for rolls, not something summoned per roll.
+- ~~Roll context panel, opens with a button in the bottom bar (only for decor currently) (designed)~~ ✔ **BUILT** — the toast is the result, the counted badge is the reminder, and **only the player opens the panel** (stickiness was built and then dropped on purpose, see line 61).
+- ~~Features screen redesign (mockup: `guide-hud/project/G.U.I.D.E. Features.html`)~~ ✔ **BUILT** — two-column stream, Usable/Passive tabs, source chips, the hexagon as the use control, effect sub-rows off the graph, per-feature tint, and a popup with an origin breadcrumb and a live "Affected by" reverse lookup. Dropped from the mockup on purpose: the gated/hidden counters (nothing in the data model backs them) and its Subclass chip (not a `FeatureCategory`).
 - Level up characters for DM-view (designed, need to review the design and make sure it is implemented correctly)
 
 SMALL CHANGES TO DESIGN:
@@ -92,4 +93,6 @@ NO NEED TO DESIGN:
 ---
 
 ## NEXT
-**Features screen redesign** — then the Advance Turn / round tracker above.
+**Advance Turn / round tracker** — the Turn Tracker section above has the design and
+the blocker: nothing stores a number of turns yet, so it is a data-model change
+before it is a button. The third behaviour of the button is still un-recalled.
