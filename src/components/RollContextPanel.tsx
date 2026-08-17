@@ -109,13 +109,19 @@ type ShowTip = (t: (TipData & { rect?: DOMRect }) | null) => void
 
 /* ---------------- the rail ---------------- */
 
-export function RollContextPanel({ onClose, character, shardTrees, onConsumeArmed }: {
+export function RollContextPanel({ onClose, character, shardTrees, onConsumeArmed, onAdvanceTurn, turnState }: {
   onClose: () => void
   character?: CharacterRow | null
   shardTrees?: Record<string, ShardTree>
   /** §8 #1's consumption tap. Absent = the panel renders armed riders read-only,
    *  which is what a surface with no character to write to honestly is. */
   onConsumeArmed?: (id: string) => void
+  /** Advancing a turn. Absent = no character to write to, so the control is not
+   *  offered at all rather than offered and inert. */
+  onAdvanceTurn?: () => void
+  /** What is on a timer, for the button's subtitle — a tracker that does not say
+   *  what it is tracking is a button you press hopefully. */
+  turnState?: { running: number; ticking: number }
 }) {
   const { rolls, updateRoll, clear } = useRollLog()
   const [folded, setFolded] = useState<Set<string>>(new Set())
@@ -209,6 +215,26 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
           </button>
           <button type="button" disabled={!rolls.length} onClick={clear}>Clear</button>
         </div>
+
+        {/* ADVANCE TURN lives here because this is where its RESULT lands — a
+            poison's 1d6 arrives as a rider the player rolls, in the panel they
+            are already looking at, rather than as a number the app rolled for
+            them somewhere else. */}
+        {onAdvanceTurn && (
+          <div className={styles.turnBar}>
+            <button type="button" className={styles.turnBtn} onClick={onAdvanceTurn}>
+              <i className="fa-solid fa-forward-step" />Advance Turn
+            </button>
+            <span className={styles.turnMeta}>
+              {turnState && (turnState.running || turnState.ticking)
+                ? [
+                  turnState.running ? `${turnState.running} counting down` : null,
+                  turnState.ticking ? `${turnState.ticking} ticking` : null,
+                ].filter(Boolean).join(' · ')
+                : 'nothing on a timer'}
+            </span>
+          </div>
+        )}
 
         <div className={styles.body} ref={bodyRef} aria-live="polite" onScroll={() => setTip(null)}>
           {rolls.length === 0

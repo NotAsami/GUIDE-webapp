@@ -356,3 +356,32 @@
   .rail, .scrim, .cat { animation: none; }
   .live .dot, .entry.fresh, .die.spin { animation: none; }
 }
+
+/* ---- Advance Turn ----
+   Its own strip under the roll controls rather than beside Clear: Clear and
+   Collapse are about READING the log, while this one writes to the character
+   sheet, and a state-changing action sitting in a row of view toggles is one you
+   press by accident. */
+.turnBar {
+  position: relative; z-index: 2; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 18px 10px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.16);
+}
+.turnBtn {
+  --cut: 6px;
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  background-color: rgba(226, 176, 33, 0.1);
+  border: 1.5px solid rgba(226, 176, 33, 0.45);
+  color: var(--amber);
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase;
+  padding: 7px 11px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+.turnBtn:hover { color: var(--amber-hot); border-color: var(--amber); background-color: rgba(226, 176, 33, 0.2); }
+.turnBtn i { font-size: 10px; }
+.turnMeta {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
+  color: var(--beige-dim); text-transform: uppercase;
+}

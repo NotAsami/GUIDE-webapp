@@ -11,6 +11,9 @@ import { ShopTakeover } from './ShopTakeover'
 import { RollContextPanel } from './RollContextPanel'
 import { usePresenceAnnounce } from '../lib/presence'
 import { consumeArmed } from '../lib/graphState'
+import { advanceTurn } from '../lib/turns'
+import { useRollLog } from '../lib/rolls'
+import type { ActiveEffect } from '../lib/database.types'
 import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
 import { useEffect, useRef, useState } from 'react'
@@ -44,6 +47,47 @@ export function Layout() {
      interruption you have to dismiss before you can do anything else. The toast
      and the counted badge already say a roll landed and where to read it. */
   const [rollPanelOpen, setRollPanelOpen] = useState(false)
+
+  /* ADVANCING A TURN is one write and one roll-log entry.
+     The entry is the point. A ticking effect comes back as an UNRESOLVED rider,
+     so the player rolls the poison themselves in the panel — the app never rolls
+     damage on someone's behalf while they are not looking, which is the same rule
+     §7 applies to every other conditional contribution. Expiries are results, so
+     they read as lines. */
+  const { addRoll } = useRollLog()
+  const activeNow = ((character?.resources ?? {}) as { activeEffects?: ActiveEffect[] }).activeEffects ?? []
+  async function doAdvanceTurn() {
+    if (!character) return
+    const res = (character.resources ?? {}) as { activeEffects?: ActiveEffect[] }
+    const { next, expired, ticks, running } = advanceTurn(res.activeEffects ?? [])
+
+    await updateSection('resources', { ...res, activeEffects: next } as CharacterRow['resources'])
+
+    addRoll({
+      kind: 'custom', title: 'Turn Advanced', icon: 'fa-forward-step',
+      subtitle: running ? `${running} still counting down` : 'nothing left on a timer',
+      lines: [
+        ...expired.map(e => ({ label: e.name, total: 'expired', breakdown: 'wore off', tone: 'buff' as const })),
+        ...(expired.length === 0 && ticks.length === 0
+          ? [{ label: 'No change', total: '—', breakdown: 'nothing expired or ticked' }]
+          : []),
+      ],
+      // A tick is a roll the PLAYER still owes, so it arrives as a manual rider —
+      // the same shape an `ask` uses, which is what keeps the ROLLS badge counting
+      // it until they deal with it.
+      riderGroups: ticks.length
+        ? [{
+          label: 'Turn',
+          riders: ticks.map(t => ({
+            label: t.name, source: 'Start of turn', op: 'add' as const,
+            formula: t.dice, flat: 0, dice: [t.dice],
+            when: 'manual' as const, on: false,
+            text: `${t.name} — roll ${t.dice}`,
+          })),
+        }]
+        : undefined,
+    })
+  }
 
   async function handleSignOut() {
     await signOut()
@@ -155,6 +199,11 @@ export function Layout() {
         <RollContextPanel
           character={character} shardTrees={shardTrees}
           onConsumeArmed={id => void updateSection('resources', consumeArmed(character, id) as CharacterRow['resources'])}
+          onAdvanceTurn={() => void doAdvanceTurn()}
+          turnState={{
+            running: activeNow.filter(e => typeof e.turns === 'number').length,
+            ticking: activeNow.filter(e => !!e.tick?.trim()).length,
+          }}
           onClose={() => setRollPanelOpen(false)}
         />
       )}

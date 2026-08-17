@@ -28,15 +28,6 @@ The DM can define a list that would then parse these lists, choose what items to
 ## BETTER IMAGE UPLOADS
 - Like so you don't have to use the sql for it. (probably on each character portrait or thing that has an image, you get an input for image files)
 
-## TURN TRACKER (not a VTT)
-- A turn tracker per-player button that when you press effects like poison get sent to the roll context panel that remind the player they took 1d6 damage (can roll in there) the button just “advances” the players turn, no tracking actual combat. The effects then need to be able to read the turn has advanced and remind themselves. Inspiration from dicecloud
-- Located in the roll context panel? YES!
-- **Scheduled: the pass after the Features screen redesign. Design + blockers written up in `GUIDE_Codex_Deferred.md` → "Advance Turn — a round tracker".**
-  - Behaviour so far: clear every 1-turn effect; decrement longer ones by a turn (1 minute = 10 turns); **third behaviour not yet recalled — deliberately not guessed, it may decide the data shape.**
-  - **Blocker found: nothing stores a NUMBER of turns.** `EquippedItem.duration`, `ActiveEffect.note` and `Spell.duration` are all free text — `EquippedItem.duration`'s own comment says *"NOT auto-counted — there's no round tracker"*. Live data is worse: the one active effect in the campaign is Haste and its `note` (the documented duration field) holds `"Haste"`, i.e. it's being used as a label. So this is a data-model change before it's a button: `ActiveEffect.turns?: number`, authored at apply time.
-  - Already has somewhere to report: `pendingOf` (lib/rollView.ts) reserves a turn-tick slot, so the toast's CTA and the nav badge will surface "3 ticked, 1 expired" with no change to either surface.
-  - **Decide with it, don't discover after: concentration.** Haste is a concentration spell, and a tracker that keeps ticking an effect nobody is concentrating on is a silent wrong number, not a missing feature.
-
 ## ISSUES
 - Add a way to add a picture of shopkeeper to the menu (needs design (both shopkeeper editor & the actual menu) + better image uploads)
 - Spells that grant effects don’t currently do anything except give an indicator to the effects panel, update the effect granter when effect editor is built. — **OPEN, and unscoped.** The effect editor exists; what "integration" means does not: which effects a spell may grant, whether casting applies them, and how they expire. Needs reading before building.
@@ -71,6 +62,6 @@ NO NEED TO DESIGN:
 ---
 
 ## NEXT
-**Advance Turn / round tracker** — the Turn Tracker section above has the design and
-the blocker: nothing stores a number of turns yet, so it is a data-model change
-before it is a button. The third behaviour of the button is still un-recalled.
+Open field. The Turn Tracker shipped; what remains on the ISSUES list is
+shopkeeper pictures (image work), spell-granted effects (unscoped), and §19's
+AmmoBonus deletion (blocked on the carried-item question).

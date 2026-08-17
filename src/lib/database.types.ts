@@ -580,6 +580,29 @@ export type ActiveEffect = {
   desc?: string
   /** When it was applied (epoch ms). */
   at?: number
+  /** Turns remaining, counted down by Advance Turn (lib/turns.ts).
+   *
+   *  ABSENT MEANS UNTRACKED, never zero — "until rest", a permanent boon, or a
+   *  condition the DM will lift by hand. Treating absent as expired would delete
+   *  every effect the first time the button was pressed.
+   *
+   *  A NUMBER, because `note` and `duration` are free text: one says "10 rounds",
+   *  another "1 minute", and the one live effect in the campaign says "Haste".
+   *  None of that can be decremented, which is why the tracker needed this field
+   *  before it could need a button. Written at apply time from the duration the
+   *  DM already picks (amount + unit), so it is derived rather than re-typed. */
+  turns?: number
+  /** Damage this effect deals at the start of each turn, as a dice expression —
+   *  "1d6" for poison. Advance Turn does NOT roll it: it surfaces it in the roll
+   *  panel for the player to roll, because a number the app rolled on your behalf
+   *  while you were not looking is one you cannot check. */
+  tick?: string
+  /** Requires concentration. Display and bookkeeping only — the app never drops
+   *  it, because losing concentration is a saving throw made at the table and an
+   *  effect the app cancelled on its own would be a rule it invented. Marked so
+   *  the player can see WHY it is fragile, and so a second one is visibly a
+   *  problem. */
+  concentration?: boolean
 }
 
 /** Weapon-specific fields layered onto an item. */
