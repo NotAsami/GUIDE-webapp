@@ -1609,20 +1609,11 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
 
       {category === 'weapon' && (
         <div className={styles.catGrid3}>
-          <div>
-            <span className={styles.fieldLab}>Attack Ability</span>
-            <select className={styles.selIn} value={ability} onChange={e => setAbility(e.target.value as WeaponAbility)}>
-              {WEAPON_ABILITIES.map(a => <option key={a} value={a}>{a === 'finesse' ? 'Finesse' : a.toUpperCase()}</option>)}
-            </select>
-          </div>
-          <div><span className={styles.fieldLab}>Damage Dice</span><input className={styles.sessIn} value={damageDice} onChange={e => setDamageDice(e.target.value)} placeholder="e.g. 1d8" /></div>
-          <div><span className={styles.fieldLab}>Damage Type</span><input className={styles.sessIn} value={dmgType} onChange={e => setDmgType(e.target.value)} placeholder="e.g. Slashing" /></div>
+          {/* FIRST in the weapon block, because it is the question that changes
+              the answers below it — everything ranged hangs off this one flag:
+              the empty-quiver refusal, the ammunition spend, and the `ranged` sub
+              that makes `roll:attack.ranged` match. */}
           <div className={styles.catSpan3}>
-            {/* Everything ranged hangs off this one flag: the empty-quiver
-                refusal, the ammunition spend, and the `ranged` sub that makes
-                `roll:attack.ranged` match. It was previously inferred from the
-                word "ammunition" in a free-text list with no control, so no
-                weapon made here could be ranged at all. */}
             <label className={styles.catCheck}>
               <input type="checkbox" checked={ranged}
                 onChange={e => {
@@ -1634,6 +1625,14 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
               <span>Ranged <span className={styles.dimLab}>— fires ammunition, spends a shaft per attack</span></span>
             </label>
           </div>
+          <div>
+            <span className={styles.fieldLab}>Attack Ability</span>
+            <select className={styles.selIn} value={ability} onChange={e => setAbility(e.target.value as WeaponAbility)}>
+              {WEAPON_ABILITIES.map(a => <option key={a} value={a}>{a === 'finesse' ? 'Finesse' : a.toUpperCase()}</option>)}
+            </select>
+          </div>
+          <div><span className={styles.fieldLab}>Damage Dice</span><input className={styles.sessIn} value={damageDice} onChange={e => setDamageDice(e.target.value)} placeholder="e.g. 1d8" /></div>
+          <div><span className={styles.fieldLab}>Damage Type</span><input className={styles.sessIn} value={dmgType} onChange={e => setDmgType(e.target.value)} placeholder="e.g. Slashing" /></div>
         </div>
       )}
 
