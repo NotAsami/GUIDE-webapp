@@ -174,6 +174,15 @@ export function ShopTakeover({ character, updateSection, shop, dismissed, onDism
                 <div className={cx(styles.coinBadge, styles.sp)}><span className={styles.ci}>SP</span><span className={styles.cval}>{(coins?.silver ?? 0).toLocaleString()}</span><span className={styles.clab}>Silv</span></div>
                 <div className={cx(styles.coinBadge, styles.cp)}><span className={styles.ci}>CP</span><span className={styles.cval}>{(coins?.copper ?? 0).toLocaleString()}</span><span className={styles.clab}>Copp</span></div>
               </div>
+              {/* lib/coins.ts has always converted at 1gp = 10sp = 100cp; the
+                  screen just never said so, which made a price in silver
+                  guesswork against a purse displayed in gold. */}
+              <div className={styles.rateNote}>
+                <i className="fa-solid fa-right-left" />
+                <span><b>1</b> gp = <b>10</b> sp</span>
+                <span className={styles.rSep}>·</span>
+                <span><b>1</b> sp = <b>10</b> cp</span>
+              </div>
               <div className={styles.purseNote}>
                 <span><span className={styles.k}>Ledger</span> · <span className={styles.acc}>Live — server confirms every purchase</span></span>
                 <span><span className={styles.k}>Affordable</span> · <span className={styles.acc}>{affordable} of {live.length} in stock</span></span>
@@ -222,7 +231,7 @@ export function ShopTakeover({ character, updateSection, shop, dismissed, onDism
                           <span className={styles.scFoot}>
                             <span className={styles.nm}>{line.item.name}</span>
                             <span className={styles.pr}>
-                              <span className={styles.coin}>{(line.unit ?? 'gp').toUpperCase()}</span>
+                              <span className={cx(styles.coin, styles[line.unit ?? 'gp'])}>{(line.unit ?? 'gp').toUpperCase()}</span>
                               <span className={styles.v}>{line.price.toLocaleString()}</span>
                               <span className={styles.u}>{line.unit ?? 'gp'}</span>
                               <span className={styles.st}>{state}</span>
