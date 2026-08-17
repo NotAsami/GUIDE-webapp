@@ -15,9 +15,6 @@ import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
 import { useEffect, useRef, useState } from 'react'
 
-/** Whether the roll panel is open, for the length of the session. */
-const PANEL_OPEN = 'guide.rollPanel.open'
-
 export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
   const { character, loading, error, updateSection, updateSections } = useCharacter()
@@ -41,19 +38,12 @@ export function Layout() {
     wasShopVisibleRef.current = !!shop
   }, [shop])
 
-  /* THE PANEL IS STICKY, and ONLY THE PLAYER OPENS IT. It survives navigation
-     for free (Layout outlives the routes) and a reload via sessionStorage —
-     "within a session" is the ask, so sessionStorage rather than localStorage.
-
-     It does NOT auto-open on a roll. A panel that appears on its own is an
-     interruption in the middle of the thing you were doing, and the toast plus
-     the counted badge already say a roll landed and where to read it. */
-  const [rollPanelOpen, setRollPanelOpen] = useState(() => sessionStorage.getItem(PANEL_OPEN) === '1')
-
-  function setPanel(open: boolean) {
-    setRollPanelOpen(open)
-    sessionStorage.setItem(PANEL_OPEN, open ? '1' : '0')
-  }
+  /* Plain open/closed state, and ONLY THE PLAYER CHANGES IT.
+     No auto-open on a roll and no restore across a reload: this panel is a modal
+     with a scrim over the whole app, so a copy of it appearing on its own is an
+     interruption you have to dismiss before you can do anything else. The toast
+     and the counted badge already say a roll landed and where to read it. */
+  const [rollPanelOpen, setRollPanelOpen] = useState(false)
 
   async function handleSignOut() {
     await signOut()
@@ -146,11 +136,11 @@ export function Layout() {
         </main>
         <Bottombar
           shopOpen={!!shop} shopDismissed={shopDismissed} onReopenShop={() => setShopDismissed(false)}
-          rollPanelOpen={rollPanelOpen} onToggleRollPanel={() => setPanel(!rollPanelOpen)}
+          rollPanelOpen={rollPanelOpen} onToggleRollPanel={() => setRollPanelOpen(v => !v)}
         />
       </div>
 
-      <RollToast onOpen={() => setPanel(true)} />
+      <RollToast onOpen={() => setRollPanelOpen(true)} />
       {/* Operator pushes (grants / effects / notices) arrive here via the
           G.U.I.D.E. voice channel — top-right, clear of RollToast. */}
       <SystemToasts characterId={character.id} />
@@ -165,7 +155,7 @@ export function Layout() {
         <RollContextPanel
           character={character} shardTrees={shardTrees}
           onConsumeArmed={id => void updateSection('resources', consumeArmed(character, id) as CharacterRow['resources'])}
-          onClose={() => setPanel(false)}
+          onClose={() => setRollPanelOpen(false)}
         />
       )}
     </>
