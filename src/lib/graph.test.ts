@@ -1625,3 +1625,26 @@ test('a flat number and a bare die carry no derivation', () => {
     assert.equal(resolve(buildContext(c), ATTACK).riders[0].parts, undefined, `${value} derives from nothing`)
   }
 })
+
+test('an ask-gated flag is an authoring error — it can never take effect', () => {
+  // The trap: `ask` is answered in the roll panel, AFTER the d20 exists. A number
+  // can still be added there; advantage changes how the die is rolled, and §8 #2
+  // forbids re-rolling. So the toggle appears, the player says yes, and the roll
+  // it was meant to change is already spent.
+  const bad = auditNode({ graph: [{ id: 'e1', op: 'adv', label: 'Hood', ask: 'While hood is up', target: ['roll:check.stealth'] }] }, [])
+  const hit = bad.find(a => a.t === 'Adv cannot be asked')
+  assert.ok(hit, 'an ask on adv must be reported')
+  assert.equal(hit?.sev, 'err')
+  assert.match(hit!.s, /player toggle/, 'and must name the fix')
+
+  // The same flag gated by `when` is exactly right — the engine knows in time.
+  const good = auditNode({
+    graph: [{ id: 'e1', op: 'adv', label: 'Hood', when: 'hoodUp', target: ['roll:check.stealth'] }],
+    vars: [{ name: 'hoodUp', kind: 'stored', type: 'bool', scope: 'player' }],
+  }, [])
+  assert.equal(good.filter(a => a.sev === 'err').length, 0)
+
+  // And an ask on a NUMBER stays legal — that is the whole point of the panel.
+  const num = auditNode({ graph: [{ id: 'e1', op: 'add', value: '1d6', label: 'Smite', ask: 'Did it hit?', target: ['roll:damage'] }] }, [])
+  assert.equal(num.filter(a => a.sev === 'err').length, 0)
+})
