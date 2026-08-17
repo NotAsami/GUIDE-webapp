@@ -2291,24 +2291,48 @@ function EffectLibrarySurface({ lib }: { lib: DmEffectsState }) {
   )
 }
 
-/** Skill multi-select for an effect's granted proficiency / expertise.
+/** Skill proficiency for an effect — one list, three states.
  *
- *  A chip grid rather than a `<select multiple>`: there are eighteen skills, the
- *  DM picks one or two, and a native multi-select hides everything not scrolled
- *  to. Reads SKILLS from lib/dnd.ts so the list cannot drift from the one the
- *  Stats screen renders and the one skillRow scores. */
-function SkillPicker({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
-  const on = new Set(value)
+ *  Mirrors card G (ProficienciesCard), because they are the same question asked
+ *  of different subjects: a skill is untrained, proficient, or expert, and those
+ *  are three points on ONE axis. Two separate checkbox grids made it possible to
+ *  tick expertise without proficiency — a state 5e has no name for, which
+ *  lib/effects.ts then had to quietly repair on every read.
+ *
+ *  Click cycles none -> proficient -> expertise -> none. */
+function SkillPicker({ profs, exp, onChange }: {
+  profs: string[]; exp: string[]
+  onChange: (next: { profs: string[]; exp: string[] }) => void
+}) {
+  const cycle = (key: string) => {
+    const isExp = exp.includes(key)
+    const isProf = profs.includes(key)
+    if (!isProf && !isExp) return onChange({ profs: [...profs, key], exp })
+    if (isProf && !isExp) return onChange({ profs, exp: [...exp, key] })
+    return onChange({ profs: profs.filter(k => k !== key), exp: exp.filter(k => k !== key) })
+  }
   return (
-    <div className={styles.efTags}>
-      {SKILLS.map(sk => (
-        <span
-          key={sk.key} role="button" tabIndex={0}
-          className={cx(styles.efChip, !on.has(sk.key) && styles.empty)}
-          onClick={() => onChange(on.has(sk.key) ? value.filter(k => k !== sk.key) : [...value, sk.key])}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(on.has(sk.key) ? value.filter(k => k !== sk.key) : [...value, sk.key]) } }}
-        >{sk.name}</span>
-      ))}
+    <div className={styles.profGrid}>
+      {SKILLS.map(skill => {
+        const isExp = exp.includes(skill.key)
+        const isProf = profs.includes(skill.key) || isExp
+        return (
+          <button
+            key={skill.key} type="button"
+            className={cx(styles.profChip, isProf && styles.on, isExp && styles.exp)}
+            onClick={() => cycle(skill.key)}
+            title={isExp ? 'Expertise (x2 proficiency) — click to clear' : isProf ? 'Proficient — click for expertise' : 'Click to grant proficiency'}
+          >
+            {isProf && (
+              <span className={styles.profDots}>
+                <span className={styles.profDot} />
+                {isExp && <span className={styles.profDot} />}
+              </span>
+            )}
+            {skill.name} <span className={styles.ab}>{ABILITY_ABBR[skill.ability].toUpperCase()}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -2411,14 +2435,15 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
         })}
       </div>
 
-      {/* Skill proficiency and expertise. Not modifier rows: a modifier is a
-          number, and being PROFICIENT scales with the proficiency bonus instead.
-          Expertise implies proficiency, so ticking it in both columns is not
-          required — lib/effects.ts unions it in. */}
-      <span className={styles.fieldLab}>Skill proficiency</span>
-      <SkillPicker value={skillProfs} onChange={setSkillProfs} />
-      <span className={styles.fieldLab}>Skill expertise <span className={styles.dimLab}>double proficiency</span></span>
-      <SkillPicker value={skillExp} onChange={setSkillExp} />
+      {/* Not modifier rows: a modifier is a number, and being PROFICIENT scales
+          with the proficiency bonus instead. One list rather than two, because
+          untrained / proficient / expert are three points on one axis — see
+          SkillPicker. */}
+      <span className={styles.fieldLab}>Skill proficiency <span className={styles.dimLab}>— click cycles none → proficient → expertise</span></span>
+      <SkillPicker
+        profs={skillProfs} exp={skillExp}
+        onChange={next => { setSkillProfs(next.profs); setSkillExp(next.exp) }}
+      />
 
       <span className={styles.fieldLab}>Tags</span>
       <div className={styles.efTags}>
