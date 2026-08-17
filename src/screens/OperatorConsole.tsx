@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState } from '../lib/dm'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
+import { parseCatalogQuery, matchesCatalogQuery } from '../lib/catalogSearch'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
 import type { GraphEffect, GraphState, ShardSlot, ShardTree, VarDef } from '../lib/database.types'
@@ -415,7 +416,7 @@ export function OperatorConsole() {
                 </div>
               </div>
             )}
-            <div className={cx(styles.workBody, view === 'catalog' && styles.railed)}>
+            <div className={cx(styles.workBody, view === 'catalog' && styles.catBody)}>
               {error ? (
                 <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
               ) : partyLoading ? (
@@ -1369,6 +1370,11 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
 }) {
   const { items, createItem, updateItem, deleteItem, loading, error } = catalog
   const [selId, setSelId] = useState<string | null>(null)
+  const [itemQuery, setItemQuery] = useState('')
+  const shownItems = useMemo(() => {
+    const q = parseCatalogQuery(itemQuery)
+    return items.filter(it => matchesCatalogQuery(it.data ?? {}, q))
+  }, [items, itemQuery])
   const [creating, setCreating] = useState(false)
 
   const activeId = creating ? null : (selId ?? items[0]?.id ?? null)
@@ -1413,8 +1419,17 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
             <div className={styles.catNew}>
               <Btn tone="cyan" icon="fa-plus" label="New Item" onClick={() => { setCreating(true); setSelId(null) }} />
             </div>
+            {/* Sticky, so it stays put as the list scrolls under it — a search
+                box that scrolls away recreates the up-and-down it exists to
+                stop. */}
+            <div className={cx(styles.searchWrap, styles.catSearch)}>
+              <i className="fa-solid fa-magnifying-glass" />
+              <input className={styles.searchIn} value={itemQuery} onChange={e => setItemQuery(e.target.value)}
+                placeholder="Search items, or tag:fire_damage" autoComplete="off" spellCheck={false} />
+              {itemQuery && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setItemQuery('')} />}
+            </div>
             {CAT_ORDER.map(cat => {
-              const rows = items.filter(it => (it.data?.category ?? 'misc') === cat)
+              const rows = shownItems.filter(it => (it.data?.category ?? 'misc') === cat)
               if (!rows.length) return null
               return (
                 <div key={cat} className={styles.catGrp}>
@@ -1438,7 +1453,14 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
                 </div>
               )
             })}
-            {items.length === 0 && <div className={styles.catEmpty}>{loading ? '· loading ·' : '— catalog empty —'}</div>}
+            {/* "no matches" and "nothing authored yet" are different states and
+                the empty catalog message reads as a bug when you have 20 items
+                and simply mistyped a tag. */}
+            {items.length === 0
+              ? <div className={styles.catEmpty}>{loading ? '· loading ·' : '— catalog empty —'}</div>
+              : shownItems.length === 0
+                ? <div className={styles.catEmpty}>— nothing matches —</div>
+                : null}
           </div>
 
           <div className={styles.catForm}>

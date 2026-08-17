@@ -266,11 +266,31 @@
    scrollbar styled by the ::-webkit-scrollbar-thumb rule below — a stray amber/gold bar
    along the bottom of the panel that has nothing to do with an intentional design element. */
 .workBody { position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 13px; }
-/* The catalog rail hangs off region 01 and overlaps ~20px into this panel, so
-   the catalog's content has to start clear of it — the same reason the
-   authoring editor's .gp-body carries a 46px left padding under its .gbtn
-   tabs. Only on the catalog view; every other surface uses the full width. */
-.workBody.railed { padding-left: 30px; }
+/* The catalog view, which needs two things this panel does not do by default.
+   Only this view; every other surface keeps the plain scrolling body.
+
+   1. LEFT PADDING — the rail hangs off region 01 and overlaps ~20px into this
+      panel, the same reason the authoring editor's .gp-body carries 46px under
+      its .gbtn tabs.
+
+   2. NO SCROLL OF ITS OWN. The body used to scroll as one piece, so reading
+      down a long item list dragged the editor along with it and you had to
+      scroll back up to get at the form. Instead the body is now a fixed-height
+      flex column and the two catalog panes scroll independently — which is what
+      the mockup's .wb-catalog does. `min-height: 0` on both is what actually
+      allows them to shrink and scroll; a flex child defaults to min-height:auto
+      and would just grow the column instead. */
+.workBody.catBody { padding-left: 30px; display: flex; flex-direction: column; overflow: hidden; }
+.workBody.catBody > .ovBanner { flex: 0 0 auto; }
+.workBody.catBody > .catLayout { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+.workBody.catBody .catIndex,
+.workBody.catBody .catForm { min-height: 0; overflow-y: auto; padding-right: 7px; }
+.workBody.catBody .catIndex::-webkit-scrollbar,
+.workBody.catBody .catForm::-webkit-scrollbar { width: 7px; }
+.workBody.catBody .catIndex::-webkit-scrollbar-track,
+.workBody.catBody .catForm::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
+.workBody.catBody .catIndex::-webkit-scrollbar-thumb,
+.workBody.catBody .catForm::-webkit-scrollbar-thumb { background: rgba(226, 176, 33, 0.35); }
 .workBody::-webkit-scrollbar { width: 7px; }
 .workBody::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
 .workBody::-webkit-scrollbar-thumb { background: rgba(226,176,33,0.35); }
@@ -1089,6 +1109,20 @@
 
 .catLayout { display: grid; grid-template-columns: 250px 1fr; gap: 18px; align-items: start; }
 .catIndex { display: flex; flex-direction: column; gap: 13px; }
+
+/* Pinned to the top of the scrolling index. Needs an opaque background of its
+   own — rows scrolling underneath a transparent sticky element show straight
+   through it — and a z-index above them. */
+.catSearch {
+  position: sticky; top: 0; z-index: 2; margin-bottom: 0;
+  background: linear-gradient(180deg, #161513 82%, rgba(22, 21, 19, 0));
+  padding-bottom: 7px;
+}
+.catSearchClr {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--beige-dim); font-size: 10px; cursor: pointer;
+}
+.catSearchClr:hover { color: var(--amber-hot); }
 .catGrp .catGrpHead { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
 .catGrpHead .ghT { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--beige); }
 .catGrpHead .ghC { font-family: var(--font-mono); font-size: 8px; color: var(--beige-dim); }
