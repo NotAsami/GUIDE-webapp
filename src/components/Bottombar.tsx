@@ -29,7 +29,10 @@ export function Bottombar({ shopOpen, shopDismissed, onReopenShop, rollPanelOpen
 
      Seeded with the newest roll already in the log, so arriving on a screen with
      history behind you does not ping for rolls you have seen. */
-  const latest = rolls[0]
+  // The newest entry that has NOT already announced itself. A rest toast is its
+  // own notification, so it neither raises the ping nor hides an earlier roll
+  // that is still unread.
+  const latest = rolls.find(r => !r.quiet)
   const [seen, setSeen] = useState<string | null>(() => latest?.id ?? null)
   useEffect(() => {
     if (rollPanelOpen && latest) setSeen(latest.id)
