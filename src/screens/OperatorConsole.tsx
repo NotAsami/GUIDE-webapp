@@ -2209,7 +2209,22 @@ const modText = (m: Mod) => (m.set ? `${m.stat} = ${m.amt}` : `${m.amt < 0 ? '�
 const flagText = (f: EffectFlag) => `${EF_FLAG_MODES[f.mode].short} ${f.target || '—'}`
 /** Mods then flags, as short human strings — used everywhere an effect is
  *  summarised: the index row, the preview strip, an item's reference row. */
-const effectParts = (e: { mods: Mod[]; flags: EffectFlag[] }) => [...e.mods.map(modText), ...e.flags.map(flagText)]
+/** One effect, summarised as chips — used by the Apply Effect list, the item
+ *  form's Effects Granted rows, and its picker.
+ *
+ *  Skill proficiency is included because without it an effect whose ONLY content
+ *  is "proficient in Stealth" summarised as nothing at all, in all three places:
+ *  you would attach it to an item and the row would sit there blank, which reads
+ *  as "this effect does nothing". */
+const SKILL_NAME: Record<string, string> = Object.fromEntries(SKILLS.map(sk => [sk.key, sk.name]))
+const effectParts = (e: { mods: Mod[]; flags: EffectFlag[]; skillProficiencies?: string[]; skillExpertise?: string[] }) => [
+  ...e.mods.map(modText),
+  ...e.flags.map(flagText),
+  ...(e.skillProficiencies ?? [])
+    .filter(k => !(e.skillExpertise ?? []).includes(k))
+    .map(k => `Prof: ${SKILL_NAME[k] ?? k}`),
+  ...(e.skillExpertise ?? []).map(k => `Expertise: ${SKILL_NAME[k] ?? k}`),
+]
 
 /** The Effects tab of the Catalog: author-once library of effect DEFINITIONS,
  *  grouped by kind (mirrors the mockup). Same index+form pattern as Items/
