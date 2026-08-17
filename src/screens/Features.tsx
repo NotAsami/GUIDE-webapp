@@ -79,7 +79,18 @@ export function Features() {
   const graph = useGraph(character, shardTrees)
   const vars = playerVars(character, shardTrees)
 
-  const [tab, setTab] = useState<'usable' | 'passive'>('usable')
+  /* THE DEFAULT TAB IS WHICHEVER HAS ANYTHING IN IT.
+     Usable first when it is not empty — it is the half you act on. But a
+     character can legitimately have nothing pressable (every one of this
+     character's features is a passive `add`), and opening on an empty tab makes a
+     fully-populated screen look broken. Computed once on mount, not per render:
+     spending the last use of the last usable feature must not yank the player to
+     another tab mid-press. */
+  const [tab, setTab] = useState<'usable' | 'passive'>(() =>
+    (character.sheet?.features ?? []).some(isUsable)
+      || gearFeatures(character).some(isUsable)
+      || shardFeatures(character, shardTrees).some(isUsable)
+      ? 'usable' : 'passive')
   const [src, setSrc] = useState('all')
   /** The open popup, plus the trail that got there. Features reach other
    *  features through AFFECTED BY, so opening a contributor pushes and BACK
