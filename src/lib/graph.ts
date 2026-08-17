@@ -26,7 +26,7 @@ import type { ArmedMod, CharacterRow, GraphEffect, GraphOp, GraphState, ShardTre
 import type { ExprScope, FormulaValue } from './expr.ts'
 import { ROLL_IDENTS, VAR_IDENTS, evalExpr, freeIdents, interpolate, interpolations } from './expr.ts'
 import { type ActiveSource, activeSources, effectiveSheet } from './effects.ts'
-import { IS_ACTIVATION, OPS } from './opSchema.ts'
+import { IS_ACTIVATION, OPS, OP_TITLE } from './opSchema.ts'
 import { abilities, abilityMod, proficiency } from './dnd.ts'
 import { rolledDiceTerms, type RolledDie } from './dice.ts'
 
@@ -1040,6 +1040,22 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
     }
     if (eff.op !== 'add' && !IS_ACTIVATION(eff.op) && eff.value) {
       out.push({ sev: 'err', id: eff.id, t: 'Value on a flag', s: `${eff.label || eff.id} is ${eff.op}, which is a flag, never a number. Advantage is not a bonus.` })
+    }
+    /* A FLAG CANNOT BE DECIDED AFTER THE DICE LAND.
+       `ask` is answered in the roll panel, which is by definition after the roll:
+       a number can still be added there, but advantage changes HOW the d20 is
+       rolled, and §8 #2 forbids re-rolling one that already exists. So an
+       ask-gated adv/dis/crit silently does nothing — the panel offers a toggle,
+       the player says yes, and the roll it was meant to change is already spent.
+
+       The fix is always the same shape, and it is the one §04 of the authoring
+       guide describes: a stance the player holds is a stored bool they flip
+       BEFORE rolling, with `when` reading it, so the engine knows in time. */
+    if (eff.ask?.trim() && (eff.op === 'adv' || eff.op === 'dis' || eff.op === 'crit')) {
+      out.push({
+        sev: 'err', id: eff.id, t: `${OP_TITLE[eff.op]} cannot be asked`,
+        s: `${eff.label || eff.id} asks "${eff.ask.trim()}", but ${eff.op} changes how the d20 is rolled and an ask is answered after it already has been. Use a player toggle instead: press "player toggle" on the when row, and the player holds it before rolling.`,
+      })
     }
     // Not an error — §32 makes the combination legal and §24 needs it. But the
     // consequence is invisible from the editor: while the condition is false the
