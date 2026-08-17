@@ -695,6 +695,45 @@ type FormProps = {
   setPop: (p: PopKind) => void
 }
 
+/** The origin breadcrumb editor: an ordered list of free-text steps.
+ *
+ *  Ordered, so it is add / remove / move rather than one comma-separated field —
+ *  the popup renders the steps with arrows between them and marks the last one,
+ *  and a player reading "Fighter -> Level 1" backwards learns the wrong thing.
+ *  Blank steps are dropped on save, so a half-typed row cannot become an empty
+ *  chip on the player's screen. */
+function OriginChain({ steps, onChange }: { steps: string[]; onChange: (next: string[]) => void }) {
+  const put = (i: number, v: string) => onChange(steps.map((s, j) => (j === i ? v : s)))
+  const move = (i: number, by: number) => {
+    const next = [...steps]
+    const j = i + by
+    if (j < 0 || j >= next.length) return
+    const tmp = next[i]; next[i] = next[j]; next[j] = tmp
+    onChange(next)
+  }
+  return (
+    <div className={styles.originList}>
+      {steps.map((step, i) => (
+        <div key={i} className={styles.originRow}>
+          <span className={styles.originN}>{i + 1}</span>
+          <input className={styles.in} value={step} spellCheck={false}
+            placeholder={i === 0 ? 'Fighter' : i === steps.length - 1 ? 'Second Wind' : 'Level 1'}
+            onChange={e => put(i, e.target.value)} />
+          <button type="button" className={styles.originBtn} title="Move up"
+            disabled={i === 0} onClick={() => move(i, -1)}><i className="fa-solid fa-chevron-up" /></button>
+          <button type="button" className={styles.originBtn} title="Move down"
+            disabled={i === steps.length - 1} onClick={() => move(i, 1)}><i className="fa-solid fa-chevron-down" /></button>
+          <button type="button" className={styles.originBtn} title="Remove"
+            onClick={() => onChange(steps.filter((_, j) => j !== i))}><i className="fa-solid fa-trash" /></button>
+        </div>
+      ))}
+      <button type="button" className={styles.originAdd} onClick={() => onChange([...steps, ''])}>
+        <i className="fa-solid fa-plus" />add step
+      </button>
+    </div>
+  )
+}
+
 function FeatureForm(p: FormProps) {
   const { d, set, update } = p
   const deepRef = useAutoGrow(d.deep_description ?? '')
@@ -740,6 +779,14 @@ function FeatureForm(p: FormProps) {
         <div>
           <span className={styles.fieldLab}>Source detail</span>
           <input className={styles.in} value={d.source ?? ''} placeholder="Fighter 1" onChange={e => set({ source: e.target.value })} />
+        </div>
+        <div className={styles.originCell}>
+          <span className={styles.fieldLab}>Origin chain</span>
+          {/* The provenance breadcrumb the PLAYER sees in the feature popup. Left
+              empty it derives one from category / source detail / level / name,
+              so this is enrichment rather than another required field — which is
+              why it sits beside Source detail instead of replacing it. */}
+          <OriginChain steps={d.origin ?? []} onChange={origin => set({ origin: origin.length ? origin : undefined })} />
         </div>
         <div>
           <span className={styles.fieldLab}>Folder</span>
