@@ -181,6 +181,7 @@
 .gbtn:hover { background: var(--amber); } .gbtn:hover i { color: var(--amber-hot); }
 .gbtn.on { background: var(--amber); filter: drop-shadow(3px 0 12px rgba(226,176,33,.4)); } .gbtn.on i { color: var(--amber-hot); }
 .gbtn.g2 { top: 100px; }
+.gbtn.g3 { top: 138px; }
 /* Both overlays stay mounted so they can transition — a conditionally rendered
    panel has no "from" state to animate out of. `pointer-events: none` while
    closed is load-bearing: an invisible full-bleed panel would otherwise eat
