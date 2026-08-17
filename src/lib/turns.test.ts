@@ -72,3 +72,19 @@ test('the chip label reads the last turn differently', () => {
   assert.equal(turnsLabel(eff({ turns: 1 })), 'last turn')
   assert.equal(turnsLabel(eff({})), null)
 })
+
+test('a countdown that merely went down is reported too, not just an expiry', () => {
+  // A tracker that only speaks when something expires cannot be trusted between
+  // expiries: pressing the button and seeing nothing reads as "it did nothing"
+  // rather than "three turns left".
+  const r = advanceTurn([eff({ name: "Giant's Strength", turns: 3 })])
+  assert.deepEqual(r.counted.map(e => [e.name, e.turns]), [["Giant's Strength", 2]])
+  assert.deepEqual(r.expired, [])
+})
+
+test('the turn it expires it is expired, not counted', () => {
+  // Both lists at once would report one effect twice on its last turn.
+  const r = advanceTurn([eff({ turns: 1 })])
+  assert.deepEqual(r.counted, [])
+  assert.equal(r.expired.length, 1)
+})

@@ -46,6 +46,11 @@ export type TurnAdvance = {
   next: ActiveEffect[]
   /** Effects whose last turn just ran out. Removed from `next`. */
   expired: ActiveEffect[]
+  /** Effects whose count went DOWN but has not run out, already decremented.
+   *  Reported because a tracker that only speaks when something expires is one
+   *  the player cannot trust between expiries — pressing the button and seeing
+   *  nothing reads as "it did nothing", not "three turns left". */
+  counted: ActiveEffect[]
   /** Effects that deal damage each turn — the player still has to ROLL these,
    *  which is why they come back as a list rather than a number. */
   ticks: TurnTick[]
@@ -62,6 +67,7 @@ export type TurnAdvance = {
 export function advanceTurn(effects: ActiveEffect[]): TurnAdvance {
   const next: ActiveEffect[] = []
   const expired: ActiveEffect[] = []
+  const counted: ActiveEffect[] = []
   const ticks: TurnTick[] = []
 
   for (const e of effects) {
@@ -69,11 +75,13 @@ export function advanceTurn(effects: ActiveEffect[]): TurnAdvance {
 
     if (typeof e.turns !== 'number') { next.push(e); continue }
     const left = e.turns - 1
-    if (left <= 0) expired.push(e)
-    else next.push({ ...e, turns: left })
+    if (left <= 0) { expired.push(e); continue }
+    const dec = { ...e, turns: left }
+    next.push(dec)
+    counted.push(dec)
   }
 
-  return { next, expired, ticks, running: next.filter(e => typeof e.turns === 'number').length }
+  return { next, expired, counted, ticks, running: counted.length }
 }
 
 /** How a countdown reads on a status chip. Short, because it sits beside a name
