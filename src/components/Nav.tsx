@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import styles from './Nav.module.css'
 
 interface NavItem {
@@ -55,13 +55,23 @@ interface Props {
 function NavBtn({
   item, active, subActive,
 }: { item: NavItem; active?: boolean; subActive?: boolean }) {
+  const nav = useNavigate()
   const cls = [
     styles.btn,
     active ? styles.active : '',
     subActive ? styles.subActive : '',
   ].filter(Boolean).join(' ')
   return (
-    <NavLink to={item.to} className={cls} aria-current={active || subActive ? 'page' : undefined}>
+    <NavLink
+      to={item.to} className={cls} aria-current={active || subActive ? 'page' : undefined}
+      /* Pressing the screen you are ALREADY on used to be a no-op — the one
+         press in the bar that did nothing. It goes home instead, which is the
+         only other place a nav button could sensibly mean. Guarded on `active`
+         so ordinary navigation stays ordinary, and it does not fire for a
+         sub-item: `subActive` means a CHILD is open, and returning to the Codex
+         from there would skip the parent the player was aiming for. */
+      onClick={active && !subActive ? e => { e.preventDefault(); nav('/') } : undefined}
+    >
       <span className={styles.frame} />
       {item.marker && <span className={styles.marker}>{item.marker}</span>}
       <span className={styles.inner}>

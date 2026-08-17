@@ -124,7 +124,11 @@ function EffectDetailPopup({ effect, onRemove, onClose }: {
           <span className={`${pop.imCorner} ${pop.br}`} />
 
           <header className={pop.imHead}>
-            <span className={pop.imCrystal}><i className={`fa-solid ${effect.icon ?? 'fa-wand-sparkles'}`} /></span>
+            {/* The `kind` class was missing here, so a debuff's chip went red and
+                its opened crystal stayed cyan — the same effect, two colours. */}
+            <span className={cx(pop.imCrystal, pop[effect.kind ?? 'buff'])}>
+              <i className={`fa-solid ${effect.icon ?? 'fa-wand-sparkles'}`} />
+            </span>
             <div className={pop.imTitles}>
               <span className={pop.imName}>{effect.name}</span>
               <span className={pop.imTags}>

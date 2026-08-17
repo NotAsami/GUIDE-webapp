@@ -269,3 +269,24 @@
   .ia.drop { flex: 1 1 140px; }
   .stowPick { flex: 1 1 100%; height: 46px; }
 }
+
+/* ---- Effect crystal, tinted by kind ----
+   The Effects panel's chips already say buff = cyan, condition = amber,
+   debuff = red (EffectsSidebar.module.css .statusChip). The opened popover had no
+   variant at all and stayed cyan for everything, so one effect showed two
+   different colours depending on whether you had clicked it. Same tokens, so the
+   two surfaces cannot disagree about what a debuff looks like. */
+.imCrystal.cond {
+  color: var(--amber-hot);
+  background:
+    radial-gradient(120% 90% at 50% 40%, rgba(226, 176, 33, 0.28), transparent 65%),
+    rgba(226, 176, 33, 0.45);
+  filter: drop-shadow(0 0 9px rgba(226, 176, 33, 0.4));
+}
+.imCrystal.debuff {
+  color: #ffd9d9;
+  background:
+    radial-gradient(120% 90% at 50% 40%, rgba(255, 84, 84, 0.3), transparent 65%),
+    rgba(185, 58, 58, 0.55);
+  filter: drop-shadow(0 0 9px rgba(255, 84, 84, 0.4));
+}
