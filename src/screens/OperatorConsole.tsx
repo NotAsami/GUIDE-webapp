@@ -1501,8 +1501,9 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
     // effectRefs is the authored source; `effects` is a COMPILED CACHE recomputed
     // here on every save so the equip/grant engine keeps reading plain
     // ItemEffects with no changes (see EffectRef's doc comment).
-    const referencedMods = effectRefs.flatMap(r => effectLib.find(e => e.id === r.effectId)?.data.mods ?? [])
-    const effects = compileEffects(referencedMods)
+    const referenced = effectRefs.map(r => effectLib.find(e => e.id === r.effectId)?.data).filter(Boolean) as EffectDef[]
+    const referencedMods = referenced.flatMap(e => e.mods ?? [])
+    const effects = compileEffects(referencedMods, referenced)
     if (effects) data.effects = effects
     if (effectRefs.length) data.effectRefs = effectRefs
     if (feats.length) data.features = feats
@@ -2247,6 +2248,28 @@ function EffectLibrarySurface({ lib }: { lib: DmEffectsState }) {
   )
 }
 
+/** Skill multi-select for an effect's granted proficiency / expertise.
+ *
+ *  A chip grid rather than a `<select multiple>`: there are eighteen skills, the
+ *  DM picks one or two, and a native multi-select hides everything not scrolled
+ *  to. Reads SKILLS from lib/dnd.ts so the list cannot drift from the one the
+ *  Stats screen renders and the one skillRow scores. */
+function SkillPicker({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+  const on = new Set(value)
+  return (
+    <div className={styles.efTags}>
+      {SKILLS.map(sk => (
+        <span
+          key={sk.key} role="button" tabIndex={0}
+          className={cx(styles.efChip, !on.has(sk.key) && styles.empty)}
+          onClick={() => onChange(on.has(sk.key) ? value.filter(k => k !== sk.key) : [...value, sk.key])}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(on.has(sk.key) ? value.filter(k => k !== sk.key) : [...value, sk.key]) } }}
+        >{sk.name}</span>
+      ))}
+    </div>
+  )
+}
+
 function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
   effect: CatalogEffectRow | null
   effectLib: CatalogEffectRow[]
@@ -2261,6 +2284,8 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
   const [tagInput, setTagInput] = useState('')
   const [tagAcOpen, setTagAcOpen] = useState(false)
   const [mods, setMods] = useState<Mod[]>(d?.mods ?? [])
+  const [skillProfs, setSkillProfs] = useState<string[]>(d?.skillProficiencies ?? [])
+  const [skillExp, setSkillExp] = useState<string[]>(d?.skillExpertise ?? [])
   const [flags, setFlags] = useState<EffectFlag[]>(d?.flags ?? [])
   const [desc, setDesc] = useState(d?.desc ?? '')
   const [busy, setBusy] = useState(false)
@@ -2287,7 +2312,11 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
   }
 
   function build(): EffectDef {
-    return { name: name.trim(), icon, kind, tags, mods, flags, desc }
+    return {
+      name: name.trim(), icon, kind, tags, mods, flags, desc,
+      ...(skillProfs.length ? { skillProficiencies: skillProfs } : {}),
+      ...(skillExp.length ? { skillExpertise: skillExp } : {}),
+    }
   }
   async function submit() {
     setBusy(true)
@@ -2338,6 +2367,15 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
           )
         })}
       </div>
+
+      {/* Skill proficiency and expertise. Not modifier rows: a modifier is a
+          number, and being PROFICIENT scales with the proficiency bonus instead.
+          Expertise implies proficiency, so ticking it in both columns is not
+          required — lib/effects.ts unions it in. */}
+      <span className={styles.fieldLab}>Skill proficiency</span>
+      <SkillPicker value={skillProfs} onChange={setSkillProfs} />
+      <span className={styles.fieldLab}>Skill expertise <span className={styles.dimLab}>double proficiency</span></span>
+      <SkillPicker value={skillExp} onChange={setSkillExp} />
 
       <span className={styles.fieldLab}>Tags</span>
       <div className={styles.efTags}>

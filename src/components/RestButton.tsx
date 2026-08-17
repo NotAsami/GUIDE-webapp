@@ -142,16 +142,18 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
   )
 }
 
-/** One result line: label + value on a single row (value flush-right, never
- *  wrapping), with the breakdown on its own muted line below. */
+/** One result line, on ONE row: label, the muted breakdown taking the slack, then
+ *  the value flush-right. The breakdown used to be a second row under every line,
+ *  which made a four-result rest eight rows tall and read as each result wrapping
+ *  onto two lines. */
 function Line({ line }: { line: RollLine }) {
   return (
     <div className={`${styles.line} ${line.tone ? styles[line.tone] : ''}`}>
       <div className={styles.lineMain}>
         <span className={styles.lab}>{line.label}</span>
+        {line.breakdown && <span className={styles.bd}>{line.breakdown}</span>}
         <span className={styles.total}>{line.total}</span>
       </div>
-      {line.breakdown && <span className={styles.bd}>{line.breakdown}</span>}
     </div>
   )
 }

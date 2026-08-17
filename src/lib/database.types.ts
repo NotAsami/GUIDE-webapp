@@ -440,6 +440,15 @@ export type ItemEffects = {
   saves?: number | Partial<Record<AbilityKey, number>>
   /** Flat per-skill bonus, keyed by skill key (see lib/dnd.ts SKILLS). */
   skills?: Partial<Record<string, number>>
+  /** Skill keys this item makes the wearer PROFICIENT in, unioned with the
+   *  character's own. Deliberately separate from `skills` above: "+2 Stealth" and
+   *  "proficient in Stealth" are different claims — the first is a flat number,
+   *  the second scales with proficiency bonus and shows as a filled pip. */
+  skillProficiencies?: string[]
+  /** Skill keys this item grants EXPERTISE in — double proficiency. Implies
+   *  proficiency, the same way an authored `skillExpertise` does (lib/dnd.ts
+   *  skillRow reads `expertise ? 2 : proficient ? 1 : 0`). */
+  skillExpertise?: string[]
   /** Walking-speed bonus in feet. */
   speed?: number
   /** Initiative bonus (added to the stored initiative; does not recompute from DEX). */
@@ -932,6 +941,14 @@ export type EffectDef = {
   tags: string[]
   mods: Mod[]
   flags: EffectFlag[]
+  /** Skills this effect makes the wearer proficient in / expert at.
+   *
+   *  Separate from `mods` because a Mod is a stat and a NUMBER, and "proficient
+   *  in Stealth" is neither — it scales with the proficiency bonus and shows as a
+   *  filled pip rather than a "+2". Compiled into `ItemEffects` on save by the
+   *  item form, the same way `mods` are. */
+  skillProficiencies?: string[]
+  skillExpertise?: string[]
   /** Player-facing prose — the rule a modifier/flag can't express (e.g. Bless's
    *  1d4, Haste's speed ×2 and the after-effect). */
   desc: string

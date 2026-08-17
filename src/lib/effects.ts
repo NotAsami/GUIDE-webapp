@@ -277,6 +277,23 @@ export function effectiveSheet(character: CharacterRow, shardTrees: Record<strin
     }
   }
 
+  /* Granted skill proficiency and expertise: a UNION with what the character
+     already has, never a replacement — a ring that grants Stealth must not take
+     away the Perception a class gave you. Nothing downstream needed changing for
+     this: lib/dnd.ts skillRow already reads both lists off the sheet, and Stats
+     and Character both work from THIS sheet, so the pip, the bonus and the check
+     roll all follow from the union. */
+  const skillProficiencies = [...new Set([
+    ...(base.skillProficiencies ?? []),
+    ...fx.flatMap(e => e.skillProficiencies ?? []),
+    // Expertise implies proficiency, so a grant of one is a grant of both.
+    ...fx.flatMap(e => e.skillExpertise ?? []),
+  ])]
+  const skillExpertise = [...new Set([
+    ...(base.skillExpertise ?? []),
+    ...fx.flatMap(e => e.skillExpertise ?? []),
+  ])]
+
   return {
     ...base,
     abilities,
@@ -287,6 +304,8 @@ export function effectiveSheet(character: CharacterRow, shardTrees: Record<strin
     senses: { ...base.senses, darkvision },
     saveBonuses,
     skillBonuses,
+    skillProficiencies,
+    skillExpertise,
     __effective: true,
   } as EffectiveSheet
 }

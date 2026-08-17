@@ -5,7 +5,7 @@
  * lattice editor's effect widgets can never drift into two different stat
  * lists or two different "bonus vs. set" rules.
  */
-import type { AbilityKey, ItemEffects, Mod } from './database.types'
+import type { AbilityKey, EffectDef, ItemEffects, Mod } from './database.types'
 
 export type { Mod }
 
@@ -19,8 +19,16 @@ export const isAbility = (stat: string): boolean => stat in ABIL_KEYS
 /** Compile the GUI modifier rows into the structured `effects`/`mods` the
  *  engine layers over the sheet. Abilities can be a flat bonus OR a "set to"
  *  floor (Giant Strength); everything else is a flat bonus. */
-export function compileEffects(mods: Mod[]): ItemEffects | undefined {
+export function compileEffects(mods: Mod[], skills?: Pick<EffectDef, 'skillProficiencies' | 'skillExpertise'>[]): ItemEffects | undefined {
   const eff: ItemEffects = {}
+  /* Skill proficiency rides along rather than living in its own compile step,
+     because `effects` is a single compiled cache — two compilers writing the same
+     field is how one of them silently wins. Unioned across every referenced
+     effect, so two rings granting different skills grant both. */
+  const profs = [...new Set((skills ?? []).flatMap(s => s.skillProficiencies ?? []))]
+  const exp = [...new Set((skills ?? []).flatMap(s => s.skillExpertise ?? []))]
+  if (profs.length) eff.skillProficiencies = profs
+  if (exp.length) eff.skillExpertise = exp
   for (const m of mods) {
     const n = m.amt
     if (!Number.isFinite(n)) continue

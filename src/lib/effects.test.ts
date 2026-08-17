@@ -203,3 +203,42 @@ test('a concealed, unrevealed node contributes nothing — even to the DM', () =
   const plain = { sh1: { id: 'sh1', name: 'S', nodes: [{ ...node, concealed: false }] } } as never
   assert.equal(activeSources(c(), plain).filter(s => s.kind === 'shardnode').length, 1)
 })
+
+/* ---------- item-granted skill proficiency & expertise ---------- */
+
+test('an equipped item can grant skill proficiency, unioned with the character’s own', () => {
+  // UNION, never replace. A ring that grants Stealth must not take away the
+  // Perception a class gave you — that would be a silent loss of a proficiency
+  // nobody touched.
+  const c = character({
+    sheet: { skillProficiencies: ['perception'] },
+    equipped: { cloak: ({ id: 'g1', name: 'Ring of Shadows', slot: 'cloak', effects: { skillProficiencies: ['stealth'] } } as EquippedItem) },
+  })
+  const view = effectiveSheet(c)
+  assert.deepEqual([...(view.skillProficiencies ?? [])].sort(), ['perception', 'stealth'])
+})
+
+test('granted expertise implies proficiency', () => {
+  // lib/dnd.ts scores `expertise ? 2 : proficient ? 1 : 0`, so expertise without
+  // proficiency would be a coherent-looking state that doubles nothing.
+  const c = character({ equipped: { cloak: ({ id: 'g2', name: 'Cloak of Elvenkind', slot: 'cloak', effects: { skillExpertise: ['stealth'] } } as EquippedItem) } })
+  const view = effectiveSheet(c)
+  assert.ok((view.skillProficiencies ?? []).includes('stealth'))
+  assert.ok((view.skillExpertise ?? []).includes('stealth'))
+})
+
+test('unequipping takes the granted proficiency back', () => {
+  // It is a grant, not a write to the sheet.
+  const c = character({ sheet: { skillProficiencies: ['perception'] }, equipped: {} })
+  assert.deepEqual(effectiveSheet(c).skillProficiencies, ['perception'])
+})
+
+test('two items granting different skills grant both', () => {
+  const c = character({
+    equipped: {
+      cloak: ({ id: 'g1', name: 'Ring of Shadows', slot: 'cloak', effects: { skillProficiencies: ['stealth'] } } as EquippedItem),
+      neck: ({ id: 'g3', name: 'Gauntlets', slot: 'neck', effects: { skillProficiencies: ['athletics'] } } as EquippedItem),
+    },
+  })
+  assert.deepEqual([...(effectiveSheet(c).skillProficiencies ?? [])].sort(), ['athletics', 'stealth'])
+})

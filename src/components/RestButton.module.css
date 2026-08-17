@@ -39,19 +39,29 @@
 @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
 
 .panel {
-  width: 360px;
+  /* --cut MUST match the clip-path chamfer, and --bc is the whole border: a plain
+     `border` draws nothing on a 45 degree clip-path edge, which is why this panel
+     had four bare diagonals. See docs/Chamfered_clip-path_corners_fix.md. */
+  --cut: 14px;
+  --bc: var(--beige);
+  width: 400px;
   max-width: 100%;
-  background:
-    radial-gradient(120% 90% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 60%),
-    rgba(10, 10, 10, 0.98);
-  border: 1px solid var(--beige);
+  background-color: rgba(10, 10, 10, 0.98);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    radial-gradient(120% 90% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 60%);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right, 0 0;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px), auto;
+  border: 1.5px solid var(--bc);
   box-shadow:
-    0 0 0 1px rgba(212, 191, 125, 0.15),
     0 18px 40px rgba(0, 0, 0, 0.7),
     0 0 28px rgba(0, 166, 214, 0.18);
-  clip-path: polygon(14px 0, 100% 0,
-    100% calc(100% - 14px), calc(100% - 14px) 100%,
-    0 100%, 0 14px);
+  clip-path: polygon(var(--cut) 0, 100% 0,
+    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+    0 100%, 0 var(--cut));
   animation: panelIn 200ms cubic-bezier(.2, .7, .2, 1);
 }
 @keyframes panelIn {
@@ -96,7 +106,7 @@
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
   text-transform: uppercase; color: var(--muted);
   background: transparent;
-  border: 1px solid var(--beige-dim);
+  border: 1.5px solid var(--beige-dim);
   cursor: pointer;
   transition: color 120ms, border-color 120ms, background 120ms;
 }
@@ -118,8 +128,7 @@
 .lineMain {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 .lab {
   font-family: var(--font-mono); font-size: 9.5px;
@@ -130,12 +139,15 @@
   font-size: 18px; line-height: 1; color: var(--cyan-hot);
   white-space: nowrap;
 }
+/* Inline, between the label and the number, so one result is one row. It takes
+   the slack, and truncates rather than pushing the total onto a line of its own. */
 .bd {
-  display: block;
-  margin-top: 4px;
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: var(--font-mono); font-size: 9px;
   letter-spacing: 0.04em; color: var(--muted);
 }
+.total { margin-left: auto; flex: 0 0 auto; }
 .line.heal .total { color: #6fdc8c; }
 .line.buff .total { color: var(--cyan); }
 
@@ -192,13 +204,13 @@
 }
 .cancel {
   background: transparent;
-  border: 1px solid var(--beige-dim);
+  border: 1.5px solid var(--beige-dim);
   color: var(--muted);
 }
 .cancel:hover { color: var(--beige); border-color: var(--beige); }
 .confirm {
   background: rgba(0, 166, 214, 0.1);
-  border: 1px solid var(--cyan);
+  border: 1.5px solid var(--cyan);
   color: var(--cyan-hot);
 }
 .confirm:hover { background: rgba(0, 166, 214, 0.18); }
