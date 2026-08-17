@@ -1990,10 +1990,25 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
   const [selId, setSelId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
+  const [query, setQuery] = useState('')
+
   const sheet = row.sheet ?? {}
   const current = sheet.features ?? []
-  const selected = featureLib.find(f => f.id === selId) ?? null
   const first = firstName(member.name)
+
+  /* Name, source and category, because those are the three things a DM knows
+     about a feature they are hunting for — "the Fighter one", "Second Wind",
+     "racial". Same shape as the Apply Effect and Grant Item searches above. */
+  const q = query.trim().toLowerCase()
+  const shown = q
+    ? featureLib.filter(f => {
+      const d = f.data
+      const cat = FEAT_CATS.find(c => c.key === d?.category)?.label ?? ''
+      return [d?.name, d?.source, cat, d?.usage].some(v => (v ?? '').toLowerCase().includes(q))
+    })
+    : featureLib
+  // Same rule as Grant Spell: the selection is whatever is visible.
+  const selected = shown.find(f => f.id === selId) ?? null
 
   async function grant() {
     if (!selected) return
@@ -2021,10 +2036,17 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
       <div className={styles.featGrantSplit}>
         <div className={styles.fgCol}>
           <span className={styles.fieldLab}>Library · roleplay boons &amp; perks</span>
+          <div className={styles.searchWrap}>
+            <i className="fa-solid fa-magnifying-glass" />
+            <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+              placeholder="Search features by name, source or kind…" />
+          </div>
           <div className={styles.catList}>
             {featureLib.length === 0 ? (
               <div className={styles.catListEmpty}>Library is empty — author features in the Catalog's Features tab.</div>
-            ) : featureLib.map(f => (
+            ) : shown.length === 0 ? (
+              <div className={styles.catListEmpty}>Nothing matches “{query.trim()}”.</div>
+            ) : shown.map(f => (
               <button key={f.id} className={cx(styles.catItem, f.id === selId && styles.sel)} onClick={() => setSelId(f.id)}>
                 <span className={styles.ciIc} style={{ color: 'var(--amber)' }}><i className={`fa-solid ${f.data?.icon ?? 'fa-star'}`} /></span>
                 <span className={styles.ciTx}>
@@ -3008,10 +3030,26 @@ function GrantSpellCard({ member, row, spellLib, onUpdate, onVoice, log }: {
   const [selId, setSelId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
+  const [query, setQuery] = useState('')
+
   const sb = row.spellbook ?? {}
   const current = sb.spells ?? []
-  const selected = spellLib.find(s => s.id === selId) ?? null
   const first = firstName(member.name)
+
+  /* Name, school and level — a spell list is long and those are the three ways a
+     DM narrows it. "3" and "cantrip" both work, because the level label is what
+     the row itself shows. */
+  const q = query.trim().toLowerCase()
+  const shown = q
+    ? spellLib.filter(sp => {
+      const d = sp.data
+      return [d?.name, d?.school, spellLevelLabel(d?.level ?? 0)].some(v => (v ?? '').toLowerCase().includes(q))
+    })
+    : spellLib
+  /* Chosen from the VISIBLE list, not the whole library: search past your own
+     selection and Grant would otherwise stay armed on something no longer on
+     screen, and a grant you cannot see is a grant you did not check. */
+  const selected = shown.find(sp => sp.id === selId) ?? null
   const alreadyKnown = selected ? current.some(s => s.spell_id === selected.id) : false
 
   async function grant() {
@@ -3038,10 +3076,17 @@ function GrantSpellCard({ member, row, spellLib, onUpdate, onVoice, log }: {
       <div className={styles.featGrantSplit}>
         <div className={styles.fgCol}>
           <span className={styles.fieldLab}>Library · Catalog · Spells tab</span>
+          <div className={styles.searchWrap}>
+            <i className="fa-solid fa-magnifying-glass" />
+            <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+              placeholder="Search spells by name, school or level…" />
+          </div>
           <div className={styles.catList}>
             {spellLib.length === 0 ? (
               <div className={styles.catListEmpty}>Library is empty — author spells in the Catalog's Spells tab.</div>
-            ) : spellLib.map(sp => (
+            ) : shown.length === 0 ? (
+              <div className={styles.catListEmpty}>Nothing matches “{query.trim()}”.</div>
+            ) : shown.map(sp => (
               <button key={sp.id} className={cx(styles.catItem, sp.id === selId && styles.sel)} onClick={() => setSelId(sp.id)}>
                 <span className={styles.ciIc} style={{ color: sp.data?.iconColor || 'var(--cyan)' }}>
                   <i className={`fa-solid ${sp.data?.icon || SPELL_SCHOOL_ICON[sp.data?.school ?? 'Evocation']}`} />
