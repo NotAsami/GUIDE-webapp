@@ -59,6 +59,10 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 
 ### Recurring bug: chamfered clip-path corners lose their border
 - If the user complains about missing corners in quadrilaterals or hexagons, read ./docs/Chamfered_clip-path_corners_fix.md for the fix.
+- 45° chamfers are now guarded by `src/lib/chamferBorders.test.ts`, which fails on an
+  unregistered rule, a `background:` shorthand that erases the diagonals, or a variant
+  using `border-color` instead of `--bc`. Don't hand-audit for these — run the tests.
+  Hexagons still need the two-layer fix and are NOT covered by the guard.
 
 ## Other guides
 - Inventory refactor spec: docs/GUIDE_Codex_Inventory_Refactor.md

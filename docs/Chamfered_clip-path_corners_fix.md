@@ -1,3 +1,10 @@
+> **This is now enforced by a test, not by remembering it.** `src/lib/chamferBorders.test.ts`
+> scans every `*.module.css` and fails on all three failure modes below: a chamfered+bordered
+> rule with no corner diagonals, a `background:` shorthand that erases them, and a variant
+> recolouring with `border-color` instead of `--bc`. Run `node --test src/lib/*.test.ts`.
+> If it fails, the message names the file, line and selector — read on for what to do about it.
+> The rest of this document is why, and how to fix what the test reports.
+
 Any element with a chamfered `clip-path` (the `polygon(Npx 0, 100% 0, 100% calc(100% - Npx), ...)`
 cut-corner shape used everywhere in this UI) that also styles its edge with a plain CSS `border`
 will render **bare 45° corners** — the border draws fine on the straight edges, but clip-path

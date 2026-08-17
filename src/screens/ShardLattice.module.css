@@ -405,7 +405,7 @@ select.in { appearance: none; background-image: linear-gradient(45deg, transpare
 .dtlNew .wgtBtn { width: auto; height: 40px; padding: 0 16px; }
 .iconPickWrap { position: relative; }
 .iconPickBtn {
-  --cut: 7px; --bc: rgba(226, 176, 33, 0.32);
+  --cut: 7px; --bc: rgba(226, 176, 33, 0.32); --bw: 1.5px;
   width: 40px; height: 40px;
   display: flex; align-items: center; justify-content: center;
   background-color: rgba(0, 0, 0, 0.4); border: 1.5px solid var(--bc); color: var(--amber-hot); font-size: 14px; cursor: pointer;
@@ -467,14 +467,14 @@ select.in { appearance: none; background-image: linear-gradient(45deg, transpare
    1/√2, the perpendicular offset of a 45° line. */
 .opRootpill, .opBack, .auditItem, .tool, .modeSeg, .in, .prose, .ic, .stepper,
 .chip, .tog, .zoomers button, .itabs, .modRow, .wgtBtn, .dtlNew input, .imeta,
-.toastEl, .catFx, .selIn {
+.toastEl, .catFx, .selIn, .iconPickBtn {
   background-image:
-    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
-    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - var(--bw, 1px)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw, 1px)), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - var(--bw, 1px)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw, 1px)), transparent 0);
   background-repeat: no-repeat;
   background-origin: border-box;
   background-position: top left, bottom right;
-  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+  background-size: calc(var(--cut) + var(--bw, 1px)) calc(var(--cut) + var(--bw, 1px));
 }
 /* the blanket border-color above flattens mixed borders — re-assert the
    accent left edge (straight edge, so the plain border is correct there) */

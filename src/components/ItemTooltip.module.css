@@ -7,7 +7,7 @@
   position: fixed;
   min-width: 260px; max-width: 320px;
   padding: 14px 16px;
-  background: rgba(8, 8, 8, 0.97);
+  background-color: rgba(8, 8, 8, 0.97);
   border: 1px solid var(--beige);
   box-shadow:
     0 0 0 1px rgba(212, 191, 125, 0.15),

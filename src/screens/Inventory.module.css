@@ -398,7 +398,7 @@
   --cut: 5px;
   position: relative;
   border: 1px solid var(--beige-dim);
-  background: rgba(0, 0, 0, 0.35);
+  background-color: rgba(0, 0, 0, 0.35);
   padding: 5px 3px;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   clip-path: polygon(var(--cut) 0, 100% 0,
