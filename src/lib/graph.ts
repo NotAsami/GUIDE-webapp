@@ -569,6 +569,42 @@ export function buildContext(
 
 /* ---------- the walk ---------- */
 
+/** WHO TARGETS THIS NODE — the reverse of what the index is normally asked.
+ *
+ *  The Features popup's "Affected by" section. It is NOT a second authored list:
+ *  authoring one would mean the DM writing the same relationship twice and the
+ *  two drifting the first time an effect is retargeted. `ctx.index` is already
+ *  keyed by target selector, so the reverse lookup is a read of the forward one.
+ *
+ *  Matched by gid AND by every tag the node carries, because `tag:fire` hitting
+ *  this feature is exactly as much "affected by" as naming it outright. An
+ *  effect owned by the node itself is excluded — a feature is not affected by
+ *  itself, and §51's boost path already treats self-targeting as its own case.
+ *
+ *  Deliberately unfiltered by `when`/`ask`: this answers "what could reach this",
+ *  which is a question about the graph, not about one roll. */
+export function affectedBy(ctx: GraphContext, target: Gid, tags: string[] = []): {
+  /** The effect doing the reaching. */
+  eff: GraphEffect
+  /** Display name of the node it was authored on. */
+  source: string
+  /** Its gid, so the popup can navigate to it. Null for a source with no gid
+   *  of its own (a potion, a shard tree — see sourceGid). */
+  sourceGid: Gid | null
+}[] {
+  const keys = [target, ...tags.map(t => `tag:${normalizeTag(t)}`)]
+  const seen = new Set<GraphEffect>()
+  const out: { eff: GraphEffect; source: string; sourceGid: Gid | null }[] = []
+  for (const k of keys) {
+    for (const e of ctx.index.get(k) ?? []) {
+      if (e.owner === target || seen.has(e.eff)) continue
+      seen.add(e.eff)
+      out.push({ eff: e.eff, source: e.from.obj.name, sourceGid: e.owner ?? null })
+    }
+  }
+  return out
+}
+
 /** An active source's card text, whatever that source calls the field.
  *
  *  Four node kinds keep their prose under four different names — a feature's

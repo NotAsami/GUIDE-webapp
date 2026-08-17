@@ -123,6 +123,15 @@ export type Feature = {
   kind?: FeatureKind
   /** e.g. "Fighter 1", "Variant Human", "Soldier". */
   source?: string
+  /** The provenance BREADCRUMB shown in the player's feature popup —
+   *  ["Fighter", "Martial Reserve", "Level 1", "Second Wind"].
+   *
+   *  A chain rather than a longer `source` because the popup renders it as steps
+   *  with arrows and marks the last one, which a single string cannot express.
+   *  Absent falls back to a chain derived from category/source/level/name
+   *  (lib/featureView.ts originChain), so this is enrichment, never a
+   *  requirement. */
+  origin?: string[]
   /** Font Awesome icon name, e.g. 'fa-wind'. */
   icon?: string
   /** Level the feature was acquired at (for display/sorting). */
@@ -163,16 +172,25 @@ export type Feature = {
   tags?: string[]
   /** Structured roll contributions. Absent = a pure prose feature. */
   graph?: GraphEffect[]
-  // ── Authoring-only fields (Feature Editor, slice 3). None of these reach a
-  //    player screen; they organise and tint the DM's catalog. ──
+  /** THE FEATURE TINT. A DM-set hex that reaches the PLAYER's card and popup: it
+   *  owns the header wash and the hexagon fill, and nothing else. State — cyan
+   *  interactive, red spent, cyan active-ON — always overrides it, so a tint can
+   *  never disguise whether a feature is spent or held.
+   *
+   *  Names render as a fixed-lightness mix of the tint toward warm white rather
+   *  than the raw hex, so every swatch a DM can pick stays legible on the dark
+   *  card. Absent renders exactly as an untinted feature always did.
+   *
+   *  Distinct from `kind`, which tints by PROVENANCE and is not the DM's choice.
+   *  It also still tints the editor's own list row, which is where it started. */
+  color?: string
+  // ── Authoring-only fields (Feature Editor, slice 3). These organise the DM's
+  //    catalog and reach no player screen. ──
   /** Folder name in the Feature Editor's list. The folder set is DERIVED from
    *  the features in it — there is no folder store to drift out of sync, and the
    *  cost is that a folder emptied of its last member stops existing.
    *  ponytail: derived folders. Add a folder store if empty ones need to persist. */
   folder?: string
-  /** Hex tint for the editor's list row and header. Distinct from `kind`, which
-   *  tints the PLAYER's card by provenance. */
-  color?: string
   /** What the player spends to use it. Independent of `uses` — a passive feature
    *  can still track uses, and an at-will action can have none. */
   activation?: 'none' | 'action' | 'bonus' | 'reaction' | 'free'
