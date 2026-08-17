@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useAutoGrow, useNoScrollChain } from '../lib/textareaHooks'
 import { createPortal } from 'react-dom'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
@@ -38,54 +39,6 @@ type Mode = 'author' | 'preview'
  *  no-op (confirmed live too — the handler ran, scrollTop still never
  *  moved). Has to be a real `addEventListener('wheel', fn, {passive:false})`
  *  on the DOM node instead, which is what this hook wires up. */
-function useNoScrollChain() {
-  const ref = useRef<HTMLTextAreaElement | null>(null)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const onWheel = (e: WheelEvent) => {
-      // 110%-zoom subpixel rounding can make scrollHeight-clientHeight read as
-      // 1-2px even when the field has no real overflow, which used to trip the
-      // boundary check into thinking there was room to scroll — capturing the
-      // event, moving scrollTop by that same 1-2px, then eating the rest of the
-      // gesture instead of letting it chain to the panel. Below this tolerance,
-      // don't intercept at all.
-      const range = el.scrollHeight - el.clientHeight
-      if (range <= 2) return
-      const atTop = e.deltaY < 0 && el.scrollTop <= 0
-      const atBottom = e.deltaY > 0 && el.scrollTop >= range
-      if (atTop || atBottom) return
-      el.scrollTop += e.deltaY
-      e.stopPropagation()
-      e.preventDefault()
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [])
-  return ref
-}
-
-/** Auto-grows a textarea to fit its content (up to the CSS `max-height` cap,
- *  where `.prose`'s `overflow-y: auto` takes over) — so the DM Note field is
- *  only scrollable when the text genuinely overflows the cap, not by default
- *  just because it's a fixed-height box. The inline `height` is clamped to
- *  that same max-height in JS rather than left at the full (uncapped)
- *  scrollHeight for CSS to visually clip alone — keeps the element's real
- *  size matching what's rendered instead of relying on max-height to paper
- *  over a much taller box. Also wires up useNoScrollChain's wheel fix on the
- *  same ref/element, since every DM Note field needs both. */
-function useAutoGrow(value: string) {
-  const ref = useNoScrollChain()
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    el.style.height = 'auto'
-    const cap = parseFloat(getComputedStyle(el).maxHeight)
-    const target = Number.isFinite(cap) ? Math.min(el.scrollHeight, cap) : el.scrollHeight
-    el.style.height = `${target}px`
-  }, [value])
-  return ref
-}
 // AuditSev/AuditItem live in lib/graph.ts — the feature graph's audit and this
 // one report the same shape to the same UI, so they share one vocabulary.
 

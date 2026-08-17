@@ -267,10 +267,24 @@
 .in.name { font-family: var(--font-prose); font-size: 17px; letter-spacing: .01em; padding: 10px 12px; }
 select.in { appearance: none; cursor: pointer; background-image: linear-gradient(45deg, transparent 50%, var(--amber) 50%), linear-gradient(135deg, var(--amber) 50%, transparent 50%); background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
 select.in option { background: #14130f; }
+/* AUTO-GROWN TEXTAREAS MUST NOT OWN A SCROLLBAR.
+   useAutoGrow sets height to scrollHeight and there is no max-height, so the box
+   is always exactly as tall as its content and has nothing to scroll. But at
+   fractional browser zoom scrollHeight and clientHeight round apart by a pixel,
+   which makes the element SCROLLABLE as far as the browser is concerned: the
+   wheel lands on it, it moves one imperceptible pixel, and it refuses to chain to
+   the panel behind it. The field appears to swallow the gesture while doing
+   nothing.
+
+   useNoScrollChain's `range <= 2` guard looks like it covers this and cannot: it
+   only declines to INTERCEPT, after which the browser's own behaviour applies and
+   does exactly the wrong thing. Removing the overflow removes the capability, so
+   there is nothing to chain away from. */
 .prose {
   --cut: 7px; --bc: rgba(212,191,125,.32);
   width: 100%; min-height: 112px; resize: vertical; background-color: rgba(0,0,0,.4); border: 1.5px solid var(--bc); border-left: 2px solid var(--cyan); color: var(--text); font-family: var(--font-prose); font-size: 15px; line-height: 1.6; padding: 10px 12px; margin-bottom: 5px;
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  overflow-y: hidden;
 }
 .prose:focus { outline: none; --bc: var(--cyan-hot); }
 .prose.short { min-height: 70px; }
