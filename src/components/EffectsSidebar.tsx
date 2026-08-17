@@ -26,6 +26,7 @@ import { renderInline } from '../lib/markdown'
 import { useItemTooltip } from './ItemTooltip'
 import styles from './EffectsSidebar.module.css'
 import pop from '../screens/InventoryPopup.module.css'
+import { turnsLabel } from '../lib/turns'
 
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')
 const KIND_LABEL: Record<'buff' | 'cond' | 'debuff', string> = { buff: 'Buff', cond: 'Condition', debuff: 'Debuff' }
@@ -73,6 +74,9 @@ export function EffectsSidebar({ open, effects, onRemove, onClose }: {
                     onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setDetailId(e.id) } }}
                     {...bind({ name: e.name, sub: KIND_LABEL[e.kind ?? 'buff'], rows: grants ? [['Grants', grants]] : undefined, flavor: e.desc })}>
                     <span className={styles.scIcon}><i className={`fa-solid ${e.icon ?? 'fa-wand-sparkles'}`} /></span>
+                    {/* The countdown, where the effect is. A number only the roll
+                        panel knows is one the player cannot plan around. */}
+                    {turnsLabel(e) && <span className={styles.scTurns}>{turnsLabel(e)}</span>}
                     <span className={styles.scBody}>
                       <span className={styles.scName}>{e.name}</span>
                       <span className={styles.scMeta}>{summarizeEffects(e.effects)}{e.note ? ` · ${e.note}` : ''}</span>

@@ -347,6 +347,19 @@ function Entry({
                 onReroll={die => reroll({ line: i, die }, `${i}:${die}`)} />
             ))}
 
+            {/* NON-DICE RESULTS — a rest's restored slots, a potion's healing, a
+                turn's countdowns. `entry.lines` has existed since the roll log did
+                and this panel never read it, so every custom entry rendered an
+                empty body here while the toast showed it in full. The panel is
+                meant to be the fuller view, not the emptier one. */}
+            {(entry.lines ?? []).map((l, i) => (
+              <div key={`x${i}`} className={cx(styles.xLine, l.tone && styles[l.tone])}>
+                <span className={styles.xLab}>{l.label}</span>
+                {l.breakdown && <span className={styles.xBd}>{l.breakdown}</span>}
+                <span className={styles.xVal}>{l.total}</span>
+              </div>
+            ))}
+
             {/* Armed: already spent, already applied, and waiting for the player
                 to say the roll landed. Kept apart from the resolved list because
                 it is the one contribution here that is still SPENDABLE — §8 #1

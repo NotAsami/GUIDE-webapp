@@ -71,10 +71,13 @@ export function Layout() {
          all and then suddenly "cleared" — which reads as three broken presses
          followed by one that worked. */
       lines: [
+        // `counted` is already decremented, so the previous value is one more.
+        // Showing both is the whole point — a countdown that only prints where it
+        // landed does not read as counting.
         ...counted.map(e => ({
           label: e.name,
-          total: e.turns === 1 ? 'last turn' : `${e.turns} turns`,
-          breakdown: 'ticked down',
+          total: `${(e.turns ?? 0) + 1} → ${e.turns}`,
+          breakdown: e.turns === 1 ? 'last turn' : 'turns remaining',
         })),
         ...expired.map(e => ({ label: e.name, total: 'cleared', breakdown: 'wore off', tone: 'buff' as const })),
         ...(counted.length === 0 && expired.length === 0 && ticks.length === 0
