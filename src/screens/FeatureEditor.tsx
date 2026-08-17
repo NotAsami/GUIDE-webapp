@@ -509,14 +509,17 @@ export default function FeatureEditor() {
           <button type="button" className={cx(styles.gbtn, overlay === 'graph' && styles.on)}
             title="02 · Dependency Graph" onClick={() => setOverlay(o => (o === 'graph' ? null : 'graph'))}>
             <i className="fa-solid fa-circle-nodes" />
+            <span className={styles.gbLab}>Dependency Graph</span>
           </button>
           <button type="button" className={cx(styles.gbtn, styles.g2, overlay === 'origin' && styles.on)}
             title="Origin Chain" onClick={() => setOverlay(o => (o === 'origin' ? null : 'origin'))}>
             <i className="fa-solid fa-diagram-project" />
+            <span className={styles.gbLab}>Origin Chain</span>
           </button>
           <button type="button" className={cx(styles.gbtn, styles.g3, overlay === 'guide' && styles.on)}
             title="Authoring Guide" onClick={() => setOverlay(o => (o === 'guide' ? null : 'guide'))}>
             <i className="fa-solid fa-question" />
+            <span className={styles.gbLab}>Authoring Guide</span>
           </button>
         </section>
 

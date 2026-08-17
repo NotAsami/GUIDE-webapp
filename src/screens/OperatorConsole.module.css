@@ -1894,14 +1894,23 @@
 .catRail {
   position: absolute; left: calc(100% - 2px); top: 54px; z-index: 45;
   display: flex; flex-direction: column; gap: 6px;
+  /* The rail's box overhangs region 02, and it gets much wider while a tab is
+     expanded. Without this, that whole area swallows clicks meant for the
+     catalog underneath; the tabs themselves opt back in. */
+  pointer-events: none;
 }
 .crTab {
   --cut: 9px;
+  /* Lets the hover width animate to `max-content` instead of a hardcoded pixel
+     width, so every tab hugs its own label and none of them carry dead space.
+     Where it is unsupported the width simply snaps rather than sliding. */
+  interpolate-size: allow-keywords;
   position: relative; isolation: isolate; width: 34px; height: 34px; padding: 0; border: 0; cursor: pointer;
+  pointer-events: auto; overflow: hidden;
   background: var(--beige);
   clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
-  display: flex; align-items: center; justify-content: center;
-  transition: background-color 130ms ease, filter 130ms ease;
+  display: flex; align-items: center; justify-content: flex-start;
+  transition: width 190ms cubic-bezier(0.16, 0.84, 0.28, 1), background-color 130ms ease, filter 130ms ease;
 }
 /* left inset 0 — see the note above; this is the join, not a rounding detail. */
 .crTab::before {
@@ -1909,9 +1918,19 @@
   background: #141311;
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
 }
-.crGlyph { font-size: 14px; color: var(--beige); transition: color 130ms ease; }
-.crTab:hover:not(:disabled) { background: var(--amber); }
-.crTab:hover:not(:disabled) .crGlyph { color: var(--amber-hot); }
+/* Fixed 34px box so the glyph stays centred in the collapsed tab and does not
+   drift left as the label pushes in beside it. */
+.crGlyph { flex: 0 0 34px; text-align: center; font-size: 14px; color: var(--beige); transition: color 130ms ease; }
+.crLab {
+  flex: 0 0 auto; white-space: nowrap; padding-right: 13px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--amber-hot); opacity: 0; transform: translateX(-5px);
+  transition: opacity 120ms ease, transform 190ms cubic-bezier(0.16, 0.84, 0.28, 1);
+}
+
+.crTab:hover:not(:disabled), .crTab:focus-visible:not(:disabled) { width: max-content; background: var(--amber); }
+.crTab:hover:not(:disabled) .crGlyph, .crTab:focus-visible:not(:disabled) .crGlyph { color: var(--amber-hot); }
+.crTab:hover:not(:disabled) .crLab, .crTab:focus-visible:not(:disabled) .crLab { opacity: 1; transform: none; }
 
 .crTab.sel { background: var(--amber); filter: drop-shadow(3px 0 12px rgba(226, 176, 33, 0.4)); }
 .crTab.sel .crGlyph { color: var(--amber-hot); }
@@ -1919,3 +1938,7 @@
 .crTab.stub { opacity: 0.4; cursor: not-allowed; }
 .crTab.stub:hover { background: var(--beige); }
 .crTab.stub:hover .crGlyph { color: var(--beige); }
+
+@media (prefers-reduced-motion: reduce) {
+  .crTab, .crLab { transition: none; }
+}
