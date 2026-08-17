@@ -29,7 +29,7 @@ import {
   OPS, OP_ORDER, OP_TITLE, PALETTE, PALETTE_MORE, PALETTE_ACT, ROLL_SELECTORS,
   IS_ACTIVATION, IS_DAMAGE_FLAG, type OpField,
 } from '../lib/opSchema'
-import { useAutoGrow } from '../lib/textareaHooks'
+import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
 import { matchCount, normalizeTag, type AuthoredNode } from '../lib/graph'
 import styles from './authoring.module.css'
 
@@ -601,7 +601,8 @@ function SchemaField({ fd, eff, ei, setEffect, vars }: {
   }
   if (fd.type === 'text') {
     return <>{label}<textarea ref={textRef} className={cx(styles.prose, styles.short)} value={String(raw ?? '')}
-      placeholder={fd.example} onChange={e => put(e.target.value)} /></>
+      placeholder={fd.example} onKeyDown={markdownShortcuts(put)}
+      onChange={e => put(e.target.value)} /></>
   }
   if (fd.type === 'enum') {
     // An OPTIONAL enum needs a way back to unset, or the first option becomes a

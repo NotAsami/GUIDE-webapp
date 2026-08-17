@@ -25,7 +25,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmFeatures, featureContent } from '../lib/dm'
 import { useLocalDraft } from '../lib/draft'
-import { useAutoGrow } from '../lib/textareaHooks'
+import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
 import { GraphEffects, TagsBlock, VarsBlock, splitSel } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { auditNode, gid, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
@@ -880,6 +880,7 @@ function FeatureForm(p: FormProps) {
           into the deep description, where the player has to open the card to
           find it. */}
       <input className={cx(styles.in, styles.sumline)} value={d.light_description ?? ''}
+        onKeyDown={markdownShortcuts(light_description => set({ light_description }))}
         placeholder="One line — what the player reads while scanning the card…"
         onChange={e => set({ light_description: e.target.value })} />
       <div className={styles.subHint}>One line, on the collapsed card in play. Supports **bold** and *italics*.</div>
@@ -890,6 +891,7 @@ function FeatureForm(p: FormProps) {
       </div>
       <textarea ref={deepRef} className={styles.prose} value={d.deep_description ?? ''}
         placeholder="The full prose the player reads when the card is expanded…"
+        onKeyDown={markdownShortcuts(deep_description => set({ deep_description }))}
         onChange={e => set({ deep_description: e.target.value })} />
       <div className={styles.subHint}>The detail, on the expanded card.</div>
 
@@ -996,7 +998,7 @@ function GuidePanel({ open, helpOn, setHelpOn, onClose }: { open: boolean; helpO
           <span className={styles.k}>A value</span><span className={styles.v}><code>Wisdom ({'{'}saveDc{'}'}) saving throw</code> → <b>Wisdom (15) saving throw</b>. Reads <code>level prof str dex con int wis cha hp hpMax saveDc</code>, plus every variable this feature declares.</span>
           <span className={cx(styles.k, styles.cy)}>A choice</span><span className={styles.v}>A ternary, so the sentence changes with the character: <code>{'{'}upgraded ? &quot; and restrains the target.&quot; : &quot;.&quot;{'}'}</code></span>
           <span className={styles.k}>Colour</span><span className={styles.v}><code>[Fire Damage]{'{'}fire{'}'}</code>. Prefer a <b>name</b> — every damage type, plus <code>red gold amber cyan violet green</code> — because a name follows the theme and shares one palette with the roll panel, so radiant reads the same gold in both. <code>{'{'}--cyan-hot{'}'}</code> and <code>{'{'}#e2b021{'}'}</code> also work, in that order of preference.</span>
-          <span className={styles.k}>Emphasis</span><span className={styles.v}><code>**text**</code> is bold and reads cyan — reach for it on the <b>number</b> in a sentence. <code>*text*</code> is italic.</span>
+          <span className={styles.k}>Emphasis</span><span className={styles.v}><code>**text**</code> is bold and reads cyan — reach for it on the <b>number</b> in a sentence. <code>*text*</code> is italic and reads beige. Select and press <b>Ctrl+B</b> / <b>Ctrl+I</b>; pressing again unwraps.</span>
         </div>
 
         <div className={styles.sec}><span className={styles.num}>03</span><span className={styles.fieldLab}>when vs ask</span></div>

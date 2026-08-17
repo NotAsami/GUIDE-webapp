@@ -71,3 +71,50 @@ export function Prose({ text, className }: { text: string; className?: string })
   }
   return createElement('div', { className }, elements)
 }
+
+/** Wrap or unwrap a selection in a markdown marker — the Ctrl+B / Ctrl+I edit.
+ *
+ *  Pure, and separate from the keyboard handler, because the interesting part is
+ *  the string arithmetic: it TOGGLES, so pressing the shortcut twice returns the
+ *  text you started with rather than nesting `****bold****`. Two ways a selection
+ *  can already be bold and both must unwrap — the markers inside the selection
+ *  (`**bold**` selected whole) or outside it (`bold` selected within `**bold**`).
+ *
+ *  Returns the new text and where the selection should sit afterwards, so the
+ *  caller can restore it — an editor that drops your cursor to the end on every
+ *  shortcut is worse than no shortcut.
+ *
+ *  With nothing selected it inserts the empty pair and puts the caret between
+ *  them, which is what every editor does and what makes it usable mid-sentence. */
+export function toggleWrap(
+  text: string, start: number, end: number, marker: string,
+): { text: string; start: number; end: number } {
+  const n = marker.length
+  const inner = text.slice(start, end)
+
+  // Already wrapped INSIDE the selection: **bold** selected whole.
+  if (inner.length >= n * 2 && inner.startsWith(marker) && inner.endsWith(marker)) {
+    const stripped = inner.slice(n, -n)
+    return { text: text.slice(0, start) + stripped + text.slice(end), start, end: start + stripped.length }
+  }
+  /* Already wrapped OUTSIDE the selection: bold selected within **bold**.
+     The guard matters for italics: in `**fire**` the `*` next to the selection is
+     BOLD's marker, so without it Ctrl+I on bold text unwraps a bold marker into
+     `*fire*` instead of nesting. */
+  const hugged = text.slice(start - n, start) === marker && text.slice(end, end + n) === marker
+  const isHalfOfDouble = n === 1 && (text[start - 2] === marker || text[end + 1] === marker)
+  if (hugged && !isHalfOfDouble) {
+    return {
+      text: text.slice(0, start - n) + inner + text.slice(end + n),
+      start: start - n,
+      end: end - n,
+    }
+  }
+  return {
+    text: text.slice(0, start) + marker + inner + marker + text.slice(end),
+    start: start + n,
+    // Both edges shift by ONE marker: the opening one. Adding the selection
+    // length again double-counts it and swallows the closing marker.
+    end: end + n,
+  }
+}
