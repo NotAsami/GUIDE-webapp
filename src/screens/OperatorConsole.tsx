@@ -13,6 +13,7 @@ import { GraphEffects, TagsBlock, VarsBlock } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphState'
 import { longRestPatch } from '../lib/rest'
+import { durationTurns } from '../lib/turns'
 import { effectiveSheet } from '../lib/effects'
 import { pactSlotCount, pactSlotLevel } from '../lib/spells'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/voice'
@@ -1110,6 +1111,8 @@ function ApplyEffectCard({ member, effectLib, row, onUpdate, onVoice, log }: {
   const [durN, setDurN] = useState(1)
   const [durUnit, setDurUnit] = useState<typeof DUR_UNITS[number]>('round')
   const [untilRest, setUntilRest] = useState(false)
+  const [tick, setTick] = useState('')
+  const [conc, setConc] = useState(false)
   const [busy, setBusy] = useState(false)
   const dur = untilRest ? 'until rest' : `${durN} ${durUnit}${durN === 1 ? '' : 's'}`
 
@@ -1139,6 +1142,12 @@ function ApplyEffectCard({ member, effectLib, row, onUpdate, onVoice, log }: {
       // Full description, snapshotted — the player never reads the effect
       // catalog, so this is the one copy their Effects panel tooltip has.
       desc: d.desc.trim() || undefined, at: Date.now(),
+      /* DERIVED from the duration already chosen, not re-typed: the DM picks
+         "1 minute" and the tracker gets 10. "Until rest" yields undefined, which
+         means UNTRACKED — it never ticks and never expires on its own. */
+      ...(untilRest ? {} : (() => { const t = durationTurns(durN, durUnit); return t ? { turns: t } : {} })()),
+      ...(tick.trim() ? { tick: tick.trim() } : {}),
+      ...(conc ? { concentration: true } : {}),
     }
     const ok = await onUpdate({ resources: { ...resources, activeEffects: [...active, eff] } as CharacterRow['resources'] })
     setBusy(false)
@@ -1195,6 +1204,19 @@ function ApplyEffectCard({ member, effectLib, row, onUpdate, onVoice, log }: {
         </select>
         <button className={cx(styles.durOpt, untilRest && styles.sel)} onClick={() => setUntilRest(r => !r)} aria-pressed={untilRest}>
           Until Rest
+        </button>
+      </div>
+
+      {/* Per-turn damage and concentration. Both sit with the duration because
+          all three answer "how does this end" — and the turn count itself is
+          derived from the row above rather than typed again. */}
+      <div className={styles.durRow}>
+        <span className={styles.fieldLab}>Per turn</span>
+        <input className={styles.sessIn} value={tick} onChange={e => setTick(e.target.value)}
+          placeholder="1d6 — damage at the start of each turn, left blank for none" spellCheck={false} />
+        <button className={cx(styles.durOpt, conc && styles.sel)} onClick={() => setConc(c => !c)} aria-pressed={conc}
+          title="Marked only — losing concentration is a save made at the table, never something the app decides">
+          Concentration
         </button>
       </div>
 
