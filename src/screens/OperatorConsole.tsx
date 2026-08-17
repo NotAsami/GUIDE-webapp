@@ -1449,6 +1449,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
   const [flavor, setFlavor] = useState(d?.flavor ?? '')
   const [ability, setAbility] = useState<WeaponAbility>((d?.ability as WeaponAbility) ?? 'str')
   const [damageDice, setDamageDice] = useState(d?.damageDice ?? '')
+  const [ranged, setRanged] = useState(!!d?.ranged)
   const [dmgType, setDmgType] = useState(d?.type ?? '')
   const [heal, setHeal] = useState(d?.heal != null ? String(d.heal) : '')
   const [duration, setDuration] = useState(d?.duration ?? '')
@@ -1492,7 +1493,11 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
       ...(attune ? { attune: name.trim() } : {}),
       ...(flavor.trim() ? { flavor: flavor.trim() } : {}),
       ...(category === 'weapon'
-        ? { ability, ...(damageDice.trim() ? { damageDice: damageDice.trim() } : {}), ...(dmgType.trim() ? { type: dmgType.trim() } : {}) }
+        ? {
+          ability, ...(ranged ? { ranged: true } : {}),
+          ...(damageDice.trim() ? { damageDice: damageDice.trim() } : {}),
+          ...(dmgType.trim() ? { type: dmgType.trim() } : {}),
+        }
         : {}),
       ...(category === 'consumable'
         ? { ...(heal.trim() ? { heal: heal.trim() } : {}), ...(duration.trim() ? { duration: duration.trim() } : {}) }
@@ -1612,6 +1617,23 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
           </div>
           <div><span className={styles.fieldLab}>Damage Dice</span><input className={styles.sessIn} value={damageDice} onChange={e => setDamageDice(e.target.value)} placeholder="e.g. 1d8" /></div>
           <div><span className={styles.fieldLab}>Damage Type</span><input className={styles.sessIn} value={dmgType} onChange={e => setDmgType(e.target.value)} placeholder="e.g. Slashing" /></div>
+          <div className={styles.catSpan3}>
+            {/* Everything ranged hangs off this one flag: the empty-quiver
+                refusal, the ammunition spend, and the `ranged` sub that makes
+                `roll:attack.ranged` match. It was previously inferred from the
+                word "ammunition" in a free-text list with no control, so no
+                weapon made here could be ranged at all. */}
+            <label className={styles.catCheck}>
+              <input type="checkbox" checked={ranged}
+                onChange={e => {
+                  setRanged(e.target.checked)
+                  // A convenience, not a lock: bows are DEX weapons, so offer it
+                  // when the ability is still the untouched default.
+                  if (e.target.checked && ability === 'str') setAbility('dex')
+                }} />
+              <span>Ranged <span className={styles.dimLab}>— fires ammunition, spends a shaft per attack</span></span>
+            </label>
+          </div>
         </div>
       )}
 

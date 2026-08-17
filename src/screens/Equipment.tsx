@@ -17,7 +17,7 @@ import {
 import { CarrySidebar } from './EquipmentCarry'
 import { effectiveSheet } from '../lib/effects'
 import {
-  handLabel, rollWeaponAttack, weaponAttackBonus, weaponDamageString,
+  handLabel, isRanged, rollWeaponAttack, weaponAttackBonus, weaponDamageString,
   type AmmoBonus,
 } from '../lib/weapons'
 import { PERSON } from '../lib/placement'
@@ -610,10 +610,6 @@ export function ammoBonusOf(stack: InventoryItem | null): AmmoBonus | null {
 
 /** A weapon draws from the quiver if it takes ammunition. Read off the SRD
  *  `properties` the DM already authors, so no new field is needed. */
-function isRanged(w: EquippedWeapon): boolean {
-  return (w.properties ?? []).some(p => /ammunition/i.test(p))
-}
-
 function buildWeaponRows(w: EquippedWeapon, sheet: CharacterSheet): [string, string][] {
   const rows: [string, string][] = []
   rows.push(['Attack', formatMod(weaponAttackBonus(w, sheet))])

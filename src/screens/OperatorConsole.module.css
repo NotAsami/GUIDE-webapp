@@ -1811,3 +1811,15 @@
    inside the button. Shrink the label here only — every other .qActions
    still gets the normal .lg size. */
 .skActions .btn.lg .bi { font-size: 9.5px; letter-spacing: 0.13em; gap: 6px; }
+
+/* A full-width cell inside the 3-up weapon grid — a checkbox with a sentence
+   after it does not belong in a third of a row. */
+.catSpan3 { grid-column: 1 / -1; }
+.catCheck {
+  display: flex; align-items: center; gap: 9px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.14em;
+  color: var(--beige); text-transform: uppercase;
+}
+.catCheck input { width: 14px; height: 14px; accent-color: var(--amber); cursor: pointer; }
+/* The qualifier after a field label — the part that explains rather than names. */
+.dimLab { color: var(--beige-dim); text-transform: none; letter-spacing: 0.04em; }
