@@ -1823,3 +1823,27 @@
 .catCheck input { width: 14px; height: 14px; accent-color: var(--amber); cursor: pointer; }
 /* The qualifier after a field label — the part that explains rather than names. */
 .dimLab { color: var(--beige-dim); text-transform: none; letter-spacing: 0.04em; }
+
+/* ---- Collapsible card groups (Actions tab) ----
+   Spans both columns and stacks its cards: the ones folded away are already the
+   wide kind, and a folder that reflowed them into two columns would read as a
+   different screen rather than the same one opened up. */
+.folder { grid-column: 1 / -1; display: flex; flex-direction: column; }
+.folderHead {
+  display: flex; align-items: center; gap: 10px; width: 100%; cursor: pointer; text-align: left;
+  background-color: rgba(0, 0, 0, 0.35);
+  border: 1.5px solid rgba(212, 191, 125, 0.28);
+  color: var(--beige); padding: 9px 12px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+.folderHead:hover { color: var(--amber-hot); border-color: var(--amber); background-color: rgba(226, 176, 33, 0.08); }
+.fdCar { display: inline-flex; width: 10px; color: var(--amber); font-size: 11px; transition: transform 160ms ease; }
+.folderOpen .fdCar { transform: rotate(90deg); }
+.fdIc { color: var(--amber); font-size: 12px; }
+.fdT { flex: 1 1 auto; }
+.fdHint { font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); }
+.folderBody { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+/* Inside a folder every card is full width already, so `wide` has nothing left
+   to do — and `grid-column` on a flex child is simply ignored. */
+.folderBody .actCard { width: 100%; }

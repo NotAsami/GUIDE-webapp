@@ -626,15 +626,9 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, sha
           </div>
         </div>
 
-        {/* B — GRANT ITEM: snapshot a catalog template into this PC's inventory */}
-        <GrantItemCard member={member} catalog={catalog} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
-
-        {/* C — APPLY EFFECT: push a status effect onto this PC (slice 6) */}
-        <ApplyEffectCard member={member} effectLib={effectLib} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
-
-        {/* D — CURRENCY */}
+        {/* B — CURRENCY */}
         <div className={styles.actCard}>
-          <div className={styles.acTitle}><i className="fa-solid fa-coins lead" /><span className={styles.num}>D</span><span className={styles.t}>Currency</span></div>
+          <div className={styles.acTitle}><i className="fa-solid fa-coins lead" /><span className={styles.num}>B</span><span className={styles.t}>Currency</span></div>
           <div className={styles.coinDisplay}><span className={styles.gp}>{gold.toLocaleString()}</span><span className={styles.gl}>Gold Coins</span></div>
           {/* the cells double as the award/deduct target selector */}
           <div className={styles.coinBreak}>
@@ -657,6 +651,12 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, sha
             <Btn tone="danger" sm icon="fa-minus" label="Deduct" onClick={deduct} />
           </div>
         </div>
+
+        {/* C — APPLY EFFECT: push a status effect onto this PC (slice 6) */}
+        <ApplyEffectCard member={member} effectLib={effectLib} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
+
+        {/* D — GRANT ITEM: snapshot a catalog template into this PC's inventory */}
+        <GrantItemCard member={member} catalog={catalog} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
 
         {/* E — STATUS: death saves + exhaustion (wide) */}
         <div className={cx(styles.actCard, styles.wide)}>
@@ -697,33 +697,26 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, sha
           </div>
         </div>
 
-        {/* F — GRANT FEATURE (wide): roleplay boons straight onto the sheet;
-            item-borne features travel with their item instead (Grant Item). */}
-        <GrantFeatureCard member={member} row={row} featureLib={featureLib} onUpdate={onUpdate} onVoice={onVoice} log={log} />
-
-        {/* G — PROFICIENCIES (wide): saving throws (binary) + skills (none →
-            proficient → expertise). Character-build data, so it's DM-authored
-            here rather than player-editable — see Character.tsx / lib/dnd.ts,
-            which already read these three sheet arrays for the Rolls screen. */}
-        <ProficienciesCard member={member} row={row} onUpdate={onUpdate} log={log} />
-
-        {/* H — SPELLCASTING (wide): interim caster-profile editor — class,
-            ability, save DC, attack bonus, prepared max, slot totals. Writes
-            the SAME `spellbook` fields the player Spellbook screen reads, so
-            there is exactly one owner (CLAUDE.md). Level-Up (disabled above)
-            will become the primary way this gets set once it exists; this
-            stays as the manual fallback. */}
+        {/* ---- COLLAPSED BY DEFAULT ----
+            Everything above is what a DM touches mid-session; everything below is
+            character BUILD — set once, revisited rarely. Folding it keeps the tab
+            scannable without hiding it, and each folder groups the two cards that
+            are always edited together. */}
+        <Folder label="Spells" icon="fa-hat-wizard">
         <CasterProfileCard key={row.id} member={member} row={row} onUpdate={onUpdate} log={log} />
 
-        {/* I — GRANT SPELL: snapshot a spell_catalog template onto this PC's
-            spellbook.spells, mirroring Grant Feature (F). */}
         <GrantSpellCard member={member} row={row} spellLib={spellLib} onUpdate={onUpdate} onVoice={onVoice} log={log} />
+        </Folder>
 
-        {/* J — FEATURE STATE (wide): what the graph is holding for this PC, and
-            the DM's own variable bucket — which had no writer anywhere in the
-            app until this card, despite the engine reading it and migration
-            0015 guarding it. */}
+        <Folder label="Features" icon="fa-star">
+        <GrantFeatureCard member={member} row={row} featureLib={featureLib} onUpdate={onUpdate} onVoice={onVoice} log={log} />
+
         <FeatureStateCard member={member} row={row} shardCatalog={shardCatalog} onUpdate={onUpdate} log={log} />
+        </Folder>
+
+        <Folder label="Skills" icon="fa-graduation-cap">
+        <ProficienciesCard member={member} row={row} onUpdate={onUpdate} log={log} />
+        </Folder>
       </div>
 
     </>
@@ -776,7 +769,7 @@ function FeatureStateCard({ member, row, shardCatalog, onUpdate, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-diagram-project lead" /><span className={styles.num}>J</span><span className={styles.t}>Feature State</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-diagram-project lead" /><span className={styles.num}>I</span><span className={styles.t}>Feature State</span></div>
 
       {collisions.map(a => (
         <div key={a.id ?? a.t} className={styles.skWarn}>
@@ -1049,7 +1042,7 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
 
   return (
     <div className={styles.actCard}>
-      <div className={styles.acTitle}><i className="fa-solid fa-box-open lead" /><span className={styles.num}>B</span><span className={styles.t}>Grant Item</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-box-open lead" /><span className={styles.num}>D</span><span className={styles.t}>Grant Item</span></div>
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
         <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search catalog…" />
@@ -2032,7 +2025,7 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-star lead" /><span className={styles.num}>F</span><span className={styles.t}>Grant Feature</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-star lead" /><span className={styles.num}>H</span><span className={styles.t}>Grant Feature</span></div>
       <div className={styles.featGrantSplit}>
         <div className={styles.fgCol}>
           <span className={styles.fieldLab}>Library · roleplay boons &amp; perks</span>
@@ -2078,6 +2071,35 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
   )
 }
 
+/** A collapsible group of action cards, closed until asked for.
+ *
+ *  The Actions tab had grown to ten cards with no hierarchy, and the ones a DM
+ *  reaches for mid-session were scrolling off the bottom behind character BUILD
+ *  data that is set once and rarely revisited. Folding the build cards keeps them
+ *  one click away rather than hidden, and each folder holds the pair that is
+ *  always edited together — a caster profile without its spell list is half a job.
+ *
+ *  Cards inside stack rather than sharing the two-column grid: they are already
+ *  the wide ones, and a folder that reflows its contents into columns reads as a
+ *  different screen rather than the same one opened up.
+ *
+ *  Local state on purpose. Which folders you have open is how you are reading the
+ *  tab right now, not something worth persisting into the next session. */
+function Folder({ label, icon, children }: { label: string; icon: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className={cx(styles.folder, open && styles.folderOpen)}>
+      <button type="button" className={styles.folderHead} onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <span className={styles.fdCar}><i className="fa-solid fa-caret-right" /></span>
+        <i className={cx('fa-solid', icon, styles.fdIc)} />
+        <span className={styles.fdT}>{label}</span>
+        <span className={styles.fdHint}>{open ? 'collapse' : 'expand'}</span>
+      </button>
+      {open && <div className={styles.folderBody}>{children}</div>}
+    </div>
+  )
+}
+
 /** Grant Feature (Actions card F) writes immediately per click, same as every
  *  other card on this tab — Proficiencies (G) follows suit rather than
  *  introducing a dirty/Save form for what's just two fixed toggle sets.
@@ -2117,7 +2139,7 @@ function ProficienciesCard({ member, row, onUpdate, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-graduation-cap lead" /><span className={styles.num}>G</span><span className={styles.t}>Proficiencies</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-graduation-cap lead" /><span className={styles.num}>J</span><span className={styles.t}>Proficiencies</span></div>
 
       <div className={styles.profRow}>
         <span className={styles.profLab}>Saving Throws</span>
@@ -3072,7 +3094,7 @@ function GrantSpellCard({ member, row, spellLib, onUpdate, onVoice, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>I</span><span className={styles.t}>Grant Spell</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>G</span><span className={styles.t}>Grant Spell</span></div>
       <div className={styles.featGrantSplit}>
         <div className={styles.fgCol}>
           <span className={styles.fieldLab}>Library · Catalog · Spells tab</span>
@@ -3200,7 +3222,7 @@ function CasterProfileCard({ member, row, onUpdate, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-hat-wizard lead" /><span className={styles.num}>H</span><span className={styles.t}>Spellcasting</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-hat-wizard lead" /><span className={styles.num}>F</span><span className={styles.t}>Spellcasting</span></div>
 
       <div className={cx(styles.catTog, caster && styles.on)} onClick={() => setCaster(c => !c)} role="switch" aria-checked={caster}>
         <span className={styles.tgSw} />
