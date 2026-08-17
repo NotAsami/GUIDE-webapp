@@ -510,7 +510,11 @@ export default function FeatureEditor() {
             title="02 · Dependency Graph" onClick={() => setOverlay(o => (o === 'graph' ? null : 'graph'))}>
             <i className="fa-solid fa-circle-nodes" />
           </button>
-          <button type="button" className={cx(styles.gbtn, styles.g2, overlay === 'guide' && styles.on)}
+          <button type="button" className={cx(styles.gbtn, styles.g2, overlay === 'origin' && styles.on)}
+            title="Origin Chain" onClick={() => setOverlay(o => (o === 'origin' ? null : 'origin'))}>
+            <i className="fa-solid fa-diagram-project" />
+          </button>
+          <button type="button" className={cx(styles.gbtn, styles.g3, overlay === 'guide' && styles.on)}
             title="Authoring Guide" onClick={() => setOverlay(o => (o === 'guide' ? null : 'guide'))}>
             <i className="fa-solid fa-question" />
           </button>
@@ -720,7 +724,7 @@ function OriginPanel({ open, draft, onChange, onClose }: {
       <div className={styles.gpHead}>
         <span className={styles.n}><i className="fa-solid fa-diagram-project" /></span>
         <span className={styles.t}>Origin Chain</span>
-        <button type="button" className={cx(styles.gpX, styles.plain)} onClick={onClose}>
+        <button type="button" className={styles.gpX} onClick={onClose}>
           <i className="fa-solid fa-xmark" /> Close
         </button>
       </div>
