@@ -2,13 +2,23 @@
    Shared chrome (topbar, nav, tickers, side rails, bottom bar) comes from Layout
    and Deco; everything below is this screen's own. */
 
+/* Fixed, and clear of the dock nav — the same offsets Journal and Inventory use,
+   which is also the mockup's own `main.features` rule. Two reasons it cannot just
+   flow inside Layout's .main: the nav floats over that padding box, so content
+   would render underneath it; and .region is `flex: 1 1 auto` with absolutely
+   positioned layers inside, which needs a DEFINITE height to flex within. Without
+   one the region collapsed to zero and every card was invisible. */
 .features {
-  position: relative;
+  position: fixed;
+  top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
+  bottom: calc(var(--bar-bottom-h) + 18px);
+  left: 0; right: 0;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   gap: 14px;
   min-height: 0;
-  flex: 1 1 auto;
+  padding: 0 34px;
 }
 
 /* ---- column header ---- */
