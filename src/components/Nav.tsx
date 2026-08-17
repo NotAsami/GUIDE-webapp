@@ -56,6 +56,12 @@ function NavBtn({
   item, active, subActive,
 }: { item: NavItem; active?: boolean; subActive?: boolean }) {
   const nav = useNavigate()
+  /* EXACTLY this route, which is not the same as `active`. In the dock variant
+     `active` lights the parent for anything in its GROUP — on /features the Rolls
+     button is lit — so keying the go-home shortcut off it sent you to the Codex
+     when you were trying to reach the parent screen from one of its children. */
+  const { pathname } = useLocation()
+  const atSelf = pathname === item.to
   const cls = [
     styles.btn,
     active ? styles.active : '',
@@ -70,7 +76,7 @@ function NavBtn({
          so ordinary navigation stays ordinary, and it does not fire for a
          sub-item: `subActive` means a CHILD is open, and returning to the Codex
          from there would skip the parent the player was aiming for. */
-      onClick={active && !subActive ? e => { e.preventDefault(); nav('/') } : undefined}
+      onClick={atSelf ? e => { e.preventDefault(); nav('/') } : undefined}
     >
       <span className={styles.frame} />
       {item.marker && <span className={styles.marker}>{item.marker}</span>}
