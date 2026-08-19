@@ -14,6 +14,7 @@ import { GraphEffects, TagsBlock, VarsBlock } from '../components/GraphEffects'
 import type { Feature, ItemEffects, ShardPerk } from '../lib/database.types'
 import styles from './ShardLattice.module.css'
 import { IconPicker } from '../components/IconPicker'
+import { markdownShortcuts } from '../lib/textareaHooks'
 import { Icon } from '../components/Icon'
 
 const PALETTE = [
@@ -796,7 +797,9 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
         </select>
       )}
       <div className={styles.sec}><span className={styles.fieldLab}>Player-Facing Effect</span></div>
-      <textarea ref={effectRef} className={styles.prose} placeholder="What the player reads in the node detail panel…" value={node.effect} onChange={e => setNode({ effect: e.target.value })} />
+      <textarea ref={effectRef} className={styles.prose} placeholder="What the player reads in the node detail panel…"
+        value={node.effect} onChange={e => setNode({ effect: e.target.value })}
+        onKeyDown={markdownShortcuts(effect => setNode({ effect }))} />
 
       <div className={`${styles.tog} ${node.concealed ? styles.on : ''}`} onClick={() => setNode({ concealed: !node.concealed })}>
         <span className={styles.sw} /><span className={styles.tl}><span className={styles.t}>Concealed</span><span className={styles.s}>Renders as ??? until its prereqs resolve</span></span>

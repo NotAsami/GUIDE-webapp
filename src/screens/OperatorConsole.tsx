@@ -6642,6 +6642,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
         className={styles.qPlayerDesc}
         value={backstory}
         onChange={e => setBackstory(e.target.value)}
+        onKeyDown={markdownShortcuts(setBackstory)}
         placeholder="The prose players read on the Lore screen…"
       />
       <p className={styles.acHint}>**bold**  *italics*  [text](url)  ## heading · blank line = new paragraph</p>
@@ -6649,10 +6650,10 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
       {/* nature — trait/ideal/bond/flaw */}
       <LoreSecHead icon="fa-circle-dot" label="Personality / Nature" />
       <div className={styles.catGrid2}>
-        <div><span className={styles.fieldLab}>Personality Trait</span><textarea className={styles.loreNatArea} value={trait} onChange={e => setTrait(e.target.value)} /></div>
-        <div><span className={styles.fieldLab}>Ideal</span><textarea className={styles.loreNatArea} value={ideal} onChange={e => setIdeal(e.target.value)} /></div>
-        <div><span className={styles.fieldLab}>Bond</span><textarea className={styles.loreNatArea} value={bond} onChange={e => setBond(e.target.value)} /></div>
-        <div><span className={styles.fieldLab}>Flaw</span><textarea className={styles.loreNatArea} value={flaw} onChange={e => setFlaw(e.target.value)} /></div>
+        <div><span className={styles.fieldLab}>Personality Trait</span><textarea className={styles.loreNatArea} value={trait} onChange={e => setTrait(e.target.value)} onKeyDown={markdownShortcuts(setTrait)} /></div>
+        <div><span className={styles.fieldLab}>Ideal</span><textarea className={styles.loreNatArea} value={ideal} onChange={e => setIdeal(e.target.value)} onKeyDown={markdownShortcuts(setIdeal)} /></div>
+        <div><span className={styles.fieldLab}>Bond</span><textarea className={styles.loreNatArea} value={bond} onChange={e => setBond(e.target.value)} onKeyDown={markdownShortcuts(setBond)} /></div>
+        <div><span className={styles.fieldLab}>Flaw</span><textarea className={styles.loreNatArea} value={flaw} onChange={e => setFlaw(e.target.value)} onKeyDown={markdownShortcuts(setFlaw)} /></div>
       </div>
 
       {/* relations — colored-strip rows, click the dot to cycle attitude */}
@@ -6680,7 +6681,10 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
               <span className={styles.loreAttLab}>{ATTITUDE_LABEL[r.attitude ?? ''] ?? '—'}</span>
               <span className={styles.qOx} onClick={() => setRelations(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
             </div>
-            <input className={cx(styles.sessIn, styles.loreRelDesc)} value={r.desc} onChange={e => patchRelation(i, { desc: e.target.value })} placeholder="Description…" />
+            <input className={cx(styles.sessIn, styles.loreRelDesc)} value={r.desc}
+              onChange={e => patchRelation(i, { desc: e.target.value })}
+              onKeyDown={markdownShortcuts(desc => patchRelation(i, { desc }))}
+              placeholder="Description…" />
           </div>
         )
       }) : <div className={styles.fxNone}>No relations yet — add allies, mentors, rivals, or the system itself.</div>}
@@ -6986,7 +6990,8 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
         <span className={styles.fieldLab}>Player Description</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Players see this</span>
       </div>
-      <textarea className={styles.qPlayerDesc} value={description} onChange={e => setDescription(e.target.value)} placeholder="The prose the players read in their Journal…" />
+      <textarea className={styles.qPlayerDesc} value={description} onChange={e => setDescription(e.target.value)}
+        onKeyDown={markdownShortcuts(setDescription)} placeholder="The prose the players read in their Journal…" />
 
       <span className={styles.fieldLab}>Objectives</span>
       <div className={styles.qObjList}>
@@ -7143,7 +7148,8 @@ function SessionForm({ session, nextNum, onSubmit, onDelete }: {
       <span className={styles.fieldLab}>Title</span>
       <input className={styles.sessIn} value={title} onChange={e => setTitle(e.target.value)} placeholder="Give the session a title…" />
       <span className={styles.fieldLab}>Recap</span>
-      <textarea className={styles.sessRecap} value={recap} onChange={e => setRecap(e.target.value)} placeholder="Write the session recap — what happened, who did what, where it left off…" />
+      <textarea className={styles.sessRecap} value={recap} onChange={e => setRecap(e.target.value)}
+        onKeyDown={markdownShortcuts(setRecap)} placeholder="Write the session recap — what happened, who did what, where it left off…" />
 
       <span className={styles.fieldLab}>Key Events</span>
       <div className={styles.evList}>
