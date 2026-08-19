@@ -2,7 +2,9 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { createPortal } from 'react-dom'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, useDmClasses, useDmRaces, classContent, raceContent, featureContent, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState, type DmClassesState, type DmRacesState } from '../lib/dm'
+import {
+  useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, useDmClasses, useDmRaces, classContent, raceContent, featureContent, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState, type DmClassesState, type DmRacesState, useDmLoot, lootContent,
+} from '../lib/dm'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
 import { parseCatalogQuery, matchesCatalogQuery } from '../lib/catalogSearch'
@@ -10,6 +12,8 @@ import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, 
 import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
 import type { GraphEffect, GraphState, ProgressStory, ShardSlot, ShardTree, VarDef } from '../lib/database.types'
 import { auditNode, characterVars, type AuditItem } from '../lib/graph'
+import type { DmLootState } from '../lib/dm'
+import { chanceOfNothing, expectedYield, rollLoot, type LootOutcome } from '../lib/loot'
 import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, revealAudit } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphState'
@@ -29,18 +33,7 @@ import { renderInline } from '../lib/markdown'
 import { markdownShortcuts } from '../lib/textareaHooks'
 import { useLocalDraft } from '../lib/draft'
 import type {
-  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json,
-  QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow,
-  CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity,
-  ItemSlot, AbilityKey, WeaponAbility, ActiveEffect,
-  Feature, FeatureCategory, FeatureKind, CatalogFeatureRow,
-  EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow,
-  EffectDuration, EffectRef,
-  Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData,
-  CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData,
-  CatalogRaceRow, RaceDef,
-  EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef,
-  EquippedGear, CharacterLore, Relation,
+  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json, QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow, CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect, Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow, EffectDuration, EffectRef, Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData, CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData, CatalogRaceRow, RaceDef, EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef, EquippedGear, CharacterLore, Relation, CatalogLootRow, LootTable, LootRow,
 } from '../lib/database.types'
 import { ITEM_SLOTS, isRingSlot } from '../lib/equip'
 import { SKILLS, ABILITY_ORDER, ABILITY_ABBR } from '../lib/dnd'
@@ -134,7 +127,7 @@ const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hp
 
 type View = 'overview' | 'character' | 'quests' | 'sessions' | 'catalog'
 type CharTab = 'actions' | 'inventory' | 'lore' | 'shards'
-type CatTab = 'items' | 'features' | 'spells' | 'effects' | 'shops' | 'classes' | 'races'
+type CatTab = 'items' | 'features' | 'spells' | 'effects' | 'shops' | 'classes' | 'races' | 'loot'
 
 export function OperatorConsole() {
   const { session, loading: authLoading } = useAuth()
@@ -152,6 +145,7 @@ export function OperatorConsole() {
   const spellLib = useDmSpells()
   const shopLib = useDmShops()
   const classLib = useDmClasses()
+  const lootLib = useDmLoot()
   const raceLib = useDmRaces()
   const confiscated = useDmConfiscated()
   const onlineIds = usePartyPresence()
@@ -175,6 +169,7 @@ export function OperatorConsole() {
     { key: 'shops', label: 'Shopkeepers', icon: 'fa-shop', n: shopLib.shops.length, soon: false },
     { key: 'races', label: 'Races', icon: 'fa-leaf', n: raceLib.races.length, soon: false },
     { key: 'classes', label: 'Classes', icon: 'fa-shield-halved', n: classLib.classes.length, soon: false },
+    { key: 'loot', label: 'Loot', icon: 'fa-sack-dollar', n: lootLib.tables.length, soon: false },
     /* Last on purpose: these two LEAVE the catalog for their own editor, so they
        are an exit rather than another tab, and reading order should say so. */
     { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
@@ -445,7 +440,7 @@ export function OperatorConsole() {
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
               ) : view === 'catalog' ? (
-                <CatalogSurface tab={catTab} catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} classLib={classLib} raceLib={raceLib} members={members} />
+                <CatalogSurface tab={catTab} catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} classLib={classLib} raceLib={raceLib} lootLib={lootLib} members={members} />
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
@@ -459,7 +454,7 @@ export function OperatorConsole() {
                     log={log}
                   />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} lootLib={lootLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
                 )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
@@ -570,7 +565,7 @@ function OverviewDashboard({
  *  never clobbered, and targets the same fields the player screens read — HP and
  *  coins on `sheet`, death saves + exhaustion on `resources` (see Stats.tsx) —
  *  keeping one source of truth per value. */
-function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, shardCatalog, onUpdate, onVoice, log }: {
+function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, lootLib, shardCatalog, onUpdate, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
   catalog: CatalogItemRow[]
@@ -579,6 +574,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
   spellLib: CatalogSpellRow[]
   classLib: DmClassesState
   raceLib: DmRacesState
+  lootLib: DmLootState
   shardCatalog: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
@@ -771,21 +767,28 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
             character BUILD — set once, revisited rarely. Folding it keeps the tab
             scannable without hiding it, and each folder groups the two cards that
             are always edited together. */}
-        {/* Race first: it is the half of a character that exists before any
-            class does, and its skill prompt wants to be parked before a class
-            overwrites the same slot. */}
-        <Folder label="Race" icon="fa-leaf">
+        {/* RACE, CLASS AND SKILLS ARE ONE ACT, so they are one folder. Assigning
+            a race or a class PARKS a skill prompt (`sheet.pendingSkills`) for
+            the player's picks, and the proficiency card is where those get
+            resolved — three folders meant opening three to finish one job, and
+            the middle one silently changed what the third was showing.
+
+            Order inside is the order they happen: race is the half of a
+            character that exists before any class does, and its skill prompt
+            wants to be parked before a class overwrites the same slot; the
+            training both of them granted reads last. */}
+        <Folder label="Race, Class & Skills" icon="fa-user-shield">
         <AssignRaceCard
           member={member} row={row} raceLib={raceLib} featureLib={featureLib}
           shardCatalog={shardCatalog} onUpdate={onUpdate} log={log}
         />
-        </Folder>
 
-        <Folder label="Class" icon="fa-shield-halved">
         <AssignClassCard
           member={member} row={row} classLib={classLib} featureLib={featureLib}
           itemCatalog={catalog} shardCatalog={shardCatalog} onUpdate={onUpdate} log={log}
         />
+
+        <ProficienciesCard member={member} row={row} classLib={classLib} onUpdate={onUpdate} log={log} />
         </Folder>
 
         <Folder label="Spells" icon="fa-hat-wizard">
@@ -800,12 +803,13 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
         <FeatureStateCard member={member} row={row} shardCatalog={shardCatalog} onUpdate={onUpdate} log={log} />
         </Folder>
 
-        <Folder label="Skills" icon="fa-graduation-cap">
-        <ProficienciesCard member={member} row={row} classLib={classLib} onUpdate={onUpdate} log={log} />
-        </Folder>
-
         <Folder label="Standing & Story" icon="fa-ranking-star">
         <StandingCard key={row.id} member={member} row={row} onUpdate={onUpdate} log={log} />
+        </Folder>
+
+        <Folder label="Loot" icon="fa-sack-dollar">
+        <LootCard key={row.id} member={member} row={row} lootLib={lootLib} itemCatalog={catalog}
+          onUpdate={onUpdate} onVoice={onVoice} log={log} />
         </Folder>
       </div>
 
@@ -871,7 +875,7 @@ function StandingCard({ member, row, onUpdate, log }: {
 
   return (
     <div className={styles.actCard}>
-      <div className={styles.acTitle}><i className="fa-solid fa-ranking-star lead" /><span className={styles.num}>L</span><span className={styles.t}>Standing &amp; Story</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-ranking-star lead" /><span className={styles.num}>M</span><span className={styles.t}>Standing &amp; Story</span></div>
 
       <div className={styles.catGrid2}>
         <div>
@@ -968,6 +972,591 @@ function StandingCard({ member, row, onUpdate, log }: {
 }
 
 // ============================================================
+// LOOT LIBRARY (Catalog · Loot tab) — named roll tables.
+//
+// The seventh authoring library, same list+form shell as Classes and Races. A
+// table is a list of things that MIGHT be somewhere, each with its own quantity
+// range and its own chance; lib/loot.ts rollLoot is the only implementation of
+// the roll, and the DM card on the Actions tab is its only caller.
+//
+// ROWS ROLL INDEPENDENTLY, which is why the header shows an EXPECTED YIELD and
+// a chance-of-nothing rather than asking the percentages to sum to 100. Five
+// rows at 5% look like a full table and produce nothing four times in five —
+// invisible until you either do that arithmetic or roll it twenty times.
+// ============================================================
+
+const BLANK_LOOT: LootTable = { name: '', icon: 'fa-box-open', desc: '', rows: [], published: false }
+
+const COIN_LABEL: Record<'gold' | 'silver' | 'copper', string> = {
+  gold: 'Gold', silver: 'Silver', copper: 'Copper',
+}
+
+function LootLibrarySurface({ lib, itemCatalog }: {
+  lib: DmLootState
+  itemCatalog: CatalogItemRow[]
+}) {
+  const { tables, loading } = lib
+  const [selId, setSelId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const shown = useMemo(() => {
+    const q = parseCatalogQuery(query)
+    return tables.filter(r => matchesCatalogQuery(lootContent(r), q))
+  }, [tables, query])
+
+  const activeId = creating ? null : (selId ?? tables[0]?.id ?? null)
+  const selected = tables.find(r => r.id === activeId) ?? null
+
+  return (
+    <div className={styles.catLayout}>
+      <div className={styles.catIndex}>
+        <div className={styles.catNew}>
+          <Btn tone="cyan" icon="fa-plus" label="New Table" onClick={() => { setCreating(true); setSelId(null) }} />
+        </div>
+        <div className={cx(styles.searchWrap, styles.catSearch)}>
+          <i className="fa-solid fa-magnifying-glass" />
+          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+            placeholder="Search loot tables…" autoComplete="off" spellCheck={false} />
+          {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
+        </div>
+        <div className={styles.catRows}>
+          {shown.map(r => {
+            const d = lootContent(r)
+            const rows = (d.rows ?? []).length
+            return (
+              <button key={r.id} className={cx(styles.catRow, r.id === activeId && !creating && styles.sel)}
+                style={{ ['--rar' as string]: 'var(--amber)' }} onClick={() => { setCreating(false); setSelId(r.id) }}>
+                <span className={styles.crIc}><Icon name={d.icon || 'fa-box-open'} /></span>
+                <span className={styles.crTx}>
+                  <span className={styles.crT}>{d.name || 'Untitled'}</span>
+                  <span className={styles.crS}>
+                    {rows} row{rows === 1 ? '' : 's'}
+                    {r.draft && <><span className={styles.op}> · </span>draft</>}
+                    {!r.draft && !d.published && <><span className={styles.op}> · </span>unpublished</>}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        {tables.length === 0 && <div className={styles.catEmpty}>{loading ? '· loading ·' : '— library empty —'}</div>}
+        {tables.length > 0 && shown.length === 0 && <div className={styles.catEmpty}>— nothing matches —</div>}
+      </div>
+
+      <div className={styles.catForm}>
+        <LootForm
+          row={selected} creating={creating} lib={lib} itemCatalog={itemCatalog}
+          onSelected={id => { setCreating(false); setSelId(id) }}
+          onCleared={() => { setCreating(false); setSelId(null) }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
+  row: CatalogLootRow | null
+  creating: boolean
+  lib: DmLootState
+  itemCatalog: CatalogItemRow[]
+  onSelected: (id: string) => void
+  onCleared: () => void
+}) {
+  const selId = row?.id ?? null
+  const base = creating ? BLANK_LOOT : row ? lootContent(row) : null
+  const { draft, dirty, savedAt, update, reset, clear } =
+    useLocalDraft<LootTable>(creating ? 'loot:__new__' : `loot:${selId ?? 'none'}`, base)
+
+  const [saving, setSaving] = useState(false)
+  const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
+  const [pick, setPick] = useState<number | null>(null)
+
+  const set = (p: Partial<LootTable>) => update(x => ({ ...x, ...p }))
+  const rows = draft?.rows ?? []
+  const setRow = (i: number, p: Partial<LootRow>) =>
+    update(x => ({ ...x, rows: (x.rows ?? []).map((r, j) => (j === i ? { ...r, ...p } as LootRow : r)) }))
+  const moveRow = (i: number, by: number) => update(x => {
+    const list = [...(x.rows ?? [])]
+    const j = i + by
+    if (j < 0 || j >= list.length) return x
+    const tmp = list[i]; list[i] = list[j]; list[j] = tmp
+    return { ...x, rows: list }
+  })
+
+  const byId = useMemo(() => new Map(itemCatalog.map(r => [r.id, r.data])), [itemCatalog])
+  const yields = useMemo(() => (draft ? expectedYield(draft) : null), [draft])
+  const nothing = useMemo(() => (draft ? chanceOfNothing(draft) : 1), [draft])
+
+  const audit: AuditItem[] = useMemo(() => {
+    if (!draft) return []
+    const out: AuditItem[] = []
+    if (!draft.name?.trim()) {
+      out.push({ sev: 'err', id: 'field:name', t: 'Unnamed table', s: 'A loot table needs a name before it can be rolled.' })
+    }
+    (draft.rows ?? []).forEach((r, i) => {
+      const where = `Row ${i + 1}`
+      if (r.kind === 'item' && !byId.has(r.item_id)) {
+        out.push({
+          sev: 'err', id: null, t: `${where} points at a missing item`,
+          s: 'That item is no longer in the catalog. The roll reports it rather than quietly yielding less — fix or remove the row.',
+        })
+      }
+      if (r.chance <= 0 || r.chance > 100) {
+        out.push({ sev: 'err', id: null, t: `${where} has an impossible chance`, s: `${r.chance}% — a chance must be between 1 and 100.` })
+      }
+      if (r.max < r.min) {
+        out.push({ sev: 'err', id: null, t: `${where} has an inverted range`, s: `Max (${r.max}) is below min (${r.min}).` })
+      }
+    })
+    if (!rows.length) {
+      out.push({ sev: 'warn', id: null, t: 'No rows', s: 'An empty table always rolls nothing.' })
+    } else if (nothing > 0.75) {
+      out.push({
+        sev: 'warn', id: null, t: 'Usually yields nothing',
+        s: `${Math.round(nothing * 100)}% of rolls come up completely empty. Raise some chances, or that is what the table is for.`,
+      })
+    }
+    if (!out.length) out.push({ sev: 'ok', id: null, t: 'Clean', s: 'No errors, no warnings. Safe to publish.' })
+    return out
+  }, [draft, byId, rows.length, nothing])
+
+  const errs = audit.filter(a => a.sev === 'err').length
+  const warns = audit.filter(a => a.sev === 'warn').length
+
+  if (!draft) {
+    return <div className={styles.catEmpty} style={{ marginTop: 40 }}>Select a loot table, or start a new one.</div>
+  }
+
+  async function onSaveDraft() {
+    if (!draft) return
+    setSaving(true)
+    const id = await lib.saveDraft(creating ? null : selId, draft)
+    setSaving(false)
+    if (id && creating) { clear(); onSelected(id) }
+  }
+  async function onPublish() {
+    if (!draft || errs > 0) return
+    setSaving(true)
+    const id = await lib.publishTable(creating ? null : selId, draft)
+    setSaving(false)
+    if (!id) return
+    clear(); onSelected(id)
+  }
+  function onRevert() {
+    setConfirm(null)
+    reset(row ? row.data : null)
+    if (!row) onCleared()
+  }
+  async function onDuplicate() {
+    if (!selId) return
+    const id = await lib.duplicateTable(selId)
+    if (id) onSelected(id)
+  }
+  async function onDelete() {
+    if (!selId) return
+    setConfirm(null)
+    await lib.deleteTable(selId)
+    clear(); onCleared()
+  }
+
+  return (
+    <div className={styles.clsForm}>
+      <div className={styles.catFormHead}>
+        <Icon name={draft.icon || 'fa-box-open'} />
+        <span className={styles.cfhT}>{draft.name || (creating ? 'New Loot Table' : 'Untitled')}</span>
+        <span className={styles.cfhId}>{rows.length} row{rows.length === 1 ? '' : 's'}</span>
+      </div>
+
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Name</span>
+          <input data-audit="field:name" className={styles.sessIn} value={draft.name}
+            placeholder="e.g. Knight Corpse" {...NO_AUTOFILL}
+            onChange={e => set({ name: e.target.value })} />
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Icon</span>
+          <IconPicker value={draft.icon} onPick={ic => set({ icon: ic })} />
+        </div>
+      </div>
+
+      <span className={styles.fieldLab}>Description</span>
+      <textarea className={styles.catProse} value={draft.desc ?? ''}
+        placeholder="What this table is for — a note to yourself, never shown to a player."
+        onChange={e => set({ desc: e.target.value })} />
+
+      {/* THE ONE NUMBER THAT SAYS WHETHER THE TABLE IS TUNED. Rows roll
+          independently, so the percentages tell you nothing on their own. */}
+      <div className={styles.efBh}>
+        <span>Rows</span>
+        <span className={styles.efRule} />
+        <span className={styles.lootYield}>
+          {rows.length === 0 ? 'empty' : <>
+            ~{yields!.items.toFixed(1)} item{yields!.items === 1 ? '' : 's'}
+            {(yields!.coins.gold + yields!.coins.silver + yields!.coins.copper) > 0 && <>
+              {' · ~'}
+              {[
+                yields!.coins.gold ? `${yields!.coins.gold.toFixed(0)}g` : '',
+                yields!.coins.silver ? `${yields!.coins.silver.toFixed(0)}s` : '',
+                yields!.coins.copper ? `${yields!.coins.copper.toFixed(0)}c` : '',
+              ].filter(Boolean).join(' ')}
+            </>}
+            <span className={cx(styles.lootEmpty, nothing > 0.75 && styles.bad)}>
+              {' · '}{Math.round(nothing * 100)}% empty
+            </span>
+          </>}
+        </span>
+      </div>
+
+      {rows.length === 0 && <div className={styles.efNone}>No rows — this table always rolls nothing.</div>}
+
+      {rows.map((r, i) => {
+        const item = r.kind === 'item' ? byId.get(r.item_id) : null
+        const gone = r.kind === 'item' && !item
+        return (
+          <div key={i} className={cx(styles.lootRow, gone && styles.bad)}>
+            <select className={styles.selIn} value={r.kind} aria-label="Row kind"
+              onChange={e => {
+                const kind = e.target.value as LootRow['kind']
+                update(x => ({
+                  ...x,
+                  rows: (x.rows ?? []).map((old, j) => j !== i ? old
+                    : kind === 'coin'
+                      ? { kind: 'coin', coin: 'gold', min: old.min, max: old.max, chance: old.chance }
+                      : { kind: 'item', item_id: '', min: old.min, max: old.max, chance: old.chance }),
+                }))
+              }}>
+              <option value="item">Item</option>
+              <option value="coin">Coin</option>
+            </select>
+
+            {r.kind === 'coin' ? (
+              <select className={styles.selIn} value={r.coin} aria-label="Denomination"
+                onChange={e => setRow(i, { coin: e.target.value as 'gold' | 'silver' | 'copper' })}>
+                {(['gold', 'silver', 'copper'] as const).map(c => <option key={c} value={c}>{COIN_LABEL[c]}</option>)}
+              </select>
+            ) : (
+              <button type="button" className={cx(styles.lootPick, gone && styles.bad)} onClick={() => setPick(i)}>
+                {item ? <><Icon name={item.icon || 'fa-box'} /> {item.name}</>
+                  : r.item_id ? <><i className="fa-solid fa-triangle-exclamation" /> missing item</>
+                    : <><i className="fa-solid fa-magnifying-glass" /> pick an item…</>}
+              </button>
+            )}
+
+            <span className={styles.lootRange}>
+              <input className={styles.sessIn} type="number" min={0} value={r.min} aria-label="Minimum"
+                onChange={e => setRow(i, { min: Math.max(0, parseInt(e.target.value || '0', 10) || 0) })} />
+              <span className={styles.op}>–</span>
+              <input className={styles.sessIn} type="number" min={0} value={r.max} aria-label="Maximum"
+                onChange={e => setRow(i, { max: Math.max(0, parseInt(e.target.value || '0', 10) || 0) })} />
+            </span>
+
+            <span className={styles.lootChance}>
+              <input className={styles.sessIn} type="number" min={1} max={100} value={r.chance} aria-label="Chance percent"
+                onChange={e => setRow(i, { chance: Math.max(0, Math.min(100, parseInt(e.target.value || '0', 10) || 0)) })} />
+              <span className={styles.op}>%</span>
+            </span>
+
+            <span className={styles.stdMove}>
+              <button type="button" onClick={() => moveRow(i, -1)} disabled={i === 0} aria-label="Move up"><i className="fa-solid fa-angle-up" /></button>
+              <button type="button" onClick={() => moveRow(i, 1)} disabled={i === rows.length - 1} aria-label="Move down"><i className="fa-solid fa-angle-down" /></button>
+              <button type="button" className={styles.stdDel} aria-label="Remove row"
+                onClick={() => update(x => ({ ...x, rows: (x.rows ?? []).filter((_, j) => j !== i) }))}><i className="fa-solid fa-xmark" /></button>
+            </span>
+          </div>
+        )
+      })}
+
+      <div className={styles.efAdd}>
+        <Btn tone="ghost" icon="fa-plus" label="Add Row"
+          onClick={() => update(x => ({ ...x, rows: [...(x.rows ?? []), { kind: 'item', item_id: '', min: 1, max: 1, chance: 50 }] }))} />
+      </div>
+
+      <div className={styles.catFx}>
+        <AuditPanel title="Loot Audit" audit={audit} onJump={a => revealAudit(a.id)} />
+      </div>
+
+      {confirm === 'revert' && (
+        <div className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" />
+          <span>
+            <b>Discard this draft?</b>{' '}
+            {row?.data?.published
+              ? 'The published version comes back.'
+              : 'This table has never been published, so discarding removes it entirely.'}
+          </span>
+          <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
+          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+        </div>
+      )}
+      {confirm === 'delete' && (
+        <div className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" />
+          <span><b>Delete {draft.name || 'this table'}?</b> Nothing already granted from it is affected.</span>
+          <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
+          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+        </div>
+      )}
+
+      <div className={styles.clsBar}>
+        <div className={styles.clsBarInfo}>
+          <div className={cx(styles.clsStat, errs ? styles.bad : warns ? styles.warn : undefined)}>
+            <span className={styles.dot} />
+            <span>
+              {errs ? `${errs} error${errs === 1 ? '' : 's'} — publish blocked`
+                : warns ? `${warns} warning${warns === 1 ? '' : 's'} — publishable`
+                  : 'Draft valid · publishable'}
+            </span>
+          </div>
+          <span className={cx(styles.clsDirty, dirty && styles.on)}>● Unpublished changes</span>
+          <span className={styles.clsSaved}>
+            {savedAt ? `Draft autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}
+          </span>
+        </div>
+        {selId && (
+          <div className={cx(styles.clsActs, styles.rowActs)}>
+            <Btn tone="ghost" sm icon="fa-clone" label="Duplicate" onClick={() => void onDuplicate()} />
+            <Btn tone="ghost" sm icon="fa-trash" label="Delete" onClick={() => setConfirm('delete')} />
+          </div>
+        )}
+        <div className={styles.clsActs}>
+          <Btn tone="ghost" sm icon="fa-rotate-left" label="Revert" onClick={() => setConfirm('revert')} disabled={!dirty} />
+          <Btn tone="cyan" sm icon="fa-floppy-disk" label="Save Draft" onClick={() => void onSaveDraft()} disabled={saving} />
+          <span className={styles.clsPub}>
+            <Btn tone="amber" sm icon="fa-tower-broadcast" label={saving ? 'Working…' : 'Publish'}
+              onClick={() => void onPublish()} disabled={saving || errs > 0} />
+          </span>
+        </div>
+      </div>
+
+      {pick !== null && (
+        <LootItemPicker
+          catalog={itemCatalog}
+          onClose={() => setPick(null)}
+          onPick={id => { setRow(pick, { item_id: id }); setPick(null) }}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Item chooser for a loot row. Its own overlay rather than a long select: the
+ *  catalog is searched by name and tag through the same parseCatalogQuery the
+ *  library index uses. */
+function LootItemPicker({ catalog, onPick, onClose }: {
+  catalog: CatalogItemRow[]
+  onPick: (id: string) => void
+  onClose: () => void
+}) {
+  const [q, setQ] = useState('')
+  const shown = useMemo(() => {
+    const parsed = parseCatalogQuery(q)
+    return catalog.filter(r => matchesCatalogQuery(r.data, parsed)).slice(0, 60)
+  }, [catalog, q])
+
+  return createPortal(
+    <div className={styles.lootScrim} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className={styles.lootPop} role="dialog" aria-label="Pick an item">
+        <div className={styles.lootPopHead}>
+          <i className="fa-solid fa-box" />
+          <span>Pick an item</span>
+          <button type="button" className={styles.lootPopX} onClick={onClose} aria-label="Close"><i className="fa-solid fa-xmark" /></button>
+        </div>
+        <div className={cx(styles.searchWrap, styles.catSearch)}>
+          <i className="fa-solid fa-magnifying-glass" />
+          <input className={styles.searchIn} value={q} onChange={e => setQ(e.target.value)} autoFocus
+            placeholder="Search items, or tag:fire" autoComplete="off" spellCheck={false} />
+        </div>
+        <div className={styles.lootPopList}>
+          {shown.map(r => (
+            <button key={r.id} type="button" className={styles.catRow} onClick={() => onPick(r.id)}>
+              <span className={styles.crIc}><Icon name={r.data?.icon || 'fa-box'} /></span>
+              <span className={styles.crTx}>
+                <span className={styles.crT}>{r.data?.name ?? r.id}</span>
+                <span className={styles.crS}>{r.data?.category ?? 'gear'}</span>
+              </span>
+            </button>
+          ))}
+          {!shown.length && <div className={styles.catEmpty}>— nothing matches —</div>}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+// ============================================================
+// ROLL LOOT (Actions card M) — the only caller of lib/loot.ts rollLoot.
+// ============================================================
+
+/** Roll a table, look at what came up, then grant it.
+ *
+ *  PREVIEW BEFORE WRITE, deliberately: a roll is the one DM action whose result
+ *  you may want to overrule — the 2% amulet landing on a peasant, or a quantity
+ *  that reads wrong for the scene. Every other card on this tab writes on click
+ *  because its result is what you typed; this one is the only one where the app
+ *  decided, so it asks.
+ *
+ *  MISSES ARE SHOWN. Seeing what did not come up is how you notice a table is
+ *  tuned wrong, and it is the difference between "the chest was empty" and "the
+ *  chest is broken".
+ *
+ *  The write reuses the same path as Grant Item — grantMany for the stackable
+ *  vs instance split, the same acquisition toast — so loot arrives on the
+ *  player's screen indistinguishably from a hand-granted item. */
+function LootCard({ member, row, lootLib, itemCatalog, onUpdate, onVoice, log }: {
+  member: PartyMember
+  row: CharacterRow
+  lootLib: DmLootState
+  itemCatalog: CatalogItemRow[]
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  onVoice: (v: { kind: 'item'; target: string; name: string; icon?: string; rarity?: string }) => Promise<unknown>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const [tableId, setTableId] = useState<string | null>(null)
+  const [result, setResult] = useState<LootOutcome[] | null>(null)
+  const [taken, setTaken] = useState<Set<number>>(() => new Set())
+  const [busy, setBusy] = useState(false)
+  const [flash, setFlash] = useState('')
+
+  const published = lootLib.tables.filter(t => lootContent(t).published)
+  const table = published.find(t => t.id === tableId) ?? null
+  const byId = useMemo(() => new Map(itemCatalog.map(r => [r.id, r.data])), [itemCatalog])
+
+  function roll() {
+    if (!table) return
+    const r = rollLoot(lootContent(table), byId)
+    setResult(r.outcomes)
+    // Everything that came up is taken by default; unchecking is the override.
+    setTaken(new Set(r.outcomes.flatMap((o, i) => (o.hit && !o.missing && o.qty > 0 ? [i] : []))))
+  }
+
+  const kept = (result ?? []).filter((o, i) => taken.has(i) && o.hit && !o.missing && o.qty > 0)
+  const keptItems = kept.filter(o => o.row.kind === 'item')
+  const keptCoins = kept.reduce((acc, o) => {
+    if (o.row.kind === 'coin') acc[o.row.coin] += o.qty
+    return acc
+  }, { gold: 0, silver: 0, copper: 0 })
+  const anyCoin = keptCoins.gold + keptCoins.silver + keptCoins.copper > 0
+
+  async function grant() {
+    if (!kept.length) return
+    setBusy(true)
+    let inv = ((row.inventory as unknown as InventoryItem[]) ?? [])
+    const gear = (row.equipped ?? {}) as EquippedGear
+    for (const o of keptItems) {
+      if (o.row.kind !== 'item') continue
+      const data = byId.get(o.row.item_id)
+      if (!data) continue
+      inv = grantMany(data, o.row.item_id, o.qty, gear, inv)
+    }
+
+    const patch: CharacterUpdate = { inventory: inv as unknown as Json[] }
+    if (anyCoin) {
+      const coins = (row.sheet?.coins ?? { gold: 0 }) as { gold: number; silver?: number; copper?: number }
+      patch.sheet = {
+        ...row.sheet,
+        coins: {
+          gold: (coins.gold ?? 0) + keptCoins.gold,
+          silver: (coins.silver ?? 0) + keptCoins.silver,
+          copper: (coins.copper ?? 0) + keptCoins.copper,
+        },
+      } as CharacterRow['sheet']
+    }
+    const ok = await onUpdate(patch)
+    setBusy(false)
+    if (!ok) return
+
+    /* ONE toast, not one per line. A corpse yielding four things should not
+       fire four ITEM ACQUIRED pings — the same reason Grant Item sends one
+       toast for a stack of ten. */
+    const label = lootContent(table!).name || 'Loot'
+    void onVoice({ kind: 'item', target: member.id, name: label, icon: lootContent(table!).icon })
+    log(
+      <>Rolled <span className={styles.obj}>{label}</span> for <span className={styles.who}>{firstName(member.name)}</span>
+        {' — '}{keptItems.length} item{keptItems.length === 1 ? '' : 's'}
+        {anyCoin && <> · {[keptCoins.gold && `${keptCoins.gold}g`, keptCoins.silver && `${keptCoins.silver}s`, keptCoins.copper && `${keptCoins.copper}c`].filter(Boolean).join(' ')}</>}
+      </>, 'cyan')
+    setFlash(`Granted ${keptItems.length} item${keptItems.length === 1 ? '' : 's'}${anyCoin ? ' + coin' : ''}`)
+    setResult(null)
+    setTaken(new Set())
+    setTimeout(() => setFlash(''), 2400)
+  }
+
+  const lineLabel = (o: LootOutcome) => {
+    if (o.row.kind === 'coin') return COIN_LABEL[o.row.coin]
+    const d = byId.get(o.row.item_id)
+    return d?.name ?? o.row.item_id
+  }
+
+  return (
+    <div className={styles.actCard}>
+      <div className={styles.acTitle}><i className="fa-solid fa-sack-dollar lead" /><span className={styles.num}>N</span><span className={styles.t}>Roll Loot</span></div>
+
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Table</span>
+          <select className={styles.selIn} value={tableId ?? ''}
+            onChange={e => { setTableId(e.target.value || null); setResult(null) }}>
+            <option value="">— pick a table —</option>
+            {published.map(t => <option key={t.id} value={t.id}>{lootContent(t).name || 'Untitled'}</option>)}
+          </select>
+        </div>
+        <div className={styles.lootRollBtn}>
+          <Btn tone="cyan" icon="fa-dice-d20" label={result ? 'Re-roll' : 'Roll'} onClick={roll} disabled={!table} />
+        </div>
+      </div>
+
+      {!published.length && (
+        <div className={styles.efNone}>No published loot tables — author one in Catalog · Loot.</div>
+      )}
+
+      {result && (
+        <>
+          <div className={styles.efBh}>
+            <span>Result</span>
+            <span className={styles.efRule} />
+            <span className={styles.lootYield}>{kept.length} of {result.length} taken</span>
+          </div>
+
+          {result.length === 0 && <div className={styles.efNone}>That table has no rows.</div>}
+
+          {result.map((o, i) => {
+            const dead = !o.hit || o.qty === 0
+            return (
+              <label key={i} className={cx(styles.lootLine, dead && styles.miss, o.missing && styles.bad)}>
+                <input type="checkbox" checked={taken.has(i)} disabled={dead || o.missing}
+                  onChange={e => setTaken(prev => {
+                    const next = new Set(prev)
+                    if (e.target.checked) next.add(i); else next.delete(i)
+                    return next
+                  })} />
+                <span className={styles.llName}>{lineLabel(o)}</span>
+                <span className={styles.llQty}>
+                  {o.missing ? 'missing from the catalog'
+                    : !o.hit ? '—'
+                      : `×${o.qty}`}
+                </span>
+                <span className={styles.llPct}>{o.row.chance}%</span>
+              </label>
+            )
+          })}
+
+          <div className={styles.grantAction}>
+            <Btn tone="amber" icon="fa-hand-holding-heart"
+              label={busy ? 'Granting…' : `Grant to ${firstName(member.name)}`}
+              onClick={() => void grant()} disabled={busy || !kept.length} />
+          </div>
+        </>
+      )}
+
+      {flash && <div className={styles.grantFlash}>{flash}</div>}
+    </div>
+  )
+}
+
+// ============================================================
 // FEATURE STATE (Actions card J) — §8 #4 + §31's DM bucket
 // ============================================================
 
@@ -1013,7 +1602,7 @@ function FeatureStateCard({ member, row, shardCatalog, onUpdate, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-diagram-project lead" /><span className={styles.num}>I</span><span className={styles.t}>Feature State</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-diagram-project lead" /><span className={styles.num}>L</span><span className={styles.t}>Feature State</span></div>
 
       {collisions.map(a => (
         <div key={a.id ?? a.t} className={styles.skWarn}>
@@ -1491,9 +2080,9 @@ function BroadcastPanel({ selected, onSend, log }: {
  *  so a granted copy is mechanically real the instant it lands. */
 /** `tab` is owned by OperatorConsole: the rail that switches it hangs off
     region 01, so the state has to live above both. */
-function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib, classLib, raceLib, members }: {
+function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib, classLib, raceLib, lootLib, members }: {
   tab: CatTab
-  catalog: DmCatalogState; featureLib: DmFeaturesState; effectLib: DmEffectsState; spellLib: DmSpellsState; shopLib: DmShopsState; classLib: DmClassesState; raceLib: DmRacesState; members: PartyMember[]
+  catalog: DmCatalogState; featureLib: DmFeaturesState; effectLib: DmEffectsState; spellLib: DmSpellsState; shopLib: DmShopsState; classLib: DmClassesState; raceLib: DmRacesState; lootLib: DmLootState; members: PartyMember[]
 }) {
   const { items, createItem, updateItem, deleteItem, loading, error } = catalog
   const [selId, setSelId] = useState<string | null>(null)
@@ -1529,10 +2118,10 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
         <span className={styles.dmonly}><i className="fa-solid fa-box-archive" /> Templates — not a grant</span>
       </div>
 
-      {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : tab === 'classes' ? classLib.error : tab === 'races' ? raceLib.error : error) ? (
+      {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : tab === 'classes' ? classLib.error : tab === 'races' ? raceLib.error : tab === 'loot' ? lootLib.error : error) ? (
         <div className={styles.soonPanel}>
           <i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span>
-          <span>{tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : tab === 'classes' ? classLib.error : tab === 'races' ? raceLib.error : error}</span>
+          <span>{tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : tab === 'classes' ? classLib.error : tab === 'races' ? raceLib.error : tab === 'loot' ? lootLib.error : error}</span>
         </div>
       ) : tab === 'spells' ? (
         <SpellLibrarySurface lib={spellLib} />
@@ -1547,6 +2136,8 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
         </div>
         <EffectLibrarySurface lib={effectLib} />
       </>
+      ) : tab === 'loot' ? (
+        <LootLibrarySurface lib={lootLib} itemCatalog={items} />
       ) : tab === 'races' ? (
         <RaceLibrarySurface lib={raceLib} featureLib={featureLib} members={members} />
       ) : tab === 'classes' ? (
@@ -2213,7 +2804,7 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-star lead" /><span className={styles.num}>H</span><span className={styles.t}>Grant Feature</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-star lead" /><span className={styles.num}>K</span><span className={styles.t}>Grant Feature</span></div>
       <div className={styles.featGrantSplit}>
         <div className={styles.fgCol}>
           <span className={styles.fieldLab}>Library · roleplay boons &amp; perks</span>
@@ -2348,7 +2939,7 @@ function ProficienciesCard({ member, row, classLib, onUpdate, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-graduation-cap lead" /><span className={styles.num}>J</span><span className={styles.t}>Proficiencies</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-graduation-cap lead" /><span className={styles.num}>H</span><span className={styles.t}>Proficiencies</span></div>
 
       <div className={styles.profRow}>
         <span className={styles.profLab}>Saving Throws</span>
@@ -3312,7 +3903,7 @@ function GrantSpellCard({ member, row, spellLib, onUpdate, onVoice, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>G</span><span className={styles.t}>Grant Spell</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>J</span><span className={styles.t}>Grant Spell</span></div>
       <div className={styles.featGrantSplit}>
         <div className={styles.fgCol}>
           <span className={styles.fieldLab}>Library · Catalog · Spells tab</span>
@@ -3440,7 +4031,7 @@ function CasterProfileCard({ member, row, onUpdate, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-hat-wizard lead" /><span className={styles.num}>F</span><span className={styles.t}>Spellcasting</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-hat-wizard lead" /><span className={styles.num}>I</span><span className={styles.t}>Spellcasting</span></div>
 
       <div className={cx(styles.catTog, caster && styles.on)} onClick={() => setCaster(c => !c)} role="switch" aria-checked={caster}>
         <span className={styles.tgSw} />
@@ -4877,7 +5468,7 @@ function AssignRaceCard({ member, row, raceLib, featureLib, shardCatalog, onUpda
   return (
     <div className={cx(styles.actCard, styles.wide)}>
       <div className={styles.acTitle}>
-        <i className="fa-solid fa-leaf lead" /><span className={styles.num}>L</span>
+        <i className="fa-solid fa-leaf lead" /><span className={styles.num}>F</span>
         <span className={styles.t}>Race</span>
       </div>
 
@@ -5090,7 +5681,7 @@ function AssignClassCard({ member, row, classLib, featureLib, itemCatalog, shard
   return (
     <div className={cx(styles.actCard, styles.wide)}>
       <div className={styles.acTitle}>
-        <i className="fa-solid fa-shield-halved lead" /><span className={styles.num}>K</span>
+        <i className="fa-solid fa-shield-halved lead" /><span className={styles.num}>G</span>
         <span className={styles.t}>Class</span>
       </div>
 

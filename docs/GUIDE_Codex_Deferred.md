@@ -239,3 +239,42 @@ contributor of the selected glyph. See that file before touching
 reaching for a UI glyph — a control, a state, a marker — that is not in the
 list. game-icons covers the fantasy vocabulary; Font Awesome covers the
 interface, and only the latter is thin now.
+
+---
+
+## A player-facing looting menu — the chest the player opens
+
+**Designed, not built.** The loot engine (`src/lib/loot.ts`) and its DM card
+shipped as **preview-then-grant**: the DM rolls, sees what came up, drops what
+they do not want, and presses Grant. The loot then arrives on the player's sheet
+exactly as a hand-granted item does — same `grantMany` path, same acquisition
+toast.
+
+What was asked for alongside it, and deliberately deferred:
+
+> "maybe some like chest or corpse looting menu would be cool"
+
+A container the PLAYER opens and takes from, rather than items appearing in
+their bag — the diegetic version, closer to how a chest works at a table.
+
+**Trigger:** wanting the players to *choose* who takes what. Preview-then-grant
+makes the DM the one who decides where each item lands, which is fine for a
+corpse the party loots as a unit and wrong for a hoard four people divide.
+
+**What it costs:**
+
+- A new player surface, closest in shape to `ShopTakeover` — a full-screen
+  takeover the player dismisses, with a take/leave affordance per line.
+- A place to PARK the rolled result between the DM rolling and the player
+  taking. It cannot live on the character row (it is not theirs yet) and it
+  cannot be re-rolled on open (that would re-roll per viewer). That means a new
+  table, or a `containers` field on the campaign, plus RLS letting exactly the
+  targeted players read it.
+- Contention: two players opening the same chest must not both take the last
+  torch. That is the real work — a claim needs to be atomic, which points at a
+  SECURITY DEFINER function like `cast_party_effect`, not a client-side write.
+
+**Do NOT** implement it by granting to one player and letting them hand items
+over. Item transfer between characters does not exist, and building it as a
+side effect of loot would put a cross-character write path in the one place
+nobody would look for it.
