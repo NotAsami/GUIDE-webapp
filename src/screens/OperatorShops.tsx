@@ -23,6 +23,8 @@ import { ALL_PARTY } from '../lib/voice'
 import { CAT_LABEL, CAT_ORDER, rarityLabel } from '../lib/items'
 import styles from './OperatorConsole.module.css'
 import pop from './InventoryPopup.module.css'
+import { IconPicker } from '../components/IconPicker'
+import { Icon } from '../components/Icon'
 
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')
 
@@ -48,17 +50,12 @@ function Btn({ tone, lg, icon, label, onClick, disabled }: {
   return (
     <button className={cx(styles.btn, styles[tone], lg && styles.lg)} onClick={onClick} disabled={disabled}>
       <span className={styles.bf} />
-      <span className={styles.bi}><i className={`fa-solid ${icon}`} /> {label}</span>
+      <span className={styles.bi}><Icon name={icon} /> {label}</span>
     </button>
   )
 }
 
 const UNITS: PriceUnit[] = ['gp', 'sp', 'cp']
-
-const SHOP_ICONS = [
-  'fa-shop', 'fa-store', 'fa-coins', 'fa-mortar-pestle', 'fa-flask', 'fa-scroll',
-  'fa-hat-wizard', 'fa-gem', 'fa-book', 'fa-khanda', 'fa-anchor', 'fa-vial',
-]
 
 export function OperatorShops({ shopLib, itemCatalog, members }: {
   shopLib: DmShopsState
@@ -109,7 +106,7 @@ export function OperatorShops({ shopLib, itemCatalog, members }: {
           {shops.map(s => (
             <div key={s.id} className={cx(styles.skRow, s.id === activeId && !creating && styles.sel)}>
               <button className={styles.skMain} onClick={() => { setCreating(false); setSelId(s.id) }}>
-                <span className={styles.crIc}><i className={`fa-solid ${s.data?.icon ?? 'fa-shop'}`} /></span>
+                <span className={styles.crIc}><Icon name={s.data?.icon ?? 'fa-shop'} /></span>
                 <span className={styles.crTx}>
                   <span className={styles.crT}>{s.data?.name ?? 'Untitled'}</span>
                   {/* Whether a shop is LIVE is the one thing worth scanning this
@@ -217,7 +214,7 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
 
       <div className={styles.catPrev} style={{ ['--rar' as string]: 'var(--amber)' }}>
         <span className={styles.pvCell}>
-          <i className={`fa-solid ${icon}`} />
+          <Icon name={icon} />
         </span>
         <span className={styles.pvTx}>
           <span className={styles.pvName}>{name || 'Untitled Shopkeeper'}</span>
@@ -233,13 +230,7 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
       <input className={styles.sessIn} value={name} onChange={e => setName(e.target.value)} placeholder="Name the shopkeeper…" />
 
       <span className={styles.fieldLab}>Icon</span>
-      <div className={styles.catIcons}>
-        {SHOP_ICONS.map(ic => (
-          <button key={ic} className={cx(styles.catIc, ic === icon && styles.sel)} onClick={() => setIcon(ic)} title={ic} aria-label={ic}>
-            <i className={`fa-solid ${ic}`} />
-          </button>
-        ))}
-      </div>
+      <IconPicker value={icon} onPick={setIcon} />
 
       <span className={styles.fieldLab}>Location</span>
       <input className={styles.sessIn} value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Brettany Market Row" />
@@ -274,7 +265,7 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
           const overridden = catalogValue != null && (catalogValue !== line.price || catalogUnit !== (line.unit ?? 'gp'))
           return (
             <div key={line.item_id} className={styles.skStockRow} style={{ ['--rar' as string]: RAR_COLOR[rar] }}>
-              <span className={styles.ssIc}><i className={`fa-solid ${line.item.icon ?? 'fa-box'}`} /></span>
+              <span className={styles.ssIc}><Icon name={line.item.icon ?? 'fa-box'} /></span>
               <span className={styles.ssTx}>
                 <span className={styles.ssT}>{line.item.name}</span>
                 <span className={styles.ssS}>
@@ -362,7 +353,7 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
                 disabled={blocked || already}
                 onClick={() => addLine(it)}
               >
-                <span className={styles.piIc}><i className={`fa-solid ${it.data?.icon ?? 'fa-box'}`} /></span>
+                <span className={styles.piIc}><Icon name={it.data?.icon ?? 'fa-box'} /></span>
                 <span className={styles.piT}>{it.data?.name ?? 'Untitled'}</span>
                 <span className={styles.piM}>{blocked ? 'Quest · excluded' : already ? 'In stock' : rarityLabel(rar)}</span>
                 {!blocked && <span className={styles.piV}>{formatPrice(it.data?.value ?? 0, it.data?.valueUnit)}</span>}
@@ -402,7 +393,7 @@ function OpenShopPopup({ shop, members, onFire, onCloseShop, onClose }: {
           <span className={`${pop.imCorner} ${pop.tl}`} />
           <span className={`${pop.imCorner} ${pop.br}`} />
           <header className={pop.imHead}>
-            <span className={pop.imCrystal}><i className={`fa-solid ${shop.data?.icon ?? 'fa-shop'}`} /></span>
+            <span className={pop.imCrystal}><Icon name={shop.data?.icon ?? 'fa-shop'} /></span>
             <div className={pop.imTitles}>
               <span className={pop.imName}>{shop.data?.name ?? 'Shopkeeper'}</span>
               <span className={pop.imTags}>

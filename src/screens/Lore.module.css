@@ -248,7 +248,11 @@
    02  RECORD — the reading panel
    ============================================================ */
 .readPad { position: relative; z-index: 1; flex: 1; min-height: 0; }
-.readInner { max-width: 700px; margin: 0 auto; padding: 36px 48px 44px; }
+/* Full width of the record panel, not a centred 700px measure. The column is
+   already narrow chrome around it, so capping the text AND padding it 48px left
+   a band of dead panel on both sides that read as a layout bug rather than a
+   reading measure. Vertical padding is unchanged — only the sides were wrong. */
+.readInner { padding: 36px 12px 44px; }
 
 .dossierSec + .dossierSec { margin-top: 46px; }
 .secLabel {
@@ -392,4 +396,33 @@
   .lore { grid-template-columns: 38fr 62fr; }
   .readInner { padding: 28px 32px 34px; }
   .natureGrid { grid-template-columns: 1fr; }
+}
+
+/* ---- Origin (dossier 03) ----
+   The class and race descriptions, moved off the Features screen where they
+   rendered on synthetic carrier rows. Two entries at most, so a plain stack
+   rather than a grid. */
+.originRow + .originRow { margin-top: 22px; }
+.originHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+.originKind {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  border: 1px solid rgba(0, 166, 214, 0.4);
+  padding: 2px 6px;
+}
+.originName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--beige);
 }

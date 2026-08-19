@@ -409,6 +409,14 @@ export type ResolveReq = {
 export type Rider = {
   label: string
   source: string
+  /** The source's gid, so the Roll Context Panel's catalog sheet can LINK to it
+   *  instead of naming it and stopping there. `source` above is deliberately a
+   *  bare display name; this is the identity beside it.
+   *
+   *  Only a `feature:` gid is navigable today — that is the one kind the
+   *  Features screen can open (its byGid map) — but the gid is stored unfiltered
+   *  so the panel decides, not the engine. */
+  sourceGid?: Gid
   /** What this rider grants. A toggled `adv` is not a number, so the panel has to
    *  be told which it is — §13's shape carried flat/dice only. */
   op: GraphOp
@@ -821,7 +829,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
       if (eff.op === 'dis') out.dis = true
       if (eff.op === 'crit') applyCrit(eff)
       out.riders.push({
-        label: eff.label, source: from.obj.name, op: eff.op,
+        label: eff.label, source: from.obj.name, sourceGid: e.owner, op: eff.op,
         formula: eff.value ?? '', flat: v.flat, dice: v.dice,
         when: 'always', on: true, dmgType: eff.dmgType,
         sourceText: summaryOf(from.obj), parts: partsOf(eff.value, ctx.scope),
@@ -832,6 +840,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     const rider: Rider = {
       label: eff.label,
       source: from.obj.name,
+      sourceGid: e.owner,
       op: eff.op,
       formula: eff.value ?? '',
       flat: v.flat,
@@ -908,7 +917,7 @@ ${rider.reveal}` : rider.reveal
     out.riders.push({
       // The NAME if it was captured, never the gid — every other rider's
       // `source` is a human name, and this is the same column on screen.
-      label: m.label, source: m.sourceName || m.source, op: m.op,
+      label: m.label, source: m.sourceName || m.source, sourceGid: m.source as Gid, op: m.op,
       formula: m.value ?? '', flat: v?.t === 'num' ? v.flat : 0, dice: v?.t === 'num' ? v.dice : [],
       when: 'always', on: true, armedId: m.id, dmgType: m.dmgType,
       // No `sourceText`: an armed mod is a stored snapshot naming its source,

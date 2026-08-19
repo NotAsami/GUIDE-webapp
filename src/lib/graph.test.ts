@@ -1693,3 +1693,47 @@ test('an ask-gated flag is an authoring error — it can never take effect', () 
   const num = auditNode({ graph: [{ id: 'e1', op: 'add', value: '1d6', label: 'Smite', ask: 'Did it hit?', target: ['roll:damage'] }] }, [])
   assert.equal(num.filter(a => a.sev === 'err').length, 0)
 })
+
+// --- a rider knows WHERE it came from, not just what it is called ------------
+
+test('A RIDER CARRIES ITS SOURCE GID, so the panel can link to it', () => {
+  // `source` is a display NAME by design, which left the Roll Context Panel's
+  // catalog sheet naming a contributor it could not open. The gid is the handle
+  // the Features screen already resolves through its byGid map.
+  const c = withFeatures([gfeat('F', [{ id: 'e1', op: 'add', value: '2', label: 'Always', target: ['roll:attack'] }])])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(r.riders[0].source, 'F', 'still a human name')
+  assert.equal(r.riders[0].sourceGid, 'feature:F', 'and now an identity beside it')
+})
+
+test('a conditional rider carries it too, not just an unconditional one', () => {
+  // Two separate construction sites in resolve(); the `always` one is the easy
+  // one to remember and the gated one is the easy one to forget.
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '3', label: 'Gated', target: ['roll:attack'], ask: 'did it land?' },
+  ])])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(r.riders.length, 1)
+  assert.equal(r.riders[0].when, 'manual')
+  assert.equal(r.riders[0].sourceGid, 'feature:F')
+})
+
+test('an armed rider reports the gid it armed from', () => {
+  // ArmedMod.source IS the gid (database.types.ts says so) and sourceName is the
+  // display copy — so this one is already in hand and only had to be passed on.
+  const c = armedChar([{ id: 'a1', source: 'spell:cat-flame', sourceName: 'Sacred Flame',
+    label: 'Sanctified', kind: 'attack', op: 'add', value: '4', at: 1 }])
+  const r = resolve(buildContext(c), ATTACK)
+  assert.equal(r.riders[0].source, 'Sacred Flame')
+  assert.equal(r.riders[0].sourceGid, 'spell:cat-flame')
+})
+
+test('a NON-feature source is still reported — the panel decides what is linkable', () => {
+  // The engine must not pre-filter to `feature:`: an item rider is a real fact
+  // about the roll, and hiding its identity here would make the panel guess.
+  const c = armedChar([{ id: 'a1', source: 'item:cat-blade', sourceName: 'Blade',
+    label: 'Etched', kind: 'attack', op: 'add', value: '1', at: 1 }])
+  const gid = resolve(buildContext(c), ATTACK).riders[0].sourceGid
+  assert.equal(gid, 'item:cat-blade')
+  assert.ok(!gid?.startsWith('feature:'), 'and it is not a feature, so the panel will not link it')
+})

@@ -8,6 +8,7 @@ import {
 } from '../lib/kit'
 import { SKILLS } from '../lib/dnd'
 import styles from './StartingKit.module.css'
+import { Icon } from './Icon'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
 
@@ -208,7 +209,7 @@ export function StartingKit({ character, onUpdate }: {
                 disabled={busy} onClick={() => void takePath(op)}
               >
                 <span className={styles.koN} style={op.color ? { color: op.color } : undefined}>
-                  <i className={`fa-solid ${op.icon || 'fa-code-branch'}`} />
+                  <Icon name={op.icon || 'fa-code-branch'} />
                 </span>
                 <span className={styles.koTx}>
                   <span className={styles.koL}>{op.name}</span>
@@ -262,7 +263,7 @@ export function StartingKit({ character, onUpdate }: {
                   key={it.item_id} type="button" className={cx(styles.poolItem, busy && styles.busy)}
                   disabled={busy} onClick={() => void answerPool(q, it.item_id)}
                 >
-                  <span className={styles.piIc}><i className={`fa-solid ${it.data.icon ?? 'fa-box'}`} /></span>
+                  <span className={styles.piIc}><Icon name={it.data.icon ?? 'fa-box'} /></span>
                   <span className={styles.piNm}>{it.data.name}</span>
                 </button>
               ))}

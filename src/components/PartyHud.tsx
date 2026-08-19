@@ -24,6 +24,7 @@ import { usePartyRoster } from '../lib/party'
 import type { PartyRosterRow, PublicVitals } from '../lib/database.types'
 import { useTip } from './Tip'
 import styles from './PartyHud.module.css'
+import { Icon } from './Icon'
 
 /** Six identity hues, assigned by character id so a player's colour is stable
  *  across sessions. Chosen clear of every colour that already MEANS something
@@ -176,7 +177,7 @@ function Row({ row, vitals, online, entering, bind }: {
                 hint: `on ${row.name}`,
               }))}
             >
-              <i className={`fa-solid ${e.icon ?? (e.kind === 'buff' ? 'fa-arrow-up' : 'fa-triangle-exclamation')}`} />
+              <Icon name={e.icon ?? (e.kind === 'buff' ? 'fa-arrow-up' : 'fa-triangle-exclamation')} />
             </span>
           ))}
           {hidden > 0 && (

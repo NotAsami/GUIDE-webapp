@@ -4,6 +4,7 @@ import type { CharacterRow, Relation } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { Prose, renderInline } from '../lib/markdown'
+import { origins } from '../lib/featureView'
 import styles from './Lore.module.css'
 
 interface RouteContext {
@@ -37,6 +38,7 @@ export function Lore() {
   const { character } = useOutletContext<RouteContext>()
   const identity = character.identity ?? {}
   const lore = character.lore ?? {}
+  const origin = origins(character.sheet?.features)
 
   const idLine = [identity.race, identity.class].filter(Boolean).join(' ')
   const archLine = [identity.archetype].filter(Boolean).join('')
@@ -137,8 +139,30 @@ export function Lore() {
                     )}
                   </section>
 
+                  {/* ORIGIN — the class and race descriptions.
+                      They used to render on the Features screen, on the synthetic
+                      carrier rows that exist only to hand a class's vars to the
+                      engine. A class is not a feature and grants nothing by
+                      itself, so it read as a card that did nothing. This is
+                      where "who is this character" already lives — the VITALS
+                      table two columns over names the same race and class. */}
+                  {origin.length > 0 && (
+                    <section className={styles.dossierSec} aria-label="Origin">
+                      <div className={styles.secLabel}><span className={styles.num}>03</span> Origin</div>
+                      {origin.map(o => (
+                        <div key={o.kind} className={styles.originRow}>
+                          <div className={styles.originHead}>
+                            <span className={styles.originKind}>{o.kind}</span>
+                            <span className={styles.originName}>{o.name}</span>
+                          </div>
+                          <Prose text={o.desc} className={styles.prose} />
+                        </div>
+                      ))}
+                    </section>
+                  )}
+
                   <section className={styles.dossierSec} aria-label="Nature">
-                    <div className={styles.secLabel}><span className={styles.num}>03</span> Nature</div>
+                    <div className={styles.secLabel}><span className={styles.num}>04</span> Nature</div>
                     {NATURE.some(n => lore.personality?.[n.key]) ? (
                       <div className={styles.natureGrid}>
                         {NATURE.map(({ key, label }) => (
@@ -159,7 +183,7 @@ export function Lore() {
                   </section>
 
                   <section className={styles.dossierSec} aria-label="Relations">
-                    <div className={styles.secLabel}><span className={styles.num}>04</span> Relations</div>
+                    <div className={styles.secLabel}><span className={styles.num}>05</span> Relations</div>
                     {lore.relations && lore.relations.length > 0 ? (
                       <div className={styles.relations}>
                         {lore.relations.map((r, i) => <RelationRow key={i} r={r} />)}

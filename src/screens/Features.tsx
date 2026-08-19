@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, Feature, ShardPerk, ShardTree } from '../lib/database.types'
 import type { CSSProperties } from 'react'
 import { Nav } from '../components/Nav'
@@ -11,12 +11,13 @@ import { Prose } from '../lib/markdown'
 import { interpolate } from '../lib/expr'
 import { colorOf } from '../lib/palette'
 import { affectedBy, gid, type Gid } from '../lib/graph'
-import { featureEffects, isUsable, originChain, toggleVar } from '../lib/featureView'
+import { featureEffects, isCarrier, isUsable, originChain, toggleVar } from '../lib/featureView'
 import { useGraph } from '../lib/useGraph'
 import { playerVars, setVars, type VarRow } from '../lib/graphState'
 import type { ExprScope } from '../lib/expr'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Features.module.css'
+import { Icon } from '../components/Icon'
 
 interface RouteContext {
   character: CharacterRow
@@ -115,6 +116,7 @@ export function Features() {
   /** The open popup, plus the trail that got there. Features reach other
    *  features through AFFECTED BY, so opening a contributor pushes and BACK
    *  pops — without the stack, following a link is a one-way trip. */
+  const [params, setParams] = useSearchParams()
   const [popup, setPopup] = useState<string | null>(null)
   const [stack, setStack] = useState<string[]>([])
   /** The card that just refused a press, for the shake. */
@@ -126,7 +128,13 @@ export function Features() {
   const perks = shardPerks(character, shardTrees)
 
   const rows: Row[] = useMemo(() => [
-    ...sheetFeatures.map(f => ({ f, group: f.category ?? 'other' })),
+    /* Carriers are filtered from the LIST only. `cls:<id>` / `race:<id>` are
+       synthetic rows holding a class's vars and graph for the engine — they
+       grant nothing and rendered as a card with a description and no effects.
+       They stay in `character.sheet.features`, so activeSources still reads
+       them; this screen just stops calling them features. Their prose is on
+       Lore's dossier instead. */
+    ...sheetFeatures.filter(f => !isCarrier(f.id)).map(f => ({ f, group: f.category ?? 'other' })),
     ...fromGear.map(f => ({ f, group: 'gear' })),
     ...fromShards.map(f => ({ f, group: 'shard' })),
   ], [sheetFeatures, fromGear, fromShards])
@@ -194,6 +202,25 @@ export function Features() {
     setStack(s => (push && popup && popup !== id ? [...s, popup] : s))
     setPopup(id)
   }
+
+  /* DEEP LINK — `/features?f=<gid>`, which the Roll Context Panel's catalog
+     sheet uses to hand a rider's source over for inspection. Resolved through
+     the SAME byGid map an "affected by" link already uses, so a gid that isn't
+     on the sheet (unequipped since the roll, a shard node, an item) simply
+     opens nothing rather than erroring.
+
+     The param is cleared once consumed: leaving it in the URL would reopen the
+     popup on every refresh and on Back, which is exactly the self-opening
+     behaviour this screen's popups are not allowed to have. */
+  useEffect(() => {
+    const gidParam = params.get('f')
+    if (!gidParam) return
+    const row = byGid.get(gidParam as ReturnType<typeof gid>)
+    if (row) openPopup(row.f.id)
+    setParams(p => { const next = new URLSearchParams(p); next.delete('f'); return next }, { replace: true })
+    // byGid is rebuilt on every sheet change; this must run for the param only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, byGid])
   const closePopup = () => { setPopup(null); setStack([]) }
   const popBack = () => {
     const prev = stack[stack.length - 1]
@@ -399,13 +426,13 @@ function FeatureCard({ row, busy, scope, on, armed, denied, onOpen, onPress }: {
               onClick={e => { e.stopPropagation(); onPress() }}
             >
               <span className={styles.hxFrame} />
-              <span className={styles.hxInner}><i className={cx(styles.fcIcon, 'fa-solid', f.icon ?? 'fa-diamond')} /></span>
+              <span className={styles.hxInner}><Icon name={f.icon ?? 'fa-diamond'} className={styles.fcIcon} /></span>
               <span className={cx(styles.hxPip, spent && styles.pipOff)}>{pip}</span>
             </button>
           ) : (
             <span className={styles.fcHex}>
               <span className={styles.hxFrame} />
-              <span className={styles.hxInner}><i className={cx(styles.fcIcon, 'fa-solid', f.icon ?? 'fa-diamond')} /></span>
+              <span className={styles.hxInner}><Icon name={f.icon ?? 'fa-diamond'} className={styles.fcIcon} /></span>
             </span>
           )}
 
@@ -507,7 +534,7 @@ function FeaturePopup({ row, busy, scope, on, vars, back, affected, resolveGid, 
           <div className={cx(styles.imHead, f.color && styles.tinted, spent && styles.spent)}
             style={f.color ? ({ ['--tint' as string]: f.color } as React.CSSProperties) : undefined}>
             <div className={cx(styles.imCrystal, !usable && styles.passive)}>
-              <i className={cx('fa-solid', f.icon ?? 'fa-diamond')} />
+              <Icon name={f.icon ?? 'fa-diamond'} />
             </div>
             <div className={styles.imTitles}>
               <div className={cx(styles.imName, on && styles.on)}>{f.name}</div>
@@ -689,7 +716,7 @@ function VarControl({ row, disabled, onWrite }: {
 function PerkCard({ perk }: { perk: ShardPerk }) {
   return (
     <div className={styles.perk}>
-      <span className={styles.perkIcon}><i className={cx('fa-solid', perk.icon ?? 'fa-wand-magic-sparkles')} /></span>
+      <span className={styles.perkIcon}><Icon name={perk.icon ?? 'fa-wand-magic-sparkles'} /></span>
       <div>
         <div className={styles.perkName}>{perk.name}</div>
         {perk.description && <Prose text={perk.description} className={styles.perkDesc} />}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRollLog } from '../lib/rolls'
 import { lineViews, pendingOf } from '../lib/rollView'
 import styles from './RollToast.module.css'
+import { Icon } from './Icon'
 
 const VISIBLE_MS = 5200
 
@@ -55,7 +56,7 @@ export function RollToast({ onOpen }: { onOpen: () => void }) {
   return (
     <div className={styles.toast} key={show.id} role="status">
       <div className={styles.head} onClick={() => setDismissed(show.id)} title="Dismiss">
-        <span className={styles.icon}><i className={`fa-solid ${show.icon ?? 'fa-dice-d20'}`} /></span>
+        <span className={styles.icon}><Icon name={show.icon ?? 'fa-dice-d20'} /></span>
         <div className={styles.titles}>
           <span className={styles.title}>{show.title}</span>
           {show.subtitle && <span className={styles.sub}>{show.subtitle}</span>}

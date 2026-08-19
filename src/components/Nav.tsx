@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import styles from './Nav.module.css'
+import { Icon } from './Icon'
 
 interface NavItem {
   to: string
@@ -81,7 +82,7 @@ function NavBtn({
       <span className={styles.frame} />
       {item.marker && <span className={styles.marker}>{item.marker}</span>}
       <span className={styles.inner}>
-        <span className={styles.icon}><i className={`fa-solid ${item.icon}`} /></span>
+        <span className={styles.icon}><Icon name={item.icon} /></span>
         <span className={styles.label}>{item.label}</span>
       </span>
     </NavLink>

@@ -155,3 +155,48 @@ export function toggleVar(f: Feature): VarDef | null {
   const vars = toggleVars(f)
   return vars.length === 1 && !f.uses && !f.roll ? vars[0] : null
 }
+
+/* ---------- carriers ---------- */
+
+/**
+ * A class or race CARRIER, not a feature.
+ *
+ * `assignClass`/`assignRace` put one synthetic row on `sheet.features` per
+ * class and per race (`cls:<id>`, `race:<id>`) whose only job is to carry that
+ * class's vars and graph to the engine — `activeSources` reads features, so a
+ * carrier is how a class reaches a roll without the engine growing a fifth
+ * source kind. It grants nothing and does nothing on its own.
+ *
+ * It is therefore not something to LIST as a feature, which is what it looked
+ * like on the Features screen: a card with a class description and no effects.
+ *
+ * MATCHES THE CARRIER ONLY. A granted feature is `cls:<id>:<featureId>` — two
+ * colons — and those are real features that must keep showing. A prefix test
+ * (`id.startsWith('cls:')`) would hide every feature a class grants, which is
+ * most of them.
+ */
+export const isCarrier = (id: string | undefined): boolean => /^(?:cls|race):[^:]+$/.test(id ?? '')
+
+export type Origin = { kind: 'race' | 'class'; name: string; desc: string }
+
+/**
+ * What the carriers say about where this character came from — the class and
+ * race descriptions, for the Lore dossier.
+ *
+ * Read off the carrier rather than the catalog on purpose: `class_catalog` has
+ * no player policy (the security is the absence of one), so a player cannot
+ * read it. `assignClass` already snapshots `desc` onto the carrier as
+ * `light_description`, which is the copy the player owns.
+ */
+export function origins(features: readonly Feature[] | undefined): Origin[] {
+  const out: Origin[] = []
+  for (const f of features ?? []) {
+    if (!isCarrier(f.id)) continue
+    const desc = (f.light_description ?? '').trim()
+    if (!desc) continue
+    out.push({ kind: f.id.startsWith('race:') ? 'race' : 'class', name: f.name, desc })
+  }
+  // Race before class: it is the half of a character that exists first, the
+  // same order the Operator Console's Actions tab puts them in.
+  return out.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'race' ? -1 : 1))
+}

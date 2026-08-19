@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { CharacterRow, CharacterSection, ShardNode, ShardSlot, ShardTree } from '../lib/database.types'
 import { RING_GAP, branchColor, nodeState, nodeXY, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import styles from './ShardTree.module.css'
+import { Icon } from '../components/Icon'
 
 interface Props {
   character: CharacterRow
@@ -184,7 +185,7 @@ export function ShardTreeModal({ character, updateSection, slotKey, slot, tree, 
             <span className={`${styles.pnCorner} ${styles.br}`} />
 
             <header className={styles.pnHeader}>
-              <div className={styles.hdCrystal}><i className={`fa-solid ${tree.icon}`} /></div>
+              <div className={styles.hdCrystal}><Icon name={tree.icon} /></div>
               <div className={styles.hdTitles}>
                 <div className={styles.hdName}>{tree.name}</div>
                 <div className={styles.hdMeta}>
@@ -272,7 +273,7 @@ export function ShardTreeModal({ character, updateSection, slotKey, slot, tree, 
                                 onClick={() => onNodeClick(n)}
                               >
                                 <span className={styles.nFrame} />
-                                <span className={styles.nInner}><i className={`fa-solid ${d.icon}`} /></span>
+                                <span className={styles.nInner}><Icon name={d.icon} /></span>
                                 {n.cost > 0 && state !== 'attuned' && <span className={styles.nCost}>{n.cost}</span>}
                                 {state === 'locked' && <span className={styles.nLock}><i className="fa-solid fa-lock" /></span>}
                               </button>

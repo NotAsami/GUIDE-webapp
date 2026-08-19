@@ -32,6 +32,7 @@ import { CAT_LABEL } from '../lib/items'
 import { fmtWeight, itemWeight } from '../lib/burden'
 import type { DmConfiscatedState } from '../lib/dm'
 import styles from './OperatorConsole.module.css'
+import { Icon } from '../components/Icon'
 
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ')
 
@@ -211,7 +212,7 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
           <div className={styles.invList}>
             {inventory.map(item => (
               <div key={item.id} className={cx(styles.invRow, item.locked && styles.isLocked)}>
-                <span className={styles.irIcon}><i className={`fa-solid ${item.icon ?? 'fa-cube'}`} /></span>
+                <span className={styles.irIcon}><Icon name={item.icon ?? 'fa-cube'} /></span>
                 <span className={styles.irName}>
                   {item.locked && <i className={cx('fa-solid fa-lock', styles.irLock)} />}
                   {item.name}
@@ -266,7 +267,7 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
           <div className={styles.invList}>
             {equippedEntries.map(entry => (
               <div key={entry.item.id} className={styles.invRow}>
-                <span className={styles.irIcon}><i className={`fa-solid ${entry.item.icon ?? 'fa-cube'}`} /></span>
+                <span className={styles.irIcon}><Icon name={entry.item.icon ?? 'fa-cube'} /></span>
                 <span className={styles.irName}>{entry.item.name}</span>
                 <span className={styles.irWhere}>{entry.where}</span>
                 <span className={styles.irCat}>{CAT_LABEL[entry.item.category ?? 'misc']}</span>
@@ -317,7 +318,7 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
           <div className={styles.invList}>
             {held.map(rec => (
               <div key={rec.id} className={cx(styles.invRow, styles.held)}>
-                <span className={styles.irIcon}><i className={`fa-solid ${rec.item.icon ?? 'fa-cube'}`} /></span>
+                <span className={styles.irIcon}><Icon name={rec.item.icon ?? 'fa-cube'} /></span>
                 <span className={styles.irName}>
                   {rec.item.name}
                   {rec.item.qty && rec.item.qty > 1 ? <span className={styles.irQty}>×{rec.item.qty}</span> : null}

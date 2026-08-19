@@ -15,6 +15,7 @@ import { Shard } from './screens/Shard'
 import { ShardLattice } from './screens/ShardLattice'
 import FeatureEditor from './screens/FeatureEditor'
 import { OperatorConsole } from './screens/OperatorConsole'
+import { CatalogSearch } from './components/CatalogSearch'
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -22,9 +23,14 @@ export const router = createBrowserRouter([
   // DM-only Operator Console (Phase 2). Standalone full-screen surface with its
   // own amber chrome — NOT a child of the player Layout. The screen self-gates on
   // dm_users membership and redirects non-DM users back to '/'.
-  { path: '/dm', element: <OperatorConsole /> },
-  { path: '/dm/shards', element: <ShardLattice /> },
-  { path: '/dm/features', element: <FeatureEditor /> },
+  /* CatalogSearch rides alongside each authoring surface rather than inside it:
+     it is a Ctrl/Cmd+K overlay that must be reachable from the console, the
+     shard lattice AND the feature editor, and mounting it here keeps all three
+     screens unaware of it. Not on the player routes — it reads the DM catalogs,
+     which RLS returns empty for anyone else. */
+  { path: '/dm', element: <><OperatorConsole /><CatalogSearch /></> },
+  { path: '/dm/shards', element: <><ShardLattice /><CatalogSearch /></> },
+  { path: '/dm/features', element: <><FeatureEditor /><CatalogSearch /></> },
   {
     path: '/',
     element: <Layout />,

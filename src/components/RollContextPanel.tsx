@@ -29,6 +29,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import { useRollLog, type RollEntry } from '../lib/rolls'
 import { rolledDiceTerms } from '../lib/dice'
 import { Prose, renderInline } from '../lib/markdown'
@@ -40,6 +41,7 @@ import {
 } from '../lib/rollView'
 import styles from './RollContextPanel.module.css'
 import { useTip, tipProps, type ShowTip } from './Tip'
+import { Icon } from './Icon'
 
 const cx = (...v: (string | false | undefined)[]) => v.filter(Boolean).join(' ')
 
@@ -216,7 +218,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
               ))}
         </div>
 
-        {cat && <CatalogSheet view={catView} entry={cat} onClose={() => setCat(null)} />}
+        {cat && <CatalogSheet view={catView} entry={cat} onClose={() => setCat(null)} onLeave={onClose} />}
       </aside>
       {tipLayer}
     </div>,
@@ -276,7 +278,7 @@ function Entry({
       <span className={styles.eFrame} aria-hidden="true" />
       <div className={styles.eInner}>
         <header className={styles.eHead} onClick={onFold}>
-          <span className={styles.eGlyph}><i className={`fa-solid ${entry.icon ?? 'fa-dice-d20'}`} /></span>
+          <span className={styles.eGlyph}><Icon name={entry.icon ?? 'fa-dice-d20'} /></span>
           <div>
             <div
               className={cx(styles.eName, hasCat && styles.linked)}
@@ -767,8 +769,14 @@ function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin }: {
 
 /* ---------------- the catalog sheet ---------------- */
 
-function CatalogSheet({ view, entry, onClose }: {
-  view: CatalogView | null; entry: RollEntry; onClose: () => void
+function CatalogSheet({ view, entry, onClose, onLeave }: {
+  view: CatalogView | null; entry: RollEntry
+  /** Dismiss THIS sheet, back to the roll list behind it. */
+  onClose: () => void
+  /** Leave the panel entirely. Following a link navigates away, and leaving the
+   *  rail open over the screen you just asked for means dismissing it before you
+   *  can read the thing you clicked through to. */
+  onLeave: () => void
 }) {
   const bodyRef = useRef<HTMLDivElement>(null)
   useEffect(() => { bodyRef.current?.scrollTo({ top: 0 }) }, [view])
@@ -796,7 +804,7 @@ function CatalogSheet({ view, entry, onClose }: {
         ) : (<>
           <div className={styles.catName}>{view.name}</div>
           <div className={styles.catLine}>
-            <span className={styles.school}><i className={`fa-solid ${view.icon}`} />{view.kind}</span>
+            <span className={styles.school}><Icon name={view.icon} />{view.kind}</span>
             {view.school && (<><span className={styles.sep}>·</span><span>{view.school}</span></>)}
           </div>
           {(view.stats.length > 0 || view.damage.length > 0) && (
@@ -822,9 +830,32 @@ function CatalogSheet({ view, entry, onClose }: {
           </>)}
           {riders.length > 0 && (<>
             <span className={styles.catLbl}>Interacts With</span>
-            {riders.map((r, i) => (
+            {riders.map((r, i) => {
+              /* Only a feature can be opened — riders also come from items and
+                 shard nodes, and the Features screen has no row for those. */
+              const link = r.sourceGid?.startsWith('feature:') ? r.sourceGid : null
+              /* The source name is printed beside the label to say WHICH thing
+                 granted this. Once the label is a link to that thing, saying it
+                 twice is noise — and it read as a stutter, because an effect is
+                 usually named after the feature carrying it ("Condemning Strike"
+                 on Condeming Strike). Linked: the name alone, and the source is
+                 on the link's tooltip. Not linked: unchanged. */
+              const showSource = !link && r.label.trim().toLowerCase() !== r.source.trim().toLowerCase()
+              return (
               <div key={i} className={styles.catRider}>
-                <div className={styles.rn}>{r.label}<span>{r.source}</span></div>
+                <div className={styles.rn}>
+                  {link
+                    ? <Link
+                        to={`/features?f=${encodeURIComponent(link)}`}
+                        className={styles.rLink}
+                        title={`Open ${r.source} on the Features screen`}
+                        onClick={onLeave}
+                      >
+                        {r.label}<i className="fa-solid fa-arrow-up-right-from-square" />
+                      </Link>
+                    : r.label}
+                  {showSource && <span>{r.source}</span>}
+                </div>
                 <div className={styles.rt}>
                   {r.text
                     ? renderInline(r.text)
@@ -833,7 +864,8 @@ function CatalogSheet({ view, entry, onClose }: {
                       : `Grants ${r.op}.`}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </>)}
         </>)}
       </div>

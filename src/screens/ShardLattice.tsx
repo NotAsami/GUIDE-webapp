@@ -13,10 +13,9 @@ import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { GraphEffects, TagsBlock, VarsBlock } from '../components/GraphEffects'
 import type { Feature, ItemEffects, ShardPerk } from '../lib/database.types'
 import styles from './ShardLattice.module.css'
+import { IconPicker } from '../components/IconPicker'
+import { Icon } from '../components/Icon'
 
-const ICONS = ['fa-gem', 'fa-hand-fist', 'fa-shield', 'fa-shield-heart', 'fa-heart-pulse', 'fa-droplet', 'fa-bolt', 'fa-anchor',
-  'fa-hammer', 'fa-dumbbell', 'fa-explosion', 'fa-mountain', 'fa-angles-up', 'fa-arrows-rotate', 'fa-star', 'fa-fire',
-  'fa-brain', 'fa-eye', 'fa-skull', 'fa-wave-square', 'fa-signal', 'fa-book-open']
 const PALETTE = [
   { n: 'Beige', v: 'var(--beige)' }, { n: 'Amber', v: 'var(--amber)' }, { n: 'Cyan', v: 'var(--cyan)' },
   { n: 'Violet', v: 'var(--violet)' }, { n: 'Ember', v: 'var(--danger-hot)' }, { n: 'Green', v: 'var(--good)' },
@@ -397,7 +396,7 @@ export function ShardLattice() {
               <div className={styles.lib}>
                 {trees.map(t => (
                   <button key={t.id} type="button" className={`${styles.libRow} ${t.id === activeId ? styles.sel : ''}`} onClick={() => setActiveId(t.id)}>
-                    <span className={styles.lrIc}><span className={styles.lrIcFrame} /><span className={styles.lrIcInner}><i className={`fa-solid ${t.icon}`} /></span></span>
+                    <span className={styles.lrIc}><span className={styles.lrIcFrame} /><span className={styles.lrIcInner}><Icon name={t.icon} /></span></span>
                     <span className={styles.lrTx}>
                       <span className={styles.lrT}>{t.name}</span>
                       <span className={styles.lrS}>{t.nodes.length} nodes · {t.rarity}</span>
@@ -517,7 +516,7 @@ export function ShardLattice() {
                             }}
                           >
                             <span className={styles.nf} />
-                            <span className={styles.ni}><i className={`fa-solid ${concealed ? 'fa-question' : n.icon}`} /></span>
+                            <span className={styles.ni}><Icon name={concealed ? 'fa-question' : n.icon} /></span>
                             {(n.cost > 0 && !(mode === 'preview' && sim?.has(n.id))) && <span className={styles.ncost}>{n.cost}</span>}
                             {mode === 'author' && n.concealed && <span className={styles.nconceal}><i className="fa-solid fa-eye-slash" /></span>}
                             {mode === 'author' && <span className={styles.ntier}>T{n.tier}·{Math.round(n.angle)}°</span>}
@@ -627,7 +626,7 @@ function ShardInspector({ draft, setDraft, onDelete, fireToast, featureLib }: {
   useEffect(() => { setConfirmDelete(false) }, [draft.id])
   return (
     <>
-      <div className={styles.imeta}><i className={`fa-solid ${draft.icon}`} /><span className={styles.t}>{draft.name}</span><span className={styles.s}>{draft.id}</span></div>
+      <div className={styles.imeta}><Icon name={draft.icon} /><span className={styles.t}>{draft.name}</span><span className={styles.s}>{draft.id}</span></div>
       <span className={styles.fieldLab}>Shard Name</span>
       <input className={styles.in} value={draft.name} onChange={e => set(t => ({ ...t, name: e.target.value }))} />
       <span className={styles.fieldLab}>Rarity</span>
@@ -652,9 +651,7 @@ function ShardInspector({ draft, setDraft, onDelete, fireToast, featureLib }: {
         </div>
       </div>
       <div className={styles.sec}><span className={styles.fieldLab}>Glyph</span></div>
-      <div className={styles.icons}>
-        {ICONS.map(i => <div key={i} className={`${styles.ic} ${i === draft.icon ? styles.sel : ''}`} onClick={() => set(t => ({ ...t, icon: i }))}><i className={`fa-solid ${i}`} /></div>)}
-      </div>
+      <IconPicker value={draft.icon} onPick={i => set(t => ({ ...t, icon: i }))} />
       <div className={styles.sec}><span className={styles.fieldLab}>Flavour — read on slot</span></div>
       <textarea ref={flavorRef} className={styles.prose} placeholder="What the player reads the moment the shard seats…" value={draft.flavor ?? ''} onChange={e => set(t => ({ ...t, flavor: e.target.value }))} />
 
@@ -750,7 +747,7 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
 
   return (
     <>
-      <div className={styles.imeta}><i className={`fa-solid ${node.icon}`} /><span className={styles.t}>{node.name}</span><span className={styles.s}>{node.id}</span></div>
+      <div className={styles.imeta}><Icon name={node.icon} /><span className={styles.t}>{node.name}</span><span className={styles.s}>{node.id}</span></div>
       <span className={styles.fieldLab}>Node Name</span>
       <input className={styles.in} value={node.name} onChange={e => setNode({ name: e.target.value })} />
       <div className={styles.grid2}>
@@ -780,9 +777,7 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
         </div>
       </div>
       <div className={styles.sec}><span className={styles.fieldLab}>Glyph</span></div>
-      <div className={styles.icons}>
-        {ICONS.map(i => <div key={i} className={`${styles.ic} ${i === node.icon ? styles.sel : ''}`} onClick={() => setNode({ icon: i })}><i className={`fa-solid ${i}`} /></div>)}
-      </div>
+      <IconPicker value={node.icon} onPick={i => setNode({ icon: i })} />
       <div className={styles.sec}><span className={styles.fieldLab}>Prerequisites</span></div>
       <div className={styles.chips}>
         {node.prereqs.length ? node.prereqs.map(p => {
@@ -957,7 +952,10 @@ function FeaturesWidget({ features, onChange, label, note, library }: {
  *  cosmetic-only: it shows on the shard's buffs list / node detail panel and
  *  nowhere else, so flavor text like "Quest Tracking" can't flood the real
  *  Features system. */
-const PERK_ICONS = ['fa-wand-magic-sparkles', ...ICONS]
+/* The perk default first, then the shared palette. Filtered, not just
+   prepended: the shared list already contains it, and a repeat here is a
+   duplicate React key as well as the same glyph twice in the picker. */
+const PERK_DEFAULT = 'fa-wand-magic-sparkles'
 
 /** Icon-picker button + popup, portaled to <body> and positioned in `fixed`
  *  coordinates from the button's own rect — same pattern as Equipment.tsx's
@@ -1001,7 +999,7 @@ function PerkIconPicker({ icon, onPick }: { icon: string; onPick: (i: string) =>
         ref={btnRef} type="button" className={styles.iconPickBtn}
         onClick={e => { e.stopPropagation(); setOpen(o => !o); setPos(null) }}
       >
-        <i className={`fa-solid ${icon}`} />
+        <Icon name={icon} />
       </button>
       {open && createPortal(
         <div
@@ -1009,14 +1007,7 @@ function PerkIconPicker({ icon, onPick }: { icon: string; onPick: (i: string) =>
           style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
           onClick={e => e.stopPropagation()}
         >
-          <div className={styles.icons}>
-            {PERK_ICONS.map(i => (
-              <div key={i} className={`${styles.ic} ${i === icon ? styles.sel : ''}`}
-                onClick={() => { onPick(i); setOpen(false) }}>
-                <i className={`fa-solid ${i}`} />
-              </div>
-            ))}
-          </div>
+          <IconPicker value={icon} onPick={i => { onPick(i); setOpen(false) }} autoFocus />
         </div>,
         document.body,
       )}
@@ -1029,7 +1020,7 @@ function PerksWidget({ perks, onChange, label, note }: {
 }) {
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
-  const [icon, setIcon] = useState(PERK_ICONS[0])
+  const [icon, setIcon] = useState(PERK_DEFAULT)
   function add() {
     const n = name.trim()
     if (!n) return
@@ -1041,7 +1032,7 @@ function PerksWidget({ perks, onChange, label, note }: {
       <div className={styles.wgtHead}><i className={`fa-solid fa-wand-magic-sparkles ${styles.wi}`} /><span className={styles.wt}>{label}</span><span className={styles.wn}>{note} · Flavor only, not a real Feature</span></div>
       {perks.length ? perks.map((p, i) => (
         <div key={i} className={styles.dtlRow}>
-          <i className={`fa-solid ${p.icon ?? PERK_ICONS[0]}`} style={{ color: 'var(--cyan)', width: 16, flex: '0 0 auto' }} />
+          <Icon name={p.icon ?? PERK_DEFAULT} style={{ color: 'var(--cyan)', width: 16, flex: '0 0 auto' }} />
           <span className={styles.dl}>{p.name}</span>
           <span className={styles.dv}>{p.description}</span>
           <i className={`fa-solid fa-xmark ${styles.dx}`} onClick={() => onChange(perks.filter((_, idx) => idx !== i))} />
@@ -1089,7 +1080,7 @@ function PlayerRead({ tree, node, sim, canAttune }: { tree: EditorTree; node: Ed
   return (
     <>
       <div className={styles.imeta} style={{ borderLeftColor: 'var(--cyan)', background: 'rgba(0,166,214,.06)', borderColor: 'rgba(0,166,214,.3)' }}>
-        <i className={`fa-solid ${concealed ? 'fa-question' : node.icon}`} style={{ color: 'var(--cyan-hot)' }} />
+        <Icon name={concealed ? 'fa-question' : node.icon} style={{ color: 'var(--cyan-hot)' }} />
         <span className={styles.t} style={{ color: 'var(--cyan-hot)' }}>{concealed ? '???' : node.name}</span><span className={styles.s}>{state}</span>
       </div>
       <div className={styles.chips}>

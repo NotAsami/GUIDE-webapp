@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg } from '../lib/voice'
 import styles from './SystemToasts.module.css'
+import { Icon } from './Icon'
 
 const RAR_COLOR: Record<string, string> = {
   common: 'var(--rar-common)',
@@ -78,7 +79,7 @@ function ToastCard({ msg, out }: { msg: VoiceMsg; out: boolean }) {
       <div className={cls}>
         <div className={styles.tgTag}>Realtime → You</div>
         <div className={styles.tgHead}>
-          <span className={styles.tgIc}><i className={`fa-solid ${msg.icon ?? 'fa-box-open'}`} /></span>
+          <span className={styles.tgIc}><Icon name={msg.icon ?? 'fa-box-open'} /></span>
           <div className={styles.tgTx}>
             <div className={styles.tgT}>Item Acquired ::</div>
             <div className={styles.tgN}>
@@ -97,7 +98,7 @@ function ToastCard({ msg, out }: { msg: VoiceMsg; out: boolean }) {
       <div className={cls}>
         <div className={styles.tgTag}>Realtime → You</div>
         <div className={styles.tgHead}>
-          <span className={styles.tgIc}><i className={`fa-solid ${msg.icon ?? 'fa-star'}`} /></span>
+          <span className={styles.tgIc}><Icon name={msg.icon ?? 'fa-star'} /></span>
           <div className={styles.tgTx}>
             <div className={styles.tgT}>Feature Acquired ::</div>
             <div className={styles.tgN}>{msg.name}</div>

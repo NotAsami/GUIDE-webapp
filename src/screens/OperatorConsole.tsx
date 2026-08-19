@@ -8,9 +8,9 @@ import { OperatorShops } from './OperatorShops'
 import { parseCatalogQuery, matchesCatalogQuery } from '../lib/catalogSearch'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
-import type { GraphEffect, GraphState, ShardSlot, ShardTree, VarDef } from '../lib/database.types'
+import type { GraphEffect, GraphState, ProgressStory, ShardSlot, ShardTree, VarDef } from '../lib/database.types'
 import { auditNode, characterVars, type AuditItem } from '../lib/graph'
-import { AuditPanel, GraphEffects, TagsBlock, VarsBlock } from '../components/GraphEffects'
+import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, revealAudit } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphState'
 import { longRestPatch } from '../lib/rest'
@@ -50,6 +50,8 @@ import { isEquipPick } from '../lib/database.types'
 import { OperatorInventory } from './OperatorInventory'
 import { normalizeTag } from '../lib/graph'
 import styles from './OperatorConsole.module.css'
+import { IconPicker } from '../components/IconPicker'
+import { Icon } from '../components/Icon'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
  *  Stat Panel / the Operator Console mockup. */
@@ -334,7 +336,7 @@ export function OperatorConsole() {
                       onClick={() => openCharacter(p.id)}
                     >
                       <div className={styles.pcTop}>
-                        <span className={styles.pcPortrait}><i className={`fa-solid ${p.icon}`} /></span>
+                        <span className={styles.pcPortrait}><Icon name={p.icon} /></span>
                         <span className={styles.pcNamewrap}>
                           <div className={styles.pcName}>{p.name}</div>
                           <div className={styles.pcMeta}>{p.race} · {p.cls} · Lv {p.level}</div>
@@ -383,7 +385,7 @@ export function OperatorConsole() {
                   <button key={t.key} className={cx(styles.crTab, t.key === catTab && styles.sel, t.soon && styles.stub)}
                     disabled={t.soon} title={title}
                     onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setCatTab(t.key as CatTab) }}>
-                    <i className={cx('fa-solid', t.icon, styles.crGlyph)} />
+                    <Icon name={t.icon} className={styles.crGlyph} />
                     <span className={styles.crLab}>{t.label}</span>
                   </button>
                 )
@@ -650,7 +652,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
     <>
       {/* selected-character header */}
       <div className={styles.selHead}>
-        <span className={styles.selPortrait}><i className={`fa-solid ${member.icon}`} /></span>
+        <span className={styles.selPortrait}><Icon name={member.icon} /></span>
         <div className={styles.selTitles}>
           <div className={styles.selName}>{member.name}</div>
           <div className={styles.selMeta}>
@@ -801,9 +803,167 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
         <Folder label="Skills" icon="fa-graduation-cap">
         <ProficienciesCard member={member} row={row} classLib={classLib} onUpdate={onUpdate} log={log} />
         </Folder>
+
+        <Folder label="Standing & Story" icon="fa-ranking-star">
+        <StandingCard key={row.id} member={member} row={row} onUpdate={onUpdate} log={log} />
+        </Folder>
       </div>
 
     </>
+  )
+}
+
+// ============================================================
+// STANDING & STORY (Actions card L) — the two readouts the player
+// screens render and nothing could write.
+// ============================================================
+
+/** Reputation drives the Topbar's 00-100 bar; `progress.stories[]` IS the Codex
+ *  home screen — its three cards render from nothing else, and Codex.tsx's empty
+ *  state literally told you to seed the row by hand. Both were readable by the
+ *  player and unsettable by the DM, which is the same gap twice.
+ *
+ *  One card because it is one act: what this character's standing looks like
+ *  right now. One save, one patch — `identity` and `progress` are different
+ *  sections, so they go in a single update rather than two writes that every
+ *  realtime subscriber would see as two separate events. */
+function StandingCard({ member, row, onUpdate, log }: {
+  member: PartyMember
+  row: CharacterRow
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const first = firstName(member.name)
+  const [rep, setRep] = useState(row.identity?.reputation ?? 0)
+  const [stories, setStories] = useState<ProgressStory[]>(() => row.progress?.stories ?? [])
+  const [busy, setBusy] = useState(false)
+
+  const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n) || 0))
+  const patchStory = (i: number, patch: Partial<ProgressStory>) =>
+    setStories(list => list.map((st, j) => (j === i ? { ...st, ...patch } : st)))
+  const move = (i: number, by: number) => setStories(list => {
+    const j = i + by
+    if (j < 0 || j >= list.length) return list
+    const next = [...list]
+    const tmp = next[i]
+    next[i] = next[j]
+    next[j] = tmp
+    return next
+  })
+  const addStory = () => setStories(list => [...list, {
+    // Stable within the row is all this needs to be: it is a React key, and the
+    // Codex renders these by position.
+    id: 'story-' + Date.now().toString(36),
+    title: '', label: '', emblem: 'character', percent: 0,
+  }])
+
+  async function save() {
+    setBusy(true)
+    const ok = await onUpdate({
+      identity: { ...row.identity, reputation: clamp(rep) },
+      progress: { ...row.progress, stories },
+    } as CharacterUpdate)
+    setBusy(false)
+    if (ok) {
+      log(<>Standing of <span className={styles.who}>{first}</span> to <span className={styles.obj}>REP {clamp(rep)}</span> · {stories.length} {stories.length === 1 ? 'story' : 'stories'}</>)
+    }
+  }
+
+  return (
+    <div className={styles.actCard}>
+      <div className={styles.acTitle}><i className="fa-solid fa-ranking-star lead" /><span className={styles.num}>L</span><span className={styles.t}>Standing &amp; Story</span></div>
+
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Reputation</span>
+          <input
+            className={styles.sessIn} type="number" min={0} max={100} value={rep}
+            onChange={e => setRep(clamp(parseInt(e.target.value || '0', 10)))}
+          />
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Topbar reads</span>
+          {/* The same 0-100 bar the player sees, so the number is set against the
+              thing it renders rather than in the abstract. */}
+          <div className={styles.stdBar}><i style={{ width: clamp(rep) + '%' }} /></div>
+          <span className={styles.stdBarNum}>{clamp(rep).toString().padStart(2, '0')} / 100</span>
+        </div>
+      </div>
+
+      <div className={styles.efBh}>
+        <span>Story Progress</span>
+        <span className={styles.efRule} />
+        <span className={styles.stdCount}>{stories.length} {stories.length === 1 ? 'card' : 'cards'} on the Codex</span>
+      </div>
+
+      {stories.length === 0 && (
+        <div className={styles.efNone}>No cards — the player&apos;s Codex home shows its empty state.</div>
+      )}
+
+      {stories.map((st, i) => (
+        <div key={st.id} className={styles.stdStory}>
+          <div className={styles.stdHead}>
+            <select
+              className={styles.selIn} value={st.emblem} aria-label="Emblem"
+              onChange={e => patchStory(i, { emblem: e.target.value as ProgressStory['emblem'] })}
+            >
+              <option value="character">Character</option>
+              <option value="main">Main Story</option>
+              <option value="region">Region</option>
+            </select>
+            <input
+              className={styles.sessIn} value={st.title} placeholder="Title — e.g. The Reclamation"
+              aria-label="Title" {...NO_AUTOFILL}
+              onChange={e => patchStory(i, { title: e.target.value })}
+            />
+            <span className={styles.stdMove}>
+              <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up"><i className="fa-solid fa-angle-up" /></button>
+              <button type="button" onClick={() => move(i, 1)} disabled={i === stories.length - 1} aria-label="Move down"><i className="fa-solid fa-angle-down" /></button>
+              <button type="button" className={styles.stdDel} onClick={() => setStories(l => l.filter((_, j) => j !== i))} aria-label="Remove"><i className="fa-solid fa-xmark" /></button>
+            </span>
+          </div>
+
+          <div className={styles.catGrid3}>
+            <div>
+              <span className={styles.fieldLab}>Label</span>
+              <input className={styles.sessIn} value={st.label} placeholder="e.g. Chapter II" {...NO_AUTOFILL}
+                onChange={e => patchStory(i, { label: e.target.value })} />
+            </div>
+            <div>
+              <span className={styles.fieldLab}>Percent</span>
+              <input className={styles.sessIn} type="number" min={0} max={100} value={st.percent}
+                onChange={e => patchStory(i, { percent: clamp(parseInt(e.target.value || '0', 10)) })} />
+            </div>
+            <div>
+              <span className={styles.fieldLab}>Chapter</span>
+              <input className={styles.sessIn} value={st.chapter ?? ''} placeholder="optional" {...NO_AUTOFILL}
+                onChange={e => patchStory(i, { chapter: e.target.value || undefined })} />
+            </div>
+          </div>
+
+          <div className={styles.catGrid2}>
+            <div>
+              <span className={styles.fieldLab}>Telemetry</span>
+              <input className={styles.sessIn} value={st.telemetry ?? ''} placeholder="small mono line under the title" {...NO_AUTOFILL}
+                onChange={e => patchStory(i, { telemetry: e.target.value || undefined })} />
+            </div>
+            <div>
+              <span className={styles.fieldLab}>Hover text</span>
+              <input className={styles.sessIn} value={st.tooltip ?? ''} placeholder="shown on hover" {...NO_AUTOFILL}
+                onChange={e => patchStory(i, { tooltip: e.target.value || undefined })} />
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div className={styles.efAdd}>
+        <Btn tone="ghost" icon="fa-plus" label="Add Story Card" onClick={addStory} />
+      </div>
+
+      <div className={styles.grantAction}>
+        <Btn tone="amber" icon="fa-floppy-disk" label={busy ? 'Saving…' : 'Save Standing'} onClick={() => void save()} disabled={busy} />
+      </div>
+    </div>
   )
 }
 
@@ -997,13 +1157,6 @@ const SLOT_LABEL: Record<ItemSlot, string> = {
   gloves: 'Gloves', neck: 'Neck', ring1: 'Ring', ring2: 'Ring',
 }
 const WEAPON_ABILITIES: WeaponAbility[] = ['str', 'dex', 'finesse']
-const ITEM_ICONS = [
-  'fa-khanda', 'fa-hammer', 'fa-bullseye', 'fa-gavel', 'fa-wand-sparkles', 'fa-staff-snake',
-  'fa-shirt', 'fa-shield-halved', 'fa-helmet-safety', 'fa-user-tie', 'fa-hat-wizard', 'fa-shoe-prints',
-  'fa-ring', 'fa-gem', 'fa-flask', 'fa-vial', 'fa-scroll', 'fa-book',
-  'fa-key', 'fa-fire', 'fa-drumstick-bite', 'fa-link', 'fa-bed', 'fa-box',
-]
-
 const rarColor = (r?: ItemRarity) => RAR_DEF[r ?? 'common']?.token ?? 'var(--muted)'
 const catDef = (c?: ItemCategory) => CAT_DEF[c ?? 'misc'] ?? CAT_DEF.misc
 
@@ -1078,7 +1231,7 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
           const col = rarColor(it.data?.rarity)
           return (
             <button key={it.id} className={cx(styles.catItem, it.id === selId && styles.sel)} onClick={() => setSelId(it.id)}>
-              <span className={styles.ciIc} style={{ color: col }}><i className={`fa-solid ${it.data?.icon ?? 'fa-box'}`} /></span>
+              <span className={styles.ciIc} style={{ color: col }}><Icon name={it.data?.icon ?? 'fa-box'} /></span>
               <span className={styles.ciTx}>
                 <span className={styles.ciNm}>{it.data?.name ?? 'Untitled'}</span>
                 <span className={styles.ciTy}>{catDef(it.data?.category).label}</span>
@@ -1197,7 +1350,7 @@ function ApplyEffectCard({ member, effectLib, row, onUpdate, onVoice, log }: {
           const parts = effectParts(e.data ?? { mods: [], flags: [] })
           return (
             <button key={e.id} className={cx(styles.catItem, e.id === effId && styles.sel)} onClick={() => setEffId(e.id)}>
-              <span className={styles.ciIc} style={{ color: K.color }}><i className={`fa-solid ${e.data?.icon ?? 'fa-bolt'}`} /></span>
+              <span className={styles.ciIc} style={{ color: K.color }}><Icon name={e.data?.icon ?? 'fa-bolt'} /></span>
               <span className={styles.ciTx}>
                 <span className={styles.ciNm}>{e.data?.name ?? 'Untitled'}</span>
                 <span className={styles.ciTy}>{parts.length ? parts.join(' · ') : 'prose only'}</span>
@@ -1427,7 +1580,7 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
                       return (
                         <button key={it.id} className={cx(styles.catRow, it.id === activeId && !creating && styles.sel)}
                           style={{ ['--rar' as string]: col }} onClick={() => { setCreating(false); setSelId(it.id) }}>
-                          <span className={styles.crIc}><i className={`fa-solid ${it.data?.icon ?? 'fa-box'}`} /></span>
+                          <span className={styles.crIc}><Icon name={it.data?.icon ?? 'fa-box'} /></span>
                           <span className={styles.crTx}>
                             <span className={styles.crT}>{it.data?.name ?? 'Untitled'}</span>
                             <span className={styles.crS}>{CAT_DEF[cat].label} · {it.data?.w ?? 1}×{it.data?.h ?? 1}</span>
@@ -1592,7 +1745,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
       {/* live preview tile */}
       <div className={styles.catPrev} style={{ ['--rar' as string]: rd.token }}>
         <span className={styles.pvCell}>
-          <i className={`fa-solid ${icon}`} />
+          <Icon name={icon} />
           <span className={styles.pvCorner}><i className={`fa-solid ${def.corner}`} /></span>
         </span>
         <span className={styles.pvTx}>
@@ -1649,13 +1802,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
       </div>
 
       <span className={styles.fieldLab}>Icon</span>
-      <div className={styles.catIcons}>
-        {ITEM_ICONS.map(ic => (
-          <button key={ic} className={cx(styles.catIc, ic === icon && styles.sel)} onClick={() => setIcon(ic)} title={ic} aria-label={ic}>
-            <i className={`fa-solid ${ic}`} />
-          </button>
-        ))}
-      </div>
+      <IconPicker value={icon} onPick={setIcon} />
 
       {category === 'weapon' && (
         <div className={styles.catGrid3}>
@@ -1828,7 +1975,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
                 return (
                   <div key={i} className={styles.efRefRow} style={{ ['--k' as string]: K.color }}>
                     <div className={styles.efRefTop}>
-                      <span className={styles.ic}><i className={`fa-solid ${eff.data.icon}`} /></span>
+                      <span className={styles.ic}><Icon name={eff.data.icon} /></span>
                       <span className={styles.nm}>{eff.data.name}</span>
                       <span className={styles.efBadge} style={{ ['--k' as string]: K.color }}>{K.label}</span>
                       <span className={styles.x} onClick={() => setEffectRefs(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
@@ -1877,7 +2024,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
                             : { effectId: e.id, dur: 'Permanent while equipped', amount: 1 }])
                           setFxQuery('')
                         }}>
-                          <span className={styles.piIc}><i className={`fa-solid ${e.data.icon}`} /></span>
+                          <span className={styles.piIc}><Icon name={e.data.icon} /></span>
                           <span className={styles.piT}>{e.data.name}</span>
                           <span className={styles.piM}>{parts.length ? parts.join(' · ') : 'prose only'}</span>
                           <span className={styles.piV}>{K.label}</span>
@@ -1901,7 +2048,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
           <div className={styles.featChips}>
             {feats.length ? feats.map((f, i) => (
               <span key={i} className={styles.qTag}>
-                <i className={`fa-solid ${f.icon ?? 'fa-star'}`} /> {f.name}
+                <Icon name={f.icon ?? 'fa-star'} /> {f.name}
                 <span className={styles.qTx2} onClick={() => setFeats(list => list.filter((_, j) => j !== i))}><i className="fa-solid fa-xmark" /></span>
               </span>
             )) : <div className={styles.catFxNone}>No features — attach perks authored in the Features tab (e.g. a cloak's stealth boon).</div>}
@@ -1967,10 +2114,14 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
         )}
       </div>
 
+      {/* Clickable, like the Feature/Class/Race audit panels: opens the Rules
+          fold and jumps to the node or variable that is wrong, rather than
+          naming it and leaving you to find it. */}
       {gErrs.map((a, i) => (
-        <div key={i} className={styles.skWarn}>
+        <button key={i} type="button" className={styles.skWarn}
+          onClick={() => { setGfxOpen(true); revealAudit(a.id) }}>
           <i className="fa-solid fa-triangle-exclamation" /> <b>{a.t}</b> — {a.s}
-        </div>
+        </button>
       ))}
 
       <div className={styles.qActions}>
@@ -2078,7 +2229,7 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
               <div className={styles.catListEmpty}>Nothing matches “{query.trim()}”.</div>
             ) : shown.map(f => (
               <button key={f.id} className={cx(styles.catItem, f.id === selId && styles.sel)} onClick={() => setSelId(f.id)}>
-                <span className={styles.ciIc} style={{ color: 'var(--amber)' }}><i className={`fa-solid ${f.data?.icon ?? 'fa-star'}`} /></span>
+                <span className={styles.ciIc} style={{ color: 'var(--amber)' }}><Icon name={f.data?.icon ?? 'fa-star'} /></span>
                 <span className={styles.ciTx}>
                   <span className={styles.ciNm}>{f.data?.name ?? 'Untitled'}</span>
                   <span className={styles.ciTy}>{f.data?.source ?? FEAT_CATS.find(c => c.key === f.data?.category)?.label ?? 'Feature'}</span>
@@ -2096,7 +2247,7 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
           <div className={cx(styles.fxActive, styles.fgList)}>
             {current.length ? current.map(f => (
               <div key={f.id} className={cx(styles.fxLine, styles[featTint(f.kind)])}>
-                <span className={styles.nm}><i className={`fa-solid ${f.icon ?? 'fa-star'}`} /> {f.name}</span>
+                <span className={styles.nm}><Icon name={f.icon ?? 'fa-star'} /> {f.name}</span>
                 {f.usage && <span className={styles.du}>{f.usage}</span>}
                 <span className={styles.x} onClick={() => void remove(f.id)} title="Remove feature"><i className="fa-solid fa-xmark" /></span>
               </div>
@@ -2128,7 +2279,7 @@ function Folder({ label, icon, children }: { label: string; icon: string; childr
     <div className={cx(styles.folder, open && styles.folderOpen)}>
       <button type="button" className={styles.folderHead} onClick={() => setOpen(o => !o)} aria-expanded={open}>
         <span className={styles.fdCar}><i className="fa-solid fa-caret-right" /></span>
-        <i className={cx('fa-solid', icon, styles.fdIc)} />
+        <Icon name={icon} className={styles.fdIc} />
         <span className={styles.fdT}>{label}</span>
         <span className={styles.fdHint}>{open ? 'collapse' : 'expand'}</span>
       </button>
@@ -2302,13 +2453,6 @@ const EF_DMG_TYPES = [
 const EF_DURATIONS: EffectDuration[] = ['Rounds', 'Minutes', 'Hours', 'Until rest', 'Permanent while equipped']
 const EF_TICKING: EffectDuration[] = ['Rounds']
 const EF_COUNTED: EffectDuration[] = ['Rounds', 'Minutes', 'Hours']
-const EFFECT_ICONS = [
-  'fa-bolt', 'fa-arrow-up-right-dots', 'fa-arrow-down-short-wide', 'fa-triangle-exclamation',
-  'fa-skull', 'fa-ghost', 'fa-fire', 'fa-snowflake', 'fa-droplet', 'fa-hand-fist',
-  'fa-shield-halved', 'fa-hands-praying', 'fa-wind', 'fa-heart-pulse', 'fa-eye',
-  'fa-moon', 'fa-gem', 'fa-flask', 'fa-ring', 'fa-khanda', 'fa-location-arrow', 'fa-star',
-]
-
 const clipTx = (s: string, n: number) => {
   const t = (s ?? '').trim()
   return t.length > n ? `${t.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : t
@@ -2380,7 +2524,7 @@ function EffectLibrarySurface({ lib }: { lib: DmEffectsState }) {
                   return (
                     <button key={e.id} className={cx(styles.catRow, e.id === activeId && !creating && styles.sel)}
                       style={{ ['--rar' as string]: K.color }} onClick={() => { setCreating(false); setSelId(e.id) }}>
-                      <span className={styles.crIc}><i className={`fa-solid ${e.data?.icon ?? 'fa-bolt'}`} /></span>
+                      <span className={styles.crIc}><Icon name={e.data?.icon ?? 'fa-bolt'} /></span>
                       <span className={styles.crTx}>
                         <span className={styles.crT}>{e.data?.name ?? 'Untitled'}</span>
                         {parts.length ? (
@@ -2538,7 +2682,7 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
       </div>
 
       <div className={styles.efPrev} style={{ ['--k' as string]: K.color }}>
-        <span className={styles.pc}><i className={`fa-solid ${icon}`} /></span>
+        <span className={styles.pc}><Icon name={icon} /></span>
         <span className={styles.pt}>
           <span className={styles.pn}>{name || 'Untitled Effect'}</span>
           <span className={styles.pm}>
@@ -2554,13 +2698,7 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
       <input className={styles.sessIn} value={name} onChange={e => setName(e.target.value)} placeholder="Name the effect…" />
 
       <span className={styles.fieldLab}>Icon</span>
-      <div className={styles.catIcons}>
-        {EFFECT_ICONS.map(ic => (
-          <button key={ic} className={cx(styles.catIc, ic === icon && styles.sel)} onClick={() => setIcon(ic)} title={ic} aria-label={ic}>
-            <i className={`fa-solid ${ic}`} />
-          </button>
-        ))}
-      </div>
+      <IconPicker value={icon} onPick={setIcon} />
 
       <span className={styles.fieldLab}>Kind <span style={{ color: 'var(--beige-dim)' }}>· drives the tint wherever this effect appears</span></span>
       <div className={styles.efKind}>
@@ -2568,7 +2706,7 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
           const KK = EFFECT_KINDS[k]
           return (
             <button key={k} className={cx(styles.k, k === kind && styles.on)} style={{ ['--k' as string]: KK.color }} onClick={() => setKind(k)}>
-              <i className={`fa-solid ${KK.icon}`} /><span className={styles.t}>{KK.label}</span>
+              <Icon name={KK.icon} /><span className={styles.t}>{KK.label}</span>
             </button>
           )
         })}
@@ -2719,12 +2857,6 @@ const SPELL_SCHOOL_ICON: Record<SpellSchool, string> = {
   Illusion: 'fa-ghost', Abjuration: 'fa-shield-halved', Divination: 'fa-eye',
   Necromancy: 'fa-skull', Enchantment: 'fa-wand-magic-sparkles',
 }
-const SPELL_ICONS = [
-  'fa-wand-sparkles', 'fa-fire', 'fa-fire-flame-curved', 'fa-snowflake', 'fa-bolt', 'fa-water',
-  'fa-wind', 'fa-mountain', 'fa-meteor', 'fa-explosion', 'fa-skull', 'fa-ghost', 'fa-spider',
-  'fa-eye', 'fa-moon', 'fa-sun', 'fa-star', 'fa-shield-halved', 'fa-hand-sparkles', 'fa-hand-fist',
-  'fa-heart-pulse', 'fa-brain', 'fa-leaf', 'fa-droplet', 'fa-bone', 'fa-gem', 'fa-book-skull',
-]
 /** Default swatch shown in the color inputs when no override is authored yet
  *  — matches the player screen's hardcoded cyan fallback (tokens.css --cyan). */
 const DEFAULT_SPELL_COLOR = '#00a6d6'
@@ -2772,7 +2904,7 @@ function SpellLibrarySurface({ lib }: { lib: DmSpellsState }) {
                   <button key={s.id} className={cx(styles.catRow, s.id === activeId && !creating && styles.sel)}
                     style={{ ['--rar' as string]: 'var(--cyan)' }} onClick={() => { setCreating(false); setSelId(s.id) }}>
                     <span className={styles.crIc}>
-                      <i className={`fa-solid ${s.data?.icon || SPELL_SCHOOL_ICON[s.data?.school ?? 'Evocation']}`} style={s.data?.iconColor ? { color: s.data.iconColor } : undefined} />
+                      <Icon name={s.data?.icon || SPELL_SCHOOL_ICON[s.data?.school ?? 'Evocation']} style={s.data?.iconColor ? { color: s.data.iconColor } : undefined} />
                     </span>
                     <span className={styles.crTx}>
                       <span className={styles.crT}>{s.data?.name ?? 'Untitled'}</span>
@@ -2908,6 +3040,8 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       </div>
 
       <span className={styles.fieldLab}>Icon</span>
+      {/* Auto-by-school stays its own control above the search: it is not an
+          icon you find by typing, it is the choice to not pick one. */}
       <div className={styles.catIcons}>
         <button
           className={cx(styles.catIc, !icon && styles.sel)} onClick={() => setIcon('')}
@@ -2915,12 +3049,8 @@ function SpellForm({ spell, onSubmit, onDelete }: {
         >
           <i className={`fa-solid ${SPELL_SCHOOL_ICON[school]}`} style={{ opacity: 0.5 }} />
         </button>
-        {SPELL_ICONS.map(ic => (
-          <button key={ic} className={cx(styles.catIc, ic === icon && styles.sel)} onClick={() => setIcon(ic)} title={ic} aria-label={ic}>
-            <i className={`fa-solid ${ic}`} />
-          </button>
-        ))}
       </div>
+      <IconPicker value={icon} onPick={setIcon} />
       <div className={styles.catGrid2}>
         <div>
           <span className={styles.fieldLab}>Icon Color</span>
@@ -3094,10 +3224,14 @@ function SpellForm({ spell, onSubmit, onDelete }: {
 
       {/* An error means the node would not resolve. Same gate the feature editor
           puts on Publish (§17) — an audit that does not block is a suggestion. */}
+      {/* Clickable, like the Feature/Class/Race audit panels: opens the Rules
+          fold and jumps to the node or variable that is wrong, rather than
+          naming it and leaving you to find it. */}
       {gErrs.map((a, i) => (
-        <div key={i} className={styles.skWarn}>
+        <button key={i} type="button" className={styles.skWarn}
+          onClick={() => { setGfxOpen(true); revealAudit(a.id) }}>
           <i className="fa-solid fa-triangle-exclamation" /> <b>{a.t}</b> — {a.s}
-        </div>
+        </button>
       ))}
 
       <div className={styles.qActions}>
@@ -3195,7 +3329,7 @@ function GrantSpellCard({ member, row, spellLib, onUpdate, onVoice, log }: {
             ) : shown.map(sp => (
               <button key={sp.id} className={cx(styles.catItem, sp.id === selId && styles.sel)} onClick={() => setSelId(sp.id)}>
                 <span className={styles.ciIc} style={{ color: sp.data?.iconColor || 'var(--cyan)' }}>
-                  <i className={`fa-solid ${sp.data?.icon || SPELL_SCHOOL_ICON[sp.data?.school ?? 'Evocation']}`} />
+                  <Icon name={sp.data?.icon || SPELL_SCHOOL_ICON[sp.data?.school ?? 'Evocation']} />
                 </span>
                 <span className={styles.ciTx}>
                   <span className={styles.ciNm}>{sp.data?.name ?? 'Untitled'}</span>
@@ -3219,7 +3353,7 @@ function GrantSpellCard({ member, row, spellLib, onUpdate, onVoice, log }: {
             {current.length ? current.map(sp => (
               <div key={sp.id} className={cx(styles.fxLine, styles.buff)}>
                 <span className={styles.nm}>
-                  <i className={`fa-solid ${sp.icon || SPELL_SCHOOL_ICON[sp.school]}`} style={sp.iconColor ? { color: sp.iconColor } : undefined} /> {sp.name}
+                  <Icon name={sp.icon || SPELL_SCHOOL_ICON[sp.school]} style={sp.iconColor ? { color: sp.iconColor } : undefined} /> {sp.name}
                 </span>
                 <span className={styles.du}>{spellLevelLabel(sp.level)}</span>
                 <span className={styles.x} onClick={() => void remove(sp.id)} title="Remove spell"><i className="fa-solid fa-xmark" /></span>
@@ -3399,12 +3533,6 @@ function CasterProfileCard({ member, row, onUpdate, log }: {
 //    lib/classes.ts casterSlots, pact slots by lib/spells.ts. See classes.ts.
 // ============================================================
 
-const CLASS_ICONS = [
-  'fa-shield-halved', 'fa-hand-fist', 'fa-hat-wizard', 'fa-khanda', 'fa-cross',
-  'fa-mask', 'fa-feather', 'fa-drum', 'fa-leaf', 'fa-bullseye', 'fa-skull',
-  'fa-book-bible', 'fa-chess-rook', 'fa-dragon', 'fa-wand-sparkles', 'fa-eye',
-]
-
 const HIT_DICE: ClassDef['hitDie'][] = [6, 8, 10, 12]
 
 const CASTER_ORDER: ClassCasterType[] = ['none', 'full', 'half', 'third', 'pact']
@@ -3476,7 +3604,7 @@ function ClassLibrarySurface({ lib, featureLib, itemCatalog, members }: {
                   return (
                     <button key={c.id} className={cx(styles.catRow, c.id === activeId && !creating && styles.sel, isPath && styles.subRow)}
                       style={{ ['--rar' as string]: col }} onClick={() => { setCreating(false); setSelId(c.id) }}>
-                      <span className={styles.crIc}><i className={`fa-solid ${d.icon || 'fa-shield-halved'}`} /></span>
+                      <span className={styles.crIc}><Icon name={d.icon || 'fa-shield-halved'} /></span>
                       <span className={styles.crTx}>
                         <span className={styles.crT}>{d.name || 'Untitled'}</span>
                         <span className={styles.crS}>
@@ -3736,7 +3864,7 @@ function ClassFeaturePicker({ refs, featureLib, onChange }: {
                 <button key={f.id} className={styles.catItem}
                   onClick={() => { onChange([...refs, { feature_id: f.id, when: 'level >= 1' }]); setQuery('') }}>
                   <span className={styles.ciIc} style={{ color: d.color || 'var(--amber)' }}>
-                    <i className={`fa-solid ${d.icon ?? 'fa-star'}`} />
+                    <Icon name={d.icon ?? 'fa-star'} />
                   </span>
                   <span className={styles.ciTx}>
                     <span className={styles.ciNm}>{d.name || f.id}</span>
@@ -3779,7 +3907,7 @@ function ClassFeaturePicker({ refs, featureLib, onChange }: {
               return (
                 <div key={ref.feature_id} className={cx(styles.clsRow, !f && styles.bad)}>
                   <span className={styles.crFIc} style={{ color: d?.color || 'var(--amber)' }}>
-                    <i className={`fa-solid ${d?.icon ?? 'fa-star'}`} />
+                    <Icon name={d?.icon ?? 'fa-star'} />
                   </span>
                   <span className={styles.crFNm} title={ref.feature_id}>
                     {d?.name ?? ref.feature_id}
@@ -3988,7 +4116,7 @@ function KitEditor({ raw, itemCatalog, onChange }: {
                           <button key={it.id} type="button" className={styles.catItem}
                             onClick={() => addEntry(ci, oi, { item_id: it.id, qty: 1 })}>
                             <span className={styles.ciIc} style={{ color: rarColor(it.data?.rarity) }}>
-                              <i className={`fa-solid ${it.data?.icon ?? 'fa-box'}`} />
+                              <Icon name={it.data?.icon ?? 'fa-box'} />
                             </span>
                             <span className={styles.ciTx}>
                               <span className={styles.ciNm}>{it.data?.name ?? it.id}</span>
@@ -4115,7 +4243,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
     const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
 
     if (!draft.name?.trim()) {
-      out.unshift({ sev: 'err', id: null, t: 'Unnamed class', s: 'A class needs a name before it can be assigned.' })
+      out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed class', s: 'A class needs a name before it can be assigned.' })
     }
     // A subclass inherits its saves; only a class in its own right declares them.
     if (!draft.parent && (draft.saveProficiencies ?? []).length !== 2) {
@@ -4179,7 +4307,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
       }
     }
     if (!draft.desc?.trim()) {
-      out.push({ sev: 'warn', id: null, t: 'No description', s: 'The player has nothing to read about what this class is.' })
+      out.push({ sev: 'warn', id: 'field:desc', t: 'No description', s: 'The player has nothing to read about what this class is.' })
     }
     if ((draft.skillChooseN ?? 0) > 0 && !(draft.skillChoices ?? []).length) {
       out.push({
@@ -4303,18 +4431,11 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
 
       {/* ---- IDENTITY ---- */}
       <span className={styles.fieldLab}>Name</span>
-      <input className={styles.sessIn} value={draft.name} onChange={e => set({ name: e.target.value })}
+      <input data-audit="field:name" className={styles.sessIn} value={draft.name} onChange={e => set({ name: e.target.value })}
         placeholder="Name the class…" />
 
       <span className={styles.fieldLab}>Icon</span>
-      <div className={styles.catIcons}>
-        {CLASS_ICONS.map(ic => (
-          <button key={ic} className={cx(styles.catIc, ic === draft.icon && styles.sel)}
-            onClick={() => set({ icon: ic })} title={ic} aria-label={ic}>
-            <i className={`fa-solid ${ic}`} />
-          </button>
-        ))}
-      </div>
+      <IconPicker value={draft.icon} onPick={ic => set({ icon: ic })} />
 
       <div className={cx(styles.catGrid3, isSub && styles.hidden)}>
         <div>
@@ -4409,7 +4530,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
           <span className={styles.n}><i className="fa-solid fa-eye" /> player-facing · **bold** *italics*</span>
         </div>
         <div className={styles.efRule}>What this class is, in the player's language</div>
-        <textarea className={styles.catProse} value={draft.desc} onChange={e => set({ desc: e.target.value })}
+        <textarea data-audit="field:desc" className={styles.catProse} value={draft.desc} onChange={e => set({ desc: e.target.value })}
           onKeyDown={markdownShortcuts(desc => set({ desc }))}
           placeholder="e.g. Sworn adjudicators of the Lattice, who read a verdict into every strike…" />
       </div>
@@ -4606,7 +4727,8 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
 
       {/* ---- AUDIT ---- */}
       <div className={styles.clsAudit}>
-        <AuditPanel title="Class Audit" audit={audit} onJump={() => { setVarsOpen(true); setFxOpen(true) }} />
+        <AuditPanel title="Class Audit" audit={audit}
+          onJump={a => { setVarsOpen(true); setFxOpen(true); revealAudit(a.id) }} />
       </div>
 
       {/* ---- ACTIONS ---- */}
@@ -4782,7 +4904,7 @@ function AssignRaceCard({ member, row, raceLib, featureLib, shardCatalog, onUpda
           <button key={r.id} className={cx(styles.catItem, r.id === selId && styles.sel)}
             onClick={() => { setSelId(r.id); setSubId(null) }}>
             <span className={styles.ciIc} style={{ color: r.data.color || 'var(--good)' }}>
-              <i className={`fa-solid ${r.data.icon || 'fa-leaf'}`} />
+              <Icon name={r.data.icon || 'fa-leaf'} />
             </span>
             <span className={styles.ciTx}>
               <span className={styles.ciNm}>{r.data.name}</span>
@@ -4991,7 +5113,7 @@ function AssignClassCard({ member, row, classLib, featureLib, itemCatalog, shard
         ) : shown.map(c => (
           <button key={c.id} className={cx(styles.catItem, c.id === selId && styles.sel)} onClick={() => setSelId(c.id)}>
             <span className={styles.ciIc} style={{ color: c.data.color || 'var(--amber)' }}>
-              <i className={`fa-solid ${c.data.icon || 'fa-shield-halved'}`} />
+              <Icon name={c.data.icon || 'fa-shield-halved'} />
             </span>
             <span className={styles.ciTx}>
               <span className={styles.ciNm}>{c.data.name}</span>
@@ -5139,7 +5261,7 @@ function AssignClassCard({ member, row, classLib, featureLib, itemCatalog, shard
                     disabled={busy || level < (onClass.data.subclassLevel ?? 0)}
                     onClick={() => void takePath(pth)}>
                     <span className={styles.ciIc} style={{ color: pth.data.color || 'var(--amber)' }}>
-                      <i className={`fa-solid ${pth.data.icon || 'fa-code-branch'}`} />
+                      <Icon name={pth.data.icon || 'fa-code-branch'} />
                     </span>
                     <span className={styles.ciTx}>
                       <span className={styles.ciNm}>{pth.data.name}</span>
@@ -5173,12 +5295,6 @@ function AssignClassCard({ member, row, classLib, featureLib, itemCatalog, shard
 // `boost` rules in its own Rules block — they layer through effectiveSheet and
 // come back off when the race changes, which a written score never could.
 // ============================================================
-
-const RACE_ICONS = [
-  'fa-leaf', 'fa-mountain', 'fa-hand-fist', 'fa-feather', 'fa-fire', 'fa-snowflake',
-  'fa-dragon', 'fa-skull', 'fa-eye', 'fa-moon', 'fa-sun', 'fa-user',
-  'fa-shield-halved', 'fa-hat-wizard', 'fa-mask', 'fa-gem',
-]
 
 const BLANK_RACE: RaceDef = {
   name: '', icon: 'fa-leaf', desc: '',
@@ -5222,7 +5338,7 @@ function RaceLibrarySurface({ lib, featureLib, members }: {
     return (
       <button key={r.id} className={cx(styles.catRow, r.id === activeId && !creating && styles.sel, child && styles.subRow)}
         style={{ ['--rar' as string]: col }} onClick={() => { setCreating(false); setSelId(r.id) }}>
-        <span className={styles.crIc}><i className={`fa-solid ${d.icon || 'fa-leaf'}`} /></span>
+        <span className={styles.crIc}><Icon name={d.icon || 'fa-leaf'} /></span>
         <span className={styles.crTx}>
           <span className={styles.crT}>{d.name || 'Untitled'}</span>
           <span className={styles.crS}>
@@ -5309,7 +5425,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
     const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
 
     if (!draft.name?.trim()) {
-      out.unshift({ sev: 'err', id: null, t: 'Unnamed race', s: 'A race needs a name before it can be assigned.' })
+      out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed race', s: 'A race needs a name before it can be assigned.' })
     }
     if ((draft.skillChooseN ?? 0) > (draft.skillChoices ?? []).length) {
       out.push({
@@ -5337,7 +5453,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
       }
     }
     if (!draft.desc?.trim()) {
-      out.push({ sev: 'warn', id: null, t: 'No description', s: 'The player has nothing to read about what this race is.' })
+      out.push({ sev: 'warn', id: 'field:desc', t: 'No description', s: 'The player has nothing to read about what this race is.' })
     }
     if (!(draft.graph ?? []).some(g => g.op === 'boost') && !isSub) {
       out.push({
@@ -5404,18 +5520,11 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
       </div>
 
       <span className={styles.fieldLab}>Name</span>
-      <input className={styles.sessIn} value={draft.name} onChange={e => set({ name: e.target.value })}
+      <input data-audit="field:name" className={styles.sessIn} value={draft.name} onChange={e => set({ name: e.target.value })}
         placeholder="Name the race…" />
 
       <span className={styles.fieldLab}>Icon</span>
-      <div className={styles.catIcons}>
-        {RACE_ICONS.map(ic => (
-          <button key={ic} className={cx(styles.catIc, ic === draft.icon && styles.sel)}
-            onClick={() => set({ icon: ic })} title={ic} aria-label={ic}>
-            <i className={`fa-solid ${ic}`} />
-          </button>
-        ))}
-      </div>
+      <IconPicker value={draft.icon} onPick={ic => set({ icon: ic })} />
 
       <div className={styles.catGrid2}>
         <div>
@@ -5453,7 +5562,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
           <span className={styles.n}><i className="fa-solid fa-eye" /> player-facing · **bold** *italics*</span>
         </div>
         <div className={styles.efRule}>What this race is, in the player's language</div>
-        <textarea className={styles.catProse} value={draft.desc} onChange={e => set({ desc: e.target.value })}
+        <textarea data-audit="field:desc" className={styles.catProse} value={draft.desc} onChange={e => set({ desc: e.target.value })}
           onKeyDown={markdownShortcuts(desc => set({ desc }))}
           placeholder="e.g. Long-lived and watchful, elves measure a human life in seasons…" />
       </div>
@@ -5582,7 +5691,8 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
       </div>
 
       <div className={styles.clsAudit}>
-        <AuditPanel title="Race Audit" audit={audit} onJump={() => { setVarsOpen(true); setFxOpen(true) }} />
+        <AuditPanel title="Race Audit" audit={audit}
+          onJump={a => { setVarsOpen(true); setFxOpen(true); revealAudit(a.id) }} />
       </div>
 
       {confirm === 'revert' && (
@@ -5668,7 +5778,7 @@ function attitudeClass(a?: Relation['attitude'] | null): 'fr' | 'ne' | 'wa' | 'h
 function LoreSecHead({ icon, label, first }: { icon: string; label: string; first?: boolean }) {
   return (
     <div className={cx(styles.loreSecH, first && styles.first)}>
-      <i className={`fa-solid ${icon}`} />
+      <Icon name={icon} />
       <span className={styles.t}>{label}</span>
     </div>
   )
@@ -5728,7 +5838,7 @@ function ShardsTab({ row, member, shardLib, onUpdate, onVoice, log }: {
               const has = owned.includes(t.id)
               return (
                 <button key={t.id} className={cx(styles.catItem, has && styles.sel)} onClick={() => void toggleOwned(t.id)}>
-                  <span className={styles.ciIc}><i className={`fa-solid ${t.icon}`} /></span>
+                  <span className={styles.ciIc}><Icon name={t.icon} /></span>
                   <span className={styles.ciTx}>
                     <span className={styles.ciNm}>{t.name}</span>
                     <span className={styles.ciTy}>{t.module}</span>
@@ -5913,7 +6023,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
   return (
     <>
       <div className={styles.selHead}>
-        <span className={styles.selPortrait}><i className={`fa-solid ${icon}`} /></span>
+        <span className={styles.selPortrait}><Icon name={icon} /></span>
         <div className={styles.selTitles}>
           <div className={styles.selName}>{member.name}</div>
           <div className={styles.selMeta}>
@@ -6002,7 +6112,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
           {portrait && !portraitFailed ? (
             <img src={portrait} alt="" style={{ objectPosition: focus }} onError={() => setPortraitFailed(true)} />
           ) : (
-            <i className={`fa-solid ${icon}`} />
+            <Icon name={icon} />
           )}
         </div>
         <div>
@@ -6504,7 +6614,7 @@ function Btn({ tone, sm, lg, icon, label, onClick, disabled, title }: {
   return (
     <button className={cx(styles.btn, styles[tone], sm && styles.sm, lg && styles.lg)} onClick={onClick} disabled={disabled} title={title}>
       <span className={styles.bf} />
-      <span className={styles.bi}><i className={`fa-solid ${icon}`} /> {label}</span>
+      <span className={styles.bi}><Icon name={icon} /> {label}</span>
     </button>
   )
 }

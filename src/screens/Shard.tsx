@@ -7,6 +7,7 @@ import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardOwned, 
 import { summarizeEffects } from '../lib/effects'
 import { ShardTreeModal } from './ShardTree'
 import styles from './Shard.module.css'
+import { Icon } from '../components/Icon'
 
 interface RouteContext {
   character: CharacterRow
@@ -317,7 +318,7 @@ function ShardPickerModal({ port, options, onCancel, onInstall }: {
                 <span className={styles.of} />
                 <span className={styles.pkTag}>{t.rarity}</span>
                 <span className={styles.oi}>
-                  <span className={styles.glyph}><i className={`fa-solid ${t.icon}`} /></span>
+                  <span className={styles.glyph}><Icon name={t.icon} /></span>
                   <span>
                     <span className={styles.pkName}>{t.name}</span>
                     <span className={styles.pkSub}>{t.module}</span>
@@ -384,7 +385,7 @@ function ShardCard({
 
         <div className={styles.scIconWrap}>
           {variant === 'guide' ? <GuideEmblem /> : variant === 'filled' && t?.id === 'vigor' ? <VigorEmblem /> : variant === 'filled' && t ? (
-            <i className={`fa-solid ${t.icon}`} style={{ fontSize: 30, color: 'var(--cyan-hot)' }} />
+            <Icon name={t.icon} style={{ fontSize: 30, color: 'var(--cyan-hot)' }} />
           ) : <span className={styles.emptyPlus}>+</span>}
         </div>
 

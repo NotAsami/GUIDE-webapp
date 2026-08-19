@@ -19,6 +19,7 @@ import { fmtWeight, itemWeight } from '../lib/burden'
 import { containerContents } from '../lib/equip'
 import { CAT_LABEL, rarityLabel } from '../lib/items'
 import type { Bind } from '../components/ItemTooltip'
+import { Icon } from '../components/Icon'
 
 /** How many contents rows an `inline` container shows before deferring to the
  *  popup. Expansion has to be BOUNDED or the panel below shifts by an
@@ -130,7 +131,7 @@ function ContainerRow({ container, inventory, styles, bind, onUnequip }: {
   return (
     <div className={`${styles.carryRow}${expanded ? ' ' + styles.expanded : ''}`}>
       <div className={styles.crMain}>
-        <span className={styles.crIcon}><i className={`fa-solid ${container.icon ?? 'fa-box'}`} aria-hidden="true" /></span>
+        <span className={styles.crIcon}><Icon name={container.icon ?? 'fa-box'} aria-hidden="true" /></span>
         <span className={styles.crName}>{container.name}</span>
         <span className={styles.crRead}>{readout}</span>
 

@@ -29,6 +29,7 @@ import { formatPrice, priceCp, toCopper, type Coins } from '../lib/coins'
 import { buyItem, type ShopBuyResult } from '../lib/shops'
 import pop from '../screens/InventoryPopup.module.css'
 import styles from './ShopTakeover.module.css'
+import { Icon } from './Icon'
 
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')
 
@@ -143,7 +144,7 @@ export function ShopTakeover({ character, updateSection, shop, dismissed, onDism
 
             {/* ============ STOREFRONT — authored by the DM ============ */}
             <header className={styles.sfHead}>
-              <span className={styles.portrait}><i className={`fa-solid ${data.icon || 'fa-shop'}`} /></span>
+              <span className={styles.portrait}><Icon name={data.icon || 'fa-shop'} /></span>
               <div className={styles.titles}>
                 <span className={styles.eyebrow}><span className={styles.tick} />Merchant Channel Open</span>
                 <h1 className={styles.name}>{data.name}</h1>
@@ -226,7 +227,7 @@ export function ShopTakeover({ character, updateSection, shop, dismissed, onDism
                           <span className={styles.scArt}>
                             <span className={styles.catCorner}><i className={`fa-solid ${CAT_CORNER[cat]}`} /></span>
                             <span className={styles.rarCorner}>{rarityLabel(rar)}</span>
-                            <span className={styles.glyph}><i className={`fa-solid ${line.item.icon ?? 'fa-box'}`} /></span>
+                            <span className={styles.glyph}><Icon name={line.item.icon ?? 'fa-box'} /></span>
                           </span>
                           <span className={styles.scFoot}>
                             <span className={styles.nm}>{line.item.name}</span>
@@ -331,7 +332,7 @@ function ShopItemPopup({ line, shopId, coins, onClose, onBought }: {
           <span className={`${pop.imCorner} ${pop.br}`} />
 
           <header className={pop.imHead}>
-            <span className={pop.imCrystal}><i className={`fa-solid ${it.icon ?? 'fa-cube'}`} /></span>
+            <span className={pop.imCrystal}><Icon name={it.icon ?? 'fa-cube'} /></span>
             <div className={pop.imTitles}>
               <span className={pop.imName}>{it.name}</span>
               <span className={pop.imTags}>
