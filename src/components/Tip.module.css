@@ -1,0 +1,25 @@
+/* The key/value/hint hover strip. Moved verbatim out of
+   RollContextPanel.module.css when the party HUD needed the same popup — the
+   values are unchanged so the roll modifiers look exactly as they did. */
+
+.tip {
+  position: fixed;
+  z-index: 400;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  background: #0b0b0b;
+  border: 1px solid var(--cyan);
+  padding: 7px 10px;
+  max-width: 250px;
+  box-shadow: 0 8px 26px -10px #000;
+}
+.tip.show { opacity: 1; transform: none; }
+.tip .tK { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--cyan); margin-bottom: 4px; }
+.tip .tV { font-family: var(--font-mono); font-size: 10px; line-height: 1.5; color: var(--text); }
+.tip .tHint { margin-top: 5px; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige-dim); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tip { transition: none; }
+}

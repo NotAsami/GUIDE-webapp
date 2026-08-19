@@ -42,10 +42,25 @@
 .left  { left: 20px;  right: calc(50% + 428px); }
 .right { right: 20px; left:  calc(50% + 428px); margin-left: auto; }
 
-/* Below this the flank is under ~300px and the row stops being readable.
-   Small screens get their own surface later; they do not get a squeezed one. */
-@media (max-width: 1500px) {
+/* The flank is (100vw - 836px nav) / 2 - 20px. The first cut hid the HUD below
+   1500px, which took it away from an ordinary laptop — a 1366px window still
+   has 245px to work with, which is a readable row once the NAME is allowed to
+   truncate. So the cutoff is the point where even that stops working.
+
+   Below it nothing is drawn rather than squeezed: small screens are getting
+   their own surface, not a compressed copy of this one. */
+@media (max-width: 1250px) {
   .hud { display: none; }
+}
+
+/* Tighter flank: spend the loss on the name, which ellipsises, and never on the
+   numbers, which cannot be read at all when clipped. */
+@media (max-width: 1550px) {
+  .row { gap: 6px; padding-right: 7px; }
+  .right .row { padding-right: 0; padding-left: 7px; }
+  .nm { font-size: 12px; letter-spacing: 0.03em; }
+  .dia { width: 18px; height: 18px; margin-left: 5px; }
+  .right .dia { margin-left: 0; margin-right: 5px; }
 }
 
 /* ---- the row ------------------------------------------------------------ */
@@ -194,18 +209,32 @@
 
 .chips { flex: 0 0 auto; display: flex; align-items: center; gap: 3px; }
 
+/* 13px with a 7px glyph, matching the mockup's own pip.
+   The first pass used 10px/5px, and the icon read as off-centre inside the
+   circle: the icon BOX measured dead centre (0.00px on both axes), but a
+   FontAwesome glyph does not fill its em box symmetrically, and at 5px that
+   asymmetry plus sub-pixel rounding is a large fraction of the circle. The fix
+   is size, not alignment — `line-height: 1` keeps the glyph's line box from
+   adding its own offset on top. */
 .pip {
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 5px;
+  font-size: 7px;
+  line-height: 1;
   background: rgba(0, 166, 214, 0.16);
   border: 1px solid var(--cyan);
   color: var(--cyan);
   box-shadow: 0 0 5px rgba(0, 166, 214, 0.4);
+  cursor: help;
+}
+.pip i { display: block; line-height: 1; }
+.pip:focus-visible, .ds:focus-visible, .more:focus-visible {
+  outline: 1px solid var(--cyan);
+  outline-offset: 2px;
 }
 .pip.bad {
   background: rgba(185, 58, 58, 0.18);
@@ -218,22 +247,27 @@
   font-family: var(--font-mono);
   font-size: 8px;
   color: var(--muted);
+  cursor: help;
 }
 
 /* ---- death saves --------------------------------------------------------- */
 
-/* Only drawn when the character is actually down — three empty circles on every
-   healthy row would be three pieces of furniture saying nothing. */
-.ds { flex: 0 0 auto; display: flex; align-items: center; gap: 3px; }
+/* Drawn whenever any save is recorded, which is NOT the same as being at 0 HP:
+   the app allows a death save above zero and does not clear them on a heal. A
+   row with none recorded still shows none. */
+/* Stacked: successes on top, failures below — the same order and the same two
+   independent tracks the Stats screen's Death Saves widget draws. */
+.ds { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; cursor: help; }
+.dsRow { display: flex; align-items: center; gap: 2px; }
 .ds b {
-  width: 8px;
-  height: 8px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  border: 1px solid rgba(212, 191, 125, 0.5);
+  border: 1px solid rgba(212, 191, 125, 0.45);
   background: rgba(0, 0, 0, 0.5);
 }
-.ds b.ok { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.6); }
-.ds b.fail { background: var(--danger); border-color: var(--danger); box-shadow: 0 0 6px rgba(185, 58, 58, 0.6); }
+.ds b.ok { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 5px rgba(0, 166, 214, 0.6); }
+.ds b.fail { background: var(--danger); border-color: var(--danger); box-shadow: 0 0 5px rgba(185, 58, 58, 0.6); }
 
 /* ---- AC ------------------------------------------------------------------ */
 

@@ -22,6 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePartyRoster } from '../lib/party'
 import type { PartyRosterRow, PublicVitals } from '../lib/database.types'
+import { useTip } from './Tip'
 import styles from './PartyHud.module.css'
 
 /** Six identity hues, assigned by character id so a player's colour is stable
@@ -61,6 +62,7 @@ const MAX_PIPS = 4
  *  channel and quietly discard its presence key. */
 export function PartyHud({ presence }: { presence: Map<string, PublicVitals | null> }) {
   const { roster } = usePartyRoster()
+  const { bind, layer: tipLayer } = useTip()
 
   // Stable order, so a row never swaps sides when presence changes.
   const members = useMemo(
@@ -98,6 +100,7 @@ export function PartyHud({ presence }: { presence: Map<string, PublicVitals | nu
           vitals={presence.get(m.id) ?? m.public_vitals}
           online={presence.has(m.id)}
           entering={entering.has(m.id)}
+          bind={bind}
         />
       ))}
     </aside>
@@ -107,15 +110,17 @@ export function PartyHud({ presence }: { presence: Map<string, PublicVitals | nu
     <>
       {column(members.slice(0, 3), 'left')}
       {members.length > 3 && column(members.slice(3, 6), 'right')}
+      {tipLayer}
     </>
   )
 }
 
-function Row({ row, vitals, online, entering }: {
+function Row({ row, vitals, online, entering, bind }: {
   row: PartyRosterRow
   vitals: PublicVitals | null
   online: boolean
   entering: boolean
+  bind: (data: () => { k: string; v: string; hint?: string | null }) => Record<string, unknown>
 }) {
   // The roster's raw hp_* columns are the floor: a character whose client has
   // never run under migration 0018 still gets a bar rather than a blank row.
@@ -123,7 +128,14 @@ function Row({ row, vitals, online, entering }: {
   const hpMax = vitals?.hpMax ?? row.hp_max ?? 0
   const pct = hpMax > 0 ? Math.max(0, Math.min(1, hp / hpMax)) : 0
   const crit = hpMax > 0 && pct <= 0.5
-  const down = hp <= 0
+  const dOk = vitals?.deathOk ?? 0
+  const dFail = vitals?.deathFail ?? 0
+  /* SHOWN WHENEVER THERE ARE ANY, not only at 0 HP. The app lets a death save be
+     recorded while the character is above zero, and they are not cleared by a
+     heal — so gating on `hp <= 0` hid a real failed save on a healthy row, which
+     is the one number on this widget you would most want not to miss. A row with
+     nothing recorded still shows nothing. */
+  const showSaves = hp <= 0 || dOk + dFail > 0
 
   const effects = vitals?.effects ?? []
   const shown = effects.slice(0, MAX_PIPS)
@@ -156,26 +168,54 @@ function Row({ row, vitals, online, entering }: {
             <span
               key={`${e.name}-${i}`}
               className={`${styles.pip} ${e.kind === 'buff' ? '' : styles.bad}`}
-              title={e.name}
+              tabIndex={0}
               aria-label={e.name}
+              {...bind(() => ({
+                k: e.kind === 'buff' ? 'Buff' : e.kind === 'debuff' ? 'Debuff' : 'Condition',
+                v: e.name,
+                hint: `on ${row.name}`,
+              }))}
             >
               <i className={`fa-solid ${e.icon ?? (e.kind === 'buff' ? 'fa-arrow-up' : 'fa-triangle-exclamation')}`} />
             </span>
           ))}
-          {hidden > 0 && <span className={styles.more} title={effects.slice(MAX_PIPS).map(e => e.name).join(', ')}>+{hidden}</span>}
+          {hidden > 0 && (
+            <span
+              className={styles.more}
+              tabIndex={0}
+              {...bind(() => ({
+                k: `${hidden} more`,
+                v: effects.slice(MAX_PIPS).map(e => e.name).join(', '),
+                hint: `on ${row.name}`,
+              }))}
+            >+{hidden}</span>
+          )}
         </span>
       )}
 
-      {/* Death saves appear only while they are actually down — three empty
-          circles on a healthy row would be furniture reporting nothing. */}
-      {down && (
-        <span className={styles.ds} title={`Death saves — ${vitals?.deathOk ?? 0} succeeded, ${vitals?.deathFail ?? 0} failed`}>
-          {[0, 1, 2].map(i => (
-            <b key={i} className={
-              i < (vitals?.deathFail ?? 0) ? styles.fail
-                : i < (vitals?.deathFail ?? 0) + (vitals?.deathOk ?? 0) ? styles.ok : ''
-            } />
-          ))}
+      {/* TWO ROWS OF THREE, mirroring the Stats screen's own Death Saves widget
+          (Stats.tsx). Successes and failures are INDEPENDENT counts there — a
+          character can sit on 2 successes and 1 failure — so a single row of
+          three cannot represent the state: filling fails first silently hides
+          every success, and 3/3 renders identically to 3/0. */}
+      {showSaves && (
+        <span
+          className={styles.ds}
+          tabIndex={0}
+          aria-label={`Death saves: ${dOk} of 3 successes, ${dFail} of 3 failures`}
+          {...bind(() => ({
+            k: 'Death saves',
+            v: `${dOk} success${dOk === 1 ? '' : 'es'} · ${dFail} failure${dFail === 1 ? '' : 's'}`,
+            // The sheet's own words for the terminal states, not new ones.
+            hint: dFail >= 3 ? 'Dead' : dOk >= 3 ? 'Stabilized' : null,
+          }))}
+        >
+          <span className={styles.dsRow}>
+            {[0, 1, 2].map(i => <b key={i} className={i < dOk ? styles.ok : ''} />)}
+          </span>
+          <span className={styles.dsRow}>
+            {[0, 1, 2].map(i => <b key={i} className={i < dFail ? styles.fail : ''} />)}
+          </span>
         </span>
       )}
 
