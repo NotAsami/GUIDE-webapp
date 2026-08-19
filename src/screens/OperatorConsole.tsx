@@ -1098,15 +1098,15 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
       const where = `Row ${i + 1}`
       if (r.kind === 'item' && !byId.has(r.item_id)) {
         out.push({
-          sev: 'err', id: null, t: `${where} points at a missing item`,
+          sev: 'err', id: `row:${i}`, t: `${where} points at a missing item`,
           s: 'That item is no longer in the catalog. The roll reports it rather than quietly yielding less — fix or remove the row.',
         })
       }
       if (r.chance <= 0 || r.chance > 100) {
-        out.push({ sev: 'err', id: null, t: `${where} has an impossible chance`, s: `${r.chance}% — a chance must be between 1 and 100.` })
+        out.push({ sev: 'err', id: `row:${i}`, t: `${where} has an impossible chance`, s: `${r.chance}% — a chance must be between 1 and 100.` })
       }
       if (r.max < r.min) {
-        out.push({ sev: 'err', id: null, t: `${where} has an inverted range`, s: `Max (${r.max}) is below min (${r.min}).` })
+        out.push({ sev: 'err', id: `row:${i}`, t: `${where} has an inverted range`, s: `Max (${r.max}) is below min (${r.min}).` })
       }
     })
     if (!rows.length) {
@@ -1215,7 +1215,7 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
         const item = r.kind === 'item' ? byId.get(r.item_id) : null
         const gone = r.kind === 'item' && !item
         return (
-          <div key={i} className={cx(styles.lootRow, gone && styles.bad)}>
+          <div key={i} data-audit={`row:${i}`} className={cx(styles.lootRow, gone && styles.bad)}>
             <select className={styles.selIn} value={r.kind} aria-label="Row kind"
               onChange={e => {
                 const kind = e.target.value as LootRow['kind']
@@ -4839,12 +4839,12 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
     // A subclass inherits its saves; only a class in its own right declares them.
     if (!draft.parent && (draft.saveProficiencies ?? []).length !== 2) {
       out.push({
-        sev: 'err', id: null, t: 'Saving throws must be exactly two',
+        sev: 'err', id: 'field:saves', t: 'Saving throws must be exactly two',
         s: `Currently ${(draft.saveProficiencies ?? []).length}. Every 5e class grants two save proficiencies.`,
       })
     }
     if (draft.parent && !lib.classes.some(c => c.id === draft.parent)) {
-      out.push({ sev: 'err', id: null, t: 'Parent class is gone', s: 'This path points at a class that no longer exists.' })
+      out.push({ sev: 'err', id: 'field:parent', t: 'Parent class is gone', s: 'This path points at a class that no longer exists.' })
     }
     if (draft.parent) {
       const p = lib.classes.find(c => c.id === draft.parent)
@@ -4866,18 +4866,18 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
         })
       }
       if (!draft.subclassLabel?.trim()) {
-        out.push({ sev: 'warn', id: null, t: 'Path prompt unnamed', s: 'The player is asked to choose with nothing naming the question.' })
+        out.push({ sev: 'warn', id: 'field:pathPrompt', t: 'Path prompt unnamed', s: 'The player is asked to choose with nothing naming the question.' })
       }
     }
     if (draft.caster !== 'none' && !draft.castingAbility) {
       out.push({
-        sev: 'err', id: null, t: 'No casting ability',
+        sev: 'err', id: 'field:castingAbility', t: 'No casting ability',
         s: 'A caster needs the ability that backs its save DC and spell attack bonus.',
       })
     }
     if ((draft.skillChooseN ?? 0) > (draft.skillChoices ?? []).length) {
       out.push({
-        sev: 'err', id: null, t: 'More skill picks than choices',
+        sev: 'err', id: 'field:skillChooseN', t: 'More skill picks than choices',
         s: `Choose ${draft.skillChooseN} from a list of ${(draft.skillChoices ?? []).length}. Widen the list or lower the count.`,
       })
     }
@@ -5055,7 +5055,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
           <span className={styles.fieldLab}>
             Belongs to <span className={styles.dimLab}>— makes this a subclass</span>
           </span>
-          <select className={styles.selIn} value={draft.parent ?? ''}
+          <select data-audit="field:parent" className={styles.selIn} value={draft.parent ?? ''}
             onChange={e => set({ parent: e.target.value || undefined })}>
             <option value="">— a class in its own right —</option>
             {parentOptions.map(c => <option key={c.id} value={c.id}>{classContent(c).name || c.id}</option>)}
@@ -5079,7 +5079,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
           <span className={styles.fieldLab}>
             Path prompt <span className={styles.dimLab}>— what this decision is called in your world</span>
           </span>
-          <input className={styles.sessIn} value={draft.subclassLabel ?? ''} {...NO_AUTOFILL}
+          <input data-audit="field:pathPrompt" className={styles.sessIn} value={draft.subclassLabel ?? ''} {...NO_AUTOFILL}
             onChange={e => set({ subclassLabel: e.target.value || undefined })}
             aria-label="What choosing a subclass is called"
             placeholder="e.g. Arbiter Path, Martial Archetype" />
@@ -5142,7 +5142,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
       <span className={styles.fieldLab}>
         Saving throws <span className={styles.dimLab}>— pick two; a third replaces the oldest</span>
       </span>
-      <div className={styles.profGrid}>
+      <div data-audit="field:saves" className={styles.profGrid}>
         {ABILITY_ORDER.map(k => {
           const on = saves.includes(k)
           return (
@@ -5175,7 +5175,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
       <div className={styles.clsChoose}>
         <span className={styles.fieldLab} style={{ margin: 0 }}>Choose</span>
         <input className={cx(styles.sessIn, styles.num)} type="number" min={0} max={skillChoices.length || 18}
-          value={draft.skillChooseN}
+          data-audit="field:skillChooseN" value={draft.skillChooseN}
           onChange={e => set({ skillChooseN: Math.max(0, parseInt(e.target.value || '0', 10) || 0) })} />
         <span className={styles.clsChooseS}>
           of {skillChoices.length} eligible. Assigning the class never ticks them — the pick is the player's.
@@ -5232,7 +5232,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
         {draft.caster !== 'none' && (
           <div>
             <span className={styles.fieldLab}>Casting ability</span>
-            <select className={styles.selIn} value={draft.castingAbility ?? ''}
+            <select data-audit="field:castingAbility" className={styles.selIn} value={draft.castingAbility ?? ''}
               onChange={e => set({ castingAbility: (e.target.value || undefined) as AbilityKey | undefined })}>
               <option value="">— pick one —</option>
               {CASTER_ABILITIES.map(a => <option key={a} value={a}>{ABILITY_ABBR[a].toUpperCase()}</option>)}
@@ -6020,12 +6020,12 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
     }
     if ((draft.skillChooseN ?? 0) > (draft.skillChoices ?? []).length) {
       out.push({
-        sev: 'err', id: null, t: 'More skill picks than choices',
+        sev: 'err', id: 'field:skillChooseN', t: 'More skill picks than choices',
         s: `Choose ${draft.skillChooseN} from a list of ${(draft.skillChoices ?? []).length}. Widen the list or lower the count.`,
       })
     }
     if (draft.parent && !lib.races.some(r => r.id === draft.parent)) {
-      out.push({ sev: 'err', id: null, t: 'Parent race is gone', s: 'This subrace points at a race that no longer exists.' })
+      out.push({ sev: 'err', id: 'field:parent', t: 'Parent race is gone', s: 'This subrace points at a race that no longer exists.' })
     }
     if (ready) {
       for (const r of draft.features ?? []) {
@@ -6053,7 +6053,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
       })
     }
     if (!(draft.languages ?? []).length && (draft.languageChooseN ?? 0) === 0 && !isSub) {
-      out.push({ sev: 'warn', id: null, t: 'No languages', s: 'A race usually speaks at least Common.' })
+      out.push({ sev: 'warn', id: 'field:languages', t: 'No languages', s: 'A race usually speaks at least Common.' })
     }
     if (!out.length) out.push({ sev: 'ok', id: null, t: 'Clean', s: 'No errors, no warnings. Safe to publish.' })
     return out
@@ -6122,7 +6122,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
           <span className={styles.fieldLab}>
             Belongs to <span className={styles.dimLab}>— makes this a subrace</span>
           </span>
-          <select className={styles.selIn} value={draft.parent ?? ''}
+          <select data-audit="field:parent" className={styles.selIn} value={draft.parent ?? ''}
             onChange={e => set({ parent: e.target.value || undefined })}>
             <option value="">— a race in its own right —</option>
             {parentOptions.map(r => <option key={r.id} value={r.id}>{raceContent(r).name || r.id}</option>)}
@@ -6195,7 +6195,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
           <div className={styles.clsChoose}>
             <span className={styles.fieldLab} style={{ margin: 0 }}>Choose</span>
             <input className={cx(styles.sessIn, styles.num)} type="number" min={0} max={skillChoices.length || 18}
-              value={draft.skillChooseN}
+              data-audit="field:skillChooseN" value={draft.skillChooseN}
               onChange={e => set({ skillChooseN: Math.max(0, parseInt(e.target.value || '0', 10) || 0) })} />
             <span className={styles.clsChooseS}>
               of {skillChoices.length} eligible. Most races offer none — leave it at 0 unless this one does.
@@ -6203,11 +6203,13 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
           </div>
         </div>
 
-        <TrainingRow
-          label="Languages" values={draft.languages ?? []}
-          placeholder="Common, Elvish…"
-          onChange={languages => set({ languages })}
-        />
+        <div data-audit="field:languages">
+          <TrainingRow
+            label="Languages" values={draft.languages ?? []}
+            placeholder="Common, Elvish…"
+            onChange={languages => set({ languages })}
+          />
+        </div>
         <div className={styles.clsChoose}>
           <span className={styles.fieldLab} style={{ margin: 0 }}>Plus</span>
           <input className={cx(styles.sessIn, styles.num)} type="number" min={0} value={draft.languageChooseN}

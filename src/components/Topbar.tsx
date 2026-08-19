@@ -1,10 +1,14 @@
+import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { useDmStatus } from '../lib/dm'
 import type { CharacterRow, CharacterSection, ShardTree } from '../lib/database.types'
 import { burden } from '../lib/burden'
 import { effectiveSheet } from '../lib/effects'
 import { useFullscreen } from '../lib/fullscreen'
 import { RestButton } from './RestButton'
 import styles from './Layout.module.css'
+
+const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ')
 
 interface Props {
   character: CharacterRow
@@ -17,6 +21,7 @@ interface Props {
  *  the Rest button beside it resets daily resources. */
 export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
   const { signOut } = useAuth()
+  const { isDm } = useDmStatus()
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
 
   const level = character.identity?.level ?? 1
@@ -93,6 +98,15 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
         >
           <i className={`fa-solid ${isFullscreen ? 'fa-compress' : 'fa-expand'}`} aria-hidden="true" />
         </button>
+        {/* Only the DM sees this, and only because they already can: the console
+            self-gates on dm_users and every catalog it reads is DM-only by RLS.
+            Hiding it from players is tidiness, not security — a player who typed
+            /dm has always been bounced straight back. */}
+        {isDm && (
+          <Link to="/dm" className={cx(styles.signOut, styles.dmLink)} title="Operator Console">
+            <i className="fa-solid fa-terminal" aria-hidden="true" /> DM
+          </Link>
+        )}
         <button type="button" className={styles.signOut} onClick={() => signOut()}>Sign out</button>
       </div>
     </header>
