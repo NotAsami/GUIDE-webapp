@@ -9,24 +9,38 @@ import { RollToast } from './RollToast'
 import { SystemToasts } from './SystemToasts'
 import { ShopTakeover } from './ShopTakeover'
 import { RollContextPanel } from './RollContextPanel'
-import { usePresenceAnnounce } from '../lib/presence'
+import { PartyHud } from './PartyHud'
+import { usePartyPresence } from '../lib/presence'
 import { consumeArmed } from '../lib/graphState'
+import { publicVitals, vitalsEqual } from '../lib/vitals'
 import { advanceTurn } from '../lib/turns'
 import { useRollLog } from '../lib/rolls'
 import type { ActiveEffect } from '../lib/database.types'
 import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
-  const { character, loading, error, updateSection, updateSections } = useCharacter()
   const { catalog: shardTrees } = useShardCatalog()
+  const { character, loading, error, updateSection, updateSections } = useCharacter(shardTrees)
   const nav = useNavigate()
 
-  // Announce this character on the party-presence channel while the app is
-  // open — lights the Link LED on the DM's Operator Console.
-  usePresenceAnnounce(character?.id)
+  /* Announce this character on the party-presence channel while the app is
+     open — lights the Link LED on the DM's Operator Console, and carries the
+     public vitals to every other player's HUD.
+
+     THE SAME OBJECT that gets written to `characters.public_vitals` on the next
+     save (lib/character.ts). Computing it here rather than reading the column
+     back means the broadcast is never a save behind. Held stable through
+     vitalsEqual so a journal entry or an item move does not re-track. */
+  const myVitals = useMemo(
+    () => (character ? publicVitals(character, shardTrees) : null),
+    [character, shardTrees],
+  )
+  const vitalsRef = useRef(myVitals)
+  if (myVitals && !vitalsEqual(vitalsRef.current, myVitals)) vitalsRef.current = myVitals
+  const presence = usePartyPresence(character?.id, vitalsRef.current)
 
   // Shop open/dismiss state lives HERE, not inside ShopTakeover, so the
   // Bottombar's "Reopen Shop" button can see it too. "Leave Shop" is a local
@@ -194,6 +208,9 @@ export function Layout() {
           shopOpen={!!shop} shopDismissed={shopDismissed} onReopenShop={() => setShopDismissed(false)}
           rollPanelOpen={rollPanelOpen} onToggleRollPanel={() => setRollPanelOpen(v => !v)}
         />
+        {/* Fixed-position, in the flanks beside the nav — inside the shell so it
+            sits under the shop takeover and the roll panel, not over them. */}
+        <PartyHud presence={presence} />
       </div>
 
       <RollToast onOpen={() => setRollPanelOpen(true)} />

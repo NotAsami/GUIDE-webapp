@@ -5,7 +5,7 @@
  * lattice editor's effect widgets can never drift into two different stat
  * lists or two different "bonus vs. set" rules.
  */
-import type { AbilityKey, EffectDef, ItemEffects, Mod } from './database.types'
+import type { AbilityKey, EffectDef, GraphEffect, ItemEffects, Mod } from './database.types'
 import { SKILLS } from './dnd.ts'
 
 export type { Mod }
@@ -60,6 +60,37 @@ export function compileEffects(mods: Mod[], skills?: Pick<EffectDef, 'skillProfi
     else if (SKILL_KEY[m.stat]) (eff.skills ??= {})[SKILL_KEY[m.stat]] = n
   }
   return Object.keys(eff).length ? eff : undefined
+}
+
+/** Every stat a modifier row (or a `boost` op) may name. One set, so the audit
+ *  and the compiler cannot disagree about what is spellable. */
+export const MOD_STAT_SET: ReadonlySet<string> = new Set<string>([...MOD_STATS, ...SKILL_STATS])
+
+/**
+ * The sheet layer a node's graph declares — its `boost` ops, compiled.
+ *
+ * Compiled ON READ rather than cached on save. A cache would be a second copy
+ * of something the graph already says, and this project has deleted enough of
+ * those; the graph travels with the node (it is snapshotted onto the character
+ * like everything else), so there is nothing to look up and nothing to drift.
+ *
+ * `when` is deliberately NOT honoured: effectiveSheet is a pure function of the
+ * sheet with no expression scope, and a condition that silently never fires is
+ * worse than one the audit refuses. auditNode says so at author time.
+ *
+ * ponytail: walks the graph on every effectiveSheet call. Graphs are a handful
+ * of rows; memoize on the character row if a profile ever says otherwise.
+ */
+export function sheetEffects(graph?: GraphEffect[]): ItemEffects | undefined {
+  if (!graph?.length) return undefined
+  const mods: Mod[] = []
+  for (const g of graph) {
+    if (g.op !== 'boost' || !g.stat) continue
+    const amt = Number(g.value)
+    if (!Number.isFinite(amt)) continue
+    mods.push({ stat: g.stat, amt })
+  }
+  return mods.length ? compileEffects(mods) : undefined
 }
 
 /** Reverse of compileEffects, to seed the editor from an existing effects

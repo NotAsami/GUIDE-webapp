@@ -26,6 +26,7 @@ export const OP_GLYPH: Record<GraphOp, string> = {
   dis: '⊟',       // lowers
   crit: '⚔',
   note: '⊙',      // says something without changing a number
+  boost: '◈',     // moves a number on the sheet, not on a roll
   resist: '⊟',
   vuln: '⤒',
   immune: '⊘',    // cancels outright

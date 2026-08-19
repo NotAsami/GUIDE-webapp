@@ -2,7 +2,7 @@
 // (Node's built-in test runner + type stripping — no framework, no new dep.)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { CharacterRow, EquippedItem, ShardTree } from './database.types.ts'
+import type { CharacterRow, EquippedItem, ShardTree, Feature } from './database.types.ts'
 import { activeSources, carryMultiplier, effectiveSheet, gearFeatures } from './effects.ts'
 
 function character(over: Partial<CharacterRow>): CharacterRow {
@@ -56,6 +56,68 @@ test('effectiveSheet layers worn gear, applied effects and slotted shards togeth
   assert.equal(view.saveBonuses!.str, 1) // cloak's `saves: 1` applies to every ability
   assert.equal(view.saveBonuses!.cha, 1)
 })
+
+/* A FEATURE CAN GRANT A FLAT NUMBER.
+   Races and classes reach the sheet as a carrier feature (lib/classes.ts
+   assignClass), so a racial +2 DEX / 60ft darkvision has nowhere else to live.
+   Features used to be pushed into activeSources with no `fx` at all, which made
+   every number a feature granted silently inert. */
+
+const elf: Feature = {
+  id: 'race:elf', name: 'Elf', category: 'racial',
+  graph: [
+    { id: 'b1', op: 'boost', label: 'Elven Grace', stat: 'DEX', value: '2' },
+    { id: 'b2', op: 'boost', label: 'Fleet of Foot', stat: 'Speed', value: '5' },
+    { id: 'b3', op: 'boost', label: 'Darkvision', stat: 'Darkvision', value: '60' },
+  ],
+}
+
+test('a feature grants flat numbers the same way a worn item does', () => {
+  const c = character({ sheet: { ...BASE, features: [elf] } })
+  const view = effectiveSheet(c)
+  assert.equal(view.abilities!.dex, 14, '12 base + 2 from the race')
+  assert.equal(view.speed, 35)
+  assert.equal(view.senses!.darkvision, 60)
+})
+
+test('removing the feature takes its numbers with it', () => {
+  // The whole reason this layers instead of being written into sheet.abilities:
+  // changing race has to give the points back, and be seen to.
+  const withRace = effectiveSheet(character({ sheet: { ...BASE, features: [elf] } }))
+  const without = effectiveSheet(character({ sheet: BASE }))
+  assert.equal(withRace.abilities!.dex, 14)
+  assert.equal(without.abilities!.dex, 12)
+  assert.equal(without.senses!.darkvision, 0)
+})
+
+test('a feature with no boosts contributes nothing, as before', () => {
+  const prose: Feature = { id: 'f1', name: 'Second Wind' }
+  const view = effectiveSheet(character({ sheet: { ...BASE, features: [prose] } }))
+  assert.equal(view.abilities!.dex, 12)
+  assert.equal(view.ac, 15)
+})
+
+test('feature numbers stack with gear and shards rather than replacing them', () => {
+  const c = character({
+    sheet: { ...BASE, features: [elf] },
+    equipped: { cloak },
+    shards: { slot1: { shardId: 'sh1', earned: 5, attuned: ['core', 'might'] } },
+  })
+  const view = effectiveSheet(c, trees)
+  assert.equal(view.abilities!.dex, 14, 'race +2')
+  assert.equal(view.abilities!.str, 16, 'base 14 + 2 from the shard node')
+  assert.equal(view.ac, 16, '15 + 1 cloak')
+  // Both the race and the shard node grant darkvision; the larger wins.
+  assert.equal(view.senses!.darkvision, 60)
+})
+
+test('activeSources compiles a feature\'s boost ops into its effects', () => {
+  const src = activeSources(character({ sheet: { ...BASE, features: [elf] } }))
+  const found = src.find(x => x.kind === 'feature' && x.obj.id === 'race:elf')
+  assert.ok(found, 'the feature is a source')
+  assert.deepEqual(found!.fx, { abilities: { dex: 2 }, speed: 5, darkvision: 60 })
+})
+
 
 test('the base sheet is never mutated — the effective view is derived only', () => {
   const sheet = { ...BASE }

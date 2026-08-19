@@ -86,6 +86,47 @@ export function Prose({ text, className }: { text: string; className?: string })
  *
  *  With nothing selected it inserts the empty pair and puts the caret between
  *  them, which is what every editor does and what makes it usable mid-sentence. */
+/**
+ * Ctrl+K — wrap a selection as a markdown link, or unwrap one.
+ *
+ * Not `toggleWrap`, because a link is not a symmetric marker: the text and the
+ * destination are two different slots, and the useful thing after pressing it
+ * is to be typing the URL. So a selection becomes `[selection](url)` with `url`
+ * SELECTED, ready to be replaced.
+ *
+ * Toggles, like the other shortcuts: pressing it on an existing `[a](b)` gives
+ * back `a`. With nothing selected it inserts the empty pair and puts the caret
+ * in the label, which is where you start typing.
+ */
+const LINK_RE = /^\[([^\]]*)\]\(([^)\s]*)\)$/
+const URL_PLACEHOLDER = 'url'
+
+export function wrapLink(
+  text: string, start: number, end: number,
+): { text: string; start: number; end: number } {
+  const sel = text.slice(start, end)
+
+  // Selected a whole link: unwrap it back to its label.
+  const inner = LINK_RE.exec(sel)
+  if (inner) {
+    const label = inner[1]
+    return { text: text.slice(0, start) + label + text.slice(end), start, end: start + label.length }
+  }
+
+  if (!sel) {
+    const ins = '[]()'
+    return { text: text.slice(0, start) + ins + text.slice(end), start: start + 1, end: start + 1 }
+  }
+
+  const ins = `[${sel}](${URL_PLACEHOLDER})`
+  const urlAt = start + sel.length + 3
+  return {
+    text: text.slice(0, start) + ins + text.slice(end),
+    start: urlAt,
+    end: urlAt + URL_PLACEHOLDER.length,
+  }
+}
+
 export function toggleWrap(
   text: string, start: number, end: number, marker: string,
 ): { text: string; start: number; end: number } {

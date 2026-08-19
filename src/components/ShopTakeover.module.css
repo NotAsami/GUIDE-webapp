@@ -173,10 +173,10 @@
 }
 .coinBadge.gp { --bc: rgba(212, 191, 125, 0.6); }
 .coinBadge.gp .ci { background: var(--beige); color: #1d1d1d; }
-.coinBadge.sp { --bc: rgba(170, 170, 170, 0.45); }
-.coinBadge.sp .ci { border: 1.5px solid var(--muted); color: var(--muted); }
-.coinBadge.cp { --bc: rgba(138, 122, 74, 0.55); }
-.coinBadge.cp .ci { border: 1.5px solid var(--beige-dim); color: var(--beige-dim); }
+.coinBadge.sp { --bc: rgba(194, 200, 204, 0.5); }
+.coinBadge.sp .ci { background: var(--silver); color: #1d1d1d; }
+.coinBadge.cp { --bc: rgba(192, 133, 82, 0.55); }
+.coinBadge.cp .ci { background: var(--copper); color: #1d1d1d; }
 .ci { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 8.5px; line-height: 1; }
 .cval { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text); line-height: 1; font-variant-numeric: tabular-nums; }
 .clab { font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
@@ -348,8 +348,8 @@
    priced in silver or copper still showed a gold coin — the one place on the
    screen where the unit mattered most. Same three tones as the purse badges
    above (.coinBadge.gp/.sp/.cp), so a coin means the same thing in both. */
-.sc .pr .coin.sp { background: var(--muted); color: #1d1d1d; }
-.sc .pr .coin.cp { background: var(--beige-dim); color: #14120c; }
+.sc .pr .coin.sp { background: var(--silver); color: #1d1d1d; }
+.sc .pr .coin.cp { background: var(--copper); color: #1d1d1d; }
 
 /* The exchange rate, under the purse. Stated because nothing else on the screen
    did, and a price in silver is unreadable against a purse counted in gold. */

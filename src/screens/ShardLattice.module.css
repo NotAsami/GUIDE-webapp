@@ -144,6 +144,16 @@
   transition: color 130ms ease, border-color 130ms ease, background 130ms ease;
 }
 .tool i { font-size: 11px; }
+/* The keyboard hint on a tool button. It was in the markup from the start
+   and never had a rule, so V / N / L / backspace rendered as bare text
+   running straight into the label beside them. */
+.tool .kbd {
+  flex: 0 0 auto; margin-left: 2px; padding: 1px 4px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em; line-height: 1.5;
+  color: var(--beige-dim); background-color: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(212, 191, 125, 0.22);
+}
+.tool.on .kbd { color: var(--amber); border-color: rgba(226, 176, 33, 0.4); }
 .tool:hover { --bc: rgba(226, 176, 33, 0.45); color: var(--text); }
 .tool.on { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226, 176, 33, 0.1); box-shadow: inset 0 0 14px rgba(226, 176, 33, 0.12); }
 .tool.danger:hover { --bc: rgba(185, 58, 58, 0.6); color: var(--danger-hot); }
@@ -211,6 +221,10 @@
 .preview .edge.live { opacity: 1; stroke-width: 2.4; filter: brightness(1.3); }
 
 .pvBanner { position: absolute; left: 0; right: 0; top: 0; z-index: 7; display: flex; align-items: center; gap: 12px; white-space: nowrap; overflow: hidden; padding: 8px 14px; background: linear-gradient(to bottom, rgba(0, 32, 42, 0.95), rgba(0, 20, 26, 0.75) 70%, rgba(0, 20, 26, 0)); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--cyan-hot); }
+/* The shrinkable half of the banner: .pts and .reset are fixed, so this is
+   what gives way when the canvas is narrow. The banner is nowrap+hidden, so
+   without min-width:0 it simply gets clipped mid-word instead. */
+.pvBanner .cap { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pvBanner .pts { margin-left: auto; flex: 0 0 auto; color: var(--cyan-hot); }
 .pvBanner .pts b { font-family: var(--font-display); font-size: 15px; }
 .pvBanner .reset { flex: 0 0 auto; cursor: pointer; color: var(--beige); border: 1px solid rgba(212, 191, 125, 0.35); padding: 4px 9px; letter-spacing: 0.16em; background: none; }

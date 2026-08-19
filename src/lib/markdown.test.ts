@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { renderInline, Prose, toggleWrap } from './markdown.ts'
+import { renderInline, Prose, toggleWrap, wrapLink } from './markdown.ts'
 
 function html(nodes: ReactNode): string {
   return renderToStaticMarkup(createElement('div', null, nodes))
@@ -152,4 +152,34 @@ test('bold and italic nest rather than cancelling each other', () => {
   const b = wrap('fire', 0, 4)
   const i = wrap(b.text, b.start, b.end, '*')
   assert.equal(i.text, '***fire***')
+})
+
+// -- wrapLink (Ctrl+K) -------------------------------------------------------
+
+test('wrapLink turns a selection into a link with the URL selected', () => {
+  // The useful thing right after pressing Ctrl+K is to be typing the URL, so
+  // that is what ends up selected.
+  const r = wrapLink('see the docs', 4, 12)
+  assert.equal(r.text, 'see [the docs](url)')
+  assert.equal(r.text.slice(r.start, r.end), 'url')
+})
+
+test('wrapLink with nothing selected leaves the caret in the label', () => {
+  const r = wrapLink('see ', 4, 4)
+  assert.equal(r.text, 'see []()')
+  assert.equal(r.start, 5)
+  assert.equal(r.end, 5)
+})
+
+test('wrapLink toggles: pressing it on a link gives the label back', () => {
+  const link = '[the docs](https://x.dev)'
+  const r = wrapLink(`see ${link} now`, 4, 4 + link.length)
+  assert.equal(r.text, 'see the docs now')
+  assert.equal(r.text.slice(r.start, r.end), 'the docs')
+})
+
+test('wrapLink round-trips a selection', () => {
+  const once = wrapLink('the docs', 0, 8)
+  const back = wrapLink(once.text, 0, once.text.length)
+  assert.equal(back.text, 'the docs')
 })

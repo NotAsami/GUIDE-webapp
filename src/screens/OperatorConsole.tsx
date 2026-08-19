@@ -1,26 +1,33 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState } from '../lib/dm'
+import { useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, useDmClasses, useDmRaces, classContent, raceContent, featureContent, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState, type DmClassesState, type DmRacesState } from '../lib/dm'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
 import { parseCatalogQuery, matchesCatalogQuery } from '../lib/catalogSearch'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
 import type { GraphEffect, GraphState, ShardSlot, ShardTree, VarDef } from '../lib/database.types'
-import { auditNode, characterVars } from '../lib/graph'
-import { GraphEffects, TagsBlock, VarsBlock } from '../components/GraphEffects'
+import { auditNode, characterVars, type AuditItem } from '../lib/graph'
+import { AuditPanel, GraphEffects, TagsBlock, VarsBlock } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphState'
 import { longRestPatch } from '../lib/rest'
 import { durationTurns } from '../lib/turns'
 import { effectiveSheet } from '../lib/effects'
 import { pactSlotCount, pactSlotLevel } from '../lib/spells'
+import {
+  CASTER_LABEL, assignClass, assignSubclass, casterSlots, casterSummary, castingNumbers,
+  castingRules, gateLevel, hitPointRules, ordinal,
+} from '../lib/classes'
+import { assignRace } from '../lib/races'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/voice'
 import { usePartyPresence } from '../lib/presence'
 import { useFullscreen } from '../lib/fullscreen'
 import { renderInline } from '../lib/markdown'
+import { markdownShortcuts } from '../lib/textareaHooks'
+import { useLocalDraft } from '../lib/draft'
 import type {
   CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json,
   QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow,
@@ -30,11 +37,16 @@ import type {
   EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow,
   EffectDuration, EffectRef,
   Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData,
+  CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData,
+  CatalogRaceRow, RaceDef,
+  EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef,
   EquippedGear, CharacterLore, Relation,
 } from '../lib/database.types'
-import { ITEM_SLOTS, PERSON, isRingSlot } from '../lib/equip'
+import { ITEM_SLOTS, isRingSlot } from '../lib/equip'
 import { SKILLS, ABILITY_ORDER, ABILITY_ABBR } from '../lib/dnd'
-import { isStackable, place, routeItem } from '../lib/placement'
+import { grantMany, isStackable } from '../lib/placement'
+import { kitChoices, legacyKitText, resolvePool } from '../lib/kit'
+import { isEquipPick } from '../lib/database.types'
 import { OperatorInventory } from './OperatorInventory'
 import { normalizeTag } from '../lib/graph'
 import styles from './OperatorConsole.module.css'
@@ -120,23 +132,25 @@ const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hp
 
 type View = 'overview' | 'character' | 'quests' | 'sessions' | 'catalog'
 type CharTab = 'actions' | 'inventory' | 'lore' | 'shards'
-type CatTab = 'items' | 'features' | 'spells' | 'effects' | 'shops'
+type CatTab = 'items' | 'features' | 'spells' | 'effects' | 'shops' | 'classes' | 'races'
 
 export function OperatorConsole() {
   const { session, loading: authLoading } = useAuth()
   const { isDm, loading: dmLoading } = useDmStatus()
-  const { party, secrets, loading: partyLoading, error, updateCharacter, updateSecret } = useDmParty()
+  const shardLib = useDmShards()
+  // EditorTree is a superset of ShardTree (catalog geometry + merged DM
+  // secrets) — safe to feed straight into effectiveSheet()'s shardTrees arg.
+  const shardCatalog = useMemo<Record<string, ShardTree>>(
+    () => Object.fromEntries(shardLib.trees.map(t => [t.id, t])), [shardLib.trees])
+  const { party, secrets, loading: partyLoading, error, updateCharacter, updateSecret } = useDmParty(shardCatalog)
   const campaign = useDmCampaign()
   const catalog = useDmCatalog()
   const featureLib = useDmFeatures()
   const effectLib = useDmEffects()
   const spellLib = useDmSpells()
-  const shardLib = useDmShards()
   const shopLib = useDmShops()
-  // EditorTree is a superset of ShardTree (catalog geometry + merged DM
-  // secrets) — safe to feed straight into effectiveSheet()'s shardTrees arg.
-  const shardCatalog = useMemo<Record<string, ShardTree>>(
-    () => Object.fromEntries(shardLib.trees.map(t => [t.id, t])), [shardLib.trees])
+  const classLib = useDmClasses()
+  const raceLib = useDmRaces()
   const confiscated = useDmConfiscated()
   const onlineIds = usePartyPresence()
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
@@ -157,6 +171,8 @@ export function OperatorConsole() {
     { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', n: spellLib.spells.length, soon: false },
     { key: 'effects', label: 'Effects', icon: 'fa-bolt', n: effectLib.effects.length, soon: false },
     { key: 'shops', label: 'Shopkeepers', icon: 'fa-shop', n: shopLib.shops.length, soon: false },
+    { key: 'races', label: 'Races', icon: 'fa-leaf', n: raceLib.races.length, soon: false },
+    { key: 'classes', label: 'Classes', icon: 'fa-shield-halved', n: classLib.classes.length, soon: false },
     /* Last on purpose: these two LEAVE the catalog for their own editor, so they
        are an exit rather than another tab, and reading order should say so. */
     { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
@@ -187,9 +203,10 @@ export function OperatorConsole() {
   }, [])
   useEffect(() => {
     const prev = prevOnlineRef.current
-    prevOnlineRef.current = onlineIds
+    // usePartyPresence now maps id -> broadcast vitals; the LEDs only need the keys.
+    prevOnlineRef.current = new Set(onlineIds.keys())
     if (!presenceReadyRef.current) return
-    for (const id of onlineIds) {
+    for (const id of onlineIds.keys()) {
       if (prev.has(id)) continue
       const member = party.find(c => c.id === id)
       if (!member) continue
@@ -426,7 +443,7 @@ export function OperatorConsole() {
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
               ) : view === 'catalog' ? (
-                <CatalogSurface tab={catTab} catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} members={members} />
+                <CatalogSurface tab={catTab} catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} classLib={classLib} raceLib={raceLib} members={members} />
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
@@ -440,7 +457,7 @@ export function OperatorConsole() {
                     log={log}
                   />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
                 )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
@@ -551,13 +568,15 @@ function OverviewDashboard({
  *  never clobbered, and targets the same fields the player screens read — HP and
  *  coins on `sheet`, death saves + exhaustion on `resources` (see Stats.tsx) —
  *  keeping one source of truth per value. */
-function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, shardCatalog, onUpdate, onVoice, log }: {
+function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, shardCatalog, onUpdate, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
   catalog: CatalogItemRow[]
   featureLib: CatalogFeatureRow[]
   effectLib: CatalogEffectRow[]
   spellLib: CatalogSpellRow[]
+  classLib: DmClassesState
+  raceLib: DmRacesState
   shardCatalog: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
@@ -750,6 +769,23 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, sha
             character BUILD — set once, revisited rarely. Folding it keeps the tab
             scannable without hiding it, and each folder groups the two cards that
             are always edited together. */}
+        {/* Race first: it is the half of a character that exists before any
+            class does, and its skill prompt wants to be parked before a class
+            overwrites the same slot. */}
+        <Folder label="Race" icon="fa-leaf">
+        <AssignRaceCard
+          member={member} row={row} raceLib={raceLib} featureLib={featureLib}
+          shardCatalog={shardCatalog} onUpdate={onUpdate} log={log}
+        />
+        </Folder>
+
+        <Folder label="Class" icon="fa-shield-halved">
+        <AssignClassCard
+          member={member} row={row} classLib={classLib} featureLib={featureLib}
+          itemCatalog={catalog} shardCatalog={shardCatalog} onUpdate={onUpdate} log={log}
+        />
+        </Folder>
+
         <Folder label="Spells" icon="fa-hat-wizard">
         <CasterProfileCard key={row.id} member={member} row={row} onUpdate={onUpdate} log={log} />
 
@@ -763,7 +799,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, sha
         </Folder>
 
         <Folder label="Skills" icon="fa-graduation-cap">
-        <ProficienciesCard member={member} row={row} onUpdate={onUpdate} log={log} />
+        <ProficienciesCard member={member} row={row} classLib={classLib} onUpdate={onUpdate} log={log} />
         </Folder>
       </div>
 
@@ -973,76 +1009,14 @@ const catDef = (c?: ItemCategory) => CAT_DEF[c ?? 'misc'] ?? CAT_DEF.misc
 
 function firstName(name: string) { return name.split(' ')[0] }
 
-/** Build a fresh inventory instance from a catalog template: a self-describing
- *  snapshot of the template `data` + a unique instance id + the `item_id`
- *  back-ref, routed to its destination. Stackable categories carry `qty`;
- *  everything else is always exactly one unit. */
-function grantSnapshot(
-  item: CatalogItemRow, qty: number, gear: EquippedGear, inventory: InventoryItem[],
-): InventoryItem {
-  const inst = `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
-  const data = item.data ?? ({} as CatalogItemData)
-  const fresh = {
-    ...data, id: inst, item_id: item.id,
-    containerId: PERSON,
-    ...(isStackable(data.category) ? { qty } : {}),
-  } as InventoryItem
-  // Granted items go through the SAME routing chain as anything else picked up:
-  // arrows fall into the quiver, everything else takes the first free cell on
-  // person and overflows to a bag. This is what retired the grant-destination
-  // picker — the DM never has to choose a container.
-  return { ...place(fresh, routeItem(fresh, gear, inventory)), isNew: true }
-}
-
-/** Grant `qty` copies of a catalog template in ONE inventory write. Stackable
- *  categories merge into a matching stack already sitting in the routed
- *  destination — same name, same category, same container, not locked —
- *  instead of adding a second row: granting 20 arrows into a quiver that
- *  already holds 12 produces one "Arrows ×32" stack. Gear and weapons are
- *  always distinct instances: qty copies route one at a time (routing sees
- *  each previous copy already placed), the same result as clicking Grant qty
- *  times, just one DB write instead of qty round trips. */
-/** The numeric capacity of the equipped container with this id, or null for
- *  an uncapped one (bag of holding, backpack) — mirrors the lookup routeItem
- *  does internally, needed here to know how many units still fit before a
- *  merge would silently push a capped container (a quiver) over its cap. */
-function containerCapacity(gear: EquippedGear, containerId: string): number | null {
-  for (const c of Object.values(gear.containers ?? {})) {
-    if (c?.id === containerId) return c.container?.capacity ?? null
-  }
-  return null
-}
-
+/** Grant `qty` of a template, however that template counts — five javelins as
+ *  five rows, twenty arrows as one stack. Both callers (this card and a class's
+ *  starting kit) go through lib/placement.ts grantMany, so they cannot disagree
+ *  about what a quantity means. */
 function grantSnapshots(
   item: CatalogItemRow, qty: number, gear: EquippedGear, inventory: InventoryItem[],
 ): InventoryItem[] {
-  const data = item.data ?? ({} as CatalogItemData)
-  if (!isStackable(data.category)) {
-    let next = inventory
-    for (let i = 0; i < qty; i++) next = [...next, grantSnapshot(item, 1, gear, next)]
-    return next
-  }
-  // Route and merge in BATCHES per destination, not per unit — a batch that
-  // fills a capped container (the quiver) short of the full qty falls
-  // through to the next chain step for the remainder, exactly like N solo
-  // grants would, but in as many iterations as there are destinations
-  // (typically 1, at most a handful), never qty of them.
-  let next = inventory
-  let remaining = qty
-  while (remaining > 0) {
-    const probe = grantSnapshot(item, remaining, gear, next)
-    const dest = probe.containerId
-    const cap = containerCapacity(gear, dest)
-    const already = cap != null ? next.filter(i => i.containerId === dest).reduce((n, i) => n + (i.qty ?? 1), 0) : 0
-    const take = cap != null ? Math.max(1, Math.min(remaining, cap - already)) : remaining
-    const existing = next.find(i =>
-      i.containerId === dest && i.name === probe.name && i.category === probe.category && !i.locked)
-    next = existing
-      ? next.map(i => (i === existing ? { ...i, qty: (i.qty ?? 1) + take, isNew: true } : i))
-      : [...next, { ...probe, qty: take }]
-    remaining -= take
-  }
-  return next
+  return grantMany(item.data ?? ({} as CatalogItemData), item.id, qty, gear, inventory)
 }
 
 /** Grant Item: search the catalog, pick a template, snapshot it into this PC's
@@ -1364,9 +1338,9 @@ function BroadcastPanel({ selected, onSend, log }: {
  *  so a granted copy is mechanically real the instant it lands. */
 /** `tab` is owned by OperatorConsole: the rail that switches it hangs off
     region 01, so the state has to live above both. */
-function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib, members }: {
+function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib, classLib, raceLib, members }: {
   tab: CatTab
-  catalog: DmCatalogState; featureLib: DmFeaturesState; effectLib: DmEffectsState; spellLib: DmSpellsState; shopLib: DmShopsState; members: PartyMember[]
+  catalog: DmCatalogState; featureLib: DmFeaturesState; effectLib: DmEffectsState; spellLib: DmSpellsState; shopLib: DmShopsState; classLib: DmClassesState; raceLib: DmRacesState; members: PartyMember[]
 }) {
   const { items, createItem, updateItem, deleteItem, loading, error } = catalog
   const [selId, setSelId] = useState<string | null>(null)
@@ -1402,15 +1376,28 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
         <span className={styles.dmonly}><i className="fa-solid fa-box-archive" /> Templates — not a grant</span>
       </div>
 
-      {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : error) ? (
+      {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : tab === 'classes' ? classLib.error : tab === 'races' ? raceLib.error : error) ? (
         <div className={styles.soonPanel}>
           <i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span>
-          <span>{tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : error}</span>
+          <span>{tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : tab === 'classes' ? classLib.error : tab === 'races' ? raceLib.error : error}</span>
         </div>
       ) : tab === 'spells' ? (
         <SpellLibrarySurface lib={spellLib} />
-      ) : tab === 'effects' ? (
+      ) : tab === 'effects' ? (<>
+        <div className={styles.catNote}>
+          <i className="fa-solid fa-circle-info" />
+          <span>
+            An <b>effect</b> is something applied to a character or carried by an object, and it can
+            end — Bless, Poisoned, a gem’s enchantment. For what a thing simply <b>is</b> (a race’s
+            +2 DEX), use a <b>boost</b> in that thing’s own Rules block instead.
+          </span>
+        </div>
         <EffectLibrarySurface lib={effectLib} />
+      </>
+      ) : tab === 'races' ? (
+        <RaceLibrarySurface lib={raceLib} featureLib={featureLib} members={members} />
+      ) : tab === 'classes' ? (
+        <ClassLibrarySurface lib={classLib} featureLib={featureLib} itemCatalog={items} members={members} />
       ) : tab === 'shops' ? (
         <OperatorShops shopLib={shopLib} itemCatalog={items} members={members} />
       ) : (
@@ -1808,7 +1795,9 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
         <span className={styles.fieldLab}>Description</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing</span>
       </div>
-      <textarea className={styles.catProse} value={flavor} onChange={e => setFlavor(e.target.value)} placeholder="The prose the player reads when they examine this item…" />
+      <textarea className={styles.catProse} value={flavor} onChange={e => setFlavor(e.target.value)}
+        onKeyDown={markdownShortcuts(setFlavor)}
+        placeholder="The prose the player reads when they examine this item…" />
 
       {/* effects granted — reference picker into the effect library. Each
           reference carries its own duration; the item's own `effects` field is
@@ -1959,7 +1948,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
         <div className={styles.fxfHead} onClick={() => setGfxOpen(o => !o)} role="button" tabIndex={0} aria-expanded={gfxOpen}>
           <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
           <i className="fa-solid fa-diagram-project" style={{ color: 'var(--cyan-hot)', fontSize: 11 }} />
-          <span className={styles.t}>Roll Contributions</span>
+          <span className={styles.t}>Rules</span>
           <span className={styles.s}>
             {graph.length
               ? `${graph.length} effect${graph.length === 1 ? '' : 's'}${gErrs.length ? ` · ${gErrs.length} error${gErrs.length === 1 ? '' : 's'}` : ''}`
@@ -2155,9 +2144,10 @@ function Folder({ label, icon, children }: { label: string; icon: string; childr
  *  a plain on/off. Both write straight to `sheet`, spread so siblings (hp,
  *  abilities, …) survive — lib/dnd.ts's saveTotal/skillTotal already read
  *  these three arrays, so nothing downstream needs to change. */
-function ProficienciesCard({ member, row, onUpdate, log }: {
+function ProficienciesCard({ member, row, classLib, onUpdate, log }: {
   member: PartyMember
   row: CharacterRow
+  classLib: DmClassesState
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
 }) {
@@ -2166,6 +2156,26 @@ function ProficienciesCard({ member, row, onUpdate, log }: {
   const skillProfs = sheet.skillProficiencies ?? []
   const skillExp = sheet.skillExpertise ?? []
   const first = firstName(member.name)
+
+  /* WHICH SKILLS THIS CHARACTER'S CLASS OFFERS, and how many they may take.
+     A class stores an ELIGIBLE list and a count, never the picks themselves —
+     the pick is the player's, so assignClass deliberately writes nothing here.
+     That left the list reaching only the Assign preview, which is gone by the
+     time anyone acts on it. This is the card that does the ticking, so this is
+     where the class's answer has to show up.
+
+     Matched on name because identity.class stores the name, which is the only
+     thing the sheet actually records. */
+  const cls = classLib.classes.find(c => c.data?.published && c.data.name === row.identity?.class)?.data ?? null
+  const offered = new Set(cls?.skillChoices ?? [])
+  const allowed = cls?.skillChooseN ?? 0
+  const takenFromClass = [...offered].filter(k => skillProfs.includes(k) || skillExp.includes(k)).length
+  // Offered first, in SKILLS order, then everything else — a background or race
+  // can still grant a skill the class never offered, so nothing is hidden.
+  const orderedSkills = offered.size
+    ? [...SKILLS.filter(s => offered.has(s.key)), ...SKILLS.filter(s => !offered.has(s.key))]
+    : SKILLS
+  const firstUnoffered = offered.size ? SKILLS.filter(s => offered.has(s.key)).length : -1
 
   async function toggleSave(key: AbilityKey) {
     const granting = !saveProfs.includes(key)
@@ -2201,7 +2211,7 @@ function ProficienciesCard({ member, row, onUpdate, log }: {
                 onClick={() => void toggleSave(key)}
                 aria-pressed={on}
               >
-                {on && <span className={styles.profDots}><span className={styles.profDot} /></span>}
+                <ProfDots n={on ? 1 : 0} of={1} />
                 {ABILITY_ABBR[key].toUpperCase()}
               </button>
             )
@@ -2210,26 +2220,33 @@ function ProficienciesCard({ member, row, onUpdate, log }: {
       </div>
 
       <div className={styles.profRow}>
-        <span className={styles.profLab}>Skills · click cycles none → proficient → expertise</span>
+        <span className={styles.profLab}>
+          Skills · click cycles none → proficient → expertise
+          {cls && allowed > 0 && (
+            <span className={cx(styles.clsAllow, takenFromClass === allowed && styles.met, takenFromClass > allowed && styles.over)}>
+              {cls.name} allows {allowed} of {offered.size}
+              <b>{takenFromClass} / {allowed}</b>
+              {takenFromClass === allowed ? <i className="fa-solid fa-check" /> : null}
+            </span>
+          )}
+        </span>
         <div className={styles.profGrid}>
-          {SKILLS.map(skill => {
+          {orderedSkills.map((skill, idx) => {
             const isExp = skillExp.includes(skill.key)
             const isProf = skillProfs.includes(skill.key)
             return (
+              <Fragment key={skill.key}>
+              {idx === firstUnoffered && <span className={styles.profSplit}>not offered by {cls?.name ?? 'this class'}</span>}
               <button
-                key={skill.key} type="button"
-                className={cx(styles.profChip, isProf && styles.on, isExp && styles.exp)}
+                type="button"
+                className={cx(styles.profChip, isProf && styles.on, isExp && styles.exp, offered.has(skill.key) && styles.offered)}
                 onClick={() => void cycleSkill(skill.key, skill.name)}
                 title={isExp ? 'Expertise (×2 proficiency) — click to clear' : isProf ? 'Proficient — click for expertise' : 'Click to grant proficiency'}
               >
-                {isProf && (
-                  <span className={styles.profDots}>
-                    <span className={styles.profDot} />
-                    {isExp && <span className={styles.profDot} />}
-                  </span>
-                )}
+                <ProfDots n={isExp ? 2 : isProf ? 1 : 0} />
                 {skill.name} <span className={styles.ab}>{ABILITY_ABBR[skill.ability].toUpperCase()}</span>
               </button>
+              </Fragment>
             )
           })}
         </div>
@@ -2398,6 +2415,26 @@ function EffectLibrarySurface({ lib }: { lib: DmEffectsState }) {
   )
 }
 
+/** The proficiency pips on a .profChip.
+ *
+ *  ALWAYS RENDERED, even when nothing is earned. Inserting the diamond only on
+ *  the selected state makes the chip wider the moment it is clicked, which
+ *  reflows every chip after it in the wrapped grid — so the one you meant to
+ *  click next has moved out from under the cursor. Reserving the slot costs a
+ *  few pixels and makes the grid stand still.
+ *
+ *  `of` is how many states the host cycles through: 1 for a plain on/off list
+ *  (saves, a class's eligible skills), 2 where expertise is reachable. */
+function ProfDots({ n, of = 2 }: { n: number; of?: 1 | 2 }) {
+  return (
+    <span className={styles.profDots} style={{ ['--dots' as string]: of === 1 ? '5px' : '12px' }}>
+      {Array.from({ length: of }, (_, i) => (
+        <span key={i} className={cx(styles.profDot, i >= n && styles.off)} />
+      ))}
+    </span>
+  )
+}
+
 /** Skill proficiency for an effect — one list, three states.
  *
  *  Mirrors card G (ProficienciesCard), because they are the same question asked
@@ -2430,12 +2467,7 @@ function SkillPicker({ profs, exp, onChange }: {
             onClick={() => cycle(skill.key)}
             title={isExp ? 'Expertise (x2 proficiency) — click to clear' : isProf ? 'Proficient — click for expertise' : 'Click to grant proficiency'}
           >
-            {isProf && (
-              <span className={styles.profDots}>
-                <span className={styles.profDot} />
-                {isExp && <span className={styles.profDot} />}
-              </span>
-            )}
+            <ProfDots n={isExp ? 2 : isProf ? 1 : 0} />
             {skill.name} <span className={styles.ab}>{ABILITY_ABBR[skill.ability].toUpperCase()}</span>
           </button>
         )
@@ -2658,7 +2690,9 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
       <div className={cx(styles.efBlock, styles.prose)}>
         <div className={styles.efBh}><i className="fa-solid fa-feather" /><span className={styles.t}>Description</span><span className={styles.n}><i className="fa-solid fa-eye" /> player-facing · **bold** *italics*</span></div>
         <div className={styles.efRule}>Everything neither numeric nor a flag — often the real rule</div>
-        <textarea className={styles.catProse} value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. At the start of each of their turns the creature takes 1d6 damage…" />
+        <textarea className={styles.catProse} value={desc} onChange={e => setDesc(e.target.value)}
+          onKeyDown={markdownShortcuts(setDesc)}
+          placeholder="e.g. At the start of each of their turns the creature takes 1d6 damage…" />
       </div>
 
       <div className={styles.qActions}>
@@ -2931,7 +2965,9 @@ function SpellForm({ spell, onSubmit, onDelete }: {
         <span className={styles.fieldLab}>Description</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing · **bold** *italics*</span>
       </div>
-      <textarea className={cx(styles.catProse, styles.player)} value={desc} onChange={e => setDesc(e.target.value)} placeholder="The prose the player reads in their Spellbook…" />
+      <textarea className={cx(styles.catProse, styles.player)} value={desc} onChange={e => setDesc(e.target.value)}
+        onKeyDown={markdownShortcuts(setDesc)}
+        placeholder="The prose the player reads in their Spellbook…" />
 
       <div className={styles.catSecLab}><span className={styles.fieldLab}>Saving throw (optional)</span></div>
       <div>
@@ -3037,7 +3073,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
         <div className={styles.fxfHead} onClick={() => setGfxOpen(o => !o)} role="button" tabIndex={0} aria-expanded={gfxOpen}>
           <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
           <i className="fa-solid fa-diagram-project" style={{ color: 'var(--cyan-hot)', fontSize: 11 }} />
-          <span className={styles.t}>Roll Contributions</span>
+          <span className={styles.t}>Rules</span>
           <span className={styles.s}>
             {graph.length
               ? `${graph.length} effect${graph.length === 1 ? '' : 's'}${gErrs.length ? ` · ${gErrs.length} error${gErrs.length === 1 ? '' : 's'}` : ''}`
@@ -3340,6 +3376,2271 @@ function CasterProfileCard({ member, row, onUpdate, log }: {
 
       <div className={styles.grantAction}>
         <Btn tone="amber" icon="fa-floppy-disk" label={busy ? 'Saving…' : 'Save Profile'} onClick={() => void save()} disabled={busy} />
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// CLASS LIBRARY (Catalog · Classes tab) + ASSIGN CLASS —
+// the fifth authoring library. Same list+form shell as Effects and Spells, the
+// same shared authoring blocks the item and spell forms host, and the same
+// draft->publish ladder the Feature Editor runs — so it is a sibling of those
+// forms rather than a new kind of screen.
+//
+// TWO THINGS IT DELIBERATELY DOES NOT HAVE:
+//
+//  * a per-level progression grid. A level is a gate condition on a feature
+//    reference (`when: "level >= 3"`), and the picker groups its rows by the
+//    level their own condition names — so the ladder is a VIEW of the gates
+//    rather than a second copy of them. Twenty rows of table would duplicate
+//    both the gates and the byLevel arrays that already exist.
+//  * an authored slot table. Full/half/third slots are derived by
+//    lib/classes.ts casterSlots, pact slots by lib/spells.ts. See classes.ts.
+// ============================================================
+
+const CLASS_ICONS = [
+  'fa-shield-halved', 'fa-hand-fist', 'fa-hat-wizard', 'fa-khanda', 'fa-cross',
+  'fa-mask', 'fa-feather', 'fa-drum', 'fa-leaf', 'fa-bullseye', 'fa-skull',
+  'fa-book-bible', 'fa-chess-rook', 'fa-dragon', 'fa-wand-sparkles', 'fa-eye',
+]
+
+const HIT_DICE: ClassDef['hitDie'][] = [6, 8, 10, 12]
+
+const CASTER_ORDER: ClassCasterType[] = ['none', 'full', 'half', 'third', 'pact']
+
+/** Short badge for the index row. `CASTER_LABEL` is the long form. */
+const CASTER_BADGE: Record<ClassCasterType, string> = {
+  none: 'martial', full: 'full', half: 'half', third: 'third', pact: 'pact',
+}
+
+const BLANK_CLASS: ClassDef = {
+  name: '', icon: 'fa-shield-halved', desc: '', hitDie: 8, primaryAbility: 'str',
+  saveProficiencies: [], skillChoices: [], skillChooseN: 2,
+  proficiencies: {}, startingEquipment: [], caster: 'none',
+  features: [], tags: [], vars: [], graph: [], published: false,
+}
+
+function ClassLibrarySurface({ lib, featureLib, itemCatalog, members }: {
+  lib: DmClassesState
+  featureLib: DmFeaturesState
+  itemCatalog: CatalogItemRow[]
+  members: PartyMember[]
+}) {
+  const { classes, loading } = lib
+  const [selId, setSelId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const shown = useMemo(() => {
+    const q = parseCatalogQuery(query)
+    return classes.filter(c => matchesCatalogQuery(classContent(c), q))
+  }, [classes, query])
+
+  const activeId = creating ? null : (selId ?? classes[0]?.id ?? null)
+  const selected = classes.find(c => c.id === activeId) ?? null
+
+  return (
+    <div className={styles.catLayout}>
+      <div className={styles.catIndex}>
+        <div className={styles.catNew}>
+          <Btn tone="cyan" icon="fa-plus" label="New Class" onClick={() => { setCreating(true); setSelId(null) }} />
+        </div>
+        <div className={cx(styles.searchWrap, styles.catSearch)}>
+          <i className="fa-solid fa-magnifying-glass" />
+          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+            placeholder="Search classes, or tag:martial" autoComplete="off" spellCheck={false} />
+          {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
+        </div>
+        {CASTER_ORDER.map(kind => {
+          /* Grouped by caster type, but a PATH sits under the class it belongs
+             to rather than in its own group — an Eldritch Knight is a third
+             caster and its parent is not, and listing it under "Third casters"
+             away from the Arbiter would hide the relationship that matters. */
+          const rows = shown.filter(c => {
+            const d = classContent(c)
+            return !d.parent && (d.caster ?? 'none') === kind
+          })
+          if (!rows.length) return null
+          return (
+            <div key={kind} className={styles.catGrp}>
+              <div className={styles.catGrpHead}>
+                <span className={styles.ghT}>{CASTER_LABEL[kind]}{kind === 'none' ? '' : 's'}</span>
+                <span className={styles.ghC}>{rows.length}</span>
+              </div>
+              <div className={styles.catRows}>
+                {rows.flatMap(c => [c, ...shown.filter(x => classContent(x).parent === c.id)]).map(c => {
+                  const d = classContent(c)
+                  const col = d.color || 'var(--amber)'
+                  const isPath = !!d.parent
+                  return (
+                    <button key={c.id} className={cx(styles.catRow, c.id === activeId && !creating && styles.sel, isPath && styles.subRow)}
+                      style={{ ['--rar' as string]: col }} onClick={() => { setCreating(false); setSelId(c.id) }}>
+                      <span className={styles.crIc}><i className={`fa-solid ${d.icon || 'fa-shield-halved'}`} /></span>
+                      <span className={styles.crTx}>
+                        <span className={styles.crT}>{d.name || 'Untitled'}</span>
+                        <span className={styles.crS}>
+                          {isPath
+                            ? <>path</>
+                            : <>d{d.hitDie ?? 8}{(d.subclassLevel ?? 0) > 0 && <><span className={styles.op}> · </span>paths at {d.subclassLevel}</>}</>}
+                          <span className={styles.op}> · </span>
+                          {(d.features ?? []).length} feature{(d.features ?? []).length === 1 ? '' : 's'}
+                          {c.draft && <><span className={styles.op}> · </span>draft</>}
+                          {!c.draft && !d.published && <><span className={styles.op}> · </span>unpublished</>}
+                        </span>
+                      </span>
+                      <span className={styles.crTag} style={{ color: col, borderColor: col }}>
+                        {CASTER_BADGE[d.caster ?? 'none']}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+        {classes.length === 0 && <div className={styles.catEmpty}>{loading ? '· loading ·' : '— library empty —'}</div>}
+        {classes.length > 0 && shown.length === 0 && <div className={styles.catEmpty}>— nothing matches —</div>}
+      </div>
+
+      <div className={styles.catForm}>
+        <ClassForm
+          row={selected} creating={creating} lib={lib} featureLib={featureLib}
+          itemCatalog={itemCatalog} members={members}
+          onSelected={id => { setCreating(false); setSelId(id) }}
+          onCleared={() => { setCreating(false); setSelId(null) }}
+        />
+      </div>
+    </div>
+  )
+}
+
+/** A list of plain display strings — armour training, weapon training, tools.
+ *
+ *  Chips plus a text field, the same shape as TagsBlock but WITHOUT
+ *  normalisation: these are prose a player reads ("All armor", "Shields"), not
+ *  selectors anything matches on, so lowercasing them would be wrong.
+ *
+ *  ONE ROW, not a label/chips/input stack. Three of these stacked read as one
+ *  undifferentiated column — the label sits on its own line, the chips on
+ *  another, the field on a third, and by the third repetition you cannot tell
+ *  where armour ended and weapons began. Pulling the label into a fixed left
+ *  column (the .detailRow idiom already in this file) makes each one a single
+ *  scannable line and the set of them read as a set. No empty-state chip
+ *  either: the field's own placeholder says what to type, so "none" was one
+ *  more thing between the label and the control. */
+function TrainingRow({ label, values, placeholder, onChange }: {
+  label: string; values: string[]; placeholder: string
+  onChange: (next: string[]) => void
+}) {
+  const [input, setInput] = useState('')
+  const add = (raw: string) => {
+    const v = raw.trim()
+    if (v && !values.includes(v)) onChange([...values, v])
+    setInput('')
+  }
+  return (
+    <div className={styles.trainRow}>
+      <span className={styles.trLab}>{label}</span>
+      <div className={styles.trBody}>
+        {values.map((v, i) => (
+          <span key={i} className={styles.efChip}>{v}
+            <i className="fa-solid fa-xmark" onClick={() => onChange(values.filter((_, j) => j !== i))} />
+          </span>
+        ))}
+        <input
+          className={cx(styles.sessIn, styles.trIn)} value={input} placeholder={placeholder}
+          aria-label={label} {...NO_AUTOFILL}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(input) } }}
+        />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * PACT MAGIC — its own control, not the standard grid with the cells removed.
+ *
+ * Both numbers are pure step functions of character level with four and five
+ * breakpoints between them (lib/spells.ts), so the honest render is the
+ * breakpoints. Filled pips for the count against numbers-in-a-grid for the
+ * standard table is what makes the two read as different systems, which they
+ * are: one slot level and at most four slots, refreshed by a SHORT rest.
+ */
+function PactLadder() {
+  const countSteps = [1, 2, 11, 17]
+  const levelSteps = [1, 3, 5, 7, 9]
+  return (
+    <div className={styles.pactLadder}>
+      <div className={styles.plNote}>
+        <i className="fa-solid fa-hourglass-half" /> Derived from character level — never authored here
+      </div>
+      <div className={styles.plRow}>
+        <span className={styles.plLab}>Slots</span>
+        <div className={styles.plSteps}>
+          {countSteps.map(l => (
+            <span key={l} className={styles.plStep}>
+              <span className={styles.plPips}>
+                {Array.from({ length: pactSlotCount(l) }, (_, i) => <span key={i} className={styles.plPip} />)}
+              </span>
+              <span className={styles.plAt}>L{l}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className={styles.plRow}>
+        <span className={styles.plLab}>Slot level</span>
+        <div className={styles.plSteps}>
+          {levelSteps.map(l => (
+            <span key={l} className={styles.plStep}>
+              <span className={styles.plOrd}>{ordinal(pactSlotLevel(l))}</span>
+              <span className={styles.plAt}>L{l}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className={styles.plRest}>
+        <i className="fa-solid fa-rotate" /> Refreshes on a <b>short</b> or long rest — unlike every other caster
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The standard progression, DERIVED and read-only.
+ *
+ * Closed by default with the whole shape in its header, because the numbers
+ * themselves are the SRD's and a DM rarely needs to read them cell by cell.
+ * Opened, cell tint is keyed to the slot count so the staircase of a full caster
+ * against the shallow ramp of a third caster is visible as a shape rather than
+ * as a hundred and eighty numbers.
+ */
+function SlotProgression({ caster }: { caster: ClassCasterType }) {
+  const [open, setOpen] = useState(false)
+  const rows = useMemo(
+    () => Array.from({ length: 20 }, (_, i) => ({ level: i + 1, slots: casterSlots(caster, i + 1) })),
+    [caster],
+  )
+  return (
+    <div className={cx(styles.catFx, styles.fold, open && styles.open)}>
+      <div className={styles.fxfHead} onClick={() => setOpen(o => !o)} role="button" tabIndex={0} aria-expanded={open}>
+        <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
+        <i className="fa-solid fa-table-cells" style={{ color: 'var(--cyan-hot)', fontSize: 11 }} />
+        <span className={styles.t}>Slot Progression</span>
+        <span className={styles.s}>{casterSummary(caster)}</span>
+      </div>
+      {open && (
+        <div className={styles.gfxBody}>
+          <div className={styles.slotGridRO} role="table" aria-label="Spell slots by character level">
+            <div className={cx(styles.sgRow, styles.sgHead)} role="row">
+              <span className={styles.sgLvl}>lvl</span>
+              {Array.from({ length: 9 }, (_, i) => <span key={i} className={styles.sgCell}>{i + 1}</span>)}
+            </div>
+            {rows.map(r => (
+              <div key={r.level} className={styles.sgRow} role="row">
+                <span className={styles.sgLvl}>{r.level}</span>
+                {r.slots.map((n, i) => (
+                  <span key={i} className={cx(styles.sgCell, n > 0 && styles.on)}
+                    style={n > 0 ? { ['--fill' as string]: String(0.08 + n * 0.06) } : undefined}>
+                    {n > 0 ? n : '·'}
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className={styles.sgFoot}>
+            Read-only. A class stores a caster TYPE, not a table — these come from the SRD
+            progression in <code>lib/classes.ts</code>, so they cannot drift from what the player's
+            Spellbook spends.
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * FEATURES — a searchable picker plus removable rows, grouped by the level each
+ * row's own gate names.
+ *
+ * The grouping IS the progression display. `gateLevel` (lib/classes.ts) reads
+ * the floor out of the expression; anything it cannot read lands under
+ * CONDITIONAL with its expression shown verbatim, so nothing is ever hidden by
+ * being un-sortable. Edit a gate and the row moves.
+ *
+ * References, not snapshots: the row stores a feature_catalog id and the name
+ * is read live, so re-authoring a feature updates every class that grants it.
+ * The snapshot still happens — at assign time (lib/classes.ts assignClass).
+ */
+function ClassFeaturePicker({ refs, featureLib, onChange }: {
+  refs: FeatureGrantRef[]
+  featureLib: CatalogFeatureRow[]
+  onChange: (next: FeatureGrantRef[]) => void
+}) {
+  const [query, setQuery] = useState('')
+  const attached = new Set(refs.map(r => r.feature_id))
+
+  const hits = useMemo(() => {
+    const q = parseCatalogQuery(query)
+    return featureLib
+      .filter(f => !attached.has(f.id))
+      .filter(f => matchesCatalogQuery(featureContent(f), q))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [featureLib, query, refs])
+
+  const nameOf = (id: string) => featureLib.find(f => f.id === id)
+  const patch = (i: number, p: Partial<FeatureGrantRef>) =>
+    onChange(refs.map((r, j) => (j === i ? { ...r, ...p } : r)))
+
+  /* One pass, keeping each row's index so the inline gate field can still write
+     back to the right entry after grouping reorders them. */
+  const groups = useMemo(() => {
+    const by = new Map<number | null, { ref: FeatureGrantRef; i: number }[]>()
+    refs.forEach((ref, i) => {
+      const g = gateLevel(ref.when)
+      if (!by.has(g)) by.set(g, [])
+      by.get(g)!.push({ ref, i })
+    })
+    const levels = [...by.keys()].filter((k): k is number => k !== null).sort((a, b) => a - b)
+    return [
+      ...levels.map(l => ({ key: String(l), label: String(l).padStart(2, '0'), rows: by.get(l)! })),
+      ...(by.has(null) ? [{ key: 'cond', label: 'Conditional', rows: by.get(null)! }] : []),
+    ]
+  }, [refs])
+
+  const CAP = 6
+  const capped = hits.slice(0, CAP)
+
+  return (
+    <div className={cx(styles.efBlock, styles.mods)}>
+      <div className={styles.efBh}>
+        <i className="fa-solid fa-star" />
+        <span className={styles.t}>Features</span>
+        <span className={styles.n}>{refs.length} referenced</span>
+      </div>
+      <div className={styles.efRule}>Grouped by the level each gate names — that IS the progression</div>
+
+      <div className={styles.searchWrap}>
+        <i className="fa-solid fa-magnifying-glass" />
+        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          placeholder="Search the feature library, or tag:sanctity" autoComplete="off" spellCheck={false} />
+      </div>
+      {query.trim() && (
+        <div className={styles.skPicklist}>
+          {capped.length === 0
+            ? <div className={styles.fxNone}>Nothing matches “{query.trim()}”.</div>
+            : capped.map(f => {
+              const d = featureContent(f)
+              return (
+                <button key={f.id} className={styles.catItem}
+                  onClick={() => { onChange([...refs, { feature_id: f.id, when: 'level >= 1' }]); setQuery('') }}>
+                  <span className={styles.ciIc} style={{ color: d.color || 'var(--amber)' }}>
+                    <i className={`fa-solid ${d.icon ?? 'fa-star'}`} />
+                  </span>
+                  <span className={styles.ciTx}>
+                    <span className={styles.ciNm}>{d.name || f.id}</span>
+                    <span className={styles.ciTy}>{d.source ?? FEAT_CATS.find(c => c.key === d.category)?.label ?? 'Feature'}</span>
+                  </span>
+                  {!d.published && <span className={styles.ciRar} style={{ color: 'var(--amber)' }}>unpublished</span>}
+                </button>
+              )
+            })}
+          {hits.length > CAP && (
+            <div className={styles.catFxNone}>{hits.length - CAP} more — keep typing to narrow.</div>
+          )}
+        </div>
+      )}
+
+      {refs.length === 0 ? (
+        <div className={styles.efNone}>
+          No features yet. Search above to reference one, then say when it is granted —
+          <code> level &gt;= 3</code>. There is no progression table to fill in; these gates are it.
+        </div>
+      ) : (
+        /* ONE FLAT PARENT, not a div per group.
+           The gate field regroups its own row on every keystroke — type the "3"
+           of `level >= 3` and the row leaves group 01 for group 03. With a
+           wrapper div per group that is a change of PARENT, so React unmounts
+           the row and mounts a new one: the <input> is a different DOM node and
+           the field loses focus after a single character, which makes a gate
+           impossible to type. Keyed siblings of ONE parent are reordered with
+           insertBefore instead — the node survives, and so does the caret. */
+        <div className={styles.clsSpine}>
+          {groups.flatMap(g => [
+            <div key={`h:${g.key}`} className={cx(styles.clsGrpHead, g.key === 'cond' && styles.cond)}>
+              <span className={styles.cgN}>{g.label}</span>
+              <span className={styles.cgRule} />
+              <span className={styles.cgC}>{g.rows.length}</span>
+            </div>,
+            ...g.rows.map(({ ref, i }) => {
+              const f = nameOf(ref.feature_id)
+              const d = f ? featureContent(f) : null
+              return (
+                <div key={ref.feature_id} className={cx(styles.clsRow, !f && styles.bad)}>
+                  <span className={styles.crFIc} style={{ color: d?.color || 'var(--amber)' }}>
+                    <i className={`fa-solid ${d?.icon ?? 'fa-star'}`} />
+                  </span>
+                  <span className={styles.crFNm} title={ref.feature_id}>
+                    {d?.name ?? ref.feature_id}
+                    {!f && <span className={styles.crFGone}> · not in the library</span>}
+                  </span>
+                  <input
+                    className={cx(styles.sessIn, styles.crFWhen)} value={ref.when ?? ''} {...NO_AUTOFILL}
+                    onChange={e => patch(i, { when: e.target.value })}
+                    aria-label="When the class grants this feature"
+                    placeholder="always" 
+                    title="When the class grants this — an expression over level and the class's own variables"
+                  />
+                  <span className={styles.x} onClick={() => onChange(refs.filter((_, j) => j !== i))}>
+                    <i className="fa-solid fa-xmark" />
+                  </span>
+                </div>
+              )
+            }),
+          ])}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const newId = () => `k${globalThis.crypto?.randomUUID?.().slice(0, 8) ?? Math.random().toString(36).slice(2, 10)}`
+
+/** Keep password managers off an authoring field.
+ *
+ *  A bare text input with no label, no name and no autocomplete hint is exactly
+ *  what Bitwarden, 1Password and LastPass look for, so they offer to fill a
+ *  class's kit-option label with somebody's credentials. `autoComplete="off"`
+ *  alone is widely ignored by them, hence the three vendor opt-outs.
+ *
+ *  Spread onto any authoring input whose label lives in its placeholder. */
+const NO_AUTOFILL = {
+  autoComplete: 'off',
+  spellCheck: false,
+  'data-1p-ignore': true,
+  'data-lpignore': 'true',
+  'data-bwignore': true,
+} as const
+
+/**
+ * STARTING KIT — a list of decisions, not a list of items.
+ *
+ * 5e hands a new character "(a) scale mail or (b) leather armour, a longbow and
+ * 20 arrows", so the unit of authoring is the CHOICE. A group with one option
+ * is a fixed grant and the player is never asked about it; two or more is a
+ * question that reaches their screen.
+ *
+ * Items are referenced by catalog id here. The snapshot happens at assign
+ * (lib/kit.ts) — see the note there for why a reference cannot survive the trip
+ * to a player's screen.
+ */
+function KitEditor({ raw, itemCatalog, onChange }: {
+  /** Whatever the row holds — an EquipChoice[], or the prose this field used
+   *  to be. Typed loose on purpose: JSONB does not migrate itself. */
+  raw: unknown
+  itemCatalog: CatalogItemRow[]
+  onChange: (next: EquipChoice[]) => void
+}) {
+  const choices = kitChoices(raw)
+  const legacy = legacyKitText(raw)
+  const [pick, setPick] = useState<{ choice: string; option: string } | null>(null)
+  const [query, setQuery] = useState('')
+
+  const patchChoice = (ci: number, p: Partial<EquipChoice>) =>
+    onChange(choices.map((c, i) => (i === ci ? { ...c, ...p } : c)))
+  const patchOption = (ci: number, oi: number, p: Partial<EquipOption>) =>
+    patchChoice(ci, { options: choices[ci].options.map((o, i) => (i === oi ? { ...o, ...p } : o)) })
+
+  const hits = useMemo(() => {
+    if (!pick) return []
+    const q = parseCatalogQuery(query)
+    return itemCatalog.filter(it => matchesCatalogQuery(it.data ?? {}, q)).slice(0, 8)
+  }, [itemCatalog, query, pick])
+
+  const addEntry = (ci: number, oi: number, entry: EquipEntry) => {
+    const items = choices[ci].options[oi].items ?? []
+    patchOption(ci, oi, { items: [...items, entry] })
+    setQuery('')
+    setPick(null)
+  }
+  const nameOf = (id: string) => itemCatalog.find(i => i.id === id)?.data?.name ?? id
+
+  /** Item data by id, for resolving a pool query the same way assign will.
+   *  Same function, so the count shown here is the count the player gets. */
+  const itemData = useMemo(() => {
+    const m = new Map<string, CatalogItemData>()
+    for (const it of itemCatalog) if (it.data) m.set(it.id, it.data)
+    return m
+  }, [itemCatalog])
+  const matchCountFor = (from: string) => resolvePool(from, itemData).length
+
+  return (
+    <div className={cx(styles.efBlock, styles.prose)}>
+      <div className={styles.efBh}>
+        <i className="fa-solid fa-sack-xmark" />
+        <span className={styles.t}>Starting Kit</span>
+        <span className={styles.n}>
+          {choices.length ? `${choices.length} choice${choices.length === 1 ? '' : 's'}` : 'none'}
+        </span>
+      </div>
+      <div className={styles.efRule}>
+        Each group is one decision the PLAYER makes — one option means no question
+      </div>
+
+      {/* This field used to be free text. Rather than dropping what was already
+          written, keep it on screen until the structured version replaces it —
+          re-authoring should be transcription, not recall. */}
+      {legacy && (
+        <div className={styles.kitLegacy}>
+          <div className={styles.klHead}>
+            <i className="fa-solid fa-file-lines" /> Written before this was a picker · rebuild it below, then this goes
+          </div>
+          <pre className={styles.klBody}>{legacy}</pre>
+        </div>
+      )}
+
+      {choices.length === 0 && !legacy && (
+        <div className={styles.efNone}>
+          No kit. Add a choice for each decision the class offers — "Armour: (a) scale mail,
+          (b) leather armour and a longbow" — or a one-option group for something everyone gets.
+        </div>
+      )}
+
+      {choices.map((ch, ci) => (
+        <div key={ch.id} className={styles.kitChoice}>
+          <div className={styles.kcHead}>
+            <span className={styles.kcN}>{String(ci + 1).padStart(2, '0')}</span>
+            <input
+              className={cx(styles.sessIn, styles.kcLab)} value={ch.label} {...NO_AUTOFILL}
+              onChange={e => patchChoice(ci, { label: e.target.value })}
+              aria-label="What this choice is called"
+              placeholder="What is being chosen — e.g. Armour" 
+            />
+            <span className={cx(styles.kcKind, ch.options.length < 2 && styles.fixed)}>
+              {ch.options.length < 2 ? 'granted' : `${ch.options.length} options`}
+            </span>
+            <span className={styles.x} onClick={() => onChange(choices.filter((_, i) => i !== ci))}>
+              <i className="fa-solid fa-xmark" />
+            </span>
+          </div>
+
+          {ch.options.map((op, oi) => {
+            const open = pick?.choice === ch.id && pick.option === op.id
+            return (
+              <div key={op.id} className={styles.kitOpt}>
+                <div className={styles.koHead}>
+                  <span className={styles.koN}>{ch.options.length > 1 ? `(${'abcdefgh'[oi]})` : '·'}</span>
+                  <input
+                    className={cx(styles.sessIn, styles.koLab)} value={op.label} {...NO_AUTOFILL}
+                    onChange={e => patchOption(ci, oi, { label: e.target.value })}
+                    aria-label="How the player reads this option"
+                    placeholder="How the player reads it — e.g. Scale mail" 
+                  />
+                  <span className={styles.x}
+                    onClick={() => patchChoice(ci, { options: ch.options.filter((_, i) => i !== oi) })}>
+                    <i className="fa-solid fa-xmark" />
+                  </span>
+                </div>
+                <div className={styles.koItems}>
+                  {(op.items ?? []).map((r, ri) => (
+                    isEquipPick(r)
+                      ? (
+                        <span key={ri} className={cx(styles.efChip, styles.poolChip)}>
+                          <i className="fa-solid fa-dice-d20" />
+                          {r.label || 'player picks'}{r.pick > 1 ? ` ×${r.pick}` : ''}
+                          <i className="fa-solid fa-xmark"
+                            onClick={() => patchOption(ci, oi, { items: op.items.filter((_, i) => i !== ri) })} />
+                        </span>
+                      )
+                      : (
+                        <span key={ri} className={styles.efChip}>
+                          {nameOf(r.item_id)}{r.qty > 1 ? ` ×${r.qty}` : ''}
+                          <i className="fa-solid fa-xmark"
+                            onClick={() => patchOption(ci, oi, { items: op.items.filter((_, i) => i !== ri) })} />
+                        </span>
+                      )
+                  ))}
+                  <button type="button" className={styles.koAdd}
+                    onClick={() => { setPick(open ? null : { choice: ch.id, option: op.id }); setQuery('') }}>
+                    <i className="fa-solid fa-plus" /> Item
+                  </button>
+                  {/* "a martial weapon" — the class names a POOL and the player
+                      picks from it. Authored as a catalog query so tagging the
+                      martial weapons once serves every class. */}
+                  <button type="button" className={styles.koAdd}
+                    onClick={() => addEntry(ci, oi, { pick: 1, from: '', label: '' })}>
+                    <i className="fa-solid fa-dice-d20" /> Player picks
+                  </button>
+                </div>
+                {open && (
+                  <div className={styles.koPick}>
+                    <div className={styles.searchWrap}>
+                      <i className="fa-solid fa-magnifying-glass" />
+                      <input className={styles.searchIn} value={query} autoFocus
+                        onChange={e => setQuery(e.target.value)}
+                        placeholder="Search the item catalog…" {...NO_AUTOFILL} />
+                    </div>
+                    <div className={styles.skPicklist}>
+                      {hits.length === 0
+                        ? <div className={styles.catFxNone}>Nothing matches.</div>
+                        : hits.map(it => (
+                          <button key={it.id} type="button" className={styles.catItem}
+                            onClick={() => addEntry(ci, oi, { item_id: it.id, qty: 1 })}>
+                            <span className={styles.ciIc} style={{ color: rarColor(it.data?.rarity) }}>
+                              <i className={`fa-solid ${it.data?.icon ?? 'fa-box'}`} />
+                            </span>
+                            <span className={styles.ciTx}>
+                              <span className={styles.ciNm}>{it.data?.name ?? it.id}</span>
+                              <span className={styles.ciTy}>{catDef(it.data?.category).label}</span>
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Per-entry detail. A plain item asks HOW MANY; a pool asks
+                    WHICH ITEMS QUALIFY and how many the player takes.
+
+                    The count applies to everything, not just stacks — what
+                    differs is the shape it takes on the sheet: five javelins
+                    are five rows, twenty arrows are one "Arrows x20".
+                    lib/placement.ts grantMany decides which, off the item's
+                    category, so the author sets a number and never has to know
+                    the rule. */}
+                {(op.items ?? []).length > 0 && (
+                  <div className={styles.koQty}>
+                    {op.items.map((r, ri) => {
+                      const patchEntry = (p: Partial<EquipPick> & Partial<EquipRef>) => patchOption(ci, oi, {
+                        items: op.items.map((x, i) => (i === ri ? { ...x, ...p } as EquipEntry : x)),
+                      })
+                      if (isEquipPick(r)) {
+                        const n = matchCountFor(r.from)
+                        return (
+                          <div key={ri} className={styles.kqPool}>
+                            <span className={styles.kqNm}><i className="fa-solid fa-dice-d20" /> Player picks</span>
+                            <input className={cx(styles.sessIn, styles.num)} type="number" min={1} value={r.pick}
+                              aria-label="How many the player picks"
+                              onChange={e => patchEntry({ pick: Math.max(1, parseInt(e.target.value || '1', 10) || 1) })} />
+                            <span className={styles.kqOf}>of</span>
+                            <input className={cx(styles.sessIn, styles.kqFrom)} value={r.from} {...NO_AUTOFILL}
+                              aria-label="Which items qualify"
+                              placeholder="tag:martial — or any search that names the pool"
+                              onChange={e => patchEntry({ from: e.target.value })} />
+                            <span className={cx(styles.kqHit, n === 0 && styles.zero)}>
+                              {r.from.trim() ? `${n} match${n === 1 ? '' : 'es'}` : 'name a pool'}
+                            </span>
+                            <input className={cx(styles.sessIn, styles.kqLabel)} value={r.label ?? ''} {...NO_AUTOFILL}
+                              aria-label="What the player is asked"
+                              placeholder="What they are asked — e.g. A martial weapon"
+                              onChange={e => patchEntry({ label: e.target.value })} />
+                          </div>
+                        )
+                      }
+                      const cat = itemCatalog.find(i => i.id === r.item_id)?.data?.category
+                      return (
+                        <span key={ri} className={styles.kqRow}>
+                          <span className={styles.kqNm}>{nameOf(r.item_id)}</span>
+                          <input className={cx(styles.sessIn, styles.num)} type="number" min={1} value={r.qty}
+                            aria-label={`How many ${nameOf(r.item_id)}`}
+                            onChange={e => patchEntry({ qty: Math.max(1, parseInt(e.target.value || '1', 10) || 1) })} />
+                          {r.qty > 1 && (
+                            <span className={styles.kqNote}>
+                              {isStackable(cat) ? 'one stack' : `${r.qty} separate`}
+                            </span>
+                          )}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          <div className={styles.efAdd}>
+            <Btn tone="ghost" sm icon="fa-plus" label="Option"
+              onClick={() => patchChoice(ci, { options: [...ch.options, { id: newId(), label: '', items: [] }] })} />
+          </div>
+        </div>
+      ))}
+
+      <div className={styles.efAdd}>
+        <Btn tone="ghost" sm icon="fa-plus" label="Choice"
+          onClick={() => onChange([...choices, { id: newId(), label: '', options: [{ id: newId(), label: '', items: [] }] }])} />
+      </div>
+    </div>
+  )
+}
+
+function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSelected, onCleared }: {
+  row: CatalogClassRow | null
+  creating: boolean
+  lib: DmClassesState
+  featureLib: DmFeaturesState
+  itemCatalog: CatalogItemRow[]
+  members: PartyMember[]
+  onSelected: (id: string) => void
+  onCleared: () => void
+}) {
+  const selId = row?.id ?? null
+  // `base` is what the draft is measured against: a parked draft if there is
+  // one, else the published content. Reopening a parked draft must read clean.
+  const base = creating ? BLANK_CLASS : row ? classContent(row) : null
+  const { draft, dirty, savedAt, update, reset, clear } =
+    useLocalDraft<ClassDef>(creating ? 'class:__new__' : `class:${selId ?? 'none'}`, base)
+
+  const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
+  const [saving, setSaving] = useState(false)
+  const [varsOpen, setVarsOpen] = useState(false)
+  const [fxOpen, setFxOpen] = useState(false)
+  const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
+
+  const set = (p: Partial<ClassDef>) => update(x => ({ ...x, ...p }))
+
+  /** Characters this class is on. A name match, because that is what
+   *  identity.class stores — the delete warning has to ask the question the
+   *  data can actually answer. */
+  const usedBy = useMemo(
+    () => (draft?.name ? members.filter(m => m.cls === draft.name) : []),
+    [members, draft?.name],
+  )
+
+  const audit: AuditItem[] = useMemo(() => {
+    if (!draft) return []
+    // `ready` gates the node list: auditNode skips dangling-target detection
+    // entirely when it is empty, so an audit run before the libraries load
+    // would report a clean class that is not clean.
+    const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
+
+    if (!draft.name?.trim()) {
+      out.unshift({ sev: 'err', id: null, t: 'Unnamed class', s: 'A class needs a name before it can be assigned.' })
+    }
+    // A subclass inherits its saves; only a class in its own right declares them.
+    if (!draft.parent && (draft.saveProficiencies ?? []).length !== 2) {
+      out.push({
+        sev: 'err', id: null, t: 'Saving throws must be exactly two',
+        s: `Currently ${(draft.saveProficiencies ?? []).length}. Every 5e class grants two save proficiencies.`,
+      })
+    }
+    if (draft.parent && !lib.classes.some(c => c.id === draft.parent)) {
+      out.push({ sev: 'err', id: null, t: 'Parent class is gone', s: 'This path points at a class that no longer exists.' })
+    }
+    if (draft.parent) {
+      const p = lib.classes.find(c => c.id === draft.parent)
+      if (p && (classContent(p).subclassLevel ?? 0) === 0) {
+        out.push({
+          sev: 'err', id: null, t: `${classContent(p).name} offers no paths`,
+          s: 'Its "path chosen at level" is 0, so this path can never be picked. Set a level on the parent.',
+        })
+      }
+    }
+    // A class that offers paths but has none authored asks a question with no
+    // answers — the player would be prompted and shown an empty list.
+    if (!draft.parent && (draft.subclassLevel ?? 0) > 0) {
+      const paths = lib.classes.filter(c => classContent(c).parent === selId)
+      if (!paths.length) {
+        out.push({
+          sev: 'warn', id: null, t: 'No paths authored',
+          s: `This class asks for a path at level ${draft.subclassLevel}, but none belongs to it yet.`,
+        })
+      }
+      if (!draft.subclassLabel?.trim()) {
+        out.push({ sev: 'warn', id: null, t: 'Path prompt unnamed', s: 'The player is asked to choose with nothing naming the question.' })
+      }
+    }
+    if (draft.caster !== 'none' && !draft.castingAbility) {
+      out.push({
+        sev: 'err', id: null, t: 'No casting ability',
+        s: 'A caster needs the ability that backs its save DC and spell attack bonus.',
+      })
+    }
+    if ((draft.skillChooseN ?? 0) > (draft.skillChoices ?? []).length) {
+      out.push({
+        sev: 'err', id: null, t: 'More skill picks than choices',
+        s: `Choose ${draft.skillChooseN} from a list of ${(draft.skillChoices ?? []).length}. Widen the list or lower the count.`,
+      })
+    }
+    if (ready) {
+      for (const r of draft.features ?? []) {
+        const f = featureLib.features.find(x => x.id === r.feature_id)
+        if (!f) {
+          out.push({
+            sev: 'err', id: null, t: 'Feature not in the library',
+            s: `"${r.feature_id}" was referenced but no longer exists. Remove the row or restore the feature.`,
+          })
+        } else if (!featureContent(f).published) {
+          out.push({
+            sev: 'warn', id: null, t: `${featureContent(f).name} is unpublished`,
+            s: 'Assigning this class will skip it — publish the feature first.',
+          })
+        }
+      }
+    }
+    if (!draft.desc?.trim()) {
+      out.push({ sev: 'warn', id: null, t: 'No description', s: 'The player has nothing to read about what this class is.' })
+    }
+    if ((draft.skillChooseN ?? 0) > 0 && !(draft.skillChoices ?? []).length) {
+      out.push({
+        sev: 'warn', id: null, t: 'No eligible skills',
+        s: `The class says pick ${draft.skillChooseN}, but offers nothing to pick from.`,
+      })
+    }
+    for (const ch of kitChoices(draft.startingEquipment)) {
+      if (!ch.label?.trim()) {
+        out.push({ sev: 'warn', id: null, t: 'Unlabelled kit choice', s: 'The player will be asked to choose with nothing naming the question.' })
+      }
+      const empty = (ch.options ?? []).filter(o => !(o.items ?? []).length)
+      if (empty.length) {
+        out.push({
+          sev: 'err', id: null, t: `"${ch.label || 'A kit choice'}" has an empty option`,
+          s: 'An option that hands over no items is dropped at assign — the player would pick it and receive nothing.',
+        })
+      }
+      const unlabelled = (ch.options ?? []).filter(o => !o.label?.trim())
+      if (unlabelled.length && (ch.options ?? []).length > 1) {
+        out.push({ sev: 'warn', id: null, t: `"${ch.label || 'A kit choice'}" has an unnamed option`, s: 'The player picks by label — an unnamed one reads as a blank button.' })
+      }
+    }
+    if (!(draft.features ?? []).length) {
+      out.push({ sev: 'warn', id: null, t: 'No features', s: 'A class with no features grants nothing when assigned.' })
+    }
+    // Pushed LAST on purpose: a graph error must never render beside
+    // "Safe to publish".
+    if (!out.length) out.push({ sev: 'ok', id: null, t: 'Clean', s: 'No errors, no warnings. Safe to publish.' })
+    return out
+  }, [draft, nodes, ready, featureLib.features, lib.classes, selId])
+
+  const errs = audit.filter(a => a.sev === 'err').length
+  const warns = audit.filter(a => a.sev === 'warn').length
+
+  if (!draft) {
+    return (
+      <div className={styles.catEmpty} style={{ marginTop: 40 }}>
+        Select a class, or start a new one.
+      </div>
+    )
+  }
+
+  async function onSaveDraft() {
+    if (!draft) return
+    setSaving(true)
+    const id = await lib.saveDraft(creating ? null : selId, draft)
+    setSaving(false)
+    if (id && creating) { clear(); onSelected(id) }
+  }
+
+  async function onPublish() {
+    if (!draft || errs > 0) return
+    setSaving(true)
+    const id = await lib.publishClass(creating ? null : selId, draft)
+    setSaving(false)
+    if (!id) return
+    clear()
+    onSelected(id)
+  }
+
+  function onRevert() {
+    setConfirm(null)
+    reset(row ? row.data : null)
+    // Never published, so discarding the draft removes it entirely.
+    if (!row) onCleared()
+  }
+
+  async function onDuplicate() {
+    if (!selId) return
+    const id = await lib.duplicateClass(selId)
+    if (id) onSelected(id)
+  }
+
+  async function onDelete() {
+    if (!selId) return
+    setConfirm(null)
+    await lib.deleteClass(selId)
+    onCleared()
+  }
+
+  /* A SUBCLASS is a row with a parent, not a nested structure — it grants
+     features, rules and proficiencies exactly as a class does, so it wants the
+     whole editor. What it does NOT get is the fields it inherits: hit die,
+     primary ability and saving throws are the parent's answer, and an override
+     here would be a control nothing reads.
+
+     It DOES keep spellcasting: an Eldritch Knight makes a martial class into a
+     third caster, and that was the whole argument for a subclass being a row. */
+  const isSub = !!draft.parent
+  const parentClass = draft.parent ? lib.classes.find(c => c.id === draft.parent) : null
+  const parentOptions = lib.classes.filter(c => c.id !== selId && !classContent(c).parent)
+
+  const saves = draft.saveProficiencies ?? []
+  /** Toggling a third save drops the oldest rather than refusing the click —
+   *  a control that silently does nothing reads as broken. */
+  const toggleSave = (k: AbilityKey) => set({
+    saveProficiencies: saves.includes(k)
+      ? saves.filter(x => x !== k)
+      : [...saves, k].slice(-2),
+  })
+
+  const skillChoices = draft.skillChoices ?? []
+  const toggleSkill = (k: string) => set({
+    skillChoices: skillChoices.includes(k) ? skillChoices.filter(x => x !== k) : [...skillChoices, k],
+  })
+
+  return (
+    /* One wrapper so the form's vertical rhythm can be set once. A bare
+       .fieldLab gets its gap from the line box of the inline-block <input>
+       that follows it — but before a BLOCK-level widget (a flex chip row, a
+       grid) there is no line box and the control sits flush against its own
+       label. .clsForm normalises both cases to the same measure. */
+    <div className={styles.clsForm}>
+      <div className={styles.catFormHead}>
+        <span className={styles.cfhT}>
+          {draft.parent ? (creating ? 'New Path' : 'Edit Path') : (creating ? 'New Class' : 'Edit Class')}
+        </span>
+        <span className={styles.cfhId}>{selId ?? 'id minted on first save'}</span>
+      </div>
+
+      {/* ---- IDENTITY ---- */}
+      <span className={styles.fieldLab}>Name</span>
+      <input className={styles.sessIn} value={draft.name} onChange={e => set({ name: e.target.value })}
+        placeholder="Name the class…" />
+
+      <span className={styles.fieldLab}>Icon</span>
+      <div className={styles.catIcons}>
+        {CLASS_ICONS.map(ic => (
+          <button key={ic} className={cx(styles.catIc, ic === draft.icon && styles.sel)}
+            onClick={() => set({ icon: ic })} title={ic} aria-label={ic}>
+            <i className={`fa-solid ${ic}`} />
+          </button>
+        ))}
+      </div>
+
+      <div className={cx(styles.catGrid3, isSub && styles.hidden)}>
+        <div>
+          <span className={styles.fieldLab}>Hit die</span>
+          <select className={styles.selIn} value={draft.hitDie}
+            onChange={e => set({ hitDie: Number(e.target.value) as ClassDef['hitDie'] })}>
+            {HIT_DICE.map(d => <option key={d} value={d}>d{d}</option>)}
+          </select>
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Primary ability</span>
+          <select className={styles.selIn} value={draft.primaryAbility}
+            onChange={e => set({ primaryAbility: e.target.value as AbilityKey })}>
+            {ABILITY_ORDER.map(a => <option key={a} value={a}>{ABILITY_ABBR[a].toUpperCase()}</option>)}
+          </select>
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Tint</span>
+          <input className={styles.sessIn} type="color" value={draft.color || '#e2b021'}
+            onChange={e => set({ color: e.target.value })} />
+        </div>
+      </div>
+
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>
+            Belongs to <span className={styles.dimLab}>— makes this a subclass</span>
+          </span>
+          <select className={styles.selIn} value={draft.parent ?? ''}
+            onChange={e => set({ parent: e.target.value || undefined })}>
+            <option value="">— a class in its own right —</option>
+            {parentOptions.map(c => <option key={c.id} value={c.id}>{classContent(c).name || c.id}</option>)}
+          </select>
+        </div>
+        {!isSub && (
+          <div>
+            <span className={styles.fieldLab}>
+              Path chosen at level <span className={styles.dimLab}>— 0 = no subclasses</span>
+            </span>
+            <input className={cx(styles.sessIn, styles.num)} type="number" min={0} max={20}
+              value={draft.subclassLevel ?? 0}
+              aria-label="Level at which the player picks a subclass"
+              onChange={e => set({ subclassLevel: Math.max(0, Math.min(20, parseInt(e.target.value || '0', 10) || 0)) })} />
+          </div>
+        )}
+      </div>
+
+      {!isSub && (draft.subclassLevel ?? 0) > 0 && (
+        <>
+          <span className={styles.fieldLab}>
+            Path prompt <span className={styles.dimLab}>— what this decision is called in your world</span>
+          </span>
+          <input className={styles.sessIn} value={draft.subclassLabel ?? ''} {...NO_AUTOFILL}
+            onChange={e => set({ subclassLabel: e.target.value || undefined })}
+            aria-label="What choosing a subclass is called"
+            placeholder="e.g. Arbiter Path, Martial Archetype" />
+        </>
+      )}
+
+      {isSub && (
+        <div className={styles.subNote}>
+          <i className="fa-solid fa-code-branch" />
+          <span>
+            A path of <b>{parentClass ? classContent(parentClass).name : draft.parent}</b>. Hit die, primary
+            ability and saving throws come from it — set them there, not here. Spellcasting stays: a path
+            can make a martial class into a caster.
+          </span>
+        </div>
+      )}
+
+      {/* HIT POINTS ARE NOT AUTHORED. Both lines fall out of the hit die above,
+          so they are shown rather than typed — a second field here would be a
+          second answer to the same question. A subclass inherits the die, so it
+          inherits these too. */}
+      <div className={cx(styles.hpRule, isSub && styles.hidden)}>
+        <div className={styles.hrHead}>
+          <i className="fa-solid fa-heart-pulse" /> Hit points · derived from the hit die
+        </div>
+        <div className={styles.hrRow}>
+          <span className={styles.hrK}>1st level</span>
+          <span className={styles.hrV}>{hitPointRules(draft.hitDie).first}</span>
+        </div>
+        <div className={styles.hrRow}>
+          <span className={styles.hrK}>Higher levels</span>
+          <span className={styles.hrV}>{hitPointRules(draft.hitDie).higher}</span>
+        </div>
+      </div>
+
+      <div className={cx(styles.efBlock, styles.prose)}>
+        <div className={styles.efBh}>
+          <i className="fa-solid fa-feather" /><span className={styles.t}>Description</span>
+          <span className={styles.n}><i className="fa-solid fa-eye" /> player-facing · **bold** *italics*</span>
+        </div>
+        <div className={styles.efRule}>What this class is, in the player's language</div>
+        <textarea className={styles.catProse} value={draft.desc} onChange={e => set({ desc: e.target.value })}
+          onKeyDown={markdownShortcuts(desc => set({ desc }))}
+          placeholder="e.g. Sworn adjudicators of the Lattice, who read a verdict into every strike…" />
+      </div>
+
+      {/* ---- PROFICIENCIES ----
+          One block rather than five bare label/control pairs in a row. The
+          Effects form groups by block (Modifiers / Flags / Description), and a
+          long stack of naked pairs does not read as a sibling of it. */}
+      <div className={cx(styles.efBlock, styles.mods)}>
+        <div className={styles.efBh}>
+          <i className="fa-solid fa-graduation-cap" />
+          <span className={styles.t}>Proficiencies</span>
+          <span className={styles.n}>{saves.length}/2 saves · {skillChoices.length} skills</span>
+        </div>
+        <div className={styles.efRule}>What a member of this class is trained in</div>
+
+      <div className={cx(styles.clsSub, isSub && styles.hidden)}>
+      <span className={styles.fieldLab}>
+        Saving throws <span className={styles.dimLab}>— pick two; a third replaces the oldest</span>
+      </span>
+      <div className={styles.profGrid}>
+        {ABILITY_ORDER.map(k => {
+          const on = saves.includes(k)
+          return (
+            <button key={k} type="button" className={cx(styles.profChip, on && styles.on)}
+              onClick={() => toggleSave(k)} aria-pressed={on}>
+              <ProfDots n={on ? 1 : 0} of={1} />
+              {ABILITY_ABBR[k].toUpperCase()}
+            </button>
+          )
+        })}
+      </div>
+      </div>
+
+      <div className={styles.clsSub}>
+      <span className={styles.fieldLab}>
+        Skill proficiencies <span className={styles.dimLab}>— the eligible list; the player chooses from it</span>
+      </span>
+      <div className={styles.profGrid}>
+        {SKILLS.map(sk => {
+          const on = skillChoices.includes(sk.key)
+          return (
+            <button key={sk.key} type="button" className={cx(styles.profChip, on && styles.on)}
+              onClick={() => toggleSkill(sk.key)} aria-pressed={on}>
+              <ProfDots n={on ? 1 : 0} of={1} />
+              {sk.name} <span className={styles.ab}>{ABILITY_ABBR[sk.ability].toUpperCase()}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className={styles.clsChoose}>
+        <span className={styles.fieldLab} style={{ margin: 0 }}>Choose</span>
+        <input className={cx(styles.sessIn, styles.num)} type="number" min={0} max={skillChoices.length || 18}
+          value={draft.skillChooseN}
+          onChange={e => set({ skillChooseN: Math.max(0, parseInt(e.target.value || '0', 10) || 0) })} />
+        <span className={styles.clsChooseS}>
+          of {skillChoices.length} eligible. Assigning the class never ticks them — the pick is the player's.
+        </span>
+      </div>
+      </div>
+      </div>
+
+      {/* ---- TRAINING & STARTING KIT ---- */}
+      <div className={cx(styles.efBlock, styles.flags)}>
+        <div className={styles.efBh}>
+          <i className="fa-solid fa-shield" />
+          <span className={styles.t}>Training &amp; Kit</span>
+          <span className={styles.n}>Enter to add</span>
+        </div>
+        <div className={styles.efRule}>Free text — what the player reads on their sheet</div>
+        <TrainingRow
+          label="Armour" values={draft.proficiencies?.armor ?? []}
+          placeholder="All armor, Shields…"
+          onChange={armor => set({ proficiencies: { ...draft.proficiencies, armor } })}
+        />
+        <TrainingRow
+          label="Weapons" values={draft.proficiencies?.weapons ?? []}
+          placeholder="Simple weapons, Martial weapons…"
+          onChange={weapons => set({ proficiencies: { ...draft.proficiencies, weapons } })}
+        />
+        <TrainingRow
+          label="Tools" values={draft.proficiencies?.tools ?? []}
+          placeholder="Thieves' tools…"
+          onChange={tools => set({ proficiencies: { ...draft.proficiencies, tools } })}
+        />
+      </div>
+
+      {/* The kit is its own block, not a field inside Training: training is what
+          you are ALLOWED to use, a kit is what you actually walk in carrying —
+          and the player answers this one. */}
+      {!isSub && (
+        <KitEditor
+          raw={draft.startingEquipment} itemCatalog={itemCatalog}
+          onChange={startingEquipment => set({ startingEquipment })}
+        />
+      )}
+
+      {/* ---- SPELLCASTING ---- */}
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Spellcasting</span></div>
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Caster type</span>
+          <select className={styles.selIn} value={draft.caster}
+            onChange={e => set({ caster: e.target.value as ClassCasterType })}>
+            {CASTER_ORDER.map(c => <option key={c} value={c}>{c === 'none' ? 'None' : CASTER_LABEL[c]}</option>)}
+          </select>
+        </div>
+        {draft.caster !== 'none' && (
+          <div>
+            <span className={styles.fieldLab}>Casting ability</span>
+            <select className={styles.selIn} value={draft.castingAbility ?? ''}
+              onChange={e => set({ castingAbility: (e.target.value || undefined) as AbilityKey | undefined })}>
+              <option value="">— pick one —</option>
+              {CASTER_ABILITIES.map(a => <option key={a} value={a}>{ABILITY_ABBR[a].toUpperCase()}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+      {/* SPELL SAVE DC AND ATTACK BONUS ARE NOT AUTHORED — the class decides the
+          FORMULA, the character supplies the numbers. Stated here for the same
+          reason the hit-point rule is: it is the class's answer, and it was
+          otherwise only visible in the Assign card, long after you had stopped
+          thinking about it. lib/classes.ts castingNumbers computes the values. */}
+      {draft.caster !== 'none' && (
+        <div className={cx(styles.hpRule, styles.castRule)}>
+          <div className={styles.hrHead}>
+            <i className="fa-solid fa-hat-wizard" /> Spellcasting numbers · derived per character
+          </div>
+          <div className={styles.hrRow}>
+            <span className={styles.hrK}>Save DC</span>
+            <span className={styles.hrV}>{castingRules(draft.castingAbility).dc}</span>
+          </div>
+          <div className={styles.hrRow}>
+            <span className={styles.hrK}>Spell attack</span>
+            <span className={styles.hrV}>{castingRules(draft.castingAbility).atk}</span>
+          </div>
+        </div>
+      )}
+
+      {draft.caster === 'pact' ? <PactLadder />
+        : draft.caster !== 'none' ? <SlotProgression caster={draft.caster} />
+          : null}
+
+      {/* ---- FEATURES ---- */}
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Contents</span></div>
+      <ClassFeaturePicker
+        refs={draft.features ?? []} featureLib={featureLib.features}
+        onChange={features => set({ features })}
+      />
+
+      {/* ---- SHARED AUTHORING BLOCKS — identical to the item and spell forms ---- */}
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Authoring</span></div>
+      <span className={styles.fieldLab}>Targeting tags</span>
+      <TagsBlock tags={draft.tags ?? []} tagUse={tagUse} onChange={tags => set({ tags })} />
+
+      <div className={cx(styles.catFx, styles.fold, varsOpen && styles.open)}>
+        <div className={styles.fxfHead} onClick={() => setVarsOpen(o => !o)} role="button" tabIndex={0} aria-expanded={varsOpen}>
+          <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
+          <i className="fa-solid fa-database" style={{ color: 'var(--cyan-hot)', fontSize: 11 }} />
+          <span className={styles.t}>Variables</span>
+          <span className={styles.s}>
+            {(draft.vars ?? []).length
+              ? `${(draft.vars ?? []).length} declared · ${(draft.vars ?? []).map(v => v.name || '?').join(', ')}`
+              : 'none · the state this class shares — a save DC, a path counter'}
+          </span>
+        </div>
+        {varsOpen && (
+          <div className={styles.gfxBody}>
+            <VarsBlock vars={draft.vars ?? []} onChange={vars => set({ vars })} />
+          </div>
+        )}
+      </div>
+
+      <div className={cx(styles.catFx, styles.fold, fxOpen && styles.open)}>
+        <div className={styles.fxfHead} onClick={() => setFxOpen(o => !o)} role="button" tabIndex={0} aria-expanded={fxOpen}>
+          <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
+          <i className="fa-solid fa-diagram-project" style={{ color: 'var(--cyan-hot)', fontSize: 11 }} />
+          <span className={styles.t}>Rules</span>
+          <span className={styles.s}>
+            {(draft.graph ?? []).length
+              ? `${(draft.graph ?? []).length} effect${(draft.graph ?? []).length === 1 ? '' : 's'}`
+              : 'none · what the class itself contributes to a roll'}
+          </span>
+        </div>
+        {fxOpen && (
+          <div className={styles.gfxBody}>
+            <GraphEffects
+              graph={draft.graph ?? []} vars={draft.vars ?? []} nodes={nodes} namesByGid={namesByGid}
+              onChange={graph => set({ graph })} onVarsChange={vars => set({ vars })}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ---- AUDIT ---- */}
+      <div className={styles.clsAudit}>
+        <AuditPanel title="Class Audit" audit={audit} onJump={() => { setVarsOpen(true); setFxOpen(true) }} />
+      </div>
+
+      {/* ---- ACTIONS ---- */}
+      {confirm === 'revert' && (
+        <div className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" />
+          <span>
+            <b>Discard this draft?</b>{' '}
+            {row?.data?.published
+              ? 'The published version comes back and nothing a player sees changes.'
+              : 'This class has never been published, so discarding removes it entirely.'}
+          </span>
+          <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
+          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+        </div>
+      )}
+      {confirm === 'delete' && (
+        <div className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" />
+          <span>
+            <b>Delete {draft.name || 'this class'}?</b>{' '}
+            {usedBy.length
+              ? `${usedBy.map(m => firstName(m.name)).join(', ')} ${usedBy.length === 1 ? 'is' : 'are'} on it. Their sheet keeps what it was already granted — but nothing can be re-assigned from this class again.`
+              : 'No character is on it.'}
+          </span>
+          <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
+          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+        </div>
+      )}
+
+      {/* Two explicit rows. Five buttons on one wrap line put PUBLISH — the
+          whole point of the bar — alone on an orphan row below the others. */}
+      <div className={styles.clsBar}>
+        <div className={styles.clsBarInfo}>
+          <div className={cx(styles.clsStat, errs ? styles.bad : warns ? styles.warn : undefined)}>
+            <span className={styles.dot} />
+            <span>
+              {errs ? `${errs} error${errs === 1 ? '' : 's'} — publish blocked`
+                : warns ? `${warns} warning${warns === 1 ? '' : 's'} — publishable`
+                  : 'Draft valid · publishable'}
+            </span>
+          </div>
+          <span className={cx(styles.clsDirty, dirty && styles.on)}>● Unpublished changes</span>
+          <span className={styles.clsSaved}>
+            {savedAt ? `Draft autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}
+          </span>
+        </div>
+        {/* Two rows, split by what the action is ABOUT: the row itself, then
+            the draft ladder. Five across shared the width equally, which left
+            "Save Draft" narrower than its own label — and .btn's label is
+            absolutely positioned under a clip-path, so it clips rather than
+            overflowing and the icon loses half of itself. */}
+        {selId && (
+          <div className={cx(styles.clsActs, styles.rowActs)}>
+            <Btn tone="ghost" sm icon="fa-clone" label="Duplicate" onClick={() => void onDuplicate()} />
+            <Btn tone="ghost" sm icon="fa-trash" label="Delete" onClick={() => setConfirm('delete')} />
+          </div>
+        )}
+        <div className={styles.clsActs}>
+          <Btn tone="ghost" sm icon="fa-rotate-left" label="Revert" onClick={() => setConfirm('revert')} disabled={!dirty} />
+          <Btn tone="cyan" sm icon="fa-floppy-disk" label="Save Draft" onClick={() => void onSaveDraft()} disabled={saving} />
+          <span className={styles.clsPub}>
+            <Btn tone="amber" sm icon="fa-tower-broadcast" label={saving ? 'Working…' : 'Publish'}
+              onClick={() => void onPublish()} disabled={saving || errs > 0} />
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * ASSIGN RACE (Actions card) — the class card's twin, and the other half of a
+ * character. Everything it writes is derived by lib/races.ts assignRace, which
+ * is pure and tested; this is the picker and the report.
+ */
+function AssignRaceCard({ member, row, raceLib, featureLib, shardCatalog, onUpdate, log }: {
+  member: PartyMember
+  row: CharacterRow
+  raceLib: DmRacesState
+  featureLib: CatalogFeatureRow[]
+  shardCatalog: Record<string, ShardTree>
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const [selId, setSelId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState(false)
+  const first = firstName(member.name)
+
+  const published = raceLib.races.filter(r => r.data?.published)
+  const shown = useMemo(() => {
+    const q = parseCatalogQuery(query)
+    // Only races in their own right: a subrace is reached through its parent's
+    // dropdown, never assigned on its own.
+    return published.filter(r => !r.data.parent && matchesCatalogQuery(r.data, q))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raceLib.races, query])
+  const selected = shown.find(r => r.id === selId) ?? null
+
+  const featureData = useMemo(() => {
+    const m = new Map<string, CatalogFeatureData>()
+    for (const f of featureLib) if (f.data?.published) m.set(f.id, f.data)
+    return m
+  }, [featureLib])
+
+  /** Subraces of whatever is highlighted. Picked HERE rather than parked for
+   *  the player: a subrace is chosen at level 1 alongside the race, with the DM
+   *  in the room — unlike a class path, taken levels later. */
+  const subraces = useMemo(
+    () => (selected ? raceLib.races.filter(r => r.data?.published && r.data.parent === selected.id) : []),
+    [raceLib.races, selected],
+  )
+  const [subId, setSubId] = useState<string | null>(null)
+  const sub = subraces.find(r => r.id === subId) ?? null
+
+  const preview = useMemo(
+    () => (selected
+      ? assignRace(row, selected.id, selected.data, featureData, shardCatalog,
+        sub ? { id: sub.id, data: sub.data } : undefined)
+      : null),
+    [selected, row, featureData, shardCatalog, sub],
+  )
+
+  /** What its boost rules do to the sheet. Read off the same rules the engine
+   *  compiles, so the preview cannot promise a number the sheet will not get. */
+  const boosts = useMemo(
+    () => (selected?.data.graph ?? []).filter(g => g.op === 'boost'),
+    [selected],
+  )
+
+  async function assign() {
+    if (!selected || !preview) return
+    setBusy(true)
+    const ok = await onUpdate(preview.patch)
+    setBusy(false)
+    if (!ok) return
+    log(
+      <>Set <span className={styles.who}>{first}</span> to <span className={styles.obj}>{selected.data.name}</span>
+        {preview.granted.length ? <> · granted {preview.granted.length} trait{preview.granted.length === 1 ? '' : 's'}</> : null}
+      </>,
+      'cyan',
+    )
+  }
+
+  return (
+    <div className={cx(styles.actCard, styles.wide)}>
+      <div className={styles.acTitle}>
+        <i className="fa-solid fa-leaf lead" /><span className={styles.num}>L</span>
+        <span className={styles.t}>Race</span>
+      </div>
+
+      <div className={styles.detailRow}>
+        <span className={styles.drLab}>Currently</span>
+        <span className={styles.drVal}>
+          {row.identity?.race || '— none —'}
+          {row.identity?.subrace ? ` · ${row.identity.subrace}` : ''}
+        </span>
+      </div>
+
+      <span className={styles.fieldLab}>Library · published races only</span>
+      <div className={styles.searchWrap}>
+        <i className="fa-solid fa-magnifying-glass" />
+        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          placeholder="Search races…" autoComplete="off" spellCheck={false} />
+      </div>
+      <div className={styles.catList}>
+        {published.length === 0 ? (
+          <div className={styles.catListEmpty}>No published races — author one in the Catalog&apos;s Races tab.</div>
+        ) : shown.length === 0 ? (
+          <div className={styles.catListEmpty}>Nothing matches “{query.trim()}”.</div>
+        ) : shown.map(r => (
+          <button key={r.id} className={cx(styles.catItem, r.id === selId && styles.sel)}
+            onClick={() => { setSelId(r.id); setSubId(null) }}>
+            <span className={styles.ciIc} style={{ color: r.data.color || 'var(--good)' }}>
+              <i className={`fa-solid ${r.data.icon || 'fa-leaf'}`} />
+            </span>
+            <span className={styles.ciTx}>
+              <span className={styles.ciNm}>{r.data.name}</span>
+              <span className={styles.ciTy}>
+                {r.data.parent ? 'subrace' : 'race'} · {(r.data.features ?? []).length} traits
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {selected && subraces.length > 0 && (
+        <>
+          <span className={styles.fieldLab}>
+            {selected.data.subraceLabel || 'Lineage'} <span className={styles.dimLab}>— chosen now, with you</span>
+          </span>
+          <select className={styles.selIn} value={subId ?? ''} onChange={e => setSubId(e.target.value || null)}>
+            <option value="">— none —</option>
+            {subraces.map(r => <option key={r.id} value={r.id}>{r.data.name}</option>)}
+          </select>
+        </>
+      )}
+
+      {preview && selected && (
+        <div className={styles.clsPreview}>
+          {boosts.length > 0 && (
+            <div className={styles.cpLine}>
+              <i className="fa-solid fa-arrow-up-right-dots" /> Sheet
+              <span className={styles.cpNames}>
+                {boosts.map(b => `${b.stat} ${Number(b.value) >= 0 ? '+' : ''}${b.value}`).join(' · ')}
+                {' — layered, and removed if the race changes'}
+              </span>
+            </div>
+          )}
+          <div className={styles.cpLine}>
+            <i className="fa-solid fa-star" /> Grants <b>{preview.granted.length}</b> trait{preview.granted.length === 1 ? '' : 's'}
+            {preview.granted.length > 0 && <span className={styles.cpNames}>{preview.granted.join(', ')}</span>}
+          </div>
+          {preview.pending.length > 0 && (
+            <div className={cx(styles.cpLine, styles.dim)}>
+              <i className="fa-solid fa-lock" /> <b>{preview.pending.length}</b> still gated
+              <span className={styles.cpNames}>
+                {preview.pending.slice(0, 4).map(p => `${p.name} (${p.when})`).join(', ')}
+              </span>
+            </div>
+          )}
+          {(selected.data.languages ?? []).length > 0 && (
+            <div className={cx(styles.cpLine, styles.dim)}>
+              <i className="fa-solid fa-language" /> Speaks
+              <span className={styles.cpNames}>
+                {(selected.data.languages ?? []).join(', ')}
+                {preview.languagePicks > 0 ? ` + ${preview.languagePicks} of their choosing` : ''}
+              </span>
+            </div>
+          )}
+          {preview.skillPicks > 0 && (
+            <div className={cx(styles.cpLine, styles.dim)}>
+              <i className="fa-solid fa-graduation-cap" /> Player picks <b>{preview.skillPicks}</b> skill
+              <span className={styles.cpNames}>waits on their Codex until they choose</span>
+            </div>
+          )}
+          {row.identity?.race && row.identity.race !== selected.data.name && (
+            <div className={cx(styles.cpLine, styles.warn)}>
+              <i className="fa-solid fa-triangle-exclamation" /> Replaces <b>{row.identity.race}</b> — its traits and
+              its sheet bonuses come off. Class grants are untouched.
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={styles.grantAction}>
+        <Btn tone="amber" icon="fa-arrow-right-to-bracket"
+          label={busy ? 'Assigning…' : selected ? `Assign to ${first}` : 'Assign race'}
+          onClick={() => void assign()} disabled={!selected || busy} />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * ASSIGN CLASS (Actions card) — the boundary where a template becomes state.
+ *
+ * Everything it writes is derived by lib/classes.ts assignClass, which is pure
+ * and tested; this card is the picker and the report. It seeds the two cards
+ * below it in the same tab (Spells, Skills), which is why it reads first.
+ *
+ * Only PUBLISHED classes appear, matching the Grant Feature and Grant Spell
+ * pickers — a draft is the DM's unfinished work, not something to put on a
+ * character.
+ */
+function AssignClassCard({ member, row, classLib, featureLib, itemCatalog, shardCatalog, onUpdate, log }: {
+  member: PartyMember
+  row: CharacterRow
+  classLib: DmClassesState
+  featureLib: CatalogFeatureRow[]
+  itemCatalog: CatalogItemRow[]
+  shardCatalog: Record<string, ShardTree>
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const [selId, setSelId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState(false)
+  const first = firstName(member.name)
+  const level = row.identity?.level ?? 1
+
+  const published = classLib.classes.filter(c => c.data?.published)
+  const shown = useMemo(() => {
+    const q = parseCatalogQuery(query)
+    return published.filter(c => matchesCatalogQuery(c.data, q))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classLib.classes, query])
+  // Same rule as Grant Feature and Grant Spell: the selection is whatever is
+  // visible, so searching past your choice disarms the button rather than
+  // assigning something off-screen.
+  const selected = shown.find(c => c.id === selId) ?? null
+
+  /** Published feature content by id — what a grant is allowed to snapshot. */
+  const featureData = useMemo(() => {
+    const m = new Map<string, CatalogFeatureData>()
+    for (const f of featureLib) if (f.data?.published) m.set(f.id, f.data)
+    return m
+  }, [featureLib])
+
+  /** Item content by id — what the kit snapshot resolves against. */
+  const itemData = useMemo(() => {
+    const m = new Map<string, CatalogItemData>()
+    for (const it of itemCatalog) if (it.data) m.set(it.id, it.data)
+    return m
+  }, [itemCatalog])
+
+  /** The paths belonging to whatever is highlighted, so assigning parks the
+   *  player's choice in the same write. */
+  const selectedPaths = useMemo(
+    () => (selected
+      ? classLib.classes.filter(c => c.data?.published && c.data.parent === selected.id)
+        .map(c => ({ id: c.id, data: c.data }))
+      : []),
+    [classLib.classes, selected],
+  )
+
+  const preview = useMemo(
+    () => (selected ? assignClass(row, selected.id, selected.data, featureData, itemData, shardCatalog, selectedPaths) : null),
+    [selected, row, featureData, itemData, shardCatalog, selectedPaths],
+  )
+
+  /** The class this character is ACTUALLY on — not whatever is highlighted in
+   *  the picker above, which is a proposal until Assign is pressed. */
+  const onClass = classLib.classes.find(c => c.data?.published && c.data.name === row.identity?.class) ?? null
+  const paths = onClass
+    ? classLib.classes.filter(c => c.data?.published && c.data.parent === onClass.id)
+    : []
+
+  async function takePath(pth: CatalogClassRow) {
+    if (busy) return
+    setBusy(true)
+    const r = assignSubclass(row, pth.id, pth.data, featureData, shardCatalog)
+    const ok = await onUpdate(r.patch)
+    setBusy(false)
+    if (!ok) return
+    log(
+      <><span className={styles.who}>{first}</span> takes the <span className={styles.obj}>{pth.data.name}</span> path
+        {r.granted.length ? <> · granted {r.granted.length} feature{r.granted.length === 1 ? '' : 's'}</> : null}
+      </>,
+      'cyan',
+    )
+  }
+
+  async function assign() {
+    if (!selected || !preview) return
+    setBusy(true)
+    const ok = await onUpdate(preview.patch)
+    setBusy(false)
+    if (!ok) return
+    log(
+      <>Set <span className={styles.who}>{first}</span> to <span className={styles.obj}>{selected.data.name}</span>
+        {preview.granted.length ? <> · granted {preview.granted.length} feature{preview.granted.length === 1 ? '' : 's'}</> : null}
+      </>,
+      'cyan',
+    )
+  }
+
+  return (
+    <div className={cx(styles.actCard, styles.wide)}>
+      <div className={styles.acTitle}>
+        <i className="fa-solid fa-shield-halved lead" /><span className={styles.num}>K</span>
+        <span className={styles.t}>Class</span>
+      </div>
+
+      <div className={styles.detailRow}>
+        <span className={styles.drLab}>Currently</span>
+        <span className={styles.drVal}>{row.identity?.class || '— none —'} · level {level}</span>
+      </div>
+
+      <span className={styles.fieldLab}>Library · published classes only</span>
+      <div className={styles.searchWrap}>
+        <i className="fa-solid fa-magnifying-glass" />
+        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          placeholder="Search classes…" autoComplete="off" spellCheck={false} />
+      </div>
+      <div className={styles.catList}>
+        {published.length === 0 ? (
+          <div className={styles.catListEmpty}>No published classes — author one in the Catalog's Classes tab.</div>
+        ) : shown.length === 0 ? (
+          <div className={styles.catListEmpty}>Nothing matches “{query.trim()}”.</div>
+        ) : shown.map(c => (
+          <button key={c.id} className={cx(styles.catItem, c.id === selId && styles.sel)} onClick={() => setSelId(c.id)}>
+            <span className={styles.ciIc} style={{ color: c.data.color || 'var(--amber)' }}>
+              <i className={`fa-solid ${c.data.icon || 'fa-shield-halved'}`} />
+            </span>
+            <span className={styles.ciTx}>
+              <span className={styles.ciNm}>{c.data.name}</span>
+              <span className={styles.ciTy}>d{c.data.hitDie} · {CASTER_LABEL[c.data.caster ?? 'none']}</span>
+            </span>
+            <span className={styles.ciRar} style={{ color: 'var(--muted)' }}>
+              {(c.data.features ?? []).length} feat
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Say what the button will do before it is pressed — assigning rewrites
+          hit die, saves, armour training and the slot ladder, which is a lot to
+          discover afterwards. */}
+      {preview && selected && (
+        <div className={styles.clsPreview}>
+          <div className={styles.cpLine}>
+            <i className="fa-solid fa-dice-d20" /> Hit die <b>d{selected.data.hitDie}</b>
+            <span className={styles.op}> · </span>
+            saves <b>{(selected.data.saveProficiencies ?? []).map(k => ABILITY_ABBR[k].toUpperCase()).join(' + ') || '—'}</b>
+            {selected.data.caster !== 'none' && (
+              <>
+                <span className={styles.op}> · </span>
+                {selected.data.caster === 'pact'
+                  ? <>pact <b>{pactSlotCount(level)}× {ordinal(pactSlotLevel(level))}</b></>
+                  : <>slots <b>{casterSlots(selected.data.caster, level).filter(n => n > 0).join('/') || 'none yet'}</b></>}
+              </>
+            )}
+          </div>
+          {selected.data.caster !== 'none' && (() => {
+            const cast = castingNumbers(row.sheet ?? {}, selected.data.castingAbility)
+            return (
+              <div className={styles.cpLine}>
+                <i className="fa-solid fa-hat-wizard" />
+                {cast
+                  ? <>Save DC <b>{cast.saveDC}</b><span className={styles.op}> · </span>spell attack <b>+{cast.attackBonus}</b>
+                    <span className={styles.cpNames}>
+                      8 + proficiency + {ABILITY_ABBR[selected.data.castingAbility as AbilityKey]?.toUpperCase()} —
+                      seeded here, overridable in the Spellcasting card
+                    </span></>
+                  : <>Save DC and spell attack need ability scores on the sheet first</>}
+              </div>
+            )
+          })()}
+          {preview.hpFromClass != null && (
+            <div className={cx(styles.cpLine, !preview.hpSeeded && styles.dim)}>
+              <i className="fa-solid fa-heart-pulse" />
+              {preview.hpSeeded
+                ? <>Max HP <b>{preview.hpFromClass}</b> at level {level}
+                  <span className={styles.cpNames}>
+                    d{selected.data.hitDie} + CON at 1st, then the average each level — the sheet has none yet
+                  </span></>
+                : <>Max HP stays <b>{row.sheet?.hp?.max ?? 0}</b>
+                  <span className={styles.cpNames}>
+                    this class would give {preview.hpFromClass} on the average — not overwritten, because
+                    that would throw away what was actually rolled. Set it in Vitals if you want it.
+                  </span></>}
+            </div>
+          )}
+          <div className={styles.cpLine}>
+            <i className="fa-solid fa-star" /> Grants <b>{preview.granted.length}</b> feature{preview.granted.length === 1 ? '' : 's'} at level {level}
+            {preview.granted.length > 0 && <span className={styles.cpNames}>{preview.granted.join(', ')}</span>}
+          </div>
+          {preview.pending.length > 0 && (
+            <div className={cx(styles.cpLine, styles.dim)}>
+              <i className="fa-solid fa-lock" /> <b>{preview.pending.length}</b> still gated
+              <span className={styles.cpNames}>
+                {preview.pending.slice(0, 4).map(p => `${p.name} (${p.when})`).join(', ')}
+                {preview.pending.length > 4 ? ` +${preview.pending.length - 4} more` : ''}
+              </span>
+            </div>
+          )}
+          {(preview.kitChoices > 0 || preview.kitGranted > 0) && (
+            <div className={cx(styles.cpLine, styles.dim)}>
+              <i className="fa-solid fa-sack-xmark" /> Starting kit ·{' '}
+              {preview.kitGranted > 0 && <><b>{preview.kitGranted}</b> item{preview.kitGranted === 1 ? '' : 's'} into the pack now</>}
+              {preview.kitGranted > 0 && preview.kitChoices > 0 && <span className={styles.op}> · </span>}
+              {preview.kitChoices > 0 && <><b>{preview.kitChoices}</b> choice{preview.kitChoices === 1 ? '' : 's'} for {first}</>}
+              {preview.kitChoices > 0 && (
+                <span className={styles.cpNames}>the choices wait on their Codex until they pick</span>
+              )}
+            </div>
+          )}
+          {selectedPaths.length > 0 && (
+            <div className={cx(styles.cpLine, styles.dim)}>
+              <i className="fa-solid fa-code-branch" /> {selected.data.subclassLabel || 'Path'} ·{' '}
+              <b>{selectedPaths.length}</b> to choose from
+              <span className={styles.cpNames}>
+                {level >= (selected.data.subclassLevel ?? 0)
+                  ? `waits on ${first}'s Codex — they pick it`
+                  : `parked now, offered at level ${selected.data.subclassLevel}`}
+              </span>
+            </div>
+          )}
+          {(selected.data.skillChooseN ?? 0) > 0 && (
+            <div className={cx(styles.cpLine, styles.dim)}>
+              <i className="fa-solid fa-graduation-cap" /> Player picks <b>{selected.data.skillChooseN}</b> of{' '}
+              {(selected.data.skillChoices ?? []).map(k => SKILLS.find(s => s.key === k)?.name ?? k).join(', ') || '—'}
+              <span className={styles.cpNames}>tick them in Proficiencies below</span>
+            </div>
+          )}
+          {row.identity?.class && row.identity.class !== selected.data.name && (
+            <div className={cx(styles.cpLine, styles.warn)}>
+              <i className="fa-solid fa-triangle-exclamation" /> Replaces <b>{row.identity.class}</b> — everything that
+              class granted comes off the sheet. Features from anywhere else stay.
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={styles.grantAction}>
+        <Btn tone="amber" icon="fa-arrow-right-to-bracket"
+          label={busy ? 'Assigning…' : selected ? `Assign to ${first}` : 'Assign class'}
+          onClick={() => void assign()} disabled={!selected || busy} />
+      </div>
+
+      {/* THE PATH, once the class is on. Separate from the picker above because
+          it is a separate decision made at a separate time — a class is chosen
+          at level 1 and its path several levels later. Assigning a path never
+          disturbs the class (lib/classes.ts assignSubclass); re-assigning the
+          CLASS clears the path, because the path belonged to it. */}
+      {onClass && (onClass.data.subclassLevel ?? 0) > 0 && (
+        <div className={styles.pathPick}>
+          <div className={styles.ppHead}>
+            <i className="fa-solid fa-code-branch" />
+            <span className={styles.t}>{onClass.data.subclassLabel || 'Path'}</span>
+            <span className={styles.n}>
+              {level >= (onClass.data.subclassLevel ?? 0)
+                ? `chosen at level ${onClass.data.subclassLevel}`
+                : `not until level ${onClass.data.subclassLevel}`}
+            </span>
+          </div>
+          {paths.length === 0 ? (
+            <div className={styles.catListEmpty}>
+              No paths authored for {onClass.data.name} yet.
+            </div>
+          ) : (
+            <div className={styles.ppRows}>
+              {paths.map(pth => {
+                const on = row.identity?.archetype === pth.data.name
+                return (
+                  <button key={pth.id} type="button"
+                    className={cx(styles.ppRow, on && styles.on)}
+                    disabled={busy || level < (onClass.data.subclassLevel ?? 0)}
+                    onClick={() => void takePath(pth)}>
+                    <span className={styles.ciIc} style={{ color: pth.data.color || 'var(--amber)' }}>
+                      <i className={`fa-solid ${pth.data.icon || 'fa-code-branch'}`} />
+                    </span>
+                    <span className={styles.ciTx}>
+                      <span className={styles.ciNm}>{pth.data.name}</span>
+                      <span className={styles.ciTy}>
+                        {(pth.data.features ?? []).length} features
+                        {pth.data.caster !== 'none' && <> · {CASTER_LABEL[pth.data.caster]}</>}
+                      </span>
+                    </span>
+                    {on && <span className={styles.ppOn}><i className="fa-solid fa-check" /> current</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+// RACE LIBRARY (Catalog · Races tab) + ASSIGN RACE
+//
+// The class editor's twin, and deliberately assembled from its parts: the same
+// list+form shell, the same draft ladder, the same gate-grouped feature spine,
+// the same shared authoring blocks, the same audit panel. A race is the same
+// KIND of object as a class, so the only things that differ are the fields it
+// does not have (hit die, saves, spellcasting) and the ones it does (languages).
+//
+// A RACE HAS NO NUMBER FIELDS. Its +2 DEX, its speed and its darkvision are
+// `boost` rules in its own Rules block — they layer through effectiveSheet and
+// come back off when the race changes, which a written score never could.
+// ============================================================
+
+const RACE_ICONS = [
+  'fa-leaf', 'fa-mountain', 'fa-hand-fist', 'fa-feather', 'fa-fire', 'fa-snowflake',
+  'fa-dragon', 'fa-skull', 'fa-eye', 'fa-moon', 'fa-sun', 'fa-user',
+  'fa-shield-halved', 'fa-hat-wizard', 'fa-mask', 'fa-gem',
+]
+
+const BLANK_RACE: RaceDef = {
+  name: '', icon: 'fa-leaf', desc: '',
+  skillChoices: [], skillChooseN: 0,
+  languages: [], languageChooseN: 0,
+  proficiencies: {}, features: [], tags: [], vars: [], graph: [], published: false,
+}
+
+function RaceLibrarySurface({ lib, featureLib, members }: {
+  lib: DmRacesState
+  featureLib: DmFeaturesState
+  members: PartyMember[]
+}) {
+  const { races, loading } = lib
+  const [selId, setSelId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const shown = useMemo(() => {
+    const q = parseCatalogQuery(query)
+    return races.filter(r => matchesCatalogQuery(raceContent(r), q))
+  }, [races, query])
+
+  const activeId = creating ? null : (selId ?? races[0]?.id ?? null)
+  const selected = races.find(r => r.id === activeId) ?? null
+
+  /* Subraces are rows too, so the index nests them under their parent rather
+     than listing eleven elf variants beside eleven dwarf ones. A subrace whose
+     parent is gone falls back to the top level rather than disappearing. */
+  const parents = shown.filter(r => !raceContent(r).parent)
+  const orphans = shown.filter(r => {
+    const p = raceContent(r).parent
+    return p && !races.some(x => x.id === p)
+  })
+  const childrenOf = (id: string) => shown.filter(r => raceContent(r).parent === id)
+
+  const row = (r: CatalogRaceRow, child = false) => {
+    const d = raceContent(r)
+    const col = d.color || 'var(--good)'
+    const kids = childrenOf(r.id).length
+    return (
+      <button key={r.id} className={cx(styles.catRow, r.id === activeId && !creating && styles.sel, child && styles.subRow)}
+        style={{ ['--rar' as string]: col }} onClick={() => { setCreating(false); setSelId(r.id) }}>
+        <span className={styles.crIc}><i className={`fa-solid ${d.icon || 'fa-leaf'}`} /></span>
+        <span className={styles.crTx}>
+          <span className={styles.crT}>{d.name || 'Untitled'}</span>
+          <span className={styles.crS}>
+            {(d.features ?? []).length} feature{(d.features ?? []).length === 1 ? '' : 's'}
+            {kids > 0 && <><span className={styles.op}> · </span>{kids} subrace{kids === 1 ? '' : 's'}</>}
+            {r.draft && <><span className={styles.op}> · </span>draft</>}
+            {!r.draft && !d.published && <><span className={styles.op}> · </span>unpublished</>}
+          </span>
+        </span>
+        {child && <span className={styles.crTag} style={{ color: col, borderColor: col }}>sub</span>}
+      </button>
+    )
+  }
+
+  return (
+    <div className={styles.catLayout}>
+      <div className={styles.catIndex}>
+        <div className={styles.catNew}>
+          <Btn tone="cyan" icon="fa-plus" label="New Race" onClick={() => { setCreating(true); setSelId(null) }} />
+        </div>
+        <div className={cx(styles.searchWrap, styles.catSearch)}>
+          <i className="fa-solid fa-magnifying-glass" />
+          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+            placeholder="Search races, or tag:fey" autoComplete="off" spellCheck={false} />
+          {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
+        </div>
+        <div className={styles.catRows}>
+          {parents.map(p => (
+            <Fragment key={p.id}>
+              {row(p)}
+              {childrenOf(p.id).map(c => row(c, true))}
+            </Fragment>
+          ))}
+          {orphans.map(o => row(o))}
+        </div>
+        {races.length === 0 && <div className={styles.catEmpty}>{loading ? '· loading ·' : '— library empty —'}</div>}
+        {races.length > 0 && shown.length === 0 && <div className={styles.catEmpty}>— nothing matches —</div>}
+      </div>
+
+      <div className={styles.catForm}>
+        <RaceForm
+          row={selected} creating={creating} lib={lib} featureLib={featureLib} members={members}
+          onSelected={id => { setCreating(false); setSelId(id) }}
+          onCleared={() => { setCreating(false); setSelId(null) }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function RaceForm({ row, creating, lib, featureLib, members, onSelected, onCleared }: {
+  row: CatalogRaceRow | null
+  creating: boolean
+  lib: DmRacesState
+  featureLib: DmFeaturesState
+  members: PartyMember[]
+  onSelected: (id: string) => void
+  onCleared: () => void
+}) {
+  const selId = row?.id ?? null
+  const base = creating ? BLANK_RACE : row ? raceContent(row) : null
+  const { draft, dirty, savedAt, update, reset, clear } =
+    useLocalDraft<RaceDef>(creating ? 'race:__new__' : `race:${selId ?? 'none'}`, base)
+
+  const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
+  const [saving, setSaving] = useState(false)
+  const [varsOpen, setVarsOpen] = useState(false)
+  const [fxOpen, setFxOpen] = useState(false)
+  const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
+
+  const set = (p: Partial<RaceDef>) => update(x => ({ ...x, ...p }))
+
+  const usedBy = useMemo(
+    () => (draft?.name ? members.filter(m => m.race === draft.name) : []),
+    [members, draft?.name],
+  )
+  /** Races this one could belong to — anything that is not itself and not
+   *  already a subrace, so the tree stays one level deep. */
+  const parentOptions = lib.races.filter(r => r.id !== selId && !raceContent(r).parent)
+  const isSub = !!draft?.parent
+
+  const audit: AuditItem[] = useMemo(() => {
+    if (!draft) return []
+    const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
+
+    if (!draft.name?.trim()) {
+      out.unshift({ sev: 'err', id: null, t: 'Unnamed race', s: 'A race needs a name before it can be assigned.' })
+    }
+    if ((draft.skillChooseN ?? 0) > (draft.skillChoices ?? []).length) {
+      out.push({
+        sev: 'err', id: null, t: 'More skill picks than choices',
+        s: `Choose ${draft.skillChooseN} from a list of ${(draft.skillChoices ?? []).length}. Widen the list or lower the count.`,
+      })
+    }
+    if (draft.parent && !lib.races.some(r => r.id === draft.parent)) {
+      out.push({ sev: 'err', id: null, t: 'Parent race is gone', s: 'This subrace points at a race that no longer exists.' })
+    }
+    if (ready) {
+      for (const r of draft.features ?? []) {
+        const f = featureLib.features.find(x => x.id === r.feature_id)
+        if (!f) {
+          out.push({
+            sev: 'err', id: null, t: 'Feature not in the library',
+            s: `"${r.feature_id}" was referenced but no longer exists. Remove the row or restore the feature.`,
+          })
+        } else if (!featureContent(f).published) {
+          out.push({
+            sev: 'warn', id: null, t: `${featureContent(f).name} is unpublished`,
+            s: 'Assigning this race will skip it — publish the feature first.',
+          })
+        }
+      }
+    }
+    if (!draft.desc?.trim()) {
+      out.push({ sev: 'warn', id: null, t: 'No description', s: 'The player has nothing to read about what this race is.' })
+    }
+    if (!(draft.graph ?? []).some(g => g.op === 'boost') && !isSub) {
+      out.push({
+        sev: 'warn', id: null, t: 'No ability score increase',
+        s: 'Nearly every race moves at least one score. Add a boost rule below — a field would not come back off when the race changes.',
+      })
+    }
+    if (!(draft.languages ?? []).length && (draft.languageChooseN ?? 0) === 0 && !isSub) {
+      out.push({ sev: 'warn', id: null, t: 'No languages', s: 'A race usually speaks at least Common.' })
+    }
+    if (!out.length) out.push({ sev: 'ok', id: null, t: 'Clean', s: 'No errors, no warnings. Safe to publish.' })
+    return out
+  }, [draft, nodes, ready, featureLib.features, lib.races, isSub])
+
+  const errs = audit.filter(a => a.sev === 'err').length
+  const warns = audit.filter(a => a.sev === 'warn').length
+
+  if (!draft) {
+    return <div className={styles.catEmpty} style={{ marginTop: 40 }}>Select a race, or start a new one.</div>
+  }
+
+  async function onSaveDraft() {
+    if (!draft) return
+    setSaving(true)
+    const id = await lib.saveDraft(creating ? null : selId, draft)
+    setSaving(false)
+    if (id && creating) { clear(); onSelected(id) }
+  }
+  async function onPublish() {
+    if (!draft || errs > 0) return
+    setSaving(true)
+    const id = await lib.publishRace(creating ? null : selId, draft)
+    setSaving(false)
+    if (!id) return
+    clear(); onSelected(id)
+  }
+  function onRevert() {
+    setConfirm(null)
+    reset(row ? row.data : null)
+    if (!row) onCleared()
+  }
+  async function onDuplicate() {
+    if (!selId) return
+    const id = await lib.duplicateRace(selId)
+    if (id) onSelected(id)
+  }
+  async function onDelete() {
+    if (!selId) return
+    setConfirm(null)
+    await lib.deleteRace(selId)
+    onCleared()
+  }
+
+  const skillChoices = draft.skillChoices ?? []
+  const toggleSkill = (k: string) => set({
+    skillChoices: skillChoices.includes(k) ? skillChoices.filter(x => x !== k) : [...skillChoices, k],
+  })
+
+  return (
+    <div className={styles.clsForm}>
+      <div className={styles.catFormHead}>
+        <span className={styles.cfhT}>{creating ? 'New Race' : isSub ? 'Edit Subrace' : 'Edit Race'}</span>
+        <span className={styles.cfhId}>{selId ?? 'id minted on first save'}</span>
+      </div>
+
+      <span className={styles.fieldLab}>Name</span>
+      <input className={styles.sessIn} value={draft.name} onChange={e => set({ name: e.target.value })}
+        placeholder="Name the race…" />
+
+      <span className={styles.fieldLab}>Icon</span>
+      <div className={styles.catIcons}>
+        {RACE_ICONS.map(ic => (
+          <button key={ic} className={cx(styles.catIc, ic === draft.icon && styles.sel)}
+            onClick={() => set({ icon: ic })} title={ic} aria-label={ic}>
+            <i className={`fa-solid ${ic}`} />
+          </button>
+        ))}
+      </div>
+
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>
+            Belongs to <span className={styles.dimLab}>— makes this a subrace</span>
+          </span>
+          <select className={styles.selIn} value={draft.parent ?? ''}
+            onChange={e => set({ parent: e.target.value || undefined })}>
+            <option value="">— a race in its own right —</option>
+            {parentOptions.map(r => <option key={r.id} value={r.id}>{raceContent(r).name || r.id}</option>)}
+          </select>
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Tint</span>
+          <input className={styles.sessIn} type="color" value={draft.color || '#4fae6b'}
+            onChange={e => set({ color: e.target.value })} />
+        </div>
+      </div>
+
+      {!isSub && (
+        <>
+          <span className={styles.fieldLab}>
+            Subrace prompt <span className={styles.dimLab}>— what the player is asked; blank = no subraces</span>
+          </span>
+          <input className={styles.sessIn} value={draft.subraceLabel ?? ''} {...NO_AUTOFILL}
+            onChange={e => set({ subraceLabel: e.target.value || undefined })}
+            aria-label="What choosing a subrace is called"
+            placeholder="e.g. Elf Lineage" />
+        </>
+      )}
+
+      <div className={cx(styles.efBlock, styles.prose)}>
+        <div className={styles.efBh}>
+          <i className="fa-solid fa-feather" /><span className={styles.t}>Description</span>
+          <span className={styles.n}><i className="fa-solid fa-eye" /> player-facing · **bold** *italics*</span>
+        </div>
+        <div className={styles.efRule}>What this race is, in the player's language</div>
+        <textarea className={styles.catProse} value={draft.desc} onChange={e => set({ desc: e.target.value })}
+          onKeyDown={markdownShortcuts(desc => set({ desc }))}
+          placeholder="e.g. Long-lived and watchful, elves measure a human life in seasons…" />
+      </div>
+
+      {/* THE NUMBERS ARE NOT HERE. +2 DEX, speed and darkvision are boost rules
+          in the Rules block below — see the note there. */}
+      <div className={styles.raceNums}>
+        <i className="fa-solid fa-arrow-up-right-dots" />
+        <span>
+          Ability increases, speed and darkvision are <b>boost</b> rules, not fields — add them in
+          <b> Rules</b> below. They layer onto the sheet and come back off when the race changes.
+        </span>
+      </div>
+
+      <div className={cx(styles.efBlock, styles.mods)}>
+        <div className={styles.efBh}>
+          <i className="fa-solid fa-graduation-cap" />
+          <span className={styles.t}>Proficiencies &amp; Tongues</span>
+          <span className={styles.n}>{skillChoices.length} skills · {(draft.languages ?? []).length} languages</span>
+        </div>
+        <div className={styles.efRule}>What every member of this race is trained in</div>
+
+        <div className={styles.clsSub}>
+          <span className={styles.fieldLab}>
+            Skill choices <span className={styles.dimLab}>— the eligible list; the player chooses from it</span>
+          </span>
+          <div className={styles.profGrid}>
+            {SKILLS.map(sk => {
+              const on = skillChoices.includes(sk.key)
+              return (
+                <button key={sk.key} type="button" className={cx(styles.profChip, on && styles.on)}
+                  onClick={() => toggleSkill(sk.key)} aria-pressed={on}>
+                  <ProfDots n={on ? 1 : 0} of={1} />
+                  {sk.name} <span className={styles.ab}>{ABILITY_ABBR[sk.ability].toUpperCase()}</span>
+                </button>
+              )
+            })}
+          </div>
+          <div className={styles.clsChoose}>
+            <span className={styles.fieldLab} style={{ margin: 0 }}>Choose</span>
+            <input className={cx(styles.sessIn, styles.num)} type="number" min={0} max={skillChoices.length || 18}
+              value={draft.skillChooseN}
+              onChange={e => set({ skillChooseN: Math.max(0, parseInt(e.target.value || '0', 10) || 0) })} />
+            <span className={styles.clsChooseS}>
+              of {skillChoices.length} eligible. Most races offer none — leave it at 0 unless this one does.
+            </span>
+          </div>
+        </div>
+
+        <TrainingRow
+          label="Languages" values={draft.languages ?? []}
+          placeholder="Common, Elvish…"
+          onChange={languages => set({ languages })}
+        />
+        <div className={styles.clsChoose}>
+          <span className={styles.fieldLab} style={{ margin: 0 }}>Plus</span>
+          <input className={cx(styles.sessIn, styles.num)} type="number" min={0} value={draft.languageChooseN}
+            onChange={e => set({ languageChooseN: Math.max(0, parseInt(e.target.value || '0', 10) || 0) })} />
+          <span className={styles.clsChooseS}>of the player's choosing, on top of the fixed ones above.</span>
+        </div>
+
+        <TrainingRow
+          label="Armour" values={draft.proficiencies?.armor ?? []}
+          placeholder="Light armor…"
+          onChange={armor => set({ proficiencies: { ...draft.proficiencies, armor } })}
+        />
+        <TrainingRow
+          label="Weapons" values={draft.proficiencies?.weapons ?? []}
+          placeholder="Longsword, Shortbow…"
+          onChange={weapons => set({ proficiencies: { ...draft.proficiencies, weapons } })}
+        />
+        <TrainingRow
+          label="Tools" values={draft.proficiencies?.tools ?? []}
+          placeholder="Smith's tools…"
+          onChange={tools => set({ proficiencies: { ...draft.proficiencies, tools } })}
+        />
+      </div>
+
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Contents</span></div>
+      <ClassFeaturePicker
+        refs={draft.features ?? []} featureLib={featureLib.features}
+        onChange={features => set({ features })}
+      />
+
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Authoring</span></div>
+      <span className={styles.fieldLab}>Targeting tags</span>
+      <TagsBlock tags={draft.tags ?? []} tagUse={tagUse} onChange={tags => set({ tags })} />
+
+      <div className={cx(styles.catFx, styles.fold, varsOpen && styles.open)}>
+        <div className={styles.fxfHead} onClick={() => setVarsOpen(o => !o)} role="button" tabIndex={0} aria-expanded={varsOpen}>
+          <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
+          <i className="fa-solid fa-database" style={{ color: 'var(--cyan-hot)', fontSize: 11 }} />
+          <span className={styles.t}>Variables</span>
+          <span className={styles.s}>
+            {(draft.vars ?? []).length
+              ? `${(draft.vars ?? []).length} declared · ${(draft.vars ?? []).map(v => v.name || '?').join(', ')}`
+              : 'none · the state this race shares'}
+          </span>
+        </div>
+        {varsOpen && (
+          <div className={styles.gfxBody}>
+            <VarsBlock vars={draft.vars ?? []} onChange={vars => set({ vars })} />
+          </div>
+        )}
+      </div>
+
+      <div className={cx(styles.catFx, styles.fold, fxOpen && styles.open)}>
+        <div className={styles.fxfHead} onClick={() => setFxOpen(o => !o)} role="button" tabIndex={0} aria-expanded={fxOpen}>
+          <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
+          <i className="fa-solid fa-diagram-project" style={{ color: 'var(--cyan-hot)', fontSize: 11 }} />
+          <span className={styles.t}>Rules</span>
+          <span className={styles.s}>
+            {(draft.graph ?? []).length
+              ? `${(draft.graph ?? []).length} rule${(draft.graph ?? []).length === 1 ? '' : 's'} · ${(draft.graph ?? []).filter(g => g.op === 'boost').length} boost`
+              : 'none · ability increases, speed and darkvision go here'}
+          </span>
+        </div>
+        {fxOpen && (
+          <div className={styles.gfxBody}>
+            <GraphEffects
+              graph={draft.graph ?? []} vars={draft.vars ?? []} nodes={nodes} namesByGid={namesByGid}
+              onChange={graph => set({ graph })} onVarsChange={vars => set({ vars })}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className={styles.clsAudit}>
+        <AuditPanel title="Race Audit" audit={audit} onJump={() => { setVarsOpen(true); setFxOpen(true) }} />
+      </div>
+
+      {confirm === 'revert' && (
+        <div className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" />
+          <span>
+            <b>Discard this draft?</b>{' '}
+            {row?.data?.published
+              ? 'The published version comes back and nothing a player sees changes.'
+              : 'This race has never been published, so discarding removes it entirely.'}
+          </span>
+          <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
+          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+        </div>
+      )}
+      {confirm === 'delete' && (
+        <div className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" />
+          <span>
+            <b>Delete {draft.name || 'this race'}?</b>{' '}
+            {usedBy.length
+              ? `${usedBy.map(m => firstName(m.name)).join(', ')} ${usedBy.length === 1 ? 'is' : 'are'} on it. Their sheet keeps what it was already granted — but nothing can be re-assigned from this race again.`
+              : 'No character is on it.'}
+          </span>
+          <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
+          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+        </div>
+      )}
+
+      <div className={styles.clsBar}>
+        <div className={styles.clsBarInfo}>
+          <div className={cx(styles.clsStat, errs ? styles.bad : warns ? styles.warn : undefined)}>
+            <span className={styles.dot} />
+            <span>
+              {errs ? `${errs} error${errs === 1 ? '' : 's'} — publish blocked`
+                : warns ? `${warns} warning${warns === 1 ? '' : 's'} — publishable`
+                  : 'Draft valid · publishable'}
+            </span>
+          </div>
+          <span className={cx(styles.clsDirty, dirty && styles.on)}>● Unpublished changes</span>
+          <span className={styles.clsSaved}>
+            {savedAt ? `Draft autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}
+          </span>
+        </div>
+        {selId && (
+          <div className={cx(styles.clsActs, styles.rowActs)}>
+            <Btn tone="ghost" sm icon="fa-clone" label="Duplicate" onClick={() => void onDuplicate()} />
+            <Btn tone="ghost" sm icon="fa-trash" label="Delete" onClick={() => setConfirm('delete')} />
+          </div>
+        )}
+        <div className={styles.clsActs}>
+          <Btn tone="ghost" sm icon="fa-rotate-left" label="Revert" onClick={() => setConfirm('revert')} disabled={!dirty} />
+          <Btn tone="cyan" sm icon="fa-floppy-disk" label="Save Draft" onClick={() => void onSaveDraft()} disabled={saving} />
+          <span className={styles.clsPub}>
+            <Btn tone="amber" sm icon="fa-tower-broadcast" label={saving ? 'Working…' : 'Publish'}
+              onClick={() => void onPublish()} disabled={saving || errs > 0} />
+          </span>
+        </div>
       </div>
     </div>
   )

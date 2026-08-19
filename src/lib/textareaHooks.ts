@@ -3,7 +3,7 @@
  *  an `overflow-y: auto` panel misbehaves in two ways that are not obvious until
  *  someone reports the panel "jumping". */
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { toggleWrap } from './markdown'
+import { toggleWrap, wrapLink } from './markdown'
 
 /** Stops a textarea's wheel gesture being stolen by the scroll panel around it.
  *
@@ -71,11 +71,14 @@ export function markdownShortcuts(onChange: (next: string) => void) {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return
     const key = e.key.toLowerCase()
     const marker = key === 'b' ? '**' : key === 'i' ? '*' : null
-    if (!marker) return
+    // Ctrl+K is a link, which is not a symmetric marker — see wrapLink.
+    if (!marker && key !== 'k') return
     e.preventDefault()
 
     const el = e.currentTarget
-    const r = toggleWrap(el.value, el.selectionStart ?? 0, el.selectionEnd ?? 0, marker)
+    const from = el.selectionStart ?? 0
+    const to = el.selectionEnd ?? 0
+    const r = marker ? toggleWrap(el.value, from, to, marker) : wrapLink(el.value, from, to)
     onChange(r.text)
     requestAnimationFrame(() => {
       el.setSelectionRange(r.start, r.end)

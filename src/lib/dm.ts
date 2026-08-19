@@ -8,10 +8,13 @@ import type {
   CatalogFeatureRow, CatalogFeatureInsert, CatalogFeatureUpdate, CatalogFeatureData,
   CatalogEffectRow, CatalogEffectInsert, CatalogEffectUpdate,
   CatalogSpellRow, CatalogSpellInsert, CatalogSpellUpdate,
+  CatalogClassRow, CatalogClassUpdate, ClassDef,
+  CatalogRaceRow, CatalogRaceUpdate, RaceDef,
   ConfiscatedItemRow, ConfiscatedItemInsert, InventoryItem,
-  ShopCatalogRow, Shop,
+  ShopCatalogRow, Shop, ShardTree,
 } from './database.types'
 import { useAuth } from './auth'
+import { publicVitals, vitalsEqual } from './vitals.ts'
 
 /** Is the current user the DM? Checked against the `dm_users` table — the same
  *  membership the `dm_all` RLS policy uses to grant cross-character access
@@ -81,7 +84,7 @@ interface DmPartyState {
  *  more than the caller's own row when the `dm_all` RLS policy applies (i.e. the
  *  user is in `dm_users`); a plain player gets just their own character back, so
  *  always gate the Operator Console on useDmStatus() rather than on row count. */
-export function useDmParty(): DmPartyState {
+export function useDmParty(shardTrees: Record<string, ShardTree> = {}): DmPartyState {
   const { session } = useAuth()
   const [party, setParty] = useState<CharacterRow[]>([])
   const [secrets, setSecrets] = useState<Record<string, CharacterSecret>>({})
@@ -157,16 +160,31 @@ export function useDmParty(): DmPartyState {
   }, [session])
 
   const updateCharacter = useCallback<DmPartyState['updateCharacter']>(async (id, patch) => {
+    /* THE PARTY HUD'S CACHE — recomputed here for exactly the same reason
+       lib/character.ts does it on the player side. The DM writes characters
+       through THIS path (granting a +1 AC ring, a level-up, a long rest), and
+       every one of those can move a number other players see. Skip it and the
+       cache only heals the next time the PLAYER happens to touch their sheet.
+
+       Same pure compiler, two write paths — not two implementations. */
+    const merged = party.find(c => c.id === id)
+    const withVitals = (() => {
+      if (!merged) return {}
+      const next = { ...merged, ...patch } as CharacterRow
+      const v = publicVitals(next, shardTrees)
+      return vitalsEqual(next.public_vitals, v) ? {} : { public_vitals: v }
+    })()
+
     // Optimistic: row-level shallow merge (caller already spread the section).
     let previous: CharacterRow | undefined
     setParty(prev => prev.map(c => {
       if (c.id !== id) return c
       previous = c
-      return { ...c, ...patch } as CharacterRow
+      return { ...c, ...patch, ...withVitals } as CharacterRow
     }))
     const { data, error: err } = await supabase
       .from('characters')
-      .update(patch)
+      .update({ ...patch, ...withVitals })
       .eq('id', id)
       .select()
       .single<CharacterRow>()
@@ -177,7 +195,7 @@ export function useDmParty(): DmPartyState {
     }
     if (data) setParty(prev => prev.map(c => (c.id === id ? data : c)))
     return true
-  }, [])
+  }, [party, shardTrees])
 
   const updateSecret = useCallback<DmPartyState['updateSecret']>(async (characterId, patch) => {
     // Optimistic: merge onto the existing secret (or a fresh zero-value one).
@@ -605,6 +623,201 @@ export function useDmFeatures(): DmFeaturesState {
   return {
     features, loading, error, refetch: fetchAll, createFeature, updateFeature, deleteFeature,
     saveDraft, publishFeature, duplicateFeature,
+  }
+}
+
+// ── Race catalog (migration 0017) ───────────────────────────────────────────
+
+export interface DmRacesState {
+  races: CatalogRaceRow[]
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  updateRace: (id: string, patch: CatalogRaceUpdate) => Promise<void>
+  deleteRace: (id: string) => Promise<void>
+  saveDraft: (id: string | null, data: RaceDef) => Promise<string | null>
+  publishRace: (id: string | null, data: RaceDef) => Promise<string | null>
+  duplicateRace: (id: string) => Promise<string | null>
+}
+
+/** The editable payload: the parked draft if there is one, else what is
+ *  published. Twin of classContent/featureContent. */
+export const raceContent = (r: CatalogRaceRow): RaceDef => r.draft ?? r.data
+
+/** The DM's race-authoring library (`race_catalog`, migration 0017) — the same
+ *  hook as useDmClasses against a different table, because a race is the same
+ *  kind of object as a class. Consumed by Assign Race, which SNAPSHOTS onto the
+ *  character (lib/races.ts assignRace), so this table stays DM-only. */
+export function useDmRaces(): DmRacesState {
+  const { session } = useAuth()
+  const [races, setRaces] = useState<CatalogRaceRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const byName = (a: CatalogRaceRow, b: CatalogRaceRow) =>
+    (raceContent(a).name ?? '').localeCompare(raceContent(b).name ?? '')
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setRaces([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase.from('race_catalog').select('*')
+    if (err) { setError(err.message); setRaces([]) }
+    else { setRaces(((data as CatalogRaceRow[]) ?? []).sort(byName)); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const updateRace = useCallback<DmRacesState['updateRace']>(async (id, patch) => {
+    let previous: CatalogRaceRow | undefined
+    setRaces(prev => prev.map(r => { if (r.id !== id) return r; previous = r; return { ...r, ...patch } as CatalogRaceRow }))
+    const { data, error: err } = await supabase.from('race_catalog').update(patch).eq('id', id).select().single<CatalogRaceRow>()
+    if (err) { setError(err.message); if (previous) setRaces(prev => prev.map(r => (r.id === id ? previous! : r))) }
+    else if (data) setRaces(prev => prev.map(r => (r.id === id ? data : r)).sort(byName))
+  }, [])
+
+  const deleteRace = useCallback<DmRacesState['deleteRace']>(async (id) => {
+    const snapshot = races
+    setRaces(prev => prev.filter(r => r.id !== id))
+    const { error: err } = await supabase.from('race_catalog').delete().eq('id', id)
+    if (err) { setError(err.message); setRaces(snapshot) }
+  }, [races])
+
+  const write = useCallback(async (id: string | null, data: RaceDef, promote: boolean): Promise<string | null> => {
+    const patch = promote ? { data: { ...data, published: true }, draft: null } : { draft: data }
+    if (id) {
+      const { data: row, error: err } = await supabase.from('race_catalog').update(patch).eq('id', id).select().single<CatalogRaceRow>()
+      if (err) { setError(err.message); return null }
+      setRaces(prev => prev.map(r => (r.id === id ? row : r)).sort(byName))
+      return id
+    }
+    // Minted once and frozen: a subrace names its parent by this id, and every
+    // character assigned the race keeps it.
+    const fresh = mintId(data.name ?? '', new Set(races.map(r => r.id)))
+    const { data: row, error: err } = await supabase.from('race_catalog')
+      .insert({ id: fresh, ...patch, ...(promote ? {} : { data: {} as RaceDef }) })
+      .select().single<CatalogRaceRow>()
+    if (err) { setError(err.message); return null }
+    setRaces(prev => [...prev, row].sort(byName))
+    return fresh
+  }, [races])
+
+  const saveDraft = useCallback<DmRacesState['saveDraft']>((id, data) => write(id, data, false), [write])
+  const publishRace = useCallback<DmRacesState['publishRace']>((id, data) => write(id, data, true), [write])
+
+  const duplicateRace = useCallback<DmRacesState['duplicateRace']>(async (id) => {
+    const src = races.find(r => r.id === id)
+    if (!src) return null
+    const content = raceContent(src)
+    return write(null, { ...content, name: `${content.name ?? 'Untitled'} (copy)`, published: false }, false)
+  }, [races, write])
+
+  return { races, loading, error, refetch: fetchAll, updateRace, deleteRace, saveDraft, publishRace, duplicateRace }
+}
+
+// ── Class catalog (migration 0016) ──────────────────────────────────────────
+
+export interface DmClassesState {
+  classes: CatalogClassRow[]
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  updateClass: (id: string, patch: CatalogClassUpdate) => Promise<void>
+  deleteClass: (id: string) => Promise<void>
+  /** Park an in-progress edit. Writes `draft`, never `data`, so a class a
+   *  character has already been assigned can be rewritten without disturbing
+   *  what the Assign picker offers. `id` null mints a row for a class that has
+   *  never been published. */
+  saveDraft: (id: string | null, data: ClassDef) => Promise<string | null>
+  /** Promote a draft into `data` with `published: true` and clear the draft
+   *  slot. The id is minted on FIRST publish and never again. */
+  publishClass: (id: string | null, data: ClassDef) => Promise<string | null>
+  duplicateClass: (id: string) => Promise<string | null>
+}
+
+/** The editable payload: the parked draft if there is one, else what is
+ *  published. Every list, count and audit in the class editor reads through
+ *  this; only the Assign picker reads `data` directly. Twin of featureContent. */
+export const classContent = (r: CatalogClassRow): ClassDef => r.draft ?? r.data
+
+/** The DM's class-authoring library (`class_catalog`, migration 0016) —
+ *  structurally the twin of useDmFeatures, draft ladder included. Consumed by
+ *  the Assign Class card, which SNAPSHOTS onto the character (lib/classes.ts
+ *  assignClass), so this table stays DM-only. */
+export function useDmClasses(): DmClassesState {
+  const { session } = useAuth()
+  const [classes, setClasses] = useState<CatalogClassRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const byName = (a: CatalogClassRow, b: CatalogClassRow) =>
+    (classContent(a).name ?? '').localeCompare(classContent(b).name ?? '')
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setClasses([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase.from('class_catalog').select('*')
+    if (err) { setError(err.message); setClasses([]) }
+    else { setClasses(((data as CatalogClassRow[]) ?? []).sort(byName)); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const updateClass = useCallback<DmClassesState['updateClass']>(async (id, patch) => {
+    let previous: CatalogClassRow | undefined
+    setClasses(prev => prev.map(c => { if (c.id !== id) return c; previous = c; return { ...c, ...patch } as CatalogClassRow }))
+    const { data, error: err } = await supabase.from('class_catalog').update(patch).eq('id', id).select().single<CatalogClassRow>()
+    if (err) { setError(err.message); if (previous) setClasses(prev => prev.map(c => (c.id === id ? previous! : c))) }
+    else if (data) setClasses(prev => prev.map(c => (c.id === id ? data : c)).sort(byName))
+  }, [])
+
+  const deleteClass = useCallback<DmClassesState['deleteClass']>(async (id) => {
+    const snapshot = classes
+    setClasses(prev => prev.filter(c => c.id !== id))
+    const { error: err } = await supabase.from('class_catalog').delete().eq('id', id)
+    if (err) { setError(err.message); setClasses(snapshot) }
+  }, [classes])
+
+  /** One write path for both rungs of the ladder — same shape as the feature
+   *  catalog's, because it is the same ladder. */
+  const write = useCallback(async (id: string | null, data: ClassDef, promote: boolean): Promise<string | null> => {
+    const patch = promote
+      ? { data: { ...data, published: true }, draft: null }
+      : { draft: data }
+    if (id) {
+      const { data: row, error: err } = await supabase.from('class_catalog').update(patch).eq('id', id).select().single<CatalogClassRow>()
+      if (err) { setError(err.message); return null }
+      setClasses(prev => prev.map(c => (c.id === id ? row : c)).sort(byName))
+      return id
+    }
+    // Never published: mint the id now and freeze it. Other rows (and every
+    // character this class has been assigned to) key off it, so a rename must
+    // never touch it.
+    const fresh = mintId(data.name ?? '', new Set(classes.map(c => c.id)))
+    const { data: row, error: err } = await supabase.from('class_catalog')
+      .insert({ id: fresh, ...patch, ...(promote ? {} : { data: {} as ClassDef }) })
+      .select().single<CatalogClassRow>()
+    if (err) { setError(err.message); return null }
+    setClasses(prev => [...prev, row].sort(byName))
+    return fresh
+  }, [classes])
+
+  const saveDraft = useCallback<DmClassesState['saveDraft']>((id, data) => write(id, data, false), [write])
+  const publishClass = useCallback<DmClassesState['publishClass']>((id, data) => write(id, data, true), [write])
+
+  const duplicateClass = useCallback<DmClassesState['duplicateClass']>(async (id) => {
+    const src = classes.find(c => c.id === id)
+    if (!src) return null
+    const content = classContent(src)
+    // A copy starts as a draft — a starting point to edit, not something to put
+    // in front of the Assign picker before it has been looked at.
+    return write(null, { ...content, name: `${content.name ?? 'Untitled'} (copy)`, published: false }, false)
+  }, [classes, write])
+
+  return {
+    classes, loading, error, refetch: fetchAll, updateClass, deleteClass,
+    saveDraft, publishClass, duplicateClass,
   }
 }
 

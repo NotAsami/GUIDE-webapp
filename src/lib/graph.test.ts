@@ -299,6 +299,51 @@ const withFeatures = (features: Feature[], graph: object = {}) =>
 
 const ATTACK: ResolveReq = { kind: 'attack' }
 
+/* THE SHEET LAYER.
+   `boost` moves a number on the sheet, not on a roll. lib/effects.ts has already
+   layered it in before any roll is built, so resolving it here as well would
+   count a racial +2 DEX twice — once inside the ability the roll comes from, and
+   again as a contribution on top. */
+
+test('a boost never surfaces as a roll contribution', () => {
+  // The request names the feature as its SUBJECT, so a targetless effect on it
+  // does apply — which is exactly the case that would double-count. Resolving a
+  // generic attack instead would pass whether or not resolve() skips boosts.
+  const c = withFeatures([gfeat('F', [
+    { id: 'b1', op: 'boost', label: 'Elven Grace', stat: 'DEX', value: '2' },
+    { id: 'e1', op: 'add', value: '2', label: 'Real' },
+  ])])
+  const res = resolve(buildContext(c), { kind: 'attack', subject: 'feature:F' })
+  assert.ok(res.riders.some(r => r.label === 'Real'), 'a targetless add still applies to its own roll')
+  assert.ok(!res.riders.some(r => r.label === 'Elven Grace'), 'the boost must not')
+})
+
+test('auditNode holds a boost to its own shape', () => {
+  const ok = auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'Grace', stat: 'DEX', value: '2' }] })
+  assert.deepEqual(ok.filter(a => a.sev === 'err'), [])
+
+  // It applies to whoever carries it, so a target is a claim nothing honours.
+  assert.ok(auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'DEX', value: '2', target: ['roll:attack'] }] })
+    .some(a => a.t === 'Boost cannot target'))
+
+  // effectiveSheet has no expression scope, so a `when` would never fire.
+  assert.ok(auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'DEX', value: '2', when: 'level >= 3' }] })
+    .some(a => a.t === 'Boost cannot be conditional'))
+
+  assert.ok(auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'Charisma?', value: '2' }] })
+    .some(a => a.t === 'Unknown stat'))
+
+  // A BLANK stat is one mistake, so it is one error: the schema's required-field
+  // check owns it, and "unknown stat: ''" alongside is noise.
+  const blank = auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: '', value: '2' }] })
+  assert.ok(blank.some(a => a.t === 'Missing stat'))
+  assert.ok(!blank.some(a => a.t === 'Unknown stat'))
+
+  // No roll to compute against, so dice cannot apply.
+  assert.ok(auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'DEX', value: '1d6' }] })
+    .some(a => a.t === 'Boost needs a plain number'))
+})
+
 // --- target matching, all three namespaces (§11) ----------------------------
 
 test('roll: selectors match by kind and by sub-kind', () => {
@@ -1052,7 +1097,7 @@ test('every GraphEffect field is authorable, or is explicitly recorded as not ye
     when: 'universal', ask: 'universal',
     // Rendered from OPS[op].fields — asserted below.
     value: 'schema', byLevel: 'schema', variable: 'schema', text: 'schema',
-    threshold: 'schema', dmgType: 'schema', once: 'schema',
+    threshold: 'schema', dmgType: 'schema', once: 'schema', stat: 'schema',
     // Nothing is deferred today. The category stays because it is the honest
     // place to put a field that is stored but not yet authorable, and saying so
     // out loud beats leaving it silently uncovered.

@@ -107,20 +107,41 @@
   padding-right: 6px;
 }
 .slotCells { display: flex; gap: 7px; flex: 1 1 auto; flex-wrap: nowrap; }
+/* TWO LAYERS, NOT AN INSET SHADOW.
+   This used to draw its edge with `box-shadow: inset 0 0 0 1px`, which follows
+   the border-box RECTANGLE — so the clip-path sliced both diagonals off with no
+   stroke on them and the cells rendered with two bare corners. Same bug as a
+   plain `border` next to a chamfer (docs/Chamfered_clip-path_corners_fix.md),
+   reached through a different property, which is why the guard did not see it.
+
+   The gradient recipe would work, but every variant here overrides `background`
+   to retint the cell — and that shorthand resets background-image, taking the
+   corner stripes with it. So this uses the frame+inner pattern instead: the
+   shape is FILLED with the edge colour and a ::before inset 1.5px paints the
+   interior on top, leaving the fill showing as a ring on every edge, oblique
+   ones included. Variants then only have to override --edge and --fill. */
 .slotCell {
   --cut: 7px;
-  flex: 1 1 0; min-width: 0; position: relative;
+  --edge: rgba(212, 191, 125, 0.28);
+  --fill: linear-gradient(180deg, rgba(0, 166, 214, 0.04), transparent 70%), #131313;
+  flex: 1 1 0; min-width: 0; position: relative; isolation: isolate;
   padding: 8px 6px 9px;
   display: flex; flex-direction: column; align-items: center; gap: 7px;
-  background: linear-gradient(180deg, rgba(0, 166, 214, 0.04), transparent 70%), #131313;
+  background: var(--edge);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
-  box-shadow: inset 0 0 0 1px rgba(212, 191, 125, 0.28);
 }
-.slotCell.cantripCell { background: linear-gradient(180deg, rgba(0, 166, 214, 0.08), transparent 70%), #131313; box-shadow: inset 0 0 0 1px rgba(0, 166, 214, 0.4); }
-.slotCell.inert { background: #101010; box-shadow: inset 0 0 0 1px rgba(212, 191, 125, 0.1); }
+/* 1.5px, not 1px: a hairline ring rounds away entirely at the 110% zoom this
+   app is read at. Same reason the doc gives for border widths. */
+.slotCell::before {
+  content: ""; position: absolute; inset: 1.5px; z-index: -1;
+  background: var(--fill);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.slotCell.cantripCell { --edge: rgba(0, 166, 214, 0.4); --fill: linear-gradient(180deg, rgba(0, 166, 214, 0.08), transparent 70%), #131313; }
+.slotCell.inert { --edge: rgba(212, 191, 125, 0.1); --fill: #101010; }
 /* Pact Magic: a single cell replaces the 9-level ladder — cap its width so
    it doesn't stretch to fill the whole row next to just the cantrip cell. */
-.slotCell.pactCell { flex: 0 1 220px; background: linear-gradient(180deg, rgba(0, 166, 214, 0.08), transparent 70%), #131313; box-shadow: inset 0 0 0 1px rgba(0, 166, 214, 0.4); }
+.slotCell.pactCell { flex: 0 1 220px; --edge: rgba(0, 166, 214, 0.4); --fill: linear-gradient(180deg, rgba(0, 166, 214, 0.08), transparent 70%), #131313; }
 .scLvl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; color: var(--beige); text-transform: uppercase; }
 .slotCell.cantripCell .scLvl { color: var(--cyan); }
 .slotCell.inert .scLvl { color: var(--beige-dim); opacity: 0.6; }

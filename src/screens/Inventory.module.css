@@ -421,10 +421,13 @@
 }
 .coinBadge.gp { --bc: rgba(212, 191, 125, 0.6); }
 .coinBadge.gp :global(.ci) { background: var(--beige); color: #1d1d1d; }
-.coinBadge.sp { --bc: rgba(170, 170, 170, 0.45); }
-.coinBadge.sp :global(.ci) { border: 1px solid var(--muted); color: var(--muted); }
-.coinBadge.cp { --bc: rgba(138, 122, 74, 0.55); }
-.coinBadge.cp :global(.ci) { border: 1px solid var(--beige-dim); color: var(--beige-dim); }
+/* All three discs are FILLED, differing only in metal — silver and copper used
+   to be hollow rings, which reads as "empty" beside a solid gold coin rather
+   than as a different currency. */
+.coinBadge.sp { --bc: rgba(194, 200, 204, 0.5); }
+.coinBadge.sp :global(.ci) { background: var(--silver); color: #1d1d1d; }
+.coinBadge.cp { --bc: rgba(192, 133, 82, 0.55); }
+.coinBadge.cp :global(.ci) { background: var(--copper); color: #1d1d1d; }
 
 /* Cut-corner border fix (see OperatorConsole.module.css for the full note):
    the border is clipped away along the 45° cuts, so corner-anchored gradient
