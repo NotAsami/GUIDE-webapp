@@ -4,6 +4,7 @@ import { Deco } from '../components/Deco'
 import { useCampaign } from '../lib/campaign'
 import type { QuestRow, QuestStatus, QuestType, RelatedTag, SessionRow } from '../lib/database.types'
 import styles from './Journal.module.css'
+import { Prose } from '../lib/markdown'
 
 const TYPE_LABEL: Record<QuestType, string> = { main: 'Main Quest', side: 'Side Quest' }
 const STATUS_LABEL: Record<QuestStatus, string> = { active: 'Active', completed: 'Completed', failed: 'Failed' }
@@ -24,13 +25,6 @@ function toRelatedTag(r: RelatedTag | string): RelatedTag {
 function safeHref(url: string | undefined): string | null {
   if (!url) return null
   return /^https?:\/\//i.test(url) ? url : null
-}
-
-/** The DM writes one textarea; split on blank lines into paragraphs, falling
- *  back to the whole string as one paragraph when there's no blank line. */
-function paragraphs(text: string): string[] {
-  const parts = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
-  return parts.length ? parts : (text.trim() ? [text.trim()] : [])
 }
 
 type Selection = { kind: 'quest'; id: string } | { kind: 'session'; id: string } | null
@@ -253,9 +247,7 @@ function QuestEntry({ q }: { q: QuestRow }) {
         <span className="k">Location:</span> <span className="v">{q.location}</span>
       </div>
       <div className={styles.entryRule} />
-      <div className={styles.prose}>
-        {paragraphs(q.description).map((p, i) => <p key={i}>{p}</p>)}
-      </div>
+      <Prose text={q.description} className={styles.prose} />
       {q.objectives.length > 0 && (
         <>
           <div className={styles.subLabel}>Objectives <span className="acc">::</span> {done} / {q.objectives.length}</div>
@@ -303,9 +295,7 @@ function SessionEntry({ s }: { s: SessionRow }) {
       <h1 className={styles.entryTitle}>{s.title}</h1>
       <div className={styles.attrib}>Recorded by G.U.I.D.E. &nbsp;//&nbsp; Auto-Log</div>
       <div className={styles.entryRule} />
-      <div className={styles.prose}>
-        {paragraphs(s.recap).map((p, i) => <p key={i}>{p}</p>)}
-      </div>
+      <Prose text={s.recap} className={styles.prose} />
       {s.events.length > 0 && (
         <>
           <div className={styles.subLabel}>Key Events</div>
