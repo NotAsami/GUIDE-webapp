@@ -33,6 +33,11 @@
 
   /* Extended rarity scale (Operator Console catalog). The player screens only
      needed common→legendary; the catalog also reads very-rare. */
+  /* Coin metals. Gold is --beige (it doubles as the UI's warm accent); these
+     two existed only as inline hexes on the console's coin cells. */
+  --silver:       #c2c8cc;
+  --copper:       #c08552;
+
   --rar-common:   #b8b8b8;
   --rar-uncommon: #4fae6b;
   --rar-rare:     #00a6d6;

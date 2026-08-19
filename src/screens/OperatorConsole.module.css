@@ -560,8 +560,8 @@
 .coinCell .cn { font-family: var(--font-display); font-weight: 600; font-size: 15px; line-height: 1; }
 .coinCell .ct { font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; margin-top: 3px; }
 .coinCell.gp .cn { color: var(--amber); }
-.coinCell.sp .cn { color: #c2c8cc; }
-.coinCell.cp .cn { color: #c08552; }
+.coinCell.sp .cn { color: var(--silver); }
+.coinCell.cp .cn { color: var(--copper); }
 
 /* STATUS — death saves + exhaustion */
 .statusSplit { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -745,8 +745,14 @@
    outline→solid-fill flip for expertise. (tokens.css defines --gold-rare and
    --amber as the identical hex value, so a color-only distinction there was
    invisible — this doesn't depend on that pair being different.) */
-.profDots { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+/* Fixed-width slot, ALWAYS present — see ProfDots in OperatorConsole.tsx. A pip
+   that only exists on the selected state widens the chip on click and reflows
+   every chip after it in the wrapped grid, so the next one you meant to click
+   moves out from under the cursor. --dots is 5px for an on/off list, 12px where
+   expertise adds a second diamond. */
+.profDots { display: inline-flex; gap: 2px; flex: 0 0 auto; width: var(--dots, 12px); }
 .profDot { width: 5px; height: 5px; background: var(--amber); transform: rotate(45deg); }
+.profDot.off { visibility: hidden; }
 .profChip.on { color: var(--amber-hot); background-color: rgba(226,176,33,0.12); --bc: var(--amber); box-shadow: inset 0 0 10px rgba(226,176,33,0.14); }
 .profChip.exp {
   color: #1c1608; background-color: var(--amber-hot); --bc: var(--amber-hot);
@@ -1824,7 +1830,19 @@
 .skMain .crTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .skMain .crT { font-family: var(--font-prose); font-size: 14px; color: var(--text); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .skMain .crS { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.skLive { color: var(--good); }
+/* Open/Closed reads as a STATE, with a lit dot and a colour, rather than as a
+   word appended to the shop's name. Green is live to a player right now; red is
+   not. `.skLive` was the old inline marker and is gone with it. */
+.skState { display: inline-flex; align-items: center; gap: 5px; }
+.skState .skDot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.skState.isOpen { color: var(--good); }
+.skState.isOpen .skDot { box-shadow: 0 0 6px var(--good); }
+.skState.isShut { color: var(--danger-hot); }
+/* flex collapses a whitespace-only child, so the shared `.op` separator (which
+   is literally " · ") loses its spaces and the line reads "OPEN·2 ITEMS".
+   Give it real margins rather than relying on the text nodes. */
+.skMain .crS { display: flex; align-items: center; }
+.skMain .crS .op { margin: 0 6px; }
 .skUse {
   flex: 0 0 auto; width: 52px; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 10px;
   background: rgba(0,0,0,0.3); border: 1px solid rgba(212,191,125,0.2); color: var(--beige-dim);
@@ -2046,3 +2064,526 @@
 @media (prefers-reduced-motion: reduce) {
   .crTab, .crLab { transition: none; }
 }
+
+/* ============================================================
+   CLASS EDITOR (Catalog · Classes tab)
+
+   Four controls with no precedent. Everything else in the class form is an
+   existing atom — .catLayout, .catRow, .fieldLab, .sessIn, .selIn, .catProse,
+   .profGrid, .efBlock, .catFx.fold, .searchWrap, .catItem — so the form reads
+   as a sibling of the Effects and Items forms rather than a new screen.
+
+   NO clip-path in this block, deliberately. Every chamfered element in this
+   file has to carry the two-gradient corner recipe keyed off --bc
+   (docs/Chamfered_clip-path_corners_fix.md, guarded by
+   src/lib/chamferBorders.test.ts); these use left-accent bars instead, which is
+   the same house idiom .detailRow, .skWarn and .efBlock already use and cannot
+   grow bare corners.
+   ============================================================ */
+
+/* ---- THE FEATURE SPINE ----
+   The one thing that replaces a twenty-row progression grid: rows group under
+   the level their own gate names, so the ladder is a VIEW of the conditions
+   rather than a second copy of them. The group marker is a NUMBER because the
+   content genuinely is a sequence — the level ladder — and CONDITIONAL is
+   cyan rather than a number because it is a different axis, not level zero. */
+/* Flat: every header and every row is a direct child, so React can MOVE a
+   regrouped row instead of remounting it. See the note at the call site — the
+   gate field is unusable otherwise. Group separation therefore has to come off
+   the header, not off a wrapper. */
+.clsSpine { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; }
+.clsGrpHead { display: flex; align-items: center; gap: 10px; padding: 0 2px 3px; margin-top: 12px; }
+.clsGrpHead:first-child { margin-top: 0; }
+.clsGrpHead .cgN {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.22em; text-transform: uppercase; color: var(--amber);
+}
+.clsGrpHead .cgRule { flex: 1; height: 1px; background: rgba(226,176,33,0.22); }
+.clsGrpHead .cgC {
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; color: var(--muted);
+}
+/* Not a level, so not a number and not amber. */
+.clsGrpHead.cond .cgN { color: var(--cyan-hot); letter-spacing: 0.18em; font-size: 9px; }
+.clsGrpHead.cond .cgRule { background: rgba(0,166,214,0.22); }
+
+.clsRow {
+  display: flex; align-items: center; gap: 9px; padding: 6px 9px;
+  background: rgba(0,0,0,0.28); border-left: 2px solid rgba(226,176,33,0.5);
+  transition: background 130ms ease;
+}
+.clsRow:hover { background: rgba(226,176,33,0.06); }
+.clsRow .crFIc { flex: 0 0 16px; text-align: center; font-size: 11px; }
+/* min-width:0 or the name refuses to ellipsis and pushes the gate field out of
+   the form — the same failure .catGrid2 documents for grid children. */
+.clsRow .crFNm {
+  flex: 1; min-width: 0; font-family: var(--font-prose); font-size: 13.5px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.clsRow .crFGone { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; color: var(--danger-hot); }
+/* The gate reads as what it is — an expression — so it is set in mono at the
+   size the op editor sets `when` in, not as prose. */
+.clsRow .crFWhen {
+  flex: 0 0 clamp(150px, 34%, 260px); margin-bottom: 0;
+  font-size: 9.5px; letter-spacing: 0.06em; color: var(--amber-hot);
+  padding: 5px 8px; background-color: rgba(0,0,0,0.45);
+}
+.clsRow .crFWhen::placeholder { color: var(--beige-dim); letter-spacing: 0.12em; }
+.clsRow .x { flex: 0 0 auto; cursor: pointer; color: var(--muted); font-size: 10px; padding: 2px 3px; }
+.clsRow .x:hover { color: var(--danger-hot); }
+.clsRow.bad { border-left-color: var(--danger); background: rgba(185,58,58,0.07); }
+
+/* ---- FORM RHYTHM ----
+   A .fieldLab takes its gap from the LINE BOX of the inline-block <input> that
+   normally follows it. Before a block-level widget — a flex chip row, a grid,
+   an icon picker — there is no line box, so the control renders flush against
+   its own label and a column of them reads as one undifferentiated mass. Set
+   the gap explicitly instead, so both cases measure the same.
+
+   Scoped to .clsForm rather than .catForm: every other catalog form is already
+   tuned around the line-box behaviour, and this is a fix for a form that has
+   far more block-level widgets than they do, not a global re-spacing. */
+.clsForm .fieldLab { display: block; margin-bottom: 7px; }
+/* The section divider sets its own gap — its label sits beside a hairline. */
+.clsForm .catSecLab { margin: 20px 0 12px; }
+.clsForm .catSecLab .fieldLab { margin-bottom: 0; }
+.clsForm .efBh .t, .clsForm .efBh .n { margin-bottom: 0; }
+.clsForm .catIcons { margin-bottom: 15px; }
+/* .fxfHead .t has no nowrap because every other fold in this file is titled
+   in one short word ("Roll Contributions" fits). "Slot Progression" does not,
+   and a wrapped two-line title makes the fold twice as tall as its siblings. */
+.clsForm .fxfHead .t { flex: 0 0 auto; white-space: nowrap; }
+
+/* A labelled group inside a block. Without this the saving-throw chips run
+   straight into the next label and the two questions read as one. */
+.clsSub { margin-bottom: 16px; }
+.clsSub:last-child { margin-bottom: 0; }
+
+/* ---- TRAINING ROWS ----
+   Label in a fixed left column, chips and the add-field sharing the line to its
+   right — the .detailRow idiom. Three of these stacked stay three lines instead
+   of nine, which is what stops armour, weapons and tools merging together. */
+.trainRow { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.trainRow .trLab {
+  flex: 0 0 76px; padding-top: 8px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--beige);
+}
+/* min-width:0 or a long chip refuses to wrap and pushes the field out of the
+   block — the failure .catGrid2 documents for grid children, same cause. */
+.trainRow .trBody { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.trainRow .trIn { flex: 1 1 170px; min-width: 0; width: auto; margin-bottom: 0; padding: 6px 10px; font-size: 9.5px; }
+
+/* "Choose N of the eligible list" — one line, because it is one sentence. The
+   field holds ONE DIGIT: at the full .sessIn size (62x34, the same box a
+   full-width text field gets) it read as the most important control on the
+   screen, which it is not. */
+/* Real separation from the eighteen chips above it: this is a different
+   question ("how many of them"), not another chip in the same list. */
+.clsChoose { display: flex; align-items: center; gap: 9px; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid rgba(212,191,125,0.14); }
+.clsChoose .fieldLab { margin-bottom: 0; }
+.clsChoose .num {
+  flex: 0 0 auto; width: 44px; margin-bottom: 0; text-align: center;
+  padding: 5px 6px; font-size: 10px; letter-spacing: 0;
+}
+.clsChooseS { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em; color: var(--muted); line-height: 1.5; }
+
+/* ---- PACT MAGIC ----
+   Its own control, not the standard grid with the cells taken out. Both numbers
+   are step functions with four and five breakpoints (lib/spells.ts), so the
+   breakpoints ARE the render. Violet rather than the cyan the derived slot grid
+   uses, because the point is that these are two different systems. */
+.pactLadder {
+  margin: 0 0 14px; padding: 12px 14px 11px;
+  background: rgba(160,122,214,0.05);
+  border: 1px solid rgba(160,122,214,0.3); border-left: 3px solid var(--violet);
+}
+.pactLadder .plNote {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 12px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--violet-hot);
+}
+.pactLadder .plNote i { font-size: 9px; }
+.pactLadder .plRow { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 12px; }
+.pactLadder .plLab {
+  flex: 0 0 68px; padding-top: 5px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige);
+}
+.pactLadder .plSteps { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 6px; }
+/* Equal-width steps, so the breakpoints read as a ladder rather than as text
+   that happens to have numbers under it. */
+.pactLadder .plStep {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 6px 4px 5px; background: rgba(0,0,0,0.3); border-top: 1.5px solid rgba(160,122,214,0.45);
+}
+.pactLadder .plPips { display: flex; gap: 3px; height: 12px; align-items: center; }
+.pactLadder .plPip { width: 7px; height: 7px; background: var(--violet); box-shadow: 0 0 5px rgba(160,122,214,0.5); }
+.pactLadder .plOrd {
+  height: 12px; display: flex; align-items: center;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--violet-hot);
+}
+.pactLadder .plAt { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; color: var(--muted); }
+.pactLadder .plRest {
+  display: flex; align-items: center; gap: 7px; padding-top: 9px;
+  border-top: 1px solid rgba(160,122,214,0.18);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.05em; color: var(--muted);
+}
+.pactLadder .plRest b { color: var(--violet-hot); }
+.pactLadder .plRest i { color: var(--violet); font-size: 9px; }
+
+/* ---- DERIVED SLOT PROGRESSION ----
+   Read-only, so it can be dense: no inputs, just the SRD numbers. Cell tint is
+   keyed to the count, which is what makes a full caster's staircase and a third
+   caster's shallow ramp legible as a SHAPE instead of as 180 numbers. */
+.slotGridRO {
+  display: flex; flex-direction: column; gap: 2px;
+  /* A dense grid is the one thing in this form that can out-run its column on a
+     narrow window; let it scroll inside itself rather than pushing the page. */
+  overflow-x: auto; padding-bottom: 4px;
+}
+.slotGridRO .sgRow { display: grid; grid-template-columns: 30px repeat(9, minmax(22px, 1fr)); gap: 2px; min-width: 260px; }
+.slotGridRO .sgRow > * { min-width: 0; }
+.slotGridRO .sgLvl {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.08em; color: var(--beige-dim);
+  display: flex; align-items: center; justify-content: flex-end; padding-right: 5px;
+}
+.slotGridRO .sgCell {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.04em; color: var(--beige-dim);
+  display: flex; align-items: center; justify-content: center; padding: 3px 0;
+  background: rgba(0,0,0,0.25);
+}
+.slotGridRO .sgCell.on { color: var(--cyan-hot); background: rgba(0,166,214,var(--fill, 0.14)); }
+.slotGridRO .sgHead .sgCell,
+.slotGridRO .sgHead .sgLvl {
+  background: none; color: var(--beige); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  padding-bottom: 5px;
+}
+.sgFoot {
+  margin-top: 9px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.03em;
+  color: var(--muted); line-height: 1.6;
+}
+.sgFoot code { color: var(--cyan-hot); font-size: 8px; }
+
+/* ---- AUDIT + ACTION BAR ----
+   The audit is the shared Lattice-Audit panel (components/AuditPanel); this is
+   only the well it sits in. `.edAudit` is the Feature Editor's wrapper and
+   re-pads for that screen's 46px step gutter, so the class form cannot use it. */
+.clsAudit {
+  margin: 18px 0 0; background: rgba(0,0,0,0.22);
+  border-top: 1px solid rgba(212,191,125,0.24);
+}
+
+/* Sticky, so Publish stays reachable in a form this long — the Feature Editor
+   gets the same guarantee from its screen-level footer, which a catalog tab has
+   no room for. Needs its own opaque background or the form scrolls through it. */
+.clsBar {
+  position: sticky; bottom: 0; z-index: 6;
+  display: flex; flex-direction: column; gap: 9px;
+  margin-top: 14px; padding: 10px 13px 12px;
+  background: #14130f; border-top: 1.5px solid rgba(212,191,125,0.3);
+}
+.clsBarInfo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.clsStat { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--good); }
+.clsStat .dot { width: 6px; height: 6px; background: var(--good); box-shadow: 0 0 7px currentColor; }
+.clsStat.warn { color: var(--amber); }
+.clsStat.warn .dot { background: var(--amber); }
+.clsStat.bad { color: var(--danger-hot); }
+.clsStat.bad .dot { background: var(--danger-hot); }
+.clsDirty {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--amber); opacity: 0; transition: opacity 160ms ease;
+}
+.clsDirty.on { opacity: 1; }
+.clsSaved { margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.08em; color: var(--muted); }
+/* Buttons share the width of their row rather than each claiming a fixed
+   width, so nothing gets orphaned onto a line of its own.
+   min-width is a floor, not decoration: .btn's label lives in an absolutely
+   positioned .bi under a clip-path, so it has NO intrinsic width and a button
+   narrower than its label clips the text and the icon instead of overflowing. */
+.clsActs { display: flex; gap: 7px; align-items: stretch; }
+.clsActs > * { flex: 1 1 0; min-width: 104px; }
+.clsActs .btn { flex: 1 1 0; min-width: 104px; }
+/* Publish is the action the bar exists for — give it the extra room. */
+.clsPub { flex: 1.5 1 0; display: flex; }
+/* Duplicate/Delete act on the ROW; the ladder below acts on the DRAFT. Two
+   short rows read as two kinds of action and give every label its space. */
+.clsActs.rowActs { margin-bottom: 7px; }
+
+/* ---- STARTING KIT EDITOR ----
+   A choice group is a box; an option is a row inside it; items are chips on the
+   option. The nesting is the point — you have to be able to see at a glance
+   which options belong to which decision, or a four-choice kit reads as twelve
+   loose inputs.
+
+   No clip-path in here: chamfers next to an edge need the gradient recipe and
+   these use left-accent bars instead (see the note on the class-editor block). */
+.kitChoice {
+  margin-bottom: 11px; padding: 9px 11px 10px;
+  background: rgba(0,0,0,0.26); border-left: 2px solid var(--beige-dim);
+}
+.kitChoice .kcHead { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.kitChoice .kcN {
+  flex: 0 0 auto; font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.18em; color: var(--beige);
+}
+/* min-width:0 or the input's intrinsic width floors the flex row and pushes the
+   badge and the remove control off the block. */
+.kitChoice .kcLab {
+  flex: 1 1 auto; min-width: 0; margin-bottom: 0;
+  padding: 6px 9px; font-size: 10px;
+}
+.kitChoice .kcKind {
+  flex: 0 0 auto; padding: 3px 7px;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--amber); background: rgba(226,176,33,0.1);
+  border: 1px solid rgba(226,176,33,0.28);
+}
+/* One option is not a question — say so, and say it quietly. */
+.kitChoice .kcKind.fixed { color: var(--muted); background: rgba(0,0,0,0.3); border-color: rgba(212,191,125,0.18); }
+.kitChoice > .kcHead .x { flex: 0 0 auto; cursor: pointer; color: var(--muted); font-size: 10px; padding: 2px 3px; }
+.kitChoice > .kcHead .x:hover { color: var(--danger-hot); }
+
+.kitOpt {
+  margin: 0 0 7px 14px; padding: 8px 10px 9px;
+  background: rgba(0,0,0,0.3); border-left: 2px solid rgba(226,176,33,0.42);
+}
+.kitOpt .koHead { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.kitOpt .koN {
+  flex: 0 0 22px; text-align: center;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.04em; color: var(--amber-hot);
+}
+.kitOpt .koLab { flex: 1 1 auto; min-width: 0; margin-bottom: 0; padding: 6px 9px; font-size: 10px; }
+.kitOpt .koHead .x { flex: 0 0 auto; cursor: pointer; color: var(--muted); font-size: 10px; padding: 2px 3px; }
+.kitOpt .koHead .x:hover { color: var(--danger-hot); }
+
+.kitOpt .koItems { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 30px; }
+.kitOpt .koAdd {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  padding: 4px 9px; background: rgba(0,0,0,0.4);
+  border: 1px dashed rgba(212,191,125,0.32); color: var(--beige-dim);
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  transition: color 130ms ease, border-color 130ms ease;
+}
+.kitOpt .koAdd:hover { color: var(--amber); border-color: rgba(226,176,33,0.45); }
+.kitOpt .koAdd i { font-size: 8px; }
+
+/* OVERLAYS, never inline. Rendered in flow it pushed option (b), the quantity
+   rows and the next choice group down by ~250px the moment you opened it, and
+   the block you were editing scrolled out from under you. It floats over the
+   content below instead — same call the tag autocomplete (.efAc) makes. */
+.kitOpt { position: relative; }
+.kitOpt .koPick {
+  position: absolute; z-index: 40; left: 30px; right: 10px; top: calc(100% - 6px);
+  padding: 8px 9px 9px;
+  background: #14130f; border: 1.5px solid rgba(226, 176, 33, 0.4);
+  box-shadow: 0 16px 34px -14px #000;
+}
+.kitOpt .koPick .searchWrap { margin-bottom: 7px; }
+.kitOpt .koPick .skPicklist { max-height: 208px; }
+
+/* A pool entry reads as a question, not an item — it is the one chip in the row
+   that names something the player will decide. */
+.kitOpt .poolChip { --bc: rgba(0, 166, 214, 0.45); color: var(--cyan-hot); background: rgba(0, 166, 214, 0.08); }
+.kitOpt .poolChip > i:first-child { cursor: default; color: var(--cyan); }
+
+.kitOpt .kqPool { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; width: 100%; }
+.kitOpt .kqPool .kqNm { display: flex; align-items: center; gap: 5px; color: var(--cyan-hot); }
+.kitOpt .kqOf { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.12em; color: var(--beige-dim); }
+.kitOpt .kqFrom { flex: 1 1 190px; min-width: 0; margin-bottom: 0; padding: 4px 8px; font-size: 9.5px; }
+.kitOpt .kqLabel { flex: 1 1 100%; min-width: 0; margin-bottom: 0; padding: 4px 8px; font-size: 9.5px; }
+/* The live match count is what makes a query verifiable before it ships — the
+   same reassurance the graph editor's target selectors give. */
+.kitOpt .kqHit {
+  flex: 0 0 auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--good);
+}
+.kitOpt .kqHit.zero { color: var(--danger-hot); }
+
+/* Quantity only appears for the categories where a stack means something, so
+   this row is usually absent entirely rather than a column of 1s. */
+.kitOpt .koQty {
+  display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 9px 0 0 30px; padding-top: 8px;
+  border-top: 1px solid rgba(212,191,125,0.12);
+}
+.kitOpt .kqRow { display: flex; align-items: center; gap: 8px; }
+.kitOpt .kqNm {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--beige-dim);
+}
+/* Says which shape the number takes on the sheet, so nobody has to know that
+   stacking is decided by category. */
+.kitOpt .kqNote {
+  font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--amber-dim);
+}
+.kitOpt .kqRow .num {
+  flex: 0 0 auto; width: 52px; margin-bottom: 0; text-align: center;
+  padding: 4px 6px; font-size: 10px; letter-spacing: 0;
+}
+
+/* The prose this field used to hold, kept readable while it is rebuilt. */
+.kitLegacy {
+  margin: 0 0 12px; padding: 9px 11px 10px;
+  background: rgba(0,0,0,0.3); border: 1px dashed rgba(212,191,125,0.28); border-left: 2px solid var(--beige-dim);
+}
+.kitLegacy .klHead {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 7px;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--beige-dim);
+}
+.kitLegacy .klBody {
+  margin: 0; white-space: pre-wrap; word-break: break-word;
+  font-family: var(--font-prose); font-size: 13px; line-height: 1.55; color: var(--muted);
+}
+
+/* One sentence at the top of a catalog tab, drawing a line the tab's own name
+   used to blur. Not a warning — a definition. */
+.catNote {
+  display: flex; align-items: flex-start; gap: 9px; margin-bottom: 14px; padding: 9px 12px;
+  background: rgba(0,166,214,0.05); border-left: 2px solid var(--cyan);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em;
+  color: var(--muted); line-height: 1.75;
+}
+.catNote i { color: var(--cyan-hot); font-size: 10px; margin-top: 3px; }
+.catNote b { color: var(--text); }
+
+/* A subrace, nested under its parent in the index. Indented and quieter, so a
+   race with five lineages still reads as one entry with five under it. */
+/* A nested row (a subrace, a class path).
+   `width: auto`, NOT the inherited `width: 100%`: with a fixed 100% the margin
+   made the box 100%+16px and its right edge ran under the panel border, so the
+   indent silently cost you the end of every nested row. In a stretch flex
+   column, auto is exactly the space the margin leaves. */
+.catRow.subRow { margin-left: 16px; width: auto; }
+.catRow.subRow .crT { font-size: 13px; }
+/* A tick back toward the parent, so the indent reads as belonging rather than
+   as a row that drifted right. */
+.catRow.subRow::before {
+  content: ""; position: absolute; left: -10px; top: 50%; width: 8px; height: 1px;
+  background: rgba(212, 191, 125, 0.28);
+}
+.catRow.subRow { position: relative; }
+
+/* The path picker, under the class it belongs to. Violet, matching the subclass
+   note in the editor, so "path" looks the same on both sides of the screen. */
+.pathPick {
+  margin-top: 13px; padding-top: 12px; border-top: 1px solid rgba(212,191,125,0.14);
+}
+.pathPick .ppHead { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.pathPick .ppHead i { color: var(--violet); font-size: 11px; }
+.pathPick .ppHead .t {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--violet-hot);
+}
+.pathPick .ppHead .n {
+  margin-left: auto; font-family: var(--font-mono); font-size: 7.5px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+}
+.pathPick .ppRows { display: flex; flex-direction: column; gap: 5px; }
+.pathPick .ppRow {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;
+  padding: 8px 10px; background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(212,191,125,0.18); border-left: 2px solid rgba(160,122,214,0.5);
+  transition: background 130ms ease, border-color 130ms ease;
+}
+.pathPick .ppRow:hover:not(:disabled) { background: rgba(160,122,214,0.1); border-color: rgba(160,122,214,0.5); }
+.pathPick .ppRow:disabled { opacity: 0.4; cursor: not-allowed; }
+.pathPick .ppRow.on { background: rgba(160,122,214,0.12); border-left-color: var(--violet); }
+.pathPick .ppOn {
+  margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--violet-hot);
+}
+
+/* Fields a subclass inherits are removed from the flow, not disabled: a greyed
+   control still reads as "you could set this", and you cannot. */
+.hidden { display: none; }
+
+/* What a path inherits, said once where it would otherwise be missing. */
+.subNote {
+  display: flex; align-items: flex-start; gap: 9px; margin: 0 0 14px; padding: 9px 12px;
+  background: rgba(160,122,214,0.06); border-left: 2px solid var(--violet);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em;
+  color: var(--muted); line-height: 1.75;
+}
+.subNote i { color: var(--violet); font-size: 10px; margin-top: 3px; }
+.subNote b { color: var(--text); }
+
+/* Says where a race's numbers actually live. Without it the form looks like it
+   forgot ability scores, which is the first thing anyone would look for. */
+.raceNums {
+  display: flex; align-items: flex-start; gap: 9px; margin: 0 0 14px; padding: 9px 12px;
+  background: rgba(63,199,180,0.05); border-left: 2px solid var(--teal);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em;
+  color: var(--muted); line-height: 1.75;
+}
+.raceNums i { color: var(--teal); font-size: 10px; margin-top: 3px; }
+.raceNums b { color: var(--text); }
+
+/* ---- HIT POINT RULE ----
+   Shown, never typed: both lines are functions of the hit die, so a field here
+   would be a second answer to a question already settled two rows up. */
+.hpRule {
+  margin: 0 0 15px; padding: 10px 12px 11px;
+  background: rgba(185,58,58,0.05); border-left: 2px solid var(--danger);
+}
+.hpRule .hrHead {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 9px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--danger-hot);
+}
+/* Same shape as the hit-point rule, in the caster colour — both are "the class
+   decides this formula, the character supplies the numbers". */
+.hpRule.castRule { background: rgba(0,166,214,0.05); border-left-color: var(--cyan); }
+.hpRule.castRule .hrHead { color: var(--cyan-hot); }
+.hpRule .hrRow { display: flex; align-items: baseline; gap: 12px; margin-top: 5px; }
+.hpRule .hrK {
+  flex: 0 0 86px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--beige-dim);
+}
+.hpRule .hrV { flex: 1; min-width: 0; font-family: var(--font-prose); font-size: 13.5px; color: var(--text); line-height: 1.4; }
+
+/* ---- THE CLASS'S SKILL ALLOWANCE, on the card that does the ticking ----
+   A class offers an eligible list and a count; the pick itself is the player's,
+   so nothing writes it automatically. This is the counter and the split that
+   make the class's answer visible where the DM actually acts on it. */
+.clsAllow {
+  display: inline-flex; align-items: baseline; gap: 7px; margin-left: 10px; padding: 2px 8px;
+  background: rgba(226,176,33,0.09); border-left: 2px solid var(--amber);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber-dim);
+}
+.clsAllow b { font-size: 9px; color: var(--amber-hot); }
+.clsAllow.met { background: rgba(79,174,107,0.1); border-left-color: var(--good); color: var(--good); }
+.clsAllow.met b, .clsAllow.met i { color: var(--good); }
+.clsAllow.over { background: rgba(185,58,58,0.1); border-left-color: var(--danger); color: var(--danger-hot); }
+.clsAllow.over b { color: var(--danger-hot); }
+
+/* Full-width rule inside the wrapped chip grid — everything below it is a
+   skill the class does not offer, which a background or race still can. */
+.profSplit {
+  flex: 1 0 100%; display: flex; align-items: center; gap: 9px; margin: 7px 0 1px;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim);
+}
+.profSplit::after { content: ""; flex: 1; height: 1px; background: rgba(212,191,125,0.14); }
+/* The offered ones read as the shortlist even before anything is ticked. */
+.profChip.offered { border-color: rgba(226,176,33,0.34); color: var(--beige); }
+
+/* ---- ASSIGN CLASS PREVIEW ----
+   Assigning rewrites hit die, saves, armour training and the slot ladder, which
+   is a lot to discover afterwards. Say it before the button is pressed. */
+.clsPreview {
+  display: flex; flex-direction: column; gap: 6px; margin: 10px 0 4px; padding: 10px 12px;
+  background: rgba(0,0,0,0.3); border-left: 2px solid var(--amber);
+}
+.clsPreview .cpLine {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.05em; color: var(--muted); line-height: 1.6;
+}
+.clsPreview .cpLine i { color: var(--amber); font-size: 9px; }
+.clsPreview .cpLine b { color: var(--text); font-weight: 600; }
+.clsPreview .cpNames {
+  flex-basis: 100%; padding-left: 16px;
+  font-family: var(--font-prose); font-size: 12.5px; letter-spacing: 0; color: var(--beige-dim);
+}
+.clsPreview .cpLine.dim i { color: var(--beige-dim); }
+.clsPreview .cpLine.warn { color: var(--amber); }
+.clsPreview .cpLine.warn i { color: var(--amber-hot); }
+.clsPreview .cpLine.warn b { color: var(--amber-hot); }

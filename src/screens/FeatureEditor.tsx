@@ -26,7 +26,7 @@ import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmFeatures, featureContent } from '../lib/dm'
 import { useLocalDraft } from '../lib/draft'
 import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
-import { GraphEffects, TagsBlock, VarsBlock, splitSel } from '../components/GraphEffects'
+import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, splitSel } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { auditNode, gid, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
 import {
@@ -374,7 +374,7 @@ export default function FeatureEditor() {
         </div>
         <div className={styles.opRight}>
           <div className={styles.opStat}><span className={styles.v}>{lib.features.length}</span><span className={styles.l}>Features</span></div>
-          <div className={styles.opStat}><span className={cx(styles.v, styles.cyan)}>{nodeCount}</span><span className={styles.l}>Effect Nodes</span></div>
+          <div className={styles.opStat}><span className={cx(styles.v, styles.cyan)}>{nodeCount}</span><span className={styles.l}>Rule Nodes</span></div>
           <div className={styles.opStat}><span className={cx(styles.v, libErrs > 0 && styles.warn)}>{libErrs}</span><span className={styles.l}>Issues</span></div>
           <div className={styles.opRootpill}><span className={styles.dot} /> Root · Architect</div>
           {/* Back to the CATALOG, which is where this editor is opened from —
@@ -588,19 +588,10 @@ export default function FeatureEditor() {
               </div>
               {draft && (
                 <div className={styles.edAudit}>
-                  <div className={styles.auditHead}>
-                    <span className={styles.t}>Feature Audit</span>
-                    <span className={styles.n}>{errs + warns ? `${errs} err · ${warns} warn` : 'clean'}</span>
-                  </div>
-                  <div className={styles.audit}>
-                    {audit.map((a, i) => (
-                      <button key={i} type="button" className={cx(styles.auditItem, styles[a.sev])}
-                        onClick={() => setOpen({ vars: true, effects: true })}>
-                        <i className={`fa-solid ${a.sev === 'err' ? 'fa-circle-exclamation' : a.sev === 'warn' ? 'fa-triangle-exclamation' : 'fa-circle-check'}`} />
-                        <span className={styles.aiTx}><span className={styles.aiT}>{a.t}</span><span className={styles.aiS}>{a.s}</span></span>
-                      </button>
-                    ))}
-                  </div>
+                  {/* The shared panel — same component the class editor mounts,
+                      so the two cannot drift. `.edAudit` is this screen's
+                      wrapper, re-padding for the 46px step gutter. */}
+                  <AuditPanel title="Feature Audit" audit={audit} onJump={() => setOpen({ vars: true, effects: true })} />
                 </div>
               )}
             </div>
@@ -961,7 +952,7 @@ function FeatureForm(p: FormProps) {
       <div className={cx(styles.blk, p.open.effects && styles.open)}>
         <button type="button" className={styles.blkHead} onClick={() => p.setOpen({ ...p.open, effects: !p.open.effects })}>
           <i className={cx('fa-solid fa-chevron-right', styles.ch)} />
-          <span className={styles.bnum}>04</span><span className={styles.bt}>Effects</span>
+          <span className={styles.bnum}>04</span><span className={styles.bt}>Rules</span>
           <span className={styles.bs}>{p.open.effects ? 'contributions this feature makes' : 'optional · prose-only features need none'}</span>
           <span className={cx(styles.bcount, effErr ? styles.bad : graph.length ? styles.hot : undefined)}>{graph.length}</span>
         </button>
@@ -995,7 +986,7 @@ function GuidePanel({ open, helpOn, setHelpOn, onClose }: { open: boolean; helpO
       </div>
       <div className={styles.gpBody}>
         <div className={styles.sec}><span className={styles.num}>01</span><span className={styles.fieldLab}>Prose is enough</span></div>
-        <p className={styles.gtext}>Fill in identity, write the description, publish. <strong>Variables</strong> and <strong>Effects</strong> exist for features the app has to compute — they stay closed until you open them, and a feature that never opens them is a complete feature.</p>
+        <p className={styles.gtext}>Fill in identity, write the description, publish. <strong>Variables</strong> and <strong>Rules</strong> exist for features the app has to compute — they stay closed until you open them, and a feature that never opens them is a complete feature.</p>
 
         <div className={styles.sec}><span className={styles.num}>02</span><span className={styles.fieldLab}>Prose that computes</span></div>
         <p className={styles.gtext}>Every prose field runs through the character before it reaches the player. <code>{'{'}...{'}'}</code> is an expression; anything it cannot resolve is left on screen exactly as you typed it, so a visible <code>{'{'}saveDc{'}'}</code> is how you find out it did not resolve.</p>
@@ -1266,7 +1257,7 @@ function Popover({ pop, onClose, draft, set, update, nodes, namesByGid, selId, r
           </div>
           <div className={styles.popBody}>
             <div className={styles.mono} style={{ marginBottom: 6 }}>
-              Deleting <b>{draft?.name || 'this feature'}</b> · <span style={{ color: 'var(--amber)' }}>{selId}</span> removes its tags, variables, effect nodes and gates. This cannot be undone.
+              Deleting <b>{draft?.name || 'this feature'}</b> · <span style={{ color: 'var(--amber)' }}>{selId}</span> removes its tags, variables, rule nodes and gates. This cannot be undone.
             </div>
             {refs.length ? (
               <div className={styles.brk}>

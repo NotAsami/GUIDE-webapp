@@ -818,7 +818,7 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
           they are the DM's simulation only until the node is unconcealed. */}
       <div className={styles.catFxHead} style={{ marginTop: 14 }}>
         <i className="fa-solid fa-diagram-project" />
-        <span className={styles.t}>Roll Contributions</span>
+        <span className={styles.t}>Rules</span>
         <span className={styles.s}>
           {node.concealed ? 'While attuned · concealed, so DM-side only' : 'While attuned'}
         </span>

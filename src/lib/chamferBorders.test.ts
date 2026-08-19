@@ -7,8 +7,8 @@
  * been fixed independently at least five times, because nothing about the
  * source looks wrong — you have to spot two missing diagonals at real zoom.
  *
- * So it is checked here instead of noticed. Three failure modes, all of which
- * were live in the codebase when this was written:
+ * So it is checked here instead of noticed. Four failure modes, all of which
+ * have been live in this codebase:
  *
  *   1. NOT REGISTERED — the rule chamfers and borders but no `0.7071` block
  *      covers it. The original bug.
@@ -18,6 +18,11 @@
  *   3. `border-color` IN A VARIANT — the border and the stripes both key off
  *      --bc, so setting border-color alone recolours the straight edges and
  *      leaves the diagonals behind, e.g. amber edges meeting beige corners.
+ *   4. `box-shadow: inset` AS THE EDGE — the same bug reached through a
+ *      different property. An inset shadow follows the border-box RECTANGLE,
+ *      so a chamfer slices both diagonals bare exactly as it does a border.
+ *      This one shipped on the Spellbook's slot cells and the guard walked
+ *      straight past it, because it was only ever looking for `border`.
  *
  * Hexagons and other non-45° polygons are excluded: they need the two-layer
  * frame+inner fix instead, which the doc covers separately.
@@ -124,6 +129,47 @@ test('no chamfered+bordered rule uses the `background` shorthand, which erases t
   }
   assert.deepEqual(bad, [], `\`background:\` resets background-image to none and takes the corner
 diagonals with it. Use \`background-color:\`.\n  ${bad.join('\n  ')}\n`)
+})
+
+/** An inset box-shadow used as the visible edge. `inset 0 0 0 1px` and
+ *  `inset 0 0 0 1.5px` are the ring form; an inset shadow with real offsets or
+ *  blur is a soft interior glow and draws no edge, so it is not a candidate. */
+const hasInsetRing = (decl: string) =>
+  /box-shadow\s*:[^;]*\binset\s+0\s+0\s+0\s+[\d.]+px/.test(decl)
+
+/** The inner half of a two-layer frame. These legitimately carry an inset ring
+ *  — it is an interior highlight, and the OUTER element is what draws the edge,
+ *  so the chamfer has a stroke on every side already. Named rather than
+ *  pattern-matched: "ends in Inner" would let a genuinely broken rule through
+ *  by being called `.somethingInner`, and each of these was checked by hand.
+ *  Adding a name here is a claim that a sibling frame element paints the edge. */
+const FRAMED_INNERS = new Set([
+  'src/screens/Codex.module.css .inner',
+  'src/screens/Equipment.module.css .pInner',
+  'src/screens/Lore.module.css .bpInner',
+  'src/screens/Shard.module.css .hpInner',
+  'src/screens/ShardTree.module.css .pnInner',
+  'src/components/ShopTakeover.module.css .pnInner',
+])
+
+test('no chamfered rule draws its only edge with an inset box-shadow', () => {
+  const bad: string[] = []
+  for (const { f, rs } of files) {
+    for (const r of rs) {
+      if (!isChamfer(r.decl) || !hasInsetRing(r.decl)) continue
+      if (hasBorder(r.decl)) continue                 // the border tests own it
+      if (/0\.7071/.test(r.decl)) continue            // paints its own diagonals
+      if (FRAMED_INNERS.has(`${f.replace(/\\/g, '/')} ${r.sel}`)) continue
+      bad.push(`${f}:${r.line}  ${r.sel}`)
+    }
+  }
+  assert.deepEqual(bad, [], `An inset box-shadow follows the border-box RECTANGLE, so a chamfer cuts
+both diagonals off it exactly as it does a plain border — the cell renders with
+two bare corners. Use the frame+inner pattern (fill the shape with the edge
+colour, then a ::before inset 1.5px for the interior), or the 0.7071 gradient
+recipe. If this rule is the inner half of a frame that already draws the edge,
+add it to FRAMED_INNERS above.
+See docs/Chamfered_clip-path_corners_fix.md.\n  ${bad.join('\n  ')}\n`)
 })
 
 test('recipe-covered elements recolour via --bc, never border-color', () => {

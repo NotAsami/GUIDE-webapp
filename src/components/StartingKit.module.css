@@ -1,0 +1,203 @@
+/* The starting-kit prompt and picker.
+   No clip-path anywhere in here: a chamfered corner beside a border needs the
+   two-gradient recipe (docs/Chamfered_clip-path_corners_fix.md, guarded by
+   src/lib/chamferBorders.test.ts). Left-accent bars carry the same house look
+   and cannot grow bare corners. */
+
+/* ---- COLLAPSED PROMPT ----
+   A card the player TAPS. It never opens itself: this sits on the screen
+   someone opened to read their story progress, and a modal that seizes it is
+   the nagging the codex is built to avoid.
+
+   OUT OF FLOW. In normal flow it pushed the story cards, the module row and
+   the nav down by its own height — the codex layout is a ported mockup with
+   everything at a deliberate vertical position, and a banner inserted at the
+   top moves all of it. Docked above the bottom bar instead, in the dead band
+   the codex already leaves there. */
+.prompt {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--bar-bottom-h) + 20px); z-index: 210;
+  display: flex; align-items: center; gap: 14px; text-align: left;
+  width: min(760px, calc(100vw - 48px)); padding: 14px 16px; cursor: pointer;
+  box-shadow: 0 18px 40px -18px #000;
+  background: rgba(226, 176, 33, 0.07);
+  border: 1px solid rgba(226, 176, 33, 0.34); border-left: 3px solid var(--amber);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.prompt:hover, .prompt:focus-visible { background: rgba(226, 176, 33, 0.13); border-color: var(--amber); }
+.prompt .pIc {
+  flex: 0 0 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  font-size: 15px; color: var(--amber-hot); background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(226, 176, 33, 0.3);
+}
+.prompt .pTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.prompt .pT {
+  font-family: var(--font-display); font-size: 15px; font-weight: 600;
+  letter-spacing: 0.04em; color: var(--amber-hot);
+}
+.prompt .pS {
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted);
+}
+.prompt .pGo {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--amber);
+}
+
+/* ---- OPEN PANEL ----
+   A centred overlay with a scrim, for the same reason: opening it in flow
+   pushed everything below it down by ~400px and the story row left the
+   viewport. Sits under ActivationSheet/ShopTakeover (400) and above the
+   story row (40), so a takeover can still land on top of it. */
+.scrim {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(2px);
+  border: 0; padding: 0; cursor: pointer;
+}
+.kit {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 210;
+  width: min(760px, calc(100vw - 40px));
+  max-height: min(80vh, 760px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 15px 17px 16px;
+  background: #121110;
+  border: 1px solid rgba(226, 176, 33, 0.3); border-left: 3px solid var(--amber);
+  box-shadow: 0 30px 70px -24px #000;
+}
+/* Sticky, so "Later" stays reachable in a panel with four questions in it. */
+.kHead {
+  position: sticky; top: -15px; z-index: 1;
+  margin: -15px -17px 4px; padding: 15px 17px 10px;
+  background: #121110;
+}
+.kHead { display: flex; align-items: center; gap: 10px; }
+.kHead i { color: var(--amber-hot); font-size: 13px; }
+.kT {
+  font-family: var(--font-display); font-size: 15px; font-weight: 600;
+  letter-spacing: 0.05em; color: var(--amber-hot);
+}
+.kS {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--muted);
+}
+.kX {
+  margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer;
+  background: none; border: 0; padding: 4px 2px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--beige-dim);
+}
+.kX:hover { color: var(--amber); }
+
+.kChoice { margin-top: 16px; }
+.kcLab {
+  margin-bottom: 8px;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--beige);
+}
+.kcOpts { display: flex; flex-direction: column; gap: 7px; }
+
+.kOpt {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+  padding: 11px 13px;
+  background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(212, 191, 125, 0.2);
+  border-left: 2px solid var(--beige-dim);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.kOpt:hover:not(:disabled), .kOpt:focus-visible:not(:disabled) {
+  background: rgba(226, 176, 33, 0.1); border-color: rgba(226, 176, 33, 0.45); border-left-color: var(--amber);
+}
+.kOpt.busy, .kOpt:disabled { opacity: 0.45; cursor: wait; }
+.kOpt .koN {
+  flex: 0 0 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; color: var(--amber);
+  background: rgba(226, 176, 33, 0.1); border: 1px solid rgba(226, 176, 33, 0.28);
+}
+/* min-width:0 or a long item list refuses to wrap and pushes the arrow off the
+   card — the same flex-child floor .catGrid2 documents. */
+.kOpt .koTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.kOpt .koL { font-family: var(--font-prose); font-size: 15px; color: var(--text); line-height: 1.25; }
+.kOpt .koI {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); line-height: 1.5;
+}
+.kOpt .koGo { flex: 0 0 auto; font-size: 10px; color: var(--beige-dim); }
+.kOpt:hover:not(:disabled) .koGo { color: var(--amber-hot); }
+
+.kcCount {
+  margin-left: 9px; padding: 2px 7px;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em;
+  color: var(--amber); background: rgba(226, 176, 33, 0.1); border: 1px solid rgba(226, 176, 33, 0.3);
+}
+
+/* ---- A POOL ("which martial weapon") ----
+   A grid, not a stack: a pool can hold a dozen weapons, and a dozen full-width
+   rows buries every other question below it off the bottom of the card. */
+.poolGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.poolGrid > * { min-width: 0; }
+.poolItem {
+  display: flex; align-items: center; gap: 9px; text-align: left; cursor: pointer;
+  padding: 9px 11px;
+  background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(212, 191, 125, 0.2);
+  border-left: 2px solid var(--beige-dim);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.poolItem:hover:not(:disabled), .poolItem:focus-visible:not(:disabled) {
+  background: rgba(226, 176, 33, 0.1); border-color: rgba(226, 176, 33, 0.45); border-left-color: var(--amber);
+}
+.poolItem.busy, .poolItem:disabled { opacity: 0.45; cursor: wait; }
+.poolItem .piIc { flex: 0 0 16px; text-align: center; font-size: 12px; color: var(--beige); }
+.poolItem .piNm {
+  flex: 1; min-width: 0; font-family: var(--font-prose); font-size: 14px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- SKILL PICKS ----
+   Same pip-and-chip vocabulary as the DM's proficiency grid, so a skill looks
+   like a skill on both sides of the screen. The dot slot is always present, or
+   the chip changes width on click and the grid reflows under the cursor. */
+.skillGrid { display: flex; flex-wrap: wrap; gap: 6px; }
+.skillChip {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  padding: 7px 11px;
+  background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(212, 191, 125, 0.22);
+  font-family: var(--font-prose); font-size: 13.5px; color: var(--beige-dim);
+  transition: color 130ms ease, border-color 130ms ease, background 130ms ease;
+}
+.skillChip .scDot { width: 5px; height: 5px; background: transparent; transform: rotate(45deg); }
+.skillChip:hover:not(:disabled) { color: var(--amber); border-color: rgba(226, 176, 33, 0.45); }
+.skillChip.on {
+  color: var(--amber-hot); background: rgba(226, 176, 33, 0.12); border-color: var(--amber);
+  box-shadow: inset 0 0 10px rgba(226, 176, 33, 0.14);
+}
+.skillChip.on .scDot { background: var(--amber); }
+.skillChip:disabled:not(.on) { opacity: 0.4; cursor: not-allowed; }
+
+/* A path carries prose the kit options do not — it is the most characterful
+   choice on this card, so it gets room to say what it is. */
+.kOpt .koD {
+  margin-top: 5px; font-family: var(--font-prose); font-size: 13px;
+  color: var(--muted); line-height: 1.5;
+}
+/* Said once, under the question it applies to, rather than in the card footer
+   where it would read as covering the gear too. */
+.kcNote {
+  margin: 9px 0 0; font-family: var(--font-mono); font-size: 7.5px;
+  letter-spacing: 0.08em; color: var(--beige-dim); line-height: 1.7;
+}
+
+.kFoot {
+  margin: 16px 0 0; padding-top: 11px; border-top: 1px solid rgba(212, 191, 125, 0.14);
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.08em;
+  color: var(--beige-dim); line-height: 1.7;
+}
+
+@media (max-width: 620px) {
+  .prompt { flex-wrap: wrap; bottom: calc(var(--bar-bottom-h) + 12px); }
+  .prompt .pGo { width: 100%; justify-content: flex-end; }
+  .kit { max-height: 86vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prompt, .kOpt { transition: none; }
+}

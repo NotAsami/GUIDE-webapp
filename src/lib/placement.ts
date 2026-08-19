@@ -14,7 +14,7 @@
  * mixing the two conventions silently shifts every item one cell.)
  */
 
-import type { EquippedGear, EquippedItem, InventoryItem, ItemCategory } from './database.types.ts'
+import type { CatalogItemData, EquippedGear, EquippedItem, InventoryItem, ItemCategory } from './database.types.ts'
 
 /** The on-person loadout. Fixed on every platform: placements are coordinates, so
  *  a grid 10 wide on desktop and 5 on mobile would strand items in columns that
@@ -210,6 +210,90 @@ export function place<T extends InventoryItem>(item: T, dest: Destination): T {
   } else {
     delete next.col
     delete next.row
+  }
+  return next
+}
+
+/**
+ * A fresh inventory instance from a catalog template: a self-describing
+ * snapshot of the template data + a unique instance id + the `item_id`
+ * back-ref, routed to its destination.
+ *
+ * Lives here rather than in the console because there are now TWO callers that
+ * must agree — the DM's Grant Item, and the player choosing a starting kit
+ * (lib/kit.ts). Two copies of "what a granted item looks like" is how a kit
+ * item ends up unstackable, or unrouted, or missing its back-ref.
+ *
+ * Granted items go through the SAME routing chain as anything picked up:
+ * arrows fall into the quiver, everything else takes the first free cell on
+ * person and overflows to a bag. That is what retired the grant-destination
+ * picker — nobody has to choose a container.
+ */
+export function grantInstance(
+  data: CatalogItemData, itemId: string, qty: number,
+  gear: EquippedGear, inventory: InventoryItem[],
+): InventoryItem {
+  const inst = `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
+  const fresh = {
+    ...data, id: inst, item_id: itemId,
+    containerId: PERSON,
+    ...(isStackable(data.category) ? { qty } : {}),
+  } as InventoryItem
+  return { ...place(fresh, routeItem(fresh, gear, inventory)), isNew: true }
+}
+
+/** A container's declared capacity, or null when it has none. Needed before a
+ *  merge, to know how many units still fit — otherwise a batch silently pushes
+ *  a capped container (a quiver) over its cap. */
+export function containerCapacity(gear: EquippedGear, containerId: string): number | null {
+  for (const c of Object.values(gear.containers ?? {})) {
+    if (c?.id === containerId) return c.container?.capacity ?? null
+  }
+  return null
+}
+
+/**
+ * Grant `qty` of a catalog template, however that template counts.
+ *
+ * TWO SHAPES, chosen by isStackable:
+ *  - NOT stackable (weapon, armor, gear) — five javelins are five rows, each
+ *    its own instance with its own cell, because each is a distinct object you
+ *    equip, throw and lose separately.
+ *  - stackable (ammo, consumable, misc) — twenty arrows are one "Arrows x20".
+ *    Routed and merged in BATCHES per destination rather than per unit: a batch
+ *    that fills a capped container short of the full qty falls through to the
+ *    next step of the chain for the remainder, exactly as N solo grants would,
+ *    but in as many iterations as there are destinations rather than qty of them.
+ *
+ * Lives here because there are two callers that must not disagree — the DM's
+ * Grant Item card, and a class's starting kit. The kit used to call
+ * grantInstance once and pass qty through, which for a non-stackable meant
+ * "five javelins" quietly granted one.
+ */
+export function grantMany(
+  data: CatalogItemData, itemId: string, qty: number,
+  gear: EquippedGear, inventory: InventoryItem[],
+): InventoryItem[] {
+  const want = Math.max(1, Math.floor(qty) || 1)
+  if (!isStackable(data.category)) {
+    let next = inventory
+    for (let i = 0; i < want; i++) next = [...next, grantInstance(data, itemId, 1, gear, next)]
+    return next
+  }
+  let next = inventory
+  let remaining = want
+  while (remaining > 0) {
+    const probe = grantInstance(data, itemId, remaining, gear, next)
+    const dest = probe.containerId
+    const cap = containerCapacity(gear, dest)
+    const already = cap != null ? next.filter(i => i.containerId === dest).reduce((n, i) => n + (i.qty ?? 1), 0) : 0
+    const take = cap != null ? Math.max(1, Math.min(remaining, cap - already)) : remaining
+    const existing = next.find(i =>
+      i.containerId === dest && i.name === probe.name && i.category === probe.category && !i.locked)
+    next = existing
+      ? next.map(i => (i === existing ? { ...i, qty: (i.qty ?? 1) + take, isNew: true } : i))
+      : [...next, { ...probe, qty: take }]
+    remaining -= take
   }
   return next
 }

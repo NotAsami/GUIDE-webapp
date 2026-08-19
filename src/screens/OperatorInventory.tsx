@@ -263,7 +263,7 @@ export function OperatorInventory({ row, member, confiscated, onUpdate, log }: {
             <span className={styles.invTitle}>Equipped</span>
             <span className={styles.invMeta}>{equippedEntries.length} worn · taking one unequips it first</span>
           </header>
-          <div className={styles.invRows}>
+          <div className={styles.invList}>
             {equippedEntries.map(entry => (
               <div key={entry.item.id} className={styles.invRow}>
                 <span className={styles.irIcon}><i className={`fa-solid ${entry.item.icon ?? 'fa-cube'}`} /></span>

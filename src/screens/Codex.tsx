@@ -1,12 +1,14 @@
 import { useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import type { CharacterRow, ProgressStory } from '../lib/database.types'
+import type { CharacterRow, CharacterUpdate, ProgressStory } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
+import { StartingKit } from '../components/StartingKit'
 import styles from './Codex.module.css'
 
 interface RouteContext {
   character: CharacterRow
+  updateSections: (patch: CharacterUpdate) => Promise<void>
 }
 
 const FALLBACK_STORIES: ProgressStory[] = []
@@ -18,7 +20,7 @@ const FALLBACK_STORIES: ProgressStory[] = []
  *  hardcodes a percentage or chapter name. Edit the row in Supabase → reload →
  *  cards reflect the new values. That's the contract. */
 export function Codex() {
-  const { character } = useOutletContext<RouteContext>()
+  const { character, updateSections } = useOutletContext<RouteContext>()
   const stories = character.progress?.stories ?? FALLBACK_STORIES
 
   return (
@@ -29,6 +31,9 @@ export function Codex() {
         right={<>Session 04F1A &nbsp;//&nbsp; <span className="acc">Brettany Theater</span> &nbsp;//&nbsp; DM Online</>}
       />
       <Glyph />
+      {/* Above the story row and only while a class has actually asked
+          something. It is a card, not a modal — see components/StartingKit. */}
+      <StartingKit character={character} onUpdate={updateSections} />
       <section className={styles.storyRow} aria-label="Story progress">
         {stories.length === 0 && (
           <div style={{

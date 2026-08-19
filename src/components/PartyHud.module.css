@@ -1,0 +1,259 @@
+/* ============================================================================
+   PARTY HUD — three roster rows in each flank beside the nav.
+
+   PLACEMENT IS MEASURED, NOT GUESSED. The nav is 836px wide and centred; the
+   topbar is --bar-top-h tall; on every screen except the Codex the screen's own
+   content starts at ~y206. That leaves one band free on ALL of them: the flank,
+   from below the status tickers down to y206 — so the row height and the gap
+   here are load-bearing, not taste.
+
+   Anchored with `right: calc(50% + 428px)` rather than a width, because the
+   window this has to survive is not a fixed size: it has been measured at both
+   1920x919 (dpr 1) and 1745x815 (dpr 1.1). 428 = the nav's 418px half-width
+   plus 10px of clearance.
+
+   The top offset clears the STATUS TICKERS, which are easy to miss: .ticker
+   .below runs y64-76 across the left flank and .ticker.above y50-62 across the
+   right (Layout.module.css). Starting at the topbar's edge puts a row straight
+   through them. Free band is therefore y82 -> y206 = 124px, and 3 rows at 36px
+   with 6px gaps is 120.
+
+   Visual recipes (pip, death-save dot, diamond, crit colouring) are ported from
+   guide-hud/project/G.U.I.D.E. Party Staircase HUD.html, scaled to a 36px row.
+   The hexagonal shell is deliberately dropped — the ask was a rectangle.
+   ============================================================================ */
+
+.hud {
+  position: fixed;
+  top: calc(var(--bar-top-h) + 20px);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* Capped rather than filling the flank: the row's content needs ~250px, and
+     stretched to the full 425px the name floats away from its own numbers. */
+  max-width: 360px;
+  /* The Codex's .storyRow section spans the full width even though its cards
+     sit in the middle third, so the flank is covered by a real element. Without
+     this the HUD would silently eat clicks meant for the screen underneath. */
+  pointer-events: none;
+}
+
+.left  { left: 20px;  right: calc(50% + 428px); }
+.right { right: 20px; left:  calc(50% + 428px); margin-left: auto; }
+
+/* Below this the flank is under ~300px and the row stops being readable.
+   Small screens get their own surface later; they do not get a squeezed one. */
+@media (max-width: 1500px) {
+  .hud { display: none; }
+}
+
+/* ---- the row ------------------------------------------------------------ */
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 0;
+  background: linear-gradient(90deg, rgba(28, 26, 23, 0.92), rgba(16, 15, 13, 0.82));
+  border: 1px solid rgba(212, 191, 125, 0.28);
+  pointer-events: auto;
+  overflow: hidden;
+  transition: opacity 260ms ease, transform 260ms ease, border-color 260ms ease;
+}
+
+.right .row {
+  flex-direction: row-reverse;
+  padding: 0 0 0 10px;
+  background: linear-gradient(270deg, rgba(28, 26, 23, 0.92), rgba(16, 15, 13, 0.82));
+}
+
+/* OFFLINE is the recessive state, not a hidden one: the row keeps its place and
+   its last-known numbers, so the party list does not reshuffle when someone
+   closes a tab. */
+.off {
+  opacity: 0.4;
+  border-color: rgba(212, 191, 125, 0.14);
+}
+
+/* Coming online pops the row out from its own screen edge. */
+.enter { animation: popLeft 340ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+.right .enter { animation-name: popRight; }
+
+@keyframes popLeft {
+  from { opacity: 0; transform: translateX(-110%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes popRight {
+  from { opacity: 0; transform: translateX(110%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row { transition: opacity 260ms ease; }
+  .enter, .right .enter { animation: fadeIn 260ms ease both; }
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+}
+
+/* ---- identity line + diamond -------------------------------------------- */
+
+/* The per-character hue. Set inline as --hue; six fixed values assigned by id
+   so a player's colour never moves between sessions. */
+.line {
+  flex: 0 0 auto;
+  align-self: stretch;
+  width: 3px;
+  background: var(--hue, var(--beige));
+  box-shadow: 0 0 8px -1px var(--hue, var(--beige));
+}
+
+.dia {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-left: 7px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  background: rgba(0, 166, 214, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.right .dia { margin-left: 0; margin-right: 7px; }
+
+.dia i {
+  font-size: 10px;
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0, 166, 214, 0.55);
+}
+.off .dia { background: rgba(170, 170, 170, 0.1); }
+.off .dia i { color: var(--muted); text-shadow: none; }
+
+/* ---- name ---------------------------------------------------------------- */
+
+.nm {
+  /* The flex child that has to give: without min-width:0 a long name pushes the
+     AC off the end instead of ellipsising. */
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  color: var(--beige);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.right .nm { text-align: right; }
+
+/* ---- HP ------------------------------------------------------------------ */
+
+.hp {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1;
+}
+.hp .sl { font-family: var(--font-mono); font-weight: 400; font-size: 9px; color: var(--muted); }
+.crit .hp { color: #ff8f8f; }
+
+/* Temp HP reads as its own cyan number, never folded into current HP. */
+.temp {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--cyan);
+}
+
+/* The HP track is the row's bottom edge. */
+.track {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.5);
+}
+.track i {
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  display: block;
+  background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+  box-shadow: 0 0 8px rgba(0, 166, 214, 0.5);
+}
+.right .track i { left: auto; right: 0; background: linear-gradient(270deg, var(--cyan-dim), var(--cyan)); }
+.crit .track i { background: linear-gradient(90deg, #7a2424, var(--danger)); box-shadow: 0 0 8px rgba(185, 58, 58, 0.5); }
+.right .crit .track i { background: linear-gradient(270deg, #7a2424, var(--danger)); }
+
+/* ---- status pips --------------------------------------------------------- */
+
+.chips { flex: 0 0 auto; display: flex; align-items: center; gap: 3px; }
+
+.pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 5px;
+  background: rgba(0, 166, 214, 0.16);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  box-shadow: 0 0 5px rgba(0, 166, 214, 0.4);
+}
+.pip.bad {
+  background: rgba(185, 58, 58, 0.18);
+  border-color: var(--danger);
+  color: #ff9d9d;
+  box-shadow: 0 0 5px rgba(185, 58, 58, 0.45);
+}
+/* Overflow counter when more conditions are running than there is room for. */
+.more {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--muted);
+}
+
+/* ---- death saves --------------------------------------------------------- */
+
+/* Only drawn when the character is actually down — three empty circles on every
+   healthy row would be three pieces of furniture saying nothing. */
+.ds { flex: 0 0 auto; display: flex; align-items: center; gap: 3px; }
+.ds b {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(212, 191, 125, 0.5);
+  background: rgba(0, 0, 0, 0.5);
+}
+.ds b.ok { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.6); }
+.ds b.fail { background: var(--danger); border-color: var(--danger); box-shadow: 0 0 6px rgba(185, 58, 58, 0.6); }
+
+/* ---- AC ------------------------------------------------------------------ */
+
+.ac {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1;
+}
+.ac .k {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  color: var(--cyan);
+  text-transform: uppercase;
+}
+.off .ac .k { color: var(--muted); }

@@ -16,6 +16,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CatalogItemRow, ItemCategory, ItemRarity, Shop, ShopCatalogRow, ShopStockLine, ShopStockMode } from '../lib/database.types'
+import { markdownShortcuts } from '../lib/textareaHooks'
 import { formatPrice, type PriceUnit } from '../lib/coins'
 import type { DmShopsState } from '../lib/dm'
 import { ALL_PARTY } from '../lib/voice'
@@ -110,8 +111,18 @@ export function OperatorShops({ shopLib, itemCatalog, members }: {
               <button className={styles.skMain} onClick={() => { setCreating(false); setSelId(s.id) }}>
                 <span className={styles.crIc}><i className={`fa-solid ${s.data?.icon ?? 'fa-shop'}`} /></span>
                 <span className={styles.crTx}>
-                  <span className={styles.crT}>{s.data?.name ?? 'Untitled'}{s.is_open && <span className={styles.skLive}> · LIVE</span>}</span>
-                  <span className={styles.crS}>{s.data?.stock?.length ?? 0} items · {s.data?.location || 'unset location'}</span>
+                  <span className={styles.crT}>{s.data?.name ?? 'Untitled'}</span>
+                  {/* Whether a shop is LIVE is the one thing worth scanning this
+                      list for, so it goes on its own line as a state you can
+                      read at a glance — not appended to the name, and not
+                      behind the location, which is flavour. */}
+                  <span className={styles.crS}>
+                    <span className={cx(styles.skState, s.is_open ? styles.isOpen : styles.isShut)}>
+                      <span className={styles.skDot} />{s.is_open ? 'Open' : 'Closed'}
+                    </span>
+                    <span className={styles.op}> · </span>
+                    {s.data?.stock?.length ?? 0} items
+                  </span>
                 </span>
               </button>
               {s.is_open ? (
@@ -248,7 +259,9 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
         <span className={styles.fieldLab}>Player-Facing Prose</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Shown when the shop opens</span>
       </div>
-      <textarea className={styles.catProse} value={desc} onChange={e => setDesc(e.target.value)} placeholder="The prose the player reads when the shop opens…" />
+      <textarea className={styles.catProse} value={desc} onChange={e => setDesc(e.target.value)}
+        onKeyDown={markdownShortcuts(setDesc)}
+        placeholder="The prose the player reads when the shop opens…" />
 
       <span className={styles.fieldLab}>Stock</span>
       <div className={styles.skStockRows}>

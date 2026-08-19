@@ -10,7 +10,8 @@ import { Deco } from '../components/Deco'
 import { Prose } from '../lib/markdown'
 import { rollHeal } from '../lib/dice'
 import { useRollLog, type RollLine } from '../lib/rolls'
-import { castPartyEffect, fetchPartyRoster, type PartyMember } from '../lib/party'
+import { castPartyEffect, fetchPartyRoster } from '../lib/party'
+import type { PartyRosterRow } from '../lib/database.types'
 import {
   damageAt, isCaster, maxCastLevel, pactSlotCount, pactSlotLevel, pactSlotsAvail,
   preparedUsed, preparesSpells, rollSpellDamage,
@@ -769,7 +770,7 @@ function PartyCastButton({ spell }: { spell: Spell }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [roster, setRoster] = useState<PartyMember[]>([])
+  const [roster, setRoster] = useState<PartyRosterRow[]>([])
   const [note, setNote] = useState<string | null>(null)
   const isHeal = spell.partyCastMode !== 'effect'
 
@@ -786,7 +787,7 @@ function PartyCastButton({ spell }: { spell: Spell }) {
     }
   }
 
-  async function castOn(member: PartyMember) {
+  async function castOn(member: PartyRosterRow) {
     setBusy(true)
     let heal: number | null = null
     let line: RollLine

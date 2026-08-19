@@ -26,7 +26,8 @@ import type { ArmedMod, CharacterRow, GraphEffect, GraphOp, GraphState, ShardTre
 import type { ExprScope, FormulaValue } from './expr.ts'
 import { ROLL_IDENTS, VAR_IDENTS, evalExpr, freeIdents, interpolate, interpolations } from './expr.ts'
 import { type ActiveSource, activeSources, effectiveSheet } from './effects.ts'
-import { IS_ACTIVATION, OPS, OP_TITLE } from './opSchema.ts'
+import { IS_ACTIVATION, IS_SHEET, OPS, OP_TITLE } from './opSchema.ts'
+import { MOD_STAT_SET } from './modEditor.ts'
 import { abilities, abilityMod, proficiency } from './dnd.ts'
 import { rolledDiceTerms, type RolledDie } from './dice.ts'
 
@@ -789,6 +790,12 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     // contribution to a number. lib/graphState.ts runs them.
     if (IS_ACTIVATION(eff.op)) continue
 
+    // A `boost` never reaches a roll: it moves a number on the SHEET, and
+    // lib/effects.ts effectiveSheet has already layered it in before any roll is
+    // made. Resolving it here too would count a racial +2 DEX twice — once in
+    // the score the roll is built from, and again as a contribution.
+    if (IS_SHEET(eff.op)) continue
+
     // §16: a `once` effect ARMS, it does not apply. It waits in
     // resources.graph.armed for the next matching roll, and the armed loop
     // below is what puts it on a number. Skipping it here is the whole
@@ -1038,7 +1045,9 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
         out.push({ sev: 'err', id: eff.id, t: `Missing ${fd.label.toLowerCase()}`, s: `${eff.label || eff.id} is ${eff.op}, whose schema requires ${fd.label}.` })
       }
     }
-    if (eff.op !== 'add' && !IS_ACTIVATION(eff.op) && eff.value) {
+    // `boost` carries a value too — the amount the sheet stat moves by. It is
+    // not a flag; its own checks below hold it to a plain number.
+    if (eff.op !== 'add' && !IS_ACTIVATION(eff.op) && !IS_SHEET(eff.op) && eff.value) {
       out.push({ sev: 'err', id: eff.id, t: 'Value on a flag', s: `${eff.label || eff.id} is ${eff.op}, which is a flag, never a number. Advantage is not a bonus.` })
     }
     /* A FLAG CANNOT BE DECIDED AFTER THE DICE LAND.
@@ -1111,6 +1120,41 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
         sev: 'err', id: eff.id, t: 'Armed modifier needs a roll target',
         s: `${eff.label || eff.id} arms once, so every target must be a roll: kind — "roll:attack", not a thing or a tag. Leave the target empty to arm this node's own roll.`,
       })
+    }
+
+    if (IS_SHEET(eff.op)) {
+      // A boost applies to whoever carries the node, so a target is not just
+      // unnecessary — it is a claim the engine cannot honour.
+      if ((eff.target ?? []).length) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'Boost cannot target',
+          s: `${eff.label || eff.id} changes a number on the sheet of whoever carries it. It has no target, and one set here does nothing.`,
+        })
+      }
+      // effectiveSheet is a pure function of the sheet with no expression scope,
+      // so a condition here would silently never fire. Refuse it rather than
+      // quietly dropping it.
+      if (eff.when?.trim()) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'Boost cannot be conditional',
+          s: `${eff.label || eff.id} has a "when", but the sheet is computed without one. Use a roll contribution if the bonus is conditional.`,
+        })
+      }
+      // An EMPTY stat is already reported by the schema's required-field check
+      // above; saying "unknown stat: ''" as well is two errors for one blank.
+      if (eff.stat?.trim() && !MOD_STAT_SET.has(eff.stat)) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'Unknown stat',
+          s: `${eff.label || eff.id} boosts "${eff.stat ?? ''}", which is not a sheet stat.`,
+        })
+      }
+      if (!Number.isFinite(Number(eff.value))) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'Boost needs a plain number',
+          s: `${eff.label || eff.id} has "${eff.value ?? ''}". The sheet has no roll to compute against, so dice and formulas cannot apply here.`,
+        })
+      }
+      continue
     }
 
     if (IS_ACTIVATION(eff.op)) {

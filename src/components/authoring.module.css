@@ -456,6 +456,15 @@ select.in option { background: #14130f; }
 .opb.act:hover { color: #cbb4f0; --bc: var(--violet); background-color: rgba(160,122,214,.12); }
 .efrow.act { --og: var(--violet); }
 .grpPill.act { color: var(--violet); border-color: rgba(160,122,214,.45); }
+
+/* The sheet layer, in teal — a third colour because it is a third KIND of
+   thing, not a variation on a contribution. Mirrors .act exactly. */
+.oppalGrp .gl.sheet { color: var(--teal); }
+.opb.sheet { --bc: rgba(63,199,180,.35); }
+.opb.sheet i { color: var(--teal); }
+.opb.sheet:hover { color: #8fe6d9; --bc: var(--teal); background-color: rgba(63,199,180,.12); }
+.grpPill.sheet { color: var(--teal); border-color: rgba(63,199,180,.45); }
+.efrow.sheet .efGlFrame { --bc: rgba(63,199,180,.4); color: var(--teal); }
 .oppalGrp::after { content: ""; flex: 1; height: 1px; background: rgba(212,191,125,.12); }
 .oppalRow { display: flex; flex-wrap: wrap; gap: 5px; }
 .opb {

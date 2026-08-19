@@ -26,11 +26,11 @@
 import { useState } from 'react'
 import type { GraphEffect, GraphOp, VarDef } from '../lib/database.types'
 import {
-  OPS, OP_ORDER, OP_TITLE, PALETTE, PALETTE_MORE, PALETTE_ACT, ROLL_SELECTORS,
-  IS_ACTIVATION, IS_DAMAGE_FLAG, type OpField,
+  OPS, OP_ORDER, OP_TITLE, PALETTE, PALETTE_MORE, PALETTE_ACT, PALETTE_SHEET, ROLL_SELECTORS,
+  IS_ACTIVATION, IS_DAMAGE_FLAG, IS_SHEET, type OpField,
 } from '../lib/opSchema'
 import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
-import { matchCount, normalizeTag, type AuthoredNode } from '../lib/graph'
+import { matchCount, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
 import styles from './authoring.module.css'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
@@ -202,6 +202,18 @@ export function GraphEffects({ graph, vars, nodes, namesByGid, onChange, onVarsC
         {/* Activations answer a different question from everything above —
             "what happens when the player presses this" rather than "what
             modifies this roll" — so they get their own group. */}
+        {/* The sheet layer. Its own group for the same reason activations get
+            one: it answers "what is this character's DEX", not "what does this
+            roll add" — and it is the only group with no target at all. */}
+        <div className={styles.oppalGrp}><span className={cx(styles.gl, styles.sheet)}>On the sheet</span></div>
+        <div className={styles.oppalRow}>
+          {PALETTE_SHEET.map(o => (
+            <button key={o} type="button" className={cx(styles.opb, styles.sheet)} onClick={() => add(o)}>
+              <i className="fa-solid fa-plus" />{OP_TITLE[o]}
+            </button>
+          ))}
+        </div>
+
         <div className={styles.oppalGrp}><span className={cx(styles.gl, styles.act)}>Activation outcomes</span></div>
         <div className={styles.oppalRow}>
           {PALETTE_ACT.map(o => (
@@ -318,7 +330,7 @@ function EffectRow({ eff, namesByGid, onOpen, onDelete }: {
   const val = opValueBit(eff)
   const flags = [eff.when?.trim() && 'when', eff.ask?.trim() && 'ask'].filter(Boolean)
   return (
-    <div className={cx(styles.efrow, IS_DAMAGE_FLAG(eff.op) && styles.flag, IS_ACTIVATION(eff.op) && styles.act, badLab && styles.bad)}
+    <div className={cx(styles.efrow, IS_DAMAGE_FLAG(eff.op) && styles.flag, IS_ACTIVATION(eff.op) && styles.act, IS_SHEET(eff.op) && styles.sheet, badLab && styles.bad)}
       role="button" tabIndex={0} onClick={onOpen}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } }}>
       <i className={cx('fa-solid fa-chevron-right', styles.ch)} />
@@ -359,6 +371,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
   const targets = eff.target ?? []
   const isFlag = IS_DAMAGE_FLAG(eff.op)
   const isAct = IS_ACTIVATION(eff.op)
+  const isSheet = IS_SHEET(eff.op)
 
   const counts = targets.map(t => (t.startsWith('roll:') ? Infinity : matchCount(t, nodes)))
   const thingsAndTags = counts.filter(n => Number.isFinite(n)).reduce((a: number, b) => a + b, 0)
@@ -398,9 +411,9 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
         }}>
           {OP_ORDER.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
-        <span className={cx(styles.grpPill, isFlag && styles.flag, isAct && styles.act)}>
-          <i className={`fa-solid ${isAct ? 'fa-bolt' : isFlag ? 'fa-shield-halved' : 'fa-infinity'}`} />
-          {isAct ? 'Activation outcome' : isFlag ? 'Damage flag' : 'Passive contribution'}
+        <span className={cx(styles.grpPill, isFlag && styles.flag, isAct && styles.act, isSheet && styles.sheet)}>
+          <i className={`fa-solid ${isSheet ? 'fa-arrow-up-right-dots' : isAct ? 'fa-bolt' : isFlag ? 'fa-shield-halved' : 'fa-infinity'}`} />
+          {isSheet ? 'Sheet layer' : isAct ? 'Activation outcome' : isFlag ? 'Damage flag' : 'Passive contribution'}
         </span>
         <button type="button" className={cx('fa-solid fa-trash', styles.dx)}
           onClick={() => { setGraph(graph.filter((_, j) => j !== ei)); onClose() }} />
@@ -409,7 +422,15 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
 
       {/* targets — activations have none: they write a variable on this
           character rather than reaching out at another node. */}
-      {isAct ? (
+      {isSheet ? (
+        <div className={styles.tgtOwn}>
+          <i className="fa-solid fa-arrow-up-right-dots" />
+          <span>
+            No target — this moves a number on the sheet of whoever carries this feature, so every
+            roll built from that number moves with it. It is never a contribution to one roll.
+          </span>
+        </div>
+      ) : isAct ? (
         <div className={styles.tgtOwn}>
           <i className="fa-solid fa-bolt" />
           <span>No target — this writes one of this feature’s own variables when the player presses Use.</span>
@@ -522,6 +543,12 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
         placeholder="required — shown in the roll breakdown"
         onChange={e => setEffect(ei, { label: e.target.value })} />
 
+      {/* A boost has neither. `when` cannot fire — effectiveSheet is a pure
+          function of the sheet with no expression scope — and `ask` is a
+          per-roll prompt, which a sheet layer never reaches. The audit
+          rejects a `when` here, so offering the control would be offering
+          a field whose only outcome is an error. */}
+      {!isSheet && (<>
       <div className={cx(styles.wa, styles.when)}>
         <span className={styles.tagl}>
           <span className={styles.k}><i className="fa-solid fa-code-branch" /> when</span>
@@ -569,6 +596,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
         </datalist>
         <span className={styles.qm} onClick={() => setPop({ k: 'help', which: 'ask' })}>?</span>
       </div>
+      </>)}
     </div>
   )
 }
@@ -598,6 +626,13 @@ function SchemaField({ fd, eff, ei, setEffect, vars }: {
   if (fd.type === 'formula') {
     return <>{label}<input className={styles.in} value={String(raw ?? '')} placeholder={fd.example}
       spellCheck={false} onChange={e => put(e.target.value)} /></>
+  }
+  // Distinct from `formula` because the difference is real: a sheet layer has no
+  // roll to evaluate against, so dice and identifiers are rejected by the audit.
+  // Labelling it "formula" invited exactly the value it cannot accept.
+  if (fd.type === 'number') {
+    return <>{label}<input className={styles.in} type="number" step="any" value={String(raw ?? '')}
+      placeholder={fd.example} onChange={e => put(e.target.value)} /></>
   }
   if (fd.type === 'text') {
     return <>{label}<textarea ref={textRef} className={cx(styles.prose, styles.short)} value={String(raw ?? '')}
@@ -661,6 +696,52 @@ function SchemaField({ fd, eff, ei, setEffect, vars }: {
 
 
 /* ---------- variables ---------- */
+
+/**
+ * The Lattice-Audit panel — one component, every authoring surface.
+ *
+ * Extracted when the class editor needed the same treatment inside a catalog
+ * form. It was previously written out by hand in FeatureEditor and again in
+ * ShardLattice, and the catalog forms had no equivalent at all: they showed a
+ * flat warning list, so an item's audit and a feature's audit looked like two
+ * different systems reporting on the same engine.
+ *
+ * The panel renders what it is given and nothing else. Composing the list — the
+ * host's own checks around `auditNode`, and the `ok` sentinel pushed LAST so a
+ * graph error never renders beside "Safe to publish" — stays with the host,
+ * because what counts as clean differs per node kind.
+ *
+ * `.edAudit` is NOT applied here: it is FeatureEditor's wrapper, re-padding for
+ * that screen's 46px step gutter. A host that wants it wraps this.
+ */
+export function AuditPanel({ title, audit, onJump }: {
+  /** e.g. "Feature Audit", "Class Audit". */
+  title: string
+  audit: AuditItem[]
+  /** Clicking an item should take the author to what it is about. Optional —
+   *  without it the rows are still readable, just not navigable. */
+  onJump?: (a: AuditItem) => void
+}) {
+  const errs = audit.filter(a => a.sev === 'err').length
+  const warns = audit.filter(a => a.sev === 'warn').length
+  return (
+    <>
+      <div className={styles.auditHead}>
+        <span className={styles.t}>{title}</span>
+        <span className={styles.n}>{errs + warns ? `${errs} err · ${warns} warn` : 'clean'}</span>
+      </div>
+      <div className={styles.audit}>
+        {audit.map((a, i) => (
+          <button key={i} type="button" className={cx(styles.auditItem, styles[a.sev])}
+            onClick={() => onJump?.(a)}>
+            <i className={`fa-solid ${a.sev === 'err' ? 'fa-circle-exclamation' : a.sev === 'warn' ? 'fa-triangle-exclamation' : 'fa-circle-check'}`} />
+            <span className={styles.aiTx}><span className={styles.aiT}>{a.t}</span><span className={styles.aiS}>{a.s}</span></span>
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
 
 /** The state a node carries, and who may write it.
  *

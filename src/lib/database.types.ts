@@ -9,8 +9,40 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
+/** The slice of a character every OTHER player may see — see lib/vitals.ts.
+ *
+ *  A compiled cache on `characters.public_vitals` (migration 0018), recomputed
+ *  by lib/character.ts on every player write and projected by
+ *  `list_party_roster()`. Two of its numbers are DERIVED (effective AC, effective
+ *  max HP), which is the whole reason it exists: computing them in SQL would put
+ *  a second copy of effectiveSheet in Postgres. */
+export type PublicVitals = {
+  hp: number
+  hpMax: number
+  temp: number
+  ac: number
+  deathOk: number
+  deathFail: number
+  /** Names, kinds and icons only — never what an effect DOES. */
+  effects: { name: string; kind: 'buff' | 'debuff' | 'cond'; icon?: string }[]
+}
+
+/** One row of the party HUD: `list_party_roster()`'s projection. */
+export type PartyRosterRow = {
+  id: string
+  name: string
+  race: string | null
+  class: string | null
+  level: number | null
+  hp_current: number | null
+  hp_max: number | null
+  public_vitals: PublicVitals | null
+}
+
 export type CharacterIdentity = {
   race?: string
+  /** e.g. "High Elf" — a row in race_catalog whose `parent` is this race. */
+  subrace?: string
   class?: string
   archetype?: string | null
   background?: string | null
@@ -60,6 +92,71 @@ export type AcBreakdown = {
 
 /** Which abilities this character is proficient in for saving throws.
  *  Authored per-character (class-granted); not derivable from scores. */
+/** A kit parked on a character, mid-decision. `picked` records the option id
+ *  chosen per choice id; a choice missing from it is still open. */
+export type PendingKit = {
+  classId: string
+  className: string
+  choices: PendingKitChoice[]
+  /** choice id -> chosen option id. Absent = the option question is still open. */
+  picked?: Record<string, string>
+  /** `${choiceId}.${entryIndex}` -> chosen item ids, for a pool entry inside the
+   *  chosen option. Short of `pick` entries = that pool question is still open. */
+  picks?: Record<string, string[]>
+}
+export type PendingKitChoice = { id: string; label: string; options: PendingKitOption[] }
+export type PendingKitOption = { id: string; label: string; items: PendingKitEntry[] }
+export type PendingKitItem = { item_id: string; qty: number; data: CatalogItemData }
+/** A resolved pool: the DM's query run against the catalog at assign time, so
+ *  the player picks from real item data without ever reading the catalog. */
+export type PendingKitPool = { pick: number; label?: string; pool: PendingKitItem[] }
+export type PendingKitEntry = PendingKitItem | PendingKitPool
+export const isPendingPool = (e: PendingKitEntry): e is PendingKitPool =>
+  Array.isArray((e as PendingKitPool).pool)
+
+/** One path the player may take, with everything it would put on the sheet
+ *  already resolved. Resolved at CLASS-assign time for the same reason the kit
+ *  is: `class_catalog` has no player policy, so a parked reference would render
+ *  as an empty list on the one screen that has to show it. */
+export type PendingPathOption = {
+  id: string
+  name: string
+  desc?: string
+  icon?: string
+  color?: string
+  /** The carrier and every feature this path grants at the character's level. */
+  features: Feature[]
+  /** The caster profile it imposes — an Eldritch Knight makes a martial class a
+   *  third caster, which is the whole reason a path is its own row. */
+  spellbook?: Partial<CharacterSpellbook>
+}
+
+/** A subclass choice waiting on the player.
+ *
+ *  Parked when the CLASS is assigned, whatever the character's level, and
+ *  surfaced by the Codex card only once they reach `level`. Parking it early is
+ *  what lets it appear at the right moment with no level-up hook to run. */
+export type PendingPath = {
+  classId: string
+  className: string
+  /** What this decision is called in this world — "Arbiter Path". */
+  label: string
+  /** The character level at which it may be taken. */
+  level: number
+  options: PendingPathOption[]
+}
+
+/** Skill proficiencies a class offers and the player still has to choose.
+ *  Parked by Assign for the same reason the kit is — it is the player's pick,
+ *  not the DM's. */
+export type PendingSkills = {
+  classId: string
+  className: string
+  /** Eligible skill keys (lib/dnd.ts SKILLS). */
+  from: string[]
+  count: number
+}
+
 export type Proficiencies = {
   armor?: string[]
   weapons?: string[]
@@ -87,6 +184,17 @@ export type CharacterSheet = {
   /** Senses overrides. darkvision in feet; absent/0 means none (e.g. Human). */
   senses?: { darkvision?: number }
   proficiencies?: Proficiencies
+  /** A starting kit waiting on the player. Written by Assign Class, cleared
+   *  when the last choice is made (components/StartingKit.tsx).
+   *
+   *  Carries item DATA rather than catalog ids on purpose: this is the one
+   *  payload a PLAYER has to read, and item_catalog is DM-only. Same
+   *  snapshot-at-the-boundary rule as a granted item or feature. */
+  pendingKit?: PendingKit
+  /** Skill picks waiting on the player — see PendingSkills. */
+  pendingSkills?: PendingSkills
+  /** A subclass choice waiting on the player — see PendingPath. */
+  pendingPath?: PendingPath
   /** Flat per-ability saving-throw bonuses. May be authored (a feat) OR injected
    *  by effect layering (lib/effects.ts); read by dnd.ts saveTotal. */
   saveBonuses?: Partial<Record<AbilityKey, number>>
@@ -172,6 +280,10 @@ export type Feature = {
   tags?: string[]
   /** Structured roll contributions. Absent = a pure prose feature. */
   graph?: GraphEffect[]
+  /* A feature's flat sheet bonuses (+2 DEX, 60ft darkvision) are NOT a field
+     here. They are `boost` ops inside `graph`, compiled on read by
+     lib/modEditor.ts sheetEffects. One mechanism, authored in the same op
+     palette as everything else a feature does. */
   /** THE FEATURE TINT. A DM-set hex that reaches the PLAYER's card and popup: it
    *  owns the header wash and the hexagon fill, and nothing else. State — cyan
    *  interactive, red spent, cyan active-ON — always overrides it, so a tint can
@@ -296,6 +408,13 @@ export type GraphState = {
 export type GraphOp =
   | 'add' | 'adv' | 'dis' | 'crit' | 'note'
   | 'resist' | 'vuln' | 'immune'
+  /** SHEET layer. Unlike everything else here, this does not touch a roll at
+   *  all — it changes a number ON THE SHEET (an ability score, speed,
+   *  darkvision), which is what a race's +2 DEX is. resolve() skips it; it is
+   *  compiled into ItemEffects by lib/modEditor.ts sheetEffects and layered by
+   *  effectiveSheet exactly like a worn item's effects. Has no target: it
+   *  applies to the character carrying it, not to a matched thing. */
+  | 'boost'
   /** ACTIVATION outcomes. Unlike everything above, these do not modify a roll —
    *  they run when the player presses Use, and they WRITE. resolve() skips them
    *  for that reason: folding them into a Resolution would fire them on every
@@ -317,6 +436,10 @@ export type GraphEffect = {
    *  unrolled so a crit can still double them. Also carries the assigned value
    *  for `setVar` and the signed delta for `addVar`. */
   value?: string
+  /** `boost` only. Which sheet stat to change — one of lib/modEditor.ts's
+   *  MOD_STATS / SKILL_STATS, the same vocabulary the item and shard-node
+   *  modifier rows use, so one compiler serves all three. */
+  stat?: string
   /** `setVar` / `addVar` only. The name of a variable this node declares. */
   variable?: string
   /** How the target list combines. Absent = `or`, which is what it has always
@@ -823,10 +946,19 @@ export type CharacterRow = {
   spellbook: CharacterSpellbook
   lore: CharacterLore
   progress: CharacterProgress
+  /** COMPILED CACHE, never a section: what other players may see, recomputed by
+   *  lib/character.ts on every write and projected by list_party_roster().
+   *  See lib/vitals.ts. */
+  public_vitals: PublicVitals | null
   updated_at: string
 }
 
-export type CharacterSection = Exclude<keyof CharacterRow, 'id' | 'owner' | 'name' | 'updated_at'>
+/** The sections a screen may write. `public_vitals` is excluded on purpose — it
+ *  is derived from the others, so anything calling updateSection on it would be
+ *  authoring a cache by hand. */
+export type CharacterSection = Exclude<
+  keyof CharacterRow, 'id' | 'owner' | 'name' | 'updated_at' | 'public_vitals'
+>
 
 export type CharacterInsert = Omit<CharacterRow, 'id' | 'updated_at'> & {
   id?: string
@@ -1135,6 +1267,165 @@ export type CatalogSpellRow = { id: string; data: CatalogSpellData; updated_at: 
 export type CatalogSpellInsert = { id?: string; data: CatalogSpellData }
 export type CatalogSpellUpdate = { data?: CatalogSpellData }
 
+// ── Class catalog (migration 0016): the DM's class-authoring library. Same
+//    DM-only RLS + draft-column pattern as feature_catalog (0005/0014) — a
+//    class reaches a player only through the Assign Class card, which SNAPSHOTS
+//    what it grants onto the character exactly the way every other grant does.
+//
+//    TWO THINGS ARE DELIBERATELY ABSENT and should stay that way:
+//
+//    * No spell-slot table. Full/half/third slots are DERIVED from `caster` and
+//      character level (lib/classes.ts casterSlots), pact slots from
+//      lib/spells.ts pactSlotCount/pactSlotLevel. Authoring the SRD progression
+//      would be a second answer to a settled question.
+//    * No per-level progression grid. A level is a gate condition on a feature
+//      reference (`when: "level >= 3"`), evaluated by the same lib/expr.ts
+//      engine that already reads GraphEffect.when, or a level-indexed derived
+//      variable. A twenty-row table would duplicate both. ──
+
+/** How a class gets its slots. 'none' is a martial class; 'pact' is
+ *  structurally different from the other three rather than a variation of them
+ *  — one slot level, a count of at most four, refreshed on a SHORT rest. */
+export type ClassCasterType = 'none' | 'full' | 'half' | 'third' | 'pact'
+
+/** One item an option hands over, by catalog id. */
+export type EquipRef = { item_id: string; qty: number }
+
+/** "a martial weapon" — the class names a POOL and the player picks from it.
+ *
+ *  `from` is a catalog query in the same syntax the item index and the graph's
+ *  tag selectors use (lib/catalogSearch.ts): plain text matches name or tag,
+ *  `tag:martial` narrows to tags. Resolved against the catalog at ASSIGN, like
+ *  everything else here, because the player cannot read item_catalog. */
+export type EquipPick = { pick: number; from: string; label?: string }
+
+/** Either an exact item or a pool to choose from. `pick` is the discriminator —
+ *  an entry without it is a plain item, which is what every entry authored
+ *  before pools existed already is. */
+export type EquipEntry = EquipRef | EquipPick
+export const isEquipPick = (e: EquipEntry): e is EquipPick =>
+  typeof (e as EquipPick).pick === 'number'
+
+/** One branch of a decision — "(a) scale mail". `id` is stable so a kit already
+ *  parked on a character survives the class being re-authored. */
+export type EquipOption = { id: string; label: string; items: EquipEntry[] }
+/** One decision the player makes. One option = a fixed grant, no question asked. */
+export type EquipChoice = { id: string; label: string; options: EquipOption[] }
+
+/** A feature a class OR A RACE grants, and when.
+ *
+ *  A REFERENCE, not a snapshot: the row stores only the feature_catalog id, so
+ *  re-authoring Second Wind updates every class that grants it. Deliberately
+ *  unlike the shard editor's FeaturesWidget, which snapshots — a shard node
+ *  carries one or two features and a class carries forty, and the DM edits them
+ *  continuously while the campaign runs. */
+export type FeatureGrantRef = {
+  feature_id: string
+  /** Boolean expression over the same scope as GraphEffect.when (lib/expr.ts —
+   *  `level` is already whitelisted in VAR_IDENTS). Absent = granted from level
+   *  1. This is where a class's progression lives; see the note above. */
+  when?: string
+}
+
+export type ClassDef = {
+  name: string
+  /** Font Awesome icon name, e.g. 'fa-shield-halved'. */
+  icon: string
+  /** Tint for the index row and the granted carrier feature's card, same role
+   *  Feature.color plays. */
+  color?: string
+  /** Player-facing prose (EB Garamond), markdown as everywhere else. */
+  desc: string
+  hitDie: 6 | 8 | 10 | 12
+  primaryAbility: AbilityKey
+  /** Exactly two — the editor's audit blocks Publish otherwise. */
+  saveProficiencies: AbilityKey[]
+  /** Keys from lib/dnd.ts SKILLS the player may choose from, and how many they
+   *  pick. The chosen ones are the PLAYER's answer, so assigning a class never
+   *  writes sheet.skillProficiencies — it surfaces the list for the DM to tick. */
+  skillChoices: string[]
+  skillChooseN: number
+  /** The SAME type the character sheet stores (sheet.proficiencies), so Assign
+   *  writes it straight through with no mapping layer to drift. */
+  proficiencies: Proficiencies
+  /** The starting kit as a list of DECISIONS, not a flat list — 5e hands you
+   *  "(a) scale mail or (b) leather armour, a longbow and 20 arrows", and the
+   *  player picks. A fixed grant is simply a group with one option.
+   *
+   *  Authored as REFERENCES into item_catalog. The snapshot happens at assign
+   *  (lib/kit.ts snapshotKit), because a player cannot read item_catalog at
+   *  all — it has no player policy — so a reference parked on their sheet
+   *  would resolve to nothing on the screen where they choose. */
+  startingEquipment: EquipChoice[]
+  caster: ClassCasterType
+  /** Backs the save DC and the spell attack bonus. Required once `caster` is
+   *  anything but 'none' — which the audit enforces. */
+  castingAbility?: AbilityKey
+  features: FeatureGrantRef[]
+  /** Free-text targeting tags, normalised on save (lib/graph.ts normalizeTag). */
+  tags: string[]
+  /** The class's SHARED variables — a save DC, a path counter. Reaches the
+   *  engine on the carrier feature Assign writes (lib/classes.ts assignClass). */
+  vars: VarDef[]
+  graph: GraphEffect[]
+  /** Set on a SUBCLASS: the id of the class it belongs to. A row with a parent
+   *  inherits hit die, saves and skill choices from it, and the editor hides
+   *  those fields rather than offering an override nothing reads. */
+  parent?: string
+  /** Set on a PARENT class: the level at which the player picks a subclass, and
+   *  what that decision is called in this world ("Martial Archetype", "Arbiter
+   *  Path"). Absent = this class has no subclasses. */
+  subclassLevel?: number
+  subclassLabel?: string
+  /** False/absent = draft; the Assign picker hides it. Same gate as a feature. */
+  published?: boolean
+}
+
+/** A race, and — with `parent` set — a subrace.
+ *
+ *  Structurally the class's twin, minus everything that is the class's answer
+ *  (hit die, saving throws, spellcasting) and minus every number that is now a
+ *  `boost` rule instead of a field. See migration 0017 for why. */
+export type RaceDef = {
+  name: string
+  icon: string
+  color?: string
+  /** Player-facing prose (EB Garamond), markdown as everywhere else. */
+  desc: string
+  /** Set on a SUBRACE: the id of the race it belongs to. */
+  parent?: string
+  /** Set on a PARENT race: what choosing a subrace is called ("Elf Lineage").
+   *  Absent = this race has no subraces, and Assign asks nothing. */
+  subraceLabel?: string
+  /** Keys from lib/dnd.ts SKILLS the player may choose from, and how many. The
+   *  pick is the PLAYER's, so assigning parks it exactly as a class does. */
+  skillChoices: string[]
+  skillChooseN: number
+  /** Languages every member of this race speaks, plus how many more they pick.
+   *  Written straight into sheet.proficiencies.languages by Assign. */
+  languages: string[]
+  languageChooseN: number
+  /** Armour/weapon/tool training. The SAME type the sheet stores, merged key by
+   *  key so a class's grants and a race's grants coexist. */
+  proficiencies: Proficiencies
+  features: FeatureGrantRef[]
+  tags: string[]
+  vars: VarDef[]
+  /** Where a race's NUMBERS live — `boost` rules for +2 DEX, speed, darkvision.
+   *  Not fields: a boost layers through effectiveSheet and comes back off when
+   *  the race changes, which a written field could never do. */
+  graph: GraphEffect[]
+  published?: boolean
+}
+
+export type CatalogRaceRow = { id: string; data: RaceDef; draft: RaceDef | null; updated_at: string }
+export type CatalogRaceInsert = { id?: string; data?: RaceDef; draft?: RaceDef | null }
+export type CatalogRaceUpdate = { data?: RaceDef; draft?: RaceDef | null }
+
+export type CatalogClassRow = { id: string; data: ClassDef; draft: ClassDef | null; updated_at: string }
+export type CatalogClassInsert = { id?: string; data?: ClassDef; draft?: ClassDef | null }
+export type CatalogClassUpdate = { data?: ClassDef; draft?: ClassDef | null }
+
 // ── Shard tree catalog (migration 0008). Unlike item/feature catalog this table
 //    DOES carry a player policy (published rows only) — the tree has to render
 //    on the player's Shard screen. `shard_tree_secrets` is the DM-only half:
@@ -1242,6 +1533,18 @@ export type Database = {
         Row: CatalogSpellRow
         Insert: CatalogSpellInsert
         Update: CatalogSpellUpdate
+        Relationships: []
+      }
+      class_catalog: {
+        Row: CatalogClassRow
+        Insert: CatalogClassInsert
+        Update: CatalogClassUpdate
+        Relationships: []
+      }
+      race_catalog: {
+        Row: CatalogRaceRow
+        Insert: CatalogRaceInsert
+        Update: CatalogRaceUpdate
         Relationships: []
       }
       characters: {

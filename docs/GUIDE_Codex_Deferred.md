@@ -183,3 +183,39 @@ Not needed while the graph saves with the form, which is why 6b did not build it
 weapon and feature cards show a chip, and the Character screen does not. The
 query is the same `armedMatches` call. It needs a **design decision about where
 a chip goes in the hex grid**, not code.
+
+---
+
+## Targeting a class or a race — `target: ['class:arbiter']`
+
+**Trigger.** Authoring an effect that must reach *every member of a class or
+race* rather than one named feature. "Arbiters take no damage from their own
+judgment", "elves are immune to magical sleep" — a rule about the group, not
+about a thing the group happens to carry.
+
+**State.** A class and a race reach a character as a CARRIER FEATURE
+(`lib/classes.ts assignClass`, `lib/races.ts assignRace`): a per-character
+snapshot with ids `cls:<id>` / `race:<id>` and no `feature_catalog` row behind
+it. So the carrier is targetable only by accident — `feature:cls-arbiter` is not
+a gid anything mints, and `useCatalogNodes` never emits one, which means a
+`class:` selector would read as a dangling reference and the audit would be
+right to say so.
+
+Today the workaround is honest and usually enough: target one of the features
+the class actually grants, or give every such feature a shared tag
+(`tag:arbiter`) and target that. Tags already reach across catalogs, and the
+class/race editors both have a tags block — a carrier passes its own `tags`
+down, so tagging the class tags the carrier.
+
+**What it would cost.** A `class:`/`race:` gid kind in `lib/graph.ts` `gid()`
+and `sourceGid()`, both catalogs emitted by `lib/useCatalogNodes.ts` so the
+dangling-target audit can see them, and `activeSources` recognising a carrier as
+that kind rather than as a plain feature. The engine change is small; the reason
+it is not built is that no authored content has needed it — every case so far
+has been a rule about a specific feature, which the existing selectors already
+say better.
+
+**Do NOT** solve this by making the carrier a real `feature_catalog` row. That
+would put a row in the features library that the DM did not author and must not
+edit, and a grant path could copy it onto a character who has neither the class
+nor the race.

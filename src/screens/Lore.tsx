@@ -209,7 +209,7 @@ function BioPortrait({ character }: { character: CharacterRow }) {
         </div>
         <span className={styles.bpTag}>
           <span className={styles.lockDot} />
-          <span className={styles.lk}>Bio-Scan: Locked</span>
+          <span>Bio-Scan: Locked</span>
         </span>
       </div>
     </div>

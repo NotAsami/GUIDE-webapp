@@ -16,9 +16,14 @@
  * wherever it appears.
  */
 import type { GraphOp } from './database.types.ts'
+/* The stat vocabulary is modEditor's, not a second list — one compiler
+   serves the item rows, the shard-node rows and the boost op alike.
+   No cycle: modEditor imports only database.types and dnd. */
+import { MOD_STATS, SKILL_STATS } from './modEditor.ts'
 
 export type FieldType =
   | 'formula'   // number or expression, evaluated by lib/expr.ts
+  | 'number'    // a plain number — no dice, no identifiers, nothing to evaluate
   | 'text'      // player-facing prose
   | 'selector'  // a target list — thing, tag or roll kind
   | 'enum'      // one of a fixed list
@@ -46,7 +51,7 @@ export type OpDef = {
   /** `passive` modifies a roll; `activation` runs on a press and writes state.
    *  The palette groups them, and the two never mix in one code path — resolve()
    *  reads only passives, runActivation() only activations. */
-  group: 'passive' | 'activation'
+  group: 'passive' | 'activation' | 'sheet'
   icon: string
   blurb: string
   fields: OpField[]
@@ -97,6 +102,23 @@ export const OPS: Record<GraphOp, OpDef> = {
         key: 'byLevel', type: 'array', label: 'By level', wide: true,
         desc: 'Level-indexed progression. When any slot is filled it overrides Amount. Index 0 is unused — character levels start at 1.',
         example: 'slot 1 = 2, slot 5 = 3, slot 11 = 4',
+      },
+    ],
+  },
+  boost: {
+    label: 'boost', group: 'sheet', icon: 'fa-arrow-up-right-dots',
+    blurb: 'Changes a number ON THE SHEET rather than on a roll — an ability score, speed, darkvision. This is what a racial +2 DEX is: it moves the score itself, so every save, skill and derived value made from it moves too. No target: it applies to whoever carries this node. Use this for what a thing IS and cannot be separated from — an elf’s Dexterity. Use an Effect (the Effects tab) for something applied to you or carried by an object, which can end: Bless, Poisoned, a gem’s enchantment.',
+    fields: [
+      {
+        key: 'stat', type: 'enum', label: 'Stat', required: true,
+        options: [...MOD_STATS, ...SKILL_STATS],
+        desc: 'Which sheet value moves. The same list the item and shard-node modifier rows offer, compiled by the same function.',
+        example: 'DEX',
+      },
+      {
+        key: 'value', type: 'number', label: 'Amount', required: true,
+        desc: 'How far the stat moves. A plain number, not a formula: this layers onto the sheet, which has no roll to compute against. Negative is allowed.',
+        example: '2',
       },
     ],
   },
@@ -163,12 +185,18 @@ export const PALETTE_MORE = ['vuln', 'immune', 'note'] as const satisfies readon
 /** Activation outcomes get their own palette group — they answer a different
  *  question ("what happens when I press this") from every op above. */
 export const PALETTE_ACT = ['setVar', 'addVar'] as const satisfies readonly GraphOp[]
-export const OP_ORDER: GraphOp[] = [...PALETTE, ...PALETTE_MORE, ...PALETTE_ACT]
+/** The sheet layer gets its own palette group for the same reason activation
+ *  outcomes do: it answers a different question from every roll op above it —
+ *  "what is this character's DEX", not "what does this roll add". */
+export const PALETTE_SHEET = ['boost'] as const satisfies readonly GraphOp[]
+export const OP_ORDER: GraphOp[] = [...PALETTE, ...PALETTE_MORE, ...PALETTE_SHEET, ...PALETTE_ACT]
 
 export const IS_ACTIVATION = (op: GraphOp) => OPS[op].group === 'activation'
+/** Skipped by resolve() — it never reaches a roll. Compiled by sheetEffects. */
+export const IS_SHEET = (op: GraphOp) => OPS[op].group === 'sheet'
 
 export const OP_TITLE: Record<GraphOp, string> = {
-  add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', note: 'Note',
+  add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', note: 'Note', boost: 'Boost',
   resist: 'Resist', vuln: 'Vuln', immune: 'Immune',
   setVar: 'Set Var', addVar: 'Add Var',
 }
