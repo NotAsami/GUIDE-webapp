@@ -34,6 +34,7 @@ The DM can define a list that would then parse these lists, choose what items to
 
 ## UNSTYLED SCROLLBARS
 - The scrollbars being unstyled happens on multiple widgets and screens, we should fix all of them.
+- Present on the stat-panel screen.
 
 ## ISSUES
 - Add a way to add a picture of shopkeeper to the menu (needs design (both shopkeeper editor & the actual menu) + better image uploads)
@@ -54,6 +55,9 @@ You would get:
 Sum like that
 - Shortbow lost the ammo picker even though it's marked as ranged.
 - MORE ICONS! And each editor should have the same icon list as the others, for example the feature editor has more icons than the class and item editors.
+- You can't set the reputation of the players
+- The stat-panel is scrollable, which means it extends into the navbar when you scroll down, that's good, but the navbar should have a background or something like on the equipment panel which also scrolls if your screen is too small.
+- Can't change the character story, main story & region progress numbers nor the popup text on hover.
 
 ## DECISIONS WORTH KEEPING
 - The roll context panel is a **modal with a scrim**, so it can never be sticky as built. A genuinely sticky panel would have to stop being a modal — drop the scrim, drop `aria-modal`, and give the 436px rail its own column in the Layout grid. Deliberately not wanted for now; the toast and the counted badge cover it.

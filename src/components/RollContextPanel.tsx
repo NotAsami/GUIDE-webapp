@@ -26,8 +26,8 @@
  * everywhere. Fold state is local: it is how you are reading the list, not part
  * of the roll.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { useRollLog, type RollEntry } from '../lib/rolls'
 import { rolledDiceTerms } from '../lib/dice'
@@ -39,6 +39,7 @@ import {
   type CatalogView, type Die, type DieAddr, type RiderView, type RollLineView,
 } from '../lib/rollView'
 import styles from './RollContextPanel.module.css'
+import { useTip, tipProps, type ShowTip } from './Tip'
 
 const cx = (...v: (string | false | undefined)[]) => v.filter(Boolean).join(' ')
 
@@ -66,47 +67,6 @@ const stamp = (at: number) =>
  *  computed, and "-4" jammed against a label is where the sign gets missed. */
 const sgn = (n: number) => `${n < 0 ? '−' : '+'} ${Math.abs(n)}`
 
-/* ---------------- tooltip ----------------
- *
- * Its own, rather than useItemTooltip: that one is a FACTS-ONLY item card
- * positioned to the right of its anchor, and this is a three-slot key/value/hint
- * strip that flips above. Same doctrine, different shape — bending one into the
- * other costs more than the twenty lines below. */
-
-type TipData = { k: string; v: ReactNode; hint?: string | null }
-type Tip = TipData & { rect: DOMRect }
-
-function TipLayer({ tip }: { tip: Tip | null }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el || !tip) return
-    // Measured AFTER the content is in, or the flip decision uses a stale height.
-    const t = el.getBoundingClientRect()
-    const top = tip.rect.top - t.height - 8
-    el.style.top = `${top < 8 ? tip.rect.bottom + 8 : top}px`
-    el.style.left = `${Math.max(8, Math.min(tip.rect.left - 6, window.innerWidth - t.width - 12))}px`
-  }, [tip])
-  if (!tip) return null
-  return createPortal(
-    <div ref={ref} className={cx(styles.tip, styles.show)} role="tooltip">
-      <div className={styles.tK}>{tip.k}</div>
-      <div className={styles.tV}>{tip.v}</div>
-      {tip.hint && <div className={styles.tHint}>{tip.hint}</div>}
-    </div>,
-    document.body,
-  )
-}
-
-/** Bind a tooltip to an element: hover AND focus, so a keyboard reaches it. */
-function tipProps(show: (t: TipData | null) => void, data: () => TipData) {
-  const open = (e: { currentTarget: HTMLElement }) =>
-    show({ ...data(), rect: e.currentTarget.getBoundingClientRect() } as TipData)
-  return { onMouseEnter: open, onFocus: open, onMouseLeave: () => show(null), onBlur: () => show(null) }
-}
-
-type ShowTip = (t: (TipData & { rect?: DOMRect }) | null) => void
-
 /* ---------------- the rail ---------------- */
 
 export function RollContextPanel({ onClose, character, shardTrees, onConsumeArmed, onAdvanceTurn, turnState }: {
@@ -125,13 +85,12 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
 }) {
   const { rolls, updateRoll, clear } = useRollLog()
   const [folded, setFolded] = useState<Set<string>>(new Set())
-  const [tip, setTip] = useState<Tip | null>(null)
+  const { showTip, layer: tipLayer } = useTip()
   // The whole entry, not just its subject: the sheet's "Interacts With" block is
   // this roll's riders — the app's honest answer to the mockup's authored list.
   const [cat, setCat] = useState<RollEntry | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
-  const showTip = useCallback<ShowTip>(t => setTip(t as Tip | null), [])
 
   // A roll that arrives while the panel is open animates in and pulls the body
   // back to the top — a new roll below the fold is a roll you did not see.
@@ -236,7 +195,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
           </div>
         )}
 
-        <div className={styles.body} ref={bodyRef} aria-live="polite" onScroll={() => setTip(null)}>
+        <div className={styles.body} ref={bodyRef} aria-live="polite" onScroll={() => showTip(null)}>
           {rolls.length === 0
             ? <div className={styles.empty}>Awaiting Roll</div>
             : rolls.map((entry, i) => (
@@ -259,7 +218,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
 
         {cat && <CatalogSheet view={catView} entry={cat} onClose={() => setCat(null)} />}
       </aside>
-      <TipLayer tip={tip} />
+      {tipLayer}
     </div>,
     document.body,
   )
