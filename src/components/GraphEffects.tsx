@@ -32,6 +32,7 @@ import {
 import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
 import { matchCount, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
 import styles from './authoring.module.css'
+import { Icon } from './Icon'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
 
@@ -330,11 +331,12 @@ function EffectRow({ eff, namesByGid, onOpen, onDelete }: {
   const val = opValueBit(eff)
   const flags = [eff.when?.trim() && 'when', eff.ask?.trim() && 'ask'].filter(Boolean)
   return (
-    <div className={cx(styles.efrow, IS_DAMAGE_FLAG(eff.op) && styles.flag, IS_ACTIVATION(eff.op) && styles.act, IS_SHEET(eff.op) && styles.sheet, badLab && styles.bad)}
+    <div data-audit={eff.id}
+      className={cx(styles.efrow, IS_DAMAGE_FLAG(eff.op) && styles.flag, IS_ACTIVATION(eff.op) && styles.act, IS_SHEET(eff.op) && styles.sheet, badLab && styles.bad)}
       role="button" tabIndex={0} onClick={onOpen}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } }}>
       <i className={cx('fa-solid fa-chevron-right', styles.ch)} />
-      <span className={styles.efGlFrame}><i className={`fa-solid ${cfg?.icon ?? 'fa-circle'}`} /></span>
+      <span className={styles.efGlFrame}><Icon name={cfg?.icon ?? 'fa-circle'} /></span>
       <span className={styles.op}>{cfg?.label ?? eff.op}</span>
       <span className={cx(styles.lab, badLab && styles.miss)}>{badLab ? 'no label' : eff.label}</span>
       <span className={styles.sum}>
@@ -391,7 +393,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
     setEffect(ei, { target: targets.map((t, j) => (j === ti ? v : t)) })
 
   return (
-    <div className={cx(styles.card, badLab && styles.err)}>
+    <div data-audit={eff.id} className={cx(styles.card, badLab && styles.err)}>
       <div className={styles.cardHead}>
         <i className={cx('fa-solid fa-chevron-down', styles.ch)} onClick={onClose}
           style={{ fontSize: 9, color: 'var(--amber)', cursor: 'pointer' }} />
@@ -714,6 +716,50 @@ function SchemaField({ fd, eff, ei, setEffect, vars }: {
  * `.edAudit` is NOT applied here: it is FeatureEditor's wrapper, re-padding for
  * that screen's 46px step gutter. A host that wants it wraps this.
  */
+/**
+ * Take the DM to the thing the audit is complaining about.
+ *
+ * `AuditItem.id` is either a graph node's id or a variable's NAME (graph.ts) —
+ * both are rendered with a `data-audit` attribute, so one lookup serves both.
+ *
+ * POLLED on a TIMER, not on animation frames. Every caller opens a collapsed
+ * fold first, so the target does not exist when the click is handled, and how
+ * long it takes to appear depends on the fold, the render, and whatever else
+ * React has queued — a fixed two-frame wait looked right and silently found
+ * nothing.
+ *
+ * setTimeout rather than requestAnimationFrame because rAF is PAUSED in a
+ * background tab: the callback simply never runs, so the jump would do nothing
+ * at all for anyone driving the editor in a tab that is not frontmost.
+ *
+ * A miss is silent on purpose. Some audit items are about the form as a whole
+ * ("no name", "needs two saving throws") and point at no row at all; opening
+ * the folds is still the right thing to have done.
+ */
+export function revealAudit(id: string | null | undefined, deadlineMs = 800) {
+  if (!id) return
+  const started = performance.now()
+  const tick = () => {
+    const el = document.querySelector<HTMLElement>(`[data-audit="${CSS.escape(id)}"]`)
+    if (!el) {
+      if (performance.now() - started < deadlineMs) setTimeout(tick, 16)
+      return
+    }
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    // Attribute, not a class: the class names in this stylesheet are hashed by
+    // CSS modules and cannot be applied from a string here.
+    el.setAttribute('data-flash', '')
+    setTimeout(() => el.removeAttribute('data-flash'), 1200)
+    // The target may BE the field (a name input tagged `field:name`) or may
+    // CONTAIN it (a node card, a variable row). Try itself first.
+    const focusable = el.matches('input, select, textarea')
+      ? el
+      : el.querySelector<HTMLElement>('input, select, textarea')
+    focusable?.focus({ preventScroll: true })
+  }
+  setTimeout(tick, 0)
+}
+
 export function AuditPanel({ title, audit, onJump }: {
   /** e.g. "Feature Audit", "Class Audit". */
   title: string
@@ -765,7 +811,7 @@ export function VarsBlock({ vars, onChange }: {
         const stored = v.kind !== 'derived'
         const dmOnly = v.scope === 'dm'
         return (
-          <div key={vi} className={cx(styles.card, !v.name?.trim() && styles.err)}>
+          <div key={vi} data-audit={v.name || undefined} className={cx(styles.card, !v.name?.trim() && styles.err)}>
             <div className={styles.cardHead}>
               <input className={styles.vname} value={v.name ?? ''} placeholder="identifier" spellCheck={false}
                 onChange={e => setVar(vi, { name: e.target.value })} />

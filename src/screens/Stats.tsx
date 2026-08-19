@@ -15,6 +15,7 @@ import { burden, burdenTier, type BurdenTier } from '../lib/burden'
 import { handLabel, weaponAttackBonus, weaponDamageString } from '../lib/weapons'
 import { EffectsSidebar } from '../components/EffectsSidebar'
 import styles from './Stats.module.css'
+import { Icon } from '../components/Icon'
 
 interface RouteContext {
   character: CharacterRow
@@ -84,33 +85,35 @@ export function Stats() {
         right={<>Castella-08 &nbsp;//&nbsp; <span className="acc">SHEET: COMPLETE</span> &nbsp;//&nbsp; Loadout 02</>}
       />
       <Nav variant="dock" meta={meta} />
-      <div className={styles.dash}>
-        <header className={styles.dashHead}>
-          <span className={styles.dhNum}>09</span>
-          <span className={styles.dhTitle}>Stat Panel</span>
-          <span className={styles.dhMeta}>
-            <span><span className="dim">Class</span> {classLine(character)}</span>
-            <span className="dim">·</span>
-            <span><span className="dim">Auto-Sync</span> <span className="acc">ON</span></span>
-            <span className={styles.cursor}>▌</span>
-          </span>
-        </header>
+      <div className={styles.dashScroll}>
+        <div className={styles.dash}>
+          <header className={styles.dashHead}>
+            <span className={styles.dhNum}>09</span>
+            <span className={styles.dhTitle}>Stat Panel</span>
+            <span className={styles.dhMeta}>
+              <span><span className="dim">Class</span> {classLine(character)}</span>
+              <span className="dim">·</span>
+              <span><span className="dim">Auto-Sync</span> <span className="acc">ON</span></span>
+              <span className={styles.cursor}>▌</span>
+            </span>
+          </header>
 
-        <div className={styles.grid}>
-          <Combat sheet={view} />
-          <HitPoints sheet={view} character={character} updateSection={updateSection} />
-          <HitDice sheet={view} character={character} updateSection={updateSection} />
-          <AbilityScores sheet={view} base={base.abilities} exhaustion={exhaustion} tier={tier} />
-          <Senses
-            sheet={view} character={character} exhaustion={exhaustion} tier={tier}
-            effectCount={effects.length} onOpenEffects={() => setEffectsOpen(true)}
-          />
-          <SavingThrows sheet={view} />
-          <DeathSavesWidget character={character} updateSection={updateSection} />
-          <Exhaustion character={character} updateSection={updateSection} />
-          <Skills sheet={view} exhaustion={exhaustion} tier={tier} />
-          <Attacks character={character} sheet={view} />
-          <Proficiencies character={character} sheet={view} />
+          <div className={styles.grid}>
+            <Combat sheet={view} />
+            <HitPoints sheet={view} character={character} updateSection={updateSection} />
+            <HitDice sheet={view} character={character} updateSection={updateSection} />
+            <AbilityScores sheet={view} base={base.abilities} exhaustion={exhaustion} tier={tier} />
+            <Senses
+              sheet={view} character={character} exhaustion={exhaustion} tier={tier}
+              effectCount={effects.length} onOpenEffects={() => setEffectsOpen(true)}
+            />
+            <SavingThrows sheet={view} />
+            <DeathSavesWidget character={character} updateSection={updateSection} />
+            <Exhaustion character={character} updateSection={updateSection} />
+            <Skills sheet={view} exhaustion={exhaustion} tier={tier} />
+            <Attacks character={character} sheet={view} />
+            <Proficiencies character={character} sheet={view} />
+          </div>
         </div>
       </div>
 
@@ -584,7 +587,7 @@ function Attacks({ character, sheet }: { character: CharacterRow; sheet: Charact
         <div className={styles.attackTable}>
           {weapons.map((w, i) => (
             <div key={i} className={styles.atRow}>
-              <span className={styles.atIcon}><i className={`fa-solid ${w.icon ?? 'fa-khanda'}`} style={w.flip ? { transform: 'scaleX(-1)' } : undefined} /></span>
+              <span className={styles.atIcon}><Icon name={w.icon ?? 'fa-khanda'} style={w.flip ? { transform: 'scaleX(-1)' } : undefined} /></span>
               <span className={styles.atName}>{w.name}<span className={styles.hand}>{handLabel(w.hand)}</span></span>
               <span className={styles.atToh}>{formatMod(weaponAttackBonus(w, sheet))}</span>
               <span className={styles.atDmg}>{weaponDamageString(w, sheet)}<span className={styles.type}>{w.type}</span></span>
@@ -617,7 +620,7 @@ function Proficiencies({ character, sheet }: { character: CharacterRow; sheet: C
         {groups.map(g => (
           <div key={g.label} className={styles.profGroup}>
             <div className={styles.pgHead}>
-              <i className={`fa-solid ${g.icon}`} />
+              <Icon name={g.icon} />
               <span className={styles.lab}>{g.label}</span>
               <span className={styles.ct}>{g.chips.length ? `${g.chips.length} ${g.chips.length === 1 ? 'entry' : 'entries'}` : 'none trained'}</span>
             </div>

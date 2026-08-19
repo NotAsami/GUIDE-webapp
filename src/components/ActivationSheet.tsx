@@ -21,6 +21,7 @@ import { effectiveSheet } from '../lib/effects'
 import { gid, resolve, rollResolution, type GraphContext } from '../lib/graph'
 import { applyOutcomes, planActivation, type Outcome } from '../lib/graphState'
 import styles from './ActivationSheet.module.css'
+import { Icon } from './Icon'
 
 export type ActivationHost = {
   character: CharacterRow
@@ -163,7 +164,7 @@ function ActivationConfirm({ feature, outcomes, busy, onCancel, onConfirm }: {
     <div className={styles.overlay} onClick={onCancel}>
       <div className={styles.confirm} onClick={e => e.stopPropagation()} role="dialog" aria-label={`Use ${feature.name}`}>
         <div className={styles.cfHead}>
-          <span className={styles.pIcon}><i className={`fa-solid ${feature.icon ?? 'fa-bolt'}`} /></span>
+          <span className={styles.pIcon}><Icon name={feature.icon ?? 'fa-bolt'} /></span>
           <div className={styles.pTitles}>
             <div className={styles.pName}>{feature.name}</div>
             <div className={styles.pSub}>Will apply</div>

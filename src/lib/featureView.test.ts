@@ -7,7 +7,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, GraphOp } from './database.types.ts'
-import { OP_GLYPH, featureEffects, isUsable, originChain, toggleVar } from './featureView.ts'
+import { OP_GLYPH, featureEffects, isUsable, originChain, toggleVar, isCarrier, origins } from './featureView.ts'
+import type { Feature } from './database.types.ts'
 import { OPS } from './opSchema.ts'
 import { affectedBy, baseScope, buildContext, gid } from './graph.ts'
 import { interpolate } from './expr.ts'
@@ -185,4 +186,47 @@ test('a ternary over a declared bool picks each branch', () => {
   const src = '{upgraded ? " and restrains the target." : "."}'
   assert.equal(interpolate(src, { upgraded: true }).text, ' and restrains the target.')
   assert.equal(interpolate(src, { upgraded: false }).text, '.')
+})
+
+/* ---------- carriers ---------- */
+
+const carrier = (id: string, over: Partial<Feature> = {}): Feature =>
+  ({ id, name: id, ...over }) as Feature
+
+test('A CARRIER IS HIDDEN, A GRANTED FEATURE IS NOT — the difference is one colon', () => {
+  // The dangerous line in this whole change. `cls:arbiter` is the synthetic row
+  // carrying the class's vars; `cls:arbiter:second_wind` is Second Wind. A
+  // startsWith('cls:') test would hide every feature the class grants — most of
+  // the screen — and it would look like the grant path had broken.
+  assert.equal(isCarrier('cls:arbiter'), true)
+  assert.equal(isCarrier('race:elf'), true)
+  assert.equal(isCarrier('cls:arbiter:second_wind'), false, 'a GRANTED feature')
+  assert.equal(isCarrier('race:elf:darkvision'), false, 'a GRANTED feature')
+})
+
+test('an ordinary feature is never mistaken for a carrier', () => {
+  for (const id of ['rage', 'gear-ring-1', 'shard-slot1-core-2', '', undefined]) {
+    assert.equal(isCarrier(id), false, `treated as a carrier: ${id}`)
+  }
+})
+
+test('origins read the description off the carrier, race first', () => {
+  // Off the CARRIER, not the catalog: class_catalog has no player policy, so a
+  // player cannot read it. assignClass snapshots desc onto light_description.
+  const list = origins([
+    carrier('cls:arbiter', { name: 'Arbiter', light_description: 'Sworn to the Reclamation.' }),
+    carrier('rage', { name: 'Rage', light_description: 'Not an origin.' }),
+    carrier('race:elf', { name: 'Elf', light_description: 'Graceful and long-lived.' }),
+  ])
+  assert.deepEqual(list.map(o => o.kind), ['race', 'class'])
+  assert.deepEqual(list.map(o => o.name), ['Elf', 'Arbiter'])
+  assert.equal(list[0].desc, 'Graceful and long-lived.')
+})
+
+test('a carrier with no description contributes no section', () => {
+  // Otherwise the Lore dossier grows an empty "Origin" heading for a class whose
+  // author never wrote one.
+  assert.deepEqual(origins([carrier('cls:arbiter', { name: 'Arbiter' })]), [])
+  assert.deepEqual(origins([carrier('cls:arbiter', { name: 'Arbiter', light_description: '   ' })]), [])
+  assert.deepEqual(origins(undefined), [])
 })

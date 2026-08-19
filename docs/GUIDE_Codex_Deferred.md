@@ -219,3 +219,23 @@ say better.
 would put a row in the features library that the DM did not author and must not
 edit, and a grant path could copy it onto a character who has neither the class
 nor the race.
+
+---
+
+## A richer icon set — game-icons.net
+
+**DONE.** Adopted after all: 4180 glyphs live in `public/icons/`, rendered
+through `src/components/Icon.tsx` as a CSS mask so they inherit `currentColor`
+exactly as a Font Awesome glyph does, and chosen through the shared search-first
+`IconPicker`. Font Awesome values keep working unprefixed, so no data migration
+was needed — an icon is game-icons only if it carries the `gi:` prefix.
+
+Attribution (CC BY 3.0) is in `docs/CREDITS.md`, and the picker names the
+contributor of the selected glyph. See that file before touching
+`public/icons/`: the per-author folders are the only record of who made what.
+
+**What is still deferred:** expanding the Font Awesome side of the palette
+(`ICON_GROUPS` in `src/lib/icons.ts` is 328 hand-picked names). *Trigger:*
+reaching for a UI glyph — a control, a state, a marker — that is not in the
+list. game-icons covers the fantasy vocabulary; Font Awesome covers the
+interface, and only the latter is thin now.

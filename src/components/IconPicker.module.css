@@ -1,0 +1,116 @@
+/* The shared icon picker. Search field, count line, results — in that order,
+   because the count is what tells you your term is too broad, and it has to be
+   above the grid to be read before you start scrolling it. */
+
+.wrap { display: flex; flex-direction: column; }
+
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(212, 191, 125, 0.35);
+  background: rgba(0, 0, 0, 0.4);
+}
+.field:focus-within { border-color: var(--cyan); }
+
+.mag { flex: 0 0 auto; margin-left: 11px; font-size: 11px; color: var(--beige-dim); }
+
+.in {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: none;
+  padding: 10px 11px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+.in::placeholder { color: var(--beige-dim); }
+
+.clear {
+  flex: 0 0 auto;
+  background: none; border: 0; cursor: pointer;
+  padding: 0 11px;
+  font-size: 12px;
+  color: var(--beige-dim);
+}
+.clear:hover { color: var(--danger); }
+
+.meta {
+  margin: 8px 1px 10px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--beige-dim);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+  gap: 5px;
+  /* The results scroll, never the dialog — the search field and the count stay
+     put while you look, which is the whole point of putting them above. */
+  max-height: 38vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cyan-dim) rgba(0, 0, 0, 0.5);
+}
+.grid::-webkit-scrollbar { width: 8px; }
+.grid::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15); }
+.grid::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  border: 2px solid #111;
+}
+
+/* Chamfered + bordered, so it needs the 0.7071 corner recipe: clip-path cuts
+   the two diagonals out of the border, and only a gradient paints them back.
+   Recolour through --bc, never `border-color` — see
+   docs/Chamfered_clip-path_corners_fix.md, and note the guard in
+   src/lib/chamferBorders.test.ts fails if this drifts. */
+.cell {
+  --cut: 4px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.2);
+  aspect-ratio: 1;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+  color: var(--muted);
+  background-color: rgba(0, 0, 0, 0.35);
+  border: var(--bw) solid var(--bc);
+  cursor: pointer;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - var(--bw)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw)), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - var(--bw)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw)), transparent 0);
+  background-repeat: no-repeat;
+}
+.cell:hover { color: var(--text); --bc: rgba(226, 176, 33, 0.45); }
+.cell.on { color: var(--cyan); --bc: var(--cyan); background-color: rgba(0, 166, 214, 0.12); }
+.cell:focus-visible { outline: 1px solid var(--cyan); outline-offset: 2px; }
+
+/* The selected icon, with its credit. */
+.sel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(212, 191, 125, 0.2);
+}
+.selIcon { font-size: 20px; color: var(--beige); }
+.selName {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.selSrc {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--beige-dim);
+}

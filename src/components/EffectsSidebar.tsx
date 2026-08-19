@@ -27,6 +27,7 @@ import { useItemTooltip } from './ItemTooltip'
 import styles from './EffectsSidebar.module.css'
 import pop from '../screens/InventoryPopup.module.css'
 import { turnsLabel } from '../lib/turns'
+import { Icon } from './Icon'
 
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')
 const KIND_LABEL: Record<'buff' | 'cond' | 'debuff', string> = { buff: 'Buff', cond: 'Condition', debuff: 'Debuff' }
@@ -73,7 +74,7 @@ export function EffectsSidebar({ open, effects, onRemove, onClose }: {
                     onClick={() => setDetailId(e.id)}
                     onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setDetailId(e.id) } }}
                     {...bind({ name: e.name, sub: KIND_LABEL[e.kind ?? 'buff'], rows: grants ? [['Grants', grants]] : undefined, flavor: e.desc })}>
-                    <span className={styles.scIcon}><i className={`fa-solid ${e.icon ?? 'fa-wand-sparkles'}`} /></span>
+                    <span className={styles.scIcon}><Icon name={e.icon ?? 'fa-wand-sparkles'} /></span>
                     {/* The countdown, where the effect is. A number only the roll
                         panel knows is one the player cannot plan around. */}
                     {turnsLabel(e) && <span className={styles.scTurns}>{turnsLabel(e)}</span>}
@@ -131,7 +132,7 @@ function EffectDetailPopup({ effect, onRemove, onClose }: {
             {/* The `kind` class was missing here, so a debuff's chip went red and
                 its opened crystal stayed cyan — the same effect, two colours. */}
             <span className={cx(pop.imCrystal, pop[effect.kind ?? 'buff'])}>
-              <i className={`fa-solid ${effect.icon ?? 'fa-wand-sparkles'}`} />
+              <Icon name={effect.icon ?? 'fa-wand-sparkles'} />
             </span>
             <div className={pop.imTitles}>
               <span className={pop.imName}>{effect.name}</span>

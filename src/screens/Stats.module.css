@@ -2,15 +2,50 @@
    Class names are camelCased for CSS-modules; global flavor spans (.dim/.acc)
    passed in as plain strings are reached via :global(). */
 
+/* THE SCREEN OWNS ITS SCROLL REGION, like every other content screen.
+   Stats was the only one that didn't: it padded past the dock and let Layout's
+   <main> scroll the whole page, so on a short viewport the panel slid UP THROUGH
+   the navbar — which is fixed, z-index 45 and has no background of its own, so
+   the widgets read straight through the gaps between the nav buttons.
+
+   Pinning the chrome and scrolling only the body is what Equipment already does
+   (Equipment.module.css .eq) and is the fix its comment describes.
+
+   THE SCROLL BOX AND THE COLUMN MUST BE SEPARATE ELEMENTS. A fixed box with both
+   top and bottom set has a DEFINITE height, and flex children in a definite-height
+   column shrink to fit it rather than overflow — so folding these two rules into
+   one element produces a panel that squashes and never scrolls at all. The inner
+   column has no definite height, so it grows and this box scrolls it. */
+.dashScroll {
+  position: fixed;
+  /* Clears the nav AND the nav-meta line under it, which runs to y181. The
+     padding this replaces used `--nav-h + 40px` = 174px, which cleared the nav
+     buttons but sat 7px INSIDE the meta line — invisible while the page scrolled
+     the whole panel, obvious once the body is clipped here. 26 + 72 + 46 = 206
+     is what Spellbook and Equipment already use, for this reason. */
+  top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
+  bottom: calc(var(--bar-bottom-h) + 18px);
+  left: 0; right: 0;
+  z-index: 10;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.dashScroll::-webkit-scrollbar { width: 8px; }
+.dashScroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15); }
+.dashScroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  border: 2px solid #111;
+}
+
 .dash {
   max-width: 1400px;
   margin: 0 auto;
-  /* clear the fixed dock navbar + nav-meta line above the dashboard */
-  padding-top: calc(var(--nav-h) + 40px);
   padding-bottom: 8px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 100%;
 }
 
 /* ---- section header ---- */

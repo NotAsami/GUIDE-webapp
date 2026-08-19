@@ -1,0 +1,21 @@
+/* A game-icons glyph, drawn as a MASK so it inherits `color` exactly the way a
+   Font Awesome glyph does. The SVG is a stencil; currentColor is the paint.
+
+   Sized in `em` so it follows font-size at every call site — the existing icons
+   are text, and callers set their size with font-size, not width/height. */
+.gi {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;   /* matches Font Awesome's own baseline nudge */
+  background-color: currentColor;
+  -webkit-mask-image: var(--gi);
+  mask-image: var(--gi);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  flex: 0 0 auto;
+}

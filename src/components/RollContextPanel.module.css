@@ -407,3 +407,11 @@
 .xVal { margin-left: auto; flex: 0 0 auto; font-family: var(--font-mono); font-size: 11px; color: var(--beige); }
 .xLine.heal .xVal { color: var(--good); }
 .xLine.buff .xVal { color: var(--cyan-hot); }
+
+/* A rider whose source is a feature links to it on the Features screen. The
+   arrow is what says "this leaves the panel" — the name alone reads as a label,
+   which is exactly how it read before it was navigable. */
+.catRider .rLink { color: var(--beige); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-bottom: 1px solid rgba(212, 191, 125, 0.35); }
+.catRider .rLink:hover { color: var(--cyan); border-bottom-color: var(--cyan); }
+.catRider .rLink i { font-size: 7.5px; opacity: 0.75; }
+.catRider .rLink:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }

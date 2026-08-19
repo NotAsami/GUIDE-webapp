@@ -22,6 +22,7 @@ import { CAT_CORNER, CAT_LABEL, CAT_ORDER, rarityLabel } from '../lib/items'
 import { useRollLog } from '../lib/rolls'
 import { ItemPopup } from './InventoryPopup'
 import styles from './Inventory.module.css'
+import { Icon } from '../components/Icon'
 
 interface RouteContext {
   character: CharacterRow
@@ -437,7 +438,7 @@ export function Inventory() {
                       >
                         <span className={styles.sgFrame} />
                         <span className={styles.sgInner}>
-                          <i className={`fa-solid ${t.icon}`} aria-hidden="true" />
+                          <Icon name={t.icon} aria-hidden="true" />
                           {t.label}
                           <span className={styles.sgN}>
                             {locked ? <i className="fa-solid fa-lock" aria-hidden="true" /> : count}
@@ -801,7 +802,7 @@ function ContainerList({ items, filter, sortBy, query, weightless, bind, isNewVi
               onHover(it.id)
             }}
           >
-            <span className={styles.ri}><i className={`fa-solid ${it.icon ?? 'fa-cube'}`} aria-hidden="true" /></span>
+            <span className={styles.ri}><Icon name={it.icon ?? 'fa-cube'} aria-hidden="true" /></span>
             <span className={styles.rn}>
               {it.locked && <i className={`fa-solid fa-lock ${styles.rowLock}`} aria-hidden="true" />}
               <span className={styles.rnText}>{it.name}</span>

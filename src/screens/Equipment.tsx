@@ -29,6 +29,7 @@ import { armedMatches, gid, resolve } from '../lib/graph'
 import { armableFor } from '../lib/graphState'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Equipment.module.css'
+import { Icon } from '../components/Icon'
 
 interface RouteContext {
   character: CharacterRow
@@ -501,7 +502,7 @@ function ActionBtn({ to, onClick, icon, label, active, count, soon }: {
     <>
       <span className={styles.paFrame} />
       <span className={styles.paInner}>
-        <i className={`fa-solid ${icon}`} /> {label}
+        <Icon name={icon} /> {label}
         {soon ? <span className={styles.paTag}>Soon</span> : count ? <span className={styles.paCount}>{count}</span> : null}
       </span>
     </>
@@ -553,7 +554,7 @@ function WeaponCard({ weapon, sheet, bind, dry, ammo, active, armed, armable, on
     >
       <div className={styles.wcFrame}><div className={styles.wcInner}>
         <div className={styles.wcIcon}>
-          <i className={`fa-solid ${weapon.icon ?? 'fa-khanda'}`} style={weapon.flip ? { transform: 'scaleX(-1)' } : undefined} />
+          <Icon name={weapon.icon ?? 'fa-khanda'} style={weapon.flip ? { transform: 'scaleX(-1)' } : undefined} />
         </div>
         <div className={styles.wcName}>{weapon.name}</div>
         <div className={styles.wcDmg}><span className={styles.v}>{dmg}</span>{weapon.type ? <> · {weapon.type}</> : null}</div>
@@ -724,7 +725,7 @@ function GearSlot({ slot, item, bind, onOpen }: {
       <span className={styles.sFrame} />
       <span className={styles.sInner}>
         <span className={styles.sLabel}>{slot.label}</span>
-        <span className={styles.sIcon}><i className={`fa-solid ${item?.icon ?? slot.icon}`} /></span>
+        <span className={styles.sIcon}><Icon name={item?.icon ?? slot.icon} /></span>
         <span className={styles.sName}>{item ? item.name : '— Empty —'}</span>
       </span>
       {/* Only slots actually spending one of the three attunement slots get the
@@ -780,7 +781,7 @@ function ShardBar({ character, shardTrees, bind }: { character: CharacterRow; sh
                 className={`${styles.shardSub}${filled ? '' : ' ' + styles.empty}`}
                 {...bind(tt)}
               >
-                <i className={`fa-solid ${tree?.icon ?? (slot.locked ? 'fa-gem' : 'fa-plus')}`} />
+                <Icon name={tree?.icon ?? (slot.locked ? 'fa-gem' : 'fa-plus')} />
                 <span className={styles.shardSubLabel}>{tree ? tree.name : slot.locked ? 'G.U.I.D.E.' : 'Empty'}</span>
               </span>
             )
@@ -814,7 +815,7 @@ function EquipModal({ slot, item, candidates, attuned, attCap, onEquip, onUnequi
         <span className={styles.modalFrame} data-rarity={rarity} />
         <div className={styles.modalInner}>
           <header className={styles.modalHead}>
-            <span className={styles.mhIcon}><i className={`fa-solid ${item?.icon ?? slot.icon}`} /></span>
+            <span className={styles.mhIcon}><Icon name={item?.icon ?? slot.icon} /></span>
             <div className={styles.mhTitles}>
               <span className={styles.mhKicker}>{item ? 'Equipped' : `Equip · ${slot.label}`}</span>
               <span className={styles.mhName}>{item ? item.name : slot.label}</span>
@@ -885,7 +886,7 @@ function SelectorBody({ slot, candidates, attuned, attCap, onEquip }: {
         const locked = attunementFull && consumesAttunement(it)
         return (
           <div key={it.id ?? it.name} className={`${styles.pickRow}${locked ? ' ' + styles.locked : ''}`} data-rarity={it.rarity ?? 'common'}>
-            <span className={styles.pkIcon}><i className={`fa-solid ${it.icon ?? slot.icon}`} /></span>
+            <span className={styles.pkIcon}><Icon name={it.icon ?? slot.icon} /></span>
             <span className={styles.pkBody}>
               <span className={styles.pkName}>{it.name}</span>
               <span className={styles.pkMeta}>
@@ -920,7 +921,7 @@ function WeaponManageModal({ weapon, sheet, onUnequip, onClose }: {
         <div className={styles.modalInner}>
           <header className={styles.modalHead}>
             <span className={styles.mhIcon}>
-              <i className={`fa-solid ${weapon.icon ?? 'fa-khanda'}`} style={weapon.flip ? { transform: 'scaleX(-1)' } : undefined} />
+              <Icon name={weapon.icon ?? 'fa-khanda'} style={weapon.flip ? { transform: 'scaleX(-1)' } : undefined} />
             </span>
             <div className={styles.mhTitles}>
               <span className={styles.mhKicker}>Equipped · {handLabel(weapon.hand)}</span>
@@ -995,7 +996,7 @@ function WeaponPickerModal({ hand, candidates, onEquip, onClose }: {
               <div className={styles.selectorList}>
                 {candidates.map(it => (
                   <div key={it.id ?? it.name} className={styles.pickRow} data-rarity={it.rarity ?? 'common'}>
-                    <span className={styles.pkIcon}><i className={`fa-solid ${it.icon ?? 'fa-khanda'}`} /></span>
+                    <span className={styles.pkIcon}><Icon name={it.icon ?? 'fa-khanda'} /></span>
                     <span className={styles.pkBody}>
                       <span className={styles.pkName}>{it.name}</span>
                       <span className={styles.pkMeta}>

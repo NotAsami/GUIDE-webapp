@@ -26,7 +26,7 @@ import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmFeatures, featureContent } from '../lib/dm'
 import { useLocalDraft } from '../lib/draft'
 import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
-import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, splitSel } from '../components/GraphEffects'
+import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, revealAudit, splitSel } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { auditNode, gid, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
 import {
@@ -38,6 +38,8 @@ import type {
 } from '../lib/database.types'
 import { originChain } from '../lib/featureView'
 import styles from '../components/authoring.module.css'
+import { IconPicker } from '../components/IconPicker'
+import { Icon } from '../components/Icon'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
 
@@ -47,16 +49,6 @@ const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).jo
  *  rather than written as a prop because React's DOM typings only learned the
  *  attribute in v19. */
 const inertWhen = (closed: boolean) => (closed ? ({ inert: '' } as Record<string, unknown>) : {})
-
-const ICONS = ['fa-lungs', 'fa-bolt', 'fa-burst', 'fa-eye', 'fa-leaf', 'fa-hammer', 'fa-fire', 'fa-shield-halved',
-  'fa-heart-pulse', 'fa-hand-fist', 'fa-dumbbell', 'fa-anchor', 'fa-mountain', 'fa-shoe-prints', 'fa-feather', 'fa-wind',
-  'fa-droplet', 'fa-snowflake', 'fa-sun', 'fa-moon', 'fa-star', 'fa-gem', 'fa-diamond', 'fa-khanda', 'fa-shield',
-  'fa-helmet-safety', 'fa-crosshairs', 'fa-bullseye', 'fa-dice-d20', 'fa-wand-sparkles', 'fa-hat-wizard', 'fa-book',
-  'fa-scroll', 'fa-brain', 'fa-signal', 'fa-tower-broadcast', 'fa-wave-square', 'fa-skull', 'fa-ghost', 'fa-dragon',
-  'fa-paw', 'fa-spider', 'fa-crow', 'fa-tree', 'fa-seedling', 'fa-flask', 'fa-vial', 'fa-mortar-pestle', 'fa-key',
-  'fa-lock', 'fa-door-open', 'fa-compass', 'fa-map', 'fa-clock', 'fa-hourglass-half', 'fa-link', 'fa-shuffle',
-  'fa-arrows-rotate', 'fa-explosion', 'fa-radiation', 'fa-biohazard', 'fa-dna', 'fa-microscope', 'fa-music',
-  'fa-masks-theater', 'fa-comment', 'fa-handshake', 'fa-coins', 'fa-utensils']
 
 const RECHARGES: { v: '' | 'short' | 'long'; l: string }[] = [
   { v: '', l: 'Manual (DM)' }, { v: 'short', l: 'Short rest' }, { v: 'long', l: 'Long rest' },
@@ -128,9 +120,9 @@ export default function FeatureEditor() {
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
     const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
-    if (!draft.name?.trim()) out.unshift({ sev: 'err', id: null, t: 'Unnamed feature', s: 'A feature needs a name before it can be granted.' })
-    if (!draft.light_description?.trim()) out.push({ sev: 'warn', id: null, t: 'No card text', s: 'The collapsed card in play will have nothing to scan.' })
-    if (!draft.deep_description?.trim()) out.push({ sev: 'warn', id: null, t: 'No detail text', s: 'The expanded card will have nothing below the card text.' })
+    if (!draft.name?.trim()) out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed feature', s: 'A feature needs a name before it can be granted.' })
+    if (!draft.light_description?.trim()) out.push({ sev: 'warn', id: 'field:light', t: 'No card text', s: 'The collapsed card in play will have nothing to scan.' })
+    if (!draft.deep_description?.trim()) out.push({ sev: 'warn', id: 'field:deep', t: 'No detail text', s: 'The expanded card will have nothing below the card text.' })
     if ((draft.uses?.max ?? 0) > 0 && !draft.recharge) out.push({ sev: 'warn', id: null, t: 'Uses never reset', s: 'Max uses is set but no recharge was chosen — the DM restores them by hand.' })
     if (!out.length) out.push({ sev: 'ok', id: null, t: 'Clean', s: 'No errors, no warnings. Safe to publish.' })
     return out
@@ -476,7 +468,7 @@ export default function FeatureEditor() {
                                   setDropRow({ id: r.id, after })
                                 }}
                                 onClick={() => select(r.id)}>
-                                <span className={styles.frIcFrame}><i className={`fa-solid ${d.icon || 'fa-star'}`} /></span>
+                                <span className={styles.frIcFrame}><Icon name={d.icon || 'fa-star'} /></span>
                                 <span className={styles.frTx}>
                                   <span className={styles.frN}>{d.name || 'Untitled'}</span>
                                   <span className={styles.frM}>
@@ -591,7 +583,8 @@ export default function FeatureEditor() {
                   {/* The shared panel — same component the class editor mounts,
                       so the two cannot drift. `.edAudit` is this screen's
                       wrapper, re-padding for the 46px step gutter. */}
-                  <AuditPanel title="Feature Audit" audit={audit} onJump={() => setOpen({ vars: true, effects: true })} />
+                  <AuditPanel title="Feature Audit" audit={audit}
+                    onJump={a => { setOpen({ vars: true, effects: true }); revealAudit(a.id) }} />
                 </div>
               )}
             </div>
@@ -813,14 +806,14 @@ function FeatureForm(p: FormProps) {
       <div className={styles.namerow}>
         <div>
           <span className={styles.fieldLab}>Name<span className={styles.req}>*</span></span>
-          <input className={cx(styles.in, styles.name)} value={d.name ?? ''} placeholder="Name the feature…"
+          <input data-audit="field:name" className={cx(styles.in, styles.name)} value={d.name ?? ''} placeholder="Name the feature…"
             onChange={e => set({ name: e.target.value })} />
         </div>
         <div>
           <span className={styles.fieldLab}>Icon</span>
           <button type="button" className={styles.nbtn} title="Pick an icon"
             style={{ ['--nc' as string]: d.color || DEFAULT_COLOR }} onClick={() => p.setPop({ k: 'icon' })}>
-            <i className={`fa-solid ${d.icon || 'fa-star'}`} />
+            <Icon name={d.icon || 'fa-star'} />
           </button>
         </div>
         <div>
@@ -875,7 +868,7 @@ function FeatureForm(p: FormProps) {
           knows how much a feature needs — a limit here just moved the overflow
           into the deep description, where the player has to open the card to
           find it. */}
-      <input className={cx(styles.in, styles.sumline)} value={d.light_description ?? ''}
+      <input data-audit="field:light" className={cx(styles.in, styles.sumline)} value={d.light_description ?? ''}
         onKeyDown={markdownShortcuts(light_description => set({ light_description }))}
         placeholder="One line — what the player reads while scanning the card…"
         onChange={e => set({ light_description: e.target.value })} />
@@ -885,7 +878,7 @@ function FeatureForm(p: FormProps) {
         <span className={styles.fieldLab}>Detail text</span>
         <span className={styles.facing}><i className="fa-solid fa-eye" /> Player-facing</span>
       </div>
-      <textarea ref={deepRef} className={styles.prose} value={d.deep_description ?? ''}
+      <textarea data-audit="field:deep" ref={deepRef} className={styles.prose} value={d.deep_description ?? ''}
         placeholder="The full prose the player reads when the card is expanded…"
         onKeyDown={markdownShortcuts(deep_description => set({ deep_description }))}
         onChange={e => set({ deep_description: e.target.value })} />
@@ -901,7 +894,7 @@ function FeatureForm(p: FormProps) {
         <div />
       </div>
       <div className={styles.actNote} style={{ ['--an' as string]: act.color }}>
-        <i className={`fa-solid ${act.icon}`} /><span>{act.note}</span>
+        <Icon name={act.icon} /><span>{act.note}</span>
       </div>
 
       <div className={styles.grid2} style={{ marginBottom: 2 }}>
@@ -1157,33 +1150,20 @@ function Popover({ pop, onClose, draft, set, update, nodes, namesByGid, selId, r
       <div className={cx(styles.pop, small && styles.small)}>
         {pop.k === 'icon' && draft && (<>
           <div className={styles.popHead}>
-            <i className={`fa-solid ${draft.icon || 'fa-star'}`} style={{ color: draft.color || DEFAULT_COLOR }} />
+            <Icon name={draft.icon || 'fa-star'} style={{ color: draft.color || DEFAULT_COLOR }} />
             <span className={styles.pt}>Pick an icon</span>
             <button type="button" className={styles.px} onClick={onClose}><i className="fa-solid fa-xmark" /></button>
           </div>
           <div className={styles.popBody}>
-            <input className={styles.in} value={q} onChange={e => setQ(e.target.value)}
-              placeholder="Search icons — fire, shield, brain…" autoFocus />
-            {(() => {
-              const rows = ICONS.filter(i => !q.trim() || i.replace('fa-', '').replace(/-/g, ' ').includes(q.toLowerCase().trim()))
-              return (<>
-                <div className={styles.mono} style={{ margin: '-4px 0 10px' }}>{rows.length} of {ICONS.length} glyphs</div>
-                <div className={styles.icongrid}>
-                  {rows.length ? rows.map(i => (
-                    <button key={i} type="button" className={cx(i === draft.icon && styles.on)} title={i.replace('fa-', '')}
-                      onClick={() => { set({ icon: i }); onClose() }}><i className={`fa-solid ${i}`} /></button>
-                  )) : <div className={styles.pkNone}>No glyph by that name.</div>}
-                </div>
-                <div className={styles.sec} style={{ marginTop: 14 }}><span className={styles.fieldLab}>Console palette</span></div>
-                <div className={styles.swrow}>
-                  {COLORS.map(c => (
-                    <button key={c} type="button" title={c} style={{ ['--c' as string]: c }}
-                      className={cx(c.toLowerCase() === (draft.color || DEFAULT_COLOR).toLowerCase() && styles.on)}
-                      onClick={() => set({ color: c })}><span className={styles.d} /></button>
-                  ))}
-                </div>
-              </>)
-            })()}
+            <IconPicker value={draft.icon} onPick={i => { set({ icon: i }); onClose() }} autoFocus />
+            <div className={styles.sec} style={{ marginTop: 14 }}><span className={styles.fieldLab}>Console palette</span></div>
+            <div className={styles.swrow}>
+              {COLORS.map(c => (
+                <button key={c} type="button" title={c} style={{ ['--c' as string]: c }}
+                  className={cx(c.toLowerCase() === (draft.color || DEFAULT_COLOR).toLowerCase() && styles.on)}
+                  onClick={() => set({ color: c })}><span className={styles.d} /></button>
+              ))}
+            </div>
           </div>
         </>)}
 
@@ -1202,7 +1182,7 @@ function Popover({ pop, onClose, draft, set, update, nodes, namesByGid, selId, r
                 const rows = nodes
                   .map(n => ({ n, meta: namesByGid.get(n.gid) }))
                   .filter(x => x.meta && (!q.trim() || x.meta.name.toLowerCase().includes(q.toLowerCase().trim())))
-                  .slice(0, 60)
+                  .slice(0, 40)
                 if (!rows.length) return <div className={styles.pkNone}>Nothing in the catalog matches that.</div>
                 return rows.map(({ n, meta }) => (
                   <button key={n.gid} type="button" className={styles.pkRow}

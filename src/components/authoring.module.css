@@ -640,7 +640,22 @@ select.in option { background: #14130f; }
 }
 .icongrid button:hover { color: var(--text); --bc: rgba(226,176,33,.45); }
 .icongrid button.on { color: var(--amber-hot); --bc: var(--amber); background-color: rgba(226,176,33,.12); }
-.pkList { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+/* The LIST scrolls, not the popup. Capping .pop alone let 60 rows push the
+   search field and the count off the top of a short viewport — the two things
+   you need in order to narrow the list were the first things to leave. */
+.pkList {
+  display: flex; flex-direction: column; gap: 4px; margin-top: 4px;
+  max-height: 46vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cyan-dim) rgba(0, 0, 0, 0.5);
+}
+.pkList::-webkit-scrollbar { width: 8px; }
+.pkList::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15); }
+.pkList::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  border: 2px solid #111;
+}
 .pkRow { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; cursor: pointer; background: rgba(0,0,0,.35); border: 1px solid rgba(212,191,125,.16); border-left: 2px solid var(--beige-dim); padding: 8px 11px; }
 .pkRow:hover { background: rgba(226,176,33,.09); border-left-color: var(--amber); }
 .pkRow .n { flex: 1; min-width: 0; font-family: var(--font-prose); font-size: 15.5px; color: var(--text); }
@@ -777,3 +792,18 @@ select.in, .opSel {
 }
 .originLast { color: var(--cyan-hot); border-color: rgba(0, 166, 214, .55); }
 .originArw { font-family: var(--font-mono); font-size: 11px; color: var(--amber); }
+
+/* The row an audit item just jumped to. Attribute-driven so revealAudit() can
+   set it from a plain string — CSS-module class names are hashed and cannot be
+   applied that way. Two pulses: one is easy to miss mid-scroll. */
+[data-flash] {
+  animation: auditFlash 600ms ease-out 2;
+}
+@keyframes auditFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(226, 176, 33, 0.55); }
+  40%  { box-shadow: 0 0 0 3px rgba(226, 176, 33, 0.45); }
+  100% { box-shadow: 0 0 0 0 rgba(226, 176, 33, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-flash] { animation: none; box-shadow: 0 0 0 2px rgba(226, 176, 33, 0.5); }
+}

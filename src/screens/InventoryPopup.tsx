@@ -22,6 +22,7 @@ import { getContainers, isRingSlot, type EquipTarget } from '../lib/equip'
 import { PERSON, freeCellFor, preferredDest } from '../lib/placement'
 import { CAT_LABEL, rarityLabel } from '../lib/items'
 import styles from './InventoryPopup.module.css'
+import { Icon } from '../components/Icon'
 
 /** Every place this item can be moved to: ON PERSON when a footprint-sized space
  *  is free, plus every equipped container that accepts its category and has room.
@@ -150,7 +151,7 @@ export function ItemPopup({
           <span className={`${styles.imCorner} ${styles.br}`} />
 
           <header className={styles.imHead}>
-            <span className={styles.imCrystal}><i className={`fa-solid ${item.icon ?? 'fa-cube'}`} aria-hidden="true" /></span>
+            <span className={styles.imCrystal}><Icon name={item.icon ?? 'fa-cube'} aria-hidden="true" /></span>
             <div className={styles.imTitles}>
               <span className={styles.imName}>{item.name}</span>
               <span className={styles.imTags}>
