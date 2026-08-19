@@ -89,16 +89,24 @@
 .cell.on { color: var(--cyan); --bc: var(--cyan); background-color: rgba(0, 166, 214, 0.12); }
 .cell:focus-visible { outline: 1px solid var(--cyan); outline-offset: 2px; }
 
-/* The selected icon, with its credit. */
+/* The selected icon, with its credit.
+
+   THE RULE DIVIDES THE GLYPH FROM ITS NAME, rather than floating above the
+   whole row: a full-width line over `[icon] NAME … SOURCE` separated the row
+   from the grid, which the margin already does. After the icon it is doing a
+   divider's job. */
 .sel {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 12px;
-  padding-top: 11px;
-  border-top: 1px solid rgba(212, 191, 125, 0.2);
+  margin-top: 14px;
 }
-.selIcon { font-size: 20px; color: var(--beige); }
+.selIcon {
+  font-size: 20px;
+  color: var(--beige);
+  padding-right: 10px;
+  border-right: 1px solid rgba(212, 191, 125, 0.28);
+}
 .selName {
   font-family: var(--font-mono);
   font-size: 10px;

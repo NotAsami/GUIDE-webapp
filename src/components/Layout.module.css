@@ -211,6 +211,20 @@
 }
 .signOut:hover { color: var(--cyan); border-color: var(--beige-dim); }
 
+/* The DM's way back to the Operator Console without typing the URL. Amber,
+   not cyan: everything DM-side in this app is amber, and it should not read as
+   another player control sitting in the player's topbar. */
+.dmLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--amber, #e2b021);
+  border-color: rgba(226, 176, 33, 0.35);
+}
+.dmLink:hover { color: var(--amber-hot, #ffcc3d); border-color: var(--amber, #e2b021); }
+.dmLink i { font-size: 9px; }
+
 /* ---- Main ---- */
 
 .main {

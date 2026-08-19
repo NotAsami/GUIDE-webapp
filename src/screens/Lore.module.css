@@ -405,7 +405,10 @@
 .originRow + .originRow { margin-top: 22px; }
 .originHead {
   display: flex;
-  align-items: baseline;
+  /* CENTRED, not baseline. The kind chip is 8px text inside a border and the
+     name is 16px display type — aligning their BASELINES puts the chip's box
+     ~2px low against the name, which reads as a misprint rather than a choice. */
+  align-items: center;
   gap: 10px;
   margin-bottom: 7px;
 }

@@ -2696,6 +2696,30 @@ div.skWarn { cursor: default; }
 .lootRow > * { min-width: 0; }
 .lootRow.bad { border-color: rgba(185, 58, 58, 0.5); background: rgba(185, 58, 58, 0.06); }
 
+/* EVERY CONTROL THE SAME HEIGHT, AND NO STACKING MARGIN.
+   .sessIn carries `margin-bottom: 10px` because it is built for stacked form
+   fields; in a grid row that margin both inflates the cell and drags the
+   control off centre — measured 31/35/44/44/22px tall with the select's centre
+   5px above everything else's. One height, zero margin, and align-items:center
+   then actually centres. */
+.lootRow input,
+.lootRow select,
+.lootRow .lootPick {
+  height: 34px;
+  margin: 0;
+  line-height: 1;
+}
+.lootRow .lootPick { padding-top: 0; padding-bottom: 0; }
+/* The en dash between min and max is a label, not a control — it has to sit on
+   the same optical line as the numbers rather than on the text baseline. */
+.lootRange .op,
+.lootChance .op {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  line-height: 1;
+}
+
 .lootPick {
   display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0;
   cursor: pointer; text-align: left;
@@ -2749,6 +2773,10 @@ div.skWarn { cursor: default; }
 }
 
 /* ---- item picker overlay for a loot row ---- */
+
+/* Breathing room before the audit panel — "Add Row" is the end of the row list
+   and the audit is a different thing, so they should not touch. */
+.clsForm .efAdd { margin-bottom: 18px; }
 
 .lootScrim {
   position: fixed; inset: 0; z-index: 320;
