@@ -2667,3 +2667,111 @@ div.skWarn { cursor: default; }
 .stdMove button:hover:not(:disabled) { color: var(--cyan); border-color: var(--cyan); }
 .stdMove button:disabled { opacity: 0.3; cursor: default; }
 .stdMove .stdDel:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
+
+/* ---- Loot tables (Catalog · Loot, and Actions card M) ---- */
+
+/* The expected-yield readout. Rows roll independently, so the percentages tell
+   you nothing on their own — this is the number that says whether the table is
+   tuned, and the "% empty" is the one a DM actually asks about. */
+.lootYield {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--beige-dim); white-space: nowrap;
+}
+.lootEmpty { color: var(--beige-dim); }
+.lootEmpty.bad { color: var(--danger-hot); }
+
+/* One authored row: kind · what · range · chance · reorder. Grid rather than
+   flex so every row's columns line up down the list — a ragged min/max column
+   is unreadable at ten rows. */
+.lootRow {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) 116px 78px auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  margin-bottom: 6px;
+  border: 1px solid rgba(212, 191, 125, 0.2);
+  background: rgba(255, 255, 255, 0.014);
+}
+.lootRow > * { min-width: 0; }
+.lootRow.bad { border-color: rgba(185, 58, 58, 0.5); background: rgba(185, 58, 58, 0.06); }
+
+.lootPick {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0;
+  cursor: pointer; text-align: left;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(212, 191, 125, 0.28);
+  padding: 7px 10px;
+  font-family: var(--font-prose); font-size: 14px; color: var(--text);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.lootPick:hover { border-color: var(--amber); }
+.lootPick.bad { color: var(--danger-hot); border-color: rgba(185, 58, 58, 0.5); }
+
+.lootRange, .lootChance { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.lootRange input, .lootChance input { min-width: 0; text-align: center; }
+
+/* ---- the roll preview ---- */
+
+.lootRollBtn { display: flex; align-items: flex-end; height: 100%; }
+
+/* One rolled line. A MISS still renders — seeing what did not come up is how a
+   badly tuned table gives itself away. */
+.lootLine {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  margin-bottom: 4px;
+  border-left: 2px solid var(--cyan);
+  background: rgba(255, 255, 255, 0.014);
+  cursor: pointer;
+}
+.lootLine.miss {
+  border-left-color: rgba(212, 191, 125, 0.2);
+  opacity: 0.45;
+  cursor: default;
+}
+.lootLine.bad { border-left-color: var(--danger); background: rgba(185, 58, 58, 0.07); cursor: default; }
+.llName { font-family: var(--font-prose); font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.llQty { font-family: var(--font-display); font-weight: 700; font-size: 13px; color: var(--beige); }
+.lootLine.miss .llQty { color: var(--beige-dim); font-weight: 400; }
+.lootLine.bad .llQty { font-family: var(--font-mono); font-size: 8px; font-weight: 400; color: var(--danger-hot); }
+.llPct { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; color: var(--beige-dim); text-align: right; }
+
+.grantFlash {
+  margin-top: 9px; padding: 7px 10px;
+  border-left: 2px solid var(--good, var(--cyan));
+  background: rgba(0, 166, 214, 0.08);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--cyan);
+}
+
+/* ---- item picker overlay for a loot row ---- */
+
+.lootScrim {
+  position: fixed; inset: 0; z-index: 320;
+  background: rgba(6, 6, 5, 0.72);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 10vh 20px 20px;
+}
+.lootPop {
+  width: 560px; max-width: 94vw; max-height: 70vh;
+  display: flex; flex-direction: column;
+  border: 1.5px solid var(--amber);
+  background: linear-gradient(180deg, #171512, #0f0e0c);
+  box-shadow: 0 30px 70px -20px #000;
+  padding: 14px;
+}
+.lootPopHead {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 11px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.26em;
+  text-transform: uppercase; color: var(--amber-hot);
+}
+.lootPopX { margin-left: auto; cursor: pointer; background: none; border: 0; color: var(--beige-dim); font-size: 12px; }
+.lootPopX:hover { color: var(--danger-hot); }
+.lootPopList {
+  margin-top: 10px; flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px;
+}

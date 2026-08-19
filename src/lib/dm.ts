@@ -10,6 +10,7 @@ import type {
   CatalogSpellRow, CatalogSpellInsert, CatalogSpellUpdate,
   CatalogClassRow, CatalogClassUpdate, ClassDef,
   CatalogRaceRow, CatalogRaceUpdate, RaceDef,
+  CatalogLootRow, CatalogLootUpdate, LootTable,
   ConfiscatedItemRow, ConfiscatedItemInsert, InventoryItem,
   ShopCatalogRow, Shop, ShardTree,
 } from './database.types'
@@ -713,6 +714,92 @@ export function useDmRaces(): DmRacesState {
   }, [races, write])
 
   return { races, loading, error, refetch: fetchAll, updateRace, deleteRace, saveDraft, publishRace, duplicateRace }
+}
+
+export interface DmLootState {
+  tables: CatalogLootRow[]
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  updateTable: (id: string, patch: CatalogLootUpdate) => Promise<void>
+  deleteTable: (id: string) => Promise<void>
+  saveDraft: (id: string | null, data: LootTable) => Promise<string | null>
+  publishTable: (id: string | null, data: LootTable) => Promise<string | null>
+  duplicateTable: (id: string) => Promise<string | null>
+}
+
+/** The editable payload: the parked draft if there is one, else what is
+ *  published. Twin of raceContent/classContent/featureContent. */
+export const lootContent = (r: CatalogLootRow): LootTable => r.draft ?? r.data
+
+/** The DM's loot-table library (`loot_catalog`, migration 0019) — the same hook
+ *  as useDmRaces against a different table. Players never read it: what reaches
+ *  them is items on their own row, written when the DM presses Grant. */
+export function useDmLoot(): DmLootState {
+  const { session } = useAuth()
+  const [tables, setTables] = useState<CatalogLootRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const byName = (a: CatalogLootRow, b: CatalogLootRow) =>
+    (lootContent(a).name ?? '').localeCompare(lootContent(b).name ?? '')
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setTables([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase.from('loot_catalog').select('*')
+    if (err) { setError(err.message); setTables([]) }
+    else { setTables(((data as CatalogLootRow[]) ?? []).sort(byName)); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const updateTable = useCallback<DmLootState['updateTable']>(async (id, patch) => {
+    let previous: CatalogLootRow | undefined
+    setTables(prev => prev.map(r => { if (r.id !== id) return r; previous = r; return { ...r, ...patch } as CatalogLootRow }))
+    const { data, error: err } = await supabase.from('loot_catalog').update(patch).eq('id', id).select().single<CatalogLootRow>()
+    if (err) { setError(err.message); if (previous) setTables(prev => prev.map(r => (r.id === id ? previous! : r))) }
+    else if (data) setTables(prev => prev.map(r => (r.id === id ? data : r)).sort(byName))
+  }, [])
+
+  const deleteTable = useCallback<DmLootState['deleteTable']>(async (id) => {
+    const snapshot = tables
+    setTables(prev => prev.filter(r => r.id !== id))
+    const { error: err } = await supabase.from('loot_catalog').delete().eq('id', id)
+    if (err) { setError(err.message); setTables(snapshot) }
+  }, [tables])
+
+  const write = useCallback(async (id: string | null, data: LootTable, promote: boolean): Promise<string | null> => {
+    const patch = promote ? { data: { ...data, published: true }, draft: null } : { draft: data }
+    if (id) {
+      const { data: row, error: err } = await supabase.from('loot_catalog').update(patch).eq('id', id).select().single<CatalogLootRow>()
+      if (err) { setError(err.message); return null }
+      setTables(prev => prev.map(r => (r.id === id ? row : r)).sort(byName))
+      return id
+    }
+    // Minted once and frozen: a subtable names its parent by this id, and every
+    // character assigned the table keeps it.
+    const fresh = mintId(data.name ?? '', new Set(tables.map(r => r.id)))
+    const { data: row, error: err } = await supabase.from('loot_catalog')
+      .insert({ id: fresh, ...patch, ...(promote ? {} : { data: {} as LootTable }) })
+      .select().single<CatalogLootRow>()
+    if (err) { setError(err.message); return null }
+    setTables(prev => [...prev, row].sort(byName))
+    return fresh
+  }, [tables])
+
+  const saveDraft = useCallback<DmLootState['saveDraft']>((id, data) => write(id, data, false), [write])
+  const publishTable = useCallback<DmLootState['publishTable']>((id, data) => write(id, data, true), [write])
+
+  const duplicateTable = useCallback<DmLootState['duplicateTable']>(async (id) => {
+    const src = tables.find(r => r.id === id)
+    if (!src) return null
+    const content = lootContent(src)
+    return write(null, { ...content, name: `${content.name ?? 'Untitled'} (copy)`, published: false }, false)
+  }, [tables, write])
+
+  return { tables, loading, error, refetch: fetchAll, updateTable, deleteTable, saveDraft, publishTable, duplicateTable }
 }
 
 // ── Class catalog (migration 0016) ──────────────────────────────────────────

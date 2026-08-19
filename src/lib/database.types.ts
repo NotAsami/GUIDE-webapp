@@ -1418,6 +1418,26 @@ export type RaceDef = {
   published?: boolean
 }
 
+/** One line of a loot table: something that MIGHT be there, with its own
+ *  quantity range and its own chance. Rows roll INDEPENDENTLY (lib/loot.ts) —
+ *  the chances are not a distribution and do not sum to 100. */
+export type LootRow =
+  | { kind: 'item'; item_id: string; min: number; max: number; chance: number }
+  | { kind: 'coin'; coin: 'gold' | 'silver' | 'copper'; min: number; max: number; chance: number }
+
+/** A named, reusable roll table: a chest, a knight's corpse, a bookshelf. */
+export type LootTable = {
+  name: string
+  icon: string
+  desc?: string
+  rows: LootRow[]
+  published?: boolean
+}
+
+export type CatalogLootRow = { id: string; data: LootTable; draft: LootTable | null; updated_at: string }
+export type CatalogLootInsert = { id?: string; data?: LootTable; draft?: LootTable | null }
+export type CatalogLootUpdate = { data?: LootTable; draft?: LootTable | null }
+
 export type CatalogRaceRow = { id: string; data: RaceDef; draft: RaceDef | null; updated_at: string }
 export type CatalogRaceInsert = { id?: string; data?: RaceDef; draft?: RaceDef | null }
 export type CatalogRaceUpdate = { data?: RaceDef; draft?: RaceDef | null }
@@ -1545,6 +1565,12 @@ export type Database = {
         Row: CatalogRaceRow
         Insert: CatalogRaceInsert
         Update: CatalogRaceUpdate
+        Relationships: []
+      }
+      loot_catalog: {
+        Row: CatalogLootRow
+        Insert: CatalogLootInsert
+        Update: CatalogLootUpdate
         Relationships: []
       }
       characters: {
