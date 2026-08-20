@@ -10,16 +10,16 @@
     "proficiencies": {},
     "features": [
       {
-        "id": "srd-2024_dragonborn_draconic_ancestry"
+        "feature_id": "srd-2024_dragonborn_draconic_ancestry"
       },
       {
-        "id": "srd-2024_dragonborn_breath_weapon"
+        "feature_id": "srd-2024_dragonborn_breath_weapon"
       },
       {
-        "id": "srd-2024_dragonborn_damage_resistance"
+        "feature_id": "srd-2024_dragonborn_damage_resistance"
       },
       {
-        "id": "srd-2024_dragonborn_draconic_flight"
+        "feature_id": "srd-2024_dragonborn_draconic_flight"
       }
     ],
     "vars": [],
@@ -58,13 +58,13 @@
     "proficiencies": {},
     "features": [
       {
-        "id": "srd-2024_dwarf_dwarven_resilience"
+        "feature_id": "srd-2024_dwarf_dwarven_resilience"
       },
       {
-        "id": "srd-2024_dwarf_dwarven_toughness"
+        "feature_id": "srd-2024_dwarf_dwarven_toughness"
       },
       {
-        "id": "srd-2024_dwarf_stonecunning"
+        "feature_id": "srd-2024_dwarf_stonecunning"
       }
     ],
     "vars": [],
@@ -103,16 +103,16 @@
     "proficiencies": {},
     "features": [
       {
-        "id": "srd-2024_elf_elven_lineage"
+        "feature_id": "srd-2024_elf_elven_lineage"
       },
       {
-        "id": "srd-2024_elf_fey_ancestry"
+        "feature_id": "srd-2024_elf_fey_ancestry"
       },
       {
-        "id": "srd-2024_elf_keen_senses"
+        "feature_id": "srd-2024_elf_keen_senses"
       },
       {
-        "id": "srd-2024_elf_trance"
+        "feature_id": "srd-2024_elf_trance"
       }
     ],
     "vars": [],
@@ -151,10 +151,10 @@
     "proficiencies": {},
     "features": [
       {
-        "id": "srd-2024_gnome_gnomish_cunning"
+        "feature_id": "srd-2024_gnome_gnomish_cunning"
       },
       {
-        "id": "srd-2024_gnome_gnomish_lineage"
+        "feature_id": "srd-2024_gnome_gnomish_lineage"
       }
     ],
     "vars": [],
@@ -193,13 +193,13 @@
     "proficiencies": {},
     "features": [
       {
-        "id": "srd-2024_goliath_giant_ancestry"
+        "feature_id": "srd-2024_goliath_giant_ancestry"
       },
       {
-        "id": "srd-2024_goliath_large_form"
+        "feature_id": "srd-2024_goliath_large_form"
       },
       {
-        "id": "srd-2024_goliath_powerful_build"
+        "feature_id": "srd-2024_goliath_powerful_build"
       }
     ],
     "vars": [],
@@ -231,16 +231,16 @@
     "proficiencies": {},
     "features": [
       {
-        "id": "srd-2024_halfling_brave"
+        "feature_id": "srd-2024_halfling_brave"
       },
       {
-        "id": "srd-2024_halfling_halfling_nimbleness"
+        "feature_id": "srd-2024_halfling_halfling_nimbleness"
       },
       {
-        "id": "srd-2024_halfling_luck"
+        "feature_id": "srd-2024_halfling_luck"
       },
       {
-        "id": "srd-2024_halfling_naturally_stealthy"
+        "feature_id": "srd-2024_halfling_naturally_stealthy"
       }
     ],
     "vars": [],
@@ -272,13 +272,13 @@
     "proficiencies": {},
     "features": [
       {
-        "id": "srd-2024_human_resourceful"
+        "feature_id": "srd-2024_human_resourceful"
       },
       {
-        "id": "srd-2024_human_skillful"
+        "feature_id": "srd-2024_human_skillful"
       },
       {
-        "id": "srd-2024_human_versatile"
+        "feature_id": "srd-2024_human_versatile"
       }
     ],
     "vars": [],
@@ -310,10 +310,10 @@
     "proficiencies": {},
     "features": [
       {
-        "id": "srd-2024_orc_adrenaline_rush"
+        "feature_id": "srd-2024_orc_adrenaline_rush"
       },
       {
-        "id": "srd-2024_orc_relentless_endurance"
+        "feature_id": "srd-2024_orc_relentless_endurance"
       }
     ],
     "vars": [],
@@ -352,10 +352,10 @@
     "proficiencies": {},
     "features": [
       {
-        "id": "srd-2024_tiefling_fiendish_legacy"
+        "feature_id": "srd-2024_tiefling_fiendish_legacy"
       },
       {
-        "id": "srd-2024_tiefling_otherworldly_presence"
+        "feature_id": "srd-2024_tiefling_otherworldly_presence"
       }
     ],
     "vars": [],

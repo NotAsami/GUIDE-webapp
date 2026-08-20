@@ -48,6 +48,7 @@ const DOC_PARAM = {
   species: 'document__key',
   backgrounds: 'document__key',
   feats: 'document__key',
+  classes: 'document__key',
   items: 'document',
   magicitems: 'document',
   weapons: null,                  // honours neither — see header
@@ -406,13 +407,17 @@ function toSpecies(r) {
        speed value, which is what the first pass produced. */
     const fid = `${r.key}_${normalizeTag(t.name)}`
     features.push({
-      id: fid, name: t.name, desc: t.desc, category: 'racial',
+      id: fid, name: t.name, category: 'racial',
+      ...featureProse(t.desc),
+      folder: srdFolder(r.name),
       icon: featureIcon(t.name),
       // Auto-tagging applies to features too, or none of this is targetable.
       tags: tag('racial', r.name, t.name, t.type ? String(t.type).toLowerCase() : null),
       source: 'srd', srd_key: fid,
     })
-    featureRefs.push({ id: fid })
+    // FeatureGrantRef is keyed `feature_id`, NOT `id`. Emitting `id` left every
+    // race saying "undefined was referenced but no longer exists" in its audit.
+    featureRefs.push({ feature_id: fid })
   }
   return {
     race: {
@@ -504,7 +509,7 @@ function toBackground(r, featIndex) {
     skills,
     skillChooseN: 0,
     proficiencies: tools ? { tools: [tools] } : {},
-    features: featRow ? [{ id: featRow }] : [],
+    features: featRow ? [{ feature_id: featRow }] : [],
     equipment: [],
     tags: tag('background', r.name, ...skills.map(x => `skill:${x}`)),
     vars: [],
@@ -547,26 +552,270 @@ const featureIcon = name => {
   return pick ?? 'fa-diamond'
 }
 
+/** Feature prose. `Feature` HAS NO `desc` FIELD — it declares
+ *  light_description (the card, which scales to it) and deep_description (the
+ *  detail panel below it). Writing `desc` put the text somewhere nothing reads,
+ *  so all 44 imported features showed blank; the same mistake as emitting `id`
+ *  where FeatureGrantRef declares `feature_id`.
+ *
+ *  Split at the first sentence so the card is scannable and the detail carries
+ *  the rest. Nothing is dropped: a one-sentence trait puts everything on the
+ *  card and leaves the detail empty. */
+function featureProse(text) {
+  const t = (text ?? '').trim()
+  if (!t) return {}
+  const m = /^(.+?[.!?])\s+(.+)$/s.exec(t)
+  if (!m || m[1].length > 200) return { light_description: t }
+  return { light_description: m[1], deep_description: m[2] }
+}
+
+/** Imported features are foldered by where they come from.
+ *
+ *  One flat "SRD" folder was right at 44 rows and wrong at 286: the SRD gives
+ *  most classes their own Spellcasting, Expertise, Evasion and Ability Score
+ *  Improvement, with genuinely different text each time — seven rows all called
+ *  "Spellcasting" is correct data and an unusable list. Foldering by class
+ *  separates them without touching the names, which matters because the name is
+ *  what a character sheet shows: a Bard's feature should read "Spellcasting",
+ *  not "Spellcasting (Bard)".
+ *
+ *  The editor derives folders from the features in them, so naming one here is
+ *  all it takes for it to exist.
+ *  `/` NESTS in the editor, so every one of these lives under a single
+ *  collapsible SRD parent instead of 34 top-level folders sharing a prefix. */
+const SRD_FOLDER = 'SRD'
+const srdFolder = what => `${SRD_FOLDER}/${what}`
+
 const toFeat = r => ({
   id: r.key,
   name: r.name,
   category: 'feat',
   icon: featureIcon(r.name),
-  desc: [r.desc, ...(r.benefits ?? []).map(b => b.desc)].filter(Boolean).join('\n\n'),
+  folder: srdFolder('Feats'),
+  ...featureProse([r.desc, ...(r.benefits ?? []).map(b => b.desc)].filter(Boolean).join('\n\n')),
   prerequisite: r.prerequisite || undefined,   // Q7
   source: 'srd', srd_key: r.key,
   tags: tag('feat', r.type),
 })
+
+/* ── CLASSES AND SUBCLASSES ───────────────────────────────────────────────────
+   One endpoint returns both: 24 rows for SRD 5.2, of which 12 carry
+   `subclass_of`. That maps straight onto ClassDef.parent, which is how this
+   schema already models a subclass — a row with a parent, not a nested
+   structure — so subclasses need no separate handling.
+
+   352 class features come WITH their prose and the levels they are gained at,
+   so they become real feature_catalog rows gated by `when`, rather than a
+   paragraph naming things the sheet cannot grant. */
+
+/** The feature types that are actually FEATURES. Everything else Open5e
+ *  returns under `features` is a column of the class progression table. */
+const FEATURE_TYPES = new Set(['CLASS_LEVEL_FEATURE', 'CLASS_FEATURE_OPTION_LIST'])
+const PLACEHOLDER = /^\[[\w\s]+\]$/
+
+const CASTER = { NONE: 'none', FULL: 'full', HALF: 'half', THIRD: 'third', PACT: 'pact' }
+
+const ABIL_NAME = {
+  strength: 'str', dexterity: 'dex', constitution: 'con',
+  intelligence: 'int', wisdom: 'wis', charisma: 'cha',
+}
+
+/** SRD 5.2 primary abilities — SUPPLIED DATA, not derived.
+ *
+ *  Open5e ships `primary_abilities: []` for every class, and ClassDef requires
+ *  one, so these twelve come from the SRD itself rather than from the feed.
+ *  Reviewed once and then data, exactly like the category and slot tables.
+ *
+ *  A MISS IS AN ERROR, not a default. This read `PRIMARY[slug] ?? 'str'`, which
+ *  would have quietly made a thirteenth class a Strength class — the sort of
+ *  plausible wrong value that never gets questioned. Anything absent here now
+ *  fails the run instead. */
+const PRIMARY = {
+  barbarian: 'str', bard: 'cha', cleric: 'wis', druid: 'wis',
+  fighter: 'str', monk: 'dex', paladin: 'str', ranger: 'dex',
+  rogue: 'dex', sorcerer: 'cha', warlock: 'cha', wizard: 'int',
+}
+
+const CLASS_ICON = {
+  barbarian: 'fa-hand-fist', bard: 'fa-music', cleric: 'fa-cross', druid: 'fa-leaf',
+  fighter: 'fa-shield-halved', monk: 'fa-hand-sparkles', paladin: 'fa-scale-balanced',
+  ranger: 'fa-bullseye', rogue: 'fa-user-ninja', sorcerer: 'fa-fire',
+  warlock: 'fa-book-skull', wizard: 'fa-hat-wizard',
+}
+
+/* ── THE CLASS PROGRESSION TABLE ──────────────────────────────────────────────
+   Open5e ships each table COLUMN as a feature whose `desc` is the literal
+   "[Column data]" and whose numbers live in `data_for_class_table`. Dropping
+   those rows was right — they are not features — but the first pass dropped the
+   numbers with them, which is why Barbarian's Weapon Mastery still reads "as
+   shown in the Weapon Mastery column of the Barbarian Features table" and the
+   table does not exist anywhere.
+
+   A column is a LEVEL-INDEXED DERIVED VARIABLE on the class: `[0,2,2,…][level]`,
+   which §35 of the expression language exists for. Index 0 is the level-0 slot
+   the convention reserves; levels 1–20 follow.
+
+   Two families are deliberately NOT imported, because the app already owns them
+   and a second copy is the one-authored-value-two-render-paths bug:
+     · PROFICIENCY_BONUS — canon, +3 at level 7.
+     · SPELL_SLOTS (the 1st–9th grid) — derived from `ClassDef.caster`.
+   Warlock's own "Spell Slots" column is CLASS_TABLE_DATA, not SPELL_SLOTS, and
+   IS imported: pact slots are a count the caster type does not carry. */
+const OWNED_ELSEWHERE = new Set(['PROFICIENCY_BONUS', 'SPELL_SLOTS'])
+
+/** `Rage Damage` → `rageDamage`, matching VarDef's /^[a-z][a-zA-Z0-9]*$/. */
+const varName = label => {
+  const parts = String(label).replace(/[^a-zA-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)
+  if (!parts.length) return null
+  const n = parts[0].toLowerCase() + parts.slice(1).map(w => w[0].toUpperCase() + w.slice(1).toLowerCase()).join('')
+  return /^[a-z][a-zA-Z0-9]*$/.test(n) ? n : null
+}
+
+/** One column → one derived VarDef, or null with a reason logged.
+ *
+ *  NUMERIC ONLY, on purpose. `Sneak Attack` reads "1d6, 1d6, 2d6…" and `Bardic
+ *  Die` reads "d6, d8…"; an array literal holds numbers, so representing those
+ *  means deciding that "2d6" is really the number 2 — an interpretation, and
+ *  the brief for this importer is template matching, never parsing. They are
+ *  reported instead, which is the honest handoff. */
+function columnVar(f, className, taken) {
+  const rows = f.data_for_class_table ?? []
+  if (!rows.length) return null
+  if (OWNED_ELSEWHERE.has(f.feature_type)) return null
+
+  const byLevel = new Map(rows.map(r => [r.level, String(r.column_value ?? '').trim()]))
+  const raw = Array.from({ length: 20 }, (_, i) => byLevel.get(i + 1) ?? '')
+  // A LEVEL WITH NO ENTRY IS ZERO, not a mystery. Sorcery Points starts at
+  // level 2 and Channel Divinity at 2 or 3, so the table simply has no cell
+  // there — the column is fully numeric, it just does not start at 1. Reading
+  // absence as 0 is what the blank means; it is not an interpretation of a value.
+  const bad = raw.find(v => v !== '' && !/^[+-]?\d+$/.test(v))
+  if (bad) {
+    report.warnings.push(
+      `class ${className}: column "${f.name}" is not numeric (${bad}) `
+      + '— left out, a dice or ordinal progression needs a human')
+    return null
+  }
+  const name = varName(f.name)
+  if (!name || taken.has(name)) {
+    report.warnings.push(`class ${className}: column "${f.name}" → no usable variable name`)
+    return null
+  }
+  taken.add(name)
+  // Index 0 is the level-0 slot §35 reserves; arr[level] then reads at the level.
+  return {
+    name, kind: 'derived', label: f.name,
+    formula: `[0,${raw.map(v => (v === '' ? 0 : Number(v))).join(',')}][level]`,
+  }
+}
+
+/** A class row plus every feature it grants. */
+function toClass(r) {
+  const slug = (r.key ?? '').replace(/^srd-2024_/, '')
+  const parentKey = r.subclass_of?.key ?? null
+  const baseSlug = (parentKey ?? r.key ?? '').replace(/^srd-2024_/, '')
+
+  const features = []
+  const refs = []
+  const vars = []
+  const taken = new Set()
+  let subclassAt = null
+  for (const f of r.features ?? []) {
+    // A column contributes its numbers whatever else happens to the row — a few
+    // columns are typed CLASS_LEVEL_FEATURE and are a real feature AND a column.
+    const v = columnVar(f, r.name, taken)
+    if (v) vars.push(v)
+
+    /* ONLY REAL FEATURES. Open5e models the class TABLE as features too — one
+       row per column — so "Proficiency Bonus", "Cantrips", "Rages", "Sorcery
+       Points" and every spell-slot column arrive alongside Rage and Extra
+       Attack, 98 of them carrying the literal text "[Column data]". They are
+       the progression table, which this schema expresses as level-gated
+       features and derived variables, not as rows of their own. */
+    if (!FEATURE_TYPES.has(f.feature_type)) { note('defaults', `skipped-${String(f.feature_type).toLowerCase()}`); continue }
+    /* Belt and braces: a placeholder body is not prose whatever its type says. */
+    if (PLACEHOLDER.test((f.desc ?? '').trim())) { note('defaults', 'skipped-placeholder-prose'); continue }
+    /* "Wizard Spell List" — a SECTION HEADER, not a feature. Its whole body is
+       "This section presents the Wizard spell list.", it grants nothing, and
+       the list it points at is already a query: every imported spell carries a
+       `class:wizard` tag, so `tag:class:wizard` IS the Wizard spell list. A row
+       whose only content is a pointer to something the data already answers is
+       a row that can only be in the way. */
+    if (/ Spell List$/.test(f.name ?? '')) { note('defaults', 'skipped-spell-list-header'); continue }
+    /* "Spellcasting" is a PROPERTY OF THE CLASS, not a feature you gain. Every
+       mechanical thing in it now lives on the class row: cantrips known and
+       prepared spells are the level-indexed vars above, the slot progression
+       comes from `caster`, and the ability is `castingAbility`. What is left is
+       generic 5e rules — ritual casting, spellcasting focus — which are the
+       same for every caster and belong in a rules reference, not on a card in
+       one character's feature list. Keeping it would also put the slot numbers
+       in two places, which is the defect this codebase has shipped twice. */
+    if (f.name === 'Spellcasting') { note('defaults', 'skipped-spellcasting'); continue }
+    /* "Wizard Subclass" is NOT a feature. It says "you gain a subclass at level
+       3" — which is `ClassDef.subclassLevel`, a field, not something that
+       belongs on a character's feature list. Gaining a subclass is a structural
+       fact about the class; the subclass's OWN features are the features.
+       The level is the one useful thing in the row, so it is read out before
+       the row is dropped, replacing a hardcoded 3. */
+    if (/ Subclass$/.test(f.name ?? '')) {
+      const at = (f.gained_at ?? []).map(g => g.level).filter(n => typeof n === 'number')
+      if (at.length) subclassAt = Math.min(...at)
+      note('defaults', 'skipped-subclass-marker')
+      continue
+    }
+
+    const levels = (f.gained_at ?? []).map(g => g.level).filter(n => typeof n === 'number')
+    const at = levels.length ? Math.min(...levels) : null
+    const fid = f.key
+    features.push({
+      id: fid,
+      name: f.name,
+      category: 'class',
+      icon: featureIcon(f.name),
+      folder: srdFolder(r.name),
+      ...featureProse(f.desc),
+      source: 'srd', srd_key: fid,
+      tags: tag('class', r.name, f.name, at ? `level:${at}` : null),
+    })
+    // `when` is how this schema expresses progression — see FeatureGrantRef.
+    refs.push(at ? { feature_id: fid, when: `level >= ${at}` } : { feature_id: fid })
+  }
+
+  if (!PRIMARY[baseSlug]) {
+    report.warnings.push(`class ${r.name}: no primary ability supplied for "${baseSlug}" — add it to PRIMARY`)
+  }
+
+  const cls = {
+    name: r.name,
+    icon: CLASS_ICON[baseSlug] ?? 'fa-shield-halved',
+    desc: r.desc || '',
+    hitDie: Number(String(r.hit_dice ?? 'D8').replace(/\D/g, '')) || 8,
+    primaryAbility: PRIMARY[baseSlug],
+    saveProficiencies: (r.saving_throws ?? [])
+      .map(x => ABIL_NAME[(x.name ?? '').toLowerCase()]).filter(Boolean),
+    skillChoices: [], skillChooseN: 0,
+    proficiencies: {},
+    startingEquipment: [],
+    caster: CASTER[r.caster_type] ?? 'none',
+    features: refs,
+    tags: tag('class', r.name, parentKey ? 'subclass' : 'baseclass',
+      CASTER[r.caster_type] !== 'none' ? 'caster' : null),
+    vars, graph: [],
+    ...(parentKey ? { parent: parentKey } : { subclassLevel: subclassAt ?? 3, subclassLabel: 'Subclass' }),
+    source: 'srd', srd_key: r.key,
+  }
+  return { cls, features }
+}
 
 // ── run ──────────────────────────────────────────────────────────────────────
 
 const main = async () => {
   console.log(`SRD 5.2 import · stage 1 · document ${DOC}${DRY ? ' · DRY RUN' : ''}\n`)
 
-  const [weapons, armor, items, magicitems, spells, species, feats, backgrounds] = await Promise.all([
+  const [weapons, armor, items, magicitems, spells, species, feats, backgrounds, classes] = await Promise.all([
     fetchAll('weapons'), fetchAll('armor'), fetchAll('items'),
     fetchAll('magicitems'), fetchAll('spells'), fetchAll('species'), fetchAll('feats'),
-    fetchAll('backgrounds'),
+    fetchAll('backgrounds'), fetchAll('classes'),
   ])
 
   const weaponsByKey = new Map(weapons.map(w => [w.key, w]))
@@ -578,6 +827,9 @@ const main = async () => {
   /* Feats first, so backgrounds can point at them. */
   const featIndex = new Map(outFeats.map(f => [normalizeTag(f.name), f.id]))
   const outBackgrounds = backgrounds.map(r => toBackground(r, featIndex))
+  const classPairs = classes.map(toClass)
+  const outClasses = classPairs.map(x => x.cls)
+  const outClassFeatures = classPairs.flatMap(x => x.features)
   const speciesPairs = species.map(toSpecies)
   const outRaces = speciesPairs.map(x => x.race)
   const outRacialFeatures = speciesPairs.flatMap(x => x.features)
@@ -586,7 +838,8 @@ const main = async () => {
     'items.json': outItems,
     'spells.json': outSpells,
     'races.json': outRaces,
-    'features.json': [...outRacialFeatures, ...outFeats],
+    'features.json': [...outRacialFeatures, ...outFeats, ...outClassFeatures],
+    'classes.json': outClasses,
     'backgrounds.json': outBackgrounds,
   }
 
@@ -596,7 +849,7 @@ const main = async () => {
      would then refuse. */
   const dataset = {
     items: outItems, spells: outSpells, races: outRaces,
-    features: files['features.json'], backgrounds: outBackgrounds,
+    features: files['features.json'], backgrounds: outBackgrounds, classes: outClasses,
   }
   const failures = verify(dataset)
   if (!printVerdict(failures, 'transform')) {

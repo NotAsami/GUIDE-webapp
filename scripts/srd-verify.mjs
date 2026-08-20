@@ -32,7 +32,7 @@ const VETTED = new Set(ICONS)
  * @returns {string[]} failures — empty means clear
  */
 export function verify(data) {
-  const { items = [], spells = [], races = [], features = [], backgrounds = [] } = data
+  const { items = [], spells = [], races = [], features = [], backgrounds = [], classes = [] } = data
   const fail = []
   const add = (what, detail) => fail.push(`${what}: ${detail}`)
 
@@ -54,6 +54,7 @@ export function verify(data) {
   for (const f of features) if (f.icon && !VETTED.has(f.icon)) add('feature icon', `${f.name} — ${f.icon}`)
   for (const b of backgrounds) if (b.icon && !VETTED.has(b.icon)) add('background icon', `${b.name} — ${b.icon}`)
   for (const r of races) if (r.icon && !VETTED.has(r.icon)) add('race icon', `${r.name} — ${r.icon}`)
+  for (const c of classes) if (c.icon && !VETTED.has(c.icon)) add('class icon', `${c.name} — ${c.icon}`)
 
   // ── node ids unique across the set ──
   const nodeIds = items.flatMap(i => (i.graph ?? []).map(n => n.id))
@@ -62,12 +63,52 @@ export function verify(data) {
   }
 
   // ── every reference resolves ──
+  /* Checked against `feature_id`, the field FeatureGrantRef actually declares.
+     This first read `ref.id` — the shape the transform happened to emit — so
+     it validated the emitter against itself and passed while every race in the
+     library said "undefined was referenced but no longer exists". A gate that
+     shares the emitter's assumption checks nothing. */
   const fids = new Set(features.map(f => f.id))
-  for (const r of races) for (const ref of r.features ?? []) {
-    if (!fids.has(ref.id)) add('dangling race ref', `${r.name} → ${ref.id}`)
+  const refOf = (ref, owner, kind) => {
+    if (!ref.feature_id) return add(`${kind} ref shape`, `${owner} — ref has no feature_id: ${JSON.stringify(ref)}`)
+    if (!fids.has(ref.feature_id)) add(`dangling ${kind} ref`, `${owner} → ${ref.feature_id}`)
   }
-  for (const b of backgrounds) for (const ref of b.features ?? []) {
-    if (!fids.has(ref.id)) add('dangling background ref', `${b.name} → ${ref.id}`)
+  for (const r of races) for (const ref of r.features ?? []) refOf(ref, r.name, 'race')
+  for (const c of classes) for (const ref of c.features ?? []) refOf(ref, c.name, 'class')
+  for (const b of backgrounds) for (const ref of b.features ?? []) refOf(ref, b.name, 'background')
+
+  /* FIELD NAMES THE APP ACTUALLY READS.
+     Twice now the transform wrote a field the schema does not declare — `desc`
+     on a Feature (which has light_description/deep_description) and `id` on a
+     FeatureGrantRef (which declares feature_id). Both stored fine, both read as
+     empty, and neither was visible until someone opened the editor. The gate
+     cannot type-check, but it can assert the handful of names that matter. */
+  for (const f of features) {
+    if (!f.light_description && !f.deep_description) {
+      add('feature prose', `${f.name} — no light_description`)
+    }
+    /* A placeholder body is not prose. Open5e returns the class progression
+       table as features, 98 of which carry the literal text "[Column data]" —
+       they loaded fine, read as real rows in the editor, and said nothing. */
+    if (/^\[[\w\s]+\]$/.test((f.light_description ?? '').trim())) {
+      add('placeholder prose', `${f.name} — "${f.light_description}"`)
+    }
+    if (!f.folder) add('feature folder', `${f.name} — imported features belong in a folder`)
+  }
+
+  /* A subclass is a row with a parent; a parent naming nothing would leave it
+     orphaned in the editor's tree with no way to reach it. */
+  /* Supplied data must actually be supplied. `primaryAbility` comes from a
+     hand-kept table because Open5e ships none; an absent entry used to fall
+     back to 'str', which is a plausible wrong answer rather than a visible
+     one. ClassDef requires the field, so a missing one is a broken row. */
+  for (const c of classes) {
+    if (!c.parent && !c.primaryAbility) add('class primaryAbility', `${c.name} — none supplied`)
+  }
+
+  const classKeys = new Set(classes.map(c => c.srd_key))
+  for (const c of classes) if (c.parent && !classKeys.has(c.parent)) {
+    add('orphan subclass', `${c.name} → parent ${c.parent} is not in the set`)
   }
 
   // ── value types, per op ──
@@ -79,7 +120,7 @@ export function verify(data) {
   }
 
   // ── provenance, without which re-import cannot find the row again ──
-  for (const [name, rows] of Object.entries({ items, spells, races, features, backgrounds })) {
+  for (const [name, rows] of Object.entries({ items, spells, races, features, backgrounds, classes })) {
     for (const r of rows) if (!r.srd_key && !r.id) add('provenance', `${name}: "${r.name}" has neither srd_key nor id`)
   }
 
