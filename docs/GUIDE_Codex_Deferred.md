@@ -113,6 +113,14 @@ candidate.
 Rejected in §20 alongside `and`, and unlike `and` nothing has met its trigger.
 Worth resisting: an exception is usually better expressed by fixing the tags.
 
+**Not to be confused with catalog-query negation, which SHIPPED.**
+`tag:martial !relic` works today in loot pool rows, starting-kit pools and the
+DM search boxes — `lib/catalogSearch.ts`. That is a different subsystem: it
+picks ITEMS OUT OF THE CATALOG at author or roll time, against a finite list
+that can simply be counted. This entry is about `target:` selectors on a graph
+effect, which match against a roll at resolve time and are where the audit
+problem above actually bites. Shipping one did not ship the other.
+
 ---
 
 ## What "active" means for a carried item
@@ -242,39 +250,88 @@ interface, and only the latter is thin now.
 
 ---
 
-## A player-facing looting menu — the chest the player opens
+## ~~A player-facing looting menu~~ — BUILT
 
-**Designed, not built.** The loot engine (`src/lib/loot.ts`) and its DM card
-shipped as **preview-then-grant**: the DM rolls, sees what came up, drops what
-they do not want, and presses Grant. The loot then arrives on the player's sheet
-exactly as a hand-granted item does — same `grantMany` path, same acquisition
-toast.
+Kept here, struck through, because the entry's own cost estimate was wrong in a
+way worth remembering.
 
-What was asked for alongside it, and deliberately deferred:
+It shipped as: DM rolls a table → the result is parked in `loot_open` **closed**
+→ DM assigns each line to a character (a real grant, same `grantMany` path as
+Grant Item) → **Push To Party** flips `is_open` and the party's takeover appears
+→ Close dismisses it for everyone. `src/components/LootRollOverlay.tsx` (DM),
+`src/components/LootTakeover.tsx` (player), migration 0020.
 
-> "maybe some like chest or corpse looting menu would be cool"
+**What this entry got wrong.** It called contention "the real work":
 
-A container the PLAYER opens and takes from, rather than items appearing in
-their bag — the diegetic version, closer to how a chest works at a table.
+> Two players opening the same chest must not both take the last torch. That is
+> the real work — a claim needs to be atomic, which points at a SECURITY DEFINER
+> function like `cast_party_effect`, not a client-side write.
 
-**Trigger:** wanting the players to *choose* who takes what. Preview-then-grant
-makes the DM the one who decides where each item lands, which is fine for a
-corpse the party loots as a unit and wrong for a hoard four people divide.
+That problem never had to be solved, because the design removed it. **The DM
+assigns; players only watch.** One writer means two players cannot race for the
+last torch — there is no claim call, no atomic anything, and the player side
+needs a SELECT policy and nothing else. The estimate assumed players would take
+items because a chest at a table works that way, and never questioned it.
 
-**What it costs:**
+**What it got right**, and what did turn out to be the real work: the roll needs
+somewhere to be parked that is not `loot_catalog`. That table has a `draft`
+column whose safety rests on having no player policy (0014/0019), so exposing an
+open roll from it would leak every unpublished draft. Hence a separate table,
+with the container chrome and every line's item data SNAPSHOTTED onto it —
+players cannot read `item_catalog` either.
 
-- A new player surface, closest in shape to `ShopTakeover` — a full-screen
-  takeover the player dismisses, with a take/leave affordance per line.
-- A place to PARK the rolled result between the DM rolling and the player
-  taking. It cannot live on the character row (it is not theirs yet) and it
-  cannot be re-rolled on open (that would re-roll per viewer). That means a new
-  table, or a `containers` field on the campaign, plus RLS letting exactly the
-  targeted players read it.
-- Contention: two players opening the same chest must not both take the last
-  torch. That is the real work — a claim needs to be atomic, which points at a
-  SECURITY DEFINER function like `cast_party_effect`, not a client-side write.
+---
 
-**Do NOT** implement it by granting to one player and letting them hand items
-over. Item transfer between characters does not exist, and building it as a
-side effect of loot would put a cross-character write path in the one place
-nobody would look for it.
+## Generating shop stock
+
+**Not built, and unlike most entries here it is not designed either — the
+shapes below are the fork, not a decision.**
+
+Shops today carry a hand-picked `stock: ShopStockLine[]`. There is no generator
+at all: no "stock this shop from a query", no "roll this shop's inventory".
+
+> "Same for the shop-generator, which is still not implemented."
+
+Now cheaper than it was, because the query grammar it needs already exists and
+is proven: `tag:potion !rare` parses, resolves and is audited today
+(`lib/catalogSearch.ts`, `lib/loot.ts` `poolItems`).
+
+### The constraint that decides the design
+
+**A query can never resolve on the player's client.** `ShopStockLine.item` is a
+SNAPSHOT of the catalog row, because `item_catalog` is DM-only RLS (0004) and
+the player client never reads it — the snapshot is the only reason the stock
+grid can render a name and icon at all. So any generator must resolve DM-side
+and write real stock lines. That is not a limitation in practice (the DM is the
+one who opens a shop), but it rules out "resolve the query when the player
+looks", which is the obvious first instinct.
+
+### Two shapes, for two different needs
+
+| | what it is for |
+|---|---|
+| **query lines** | staples that are always in stock — `tag:ammo`, `tag:potion !rare`. Resolved when the DM opens or restocks. |
+| **table-rolled** | stock that varies per visit. Point a shop at a loot table and roll it: pool rows, chances and ranges all come along free. |
+
+They are not alternatives so much as answers to different questions, which is
+why "both" is a real option and not a hedge.
+
+### What each still has to settle
+
+- **Price.** Stock lines carry an editable `price` seeded from the item's
+  `value`; a loot table carries no prices at all. Table-rolled stock therefore
+  has to derive price from `value` — and `value` is explicitly optional, meaning
+  *priceless/unlisted*. An item with no value appearing in a shop needs a rule:
+  skip it, price it at zero, or block the roll.
+- **`item_id` is the line's identity.** `shop_buy` (0009) finds a line by
+  `item_id`, not by array index. Two generated lines that resolve to the same
+  item would collide — they must merge into one line, or generation must
+  de-duplicate.
+- **Restock semantics.** Buying decrements `data.stock[i].qty` permanently and
+  there is no separate "opening" row, so re-firing a shop resumes where it left
+  off. A generator has to say whether re-resolving REPLACES the stock (losing
+  what was bought) or tops it up.
+
+**Do NOT** resolve a query into the stock array on every open. That would
+silently restock a shop the party had just cleared out, and the bug would read
+as "the shopkeeper is cheating" rather than as a caching mistake.
