@@ -13,9 +13,23 @@
  * field you were typing in.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Prose } from '../lib/markdown'
 import styles from './ProsePreview.module.css'
+
+/** The left edge this popover will actually be cut off at.
+ *
+ *  NOT the viewport. The editor's form sits in a scrolling panel that starts a
+ *  third of the way across the window, and a popover overflowing THAT is
+ *  clipped just as hard while still being nowhere near the window edge — which
+ *  is what a naive `rect.left < 0` check misses entirely. */
+function clipLeftOf(el: HTMLElement): number {
+  for (let n = el.parentElement; n; n = n.parentElement) {
+    const o = getComputedStyle(n)
+    if (/auto|scroll|hidden|clip/.test(o.overflowX + o.overflowY)) return n.getBoundingClientRect().left
+  }
+  return 0
+}
 
 export function ProsePreview({ text, label = 'Preview' }: {
   text: string
@@ -24,7 +38,28 @@ export function ProsePreview({ text, label = 'Preview' }: {
   label?: string
 }) {
   const [open, setOpen] = useState(false)
+  const [flip, setFlip] = useState(false)
   const wrap = useRef<HTMLSpanElement>(null)
+  const pop = useRef<HTMLSpanElement>(null)
+
+  /* WHICH SIDE IT OPENS ON, measured rather than assumed.
+   *
+   *  Right-anchoring is correct for a button at the end of a wide row, which is
+   *  where the first six of these live. Put one in the Feature Editor's section
+   *  header and the button sits a third of the way across a narrower panel, so
+   *  a 460px popover hanging off its right edge runs past the panel's left edge
+   *  and gets clipped — heading cut in half, prose cut down the side.
+   *
+   *  So: place it, look at where it actually landed, and flip it if it fell off.
+   *  useLayoutEffect, not useEffect, so the correction happens before paint and
+   *  nobody sees it jump. Flipping only ever sets `true`, so the re-measure it
+   *  triggers cannot bounce back and loop. */
+  useLayoutEffect(() => {
+    if (!open) { setFlip(false); return }
+    const el = pop.current
+    if (!el) return
+    if (el.getBoundingClientRect().left < clipLeftOf(el) + 8) setFlip(true)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -53,7 +88,8 @@ export function ProsePreview({ text, label = 'Preview' }: {
       </button>
 
       {open && (
-        <span className={styles.pop} role="dialog" aria-label="Player preview">
+        <span ref={pop} className={flip ? `${styles.pop} ${styles.popLeft}` : styles.pop}
+          role="dialog" aria-label="Player preview">
           <span className={styles.head}>
             <i className="fa-solid fa-user" />
             <span className={styles.t}>As the player reads it</span>
