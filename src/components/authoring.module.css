@@ -483,6 +483,11 @@ select.in option { background: #14130f; }
 .efrow:hover { background-color: rgba(226,176,33,.07); --bc: rgba(226,176,33,.35); }
 .efrow.flag { --og: var(--cyan); }
 .efrow.bad { --og: var(--danger-hot); background-color: rgba(185,58,58,.08); }
+/* A BROKEN ROW READS AS BROKEN, whatever group it belongs to. `.efrow.sheet
+   .efGlFrame` paints the glyph teal because that is the sheet group's colour,
+   and it targets a descendant — so it kept winning on an errored row and the
+   node still looked like an ordinary sheet op with a red tint behind it. */
+.efrow.sheet.bad .efGlFrame { --bc: rgba(185,58,58,.55); color: var(--danger-hot); }
 .efrow .ch { flex: 0 0 auto; width: 8px; font-size: 8px; color: var(--beige-dim); }
 .efGlFrame { flex: 0 0 auto; width: 22px; height: 22px; position: relative; isolation: isolate; display: flex; align-items: center; justify-content: center; background: var(--og, var(--amber)); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
 .efGlFrame::before { content: ""; position: absolute; inset: 1.5px; z-index: -1; background: #0d0c0a; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }

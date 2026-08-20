@@ -122,6 +122,18 @@ export const OPS: Record<GraphOp, OpDef> = {
       },
     ],
   },
+  useability: {
+    label: 'use ability', group: 'sheet', icon: 'fa-hand-sparkles',
+    blurb: 'Lets the carrier use a different ability for ATTACK ROLLS — "you may use Wisdom instead of Strength or Dexterity". Sits on the sheet, not on a roll, so it applies to whatever weapon they are holding rather than to one blade: the property belongs to the wielder, and a fighter who picks up the same sword swings it with Strength. It is a MAY, not a swap — the attack uses the best score among everything allowed, exactly as a finesse weapon already picks the better of STR and DEX. Affects damage too, because both run off the same ability modifier. No target: it applies to whoever carries this node.',
+    fields: [
+      {
+        key: 'ability', type: 'enum', label: 'Ability', required: true,
+        options: ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'],
+        desc: 'Which ability becomes available for attack rolls. Granting one the character is worse at changes nothing — best-of never makes an attack worse.',
+        example: 'WIS',
+      },
+    ],
+  },
   adv: flag('adv', 'fa-angles-up', 'Grants advantage on the matched rolls. The target list is the whole statement.', [ONCE]),
   dis: flag('dis', 'fa-angles-down', 'Imposes disadvantage on the matched rolls.', [ONCE]),
   crit: {
@@ -188,7 +200,7 @@ export const PALETTE_ACT = ['setVar', 'addVar'] as const satisfies readonly Grap
 /** The sheet layer gets its own palette group for the same reason activation
  *  outcomes do: it answers a different question from every roll op above it —
  *  "what is this character's DEX", not "what does this roll add". */
-export const PALETTE_SHEET = ['boost'] as const satisfies readonly GraphOp[]
+export const PALETTE_SHEET = ['boost', 'useability'] as const satisfies readonly GraphOp[]
 export const OP_ORDER: GraphOp[] = [...PALETTE, ...PALETTE_MORE, ...PALETTE_SHEET, ...PALETTE_ACT]
 
 export const IS_ACTIVATION = (op: GraphOp) => OPS[op].group === 'activation'
@@ -197,6 +209,7 @@ export const IS_SHEET = (op: GraphOp) => OPS[op].group === 'sheet'
 
 export const OP_TITLE: Record<GraphOp, string> = {
   add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', note: 'Note', boost: 'Boost',
+  useability: 'Use Ability',
   resist: 'Resist', vuln: 'Vuln', immune: 'Immune',
   setVar: 'Set Var', addVar: 'Add Var',
 }

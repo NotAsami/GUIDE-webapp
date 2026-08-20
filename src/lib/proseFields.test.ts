@@ -95,3 +95,54 @@ test('every excuse in PLAIN_ON_PURPOSE still matches something', () => {
     assert.ok(tags.some(t => t.includes(p.match)), `stale exemption, matches nothing: "${p.match}"`)
   }
 })
+
+/* ------------------------------------------------------------------
+   The MIRROR of the test above.
+   
+   Offering Ctrl+B on a field and then printing its text raw is the same
+   mismatch seen from the other end, and it is the one that actually shipped:
+   `[Mercy]{radiant}` in a weapon's description rendered as the literal
+   characters on four surfaces, while ItemTooltip — reading the SAME `flavor`
+   string — coloured it correctly. Nothing looked broken; the markup simply
+   sat there as text, and only a side-by-side comparison of two screens
+   showing one item revealed it.
+
+   Scanned, again, because the defect IS the call site: `{item.flavor}` is
+   valid React that renders something plausible.
+   ------------------------------------------------------------------ */
+
+/** Field names whose value is authored through a `markdownShortcuts` textarea
+ *  somewhere, so every render of them owes the reader the formatting. */
+const MARKDOWN_FIELDS = ['flavor', 'desc', 'description']
+
+/** Renders that are deliberately raw, and why. The bar is the AUTHORING
+ *  surface: if no markdown-enabled textarea ever writes the field, printing it
+ *  raw is correct and wrapping it would be cargo cult. */
+const RAW_ON_PURPOSE: { match: string; why: string }[] = [
+  { match: '{fd.desc}', why: 'op-schema field help — hardcoded in opSchema.ts, not DM-authored' },
+  { match: '{p.description}', why: 'shard perk blurb — authored in a plain <input>, no shortcuts offered' },
+]
+
+test('A FIELD AUTHORED AS MARKDOWN IS RENDERED AS MARKDOWN, everywhere it appears', () => {
+  const re = new RegExp(String.raw`>\{\s*([A-Za-z_$][A-Za-z0-9_.$]*\.(?:${MARKDOWN_FIELDS.join('|')}))\s*\}<`, 'g')
+  const raw: string[] = []
+  for (const f of tsxFiles()) {
+    const src = readFileSync(join(ROOT, f), 'utf8')
+    for (const m of src.matchAll(re)) {
+      if (RAW_ON_PURPOSE.some(p => m[0].includes(p.match))) continue
+      raw.push(`${f}:${src.slice(0, m.index).split('\n').length}  {${m[1]}}`)
+    }
+  }
+  assert.deepEqual(raw, [],
+    'These print markdown-authored prose as literal text — bold, links and '
+    + '[colour]{tags} will show as source.\n'
+    + 'Wrap in renderInline() (inline) or <Prose text={…}/> (paragraphs), or add '
+    + 'to RAW_ON_PURPOSE with the reason nothing authors it as markdown:\n  ' + raw.join('\n  '))
+})
+
+test('every excuse in RAW_ON_PURPOSE still matches something', () => {
+  const all = tsxFiles().map(f => readFileSync(join(ROOT, f), 'utf8')).join('\n')
+  for (const p of RAW_ON_PURPOSE) {
+    assert.ok(all.includes(p.match), `stale exemption, matches nothing: "${p.match}"`)
+  }
+})

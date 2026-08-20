@@ -8,6 +8,10 @@
 import type { AbilityKey, EffectDef, GraphEffect, ItemEffects, Mod } from './database.types'
 import { SKILLS } from './dnd.ts'
 
+/* Declared here rather than imported from effects.ts: that module imports THIS
+   one (effects.ts:29), and reaching back would make the cycle. Six constants. */
+const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
+
 export type { Mod }
 
 /** The numeric modifiers the engine (lib/effects.ts) actually reads. `Note`
@@ -84,13 +88,25 @@ export const MOD_STAT_SET: ReadonlySet<string> = new Set<string>([...MOD_STATS, 
 export function sheetEffects(graph?: GraphEffect[]): ItemEffects | undefined {
   if (!graph?.length) return undefined
   const mods: Mod[] = []
+  /* `useability` is the one sheet op that is NOT a number, so it cannot go
+     through compileEffects with the rest — it is a set of permissions, collected
+     separately and unioned onto the compiled result. */
+  const attackAbilities: AbilityKey[] = []
   for (const g of graph) {
+    if (g.op === 'useability') {
+      const key = (g.ability ?? '').toLowerCase() as AbilityKey
+      if (ABILITY_KEYS.includes(key) && !attackAbilities.includes(key)) attackAbilities.push(key)
+      continue
+    }
     if (g.op !== 'boost' || !g.stat) continue
     const amt = Number(g.value)
     if (!Number.isFinite(amt)) continue
     mods.push({ stat: g.stat, amt })
   }
-  return mods.length ? compileEffects(mods) : undefined
+  if (!mods.length && !attackAbilities.length) return undefined
+  const out: ItemEffects = mods.length ? (compileEffects(mods) ?? {}) : {}
+  if (attackAbilities.length) out.attackAbilities = attackAbilities
+  return out
 }
 
 /** Reverse of compileEffects, to seed the editor from an existing effects

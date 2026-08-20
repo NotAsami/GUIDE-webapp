@@ -223,6 +223,17 @@ export function effectiveSheet(character: CharacterRow, shardTrees: Record<strin
     abilities[key] = setFloor + flat
   }
 
+  /* UNIONED, not summed — the one non-numeric thing an ItemEffects carries.
+     `useability` grants a permission ("attacks may use WIS"), and two features
+     granting the same one grant it once. Base first so an authored value, if
+     one ever exists, is not lost. */
+  const attackAbilities: AbilityKey[] = [...(base.attackAbilities ?? [])]
+  for (const e of fx) {
+    for (const k of e.attackAbilities ?? []) {
+      if (!attackAbilities.includes(k)) attackAbilities.push(k)
+    }
+  }
+
   // Flat scalar sums.
   const ac = (base.ac ?? 0) + sum(fx, e => e.ac)
   const initiative = (base.initiative ?? 0) + sum(fx, e => e.initiative)
@@ -308,6 +319,7 @@ export function effectiveSheet(character: CharacterRow, shardTrees: Record<strin
     initiative,
     hp,
     senses: { ...base.senses, darkvision },
+    attackAbilities,
     saveBonuses,
     skillBonuses,
     skillProficiencies,

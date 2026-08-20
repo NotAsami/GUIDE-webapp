@@ -30,6 +30,7 @@ import { armableFor } from '../lib/graphState'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Equipment.module.css'
 import { Icon } from '../components/Icon'
+import { renderInline } from '../lib/markdown'
 
 interface RouteContext {
   character: CharacterRow
@@ -856,7 +857,7 @@ function DetailBody({ item, slot }: { item: EquippedItem; slot: SlotConfig }) {
       {rows.map(([k, v], i) => (
         <div key={i} className={styles.detailRow}><span className={styles.k}>{k}</span><span className={styles.v}>{v}</span></div>
       ))}
-      {item.flavor && <div className={styles.detailFlavor}>{item.flavor}</div>}
+      {item.flavor && <div className={styles.detailFlavor}>{renderInline(item.flavor)}</div>}
       {item.attune && (
         <div className={`${styles.detailAttune}${/^not|^none/i.test(item.attune) ? ' ' + styles.no : ''}`}>Attuned: {item.attune}</div>
       )}
@@ -943,7 +944,7 @@ function WeaponManageModal({ weapon, sheet, onUnequip, onClose }: {
                 <span className={styles.v}>{weapon.properties.join(', ')}</span>
               </div>
             )}
-            {weapon.flavor && <div className={styles.detailFlavor}>{weapon.flavor}</div>}
+            {weapon.flavor && <div className={styles.detailFlavor}>{renderInline(weapon.flavor)}</div>}
             {weapon.attune && (
               <div className={`${styles.detailAttune}${/^not|^none/i.test(weapon.attune) ? ' ' + styles.no : ''}`}>Attuned: {weapon.attune}</div>
             )}

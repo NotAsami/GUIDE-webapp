@@ -8,6 +8,7 @@ import {
 } from '../lib/kit'
 import { SKILLS } from '../lib/dnd'
 import styles from './StartingKit.module.css'
+import { renderInline } from '../lib/markdown'
 import { Icon } from './Icon'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
@@ -217,7 +218,7 @@ export function StartingKit({ character, onUpdate }: {
                     {op.features.length} feature{op.features.length === 1 ? '' : 's'}
                     {op.spellbook ? ' · unlocks spellcasting' : ''}
                   </span>
-                  {op.desc?.trim() && <span className={styles.koD}>{op.desc}</span>}
+                  {op.desc?.trim() && <span className={styles.koD}>{renderInline(op.desc)}</span>}
                 </span>
                 <span className={styles.koGo}><i className="fa-solid fa-arrow-right" /></span>
               </button>

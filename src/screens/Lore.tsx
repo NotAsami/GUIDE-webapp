@@ -5,6 +5,7 @@ import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { Prose, renderInline } from '../lib/markdown'
 import { origins } from '../lib/featureView'
+import { Icon } from '../components/Icon'
 import styles from './Lore.module.css'
 
 interface RouteContext {
@@ -228,7 +229,7 @@ function BioPortrait({ character }: { character: CharacterRow }) {
               onError={() => setImgFailed(true)}
             />
           ) : (
-            <i className={`${styles.bpFigure} fa-solid ${id.icon ?? 'fa-user'}`} />
+            <Icon name={id.icon ?? 'fa-user'} className={styles.bpFigure} />
           )}
         </div>
         <span className={styles.bpTag}>
