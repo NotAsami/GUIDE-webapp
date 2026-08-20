@@ -681,7 +681,7 @@ function ItemTile({ p, dragging, isNew, bind, onPointerDown, onActivate, onHover
       }}
     >
       <i className={`fa-solid ${CAT_CORNER[cat]} ${styles.catCorner}`} aria-hidden="true" />
-      <i className={`fa-solid ${item.icon ?? 'fa-cube'} ${styles.glyph}`} style={item.flip ? { transform: 'scaleX(-1)' } : undefined} aria-hidden="true" />
+      <Icon name={item.icon ?? 'fa-cube'} className={styles.glyph} style={item.flip ? { transform: 'scaleX(-1)' } : undefined} aria-hidden="true" />
       {item.locked && <i className={`fa-solid fa-lock ${styles.lockPip}`} aria-hidden="true" />}
       {item.qty && item.qty > 1 && <span className={styles.stack}>×{item.qty}</span>}
       {isNew && <span className={styles.newBadge}>New</span>}

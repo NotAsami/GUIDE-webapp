@@ -201,6 +201,11 @@ export type CharacterSheet = {
   /** Flat per-skill bonuses (keyed by skill key). Authored or effect-injected;
    *  read by dnd.ts skillTotal. */
   skillBonuses?: Partial<Record<string, number>>
+  /** Abilities the character MAY use for attack rolls beyond what the weapon
+   *  itself allows — granted by a `useability` rule. INJECTED ONLY, never
+   *  authored: effectiveSheet unions it from every active source, and
+   *  weapons.ts weaponAbilityKey reads it. */
+  attackAbilities?: AbilityKey[]
   /** Class features, feats, racial traits, senses — the Features screen's source.
    *  Descriptive (prose + usage text); mechanical numbers stay on the sheet/items.
    *  DM-authored per character. */
@@ -240,7 +245,10 @@ export type Feature = {
    *  (lib/featureView.ts originChain), so this is enrichment, never a
    *  requirement. */
   origin?: string[]
-  /** Font Awesome icon name, e.g. 'fa-wind'. */
+  /** Icon name. Either a Font Awesome class (`'fa-wind'`) or a game-icons value
+   *  prefixed `gi:` (`gi:lorc/aura`). Unprefixed IS Font Awesome — that is what
+   *  let both sets coexist with no migration. Render it with `<Icon>`, never by
+   *  interpolating into a `fa-solid` class. */
   icon?: string
   /** Level the feature was acquired at (for display/sorting). */
   level?: number
@@ -415,6 +423,12 @@ export type GraphOp =
    *  effectiveSheet exactly like a worn item's effects. Has no target: it
    *  applies to the character carrying it, not to a matched thing. */
   | 'boost'
+  /** Also SHEET layer: says the carrier MAY use a given ability for attack
+   *  rolls — "you may use Wisdom instead of Strength or Dexterity". Not a
+   *  number, so it unions rather than sums, and it is a permission rather than
+   *  a substitution: weaponAbilityKey picks the best score among everything
+   *  allowed, exactly as finesse already picks the better of STR/DEX. */
+  | 'useability'
   /** ACTIVATION outcomes. Unlike everything above, these do not modify a roll —
    *  they run when the player presses Use, and they WRITE. resolve() skips them
    *  for that reason: folding them into a Resolution would fire them on every
@@ -440,6 +454,9 @@ export type GraphEffect = {
    *  MOD_STATS / SKILL_STATS, the same vocabulary the item and shard-node
    *  modifier rows use, so one compiler serves all three. */
   stat?: string
+  /** `useability` only. Which ability the carrier MAY use for attack rolls.
+   *  Stored uppercase as the enum offers it; read case-insensitively. */
+  ability?: string
   /** `setVar` / `addVar` only. The name of a variable this node declares. */
   variable?: string
   /** How the target list combines. Absent = `or`, which is what it has always
@@ -559,6 +576,11 @@ export type ItemEffects = {
   attack?: number
   /** Damage bonus on this weapon's damage roll. */
   damage?: number
+  /** Abilities the wearer MAY use for attack rolls, on top of whatever the
+   *  weapon itself allows. The one field here that is not a number and does not
+   *  sum: two features granting WIS grant WIS, not WIS twice, so effectiveSheet
+   *  UNIONS these. Read by weapons.ts weaponAbilityKey. */
+  attackAbilities?: AbilityKey[]
   /** Flat saving-throw bonus: a number applies to ALL saves; object = per-ability. */
   saves?: number | Partial<Record<AbilityKey, number>>
   /** Flat per-skill bonus, keyed by skill key (see lib/dnd.ts SKILLS). */
@@ -1096,7 +1118,10 @@ export type EffectFlagMode = 'advantage' | 'disadvantage' | 'resistance' | 'vuln
 export type EffectFlag = { mode: EffectFlagMode; target: string }
 export type EffectDef = {
   name: string
-  /** Font Awesome icon name, e.g. 'fa-bolt'. */
+  /** Icon name. Either a Font Awesome class (`'fa-bolt'`) or a game-icons value
+   *  prefixed `gi:` (`gi:lorc/aura`). Unprefixed IS Font Awesome — that is what
+   *  let both sets coexist with no migration. Render it with `<Icon>`, never by
+   *  interpolating into a `fa-solid` class. */
   icon: string
   /** Drives the tint wherever this effect appears (index group, preview, item
    *  reference row). */
@@ -1329,7 +1354,10 @@ export type FeatureGrantRef = {
 
 export type ClassDef = {
   name: string
-  /** Font Awesome icon name, e.g. 'fa-shield-halved'. */
+  /** Icon name. Either a Font Awesome class (`'fa-shield-halved'`) or a game-icons value
+   *  prefixed `gi:` (`gi:lorc/aura`). Unprefixed IS Font Awesome — that is what
+   *  let both sets coexist with no migration. Render it with `<Icon>`, never by
+   *  interpolating into a `fa-solid` class. */
   icon: string
   /** Tint for the index row and the granted carrier feature's card, same role
    *  Feature.color plays. */

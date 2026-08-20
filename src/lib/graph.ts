@@ -1132,12 +1132,12 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
     }
 
     if (IS_SHEET(eff.op)) {
-      // A boost applies to whoever carries the node, so a target is not just
+      // A sheet op applies to whoever carries the node, so a target is not just
       // unnecessary — it is a claim the engine cannot honour.
       if ((eff.target ?? []).length) {
         out.push({
-          sev: 'err', id: eff.id, t: 'Boost cannot target',
-          s: `${eff.label || eff.id} changes a number on the sheet of whoever carries it. It has no target, and one set here does nothing.`,
+          sev: 'err', id: eff.id, t: `${OP_TITLE[eff.op]} cannot target`,
+          s: `${eff.label || eff.id} applies to the sheet of whoever carries it. It has no target, and one set here does nothing.`,
         })
       }
       // effectiveSheet is a pure function of the sheet with no expression scope,
@@ -1145,10 +1145,28 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
       // quietly dropping it.
       if (eff.when?.trim()) {
         out.push({
-          sev: 'err', id: eff.id, t: 'Boost cannot be conditional',
-          s: `${eff.label || eff.id} has a "when", but the sheet is computed without one. Use a roll contribution if the bonus is conditional.`,
+          sev: 'err', id: eff.id, t: `${OP_TITLE[eff.op]} cannot be conditional`,
+          s: `${eff.label || eff.id} has a "when", but the sheet is computed without one. Use a roll contribution if it is conditional.`,
         })
       }
+      /* A hand-edited or migrated node can name an ability that does not exist.
+         It would compile to nothing and the attack would silently keep using
+         Strength, which is indistinguishable from the feature not being there. */
+      if (eff.op === 'useability' && eff.ability?.trim()
+          && !['str', 'dex', 'con', 'int', 'wis', 'cha'].includes(eff.ability.trim().toLowerCase())) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'Unknown ability',
+          s: `${eff.label || eff.id} names "${eff.ability}", which is not one of STR, DEX, CON, INT, WIS or CHA. Attacks would keep using the weapon's own ability.`,
+        })
+      }
+      /* THE REST OF THIS BRANCH IS BOOST'S. `stat` and a numeric `value` are
+         boost's own fields — `useability` carries an `ability` and no value at
+         all, so running these against it reported a missing number on a node
+         that never had one, quoting an empty string back at the author. The
+         two rules above (no target, no `when`) are true of every sheet op; from
+         here down is one op's schema. */
+      if (eff.op !== 'boost') continue
+
       // An EMPTY stat is already reported by the schema's required-field check
       // above; saying "unknown stat: ''" as well is two errors for one blank.
       if (eff.stat?.trim() && !MOD_STAT_SET.has(eff.stat)) {

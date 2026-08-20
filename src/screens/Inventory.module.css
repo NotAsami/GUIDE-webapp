@@ -258,6 +258,22 @@
 .fpL .glyph { font-size: 34px; }
 .fpV .glyph { font-size: 26px; }
 
+/* A game-icons stencil reads smaller than a Font Awesome glyph set to the same
+   font-size. Its mask box is exactly 1em and the artwork sits inset inside a
+   512 viewBox, where a font glyph is drawn right out to the edges of its em —
+   so the two never matched, and on the tiles the difference is obvious.
+
+   Scoped by ELEMENT, which is the only handle available: <Icon> renders a
+   <span> for a game icon and an <i> for Font Awesome, and `.gi` lives in a
+   different CSS module whose hashed name is not reachable from here. The <i>
+   tiles are therefore untouched — they were already the right size, and this
+   brings the masks up to meet them rather than growing everything.
+
+   Both inventory surfaces: the grid tile and the container list row. One
+   number, em-based, so it rides the footprint scale above. */
+span.glyph,
+.crow .ri span { width: 1.25em; height: 1.25em; }
+
 /* category tints (very low alpha) */
 .cellItem[data-cat="weapon"]     { background: rgba(0, 166, 214, 0.07); }
 .cellItem[data-cat="gear"]       { background: rgba(212, 191, 125, 0.07); }

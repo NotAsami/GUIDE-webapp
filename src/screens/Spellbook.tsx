@@ -16,6 +16,7 @@ import {
   damageAt, isCaster, maxCastLevel, pactSlotCount, pactSlotLevel, pactSlotsAvail,
   preparedUsed, preparesSpells, rollSpellDamage,
 } from '../lib/spells'
+import { Icon } from '../components/Icon'
 import styles from './Spellbook.module.css'
 
 interface RouteContext {
@@ -605,7 +606,7 @@ function SpellRow({ sp, selected, preparing, onSelect }: { sp: Spell; selected: 
       <span className={styles.spellMain}>
         <span className={styles.spellName}>{sp.name}</span>
         <span className={styles.spellSub}>
-          <span className={styles.school}><i className={`fa-solid ${spellIcon(sp)}`} style={sp.iconColor ? { color: sp.iconColor } : undefined} />{sp.school}</span>
+          <span className={styles.school}><Icon name={spellIcon(sp)} className={styles.schoolIc} style={sp.iconColor ? { color: sp.iconColor } : undefined} />{sp.school}</span>
         </span>
       </span>
       <span className={styles.spellTags}>
@@ -653,7 +654,7 @@ function SpellDetail({
         <div className={styles.daLine}>
           {lvlLine}
           <span className={styles.sep}>·</span>
-          <span className={styles.school}><i className={`fa-solid ${ic}`} style={spell.iconColor ? { color: spell.iconColor } : undefined} />{spell.school}</span>
+          <span className={styles.school}><Icon name={ic} className={styles.schoolIc} style={spell.iconColor ? { color: spell.iconColor } : undefined} />{spell.school}</span>
         </div>
       </div>
 

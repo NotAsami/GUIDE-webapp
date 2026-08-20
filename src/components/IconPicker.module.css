@@ -1,13 +1,22 @@
-/* The shared icon picker. Search field, count line, results — in that order,
-   because the count is what tells you your term is too broad, and it has to be
-   above the grid to be read before you start scrolling it. */
+/* The shared icon picker.
 
-.wrap { display: flex; flex-direction: column; }
+   Vertical order is search -> chosen icon -> rule. The RESULTS are not in that
+   flow at all: they drop over the top, anchored to the search field, so typing
+   never reflows the form underneath the cursor. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  /* CLEARANCE AFTER THE RULE. Without it the next field sits straight on the
+     divider and the divider reads as that field's top border — you cannot tell
+     the picker has ended, which is exactly how it looked on the arrows. */
+  margin-bottom: 16px;
+}
 
 .field {
-  position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
   border: 1px solid rgba(212, 191, 125, 0.35);
   background: rgba(0, 0, 0, 0.4);
 }
@@ -38,8 +47,26 @@
 }
 .clear:hover { color: var(--danger); }
 
+/* ---- the dropdown ---- */
+
+/* FIXED, in a portal on <body>. Absolute inside the picker was clipped by every
+   host panel's `overflow-y: auto` — visibly so in the feature editor, where it
+   was cut off at the popup's bottom border. left/top/width come from the
+   field's measured rect; `bottom` replaces `top` when it flips upward.
+
+   z-index sits above the authoring popup (100) and the shop takeover, below the
+   roll panel's tip layer (400). */
+.pop {
+  position: fixed;
+  z-index: 320;
+  background: #100f0c;
+  border: 1.5px solid var(--amber);
+  box-shadow: 0 14px 30px -12px #000;
+  padding: 9px 10px 10px;
+}
+
 .meta {
-  margin: 8px 1px 10px;
+  margin: 0 1px 8px;
   font-family: var(--font-mono);
   font-size: 8.5px;
   letter-spacing: 0.16em;
@@ -51,9 +78,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
   gap: 5px;
-  /* The results scroll, never the dialog — the search field and the count stay
-     put while you look, which is the whole point of putting them above. */
-  max-height: 38vh;
+  max-height: 34vh;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--cyan-dim) rgba(0, 0, 0, 0.5);
@@ -66,10 +91,9 @@
 }
 
 /* Chamfered + bordered, so it needs the 0.7071 corner recipe: clip-path cuts
-   the two diagonals out of the border, and only a gradient paints them back.
-   Recolour through --bc, never `border-color` — see
-   docs/Chamfered_clip-path_corners_fix.md, and note the guard in
-   src/lib/chamferBorders.test.ts fails if this drifts. */
+   the diagonals out of the border and only a gradient paints them back.
+   Recolour through --bc, never `border-color` — src/lib/chamferBorders.test.ts
+   fails on both mistakes. */
 .cell {
   --cut: 4px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.2);
   aspect-ratio: 1;
@@ -89,24 +113,20 @@
 .cell.on { color: var(--cyan); --bc: var(--cyan); background-color: rgba(0, 166, 214, 0.12); }
 .cell:focus-visible { outline: 1px solid var(--cyan); outline-offset: 2px; }
 
-/* The selected icon, with its credit.
+/* ---- the chosen icon, then the rule ---- */
 
-   THE RULE DIVIDES THE GLYPH FROM ITS NAME, rather than floating above the
-   whole row: a full-width line over `[icon] NAME … SOURCE` separated the row
-   from the grid, which the margin already does. After the icon it is doing a
-   divider's job. */
 .sel {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 14px;
+  /* Tight to the search — they are one control, not two. */
+  margin-top: 7px;
+  padding-bottom: 10px;
+  /* 2px and brighter: at 1px/0.2 alpha it disappeared against the panel, which
+     is what made it read as somebody else's border rather than a divider. */
+  border-bottom: 2px solid rgba(212, 191, 125, 0.34);
 }
-.selIcon {
-  font-size: 20px;
-  color: var(--beige);
-  padding-right: 10px;
-  border-right: 1px solid rgba(212, 191, 125, 0.28);
-}
+.selIcon { font-size: 20px; color: var(--beige); }
 .selName {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -122,3 +142,27 @@
   text-transform: uppercase;
   color: var(--beige-dim);
 }
+.selNone {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--beige-dim);
+}
+
+/* The "no explicit icon" fallback, for editors that derive one (the spell form
+   uses the school's glyph). Dimmed, because it is a default rather than a
+   choice — and it lives in the chosen-icon row so the control keeps ONE icon,
+   like every other editor. */
+.selAutoIcon { opacity: 0.55; }
+.selAuto {
+  margin-left: 10px;
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; cursor: pointer;
+  border: 1px solid rgba(212, 191, 125, 0.28);
+  padding: 3px 7px;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--beige-dim);
+}
+.selAuto:hover { color: var(--amber); border-color: rgba(226, 176, 33, 0.5); }
+.selAuto i { font-size: 8px; }

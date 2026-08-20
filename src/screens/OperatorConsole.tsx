@@ -33,10 +33,10 @@ import { renderInline } from '../lib/markdown'
 import { markdownShortcuts } from '../lib/textareaHooks'
 import { useLocalDraft } from '../lib/draft'
 import type {
-  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json, QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow, CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect, Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow, EffectDuration, EffectRef, Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData, CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData, CatalogRaceRow, RaceDef, EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef, EquippedGear, CharacterLore, Relation, CatalogLootRow, LootTable, LootRow,
+  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json, QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow, CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect, Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow, EffectDuration, EffectRef, Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData, CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData, CatalogRaceRow, RaceDef, EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef, EquippedGear, CharacterLore, Relation, CatalogLootRow, LootTable, LootRow, CharacterSheet,
 } from '../lib/database.types'
 import { ITEM_SLOTS, isRingSlot } from '../lib/equip'
-import { SKILLS, ABILITY_ORDER, ABILITY_ABBR } from '../lib/dnd'
+import { SKILLS, ABILITY_ORDER, ABILITY_ABBR, ABILITY_NAMES, abilityMod } from '../lib/dnd'
 import { grantMany, isStackable } from '../lib/placement'
 import { kitChoices, legacyKitText, resolvePool } from '../lib/kit'
 import { isEquipPick } from '../lib/database.types'
@@ -723,9 +723,15 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
         {/* D — GRANT ITEM: snapshot a catalog template into this PC's inventory */}
         <GrantItemCard member={member} catalog={catalog} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
 
-        {/* E — STATUS: death saves + exhaustion (wide) */}
+        {/* E — ABILITY SCORES (wide): six numbers read as one block, and the
+            base -> effective readout needs the room. */}
+        <AbilityScoresCard
+          member={member} row={row} shardCatalog={shardCatalog} onUpdate={onUpdate} log={log}
+        />
+
+        {/* F — STATUS: death saves + exhaustion (wide) */}
         <div className={cx(styles.actCard, styles.wide)}>
-          <div className={styles.acTitle}><i className="fa-solid fa-heart-crack lead" /><span className={styles.num}>E</span><span className={styles.t}>Status</span></div>
+          <div className={styles.acTitle}><i className="fa-solid fa-heart-crack lead" /><span className={styles.num}>F</span><span className={styles.t}>Status</span></div>
           <div className={styles.statusSplit}>
             {/* death saves */}
             <div className={styles.stCol}>
@@ -875,7 +881,7 @@ function StandingCard({ member, row, onUpdate, log }: {
 
   return (
     <div className={styles.actCard}>
-      <div className={styles.acTitle}><i className="fa-solid fa-ranking-star lead" /><span className={styles.num}>M</span><span className={styles.t}>Standing &amp; Story</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-ranking-star lead" /><span className={styles.num}>N</span><span className={styles.t}>Standing &amp; Story</span></div>
 
       <div className={styles.catGrid2}>
         <div>
@@ -1273,7 +1279,10 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
           onClick={() => update(x => ({ ...x, rows: [...(x.rows ?? []), { kind: 'item', item_id: '', min: 1, max: 1, chance: 50 }] }))} />
       </div>
 
-      <div className={styles.catFx}>
+      {/* .clsAudit, the same wrapper the Class and Race forms use — .catFx is the
+          amber chamfered box the EFFECTS fold lives in, and wearing it made this
+          panel read as a different kind of thing from its two siblings. */}
+      <div className={styles.clsAudit}>
         <AuditPanel title="Loot Audit" audit={audit} onJump={a => revealAudit(a.id)} />
       </div>
 
@@ -1492,9 +1501,9 @@ function LootCard({ member, row, lootLib, itemCatalog, onUpdate, onVoice, log }:
 
   return (
     <div className={styles.actCard}>
-      <div className={styles.acTitle}><i className="fa-solid fa-sack-dollar lead" /><span className={styles.num}>N</span><span className={styles.t}>Roll Loot</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-sack-dollar lead" /><span className={styles.num}>O</span><span className={styles.t}>Roll Loot</span></div>
 
-      <div className={styles.catGrid2}>
+      <div className={cx(styles.catGrid2, styles.lootPickRow)}>
         <div>
           <span className={styles.fieldLab}>Table</span>
           <select className={styles.selIn} value={tableId ?? ''}
@@ -1557,6 +1566,90 @@ function LootCard({ member, row, lootLib, itemCatalog, onUpdate, onVoice, log }:
 }
 
 // ============================================================
+// ABILITY SCORES (Actions card B) — the six numbers everything
+// else on the sheet is computed from.
+// ============================================================
+
+/** The six ability scores, editable at last.
+ *
+ *  Nothing in this app could write `sheet.abilities` before now: the Stat
+ *  Panel's AbilityScores widget takes no updater and is read-only by
+ *  construction, so scores arrived by SQL seed and could never be changed. The
+ *  console even warns "Save DC and spell attack need ability scores on the
+ *  sheet first" — the app describing a gap it gave you no way to fill.
+ *
+ *  IT EDITS THE BASE, AND SAYS SO. A racial +2 DEX is a `boost` rule layered by
+ *  effectiveSheet, so the number a player sees is not the number stored here.
+ *  Typing 16 and watching the sheet read 18 looks like the field ignoring you
+ *  unless the card shows both — so when they differ, the effective value and
+ *  its source are printed beside the input. The base stays canon underneath,
+ *  which is the whole reason the boost is a rule and not a write. */
+function AbilityScoresCard({ member, row, shardCatalog, onUpdate, log }: {
+  member: PartyMember
+  row: CharacterRow
+  shardCatalog: Record<string, ShardTree>
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const sheet = row.sheet ?? {}
+  const base = sheet.abilities ?? ({} as Partial<Record<AbilityKey, number>>)
+  const view = useMemo(() => effectiveSheet(row, shardCatalog), [row, shardCatalog])
+  const [busy, setBusy] = useState<AbilityKey | null>(null)
+
+  async function setScore(key: AbilityKey, next: number) {
+    const value = Math.max(1, Math.min(30, Math.round(next) || 0))
+    if (value === (base[key] ?? 10)) return
+    setBusy(key)
+    const ok = await onUpdate({
+      sheet: { ...sheet, abilities: { ...base, [key]: value } as CharacterSheet['abilities'] },
+    })
+    setBusy(null)
+    if (ok) {
+      log(<><span className={styles.who}>{firstName(member.name)}</span> {ABILITY_NAMES[key]} → <span className={styles.obj}>{value}</span></>)
+    }
+  }
+
+  return (
+    <div className={cx(styles.actCard, styles.wide)}>
+      <div className={styles.acTitle}><i className="fa-solid fa-dumbbell lead" /><span className={styles.num}>E</span><span className={styles.t}>Ability Scores</span></div>
+
+      <div className={styles.abGrid}>
+        {ABILITY_ORDER.map(key => {
+          const raw = base[key] ?? 10
+          const eff = view.abilities?.[key] ?? raw
+          const mod = abilityMod(eff)
+          const boosted = eff !== raw
+          return (
+            <div key={key} className={cx(styles.abCell, boosted && styles.boosted)}>
+              <span className={styles.abKey}>{ABILITY_ABBR[key].toUpperCase()}</span>
+              <input
+                className={styles.abIn}
+                type="number" min={1} max={30} value={raw}
+                aria-label={ABILITY_NAMES[key]}
+                disabled={busy === key}
+                onChange={e => void setScore(key, parseInt(e.target.value || '0', 10))}
+              />
+              <span className={styles.abMod}>{mod >= 0 ? `+${mod}` : mod}</span>
+              {/* Only when they differ — printing "16 → 16" on four of six rows
+                  is noise that trains you to stop reading the one that matters. */}
+              {boosted && (
+                <span className={styles.abEff} title="Base score plus rules layered by effectiveSheet">
+                  {raw} → <b>{eff}</b>
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <p className={styles.abHint}>
+        Base scores. A racial bonus is a <b>boost</b> rule on the race, so it layers on top and comes back off with the race — set the un-boosted number here.
+      </p>
+    </div>
+  )
+}
+
+// ============================================================
 // FEATURE STATE (Actions card J) — §8 #4 + §31's DM bucket
 // ============================================================
 
@@ -1602,7 +1695,7 @@ function FeatureStateCard({ member, row, shardCatalog, onUpdate, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-diagram-project lead" /><span className={styles.num}>L</span><span className={styles.t}>Feature State</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-diagram-project lead" /><span className={styles.num}>M</span><span className={styles.t}>Feature State</span></div>
 
       {collisions.map(a => (
         <div key={a.id ?? a.t} className={styles.skWarn}>
@@ -2804,7 +2897,7 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-star lead" /><span className={styles.num}>K</span><span className={styles.t}>Grant Feature</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-star lead" /><span className={styles.num}>L</span><span className={styles.t}>Grant Feature</span></div>
       <div className={styles.featGrantSplit}>
         <div className={styles.fgCol}>
           <span className={styles.fieldLab}>Library · roleplay boons &amp; perks</span>
@@ -2939,7 +3032,7 @@ function ProficienciesCard({ member, row, classLib, onUpdate, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-graduation-cap lead" /><span className={styles.num}>H</span><span className={styles.t}>Proficiencies</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-graduation-cap lead" /><span className={styles.num}>I</span><span className={styles.t}>Proficiencies</span></div>
 
       <div className={styles.profRow}>
         <span className={styles.profLab}>Saving Throws</span>
@@ -3631,17 +3724,11 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       </div>
 
       <span className={styles.fieldLab}>Icon</span>
-      {/* Auto-by-school stays its own control above the search: it is not an
-          icon you find by typing, it is the choice to not pick one. */}
-      <div className={styles.catIcons}>
-        <button
-          className={cx(styles.catIc, !icon && styles.sel)} onClick={() => setIcon('')}
-          title={`Auto (by school — ${SPELL_SCHOOL_ICON[school]})`} aria-label="Auto icon by school"
-        >
-          <i className={`fa-solid ${SPELL_SCHOOL_ICON[school]}`} style={{ opacity: 0.5 }} />
-        </button>
-      </div>
-      <IconPicker value={icon} onPick={setIcon} />
+      {/* The school glyph is this spell's icon until one is chosen, so it goes
+          in the picker's own chosen-icon slot. As a separate chip above it, the
+          spell editor showed two icons where every other editor shows one. */}
+      <IconPicker value={icon} onPick={setIcon}
+        auto={{ icon: SPELL_SCHOOL_ICON[school], label: `${school} — by school` }} />
       <div className={styles.catGrid2}>
         <div>
           <span className={styles.fieldLab}>Icon Color</span>
@@ -3903,7 +3990,7 @@ function GrantSpellCard({ member, row, spellLib, onUpdate, onVoice, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>J</span><span className={styles.t}>Grant Spell</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-wand-sparkles lead" /><span className={styles.num}>K</span><span className={styles.t}>Grant Spell</span></div>
       <div className={styles.featGrantSplit}>
         <div className={styles.fgCol}>
           <span className={styles.fieldLab}>Library · Catalog · Spells tab</span>
@@ -4031,7 +4118,7 @@ function CasterProfileCard({ member, row, onUpdate, log }: {
 
   return (
     <div className={cx(styles.actCard, styles.wide)}>
-      <div className={styles.acTitle}><i className="fa-solid fa-hat-wizard lead" /><span className={styles.num}>I</span><span className={styles.t}>Spellcasting</span></div>
+      <div className={styles.acTitle}><i className="fa-solid fa-hat-wizard lead" /><span className={styles.num}>J</span><span className={styles.t}>Spellcasting</span></div>
 
       <div className={cx(styles.catTog, caster && styles.on)} onClick={() => setCaster(c => !c)} role="switch" aria-checked={caster}>
         <span className={styles.tgSw} />
@@ -5468,7 +5555,7 @@ function AssignRaceCard({ member, row, raceLib, featureLib, shardCatalog, onUpda
   return (
     <div className={cx(styles.actCard, styles.wide)}>
       <div className={styles.acTitle}>
-        <i className="fa-solid fa-leaf lead" /><span className={styles.num}>F</span>
+        <i className="fa-solid fa-leaf lead" /><span className={styles.num}>G</span>
         <span className={styles.t}>Race</span>
       </div>
 
@@ -5681,7 +5768,7 @@ function AssignClassCard({ member, row, classLib, featureLib, itemCatalog, shard
   return (
     <div className={cx(styles.actCard, styles.wide)}>
       <div className={styles.acTitle}>
-        <i className="fa-solid fa-shield-halved lead" /><span className={styles.num}>G</span>
+        <i className="fa-solid fa-shield-halved lead" /><span className={styles.num}>H</span>
         <span className={styles.t}>Class</span>
       </div>
 

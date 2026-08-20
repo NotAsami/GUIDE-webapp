@@ -27,6 +27,7 @@ export const OP_GLYPH: Record<GraphOp, string> = {
   crit: '⚔',
   note: '⊙',      // says something without changing a number
   boost: '◈',     // moves a number on the sheet, not on a roll
+  useability: '◈', // also the sheet layer — which ability may swing the weapon
   resist: '⊟',
   vuln: '⤒',
   immune: '⊘',    // cancels outright

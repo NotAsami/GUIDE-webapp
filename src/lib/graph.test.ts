@@ -1098,6 +1098,7 @@ test('every GraphEffect field is authorable, or is explicitly recorded as not ye
     // Rendered from OPS[op].fields — asserted below.
     value: 'schema', byLevel: 'schema', variable: 'schema', text: 'schema',
     threshold: 'schema', dmgType: 'schema', once: 'schema', stat: 'schema',
+    ability: 'schema',
     // Nothing is deferred today. The category stays because it is the honest
     // place to put a field that is stored but not yet authorable, and saying so
     // out loud beats leaving it silently uncovered.
@@ -1736,4 +1737,38 @@ test('a NON-feature source is still reported — the panel decides what is linka
   const gid = resolve(buildContext(c), ATTACK).riders[0].sourceGid
   assert.equal(gid, 'item:cat-blade')
   assert.ok(!gid?.startsWith('feature:'), 'and it is not a feature, so the panel will not link it')
+})
+
+test("A SHEET OP IS NOT AUDITED AGAINST ANOTHER SHEET OP'S SCHEMA", () => {
+  // `useability` carries an `ability` and no `value` at all, but boost's
+  // numeric-value rule lived in the shared IS_SHEET branch and ran against it —
+  // reporting a missing number on a node that never had one, and quoting an
+  // empty string back: `has ""`. The rule was right; its scope was not.
+  const node = { graph: [{ id: 'u1', op: 'useability' as const, label: 'Sanctity', ability: 'WIS' }], vars: [] }
+  const errs = auditNode(node, []).filter(a => a.sev === 'err')
+  assert.deepEqual(errs, [], `a well-formed useability node must audit clean: ${errs.map(e => e.t).join(', ')}`)
+})
+
+test('a boost with no number is still reported', () => {
+  // The other half: scoping the rule must not switch it off for the op it
+  // belongs to.
+  const node = { graph: [{ id: 'b1', op: 'boost' as const, label: 'Elven Grace', stat: 'DEX', value: '1d4' }], vars: [] }
+  assert.ok(auditNode(node, []).some(a => a.sev === 'err' && a.t === 'Boost needs a plain number'))
+})
+
+test('a useability node naming a non-ability is reported', () => {
+  // It would compile to nothing and the attack would keep using Strength, which
+  // looks exactly like the feature not being there.
+  const node = { graph: [{ id: 'u1', op: 'useability' as const, label: 'Sanctity', ability: 'LUCK' }], vars: [] }
+  assert.ok(auditNode(node, []).some(a => a.sev === 'err' && a.t === 'Unknown ability'))
+})
+
+test('the shared sheet rules still apply to BOTH sheet ops', () => {
+  // No target and no `when` are true of every sheet op, not just boost.
+  for (const op of ['boost', 'useability'] as const) {
+    const targeted = { graph: [{ id: 'x', op, label: 'L', stat: 'DEX', value: '2', ability: 'WIS', target: ['roll:attack'] }], vars: [] }
+    assert.ok(auditNode(targeted, []).some(a => a.sev === 'err' && /cannot target/.test(a.t)), `${op} target`)
+    const gated = { graph: [{ id: 'x', op, label: 'L', stat: 'DEX', value: '2', ability: 'WIS', when: 'level >= 3' }], vars: [] }
+    assert.ok(auditNode(gated, []).some(a => a.sev === 'err' && /cannot be conditional/.test(a.t)), `${op} when`)
+  }
 })

@@ -35,13 +35,37 @@ export function handLabel(hand?: WeaponHand): string {
   return hand === 'main' ? 'Main Hand' : hand === 'off' ? 'Off Hand' : 'Equipped'
 }
 
-/** Which ability actually drives this weapon (finesse → the better of STR/DEX). */
+/**
+ * Which ability actually drives this weapon — the BEST score among everything
+ * allowed to swing it.
+ *
+ * Finesse was always this: "the better of STR/DEX" is a best-of over a set of
+ * two. A `useability` rule ("you may use Wisdom") widens that set rather than
+ * introducing a second idea, which is what makes it a MAY and not a swap: an
+ * Arbiter with WIS 18 / STR 10 attacks on Wisdom, and the same character with
+ * STR 20 keeps Strength without anyone choosing.
+ *
+ * Reads `sheet.attackAbilities`, which effectiveSheet unions from every active
+ * source — so the grant arrives here with no threading, and leaves the moment
+ * the feature does.
+ *
+ * ONE CHOKEPOINT: abMod() below calls this, and both weaponAttackBonus and
+ * weaponDamageBonus call abMod, so attack and damage cannot disagree.
+ */
 export function weaponAbilityKey(weapon: EquippedWeapon, sheet: CharacterSheet): AbilityKey {
   const ab = weapon.ability ?? 'str'
-  if (ab !== 'finesse') return ab
-  const str = sheet.abilities?.str ?? 10
-  const dex = sheet.abilities?.dex ?? 10
-  return dex > str ? 'dex' : 'str'
+  const allowed: AbilityKey[] = ab === 'finesse' ? ['str', 'dex'] : [ab]
+  for (const k of sheet.attackAbilities ?? []) {
+    if (!allowed.includes(k)) allowed.push(k)
+  }
+  if (allowed.length === 1) return allowed[0]
+  // Ties keep the earlier entry, so the weapon's own ability wins a draw and a
+  // granted one never silently displaces an equal score.
+  let best = allowed[0]
+  for (const k of allowed) {
+    if ((sheet.abilities?.[k] ?? 10) > (sheet.abilities?.[best] ?? 10)) best = k
+  }
+  return best
 }
 
 function abMod(weapon: EquippedWeapon, sheet: CharacterSheet): number {

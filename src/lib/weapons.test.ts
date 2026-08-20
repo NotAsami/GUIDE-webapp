@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import type { CharacterRow, CharacterSheet, EquippedWeapon } from './database.types.ts'
 import type { Resolution } from './graph.ts'
 import { buildContext, gid, resolve, total } from './graph.ts'
-import { rollWeaponAttack, isRanged } from './weapons.ts'
+import { rollWeaponAttack, isRanged, weaponAbilityKey, weaponAttackBonus, weaponDamageBonus } from './weapons.ts'
 
 const SHEET = {
   abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 },
@@ -178,3 +178,79 @@ test('the legacy "ammunition" property still fires', () => {
   assert.equal(isRanged({ properties: ['Ammunition (range 80/320)'] }), true)
   assert.equal(isRanged({ properties: ['ammunition'] }), true)
 })
+
+// --- `useability`: a feature that changes which ability swings the weapon ----
+//
+// Every wrong answer here is a plausible number. A forced swap instead of a
+// best-of quietly makes an Arbiter with STR 20 WORSE; missing the damage half
+// leaves attack and damage disagreeing by three; a sum instead of a union
+// double-counts nothing visibly. So each is pinned.
+
+const arb = (over: Partial<CharacterSheet> = {}): CharacterSheet => ({
+  abilities: { str: 10, dex: 12, con: 12, int: 10, wis: 18, cha: 10 },
+  ...over,
+} as CharacterSheet)
+
+const sword: EquippedWeapon = { id: 'w', name: 'Longsword', ability: 'str', damageDice: '1d8' } as EquippedWeapon
+
+test('SANCTITY: granted WIS wins when it is the better score', () => {
+  const sheet = arb({ attackAbilities: ['wis'] })
+  assert.equal(weaponAbilityKey(sword, sheet), 'wis', 'WIS 18 beats STR 10')
+})
+
+test('IT IS A MAY, NOT A SWAP — a strong Arbiter keeps Strength', () => {
+  // The failure that would look correct: forcing the ability makes a STR 20
+  // character attack at +4 instead of +5 and nobody would suspect the feature.
+  const sheet = arb({ abilities: { str: 20, dex: 12, con: 12, int: 10, wis: 18, cha: 10 }, attackAbilities: ['wis'] })
+  assert.equal(weaponAbilityKey(sword, sheet), 'str', 'STR 20 beats WIS 18')
+})
+
+test('it moves DAMAGE as well as attack', () => {
+  // Both run through abMod, so they cannot disagree — but only if the grant is
+  // read in that one place rather than bolted onto the attack path.
+  const plain = arb()
+  const blessed = arb({ attackAbilities: ['wis'] })
+  assert.equal(weaponAttackBonus(sword, plain), weaponDamageBonus(sword, plain) + proficiencyOf(plain))
+  assert.equal(weaponDamageBonus(sword, blessed) - weaponDamageBonus(sword, plain), 4,
+    'WIS 18 (+4) replaces STR 10 (+0) on damage too')
+})
+
+test('a finesse weapon still picks the better of STR/DEX with no rule present', () => {
+  const finesse: EquippedWeapon = { ...sword, ability: 'finesse' } as EquippedWeapon
+  assert.equal(weaponAbilityKey(finesse, arb()), 'dex', 'DEX 12 beats STR 10')
+})
+
+test('a grant WIDENS the finesse set rather than replacing it', () => {
+  const finesse: EquippedWeapon = { ...sword, ability: 'finesse' } as EquippedWeapon
+  const sheet = arb({ abilities: { str: 20, dex: 12, con: 12, int: 10, wis: 18, cha: 10 }, attackAbilities: ['wis'] })
+  assert.equal(weaponAbilityKey(finesse, sheet), 'str', 'best of {str, dex, wis}')
+})
+
+test('granting an ability the character is WORSE at changes nothing', () => {
+  // Best-of can never make an attack worse, which is why no UI is needed to
+  // ask the player whether they want it.
+  assert.equal(weaponAbilityKey(sword, arb({ abilities: { str: 20, dex: 8, con: 10, int: 8, wis: 8, cha: 8 }, attackAbilities: ['cha'] })), 'str')
+})
+
+test('two features granting WIS is the same as one', () => {
+  // effectiveSheet UNIONS rather than sums; this pins the read side treating a
+  // repeated entry as one permission.
+  const once = arb({ attackAbilities: ['wis'] })
+  const twice = arb({ attackAbilities: ['wis', 'wis'] })
+  assert.equal(weaponAbilityKey(sword, once), weaponAbilityKey(sword, twice))
+  assert.equal(weaponDamageBonus(sword, once), weaponDamageBonus(sword, twice))
+})
+
+test('REMOVING THE FEATURE RESTORES STRENGTH — the whole reason it is a rule', () => {
+  // A stored field would have overwritten `ability` on the weapon and stayed
+  // wrong after the class changed. The grant lives on the effective sheet, so
+  // dropping it is simply the absence of the entry.
+  assert.equal(weaponAbilityKey(sword, arb({ attackAbilities: ['wis'] })), 'wis')
+  assert.equal(weaponAbilityKey(sword, arb()), 'str')
+})
+
+/** Proficiency the weapon functions assume, so the attack/damage identity
+ *  above states its own arithmetic instead of hiding it. */
+function proficiencyOf(sheet: CharacterSheet): number {
+  return weaponAttackBonus(sword, sheet) - weaponDamageBonus(sword, sheet)
+}

@@ -72,3 +72,115 @@ test('the palette is actually bigger than the biggest list it replaced', () => {
   // editor had 12. The point of the merge was that every editor gets the rich one.
   assert.ok(ICONS.length > 250, `only ${ICONS.length} icons`)
 })
+
+/* ==================================================================
+   Every authored icon goes through <Icon>.
+
+   `gi:lorc/aura` interpolated into `className={`fa-solid ${…}`}` produces
+   `class="fa-solid gi:lorc/aura"` — Font Awesome has no such glyph, so the
+   element renders as NOTHING. No error, no fallback box, just a hole where
+   the icon was; the Inventory grid tile did exactly this while the list row
+   directly beneath it, which already used <Icon>, drew the same item fine.
+
+   That is the cost of two render paths for one value: adding a second icon
+   set fixed 128 call sites and silently missed the four that had been written
+   by hand.
+   ================================================================== */
+
+import { readFileSync, readdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
+
+const ROOT = fileURLToPath(new URL('../..', import.meta.url))
+
+function tsxFiles(dir = 'src', out: string[] = []): string[] {
+  for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+    if (e.isDirectory()) tsxFiles(`${dir}/${e.name}`, out)
+    else if (e.name.endsWith('.tsx')) out.push(`${dir}/${e.name}`)
+  }
+  return out
+}
+
+/**
+ * Interpolations that read from a hardcoded map or literal union of `fa-`
+ * names, which by construction can never hold a `gi:` value.
+ *
+ * Each entry is a claim about its source, not a shrug — the day one of these
+ * maps takes an authored value it has to come OFF this list and go through
+ * <Icon> instead.
+ */
+const FA_ONLY: { match: string; why: string }[] = [
+  { match: '${K.ic}', why: 'GraphEffects op-kind chips — literal fa- names in a local const' },
+  { match: '${FLAG_ICON[', why: 'roll flag glyphs — fixed map, one entry per RollFlag' },
+  { match: '${CAT_CORNER[', why: 'item-category corner mark — fixed map, one per ItemCategory' },
+  { match: '${iconFor(', why: 'party class glyph — CLASS_ICONS lookup, falls back to fa-user' },
+  { match: '${g}', why: 'identity Menu Glyph picker — iterates the hardcoded GLYPHS array' },
+  { match: '${def.corner}', why: 'public-vitals card corner — literal on the field definition' },
+]
+
+/** The glyph slot of a `fa-solid ${…}` template, and whether every value it
+ *  can produce is a literal.
+ *
+ *  Presence of a literal is NOT enough, which is the trap the first version of
+ *  this guard fell into: `${item.icon ?? 'fa-cube'}` contains `'fa-cube'` and
+ *  is still the exact bug — the fallback is a literal, the VALUE is authored
+ *  data. So the literals are blanked to `LIT`, the ternary conditions are
+ *  struck out, and what must remain is nothing but LITs and the `:` between
+ *  them. A condition may read anything it likes; a value may not. */
+function literalOnly(expr: string): boolean {
+  const lit = expr.replace(/'[^']*'/g, 'LIT')
+  const values = lit.replace(/[^?:]*\?(?![.?])/g, '')   // strike the conditions
+  return /^[\sLIT:]*$/.test(values) && values.includes('LIT')
+}
+
+/** Every glyph slot in the file: the interpolation immediately after
+ *  `fa-solid `, wherever in the template it sits — `${styles.x} fa-solid ${…}`
+ *  is a real shape, so anchoring on the backtick would miss it. */
+function glyphSlots(src: string): { expr: string; index: number }[] {
+  return [...src.matchAll(/fa-solid \$\{([^}]*)\}/g)].map(m => ({ expr: m[1], index: m.index! }))
+}
+
+test('EVERY AUTHORED ICON RENDERS THROUGH <Icon>, never raw into a fa-solid class', () => {
+  const bare: string[] = []
+  for (const f of tsxFiles()) {
+    if (f.endsWith('components/Icon.tsx')) continue   // the one place that may branch
+    const src = readFileSync(join(ROOT, f), 'utf8')
+    for (const { expr, index } of glyphSlots(src)) {
+      if (literalOnly(expr)) continue
+      if (FA_ONLY.some(p => `${'${'}${expr}}`.includes(p.match))) continue
+      bare.push(`${f}:${src.slice(0, index).split('\n').length}  ${'${'}${expr}}`)
+    }
+  }
+  assert.deepEqual(bare, [],
+    'These interpolate a value into a Font Awesome class. A game-icons value '
+    + '(gi:…) renders as an invisible nothing there.\n'
+    + 'Use <Icon name={…}/>, or add to FA_ONLY with the reason the source can '
+    + 'only ever hold fa- names:\n  ' + bare.join('\n  '))
+})
+
+test('the icon scanner actually sees the codebase', () => {
+  // Without this the regex could stop matching and the guard above would pass
+  // forever — the failure mode of every source scan.
+  const all = tsxFiles().map(f => readFileSync(join(ROOT, f), 'utf8')).join('\n')
+  assert.ok(glyphSlots(all).length > 10, 'found almost no glyph slots — regex drifted')
+  assert.ok(all.includes('<Icon name='), 'found no <Icon> call sites at all')
+})
+
+test('literalOnly tells a fallback apart from a choice', () => {
+  // The distinction the whole guard rests on, pinned directly so a future
+  // tweak to the regex cannot quietly re-open the case that shipped.
+  assert.ok(literalOnly("cond ? 'fa-moon' : 'fa-campground'"), 'ternary over literals is safe')
+  assert.ok(literalOnly("a ? 'fa-x' : b ? 'fa-y' : 'fa-z'"), 'chained ternary over literals is safe')
+  assert.ok(literalOnly("s === 'pending' ? 'fa-spinner fa-spin' : 'fa-coins'"), 'a literal condition is still a condition')
+  assert.ok(!literalOnly("item.icon ?? 'fa-cube'"), 'THE SHIPPED BUG: authored value with a literal fallback')
+  assert.ok(!literalOnly("cond ? item.icon : 'fa-x'"), 'authored value in one branch')
+  assert.ok(!literalOnly('spellIcon(sp)'), 'a call returns whatever it returns')
+  assert.ok(!literalOnly('FLAG_ICON[f]'), 'a lookup reads a value')
+})
+
+test('every excuse in FA_ONLY still matches something', () => {
+  const all = tsxFiles().map(f => readFileSync(join(ROOT, f), 'utf8')).join('\n')
+  for (const p of FA_ONLY) {
+    assert.ok(all.includes(p.match), `stale exemption, matches nothing: "${p.match}"`)
+  }
+})

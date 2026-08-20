@@ -306,8 +306,17 @@
   scrollbar-width: none;
   /* A mask, not an overlaid gradient: an ::after would scroll away with the
      rows, and a sibling overlay would have to sit outside the scroller and be
-     positioned back over it. This rides the element's own box. */
+     positioned back over it. This rides the element's own box.
+
+     WHICH IS ALSO THE CATCH. The mask is anchored to the element, not to the
+     content, so the bottom 20px of the VISIBLE AREA is always faded. At maximum
+     scroll the last row sat in that band with nothing beneath it to bring into
+     view, so the fade never lifted and the final item could not be read.
+
+     The padding is the fade's own height: at the end of the scroll it is the
+     padding that sits in the faded band, and the last row clears it. */
   mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+  padding-bottom: 20px;
 }
 .workBody.catBody .catIndex::-webkit-scrollbar { width: 0; height: 0; }
 
@@ -1570,9 +1579,24 @@
   background-size: 5px 5px, 5px 5px, calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
 
-.detailRow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: rgba(0,0,0,0.28); border-left: 2px solid var(--beige-dim); }
+/* `.fieldLab` carries no margin of its own, so without clearance here the next
+   label ("Library · published classes only") sits flush against this row and the
+   two read as one block. */
+.detailRow {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px;
+  margin-bottom: 14px;
+  background: rgba(0,0,0,0.28); border-left: 2px solid var(--beige-dim);
+}
 .detailRow .drLab { flex: 0 0 40%; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--beige); }
-.detailRow .drVal { flex: 1; font-family: var(--font-prose); font-size: 13.5px; color: var(--text); }
+/* Display face, not prose. Body serif beside a mono-caps label reads as
+   unstyled text that nobody chose — this is a VALUE, and the house sets values
+   in the display face everywhere else. */
+.detailRow .drVal {
+  flex: 1; min-width: 0;
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 14px; letter-spacing: 0.04em;
+  color: var(--beige);
+}
 .detailAdd { display: flex; gap: 8px; align-items: stretch; margin: 6px 0 15px; }
 .detailAdd .sessIn { flex: 1; margin-bottom: 0; }
 .detailAdd button { flex: 0 0 96px; }
@@ -2572,7 +2596,12 @@ div.skWarn { cursor: default; }
 }
 .profSplit::after { content: ""; flex: 1; height: 1px; background: rgba(212,191,125,0.14); }
 /* The offered ones read as the shortlist even before anything is ticked. */
-.profChip.offered { border-color: rgba(226,176,33,0.34); color: var(--beige); }
+/* "Offered by this class" is a DECORATION; proficient/expertise are STATES, and
+   a state must win. This rule sits ~1800 lines below .profChip.exp with the same
+   specificity, so it was simply the later one — and its pale --beige text landed
+   on expertise's bright amber fill, which is the unreadable cream-on-yellow.
+   Scoped so the tint only applies to a chip in the neutral state. */
+.profChip.offered:not(.on):not(.exp) { border-color: rgba(226,176,33,0.34); color: var(--beige); }
 
 /* ---- ASSIGN CLASS PREVIEW ----
    Assigning rewrites hit die, saves, armour training and the slot ladder, which
@@ -2737,7 +2766,17 @@ div.skWarn { cursor: default; }
 
 /* ---- the roll preview ---- */
 
-.lootRollBtn { display: flex; align-items: flex-end; height: 100%; }
+/* The select and the Roll button on one line.
+
+   .selIn carries `margin-bottom: 10px` for STACKED form fields, and the button
+   cell was bottom-aligning to a cell that included it — so the button sat
+   exactly that 10px below the select. Same cause as the loot row's bumpiness:
+   a stacking margin inside a grid row. Zero it here and give both controls the
+   same height, and `align-items: end` then actually aligns them. */
+.lootPickRow { align-items: end; }
+.lootPickRow .selIn { margin-bottom: 0; height: 34px; }
+.lootRollBtn { display: flex; align-items: stretch; }
+.lootRollBtn > * { width: 100%; height: 34px; }
 
 /* One rolled line. A MISS still renders — seeing what did not come up is how a
    badly tuned table gives itself away. */
@@ -2803,3 +2842,64 @@ div.skWarn { cursor: default; }
   margin-top: 10px; flex: 1 1 auto; min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; gap: 4px;
 }
+
+/* ---- Ability Scores (Actions card B) ----
+   Three across, two rows — the 3x2 block the Stat Panel draws them in, so the
+   DM is editing them in the shape they read them. */
+/* Flows to six across on a full-width card — STR DEX CON INT WIS CHA as one
+   line, which is how they are read — and falls back to three or two as the
+   console narrows. auto-fit rather than a fixed six so the base->effective
+   readout never gets squeezed out of a cell. */
+.abGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 8px; }
+.abGrid > * { min-width: 0; }
+
+.abCell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(212, 191, 125, 0.2);
+}
+/* A score the rules have moved. Cyan because that is what a layered value reads
+   as everywhere else in this app. */
+.abCell.boosted { border-color: rgba(0, 166, 214, 0.4); }
+
+.abKey {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--beige-dim);
+}
+/* Zero margin and a fixed height: .sessIn's stacking margin is for a column of
+   fields and drags a control off centre inside a row (see .lootRow). */
+.abIn {
+  width: 100%; height: 30px; margin: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(212, 191, 125, 0.32);
+  color: var(--text);
+  font-family: var(--font-display); font-weight: 700; font-size: 15px;
+  text-align: center;
+  padding: 0 4px;
+}
+.abIn:focus { outline: none; border-color: var(--amber); }
+.abIn:disabled { opacity: 0.5; }
+
+.abMod {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em;
+  color: var(--beige); min-width: 22px; text-align: right;
+}
+/* The base → effective readout, only drawn when they disagree. Spans the row so
+   it sits under the input rather than squeezing it. */
+.abEff {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.1em;
+  color: var(--cyan);
+}
+.abEff b { color: var(--cyan-hot, var(--cyan)); font-weight: 400; }
+
+.abHint {
+  margin: 9px 1px 0;
+  font-family: var(--font-mono); font-size: 7.5px; line-height: 1.7;
+  letter-spacing: 0.06em; color: var(--beige-dim);
+}
+.abHint b { color: var(--beige); font-weight: 400; }
