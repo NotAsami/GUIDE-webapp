@@ -77,6 +77,36 @@ target a damage *type*, not a roll:
 |---|---|
 | `resist` / `vuln` / `immune` | halves / doubles / nullifies incoming damage of the matched kind. Target a tag naming the type |
 
+**Sheet ops** — these change the character *sheet*, not a roll. They take **no
+target**, because there is nothing to match against: they apply to whoever
+carries the node. They cannot be conditional either — a `when` on one is an
+error, since the sheet is not evaluated per-roll.
+
+| op | does | example |
+|---|---|---|
+| `boost` | moves a number on the sheet itself — an ability score, speed, darkvision. A racial +2 DEX is this: the score moves, so every save, skill and derived value made from it moves with it | `DEX` `+2` |
+| `use ability` | lets the carrier use a different ability for **attack rolls** | `WIS` |
+
+`boost` takes a **plain number, not a formula**. There is no roll to compute
+against at sheet level, so `prof + wis` has nothing to read.
+
+**`use ability` is a MAY, not a swap.** "You may use Wisdom instead of Strength
+or Dexterity" is a permission, so the attack uses the **best** score among
+everything allowed — exactly as a finesse weapon already picks the better of STR
+and DEX. Granting an ability the character is worse at therefore changes nothing,
+which is why it needs no toggle. It moves **damage too**, because attack and
+damage run off the same modifier.
+
+It belongs on the **feature**, not the weapon. The property is the wielder's: a
+fighter who picks the same blade off a corpse swings it with Strength. Take the
+feature away and the attack goes back to STR on its own, with nothing stored to
+clean up.
+
+> **Boost vs an Effect.** Use `boost` for what a thing *is* and cannot be
+> separated from — an elf's Dexterity. Use an Effect (the Effects tab) for
+> something applied to you or carried by an object, which can **end**: Bless,
+> Poisoned, a gem's enchantment.
+
 **Activations** — these run when the player presses Use, and they write state:
 
 | op | does |
@@ -415,6 +445,27 @@ Anything unrecognised renders **literally**, so `[x]{plaid}` shows as
 `[x]{plaid}` rather than silently losing its colour. That is deliberate: a typo
 you can see is worth more than one you cannot.
 
+### Where it renders
+
+Everywhere the field is shown, which was **not** true until recently and is the
+one thing to know if a tag ever shows up as raw text.
+
+The same rule covers `**bold**`, `*italics*` and `[text](url)`: the field has to
+be routed through `renderInline()` or `<Prose>` at the point it is drawn. A
+weapon's description used to colour correctly in the hover tooltip and print
+`[Mercy]{radiant}` as literal characters in the Equipment detail panel below it —
+one authored string, two render paths, only one upgraded. Item and weapon detail,
+the Inventory item popup, the shop header and the path-choice cards were all
+fixed together, and `src/lib/proseFields.test.ts` now fails if a field that
+*offers* the shortcuts is printed raw anywhere.
+
+Two fields are deliberately plain, because nothing authors them as markdown:
+
+- **op field help** in the effect editor — that copy is hardcoded in `opSchema.ts`,
+  not authored
+- **shard perk blurbs** — authored in a single-line input that never offered the
+  shortcuts. Colour one and you will see the brackets.
+
 ---
 
 ## Traps worth knowing
@@ -428,6 +479,9 @@ you can see is worth more than one you cannot.
 | **A variable nothing reads** | A warning. Declaring before wiring is a legitimate order of work. |
 | **Two contributions of different kinds under one `ask`** | A warning — a toggle carries one op, so only the first applies. Give them separate asks. |
 | **Damage type** | Set it on any `add` that targets a damage roll, or it lands in the untyped bucket and loses its colour in the split. |
+| **A `when` or a target on a sheet op** | An error. `boost` and `use ability` change the sheet, which has no roll to match or to evaluate against. |
+| **A formula in `boost`** | An error — sheet level has nothing to compute from. Plain number only, negative allowed. |
+| **`use ability` looks like it did nothing** | It is best-of. Granting WIS to a character whose STR is already higher correctly changes no number. |
 
 The audit rail tells you all of these while you author, and an **error blocks
 save** — on features, and now on spells.

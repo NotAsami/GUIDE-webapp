@@ -48,6 +48,10 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - `src/lib/` — `supabase.ts` (client), `auth.tsx` (session + magic link), `character.ts` (row hook + section update), `database.types.ts` (hand-written types, replace with `supabase gen types` later).
 - `src/components/Layout.tsx` + `Topbar.tsx` (HP pill = Phase 0 write surface) + `Bottombar.tsx` + `Nav.tsx` — the shared chrome from the Codex mockup, identical across routes.
 - All ten mockup screens are wired end-to-end (`Codex.tsx`, `Stats.tsx`, `Equipment.tsx`, `Inventory.tsx`, `Features.tsx`, `Journal.tsx`, `Character.tsx`, `Shard.tsx`, `Lore.tsx`, `Spellbook.tsx`). `Stub.tsx` is unused by any route now — kept only in case a future screen needs a placeholder.
+- The DM side has since grown past the mockups: `OperatorConsole.tsx` (the console and
+  every catalog tab), `FeatureEditor.tsx`, `ShardLattice.tsx`, `OperatorShops.tsx`,
+  `OperatorInventory.tsx`. Player-side splits: `EquipmentCarry.tsx`, `InventoryPopup.tsx`,
+  `ShardTree.tsx`.
 - `src/styles/tokens.css` + `global.css` — design tokens (CSS vars) shared by all screens.
 - `supabase/migrations/0001_init.sql` + `supabase/seed.sql` — paste-and-run via the Supabase SQL editor.
 
@@ -64,5 +68,27 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
   using `border-color` instead of `--bc`. Don't hand-audit for these — run the tests.
   Hexagons still need the two-layer fix and are NOT covered by the guard.
 
+### Recurring bug: one authored value, two render paths
+The same defect has now shipped twice, in two materials. A value the DM authors is
+read by two different pieces of markup; one gets upgraded, the other keeps the old
+render and fails **silently** — no error, no fallback, just wrong output that looks
+deliberate.
+
+- **Icons.** `<Icon>` (`src/components/Icon.tsx`) is the ONLY place an icon becomes
+  pixels: `gi:` → a CSS mask, anything else → a Font Awesome class. Interpolating an
+  authored value straight into `` `fa-solid ${…}` `` renders a game icon as *nothing*.
+  Guarded by `src/lib/icons.test.ts`. Note the guard tests VALUE POSITIONS, not the
+  mere presence of a literal — `${item.icon ?? 'fa-cube'}` contains `'fa-` and is
+  still the bug.
+- **Prose.** Any field authored through a `markdownShortcuts` textarea must render
+  through `renderInline()` or `<Prose>`; printed raw, `**bold**` and `[text]{colour}`
+  show as source. Guarded by `src/lib/proseFields.test.ts`, in both directions —
+  offered-but-not-rendered and rendered-but-not-offered.
+- Both guards carry an exemption list where each entry states why that source can
+  only hold safe values. Adding to it is a decision; a stale entry fails its own test.
+- Run the tests instead of grepping call sites by hand.
+
 ## Other guides
 - Inventory refactor spec: docs/GUIDE_Codex_Inventory_Refactor.md
+- Authoring guide (ops, targeting, variables, prose colour): docs/GUIDE_Codex_Authoring.md
+- Deferred/designed-but-unbuilt register: docs/GUIDE_Codex_Deferred.md

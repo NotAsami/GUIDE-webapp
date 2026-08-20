@@ -2780,3 +2780,90 @@ a flat list plus one combinator cannot express. Designed and costed in
 `GUIDE_Codex_Deferred.md` — disjunctive normal form, `targetGroups: string[][]`,
 about ten engine lines and a real authoring UI. Not built, because the two-effect
 workaround covers it until the branches can overlap.
+
+---
+
+## 55. `useability` as built — a permission on the sheet, not a field on the item
+
+The Arbiter port produced a line the engine could not say:
+
+> **Sanctity** — *Ability Mod: You may use Wisdom instead of Strength or
+> Dexterity for attack rolls.*
+
+`WeaponAbility` is exactly `'str' | 'dex' | 'finesse'`, and `weaponAbilityKey`
+only special-cased finesse as "the better of STR/DEX". Wisdom was unsayable
+anywhere.
+
+**Where it belongs was the whole design question.** The obvious home is a fourth
+value on the weapon's `ability` field — and it is wrong. The property is the
+**wielder's**, not the blade's: a fighter who picks Sanctity off a corpse swings
+it with Strength. Putting it on the item would make the swap travel with the
+weapon and survive being handed to someone who never had the feature. So it is a
+rule on the FEATURE, and the item field was not widened.
+
+That makes it the same shape as `boost`: a graph op that changes the sheet rather
+than a roll. It joins `boost` in `PALETTE_SHEET`, `group: 'sheet'`.
+
+| step | `boost` | `useability` |
+|---|---|---|
+| authored | `opSchema.ts` | same, new entry |
+| compiled | `sheetEffects()` | same function, new branch |
+| carried | `ItemEffects` | new field `attackAbilities?: AbilityKey[]` |
+| layered | `effectiveSheet()` | **unioned**, not summed |
+| read | ability scores | `weaponAbilityKey` |
+
+**Unioned, not summed** is the one place it departs from every other
+`ItemEffects` field. Those are numbers that add; this is a set of permissions
+that accumulate. Two features each granting WIS grant WIS, not WIS twice.
+
+**Why it cost almost nothing.** Two facts, both verified before the plan
+committed: `weaponAbilityKey` is the single chokepoint — attack *and* damage both
+go through `abMod`, which calls it — and the screens already hand it the
+**effective** sheet (`Equipment.tsx`, `Stats.tsx` both call `effectiveSheet`).
+An override layered onto the sheet therefore arrived at the read site with no
+threading through call sites at all.
+
+**Best-of, not a swap.** `weaponAbilityKey` became "highest score among the
+allowed set", which *generalises* finesse rather than adding a second concept
+beside it:
+
+```
+allowed = weapon.ability === 'finesse' ? [str, dex] : [weapon.ability]
+        ∪ sheet.attackAbilities
+→ pick the highest score among `allowed`   (ties keep the earlier entry)
+```
+
+"You **may** use Wisdom" is a choice, and best-of is how the sheet already
+resolves choices. An Arbiter with WIS 18 / STR 10 swings on Wisdom; the same
+character with STR 20 keeps Strength. Correct, and it needs no UI — which is the
+argument for best-of over a toggle.
+
+### The audit bug this exposed, and the rule it produced
+
+Authoring the first `useability` node raised:
+
+> **Boost needs a plain number.** *You may use Wisdom instead of Strength or
+> Dexterity for attack rolls* has `""`. The sheet has no roll to compute against,
+> so dice and formulas cannot apply here.
+
+Nonsense on a node with no `value` field at all — `Number(undefined)` → `NaN` →
+an error quoting the empty string. The cause: `auditNode`'s `IS_SHEET` branch
+held **`boost`'s own rules alongside the genuinely shared ones**, so they ran
+against every sheet op. Exactly two rules are shared by the group — *cannot
+target*, *cannot be conditional* — and the branch now says so explicitly:
+
+```ts
+// shared: no target, no `when`
+if (eff.op !== 'boost') continue      // ← everything past here is boost's alone
+```
+
+**The general rule: a group branch holds only what the whole group shares.** The
+moment a second op joins a group, whatever was written when it had one member
+becomes a false positive. Guarded by four tests in `graph.test.ts`,
+mutation-verified three ways (un-scope it → 1 fail; scope it so boost is skipped
+→ 3 fails; drop the shared no-target rule → 2 fails).
+
+It also mis-coloured: sheet ops are `--teal` by design, and because
+`.efrow.sheet .efGlFrame` targets a *descendant* it kept winning on an errored
+row, so a real error rendered in the calm colour. `.efrow.sheet.bad .efGlFrame`
+now restores the danger palette.
