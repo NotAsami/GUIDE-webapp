@@ -37,6 +37,17 @@ export const CAT_ORDER: ItemCategory[] = [
   'weapon', 'ammo', 'armor', 'consumable', 'tool', 'quest', 'misc',
 ]
 
+/** `very-rare` is hyphenated on the wire (it is an Open5e key and a CSS token
+ *  suffix) and two words on screen. Capitalising the first letter alone gave
+ *  "Very-rare", so the exceptions are spelled out rather than derived. */
+const RARITY_LABEL: Partial<Record<ItemRarity, string>> = { 'very-rare': 'Very Rare' }
+
 export function rarityLabel(r: ItemRarity): string {
-  return r.charAt(0).toUpperCase() + r.slice(1)
+  return RARITY_LABEL[r] ?? r.charAt(0).toUpperCase() + r.slice(1)
 }
+
+/** Ascending, the order a shelf sorts in. One list, so a new tier cannot be
+ *  added to the type without a sort position. */
+export const RARITY_ORDER: ItemRarity[] = [
+  'common', 'uncommon', 'rare', 'very-rare', 'legendary', 'artifact',
+]

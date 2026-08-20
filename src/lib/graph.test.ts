@@ -1772,3 +1772,53 @@ test('the shared sheet rules still apply to BOTH sheet ops', () => {
     assert.ok(auditNode(gated, []).some(a => a.sev === 'err' && /cannot be conditional/.test(a.t)), `${op} when`)
   }
 })
+
+/* ==================================================================
+   A WEAPON'S OWN BONUS APPLIES TO THAT WEAPON ONLY.
+
+   The SRD import generates one untargeted `add` per magic weapon — 114 of
+   them — and the whole design rests on "no selector means this node's own
+   roll" holding for a WEAPON, not just a feature. It was first written as
+   `target: ['roll:attack']`, which reads plausibly and is wrong: it applies to
+   every attack the character makes, so a +1 dagger in the off hand silently
+   buffs a mundane greatsword. The number just looks right, which is why this
+   is pinned rather than trusted.
+   ================================================================== */
+
+test('an untargeted node on a weapon hits that weapon, not every attack', () => {
+  const magic = {
+    id: 'w1', name: 'Battleaxe +1', category: 'weapon', damageDice: '1d8',
+    graph: [{ id: 'srd_atk', op: 'add', value: '1', label: '+1 magic weapon' }],
+  }
+  const mundane = { id: 'w2', name: 'Greatsword', category: 'weapon', damageDice: '2d6' }
+  const c = {
+    id: 'c1', sheet: {}, equipped: { weapons: [magic, mundane] },
+    inventory: [], shards: {}, resources: {},
+  } as unknown as Parameters<typeof buildContext>[0]
+
+  const ctx = buildContext(c)
+  const flat = (r: { riders: { flat?: number }[] }) =>
+    r.riders.reduce((n, x) => n + (Number(x.flat) || 0), 0)
+
+  for (const kind of ['attack', 'damage'] as const) {
+    assert.equal(flat(resolve(ctx, { kind, subject: gid('weapon', magic) })), 1,
+      `the magic weapon's own ${kind} takes the bonus`)
+    assert.equal(flat(resolve(ctx, { kind, subject: gid('weapon', mundane) })), 0,
+      `the mundane weapon's ${kind} must NOT — this is the leak`)
+  }
+})
+
+test('one untargeted node covers attack AND damage', () => {
+  // Equipment.tsx resolves both with the same weapon gid as subject, so a +1
+  // weapon needs ONE node rather than a pair. Two would double-count if the
+  // second were ever also untargeted.
+  const w = {
+    id: 'w1', name: 'Dagger +2', category: 'weapon',
+    graph: [{ id: 'srd_atk', op: 'add', value: '2', label: '+2 magic weapon' }],
+  }
+  const c = { id: 'c1', sheet: {}, equipped: { weapons: [w] }, inventory: [], shards: {}, resources: {} } as unknown as Parameters<typeof buildContext>[0]
+  const ctx = buildContext(c)
+  const flat = (r: { riders: { flat?: number }[] }) => r.riders.reduce((n, x) => n + (Number(x.flat) || 0), 0)
+  assert.equal(flat(resolve(ctx, { kind: 'attack', subject: gid('weapon', w) })), 2)
+  assert.equal(flat(resolve(ctx, { kind: 'damage', subject: gid('weapon', w) })), 2)
+})

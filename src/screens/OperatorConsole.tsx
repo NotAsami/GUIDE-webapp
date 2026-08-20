@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import {
-  useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, useDmClasses, useDmRaces, classContent, raceContent, featureContent, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState, type DmClassesState, type DmRacesState, useDmLoot, useDmLootOpen, lootContent,
+  useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, useDmClasses, useDmRaces, classContent, raceContent, featureContent, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState, type DmClassesState, type DmRacesState, useDmLoot, useDmLootOpen, lootContent, useDmBackgrounds, backgroundContent, type DmBackgroundsState,
 } from '../lib/dm'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
@@ -34,7 +34,7 @@ import { markdownShortcuts } from '../lib/textareaHooks'
 import { useLocalDraft } from '../lib/draft'
 import { useAutoPublish, useAutoSave } from '../lib/autopublish'
 import type {
-  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json, QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow, CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect, Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow, EffectDuration, EffectRef, Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData, CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData, CatalogRaceRow, RaceDef, EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef, EquippedGear, CharacterLore, Relation, CatalogLootRow, LootTable, LootRow, LootOpenLine, CharacterSheet,
+  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json, QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow, CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect, Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow, EffectDuration, EffectRef, Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData, CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData, CatalogRaceRow, RaceDef, CatalogBackgroundRow, BackgroundDef, EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef, EquippedGear, CharacterLore, Relation, CatalogLootRow, LootTable, LootRow, LootOpenLine, CharacterSheet,
 } from '../lib/database.types'
 import { ITEM_SLOTS, isRingSlot } from '../lib/equip'
 import { SKILLS, ABILITY_ORDER, ABILITY_ABBR, ABILITY_NAMES, abilityMod } from '../lib/dnd'
@@ -130,7 +130,7 @@ const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hp
 
 type View = 'overview' | 'character' | 'quests' | 'sessions' | 'catalog'
 type CharTab = 'actions' | 'inventory' | 'lore' | 'shards'
-type CatTab = 'items' | 'features' | 'spells' | 'effects' | 'shops' | 'classes' | 'races' | 'loot'
+type CatTab = 'items' | 'features' | 'spells' | 'effects' | 'shops' | 'classes' | 'races' | 'backgrounds' | 'loot'
 
 export function OperatorConsole() {
   const { session, loading: authLoading } = useAuth()
@@ -151,6 +151,7 @@ export function OperatorConsole() {
   const lootLib = useDmLoot()
   const lootOpen = useDmLootOpen()
   const raceLib = useDmRaces()
+  const backgroundLib = useDmBackgrounds()
   const confiscated = useDmConfiscated()
   const onlineIds = usePartyPresence()
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
@@ -177,6 +178,7 @@ export function OperatorConsole() {
     { key: 'loot', label: 'Loot', icon: 'fa-sack-dollar', n: lootLib.tables.length, soon: false },
     { key: 'classes', label: 'Classes', icon: 'fa-shield-halved', n: classLib.classes.length, soon: false },
     { key: 'races', label: 'Races', icon: 'fa-leaf', n: raceLib.races.length, soon: false },
+    { key: 'backgrounds', label: 'Backgrounds', icon: 'fa-scroll', n: backgroundLib.backgrounds.length, soon: false },
     /* Last on purpose: these two LEAVE the catalog for their own editor, so they
        are an exit rather than another tab, and reading order should say so. */
     { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
@@ -511,7 +513,7 @@ export function OperatorConsole() {
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
               ) : view === 'catalog' ? (
-                <CatalogSurface tab={catTab} catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} classLib={classLib} raceLib={raceLib} lootLib={lootLib} members={members}
+                <CatalogSurface tab={catTab} catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} classLib={classLib} raceLib={raceLib} lootLib={lootLib} backgroundLib={backgroundLib} members={members}
                   onRollLoot={(id, t) => { void rollLootTable(id, t) }}
                   openLootId={lootOpen.roll?.table_id ?? null}
                   onResumeLoot={() => setLootMin(false)} />
@@ -1934,7 +1936,9 @@ const RAR_DEF: Record<ItemRarity, { label: string; token: string }> = {
   common: { label: 'Common', token: 'var(--rar-common)' },
   uncommon: { label: 'Uncommon', token: 'var(--rar-uncommon)' },
   rare: { label: 'Rare', token: 'var(--rar-rare)' },
+  'very-rare': { label: 'Very Rare', token: 'var(--rar-vrare)' },
   legendary: { label: 'Legendary', token: 'var(--rar-legend)' },
+  artifact: { label: 'Artifact', token: 'var(--rar-artifact)' },
 }
 const GEAR_SLOTS: readonly ItemSlot[] = ITEM_SLOTS
 /** Ring I and Ring II are mechanically identical (lib/equip.ts isRingSlot) —
@@ -2281,9 +2285,9 @@ function BroadcastPanel({ selected, onSend, log }: {
  *  so a granted copy is mechanically real the instant it lands. */
 /** `tab` is owned by OperatorConsole: the rail that switches it hangs off
     region 01, so the state has to live above both. */
-function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib, classLib, raceLib, lootLib, members, onRollLoot, openLootId, onResumeLoot }: {
+function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib, classLib, raceLib, lootLib, backgroundLib, members, onRollLoot, openLootId, onResumeLoot }: {
   tab: CatTab
-  catalog: DmCatalogState; featureLib: DmFeaturesState; effectLib: DmEffectsState; spellLib: DmSpellsState; shopLib: DmShopsState; classLib: DmClassesState; raceLib: DmRacesState; lootLib: DmLootState; members: PartyMember[]
+  catalog: DmCatalogState; featureLib: DmFeaturesState; effectLib: DmEffectsState; spellLib: DmSpellsState; shopLib: DmShopsState; classLib: DmClassesState; raceLib: DmRacesState; lootLib: DmLootState; backgroundLib: DmBackgroundsState; members: PartyMember[]
   onRollLoot: (id: string, table: LootTable) => void
   /** The table whose roll is currently open, so its index row can offer
    *  Resume instead of Roll. */
@@ -2347,6 +2351,8 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
           onRoll={onRollLoot} openLootId={openLootId} onResume={onResumeLoot} />
       ) : tab === 'races' ? (
         <RaceLibrarySurface lib={raceLib} featureLib={featureLib} members={members} />
+      ) : tab === 'backgrounds' ? (
+        <BackgroundLibrarySurface lib={backgroundLib} featureLib={featureLib} />
       ) : tab === 'classes' ? (
         <ClassLibrarySurface lib={classLib} featureLib={featureLib} itemCatalog={items} members={members} />
       ) : tab === 'shops' ? (
@@ -6583,6 +6589,293 @@ function attitudeClass(a?: Relation['attitude'] | null): 'fr' | 'ne' | 'wa' | 'h
 
 /** Flat section divider (label + hairline rule) — the Lore tab's section idiom, replacing
  *  a boxed .actCard per section so a long form reads as one column, not stacked panels. */
+// ============================================================
+// BACKGROUNDS (migration 0021) — the race editor's sibling.
+// ============================================================
+
+/** Deliberately NOT a clone of RaceForm. A background shares the race's shape
+ *  where it matters — proficiencies, granted features, boost rules, the same
+ *  authoring blocks — and carries none of its subrace/parent/language
+ *  machinery, which would be dead controls on every row. */
+function BackgroundLibrarySurface({ lib, featureLib }: {
+  lib: DmBackgroundsState
+  featureLib: DmFeaturesState
+}) {
+  const { backgrounds, loading } = lib
+  const [selId, setSelId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const shown = useMemo(() => {
+    const q = parseCatalogQuery(query)
+    return backgrounds.filter(r => matchesCatalogQuery(backgroundContent(r), q))
+  }, [backgrounds, query])
+
+  const activeId = creating ? null : (selId ?? backgrounds[0]?.id ?? null)
+  const selected = backgrounds.find(r => r.id === activeId) ?? null
+
+  return (
+    <div className={styles.catLayout}>
+      <div className={styles.catIndex}>
+        <div className={styles.catNew}>
+          <Btn tone="cyan" icon="fa-plus" label="New Background" onClick={() => { setCreating(true); setSelId(null) }} />
+        </div>
+        <div className={cx(styles.searchWrap, styles.catSearch)}>
+          <i className="fa-solid fa-magnifying-glass" />
+          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+            placeholder="Search backgrounds…" autoComplete="off" spellCheck={false} />
+          {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
+        </div>
+        <div className={styles.catRows}>
+          {shown.map(r => {
+            const d = backgroundContent(r)
+            const n = (d.features ?? []).length
+            return (
+              <button key={r.id} className={cx(styles.catRow, r.id === activeId && !creating && styles.sel)}
+                style={{ ['--rar' as string]: 'var(--cyan)' }} onClick={() => { setCreating(false); setSelId(r.id) }}>
+                <span className={styles.crIc}><Icon name={d.icon || 'fa-scroll'} /></span>
+                <span className={styles.crTx}>
+                  <span className={styles.crT}>{d.name || 'Untitled'}</span>
+                  <span className={styles.crS}>
+                    {(d.skills ?? []).length} skill{(d.skills ?? []).length === 1 ? '' : 's'}
+                    <span className={styles.op}> · </span>{n} feature{n === 1 ? '' : 's'}
+                    {d.source === 'srd' && <><span className={styles.op}> · </span><span className={styles.srdBadge}>SRD</span></>}
+                    {d.modified && <><span className={styles.op}> · </span>edited</>}
+                    {r.draft && <><span className={styles.op}> · </span>draft</>}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        {backgrounds.length === 0 && <div className={styles.catEmpty}>{loading ? '· loading ·' : '— library empty —'}</div>}
+        {backgrounds.length > 0 && shown.length === 0 && <div className={styles.catEmpty}>— nothing matches —</div>}
+      </div>
+
+      <div className={styles.catForm}>
+        <BackgroundForm
+          row={selected} creating={creating} lib={lib} featureLib={featureLib}
+          onSelected={id => { setCreating(false); setSelId(id) }}
+          onCleared={() => { setCreating(false); setSelId(null) }}
+        />
+      </div>
+    </div>
+  )
+}
+
+const BLANK_BACKGROUND: BackgroundDef = {
+  name: '', icon: 'fa-scroll', desc: '',
+  abilityOptions: [], skills: [], skillChooseN: 0,
+  proficiencies: {}, features: [], equipment: [],
+  tags: [], vars: [], graph: [],
+}
+
+function BackgroundForm({ row, creating, lib, featureLib, onSelected, onCleared }: {
+  row: CatalogBackgroundRow | null
+  creating: boolean
+  lib: DmBackgroundsState
+  featureLib: DmFeaturesState
+  onSelected: (id: string) => void
+  onCleared: () => void
+}) {
+  const selId = row?.id ?? null
+  const base = creating ? BLANK_BACKGROUND : row ? backgroundContent(row) : null
+  const { draft, dirty, savedAt, update, reset, clear } =
+    useLocalDraft<BackgroundDef>(creating ? 'background:__new__' : `background:${selId ?? 'none'}`, base)
+
+  const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
+  const set = (p: Partial<BackgroundDef>) => update(x => ({ ...x, ...p }))
+
+  const { nodes, namesByGid, ready } = useCatalogNodes()
+
+  const audit: AuditItem[] = useMemo(() => {
+    if (!draft) return []
+    const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
+    if (!draft.name?.trim()) {
+      out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed background', s: 'A background needs a name before it can be assigned.' })
+    }
+    if ((draft.abilityOptions ?? []).length && (draft.abilityOptions ?? []).length !== 3) {
+      out.push({
+        sev: 'warn', id: 'field:abilities', t: 'Unusual ability spread',
+        s: `SRD backgrounds offer exactly three abilities to spend the increase across; this offers ${(draft.abilityOptions ?? []).length}.`,
+      })
+    }
+    if (!out.length) out.push({ sev: 'ok', id: null, t: 'Clean', s: 'No errors, no warnings.' })
+    return out
+  }, [draft, nodes, ready])
+
+  const errs = audit.filter(a => a.sev === 'err').length
+
+  const { busy: autoBusy } = useAutoPublish<BackgroundDef>({
+    draft, dirty, errs, id: creating ? null : selId,
+    saveDraft: (id, value) => lib.saveDraft(id, value),
+    publish: (id, value) => lib.publishBackground(id, value),
+    onCreated: id => { clear(); onSelected(id) },
+  })
+
+  function onRevert() {
+    setConfirm(null)
+    reset(row ? row.data : null)
+    if (!row) onCleared()
+  }
+  async function onDuplicate() {
+    if (!selId) return
+    const id = await lib.duplicateBackground(selId)
+    if (id) onSelected(id)
+  }
+  async function onDelete() {
+    if (!selId) return
+    setConfirm(null)
+    await lib.deleteBackground(selId)
+    clear(); onCleared()
+  }
+
+  if (!draft) {
+    return <div className={styles.catEmpty} style={{ marginTop: 40 }}>Select a background, or start a new one.</div>
+  }
+
+  const abil = draft.abilityOptions ?? []
+
+  return (
+    <div className={styles.clsForm}>
+      <div className={styles.catFormHead}>
+        <Icon name={draft.icon || 'fa-scroll'} />
+        <span className={styles.cfhT}>{draft.name || (creating ? 'New Background' : 'Untitled')}</span>
+        <span className={styles.cfhId}>{draft.srd_key ?? (selId ?? 'unsaved')}</span>
+      </div>
+
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Name</span>
+          <input data-audit="field:name" className={styles.sessIn} value={draft.name}
+            placeholder="e.g. Acolyte" {...NO_AUTOFILL}
+            onChange={e => set({ name: e.target.value })} />
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Icon</span>
+          <IconPicker value={draft.icon} onPick={ic => set({ icon: ic })} />
+        </div>
+      </div>
+
+      <div className={styles.qLabRow}>
+        <span className={styles.fieldLab}>Description</span>
+        <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing</span>
+        <ProsePreview text={draft.desc ?? ''} />
+      </div>
+      <textarea className={styles.catProse} value={draft.desc ?? ''}
+        placeholder="What this background is, in the player's words…"
+        onKeyDown={markdownShortcuts(desc => set({ desc }))}
+        onChange={e => set({ desc: e.target.value })} />
+
+      {/* ---- ABILITY INCREASE ----
+          The three abilities the increase may be spent across. This records the
+          OFFER, not the result: the SRD lets the player split +2/+1 or +1/+1/+1,
+          so the actual numbers are a boost rule added at assign time. Writing a
+          guessed +2 here would be a wrong number on a sheet. */}
+      <div data-audit="field:abilities" className={styles.catSecLab}>
+        <span className={styles.fieldLab}>Ability Increase <span className={styles.labHint}>· the three it may be spent across</span></span>
+      </div>
+      <div className={styles.acRow}>
+        {ABILITY_ORDER.map(k => (
+          <span key={k}
+            className={cx(styles.acChip, abil.includes(k) && styles.on)}
+            onClick={() => set({ abilityOptions: abil.includes(k) ? abil.filter(a => a !== k) : [...abil, k] })}>
+            {ABILITY_ABBR[k].toUpperCase()}
+          </span>
+        ))}
+      </div>
+
+      {/* ---- SKILLS ---- */}
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Skill Proficiencies</span></div>
+      <div className={styles.acRow}>
+        {SKILLS.map(sk => {
+          const on = (draft.skills ?? []).includes(sk.name)
+          return (
+            <span key={sk.name} className={cx(styles.acChip, on && styles.on)}
+              onClick={() => set({ skills: on ? (draft.skills ?? []).filter(x => x !== sk.name) : [...(draft.skills ?? []), sk.name] })}>
+              {sk.name}
+            </span>
+          )
+        })}
+      </div>
+
+      {/* ---- TOOLS / LANGUAGES ---- */}
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>Tool Proficiencies <span className={styles.labHint}>· comma separated</span></span>
+          <input className={styles.sessIn} value={(draft.proficiencies?.tools ?? []).join(', ')}
+            placeholder="e.g. Calligrapher's Supplies" {...NO_AUTOFILL}
+            onChange={e => set({ proficiencies: { ...draft.proficiencies, tools: e.target.value.split(',').map(x => x.trim()).filter(Boolean) } })} />
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Languages <span className={styles.labHint}>· comma separated</span></span>
+          <input className={styles.sessIn} value={(draft.proficiencies?.languages ?? []).join(', ')}
+            placeholder="e.g. Celestial" {...NO_AUTOFILL}
+            onChange={e => set({ proficiencies: { ...draft.proficiencies, languages: e.target.value.split(',').map(x => x.trim()).filter(Boolean) } })} />
+        </div>
+      </div>
+
+      {/* ---- GRANTED FEATURES — the SRD's feat lands here ---- */}
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Granted Features</span></div>
+      <ClassFeaturePicker
+        refs={draft.features ?? []} featureLib={featureLib.features}
+        onChange={features => set({ features })}
+      />
+
+      {/* ---- SHARED AUTHORING BLOCKS — identical to the class and race forms ---- */}
+      <GraphEffects graph={draft.graph ?? []} vars={draft.vars ?? []} nodes={nodes} namesByGid={namesByGid}
+        onChange={graph => set({ graph })} onVarsChange={vars => set({ vars })} />
+      <VarsBlock vars={draft.vars ?? []} onChange={vars => set({ vars })} />
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Targeting tags</span></div>
+      <TagsBlock tags={draft.tags ?? []} tagUse={new Map()} onChange={tags => set({ tags })} />
+
+      <div className={styles.clsAudit}>
+        <AuditPanel title="Background Audit" audit={audit} onJump={a => revealAudit(a.id)} />
+      </div>
+
+      {confirm === 'revert' && (
+        <div className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" />
+          <span><b>Discard this draft?</b> {row?.data?.published ? 'The published version comes back.' : 'This background has never been published, so discarding removes it entirely.'}</span>
+          <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
+          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+        </div>
+      )}
+      {confirm === 'delete' && (
+        <div className={styles.skWarn}>
+          <i className="fa-solid fa-triangle-exclamation" />
+          <span><b>Delete {draft.name || 'this background'}?</b> Characters already assigned it keep what it granted.</span>
+          <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
+          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+        </div>
+      )}
+
+      <div className={styles.clsBar}>
+        <div className={styles.clsBarInfo}>
+          <span className={cx(styles.clsDirty, (autoBusy || dirty) && styles.on)}>
+            {autoBusy ? '● Saving…'
+              : errs > 0 ? '● Draft — errors block publish'
+                : dirty ? '● Saving…'
+                  : '● Published automatically'}
+          </span>
+          <span className={styles.clsSaved}>
+            {savedAt ? `Autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}
+          </span>
+        </div>
+        {selId && (
+          <div className={cx(styles.clsActs, styles.rowActs)}>
+            <Btn tone="ghost" sm icon="fa-clone" label="Duplicate" onClick={() => void onDuplicate()} />
+            <Btn tone="ghost" sm icon="fa-trash" label="Delete" onClick={() => setConfirm('delete')} />
+          </div>
+        )}
+        <div className={styles.clsActs}>
+          <Btn tone="ghost" sm icon="fa-rotate-left" label="Revert" onClick={() => setConfirm('revert')} disabled={!dirty} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LoreSecHead({ icon, label, first }: { icon: string; label: string; first?: boolean }) {
   return (
     <div className={cx(styles.loreSecH, first && styles.first)}>

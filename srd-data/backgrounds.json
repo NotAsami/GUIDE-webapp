@@ -1,0 +1,146 @@
+[
+  {
+    "name": "Acolyte",
+    "icon": "fa-scroll",
+    "desc": "**Feat.** Magic Initiate (Cleric)\n\n**Equipment.** *Choose A or B:* (A) Calligrapher's Supplies, Book (prayers), Holy Symbol, Parchment (10 sheets), Robe, 8 GP; or (B) 50 GP",
+    "abilityOptions": [
+      "int",
+      "wis",
+      "cha"
+    ],
+    "skills": [
+      "Insight",
+      "Religion"
+    ],
+    "skillChooseN": 0,
+    "proficiencies": {
+      "tools": [
+        "Calligrapher's Supplies"
+      ]
+    },
+    "features": [
+      {
+        "id": "srd-2024_magic-initiate"
+      }
+    ],
+    "equipment": [],
+    "tags": [
+      "background",
+      "acolyte",
+      "skill:insight",
+      "skill:religion"
+    ],
+    "vars": [],
+    "graph": [],
+    "source": "srd",
+    "srd_key": "srd-2024_acolyte"
+  },
+  {
+    "name": "Criminal",
+    "icon": "fa-scroll",
+    "desc": "**Feat.** Alert\n\n**Equipment.** *Choose A or B:* (A) 2 Daggers, Thieves' Tools, Crowbar, 2 Pouches, Traveler's Clothes, 16 GP; or (B) 50 GP",
+    "abilityOptions": [
+      "dex",
+      "con",
+      "int"
+    ],
+    "skills": [
+      "Sleight of Hand",
+      "Stealth"
+    ],
+    "skillChooseN": 0,
+    "proficiencies": {
+      "tools": [
+        "Thieves' Tools"
+      ]
+    },
+    "features": [
+      {
+        "id": "srd-2024_alert"
+      }
+    ],
+    "equipment": [],
+    "tags": [
+      "background",
+      "criminal",
+      "skill:sleight_of_hand",
+      "skill:stealth"
+    ],
+    "vars": [],
+    "graph": [],
+    "source": "srd",
+    "srd_key": "srd-2024_criminal"
+  },
+  {
+    "name": "Sage",
+    "icon": "fa-scroll",
+    "desc": "**Feat.** Magic Initiate (Wizard)\n\n**Equipment.** *Choose A or B:* (A) Quarterstaff, Calligrapher's Supplies, Book (history), Parchment (8 sheets), Robe, 8 GP; or (B) 50 GP",
+    "abilityOptions": [
+      "con",
+      "int",
+      "wis"
+    ],
+    "skills": [
+      "Arcana",
+      "History"
+    ],
+    "skillChooseN": 0,
+    "proficiencies": {
+      "tools": [
+        "Calligrapher's Supplies"
+      ]
+    },
+    "features": [
+      {
+        "id": "srd-2024_magic-initiate"
+      }
+    ],
+    "equipment": [],
+    "tags": [
+      "background",
+      "sage",
+      "skill:arcana",
+      "skill:history"
+    ],
+    "vars": [],
+    "graph": [],
+    "source": "srd",
+    "srd_key": "srd-2024_sage"
+  },
+  {
+    "name": "Soldier",
+    "icon": "fa-scroll",
+    "desc": "**Feat.** Savage Attacker\n\n**Equipment.** *Choose A or B:* (A) Spear, Shortbow, 20 Arrows, Gaming Set (same as above), Healer's Kit, Quiver, Traveler's Clothes, 14 GP; or (B) 50 GP",
+    "abilityOptions": [
+      "str",
+      "dex",
+      "con"
+    ],
+    "skills": [
+      "Athletics",
+      "Intimidation"
+    ],
+    "skillChooseN": 0,
+    "proficiencies": {
+      "tools": [
+        "Choose one kind of Gaming Set"
+      ]
+    },
+    "features": [
+      {
+        "id": "srd-2024_savage-attacker"
+      }
+    ],
+    "equipment": [],
+    "tags": [
+      "background",
+      "soldier",
+      "skill:athletics",
+      "skill:intimidation"
+    ],
+    "vars": [],
+    "graph": [],
+    "source": "srd",
+    "srd_key": "srd-2024_soldier"
+  }
+]

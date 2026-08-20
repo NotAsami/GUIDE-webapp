@@ -24,6 +24,30 @@
  */
 import { useCallback, useEffect, useRef } from 'react'
 
+/**
+ * Stamp an SRD-imported row as edited, the moment a human changes it.
+ *
+ * THE SKIP RULE IS INERT WITHOUT THIS. scripts/srd-load.mjs refuses to
+ * overwrite a row carrying `modified`, which is what stops a re-import
+ * destroying hand-authored effects — but the flag has to be SET by something,
+ * and for a while nothing did. The importer wrote `source`, the loader read
+ * `modified`, and the write path in between never joined them: a re-run would
+ * have reported "941 updated, 0 skipped" while erasing every effect authored
+ * onto an SRD item.
+ *
+ * Stamped HERE, in the save path, because that is the one place every catalog
+ * edit passes through. Doing it in each form would be six chances to forget.
+ *
+ * Only touches rows that came from the import — a hand-authored row has no
+ * `source`, is never re-imported, and gains nothing from the flag.
+ */
+export function markEdited<T>(value: T): T {
+  const v = value as { source?: string; modified?: boolean } | null
+  if (!v || typeof v !== 'object') return value
+  if (v.source !== 'srd' || v.modified) return value
+  return { ...(value as object), modified: true } as T
+}
+
 /** Long enough that a sentence is one write, short enough to feel immediate. */
 const SETTLE_MS = 900
 
@@ -80,7 +104,7 @@ export function useAutoPublish<T>({
     busy.current = true
     try {
       const write = e > 0 ? saveDraft : publish
-      const got = await write(rowId.current, value)
+      const got = await write(rowId.current, markEdited(value))
       if (got && !rowId.current) { rowId.current = got; onCreated(got) }
     } finally {
       busy.current = false
@@ -153,7 +177,7 @@ export function useAutoSave<T>({
     if (!r || j === saved.current) return
     busy.current = true
     try {
-      const got = await save(v)
+      const got = await save(markEdited(v))
       saved.current = j
       if (got && !owner.current) { owner.current = got; onCreated?.(got) }
     } finally {

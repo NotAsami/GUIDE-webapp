@@ -42,7 +42,9 @@ const RAR: Record<ItemRarity, { label: string; frame: string }> = {
   common: { label: 'Common', frame: styles.rarCommon },
   uncommon: { label: 'Uncommon', frame: styles.rarUncommon },
   rare: { label: 'Rare', frame: styles.rarRare },
+  'very-rare': { label: 'Very Rare', frame: styles.rarVrare },
   legendary: { label: 'Legendary', frame: styles.rarLegendary },
+  artifact: { label: 'Artifact', frame: styles.rarArtifact },
 }
 
 const firstName = (n: string) => (n || '').split(' ')[0]

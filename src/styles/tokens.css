@@ -43,6 +43,9 @@
   --rar-rare:     #00a6d6;
   --rar-vrare:    #a07ad6;
   --rar-legend:   #e2b021;
+  /* Artifact — above legendary. A dull red-bronze rather than another gold, so
+     the top tier does not read as "legendary but bigger". */
+  --rar-artifact: #c96f3f;
 
   --bar-top-h:    62px;
   --bar-bottom-h: 50px;

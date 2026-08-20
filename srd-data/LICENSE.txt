@@ -1,0 +1,34 @@
+SRD 5.2 — attribution notice
+============================
+
+This work includes material from the System Reference Document 5.2 ("SRD 5.2")
+by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The
+SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International
+License, available at https://creativecommons.org/licenses/by/4.0/legalcode.
+
+Retrieved via the Open5e API (https://api.open5e.com/v2/), document key
+`srd-2024`, which Open5e labels "System Reference Document 5.2".
+
+
+WHY THIS FILE SITS HERE AND NOT ONLY IN THE REPO ROOT
+-----------------------------------------------------
+The licence has to travel with the data. This file lives beside the JSON it
+covers and is REWRITTEN BY THE IMPORTER on every run (scripts/srd-import.mjs),
+so a regenerated dataset can never end up without its notice.
+
+Each imported row also carries `source: 'srd'` and its Open5e slug in
+`srd_key`, so a single row remains traceable to this notice after it has been
+loaded into the database, exported, or copied onto a character sheet.
+
+
+WHAT IS AND IS NOT COVERED
+--------------------------
+Covered: only content from document `srd-2024`. The importer re-checks every
+row against that key CLIENT-SIDE, because three Open5e endpoints silently
+ignore the document filter and return third-party publishers' content instead
+(Kobold Press, Tome of Beasts and others). None of that material is included,
+and none of it would be covered by this notice.
+
+Not covered: everything hand-authored in this project — the G.U.I.D.E. Codex
+schema, its effect graph, and any effects, tags or prose a DM writes onto an
+imported row afterward.
