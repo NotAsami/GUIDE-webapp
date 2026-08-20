@@ -47,6 +47,7 @@ import styles from './OperatorConsole.module.css'
 import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
 import { ProsePreview } from '../components/ProsePreview'
+import { leafOf } from '../lib/folders'
 import { LootRollOverlay } from '../components/LootRollOverlay'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -2877,7 +2878,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
               }}>
                 <option value="" disabled>Attach a feature…</option>
                 {featureLib.filter(f => !feats.some(x => x.feature_id === f.id)).map(f => (
-                  <option key={f.id} value={f.id}>{f.data?.name ?? 'Untitled'}{f.data?.source ? ` · ${f.data.source}` : ''}</option>
+                  <option key={f.id} value={f.id}>{f.data?.name ?? 'Untitled'} · {featureOrigin(f.data)}</option>
                 ))}
               </select>
             </div>
@@ -3058,7 +3059,7 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
                 <span className={styles.ciIc} style={{ color: 'var(--amber)' }}><Icon name={f.data?.icon ?? 'fa-star'} /></span>
                 <span className={styles.ciTx}>
                   <span className={styles.ciNm}>{f.data?.name ?? 'Untitled'}</span>
-                  <span className={styles.ciTy}>{f.data?.source ?? FEAT_CATS.find(c => c.key === f.data?.category)?.label ?? 'Feature'}</span>
+                  <span className={styles.ciTy} title={f.data?.folder ?? undefined}>{featureOrigin(f.data)}</span>
                 </span>
                 {f.data?.usage && <span className={styles.ciRar} style={{ color: 'var(--muted)' }}>{f.data.usage}</span>}
               </button>
@@ -4626,6 +4627,21 @@ function SlotProgression({ caster }: { caster: ClassCasterType }) {
  * is read live, so re-authoring a feature updates every class that grants it.
  * The snapshot still happens — at assign time (lib/classes.ts assignClass).
  */
+/** What tells two identically-named features apart in a list.
+ *
+ *  `source` used to do this job and stopped the moment the SRD landed: 259 rows
+ *  all say "srd", five of them are called "Weapon Mastery", and the picker gave
+ *  a DM no way to tell the Barbarian's from the Paladin's. The folder already
+ *  holds the answer — the import files by class — so `SRD/Barbarian` shows as
+ *  "Barbarian". Source and category remain the fallback for unfiled rows.
+ *
+ *  Searching already worked: imported features carry their class as a tag, so
+ *  "barbarian weapon" narrows to one. Only the display was blind. */
+function featureOrigin(d?: { folder?: string; source?: string; category?: string } | null): string {
+  if (d?.folder) return leafOf(d.folder)
+  return d?.source ?? FEAT_CATS.find(c => c.key === d?.category)?.label ?? 'Feature'
+}
+
 function ClassFeaturePicker({ refs, featureLib, onChange }: {
   refs: FeatureGrantRef[]
   featureLib: CatalogFeatureRow[]
@@ -4693,7 +4709,7 @@ function ClassFeaturePicker({ refs, featureLib, onChange }: {
                   </span>
                   <span className={styles.ciTx}>
                     <span className={styles.ciNm}>{d.name || f.id}</span>
-                    <span className={styles.ciTy}>{d.source ?? FEAT_CATS.find(c => c.key === d.category)?.label ?? 'Feature'}</span>
+                    <span className={styles.ciTy} title={d.folder ?? undefined}>{featureOrigin(d)}</span>
                   </span>
                   {!d.published && <span className={styles.ciRar} style={{ color: 'var(--amber)' }}>unpublished</span>}
                 </button>
@@ -4736,6 +4752,9 @@ function ClassFeaturePicker({ refs, featureLib, onChange }: {
                   </span>
                   <span className={styles.crFNm} title={ref.feature_id}>
                     {d?.name ?? ref.feature_id}
+                    {/* The attached list is where a wrong pick becomes invisible —
+                        five "Weapon Mastery" rows look identical once chosen. */}
+                    {d?.folder && <span className={styles.crFOrg}>{leafOf(d.folder)}</span>}
                     {!f && <span className={styles.crFGone}> · not in the library</span>}
                   </span>
                   <input

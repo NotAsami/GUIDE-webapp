@@ -373,7 +373,17 @@ select.in option { background: #14130f; }
 .blkOptin { display: flex; align-items: flex-start; gap: 9px; padding: 9px 11px; margin-bottom: 12px; background: rgba(0,0,0,.3); border-left: 2px solid var(--beige-dim); }
 .blkOptin i { font-size: 10px; color: var(--beige-dim); margin-top: 2px; }
 .blkOptin span { font-family: var(--font-mono); font-size: 8.5px; line-height: 1.7; color: var(--muted); letter-spacing: .04em; }
-.addbtn { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; height: 36px; cursor: pointer; background: rgba(0,0,0,.4); border: 1px dashed rgba(226,176,33,.45); color: var(--amber); font-family: var(--font-mono); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; }
+/* THE DASH ALPHA IS LOAD-BEARING, not a taste call.
+   At .45 the top edge of this button intermittently vanished. Not clipping and
+   not a missing rule — with the same border in solid red every edge painted, so
+   the geometry was always fine. On a fractional devicePixelRatio (1.1 here, a
+   110% display) Chrome snaps a 1px border to one DEVICE pixel and the element's
+   top lands mid-pixel, so the dashes are drawn at partial coverage: .45 alpha
+   halved is invisible, which also made hover look like it "kept the border
+   colour" when it was really the same edge painting faint. Whether it happens
+   depends on the y offset, hence "sometimes".
+   .7 survives being halved. Verified at 1.1 dpr rather than reasoned about. */
+.addbtn { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; height: 36px; cursor: pointer; background: rgba(0,0,0,.4); border: 1px dashed rgba(226,176,33,.7); color: var(--amber); font-family: var(--font-mono); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; }
 .addbtn:hover { color: #fff; border-style: solid; border-color: var(--amber); box-shadow: inset 0 0 16px rgba(226,176,33,.14); }
 
 /* ---------- cards (variables + effects share the shell) ---------- */
