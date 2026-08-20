@@ -32,6 +32,7 @@ import { useFullscreen } from '../lib/fullscreen'
 import { renderInline } from '../lib/markdown'
 import { markdownShortcuts } from '../lib/textareaHooks'
 import { useLocalDraft } from '../lib/draft'
+import { useAutoPublish, useAutoSave } from '../lib/autopublish'
 import type {
   CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json, QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow, CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect, Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow, EffectDuration, EffectRef, Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData, CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData, CatalogRaceRow, RaceDef, EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef, EquippedGear, CharacterLore, Relation, CatalogLootRow, LootTable, LootRow, LootOpenLine, CharacterSheet,
 } from '../lib/database.types'
@@ -1185,7 +1186,6 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
   const { draft, dirty, savedAt, update, reset, clear } =
     useLocalDraft<LootTable>(creating ? 'loot:__new__' : `loot:${selId ?? 'none'}`, base)
 
-  const [saving, setSaving] = useState(false)
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
   const [pick, setPick] = useState<number | null>(null)
   // Add-From-Catalog panel. Its own filters rather than the row-level picker's:
@@ -1284,21 +1284,16 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
     return <div className={styles.catEmpty} style={{ marginTop: 40 }}>Select a loot table, or start a new one.</div>
   }
 
-  async function onSaveDraft() {
-    if (!draft) return
-    setSaving(true)
-    const id = await lib.saveDraft(creating ? null : selId, draft)
-    setSaving(false)
-    if (id && creating) { clear(); onSelected(id) }
-  }
-  async function onPublish() {
-    if (!draft || errs > 0) return
-    setSaving(true)
-    const id = await lib.publishTable(creating ? null : selId, draft)
-    setSaving(false)
-    if (!id) return
-    clear(); onSelected(id)
-  }
+  /* Typing saves; a clean record publishes itself. `creating ? null : selId`
+     is the id contract the writers already had — the first write of a new
+     record mints one, and onCreated adopts it so the next keystroke updates
+     that row instead of inserting another. */
+  const { busy: autoBusy } = useAutoPublish<LootTable>({
+    draft, dirty, errs, id: creating ? null : selId,
+    saveDraft: (id, value) => lib.saveDraft(id, value),
+    publish: (id, value) => lib.publishTable(id, value),
+    onCreated: id => { clear(); onSelected(id) },
+  })
   function onRevert() {
     setConfirm(null)
     reset(row ? row.data : null)
@@ -1593,9 +1588,17 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
                   : 'Draft valid · publishable'}
             </span>
           </div>
-          <span className={cx(styles.clsDirty, dirty && styles.on)}>● Unpublished changes</span>
+          {/* Replaces the Save/Publish buttons as the thing you read to know
+              where the work is. An error is not a failure to save — it saved,
+              as a draft; it is a refusal to publish. */}
+          <span className={cx(styles.clsDirty, (autoBusy || dirty) && styles.on)}>
+            {autoBusy ? '● Saving…'
+              : errs > 0 ? '● Draft — errors block publish'
+                : dirty ? '● Saving…'
+                  : '● Published automatically'}
+          </span>
           <span className={styles.clsSaved}>
-            {savedAt ? `Draft autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}
+            {savedAt ? `Autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}
           </span>
         </div>
         {selId && (
@@ -1604,13 +1607,11 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
             <Btn tone="ghost" sm icon="fa-trash" label="Delete" onClick={() => setConfirm('delete')} />
           </div>
         )}
+        {/* No Save Draft, no Publish: typing saves, and a clean record publishes
+            itself. Revert stays because throwing work away must never be
+            something that happens automatically. */}
         <div className={styles.clsActs}>
           <Btn tone="ghost" sm icon="fa-rotate-left" label="Revert" onClick={() => setConfirm('revert')} disabled={!dirty} />
-          <Btn tone="cyan" sm icon="fa-floppy-disk" label="Save Draft" onClick={() => void onSaveDraft()} disabled={saving} />
-          <span className={styles.clsPub}>
-            <Btn tone="amber" sm icon="fa-tower-broadcast" label={saving ? 'Working…' : 'Publish'}
-              onClick={() => void onPublish()} disabled={saving || errs > 0} />
-          </span>
         </div>
       </div>
 
@@ -2458,7 +2459,6 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
   const [rows, setRows] = useState<[string, string][]>(d?.rows ?? [])
   const [rowLab, setRowLab] = useState('')
   const [rowVal, setRowVal] = useState('')
-  const [busy, setBusy] = useState(false)
 
   const rd = RAR_DEF[rarity]
   const def = CAT_DEF[category]
@@ -2518,11 +2518,13 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
     if (tags.length) data.tags = tags
     return data
   }
-  async function submit() {
-    setBusy(true)
-    await onSubmit(build())
-    setBusy(false)
-  }
+  /* Typing saves. No button: the guard the Save button carried is now the
+     `ready` condition, so an incomplete form simply holds the write. */
+  const { busy: autoBusy } = useAutoSave({
+    value: build(), ready: !!name.trim() && gErrs.length === 0, id: item?.id ?? null,
+    save: (v: CatalogItemData) => onSubmit(v),
+  })
+
   function addRow() {
     const l = rowLab.trim()
     if (!l) return
@@ -2881,6 +2883,14 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
         <Btn tone="ghost" sm icon="fa-plus" label="Add" onClick={addRow} />
       </div>
 
+      {/* TAGS LIVE OUTSIDE THE RULES FOLD. They were inside it, which made them
+          invisible until you expanded a collapsed section about something else —
+          and tagging is not a rules-authoring job. An item's tags are what
+          `tag:` selectors match, AND what Equipment passes into every attack it
+          rolls with this weapon, so plenty of items want tags and no rules. */}
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Targeting tags</span></div>
+      <TagsBlock tags={tags} tagUse={tagUse} onChange={setTags} />
+
       {/* ROLL CONTRIBUTIONS — the same block the feature editor and the spell
           form author. Beside Effects Granted and deliberately distinct from it:
           `effects` is the passive numeric layer compiled from the effect
@@ -2901,10 +2911,6 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
           <div className={styles.gfxBody}>
             <GraphEffects graph={graph} vars={vars} nodes={nodes} namesByGid={namesByGid} onChange={setGraph} onVarsChange={setVars} />
             <VarsBlock vars={vars} onChange={setVars} />
-            {/* An item's tags are what `tag:` selectors match, AND what
-                Equipment passes into every attack it rolls with this weapon. */}
-            <div className={styles.catSecLab}><span className={styles.fieldLab}>Targeting tags</span></div>
-            <TagsBlock tags={tags} tagUse={tagUse} onChange={setTags} />
           </div>
         )}
       </div>
@@ -2920,8 +2926,14 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
       ))}
 
       <div className={styles.qActions}>
-        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : item ? 'Save Item' : 'Create Item'} onClick={() => void submit()} disabled={busy || !name.trim() || gErrs.length > 0} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+        {/* Replaces the Save button. These tables have no draft column, so an
+            invalid form holds the write rather than parking it — the last good
+            version stays live, which is the same promise the draft-backed forms
+            make by a different route. */}
+        <span className={styles.autoState}>
+          {autoBusy ? '● Saving…' : !!name.trim() && gErrs.length === 0 ? '● Saved automatically' : '● Not saved — needs a name, and no graph errors'}
+        </span>
+        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={autoBusy} />}
       </div>
     </>
   )
@@ -3988,6 +4000,12 @@ function SpellForm({ spell, onSubmit, onDelete }: {
 
           Distinct from an item's `effects`: that is the passive numeric layer,
           this is per-roll and conditional (database.types.ts:513). */}
+      {/* Outside the Rules fold, same reasoning as the item form: a spell's
+          tags are what `tag:` selectors match, and a spell can want tags
+          without carrying a single rule. */}
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Targeting tags</span></div>
+      <TagsBlock tags={tags} tagUse={tagUse} onChange={setTags} />
+
       <div className={cx(styles.catFx, styles.fold, gfxOpen && styles.open)}>
         <div className={styles.fxfHead} onClick={() => setGfxOpen(o => !o)} role="button" tabIndex={0} aria-expanded={gfxOpen}>
           <span className={styles.car}><i className="fa-solid fa-caret-right" /></span>
@@ -4005,8 +4023,6 @@ function SpellForm({ spell, onSubmit, onDelete }: {
             <VarsBlock vars={vars} onChange={setVars} />
             {/* Tags reach ACROSS catalogs — `tag:fire` should match this spell,
                 a weapon and a shard node alike. */}
-            <div className={styles.catSecLab}><span className={styles.fieldLab}>Targeting tags</span></div>
-            <TagsBlock tags={tags} tagUse={tagUse} onChange={setTags} />
           </div>
         )}
       </div>
@@ -5009,7 +5025,6 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
     useLocalDraft<ClassDef>(creating ? 'class:__new__' : `class:${selId ?? 'none'}`, base)
 
   const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
-  const [saving, setSaving] = useState(false)
   const [varsOpen, setVarsOpen] = useState(false)
   const [fxOpen, setFxOpen] = useState(false)
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
@@ -5140,28 +5155,20 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
     )
   }
 
-  async function onSaveDraft() {
-    if (!draft) return
-    setSaving(true)
-    const id = await lib.saveDraft(creating ? null : selId, draft)
-    setSaving(false)
-    if (id && creating) { clear(); onSelected(id) }
-  }
-
-  async function onPublish() {
-    if (!draft || errs > 0) return
-    setSaving(true)
-    const id = await lib.publishClass(creating ? null : selId, draft)
-    setSaving(false)
-    if (!id) return
-    clear()
-    onSelected(id)
-  }
+  /* Typing saves; a clean record publishes itself. `creating ? null : selId`
+     is the id contract the writers already had — the first write of a new
+     record mints one, and onCreated adopts it so the next keystroke updates
+     that row instead of inserting another. */
+  const { busy: autoBusy } = useAutoPublish<ClassDef>({
+    draft, dirty, errs, id: creating ? null : selId,
+    saveDraft: (id, value) => lib.saveDraft(id, value),
+    publish: (id, value) => lib.publishClass(id, value),
+    onCreated: id => { clear(); onSelected(id) },
+  })
 
   function onRevert() {
     setConfirm(null)
     reset(row ? row.data : null)
-    // Never published, so discarding the draft removes it entirely.
     if (!row) onCleared()
   }
 
@@ -5560,9 +5567,17 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
                   : 'Draft valid · publishable'}
             </span>
           </div>
-          <span className={cx(styles.clsDirty, dirty && styles.on)}>● Unpublished changes</span>
+          {/* Replaces the Save/Publish buttons as the thing you read to know
+              where the work is. An error is not a failure to save — it saved,
+              as a draft; it is a refusal to publish. */}
+          <span className={cx(styles.clsDirty, (autoBusy || dirty) && styles.on)}>
+            {autoBusy ? '● Saving…'
+              : errs > 0 ? '● Draft — errors block publish'
+                : dirty ? '● Saving…'
+                  : '● Published automatically'}
+          </span>
           <span className={styles.clsSaved}>
-            {savedAt ? `Draft autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}
+            {savedAt ? `Autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}
           </span>
         </div>
         {/* Two rows, split by what the action is ABOUT: the row itself, then
@@ -5576,13 +5591,11 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
             <Btn tone="ghost" sm icon="fa-trash" label="Delete" onClick={() => setConfirm('delete')} />
           </div>
         )}
+        {/* No Save Draft, no Publish: typing saves, and a clean record publishes
+            itself. Revert stays because throwing work away must never be
+            something that happens automatically. */}
         <div className={styles.clsActs}>
           <Btn tone="ghost" sm icon="fa-rotate-left" label="Revert" onClick={() => setConfirm('revert')} disabled={!dirty} />
-          <Btn tone="cyan" sm icon="fa-floppy-disk" label="Save Draft" onClick={() => void onSaveDraft()} disabled={saving} />
-          <span className={styles.clsPub}>
-            <Btn tone="amber" sm icon="fa-tower-broadcast" label={saving ? 'Working…' : 'Publish'}
-              onClick={() => void onPublish()} disabled={saving || errs > 0} />
-          </span>
         </div>
       </div>
     </div>
@@ -6193,7 +6206,6 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
     useLocalDraft<RaceDef>(creating ? 'race:__new__' : `race:${selId ?? 'none'}`, base)
 
   const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
-  const [saving, setSaving] = useState(false)
   const [varsOpen, setVarsOpen] = useState(false)
   const [fxOpen, setFxOpen] = useState(false)
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
@@ -6264,21 +6276,16 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
     return <div className={styles.catEmpty} style={{ marginTop: 40 }}>Select a race, or start a new one.</div>
   }
 
-  async function onSaveDraft() {
-    if (!draft) return
-    setSaving(true)
-    const id = await lib.saveDraft(creating ? null : selId, draft)
-    setSaving(false)
-    if (id && creating) { clear(); onSelected(id) }
-  }
-  async function onPublish() {
-    if (!draft || errs > 0) return
-    setSaving(true)
-    const id = await lib.publishRace(creating ? null : selId, draft)
-    setSaving(false)
-    if (!id) return
-    clear(); onSelected(id)
-  }
+  /* Typing saves; a clean record publishes itself. `creating ? null : selId`
+     is the id contract the writers already had — the first write of a new
+     record mints one, and onCreated adopts it so the next keystroke updates
+     that row instead of inserting another. */
+  const { busy: autoBusy } = useAutoPublish<RaceDef>({
+    draft, dirty, errs, id: creating ? null : selId,
+    saveDraft: (id, value) => lib.saveDraft(id, value),
+    publish: (id, value) => lib.publishRace(id, value),
+    onCreated: id => { clear(); onSelected(id) },
+  })
   function onRevert() {
     setConfirm(null)
     reset(row ? row.data : null)
@@ -6523,9 +6530,17 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
                   : 'Draft valid · publishable'}
             </span>
           </div>
-          <span className={cx(styles.clsDirty, dirty && styles.on)}>● Unpublished changes</span>
+          {/* Replaces the Save/Publish buttons as the thing you read to know
+              where the work is. An error is not a failure to save — it saved,
+              as a draft; it is a refusal to publish. */}
+          <span className={cx(styles.clsDirty, (autoBusy || dirty) && styles.on)}>
+            {autoBusy ? '● Saving…'
+              : errs > 0 ? '● Draft — errors block publish'
+                : dirty ? '● Saving…'
+                  : '● Published automatically'}
+          </span>
           <span className={styles.clsSaved}>
-            {savedAt ? `Draft autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}
+            {savedAt ? `Autosaved ${savedAt.toLocaleTimeString([], { hour12: false })}` : ''}
           </span>
         </div>
         {selId && (
@@ -6534,13 +6549,11 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
             <Btn tone="ghost" sm icon="fa-trash" label="Delete" onClick={() => setConfirm('delete')} />
           </div>
         )}
+        {/* No Save Draft, no Publish: typing saves, and a clean record publishes
+            itself. Revert stays because throwing work away must never be
+            something that happens automatically. */}
         <div className={styles.clsActs}>
           <Btn tone="ghost" sm icon="fa-rotate-left" label="Revert" onClick={() => setConfirm('revert')} disabled={!dirty} />
-          <Btn tone="cyan" sm icon="fa-floppy-disk" label="Save Draft" onClick={() => void onSaveDraft()} disabled={saving} />
-          <span className={styles.clsPub}>
-            <Btn tone="amber" sm icon="fa-tower-broadcast" label={saving ? 'Working…' : 'Publish'}
-              onClick={() => void onPublish()} disabled={saving || errs > 0} />
-          </span>
         </div>
       </div>
     </div>

@@ -282,56 +282,40 @@ players cannot read `item_catalog` either.
 
 ---
 
-## Generating shop stock
+## Generating shop stock — HALF BUILT
 
-**Not built, and unlike most entries here it is not designed either — the
-shapes below are the fork, not a decision.**
+**Built: stocking by query.** The shop form's item search now runs through
+`lib/catalogSearch.ts` like every other index, so `tag:potion !rare` narrows the
+picker, and a **Stock all N** button adds every match as real stock lines at
+once. `src/screens/OperatorShops.tsx`.
 
-Shops today carry a hand-picked `stock: ShopStockLine[]`. There is no generator
-at all: no "stock this shop from a query", no "roll this shop's inventory".
+The three questions this entry left open are settled by *how* it was built, not
+by answering them:
 
-> "Same for the shop-generator, which is still not implemented."
-
-Now cheaper than it was, because the query grammar it needs already exists and
-is proven: `tag:potion !rare` parses, resolves and is audited today
-(`lib/catalogSearch.ts`, `lib/loot.ts` `poolItems`).
-
-### The constraint that decides the design
-
-**A query can never resolve on the player's client.** `ShopStockLine.item` is a
-SNAPSHOT of the catalog row, because `item_catalog` is DM-only RLS (0004) and
-the player client never reads it — the snapshot is the only reason the stock
-grid can render a name and icon at all. So any generator must resolve DM-side
-and write real stock lines. That is not a limitation in practice (the DM is the
-one who opens a shop), but it rules out "resolve the query when the player
-looks", which is the obvious first instinct.
-
-### Two shapes, for two different needs
-
-| | what it is for |
+| question | how it went away |
 |---|---|
-| **query lines** | staples that are always in stock — `tag:ammo`, `tag:potion !rare`. Resolved when the DM opens or restocks. |
-| **table-rolled** | stock that varies per visit. Point a shop at a loot table and roll it: pool rows, chances and ranges all come along free. |
+| **restock semantics** | Nothing is stored. The DM presses a button and gets ordinary stock lines; there is no query to re-resolve, so a shop the party cleared out can never silently refill. |
+| **`item_id` collision** | Bulk-add skips anything already stocked, the same rule the per-item picker enforces by disabling the row. |
+| **price** | Each line prices from its own item's `value`. Items with **no** value are skipped — absent means *priceless/unlisted*, not free. Adding one item at 0gp by hand is a choice; sweeping twenty in at 0gp is an accident, so the control refuses and reports the count. |
 
-They are not alternatives so much as answers to different questions, which is
-why "both" is a real option and not a hedge.
+That last one is the only real judgement in here. It means a catalog full of
+unpriced items bulk-adds almost nothing, and the note under the button is what
+tells you why instead of leaving it a mystery.
 
-### What each still has to settle
+**Still not built: table-rolled stock.** Point a shop at a loot table and roll
+its inventory, so stock varies per visit and pool rows / chances / ranges come
+along free.
 
-- **Price.** Stock lines carry an editable `price` seeded from the item's
-  `value`; a loot table carries no prices at all. Table-rolled stock therefore
-  has to derive price from `value` — and `value` is explicitly optional, meaning
-  *priceless/unlisted*. An item with no value appearing in a shop needs a rule:
-  skip it, price it at zero, or block the roll.
-- **`item_id` is the line's identity.** `shop_buy` (0009) finds a line by
-  `item_id`, not by array index. Two generated lines that resolve to the same
-  item would collide — they must merge into one line, or generation must
-  de-duplicate.
-- **Restock semantics.** Buying decrements `data.stock[i].qty` permanently and
-  there is no separate "opening" row, so re-firing a shop resumes where it left
-  off. A generator has to say whether re-resolving REPLACES the stock (losing
-  what was bought) or tops it up.
+**Trigger:** wanting a shop whose stock *changes between visits*. Bulk-add gives
+a fixed shelf — excellent for a general store, wrong for a fence whose goods
+turn over. Nothing has needed that yet.
 
-**Do NOT** resolve a query into the stock array on every open. That would
-silently restock a shop the party had just cleared out, and the bug would read
-as "the shopkeeper is cheating" rather than as a caching mistake.
+**What it would still have to settle**, and this is why it was not folded in
+above: a loot table carries no prices, so a rolled shop has to derive every
+price from `value` — and it hits the priceless problem across the whole result
+rather than one item at a time, where "skip it" is a much less obvious answer.
+
+**Do NOT** implement it by storing the query or the table id on the shop and
+resolving on open. That silently restocks a shop the party had just cleared out,
+and the bug reads as "the shopkeeper is cheating" rather than as a caching
+mistake.

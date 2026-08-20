@@ -2921,3 +2921,35 @@ div.skWarn { cursor: default; }
 .lootRollBtn.on { color: var(--cyan-hot); border-color: rgba(0, 166, 214, 0.5); background: rgba(0, 166, 214, 0.08); }
 .lootRollBtn .arr { font-size: 8px; opacity: 0.8; }
 .rollOpen { color: var(--amber-hot); }
+
+/* ---- bulk stock control (shop form) ----
+   Sits between the filters and the list, because it acts on exactly what the
+   filters have narrowed to — putting it above them would read as acting on the
+   whole catalog. */
+.bulkRow { display: flex; align-items: center; gap: 11px; margin: 9px 0 2px; }
+.bulkBtn {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 7px;
+  height: 30px; padding: 0 12px; cursor: pointer;
+  background: rgba(0, 166, 214, 0.08);
+  border: 1px solid rgba(0, 166, 214, 0.45);
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--cyan);
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.bulkBtn:hover:not(:disabled) { color: var(--cyan-hot); border-color: var(--cyan); background: rgba(0, 166, 214, 0.16); }
+.bulkBtn:disabled { opacity: 0.4; cursor: default; color: var(--beige-dim); border-color: rgba(212, 191, 125, 0.25); background: transparent; }
+/* Says what was left out and why. A bulk action that silently drops items is
+   how twenty things get priced at 0gp without anyone noticing. */
+.bulkNote {
+  flex: 1 1 auto; min-width: 0;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--beige-dim); line-height: 1.5;
+}
+
+/* Autosave status, where a Save button used to be. Reads as a state, not a
+   control — nothing here is clickable. */
+.autoState {
+  display: inline-flex; align-items: center;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--beige-dim);
+}
