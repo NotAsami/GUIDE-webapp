@@ -1,0 +1,1693 @@
+[
+  {
+    "name": "Barbarian",
+    "icon": "fa-hand-fist",
+    "desc": "",
+    "hitDie": 12,
+    "primaryAbility": "str",
+    "saveProficiencies": [
+      "con",
+      "str"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_barbarian_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_brutal-strike",
+        "when": "level >= 9"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_danger-sense",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_extra-attack",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_fast-movement",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_feral-instinct",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_improved-brutal-strike",
+        "when": "level >= 13"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_improved-brutal-strike-enhanced",
+        "when": "level >= 17"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_indomitable-might",
+        "when": "level >= 18"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_instinctive-pounce",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_persistent-rage",
+        "when": "level >= 15"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_primal-champion",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_primal-knowledge",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_rage",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_reckless-attack",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_relentless-rage",
+        "when": "level >= 11"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_unarmored-defense",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_barbarian_weapon-mastery",
+        "when": "level >= 1"
+      }
+    ],
+    "tags": [
+      "class",
+      "barbarian",
+      "baseclass"
+    ],
+    "vars": [
+      {
+        "name": "rageDamage",
+        "kind": "derived",
+        "label": "Rage Damage",
+        "formula": "[0,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,4,4,4,4,4][level]"
+      },
+      {
+        "name": "rages",
+        "kind": "derived",
+        "label": "Rages",
+        "formula": "[0,2,2,3,3,3,4,4,4,4,4,4,5,5,5,5,5,6,6,6,6][level]"
+      },
+      {
+        "name": "weaponMastery",
+        "kind": "derived",
+        "label": "Weapon Mastery",
+        "formula": "[0,2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_barbarian"
+  },
+  {
+    "name": "Bard",
+    "icon": "fa-music",
+    "desc": "",
+    "hitDie": 8,
+    "primaryAbility": "cha",
+    "saveProficiencies": [
+      "cha",
+      "dex"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "full",
+    "features": [
+      {
+        "feature_id": "srd-2024_bard_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_bard_bardic-inspiration",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_bard_countercharm",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_bard_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_bard_expertise",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_bard_font-of-inspiration",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_bard_jack-of-all-trades",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_bard_magical-secrets",
+        "when": "level >= 10"
+      },
+      {
+        "feature_id": "srd-2024_bard_superior-inspiration",
+        "when": "level >= 18"
+      },
+      {
+        "feature_id": "srd-2024_bard_words-of-creation",
+        "when": "level >= 20"
+      }
+    ],
+    "tags": [
+      "class",
+      "bard",
+      "baseclass",
+      "caster"
+    ],
+    "vars": [
+      {
+        "name": "cantrips",
+        "kind": "derived",
+        "label": "Cantrips",
+        "formula": "[0,2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4][level]"
+      },
+      {
+        "name": "preparedSpells",
+        "kind": "derived",
+        "label": "Prepared Spells",
+        "formula": "[0,4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_bard"
+  },
+  {
+    "name": "Champion",
+    "icon": "fa-shield-halved",
+    "desc": "*Pursue Physical Excellence in Combat*\n\nA Champion focuses on the development of martial prowess in a relentless pursuit of victory. Champions combine rigorous training with physical excellence to deal devastating blows, withstand peril, and garner glory. Whether in athletic contests or bloody battle, Champions strive for the crown of the victor.",
+    "hitDie": 8,
+    "primaryAbility": "str",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_fighter_champion_additional-fighting-style",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_fighter_champion_heroic-warrior",
+        "when": "level >= 10"
+      },
+      {
+        "feature_id": "srd-2024_fighter_champion_improved-critical",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_fighter_champion_remarkable-athlete",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_fighter_champion_superior-critical",
+        "when": "level >= 15"
+      },
+      {
+        "feature_id": "srd-2024_fighter_champion_survivor",
+        "when": "level >= 18"
+      }
+    ],
+    "tags": [
+      "class",
+      "champion",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_fighter",
+    "source": "srd",
+    "srd_key": "srd-2024_champion"
+  },
+  {
+    "name": "Circle of the Land",
+    "icon": "fa-leaf",
+    "desc": "*Celebrate Connection to the Natural World*\n\nThe Circle of the Land comprises mystics and sages who safeguard ancient knowledge and rites. These Druids meet within sacred circles of trees or standing stones to whisper primal secrets in Druidic. The circle's wisest members preside as the chief priests of their communities.",
+    "hitDie": 8,
+    "primaryAbility": "wis",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_druid_circle-of-the-land_spell-list",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_druid_circle-of-the-land_lands-aid",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_druid_circle-of-the-land_natural-recovery",
+        "when": "level >= 6"
+      },
+      {
+        "feature_id": "srd-2024_druid_circle-of-the-land_natures-sanctuary",
+        "when": "level >= 14"
+      },
+      {
+        "feature_id": "srd-2024_druid_circle-of-the-land_natures-ward",
+        "when": "level >= 10"
+      }
+    ],
+    "tags": [
+      "class",
+      "circle_of_the_land",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_druid",
+    "source": "srd",
+    "srd_key": "srd-2024_circle-of-the-land"
+  },
+  {
+    "name": "Cleric",
+    "icon": "fa-cross",
+    "desc": "",
+    "hitDie": 8,
+    "primaryAbility": "wis",
+    "saveProficiencies": [
+      "cha",
+      "wis"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "full",
+    "features": [
+      {
+        "feature_id": "srd-2024_cleric_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_cleric_blessed-strikes",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_cleric_channel-divinity",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_cleric_cleric-subclasses",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_cleric_divine-intervention",
+        "when": "level >= 10"
+      },
+      {
+        "feature_id": "srd-2024_cleric_divine-order",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_cleric_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_cleric_greater-divine-intervention",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_cleric_improved-blessed-strikes",
+        "when": "level >= 14"
+      },
+      {
+        "feature_id": "srd-2024_cleric_sear-undead",
+        "when": "level >= 5"
+      }
+    ],
+    "tags": [
+      "class",
+      "cleric",
+      "baseclass",
+      "caster"
+    ],
+    "vars": [
+      {
+        "name": "cantrips",
+        "kind": "derived",
+        "label": "Cantrips",
+        "formula": "[0,3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5][level]"
+      },
+      {
+        "name": "channelDivinity",
+        "kind": "derived",
+        "label": "Channel Divinity",
+        "formula": "[0,0,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4][level]"
+      },
+      {
+        "name": "preparedSpells",
+        "kind": "derived",
+        "label": "Prepared Spells",
+        "formula": "[0,4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_cleric"
+  },
+  {
+    "name": "College of Lore",
+    "icon": "fa-music",
+    "desc": "*Plumb the Depths of Magical Knowledge*\n\nBards of the College of Lore collect spells and secrets from diverse sources, such as scholarly tomes, mystical rites, and peasant tales. The college's members gather in libraries and universities to share their lore with one another. They also meet at festivals or affairs of state, where they can expose corruption, unravel lies, and poke fun at self-important figures of authority.",
+    "hitDie": 8,
+    "primaryAbility": "cha",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "full",
+    "features": [
+      {
+        "feature_id": "srd-2024_college-of-lore_bonus-proficiencies",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_college-of-lore_cutting-words",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_college-of-lore_magical-discoveries",
+        "when": "level >= 6"
+      },
+      {
+        "feature_id": "srd-2024_college-of-lore_peerless-skill",
+        "when": "level >= 14"
+      }
+    ],
+    "tags": [
+      "class",
+      "college_of_lore",
+      "subclass",
+      "caster"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_bard",
+    "source": "srd",
+    "srd_key": "srd-2024_college-of-lore"
+  },
+  {
+    "name": "Draconic Sorcery",
+    "icon": "fa-fire",
+    "desc": "*Breathe the Magic of Dragons*\n\nYour innate magic comes from the gift of a dragon. Perhaps an ancient dragon facing death bequeathed some of its magical power to you or your ancestor. You might have absorbed magic from a site infused with dragons' power. Or perhaps you handled a treasure taken from a dragon's hoard that was steeped in draconic power. Or you might have a dragon for an ancestor.",
+    "hitDie": 8,
+    "primaryAbility": "cha",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_sorcerer_draconic-sorcery_draconic-resilience",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_draconic-sorcery_draconic-spells",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_draconic-sorcery_dragon-companion",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_draconic-sorcery_dragon-wings",
+        "when": "level >= 14"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_draconic-sorcery_elemental-affinity",
+        "when": "level >= 6"
+      }
+    ],
+    "tags": [
+      "class",
+      "draconic_sorcery",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_sorcerer",
+    "source": "srd",
+    "srd_key": "srd-2024_draconic-sorcery"
+  },
+  {
+    "name": "Druid",
+    "icon": "fa-leaf",
+    "desc": "",
+    "hitDie": 8,
+    "primaryAbility": "wis",
+    "saveProficiencies": [
+      "int",
+      "wis"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "full",
+    "features": [
+      {
+        "feature_id": "srd-2024_druid_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_druid_archdruid",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_druid_beast-spells",
+        "when": "level >= 18"
+      },
+      {
+        "feature_id": "srd-2024_druid_druidic",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_druid_elemental-fury",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_druid_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_druid_improved-elemental-fury",
+        "when": "level >= 15"
+      },
+      {
+        "feature_id": "srd-2024_druid_primal-order",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_druid_wild-companion",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_druid_wild-resurgence",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_druid_wild-shape",
+        "when": "level >= 2"
+      }
+    ],
+    "tags": [
+      "class",
+      "druid",
+      "baseclass",
+      "caster"
+    ],
+    "vars": [
+      {
+        "name": "cantrips",
+        "kind": "derived",
+        "label": "Cantrips",
+        "formula": "[0,2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4][level]"
+      },
+      {
+        "name": "preparedSpells",
+        "kind": "derived",
+        "label": "Prepared Spells",
+        "formula": "[0,4,5,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22][level]"
+      },
+      {
+        "name": "cantripsKnown",
+        "kind": "derived",
+        "label": "Cantrips Known",
+        "formula": "[0,0,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,4,4,4,4][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_druid"
+  },
+  {
+    "name": "Evoker",
+    "icon": "fa-hat-wizard",
+    "desc": "*Create Explosive Elemental Effects*\n\nYour studies focus on magic that creates powerful elemental effects such as bitter cold, searing flame, rolling thunder, crackling lightning, and burning acid. Some Evokers find employment in military forces, serving as artillery to blast armies from afar. Others use their power to protect others, while some seek their own gain.",
+    "hitDie": 8,
+    "primaryAbility": "int",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_wizard_evoker_empowered-evocation",
+        "when": "level >= 10"
+      },
+      {
+        "feature_id": "srd-2024_wizard_evoker_evocation-savant",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_wizard_evoker_overchannel",
+        "when": "level >= 14"
+      },
+      {
+        "feature_id": "srd-2024_wizard_evoker_potent-cantrip",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_wizard_evoker_sculpt-spells",
+        "when": "level >= 6"
+      }
+    ],
+    "tags": [
+      "class",
+      "evoker",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_wizard",
+    "source": "srd",
+    "srd_key": "srd-2024_evoker"
+  },
+  {
+    "name": "Fiend Patron",
+    "icon": "fa-book-skull",
+    "desc": "*Make a Deal with the Lower Planes*\n\nYour pact draws on the Lower Planes, the realms of perdition. You might forge a bargain with a demon lord, an archdevil, or another fiend that is especially mighty. That patron's aims are evil—the corruption or destruction of all things, ultimately including you—and your path is defined by the extent to which you strive against those aims.",
+    "hitDie": 8,
+    "primaryAbility": "cha",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_warlock_fiend-patron_dark-ones-blessing",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_warlock_fiend-patron_dark-ones-own-luck",
+        "when": "level >= 6"
+      },
+      {
+        "feature_id": "srd-2024_warlock_fiend-patron_fiend-spells",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_warlock_fiend-patron_fiendish-resilience",
+        "when": "level >= 10"
+      },
+      {
+        "feature_id": "srd-2024_warlock_fiend-patron_hurl-through-hell",
+        "when": "level >= 14"
+      }
+    ],
+    "tags": [
+      "class",
+      "fiend_patron",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_warlock",
+    "source": "srd",
+    "srd_key": "srd-2024_fiend-patron"
+  },
+  {
+    "name": "Fighter",
+    "icon": "fa-shield-halved",
+    "desc": "",
+    "hitDie": 10,
+    "primaryAbility": "str",
+    "saveProficiencies": [
+      "dex",
+      "str"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_fighter_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_fighter_action-surge",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_fighter_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_fighter_extra-attack",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_fighter_fighting-style",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_fighter_indomitable",
+        "when": "level >= 9"
+      },
+      {
+        "feature_id": "srd-2024_fighter_second-wind",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_fighter_studied-attacks",
+        "when": "level >= 13"
+      },
+      {
+        "feature_id": "srd-2024_fighter_tactical-master",
+        "when": "level >= 9"
+      },
+      {
+        "feature_id": "srd-2024_fighter_tactical-mind",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_fighter_tactical-shift",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_fighter_three-extra-attacks",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_fighter_two-extra-attacks",
+        "when": "level >= 11"
+      },
+      {
+        "feature_id": "srd-2024_fighter_weapon-mastery",
+        "when": "level >= 1"
+      }
+    ],
+    "tags": [
+      "class",
+      "fighter",
+      "baseclass"
+    ],
+    "vars": [
+      {
+        "name": "secondWind",
+        "kind": "derived",
+        "label": "Second Wind",
+        "formula": "[0,2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4][level]"
+      },
+      {
+        "name": "weaponMastery",
+        "kind": "derived",
+        "label": "Weapon Mastery",
+        "formula": "[0,3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,6,6,6,6,6][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_fighter"
+  },
+  {
+    "name": "Hunter",
+    "icon": "fa-bullseye",
+    "desc": "*Protect Nature and People from Destruction*\n\nYou stalk prey in the wilds and elsewhere, using your abilities as a Hunter to protect nature and people everywhere from forces that would destroy them.",
+    "hitDie": 8,
+    "primaryAbility": "dex",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_ranger_hunter_defensive-tactics",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_ranger_hunter_hunters-lore",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_ranger_hunter_hunters-prey",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_ranger_hunter_superior-hunters-defense",
+        "when": "level >= 15"
+      },
+      {
+        "feature_id": "srd-2024_ranger_hunter_superior-hunters-prey",
+        "when": "level >= 11"
+      }
+    ],
+    "tags": [
+      "class",
+      "hunter",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_ranger",
+    "source": "srd",
+    "srd_key": "srd-2024_hunter"
+  },
+  {
+    "name": "Life Domain",
+    "icon": "fa-cross",
+    "desc": "*Soothe the Hurts of the World*\n\nThe Life Domain focuses on the positive energy that helps sustain all life in the multiverse. Clerics who tap into this domain are masters of healing, using that life force to cure many hurts.\n\nExistence itself relies on the positive energy associated with this domain, so a Cleric of almost any religious tradition might choose it. This domain is particularly associated with agricultural deities, gods of healing or endurance, and gods of home and community. Religious orders of healing also seek the magic of this domain.",
+    "hitDie": 8,
+    "primaryAbility": "wis",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_cleric_life-domain_blessed-healer",
+        "when": "level >= 6"
+      },
+      {
+        "feature_id": "srd-2024_cleric_life-domain_disciple-of-life",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_cleric_life-domain_life-domain-spells",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_cleric_life-domain_preserve-life",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_cleric_life-domain_supreme-healing",
+        "when": "level >= 17"
+      }
+    ],
+    "tags": [
+      "class",
+      "life_domain",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_cleric",
+    "source": "srd",
+    "srd_key": "srd-2024_life-domain"
+  },
+  {
+    "name": "Monk",
+    "icon": "fa-hand-sparkles",
+    "desc": "",
+    "hitDie": 8,
+    "primaryAbility": "dex",
+    "saveProficiencies": [
+      "dex",
+      "wis"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_monk_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_monk_acrobatic-movement",
+        "when": "level >= 9"
+      },
+      {
+        "feature_id": "srd-2024_monk_body-and-mind",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_monk_deflect-attacks"
+      },
+      {
+        "feature_id": "srd-2024_monk_deflect-energy",
+        "when": "level >= 13"
+      },
+      {
+        "feature_id": "srd-2024_monk_disciplined-survivor",
+        "when": "level >= 14"
+      },
+      {
+        "feature_id": "srd-2024_monk_empowered-strikes",
+        "when": "level >= 6"
+      },
+      {
+        "feature_id": "srd-2024_monk_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_monk_evasion",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_monk_extra-attack",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_monk_heightened-focus",
+        "when": "level >= 10"
+      },
+      {
+        "feature_id": "srd-2024_monk_martial-arts",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_monk_monks-focus",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_monk_perfect-focus",
+        "when": "level >= 15"
+      },
+      {
+        "feature_id": "srd-2024_monk_self-restoration",
+        "when": "level >= 10"
+      },
+      {
+        "feature_id": "srd-2024_monk_slow-fall",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_monk_stunning-strike",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_monk_superior-defense",
+        "when": "level >= 18"
+      },
+      {
+        "feature_id": "srd-2024_monk_unarmored-defense",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_monk_unarmored-movement",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_monk_uncanny-metabolism",
+        "when": "level >= 2"
+      }
+    ],
+    "tags": [
+      "class",
+      "monk",
+      "baseclass"
+    ],
+    "vars": [
+      {
+        "name": "focusPoints",
+        "kind": "derived",
+        "label": "Focus Points",
+        "formula": "[0,0,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_monk"
+  },
+  {
+    "name": "Oath of Devotion",
+    "icon": "fa-scale-balanced",
+    "desc": "*Uphold the Ideals of Justice and Order*\n\nThe Oath of Devotion binds Paladins to the ideals of justice and order. These Paladins meet the archetype of the knight in shining armor. They hold themselves to the highest standards of conduct, and some—for better or worse—hold the rest of the world to the same standards.\n\nMany who swear this oath are devoted to gods of law and good and use their gods' tenets as the measure of personal devotion. Others hold angels as their ideals and incorporate images of angelic wings into their helmets or coats of arms.\n\nThese paladins share the following tenets:\n\n- Let your word be your promise.\n- Protect the weak and never fear to act.\n- Let your honorable deeds be an example.",
+    "hitDie": 8,
+    "primaryAbility": "str",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_paladin_oath-of-devotion_aura-of-devotion",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_paladin_oath-of-devotion_holy-nimbus",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_paladin_oath-of-devotion_sacred-weapon",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_paladin_oath-of-devotion_smite-of-protection",
+        "when": "level >= 15"
+      },
+      {
+        "feature_id": "srd-2024_paladin_oath-of-devotion_spells",
+        "when": "level >= 3"
+      }
+    ],
+    "tags": [
+      "class",
+      "oath_of_devotion",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_paladin",
+    "source": "srd",
+    "srd_key": "srd-2024_oath-of-devotion"
+  },
+  {
+    "name": "Paladin",
+    "icon": "fa-scale-balanced",
+    "desc": "",
+    "hitDie": 10,
+    "primaryAbility": "str",
+    "saveProficiencies": [
+      "cha",
+      "wis"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "half",
+    "features": [
+      {
+        "feature_id": "srd-2024_paladin_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_paladin_abjure-foes",
+        "when": "level >= 9"
+      },
+      {
+        "feature_id": "srd-2024_paladin_aura-expansion",
+        "when": "level >= 18"
+      },
+      {
+        "feature_id": "srd-2024_paladin_aura-of-courage",
+        "when": "level >= 10"
+      },
+      {
+        "feature_id": "srd-2024_paladin_aura-of-protection",
+        "when": "level >= 6"
+      },
+      {
+        "feature_id": "srd-2024_paladin_channel-divinity",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_paladin_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_paladin_extra-attack",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_paladin_faithful-steed",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_paladin_fighting-style",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_paladin_lay-on-hands",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_paladin_paladins-smite",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_paladin_radiant-strikes",
+        "when": "level >= 11"
+      },
+      {
+        "feature_id": "srd-2024_paladin_restoring-touch",
+        "when": "level >= 14"
+      },
+      {
+        "feature_id": "srd-2024_paladin_weapon-mastery",
+        "when": "level >= 1"
+      }
+    ],
+    "tags": [
+      "class",
+      "paladin",
+      "baseclass",
+      "caster"
+    ],
+    "vars": [
+      {
+        "name": "channelDivinity",
+        "kind": "derived",
+        "label": "Channel Divinity",
+        "formula": "[0,0,0,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3][level]"
+      },
+      {
+        "name": "preparedSpells",
+        "kind": "derived",
+        "label": "Prepared Spells",
+        "formula": "[0,2,3,4,5,6,6,7,7,9,9,10,10,11,11,12,12,14,14,15,15][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_paladin"
+  },
+  {
+    "name": "Path of the Berserker",
+    "icon": "fa-hand-fist",
+    "desc": "*Channel Rage into Violent Fury*\n\nBarbarians who walk the Path of the Berserker direct their Rage primarily toward violence. Their path is one of untrammeled fury, and they thrill in the chaos of battle as they allow their Rage to seize and empower them.",
+    "hitDie": 12,
+    "primaryAbility": "str",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_path-of-the-berserker_frenzy",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_path-of-the-berserker_intimidating-presence",
+        "when": "level >= 14"
+      },
+      {
+        "feature_id": "srd-2024_path-of-the-berserker_mindless-rage",
+        "when": "level >= 6"
+      },
+      {
+        "feature_id": "srd-2024_path-of-the-berserker_retaliation",
+        "when": "level >= 10"
+      }
+    ],
+    "tags": [
+      "class",
+      "path_of_the_berserker",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_barbarian",
+    "source": "srd",
+    "srd_key": "srd-2024_path-of-the-berserker"
+  },
+  {
+    "name": "Ranger",
+    "icon": "fa-bullseye",
+    "desc": "",
+    "hitDie": 10,
+    "primaryAbility": "dex",
+    "saveProficiencies": [
+      "dex",
+      "str"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "half",
+    "features": [
+      {
+        "feature_id": "srd-2024_ranger_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_ranger_deft-explorer",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_ranger_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_ranger_expertise",
+        "when": "level >= 9"
+      },
+      {
+        "feature_id": "srd-2024_ranger_extra-attack",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_ranger_favored-enemy",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_ranger_feral-senses",
+        "when": "level >= 18"
+      },
+      {
+        "feature_id": "srd-2024_ranger_fighting-style",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_ranger_foe-slayer",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_ranger_natures-veil",
+        "when": "level >= 14"
+      },
+      {
+        "feature_id": "srd-2024_ranger_precise-hunter",
+        "when": "level >= 17"
+      },
+      {
+        "feature_id": "srd-2024_ranger_relentless-hunter",
+        "when": "level >= 13"
+      },
+      {
+        "feature_id": "srd-2024_ranger_roving",
+        "when": "level >= 6"
+      },
+      {
+        "feature_id": "srd-2024_ranger_tireless",
+        "when": "level >= 10"
+      },
+      {
+        "feature_id": "srd-2024_ranger_weapon-mastery",
+        "when": "level >= 1"
+      }
+    ],
+    "tags": [
+      "class",
+      "ranger",
+      "baseclass",
+      "caster"
+    ],
+    "vars": [
+      {
+        "name": "favoredEnemy",
+        "kind": "derived",
+        "label": "Favored Enemy",
+        "formula": "[0,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6][level]"
+      },
+      {
+        "name": "preparedSpells",
+        "kind": "derived",
+        "label": "Prepared Spells",
+        "formula": "[0,2,3,4,5,6,6,7,7,9,9,10,10,11,11,12,12,14,14,15,15][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_ranger"
+  },
+  {
+    "name": "Rogue",
+    "icon": "fa-user-ninja",
+    "desc": "",
+    "hitDie": 8,
+    "primaryAbility": "dex",
+    "saveProficiencies": [
+      "dex",
+      "int"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_rogue_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_rogue_cunning-action",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_rogue_cunning-strike",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_rogue_devious-strikes",
+        "when": "level >= 14"
+      },
+      {
+        "feature_id": "srd-2024_rogue_elusive",
+        "when": "level >= 18"
+      },
+      {
+        "feature_id": "srd-2024_rogue_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_rogue_evasion",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_rogue_expertise",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_rogue_improved-cunning-strike",
+        "when": "level >= 11"
+      },
+      {
+        "feature_id": "srd-2024_rogue_reliable-talent",
+        "when": "level >= 7"
+      },
+      {
+        "feature_id": "srd-2024_rogue_slippery-mind",
+        "when": "level >= 15"
+      },
+      {
+        "feature_id": "srd-2024_rogue_sneak-attack",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_rogue_steady-aim",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_rogue_stroke-of-luck",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_rogue_thieves-cant",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_rogue_uncanny-dodge",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_rogue_weapon-mastery",
+        "when": "level >= 1"
+      }
+    ],
+    "tags": [
+      "class",
+      "rogue",
+      "baseclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_rogue"
+  },
+  {
+    "name": "Sorcerer",
+    "icon": "fa-fire",
+    "desc": "",
+    "hitDie": 6,
+    "primaryAbility": "cha",
+    "saveProficiencies": [
+      "cha",
+      "con"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "full",
+    "features": [
+      {
+        "feature_id": "srd-2024_sorcerer_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_arcane-apotheosis",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_font-of-magic",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_innate-sorcery",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_metamagic",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_metamagic-options"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_sorcerous-restoration",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_sorcerer_sorcery-incarnate",
+        "when": "level >= 7"
+      }
+    ],
+    "tags": [
+      "class",
+      "sorcerer",
+      "baseclass",
+      "caster"
+    ],
+    "vars": [
+      {
+        "name": "cantrips",
+        "kind": "derived",
+        "label": "Cantrips",
+        "formula": "[0,4,4,4,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,6][level]"
+      },
+      {
+        "name": "preparedSpells",
+        "kind": "derived",
+        "label": "Prepared Spells",
+        "formula": "[0,2,4,6,7,9,10,11,12,14,15,16,16,17,17,18,18,19,20,21,22][level]"
+      },
+      {
+        "name": "sorceryPoints",
+        "kind": "derived",
+        "label": "Sorcery Points",
+        "formula": "[0,0,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_sorcerer"
+  },
+  {
+    "name": "Thief",
+    "icon": "fa-user-ninja",
+    "desc": "*Hunt for Treasure as a Classic Adventurer*\n\nA mix of burglar, treasure hunter, and explorer, you are the epitome of an adventurer. In addition to improving your agility and stealth, you gain abilities useful for delving into ruins and getting maximum benefit from the magic items you find there.",
+    "hitDie": 8,
+    "primaryAbility": "dex",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_rogue_thief_fast-hands",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_rogue_thief_second-story-work",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_rogue_thief_supreme-sneak",
+        "when": "level >= 9"
+      },
+      {
+        "feature_id": "srd-2024_rogue_thief_thiefs-reflexes",
+        "when": "level >= 17"
+      },
+      {
+        "feature_id": "srd-2024_rogue_thief_use-magic-device",
+        "when": "level >= 13"
+      }
+    ],
+    "tags": [
+      "class",
+      "thief",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_rogue",
+    "source": "srd",
+    "srd_key": "srd-2024_thief"
+  },
+  {
+    "name": "Warlock",
+    "icon": "fa-book-skull",
+    "desc": "",
+    "hitDie": 8,
+    "primaryAbility": "cha",
+    "saveProficiencies": [
+      "cha",
+      "wis"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "pact",
+    "features": [
+      {
+        "feature_id": "srd-2024_warlock_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_warlock_contact-patron",
+        "when": "level >= 9"
+      },
+      {
+        "feature_id": "srd-2024_warlock_eldritch-invocation-options"
+      },
+      {
+        "feature_id": "srd-2024_warlock_eldritch-invocations",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_warlock_eldritch-master",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_warlock_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_warlock_magical-cunning",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_warlock_mystic-arcanum",
+        "when": "level >= 11"
+      },
+      {
+        "feature_id": "srd-2024_warlock_pact-magic",
+        "when": "level >= 1"
+      }
+    ],
+    "tags": [
+      "class",
+      "warlock",
+      "baseclass",
+      "caster"
+    ],
+    "vars": [
+      {
+        "name": "cantrips",
+        "kind": "derived",
+        "label": "Cantrips",
+        "formula": "[0,2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4][level]"
+      },
+      {
+        "name": "eldritchInvocations",
+        "kind": "derived",
+        "label": "Eldritch Invocations",
+        "formula": "[0,1,3,3,3,5,5,6,6,7,7,7,8,8,8,9,9,9,10,10,10][level]"
+      },
+      {
+        "name": "preparedSpells",
+        "kind": "derived",
+        "label": "Prepared Spells",
+        "formula": "[0,2,3,4,5,6,7,8,9,10,10,11,11,12,12,13,13,14,14,15,15][level]"
+      },
+      {
+        "name": "spellSlots",
+        "kind": "derived",
+        "label": "Spell Slots",
+        "formula": "[0,1,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,4,4,4,4][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_warlock"
+  },
+  {
+    "name": "Warrior of the Open Hand",
+    "icon": "fa-hand-sparkles",
+    "desc": "*Master Unarmed Combat Techniques*\n\nWarriors of the Open Hand are masters of unarmed combat. They learn techniques to push and trip their opponents and manipulate their own energy to protect themselves from harm.",
+    "hitDie": 8,
+    "primaryAbility": "dex",
+    "saveProficiencies": [],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "none",
+    "features": [
+      {
+        "feature_id": "srd-2024_monk_warrior-of-the-open-hand_fleet-step",
+        "when": "level >= 11"
+      },
+      {
+        "feature_id": "srd-2024_monk_warrior-of-the-open-hand_open-hand-technique",
+        "when": "level >= 3"
+      },
+      {
+        "feature_id": "srd-2024_monk_warrior-of-the-open-hand_quivering-palm",
+        "when": "level >= 17"
+      },
+      {
+        "feature_id": "srd-2024_monk_warrior-of-the-open-hand_wholeness-of-body",
+        "when": "level >= 6"
+      }
+    ],
+    "tags": [
+      "class",
+      "warrior_of_the_open_hand",
+      "subclass"
+    ],
+    "vars": [],
+    "graph": [],
+    "parent": "srd-2024_monk",
+    "source": "srd",
+    "srd_key": "srd-2024_warrior-of-the-open-hand"
+  },
+  {
+    "name": "Wizard",
+    "icon": "fa-hat-wizard",
+    "desc": "",
+    "hitDie": 6,
+    "primaryAbility": "int",
+    "saveProficiencies": [
+      "int",
+      "wis"
+    ],
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "proficiencies": {},
+    "startingEquipment": [],
+    "caster": "full",
+    "features": [
+      {
+        "feature_id": "srd-2024_wizard_ability-score-improvement",
+        "when": "level >= 4"
+      },
+      {
+        "feature_id": "srd-2024_wizard_arcane-recovery",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_wizard_epic-boon",
+        "when": "level >= 19"
+      },
+      {
+        "feature_id": "srd-2024_wizard_memorize-spell",
+        "when": "level >= 5"
+      },
+      {
+        "feature_id": "srd-2024_wizard_ritual-adept",
+        "when": "level >= 1"
+      },
+      {
+        "feature_id": "srd-2024_wizard_scholar",
+        "when": "level >= 2"
+      },
+      {
+        "feature_id": "srd-2024_wizard_signature-spells",
+        "when": "level >= 20"
+      },
+      {
+        "feature_id": "srd-2024_wizard_spell-mastery",
+        "when": "level >= 18"
+      }
+    ],
+    "tags": [
+      "class",
+      "wizard",
+      "baseclass",
+      "caster"
+    ],
+    "vars": [
+      {
+        "name": "cantrips",
+        "kind": "derived",
+        "label": "Cantrips",
+        "formula": "[0,3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5][level]"
+      },
+      {
+        "name": "preparedSpells",
+        "kind": "derived",
+        "label": "Prepared Spells",
+        "formula": "[0,4,5,6,7,9,10,11,12,14,15,16,16,17,18,19,21,22,23,24,25][level]"
+      }
+    ],
+    "graph": [],
+    "subclassLevel": 3,
+    "subclassLabel": "Subclass",
+    "source": "srd",
+    "srd_key": "srd-2024_wizard"
+  }
+]

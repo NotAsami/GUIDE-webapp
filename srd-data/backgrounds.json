@@ -20,7 +20,7 @@
     },
     "features": [
       {
-        "id": "srd-2024_magic-initiate"
+        "feature_id": "srd-2024_magic-initiate"
       }
     ],
     "equipment": [],
@@ -56,7 +56,7 @@
     },
     "features": [
       {
-        "id": "srd-2024_alert"
+        "feature_id": "srd-2024_alert"
       }
     ],
     "equipment": [],
@@ -92,7 +92,7 @@
     },
     "features": [
       {
-        "id": "srd-2024_magic-initiate"
+        "feature_id": "srd-2024_magic-initiate"
       }
     ],
     "equipment": [],
@@ -128,7 +128,7 @@
     },
     "features": [
       {
-        "id": "srd-2024_savage-attacker"
+        "feature_id": "srd-2024_savage-attacker"
       }
     ],
     "equipment": [],

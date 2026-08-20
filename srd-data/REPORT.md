@@ -1,6 +1,6 @@
 # SRD 5.2 import — stage 1 report
 
-Document: `srd-2024` · generated 2026-08-20T17:09:22.014Z
+Document: `srd-2024` · generated 2026-08-20T20:58:01.669Z
 
 
 ## Rows
@@ -11,9 +11,10 @@ Document: `srd-2024` · generated 2026-08-20T17:09:22.014Z
 | feats | 17 | 17 |
 | backgrounds | 4 | 4 |
 | armor | 13 | 13 |
-| spells | 339 | 339 |
 | weapons | 75 | 38 |
+| spells | 339 | 339 |
 | items | 203 | 203 |
+| classes | 24 | 24 |
 | magicitems | 757 | 757 |
 
 ## Written
@@ -21,7 +22,8 @@ Document: `srd-2024` · generated 2026-08-20T17:09:22.014Z
 - `items.json` — 941 rows
 - `spells.json` — 339 rows
 - `races.json` — 9 rows
-- `features.json` — 44 rows
+- `features.json` — 260 rows
+- `classes.json` — 24 rows
 - `backgrounds.json` — 4 rows
 
 ## Rejected by the client-side document check
@@ -52,3 +54,19 @@ traceable to the notice after it is loaded, exported, or copied onto a sheet.
 - skipped-category:mount — 8
 - skipped-category:land-vehicle — 5
 - skipped-category:waterborne-vehicle — 6
+- skipped-subclass-marker — 11
+- skipped-core_traits_table — 12
+- skipped-proficiency_bonus — 12
+- skipped-class_table_data — 30
+- skipped-spell-list-header — 8
+- skipped-spell_slots — 55
+- skipped-spellcasting — 7
+- skipped-placeholder-prose — 1
+
+## Warnings
+
+- class Bard: column "Bardic Die" is not numeric (D6) — left out, a dice or ordinal progression needs a human
+- class Monk: column "Martial Arts" is not numeric (1d6) — left out, a dice or ordinal progression needs a human
+- class Monk: column "Unarmoed Movement" is not numeric (+10 ft.) — left out, a dice or ordinal progression needs a human
+- class Rogue: column "Sneak Attack" is not numeric (1d6) — left out, a dice or ordinal progression needs a human
+- class Warlock: column "Slot Level" is not numeric (1st) — left out, a dice or ordinal progression needs a human
