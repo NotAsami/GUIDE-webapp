@@ -86,3 +86,13 @@ public/        Static assets (favicon, logo)
   attunement, equipped-vs-carried, and prepared spells.
 - **Render from data, never from markup.** Screens are driven by the character
   object — no hardcoded values in the JSX.
+
+## Content licences
+
+- **SRD 5.2** game content (spells, equipment, magic items, species, feats) —
+  CC BY 4.0, from Wizards of the Coast via the Open5e API. Notice:
+  [`srd-data/LICENSE.txt`](srd-data/LICENSE.txt).
+- **game-icons.net** icon set — CC BY 3.0 (some CC0):
+  [`public/icons/license.txt`](public/icons/license.txt).
+
+Attributions and the reasoning behind them: [`docs/CREDITS.md`](docs/CREDITS.md).

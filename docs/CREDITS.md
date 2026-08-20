@@ -1,5 +1,33 @@
 # Credits
 
+## Game content
+
+### System Reference Document 5.2 — CC BY 4.0
+
+Spells, equipment, magic items, species and feats imported from the **SRD 5.2**
+via the [Open5e API](https://api.open5e.com/v2/) (document key `srd-2024`).
+
+> This work includes material from the System Reference Document 5.2 ("SRD 5.2")
+> by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The
+> SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International
+> License, available at https://creativecommons.org/licenses/by/4.0/legalcode.
+
+The full notice lives at **`srd-data/LICENSE.txt`**, beside the data rather than
+only here, and `scripts/srd-import.mjs` refuses to write the dataset if it is
+missing — the licence is a condition of using the content, not documentation
+about it.
+
+**Only `srd-2024` is imported.** Open5e aggregates two dozen documents, and
+three of its endpoints silently ignore the document filter: passing the wrong
+parameter returns Kobold Press, Tome of Beasts and other publishers' content
+with no error. The importer therefore re-checks every row client-side and
+reports what it rejected. None of that third-party material is included, and
+none of it would be covered by the notice above.
+
+Imported rows carry `source: 'srd'` and their Open5e slug in `srd_key`, so a row
+stays traceable to this notice after it is loaded, exported, or copied onto a
+character sheet.
+
 ## Icons
 
 ### game-icons.net — CC BY 3.0
