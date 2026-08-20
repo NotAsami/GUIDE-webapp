@@ -1410,6 +1410,16 @@
   .sk-stock-row .ss-x { flex: 0 0 auto; margin-left: auto; cursor: pointer; color: var(--beige-dim); font-size: 11px; padding: 4px 5px; transition: color 130ms ease; }
   .sk-stock-row .ss-x:hover { color: var(--danger-hot); }
 
+  /* loot-roll assignment (reuses .sk-stock-row for each rolled line) */
+  .lr-pick { width: 190px; flex: 0 0 auto; margin-bottom: 0; margin-left: auto; }
+  .lr-assigned { flex: 0 0 auto; margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--cyan-hot); }
+  .lr-assigned i { color: var(--cyan); }
+  .lr-assigned .who { font-family: var(--font-prose); font-style: italic; font-size: 13.5px; color: var(--text); }
+  .lr-assigned .lr-unassign { margin-left: 2px; cursor: pointer; color: var(--beige-dim); padding: 3px 5px; transition: color 130ms ease; }
+  .lr-assigned .lr-unassign:hover { color: var(--danger-hot); }
+  .lr-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 34px 16px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; color: var(--beige-dim); line-height: 1.7; }
+  .lr-empty i { font-size: 20px; color: var(--beige-dim); }
+
   /* item picker */
   .sk-pick { border: 1px solid rgba(212,191,125,0.3); border-left: 3px solid var(--beige); background: rgba(212,191,125,0.04); padding: 12px 13px 13px; margin-bottom: 14px;
     clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
@@ -1886,6 +1896,7 @@
 
 <!-- level-up focused overlay (per-character; mounted on demand) -->
 <div id="levelupMount"></div>
+<div id="lootRollMount"></div>
 
 <div class="scanlines"></div>
 <div class="vignette"></div>
@@ -2286,6 +2297,30 @@ const CATALOG_SHOPKEEPERS = [
 ];
 const SK_STOCK_MODES = ['unlimited','limited'];
 
+/* ▸▸▸ CATALOG_LOOT — loot table templates. contents[] references CATALOG_ITEMS by
+   id; each line rolls independently against `chance` (%) for a qty between
+   qtyMin–qtyMax. Container chrome (icon/kind/name/location/desc) is fully
+   generic — kind is freeform text ("Corpse", "Chest", "Bookshelf", …), not
+   a fixed type list. A roll can legitimately return nothing. */
+const CATALOG_LOOT = [
+  { id:'loot_quartermaster', name:'The Drowned Quartermaster', icon:'fa-skull', kind:'Corpse', location:'Sunken Hold · Deck Three',
+    desc:'Waterlogged, rank-tabs still pinned. Whatever killed him left the pockets alone.',
+    contents:[
+      { itemId:'pot_heal', chance:90, qtyMin:1, qtyMax:2 },
+      { itemId:'thieves_tools', chance:40, qtyMin:1, qtyMax:1 },
+      { itemId:'amulet_poison', chance:20, qtyMin:1, qtyMax:1 },
+      { itemId:'shard_frag', chance:15, qtyMin:1, qtyMax:1 }
+    ] },
+  { id:'loot_strongbox', name:'Sea-Locked Strongbox', icon:'fa-box-archive', kind:'Chest', location:'Lower Quay Warehouse',
+    desc:'Banded in green copper, the lock long since given up to rust. Someone meant to come back for this.',
+    contents:[
+      { itemId:'pot_str', chance:55, qtyMin:1, qtyMax:1 },
+      { itemId:'sword_1', chance:30, qtyMin:1, qtyMax:1 },
+      { itemId:'bag_holding', chance:12, qtyMin:1, qtyMax:1 },
+      { itemId:'pot_heal', chance:70, qtyMin:1, qtyMax:3 }
+    ] }
+];
+
 const byId = id => PARTY.find(p => p.id === id);
 let selectedId = null;            // null = PARTY OVERVIEW
 let view       = 'overview';      // 'overview' | 'sessions' | 'quests' | 'catalog' | 'character'
@@ -2295,7 +2330,7 @@ let charTab = 'actions';          // selected-character work area tab: actions |
 let loreDraft = null;             // working lore form draft (per character)
 let questDraft = null;            // working quest form draft
 let questEditId = null;           // index into QUESTS, or null for a new quest
-let catType    = 'items';         // catalog type switcher: items | spells | features | effects | shops | shards
+let catType    = 'items';         // catalog type switcher: items | spells | features | effects | shops | loot | shards
 let itemDraft  = null;            // working catalog-item draft
 let itemEditId = null;            // index into CATALOG_ITEMS, or null for new
 let spellDraft = null;            // working catalog-spell draft
@@ -2314,6 +2349,12 @@ let shopPickCat = 'all';          // stock item-picker: category filter
 let shopOpenIdx = null;           // shopkeeper being opened via the recipient picker
 let shopTarget  = 'selected';     // recipient picker (mirrors bcTarget)
 let shopPcId    = null;           // chosen PC when target = 'selected'
+let lootDraft   = null;           // working loot-table draft
+let lootEditId  = null;           // index into CATALOG_LOOT, or null for new
+let lootPickQ   = '';             // contents item-picker: search string
+let lootPickRar = 'all';          // contents item-picker: rarity filter
+let lootPickCat = 'all';          // contents item-picker: category filter
+let lootRoll    = null;           // active rolled result awaiting assignment/push, or null
 let grantSel   = null;            // selected catalog item id
 let effSel     = CATALOG_EFFECTS[0].id;
 let durSel     = '3 rounds';
@@ -2972,6 +3013,7 @@ function renderCatalog() {
     { key:'features', label:'Features', icon:'fa-star',          n:CATALOG_FEATURES.length },
     { key:'effects',  label:'Effects',  icon:'fa-bolt', n:CATALOG_EFFECTS.length },
     { key:'shops',    label:'Shopkeepers', icon:'fa-shop',      n:CATALOG_SHOPKEEPERS.length },
+    { key:'loot',     label:'Loot Tables', icon:'fa-dice-d6',   n:CATALOG_LOOT.length },
     { key:'shards',   label:'Shards',   icon:'fa-diamond',       stub:true },
   ];
   const tabHtml = tabs.map(t =>
@@ -2986,6 +3028,7 @@ function renderCatalog() {
   else if (catType === 'features') main = catalogFeaturesBody();
   else if (catType === 'effects') main = catalogEffectsBody();
   else if (catType === 'shops') main = catalogShopsBody();
+  else if (catType === 'loot') main = catalogLootBody();
   else main = catalogStub('fa-diamond', 'Shard Tree',
     'Editing a branching shard node tree is a graph editor, not a form \u2014 a dedicated future tool. The catalog tab reserves its place; the tree itself is built elsewhere.', 'Dedicated tool · not a form');
 
@@ -3446,6 +3489,166 @@ function wireShopPickRows() {
   }));
 }
 
+/* ============================================================================
+   LOOT TABLES — authoring (name/icon/kind/desc + contents). Rolling and
+   assignment live further down, next to the Level Up overlay.
+   ============================================================================ */
+function newLootDraft() { lootEditId = null; lootDraft = { id:null, name:'', icon:'fa-box-archive', kind:'', location:'', desc:'', contents:[] }; }
+function loadLootDraft(idx) {
+  lootEditId = idx; const t = CATALOG_LOOT[idx];
+  lootDraft = { id:t.id, name:t.name, icon:t.icon, kind:t.kind, location:t.location, desc:t.desc, contents: t.contents.map(c => ({ ...c })) };
+}
+
+function lootPickListHtml() {
+  const q = lootPickQ.trim().toLowerCase();
+  const rows = CATALOG_ITEMS.filter(it => {
+    if (lootPickRar !== 'all' && it.rarity !== lootPickRar) return false;
+    if (lootPickCat !== 'all' && it.category !== lootPickCat) return false;
+    if (q && !(it.name + ' ' + it.category + ' ' + it.rarity).toLowerCase().includes(q)) return false;
+    return true;
+  }).map(it => {
+    const rd = RAR_DEF[it.rarity] || RAR_DEF.common;
+    return '<button class="sk-pi" style="--rar:' + rd.color + '" data-lootpick="' + esc2(it.id) + '">' +
+      '<span class="pi-ic"><i class="fa-solid ' + it.icon + '"></i></span>' +
+      '<span class="pi-t">' + esc2(it.name) + '</span>' +
+      '<span class="pi-m">' + esc2(rd.label) + '</span>' +
+    '</button>';
+  }).join('');
+  return rows || '<div class="cat-fx-none">No catalog items match this filter.</div>';
+}
+
+function lootContentsHtml() {
+  const d = lootDraft;
+  const rows = d.contents.length
+    ? d.contents.map((c, i) => {
+        const it = catItemById(c.itemId);
+        if (!it) return '';
+        const rd = RAR_DEF[it.rarity] || RAR_DEF.common;
+        const def = CAT_DEF[it.category] || CAT_DEF.misc;
+        const range = c.qtyMin === c.qtyMax ? ('\u00d7' + c.qtyMin) : ('\u00d7' + c.qtyMin + '\u2013' + c.qtyMax);
+        return '<div class="sk-stock-row" style="--rar:' + rd.color + '">' +
+          '<span class="ss-ic"><i class="fa-solid ' + it.icon + '"></i></span>' +
+          '<span class="ss-tx"><span class="ss-t">' + esc2(it.name) + '</span>' +
+            '<span class="ss-s">' + esc2(def.label) + ' \u00b7 <span class="rar">' + esc2(rd.label) + '</span> \u00b7 ' + range + '</span></span>' +
+          '<span class="sk-qty"><span class="ql">Chance</span><input class="sess-in" type="number" min="1" max="100" data-chance="' + i + '" value="' + c.chance + '" style="width:52px;"><span class="ql">%</span></span>' +
+          '<span class="sk-qty"><span class="ql">Min</span><input class="sess-in" type="number" min="1" data-qtymin="' + i + '" value="' + c.qtyMin + '"></span>' +
+          '<span class="sk-qty"><span class="ql">Max</span><input class="sess-in" type="number" min="1" data-qtymax="' + i + '" value="' + c.qtyMax + '"></span>' +
+          '<span class="ss-x" data-lootx="' + i + '"><i class="fa-solid fa-xmark"></i></span>' +
+        '</div>';
+      }).join('')
+    : '<div class="cat-fx-none">No contents yet \u2014 pull items from the catalog below. Each line rolls independently by drop chance.</div>';
+
+  const rarChips = '<span class="ac ' + (lootPickRar === 'all' ? 'on' : '') + '" data-lootrar="all">All</span>' +
+    RAR_ORDER.map(r => '<span class="ac ' + (lootPickRar === r ? 'on' : '') + '" data-lootrar="' + r + '">' + RAR_DEF[r].label + '</span>').join('');
+  const catChips = '<span class="ac ' + (lootPickCat === 'all' ? 'on' : '') + '" data-lootcat="all">All</span>' +
+    CAT_ORDER.map(c => '<span class="ac ' + (lootPickCat === c ? 'on' : '') + '" data-lootcat="' + c + '">' + CAT_DEF[c].label + '</span>').join('');
+
+  return '<div class="cat-sec-lab"><span class="field-lab">Contents</span></div>' +
+    '<div class="sk-stock-rows" id="ltContents">' + rows + '</div>' +
+    '<div class="sk-pick">' +
+      '<div class="cat-fx-head"><i class="fa-solid fa-box-open"></i><span class="t">Add From Catalog</span><span class="s">each line rolls independently \u2014 chance and quantity are yours to tune</span></div>' +
+      '<div class="search-wrap"><i class="fa-solid fa-magnifying-glass"></i><input class="search-in" id="ltSearch" placeholder="Search the item catalog\u2026" value="' + esc2(lootPickQ) + '"></div>' +
+      '<div class="sk-filters">' +
+        '<div><div class="fl">Rarity</div><div class="cat-acc" id="ltRar">' + rarChips + '</div></div>' +
+        '<div><div class="fl">Category</div><div class="cat-acc" id="ltCat">' + catChips + '</div></div>' +
+      '</div>' +
+      '<div class="sk-picklist" id="ltPickList">' + lootPickListHtml() + '</div>' +
+    '</div>';
+}
+
+function catalogLootBody() {
+  if (!lootDraft) { CATALOG_LOOT.length ? loadLootDraft(0) : newLootDraft(); }
+  let index = '<button class="btn cyan" id="catNewBtn" style="height:28px;flex:0 0 auto;font-size:9px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-plus"></i> New Loot Table</span></button>';
+  const rows = CATALOG_LOOT.map((t, idx) => {
+    const pending = lootRoll && lootRoll.tableIdx === idx;
+    const n = t.contents.length;
+    const unassigned = pending ? lootRoll.items.filter(i => !i.assignedId).length : 0;
+    return '<div class="sk-row ' + (lootEditId === idx ? 'sel' : '') + '">' +
+      '<button class="sk-main" data-loot="' + idx + '">' +
+        '<span class="sk-ic"><i class="fa-solid ' + t.icon + '"></i></span>' +
+        '<span class="sk-tx"><span class="sk-t">' + esc2(t.name || 'Untitled') + '</span>' +
+        '<span class="sk-s">' + esc2(t.kind || 'Container') + ' \u00b7 ' + n + ' line' + (n === 1 ? '' : 's') + (pending ? ' \u00b7 <span style="color:var(--amber-hot)">roll open' + (unassigned ? ', ' + unassigned + ' unclaimed' : '') + '</span>' : '') + '</span></span>' +
+      '</button>' +
+      '<button class="sk-open" data-lootroll="' + idx + '" title="Roll this table">' + (pending ? 'Resume' : 'Roll') + ' <span class="arr">\u25b8</span></button>' +
+    '</div>';
+  }).join('') || '<div class="cat-empty">No loot tables yet</div>';
+  index += '<div class="cat-grp"><div class="cat-grp-head"><span class="gh-t">Loot Tables</span><span class="gh-c">' + CATALOG_LOOT.length + '</span></div><div class="cat-rows">' + rows + '</div></div>';
+
+  const d = lootDraft;
+  const iconGrid = ITEM_ICONS.map(ic => '<div class="cat-ic ' + (ic === d.icon ? 'sel' : '') + '" data-icon="' + ic + '"><i class="fa-solid ' + ic + '"></i></div>').join('');
+  const n = d.contents.length;
+  const avgLines = d.contents.reduce((s,c) => s + c.chance/100, 0);
+
+  const form =
+    '<div class="cat-form-head"><span class="cfh-t">' + (lootEditId != null ? 'Edit Loot Table' : 'New Loot Table') + '</span>' +
+      '<span class="cfh-id">' + (d.id ? esc2(d.id) : 'unsaved template') + '</span></div>' +
+    '<div class="cat-prev" style="--rar:var(--amber);--cat-tint:rgba(226,176,33,0.05)">' +
+      '<span class="pv-cell"><i class="fa-solid ' + d.icon + '"></i><span class="pv-corner"><i class="fa-solid fa-dice-d6"></i></span></span>' +
+      '<span class="pv-tx"><span class="pv-name">' + esc2(d.name || 'Untitled Loot Table') + '</span>' +
+        '<span class="pv-meta"><span>' + esc2(d.kind || 'Container') + '</span>' +
+        '<span class="rar">' + n + ' line' + (n === 1 ? '' : 's') + '</span>' +
+        '<span>~' + avgLines.toFixed(1) + ' expected drops</span></span></span>' +
+    '</div>' +
+    '<span class="field-lab">Name</span><input class="sess-in" id="ltNameIn" value="' + esc2(d.name) + '" placeholder="Name the loot table\u2026">' +
+    '<span class="field-lab">Icon</span><div class="cat-icons" id="ltIcons">' + iconGrid + '</div>' +
+    '<span class="field-lab">Kind <span style="color:var(--beige-dim)">\u00b7 chest, corpse, bookshelf, reliquary \u2014 freeform</span></span>' +
+    '<input class="sess-in" id="ltKindIn" value="' + esc2(d.kind) + '" placeholder="e.g. Corpse">' +
+    '<span class="field-lab">Location <span style="color:var(--beige-dim)">\u00b7 optional</span></span>' +
+    '<input class="sess-in" id="ltLocIn" value="' + esc2(d.location) + '" placeholder="e.g. Sunken Hold, Deck Three">' +
+    '<div class="q-lab-row"><span class="field-lab">Description</span><span class="q-facing player"><i class="fa-solid fa-eye"></i> Player-facing</span></div>' +
+    '<textarea class="cat-prose" id="ltDescIn" placeholder="The prose the player reads when the loot is pushed\u2026">' + esc2(d.desc) + '</textarea>' +
+    lootContentsHtml() +
+    '<div class="cat-actions"><button class="btn amber" id="ltSave" style="height:42px;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-floppy-disk"></i> ' + (lootEditId != null ? 'Save Loot Table' : 'Create Loot Table') + '</span></button></div>';
+
+  return '<div class="cat-layout"><div class="cat-index">' + index + '</div><div class="cat-form">' + form + '</div></div>';
+}
+
+function wireCatalogLoot() {
+  const d = lootDraft;
+  document.querySelectorAll('#workBody .sk-main[data-loot]').forEach(r => r.addEventListener('click', () => { loadLootDraft(+r.dataset.loot); renderCatalog(); }));
+  document.querySelectorAll('#workBody .sk-open[data-lootroll]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); rollLootTable(+b.dataset.lootroll); }));
+  document.getElementById('catNewBtn')?.addEventListener('click', () => { newLootDraft(); renderCatalog(); console.log('[CATALOG] new blank loot table'); });
+
+  const bind = (id, key) => { const el = document.getElementById(id); el && el.addEventListener('input', () => { d[key] = el.value; }); };
+  bind('ltNameIn','name'); bind('ltKindIn','kind'); bind('ltLocIn','location'); bind('ltDescIn','desc');
+  document.querySelectorAll('#ltIcons .cat-ic').forEach(c => c.addEventListener('click', () => { d.icon = c.dataset.icon; renderCatalog(); }));
+
+  document.querySelectorAll('[data-chance]').forEach(inp => inp.addEventListener('input', () => { d.contents[+inp.dataset.chance].chance = Math.max(1, Math.min(100, parseInt(inp.value, 10) || 1)); }));
+  document.querySelectorAll('[data-qtymin]').forEach(inp => inp.addEventListener('input', () => { const e = d.contents[+inp.dataset.qtymin]; e.qtyMin = Math.max(1, parseInt(inp.value, 10) || 1); if (e.qtyMax < e.qtyMin) e.qtyMax = e.qtyMin; }));
+  document.querySelectorAll('[data-qtymax]').forEach(inp => inp.addEventListener('input', () => { const e = d.contents[+inp.dataset.qtymax]; e.qtyMax = Math.max(e.qtyMin, parseInt(inp.value, 10) || e.qtyMin); }));
+  document.querySelectorAll('[data-lootx]').forEach(x => x.addEventListener('click', () => { d.contents.splice(+x.dataset.lootx, 1); renderCatalog(); }));
+
+  const search = document.getElementById('ltSearch');
+  search && search.addEventListener('input', () => {
+    lootPickQ = search.value;
+    document.getElementById('ltPickList').innerHTML = lootPickListHtml();
+    wireLootPickRows();
+  });
+  document.querySelectorAll('#ltRar .ac').forEach(c => c.addEventListener('click', () => { lootPickRar = c.dataset.lootrar; renderCatalog(); }));
+  document.querySelectorAll('#ltCat .ac').forEach(c => c.addEventListener('click', () => { lootPickCat = c.dataset.lootcat; renderCatalog(); }));
+  wireLootPickRows();
+
+  document.getElementById('ltSave')?.addEventListener('click', () => {
+    const rec = { id: d.id || ('loot_' + Date.now().toString(36)), name:d.name, icon:d.icon, kind:d.kind, location:d.location, desc:d.desc,
+      contents: d.contents.map(c => ({ itemId:c.itemId, chance:c.chance, qtyMin:c.qtyMin, qtyMax:c.qtyMax })) };
+    if (lootEditId != null) CATALOG_LOOT[lootEditId] = rec;
+    else { CATALOG_LOOT.push(rec); lootEditId = CATALOG_LOOT.length - 1; }
+    d.id = rec.id;
+    logAct('Catalog: saved loot table <span class="obj">' + esc(rec.name || 'Untitled') + '</span> \u00b7 ' + rec.contents.length + ' lines', 'cyan');
+    console.log('[CATALOG] loot table saved (template)', rec);
+    renderCatalog();
+  });
+}
+
+function wireLootPickRows() {
+  document.querySelectorAll('#ltPickList .sk-pi[data-lootpick]').forEach(b => b.addEventListener('click', () => {
+    const it = catItemById(b.dataset.lootpick); if (!it) return;
+    lootDraft.contents.push({ itemId: it.id, chance: 50, qtyMin: 1, qtyMax: 1 });
+    console.log('[CATALOG] loot content +', it.name);
+    renderCatalog();
+  }));
+}
+
 /* ---------- the live trigger: OPEN ▸ → recipient picker → fire ---------- */
 function openShopRecipientPicker(idx) {
   shopOpenIdx = idx;
@@ -3786,6 +3989,7 @@ function wireCatalog() {
   else if (catType === 'features') wireCatalogFeatures();
   else if (catType === 'effects') wireCatalogEffects();
   else if (catType === 'shops') wireCatalogShops();
+  else if (catType === 'loot') wireCatalogLoot();
 }
 
 function itemContainerHtml(d) {
@@ -4181,6 +4385,13 @@ function fireToast(opt) {
         '<div class="tg-tx"><div class="tg-t">Effect Applied ::</div>' +
         '<div class="tg-n">' + esc(opt.name) + ' <span class="rar" style="color:var(--muted)">· ' + esc(opt.dur) + '</span></div></div></div>' +
       '<div class="tg-foot"><span class="led"></span> Status condition pushed</div>';
+  } else if (opt.kind === 'loot') {
+    inner =
+      '<div class="tg-tag">Realtime → All Party</div>' +
+      '<div class="tg-head"><span class="tg-ic"><i class="fa-solid ' + opt.icon + '"></i></span>' +
+        '<div class="tg-tx"><div class="tg-t">Loot Pushed ::</div>' +
+        '<div class="tg-n">' + esc(opt.name) + ' <span class="rar" style="color:var(--muted)">· ' + opt.count + ' item' + (opt.count === 1 ? '' : 's') + '</span></div></div></div>' +
+      '<div class="tg-foot"><span class="led"></span> Distribution assigned by the DM, not claimed by players</div>';
   } else { // broadcast
     inner =
       '<div class="tg-tag">' + (corrupt ? 'Unknown signal →' : 'G.U.I.D.E. notice →') + ' ' + esc((opt.pc && opt.pc.name) || 'All Party') + '</div>' +
@@ -4583,6 +4794,160 @@ renderAll();
 // seed a couple of prior log entries for context
 logAct('Encounter <span class="obj">Ashen Wharf</span> entered round tracking', 'cyan');
 logAct('Marked <span class="who">Sable</span> connection <span class="obj">offline</span>', 'danger');
+
+/* ============================================================================
+   LOOT ROLL \u2014 the DM rolls a Loot Table template, then assigns each rolled
+   line to a character one at a time (same grant path as GRANT ITEM: logAct +
+   fireToast). Rolling and pushing are separate: PUSH TO PARTY only changes
+   whether players can see it \u2014 assignment keeps working after a push.
+   CLOSE dismisses the roll for everyone, including anything left unassigned.
+   ============================================================================ */
+function rollLootTable(idx) {
+  const t = CATALOG_LOOT[idx];
+  const items = [];
+  t.contents.forEach((c, i) => {
+    if (Math.random() * 100 >= c.chance) return;
+    const it = catItemById(c.itemId); if (!it) return;
+    const qty = c.qtyMin >= c.qtyMax ? c.qtyMin : c.qtyMin + Math.floor(Math.random() * (c.qtyMax - c.qtyMin + 1));
+    items.push({ key: t.id + '_' + i, itemId: it.id, name: it.name, icon: it.icon, category: it.category, rarity: it.rarity, qty, assignedId: null });
+  });
+  lootRoll = { tableIdx: idx, tableId: t.id, name: t.name, icon: t.icon, kind: t.kind, location: t.location, desc: t.desc, items, pushed: false };
+  logAct('Rolled loot table <span class="obj">' + esc(t.name) + '</span> \u00b7 ' + (items.length ? (items.length + ' item' + (items.length === 1 ? '' : 's')) : 'nothing of value'), items.length ? 'cyan' : 'danger');
+  console.log('[LOOT] rolled', t.name, items);
+  document.addEventListener('keydown', lrEscHandler);
+  renderLootRoll();
+}
+
+function assignLootLine(key, pcId) {
+  if (!lootRoll) return;
+  const line = lootRoll.items.find(x => x.key === key); if (!line) return;
+  const pc = byId(pcId); if (!pc) return;
+  line.assignedId = pcId;
+  logAct('Assigned <span class="obj">' + esc(line.name) + (line.qty > 1 ? ' \u00d7' + line.qty : '') + '</span> to <span class="who">' + esc(pc.name) + '</span> from <span class="obj">' + esc(lootRoll.name) + '</span>');
+  fireToast({ kind:'item', name: line.name, rarity: line.rarity, icon: line.icon, pc });
+  console.log('[LOOT] assigned', line.name, '\u2192', pc.name);
+  renderLootRoll();
+}
+function unassignLootLine(key) {
+  if (!lootRoll) return;
+  const line = lootRoll.items.find(x => x.key === key); if (!line) return;
+  const prev = byId(line.assignedId);
+  line.assignedId = null;
+  if (prev) logAct('Unassigned <span class="obj">' + esc(line.name) + '</span> \u00b7 was <span class="who">' + esc(prev.name) + '</span>', 'danger');
+  renderLootRoll();
+}
+function pushLootToParty() {
+  if (!lootRoll || lootRoll.pushed) return;
+  lootRoll.pushed = true;
+  logAct('Pushed loot roll <span class="obj">' + esc(lootRoll.name) + '</span> to the party', 'cyan');
+  fireToast({ kind:'loot', name: lootRoll.name, icon: lootRoll.icon, count: lootRoll.items.length });
+  console.log('[LOOT] pushed to party', lootRoll.name);
+  renderLootRoll();
+}
+function closeLootRoll() {
+  if (!lootRoll) { minimizeLootRoll(); return; }
+  const left = lootRoll.items.filter(i => !i.assignedId).length;
+  logAct('Closed loot roll <span class="obj">' + esc(lootRoll.name) + '</span> \u00b7 dismissed for the party' + (left ? ' \u00b7 ' + left + ' line' + (left === 1 ? '' : 's') + ' left unassigned' : ''), 'danger');
+  console.log('[LOOT] closed', lootRoll.name);
+  lootRoll = null;
+  minimizeLootRoll();
+  if (view === 'catalog') renderCatalog();
+}
+function minimizeLootRoll() {
+  document.removeEventListener('keydown', lrEscHandler);
+  const ov = document.getElementById('lootRollOverlay');
+  if (!ov) return;
+  ov.classList.add('closing');
+  setTimeout(() => { const m = document.getElementById('lootRollMount'); if (m) m.innerHTML = ''; }, 240);
+}
+function lrEscHandler(e) { if (e.key === 'Escape' && document.getElementById('lootRollOverlay')) minimizeLootRoll(); }
+
+function renderLootRoll() {
+  if (!lootRoll) return;
+  const mount = document.getElementById('lootRollMount');
+  const n = lootRoll.items.length;
+  const done = lootRoll.items.filter(i => i.assignedId).length;
+  mount.innerHTML =
+    '<div class="lu-overlay" id="lootRollOverlay" role="dialog" aria-modal="true" aria-label="Loot roll \u2014 ' + esc(lootRoll.name) + '">' +
+      '<div class="lu-scrim" id="lrScrim"></div>' +
+      '<div class="lu-panel" data-screen-label="Loot Roll Overlay" style="width:min(620px,100%);height:min(680px,100%);">' +
+        '<div class="lu-gap"></div><div class="lu-line"></div>' +
+        '<div class="lu-inner">' +
+          '<span class="lu-corner tl"></span><span class="lu-corner br"></span>' +
+          '<header class="lu-head">' +
+            '<div class="lu-sigil"><i class="fa-solid ' + lootRoll.icon + '"></i></div>' +
+            '<div class="lu-htitles">' +
+              '<div class="lu-kicker">Loot Roll \u00b7 DM Only' + (lootRoll.pushed ? ' \u00b7 Pushed To Party' : '') + '</div>' +
+              '<div class="lu-hname">' + esc(lootRoll.name) + '</div>' +
+              '<div class="lu-hclass">' + esc(lootRoll.kind || 'Container') + (lootRoll.location ? ' <span class="sep">\u00b7</span> ' + esc(lootRoll.location) : '') + '</div>' +
+            '</div>' +
+            '<div class="lu-trans">' +
+              '<div class="lu-stat"><span class="l">Rolled</span><span class="v"><span class="to">' + n + '</span></span></div>' +
+              '<div class="lu-vrule"></div>' +
+              '<div class="lu-stat"><span class="l">Assigned</span><span class="v"><span class="to" style="color:' + (n && done === n ? 'var(--amber-hot)' : 'var(--beige)') + '">' + done + ' / ' + n + '</span></span></div>' +
+            '</div>' +
+            '<button class="lu-close" id="lrClose" type="button" aria-label="Minimize"><span class="clf"></span><span class="cli"><i class="fa-solid fa-xmark"></i></span></button>' +
+          '</header>' +
+          '<div class="lu-body">' + lootLinesHtml() + '</div>' +
+          lootFootHtml() +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  wireLootRoll();
+}
+
+function lootLinesHtml() {
+  if (!lootRoll.items.length) {
+    return '<div class="lr-empty"><i class="fa-solid fa-ghost"></i>Nothing of value \u2014 every line failed its drop check. A legitimate empty roll; push it or close it, there is nothing to assign.</div>';
+  }
+  return '<div class="sk-stock-rows">' + lootRoll.items.map(line => {
+    const rd = RAR_DEF[line.rarity] || RAR_DEF.common;
+    const def = CAT_DEF[line.category] || CAT_DEF.misc;
+    const assigned = byId(line.assignedId);
+    const pcOpts = '<option value="">Assign to\u2026</option>' + PARTY.map(p => '<option value="' + p.id + '">' + esc(p.name) + '</option>').join('');
+    return '<div class="sk-stock-row" style="--rar:' + rd.color + '">' +
+      '<span class="ss-ic"><i class="fa-solid ' + line.icon + '"></i></span>' +
+      '<span class="ss-tx"><span class="ss-t">' + esc(line.name) + (line.qty > 1 ? ' \u00d7' + line.qty : '') + '</span>' +
+        '<span class="ss-s">' + esc(def.label) + ' \u00b7 <span class="rar">' + esc(rd.label) + '</span></span></span>' +
+      (assigned
+        ? '<span class="lr-assigned"><i class="fa-solid fa-circle-check"></i><span class="who">' + esc(assigned.name) + '</span><span class="lr-unassign" data-unassign="' + line.key + '" title="Unassign"><i class="fa-solid fa-xmark"></i></span></span>'
+        : '<select class="sel-in lr-pick" data-assign="' + line.key + '">' + pcOpts + '</select>') +
+    '</div>';
+  }).join('') + '</div>';
+}
+
+function lootFootHtml() {
+  const pushed = lootRoll.pushed;
+  return '<footer class="lu-foot">' +
+    '<div class="lu-sumhead"><span class="sg"><i class="fa-solid fa-tower-broadcast"></i></span><span class="st">Party Distribution</span><span class="warn">' + (pushed ? 'Live \u2014 players are watching this resolve' : 'Not yet pushed \u2014 the party cannot see this roll') + '</span></div>' +
+    '<div class="lu-footrow" style="gap:10px;">' +
+      '<button class="btn ghost" id="lrReroll" style="height:42px;flex:0 0 auto;width:52px;" title="Reroll this table"><span class="bf"></span><span class="bi"><i class="fa-solid fa-dice-d6"></i></span></button>' +
+      '<button class="btn ' + (pushed ? 'ghost' : 'amber') + '" id="lrPush" style="height:42px;flex:1;"' + (pushed ? ' disabled' : '') + '><span class="bf"></span><span class="bi"><i class="fa-solid fa-tower-broadcast"></i> ' + (pushed ? 'Pushed To Party' : 'Push To Party') + '</span></button>' +
+      '<button class="btn danger" id="lrClose2" style="height:42px;flex:1;"><span class="bf"></span><span class="bi"><i class="fa-solid fa-box-archive"></i> Close Loot Roll</span></button>' +
+    '</div>' +
+  '</footer>';
+}
+
+function wireLootRoll() {
+  document.getElementById('lrScrim')?.addEventListener('click', minimizeLootRoll);
+  document.getElementById('lrClose')?.addEventListener('click', minimizeLootRoll);
+  document.querySelectorAll('#lootRollOverlay [data-assign]').forEach(sel => sel.addEventListener('change', () => {
+    if (sel.value) assignLootLine(sel.dataset.assign, sel.value);
+  }));
+  document.querySelectorAll('#lootRollOverlay [data-unassign]').forEach(x => x.addEventListener('click', () => unassignLootLine(x.dataset.unassign)));
+  document.getElementById('lrPush')?.addEventListener('click', pushLootToParty);
+  document.getElementById('lrClose2')?.addEventListener('click', closeLootRoll);
+  document.getElementById('lrReroll')?.addEventListener('click', rerollLootTable);
+}
+
+function rerollLootTable() {
+  if (!lootRoll) return;
+  const idx = lootRoll.tableIdx;
+  const wasPushed = lootRoll.pushed;
+  logAct('Rerolled loot table <span class="obj">' + esc(lootRoll.name) + '</span> \u00b7 previous roll discarded' + (wasPushed ? ' \u00b7 party notified of reroll' : ''), 'danger');
+  rollLootTable(idx);
+  if (wasPushed) pushLootToParty();
+}
 </script>
 
 </body>

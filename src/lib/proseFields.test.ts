@@ -52,7 +52,6 @@ function textareas(): { file: string; line: number; tag: string }[] {
  * bug the test exists for.
  */
 const PLAIN_ON_PURPOSE: { match: string; why: string }[] = [
-  { match: 'a note to yourself, never shown to a player', why: 'loot table DM note — renders nowhere' },
   { match: 'Compose a G.U.I.D.E. system notice', why: 'broadcast — the toast renders plain text (deferred)' },
   { match: 'DM eyes only', why: 'GM notes / true lore — DM-side render undecided (deferred)' },
   { match: 'operator only', why: 'operator scratch note — renders nowhere' },

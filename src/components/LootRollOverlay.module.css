@@ -1,0 +1,211 @@
+/* The DM's loot-roll overlay.
+ *
+ * The mockup builds this on the Level Up overlay's chrome (`.lu-*`), which is
+ * the amber sibling of the cyan panel ShopTakeover already uses: a LAYERED
+ * chamfered frame — a beige silhouette, a dark gap, a thin beige line, then the
+ * interior — rather than a border on a clip-path.
+ *
+ * That layering is the whole reason the corners survive. A `clip-path` cuts the
+ * border off with the box, so a chamfered panel cannot simply carry one; each
+ * layer is its own clipped rectangle inset a few pixels from the one behind it,
+ * and the "border" is the parent showing through. See
+ * docs/Chamfered_clip-path_corners_fix.md — this is the frame+inner recipe, not
+ * the two-gradient one, and the guard test does not cover it.
+ */
+
+.overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center; padding: 26px;
+  animation: fadeIn 200ms ease both;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.scrim {
+  position: absolute; inset: 0;
+  background: radial-gradient(120% 100% at 50% 40%, rgba(20, 16, 8, 0.86), rgba(8, 7, 5, 0.94));
+  backdrop-filter: blur(2px);
+}
+
+/* Narrower and shorter than the Level Up panel it borrows from: this is a list
+   of a handful of lines, and 1000px of width for four rows reads as a mistake. */
+.panel {
+  --cut: 24px;
+  position: relative; z-index: 1;
+  width: min(620px, 100%); height: min(680px, 100%);
+  animation: panelIn 380ms cubic-bezier(.2, .7, .2, 1) 30ms both;
+}
+@keyframes panelIn { from { transform: translateY(10px) scale(0.985); } to { transform: none; } }
+
+.panel::before {
+  content: ""; position: absolute; inset: 0; background: var(--beige);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  filter: drop-shadow(0 26px 64px rgba(0, 0, 0, 0.72)) drop-shadow(0 0 44px rgba(226, 176, 33, 0.22));
+}
+.pnGap {
+  position: absolute; inset: 6px; background: #0a0908;
+  clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0, 100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%, 0 100%, 0 calc(var(--cut) - 5px));
+}
+.pnLine {
+  position: absolute; inset: 4px; background: var(--beige); opacity: 0.5;
+  clip-path: polygon(calc(var(--cut) - 3px) 0, 100% 0, 100% calc(100% - var(--cut) + 3px), calc(100% - var(--cut) + 3px) 100%, 0 100%, 0 calc(var(--cut) - 3px));
+}
+.pnInner {
+  position: absolute; inset: 8px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(226, 176, 33, 0.09), transparent 55%),
+    linear-gradient(180deg, #161310, #0d0c0a);
+  clip-path: polygon(calc(var(--cut) - 7px) 0, 100% 0, 100% calc(100% - var(--cut) + 7px), calc(100% - var(--cut) + 7px) 100%, 0 100%, 0 calc(var(--cut) - 7px));
+  box-shadow: inset 0 0 60px rgba(226, 176, 33, 0.06), inset 0 0 1px rgba(212, 191, 125, 0.25);
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.pnInner::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: repeating-linear-gradient(to bottom, rgba(226, 176, 33, 0.025) 0px, rgba(226, 176, 33, 0.025) 1px, transparent 1px, transparent 4px);
+  mix-blend-mode: screen; opacity: 0.6;
+}
+.pnCorner { position: absolute; width: 18px; height: 18px; border-color: var(--amber); opacity: 0.8; z-index: 6; pointer-events: none; }
+.pnCorner.tl { top: 14px; left: 14px; border-top: 1px solid; border-left: 1px solid; }
+.pnCorner.br { bottom: 14px; right: 14px; border-bottom: 1px solid; border-right: 1px solid; }
+
+/* ---- header ---- */
+.head {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 15px; padding: 18px 22px 15px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.32);
+}
+.head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: rgba(226, 176, 33, 0.45); box-shadow: 0 0 10px rgba(226, 176, 33, 0.4);
+}
+/* A hexagon, so it needs the frame+inner treatment if it ever gains a border.
+   It has none — flat amber fill, glyph knocked out in the dark — so a single
+   clip-path is safe here. */
+.sigil {
+  flex: 0 0 auto; width: 46px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  color: #14120c; font-size: 20px; background: var(--amber);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  filter: drop-shadow(0 0 11px rgba(226, 176, 33, 0.45));
+}
+.titles { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+/* nowrap because appending " · Pushed To Party" wraps it onto a second line
+   and shoves the title down — the header visibly reflows the moment you push,
+   which reads as a layout bug rather than a state change. The name below it
+   already ellipsizes, so the column can afford the width. */
+.kicker {
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.3em;
+  color: var(--amber); text-transform: uppercase; white-space: nowrap;
+}
+.hname {
+  font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: 0.05em;
+  color: var(--amber-hot); text-transform: uppercase; line-height: 1;
+  text-shadow: 0 0 15px rgba(226, 176, 33, 0.3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hclass { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
+.hclass .sep { color: var(--beige-dim); margin: 0 6px; }
+
+.trans { margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: 22px; }
+.stat { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.stat .l { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.26em; color: var(--beige-dim); text-transform: uppercase; }
+.stat .v {
+  display: flex; align-items: baseline; gap: 8px;
+  font-family: var(--font-display); font-weight: 700; font-size: 30px; letter-spacing: 0.02em; line-height: 1;
+  color: var(--beige); font-variant-numeric: tabular-nums;
+}
+/* Only when every line has landed. An always-hot number says nothing. */
+.stat .v.done { color: var(--amber-hot); text-shadow: 0 0 16px rgba(226, 176, 33, 0.5); }
+.vrule { width: 1px; align-self: stretch; background: rgba(212, 191, 125, 0.22); }
+
+.close {
+  flex: 0 0 auto; --cut: 8px; margin-left: 6px; width: 42px; height: 42px;
+  position: relative; background: transparent; border: 0; padding: 0; cursor: pointer;
+}
+.close .clf {
+  position: absolute; inset: 0; background: var(--beige-dim); opacity: 0.7;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.close .cli {
+  position: absolute; inset: 1.5px; background: linear-gradient(180deg, #1a1813, #100f0c);
+  display: flex; align-items: center; justify-content: center; color: var(--beige); font-size: 14px;
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  transition: color 150ms ease, box-shadow 150ms ease;
+}
+.close:hover .cli { color: var(--danger-hot); box-shadow: inset 0 0 16px rgba(185, 58, 58, 0.3); }
+
+/* ---- body ---- */
+.body {
+  position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 16px 22px 18px; display: flex; flex-direction: column; gap: 13px;
+  scrollbar-width: thin; scrollbar-color: rgba(226, 176, 33, 0.4) rgba(0, 0, 0, 0.3);
+}
+.body::-webkit-scrollbar { width: 7px; }
+.body::-webkit-scrollbar-thumb { background: rgba(226, 176, 33, 0.4); }
+.body::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
+
+.rows { display: flex; flex-direction: column; gap: 7px; }
+
+/* A rolled line. Mirrors .sk-stock-row from the shop/kit forms so the DM reads
+   the same shape in both places, but the trailing control is an assignment
+   rather than a price. */
+.row {
+  display: flex; align-items: center; gap: 11px;
+  padding: 9px 11px;
+  border-left: 2px solid var(--rar, var(--beige-dim));
+  background: rgba(255, 255, 255, 0.02);
+}
+.rowIc { flex: 0 0 auto; width: 22px; text-align: center; color: var(--rar, var(--beige)); font-size: 15px; }
+.rowTx { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rowT { font-family: var(--font-prose); font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rowS { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; color: var(--beige-dim); text-transform: uppercase; }
+.rowS .rar { color: var(--rar, var(--beige)); }
+
+.pick {
+  flex: 0 0 auto; width: 168px; height: 32px; margin: 0;
+  background: rgba(0, 0, 0, 0.45); color: var(--text);
+  border: 1px solid rgba(212, 191, 125, 0.3);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em;
+  padding: 0 8px; cursor: pointer;
+}
+.pick:focus { outline: none; border-color: var(--amber); }
+.pick option { background: #14130f; color: var(--text); }
+
+.assigned {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--cyan-hot);
+}
+.assigned > i { color: var(--cyan); }
+.assigned .who { font-family: var(--font-prose); font-style: italic; font-size: 13.5px; color: var(--text); }
+.unassign { margin-left: 2px; cursor: pointer; color: var(--beige-dim); padding: 3px 5px; transition: color 130ms ease; background: none; border: 0; }
+.unassign:hover { color: var(--danger-hot); }
+
+/* An empty roll is a legitimate outcome, not a failure — every line missed its
+   drop check. It gets a real panel rather than a terse dash so it does not read
+   as the table being broken. */
+.empty {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  padding: 34px 16px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em;
+  color: var(--beige-dim); line-height: 1.7;
+}
+.empty > i { font-size: 20px; color: var(--beige-dim); }
+
+/* ---- footer ---- */
+.foot {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  border-top: 1px solid rgba(212, 191, 125, 0.3);
+  padding: 13px 22px 15px; background: rgba(10, 9, 7, 0.7);
+}
+.sumhead { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.sumhead .sg { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; color: var(--amber); }
+.sumhead .st { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3em; color: var(--beige); text-transform: uppercase; }
+.sumhead .warn { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; }
+.sumhead .warn.live { color: var(--cyan); }
+.footrow { display: flex; align-items: stretch; gap: 10px; }
+.footrow .grow { flex: 1 1 0; }
+.footrow .narrow { flex: 0 0 auto; width: 52px; }
+
+/* Button sizing only — the chamfer, fill and hover all come from the console's
+   .btn recipe, imported as `con` in the component. */
+.footrow .grow,
+.footrow .narrow { height: 42px; }

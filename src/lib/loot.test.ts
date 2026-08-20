@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatalogItemData, LootTable } from './database.types.ts'
-import { chanceOfNothing, expectedYield, rollLoot, rollQty, rowHits } from './loot.ts'
+import { chanceOfNothing, expectedYield, poolItems, rollLoot, rollQty, rowHits } from './loot.ts'
 
 /** Hands back the given numbers in order, then throws — so a test that consumes
  *  more randomness than it scripted fails loudly instead of drifting into
@@ -179,4 +179,86 @@ test('an empty table rolls cleanly rather than throwing', () => {
   assert.deepEqual(r.outcomes, [])
   assert.deepEqual(r.items, [])
   assert.equal(chanceOfNothing({ name: 'Empty', icon: 'x', rows: [] }), 1)
+})
+
+/* ==================================================================
+   Pool rows — "a martial weapon, but not a relic"
+   ================================================================== */
+
+const POOL_CATALOG = new Map<string, CatalogItemData>([
+  ['sword', { name: 'Longsword', tags: ['martial'] } as CatalogItemData],
+  ['axe', { name: 'Battleaxe', tags: ['martial'] } as CatalogItemData],
+  ['sunblade', { name: 'Sunblade', tags: ['martial', 'relic'] } as CatalogItemData],
+  ['club', { name: 'Club', tags: ['simple'] } as CatalogItemData],
+])
+
+const poolTable = (from: string, chance = 100): LootTable => ({
+  name: 'Armoury', icon: 'fa-box',
+  rows: [{ kind: 'pool', from, min: 1, max: 1, chance }],
+})
+
+test('a pool row picks ONE item from everything its query matches', () => {
+  // rng: [chance, qty, pick]. pick 0.5 of a 2-item pool → index 1.
+  const r = rollLoot(poolTable('tag:martial !relic'), POOL_CATALOG, scripted(0, 0, 0.5))
+  assert.equal(r.items.length, 1)
+  assert.equal(r.items[0].data.name, 'Battleaxe')
+})
+
+test('THE CASE: !relic keeps the relic out of the pool entirely', () => {
+  // Sunblade is martial. With three martial weapons a pick of 0.99 would reach
+  // it; the negation means the pool is only two long, so it cannot.
+  const r = rollLoot(poolTable('tag:martial !relic'), POOL_CATALOG, scripted(0, 0, 0.99))
+  assert.equal(r.items[0].data.name, 'Battleaxe')
+
+  // ...and without the negation, the same draw does reach it.
+  const r2 = rollLoot(poolTable('tag:martial'), POOL_CATALOG, scripted(0, 0, 0.99))
+  assert.equal(r2.items[0].data.name, 'Sunblade')
+})
+
+test('poolItems is the resolver, and it tracks the catalog', () => {
+  assert.deepEqual(poolItems('tag:martial !relic', POOL_CATALOG).map(i => i.item_id), ['sword', 'axe'])
+  assert.deepEqual(poolItems('tag:simple', POOL_CATALOG).map(i => i.item_id), ['club'])
+  // An item added later is picked up with no re-authoring — the whole reason
+  // the row stores a query rather than a resolved list.
+  const grown = new Map(POOL_CATALOG)
+  grown.set('pike', { name: 'Pike', tags: ['martial'] } as CatalogItemData)
+  assert.equal(poolItems('tag:martial !relic', grown).length, 3)
+})
+
+test('a blank query resolves to nothing, not to the whole catalog', () => {
+  assert.deepEqual(poolItems('', POOL_CATALOG), [])
+  assert.deepEqual(poolItems('   ', POOL_CATALOG), [])
+  const r = rollLoot(poolTable(''), POOL_CATALOG, scripted(0, 0, 0))
+  assert.equal(r.items.length, 0)
+  assert.deepEqual(r.missing, [''])
+})
+
+test('a pool matching nothing is reported, not silently skipped', () => {
+  const r = rollLoot(poolTable('tag:nonexistent'), POOL_CATALOG, scripted(0, 0, 0))
+  assert.equal(r.items.length, 0)
+  assert.deepEqual(r.missing, ['tag:nonexistent'])
+  assert.equal(r.outcomes[0].hit, true)
+  assert.equal(r.outcomes[0].missing, true)
+})
+
+test('a pool row that misses draws no item at all', () => {
+  const r = rollLoot(poolTable('tag:martial', 0), POOL_CATALOG, scripted(0.5, 0, 0))
+  assert.equal(r.outcomes[0].hit, false)
+  assert.equal(r.items.length, 0)
+})
+
+test('the outcome says which query produced the item', () => {
+  // Without `from`, a preview line reading "Longsword" gives no hint that the
+  // row was a pool and could have produced something else.
+  const r = rollLoot(poolTable('tag:martial !relic'), POOL_CATALOG, scripted(0, 0, 0))
+  assert.equal(r.outcomes[0].from, 'tag:martial !relic')
+  assert.equal(r.outcomes[0].name, 'Longsword')
+})
+
+test('a pool row counts toward expected yield like an item row', () => {
+  const t: LootTable = {
+    name: 'x', icon: 'fa-box',
+    rows: [{ kind: 'pool', from: 'tag:martial', min: 1, max: 3, chance: 50 }],
+  }
+  assert.equal(expectedYield(t).items, 1)   // 0.5 × mean(1,3) = 0.5 × 2
 })

@@ -128,6 +128,20 @@ test('resolvePool runs the DM query the same way the item index does', () => {
   assert.deepEqual(resolvePool('nothing-matches-this', WEAPONS), [])
 })
 
+test('kit pools got negation for free, because the query engine is shared', () => {
+  // Nothing in kit.ts changed when `!term` was added — resolvePool goes through
+  // lib/catalogSearch.ts, the same parser the loot pool rows and the DM search
+  // boxes use. This test exists so that stays true: give the kit its own copy of
+  // the parser and this is what fails.
+  const relics = new Map(WEAPONS)
+  relics.set('sunblade', item('Sunblade', { category: 'weapon', tags: ['martial', 'relic'] }))
+
+  assert.deepEqual(resolvePool('tag:martial', relics).map(x => x.data.name),
+    ['Longsword', 'Battleaxe', 'Sunblade'])
+  assert.deepEqual(resolvePool('tag:martial !relic', relics).map(x => x.data.name),
+    ['Longsword', 'Battleaxe'])
+})
+
 test('a blank pool query resolves to nothing, never to the whole catalog', () => {
   // parseCatalogQuery treats blank as "match everything", which is right for a
   // search box and catastrophic here: it would offer the player every item in

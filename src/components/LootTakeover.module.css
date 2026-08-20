@@ -1,0 +1,249 @@
+/* The party's loot takeover.
+ *
+ * READ ONLY, and the design says so out loud rather than just omitting the
+ * controls: a "Read Only — the DM assigns" chip in the header, and a line under
+ * the distribution meter telling players they cannot claim. A screen that shows
+ * unclaimed items with no way to take them would otherwise read as broken.
+ *
+ * The panel chrome is the SAME layered chamfered frame ShopTakeover uses — this
+ * is the party's other "the DM opened something for you" surface, and they
+ * should feel like siblings. Reproduced here rather than imported because CSS
+ * modules hash per file; the shapes are identical on purpose.
+ */
+
+.overlay { position: fixed; inset: 0; z-index: 400; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.scrim {
+  position: absolute; inset: 0;
+  background: radial-gradient(120% 100% at 50% 40%, rgba(6, 14, 18, 0.86), rgba(4, 6, 8, 0.95));
+  backdrop-filter: blur(2px);
+}
+
+.panel {
+  --cut: 26px;
+  position: relative; z-index: 1;
+  width: min(1180px, 100%); height: min(860px, 100%);
+  animation: panelIn 420ms cubic-bezier(.2, .7, .2, 1) both;
+}
+@keyframes panelIn { from { opacity: 0; transform: translateY(12px) scale(0.986); } to { opacity: 1; transform: none; } }
+
+.panel::before {
+  content: ""; position: absolute; inset: 0; background: var(--beige);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  filter: drop-shadow(0 26px 64px rgba(0, 0, 0, 0.75)) drop-shadow(0 0 44px rgba(0, 166, 214, 0.2));
+}
+.pnGap {
+  position: absolute; inset: 6px; background: #08090a;
+  clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0, 100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%, 0 100%, 0 calc(var(--cut) - 5px));
+}
+.pnLine {
+  position: absolute; inset: 4px; background: var(--cyan); opacity: 0.45;
+  clip-path: polygon(calc(var(--cut) - 3px) 0, 100% 0, 100% calc(100% - var(--cut) + 3px), calc(100% - var(--cut) + 3px) 100%, 0 100%, 0 calc(var(--cut) - 3px));
+}
+.pnInner {
+  position: absolute; inset: 8px;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 55%), #0d0d0d;
+  clip-path: polygon(calc(var(--cut) - 7px) 0, 100% 0, 100% calc(100% - var(--cut) + 7px), calc(100% - var(--cut) + 7px) 100%, 0 100%, 0 calc(var(--cut) - 7px));
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.pnCorner { position: absolute; width: 20px; height: 20px; border-color: var(--cyan); opacity: 0.8; z-index: 6; pointer-events: none; }
+.pnCorner.tl { top: 16px; left: 16px; border-top: 1px solid; border-left: 1px solid; }
+.pnCorner.br { bottom: 16px; right: 16px; border-bottom: 1px solid; border-right: 1px solid; }
+
+/* ---- header ---- */
+.head {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto;
+  gap: 6px 20px; padding: 20px 26px 15px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
+}
+.head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: rgba(0, 166, 214, 0.4); box-shadow: 0 0 10px rgba(0, 166, 214, 0.35);
+}
+.portrait {
+  grid-column: 1; grid-row: 1 / span 2; align-self: start;
+  width: 96px; height: 104px; display: flex; align-items: center; justify-content: center;
+  color: var(--cyan-hot); font-size: 40px;
+  border: 1px solid rgba(0, 166, 214, 0.5);
+  background: radial-gradient(120% 90% at 50% 35%, rgba(0, 166, 214, 0.2), transparent 68%), rgba(0, 0, 0, 0.5);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  filter: drop-shadow(0 0 14px rgba(0, 166, 214, 0.4));
+}
+.titles { grid-column: 2; grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; align-self: center; }
+.eyebrow { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.34em; color: var(--cyan); text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+.eyebrow .dim { color: var(--beige-dim); }
+.tick { width: 5px; height: 5px; background: var(--cyan); box-shadow: 0 0 8px rgba(0, 166, 214, .85); animation: blink 2.4s steps(2, end) infinite; }
+@keyframes blink { 50% { opacity: 0.25; } }
+.name {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(24px, 2.4vw, 33px);
+  letter-spacing: 0.14em; color: var(--cyan-hot); text-transform: uppercase; line-height: 1;
+  text-shadow: 0 0 20px rgba(0, 166, 214, 0.28);
+}
+.meta { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+/* clip-path CUTS THE BORDER OFF at the two chamfers, so the diagonals have to
+   be painted back as gradients keyed on --bc. Same recipe (and the same 0.7071)
+   as ShopTakeover's identical chip — see docs/Chamfered_clip-path_corners_fix.md.
+   Note --bc, never border-color: the gradients read the variable. */
+.chip {
+  --cut: 4px; --bc: rgba(212, 191, 125, 0.45);
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em; color: var(--beige);
+  text-transform: uppercase; border: 1px solid var(--bc); padding: 4px 9px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat; background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+}
+.chip.acc { color: var(--cyan); --bc: rgba(0, 166, 214, 0.5); }
+
+/* A fact value with nothing in it yet. Its own rule rather than borrowing the
+   eyebrow's .dim, which is scoped and would resolve to a class with no rule. */
+.factDim { color: var(--beige-dim); }
+.chip i { margin-right: 6px; opacity: .85; }
+.desc {
+  grid-column: 2 / span 2; grid-row: 2; margin: 2px 0 0;
+  font-family: var(--font-prose); font-size: clamp(15px, 1.15vw, 17px); line-height: 1.5;
+  color: var(--muted); font-style: italic; max-width: 92ch;
+}
+.leave { grid-column: 3; grid-row: 1; align-self: center; --cut: 8px; position: relative; height: 40px; min-width: 118px; background: transparent; border: 0; padding: 0; cursor: pointer; }
+.leaveFrame { position: absolute; inset: 0; background: var(--cyan); opacity: 0.75; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+.leaveInner {
+  position: absolute; inset: 1.5px; background: linear-gradient(180deg, #10171a, #0b0f11);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  transition: color 150ms ease, box-shadow 150ms ease;
+}
+.leave:hover .leaveInner { color: #fff; box-shadow: inset 0 0 20px rgba(0, 166, 214, 0.3); }
+
+/* ---- distribution meter ---- */
+.dist {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 22px; padding: 11px 26px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.22);
+  background: linear-gradient(180deg, rgba(0, 166, 214, 0.05), rgba(0, 0, 0, 0.28));
+}
+.distLead { flex: 0 0 auto; display: flex; flex-direction: column; gap: 7px; }
+.subHead { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.3em; color: var(--cyan); text-transform: uppercase; }
+.distReadout { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-mono); }
+.distReadout .cur { font-size: 26px; font-weight: 500; color: var(--cyan-hot); line-height: 1; text-shadow: 0 0 14px rgba(0, 166, 214, 0.4); font-variant-numeric: tabular-nums; }
+.distReadout .unit { font-size: 11px; color: var(--cyan); letter-spacing: 0.24em; }
+.distBar { flex: 1 1 auto; max-width: 340px; height: 6px; border: 1px solid rgba(212, 191, 125, 0.4); background: rgba(0, 0, 0, 0.5); position: relative; overflow: hidden; }
+.distBar > i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, var(--cyan-dim), var(--cyan)); box-shadow: 0 0 8px rgba(0, 166, 214, 0.6); transition: width 480ms cubic-bezier(.2, .7, .2, 1); }
+/* The line that stops the screen reading as broken: unclaimed items with no
+   take button need to say WHY there is no take button. */
+.distNote { margin-left: auto; text-align: right; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); max-width: 340px; line-height: 1.6; }
+.distNote .acc { color: var(--cyan); }
+.distNote .k { color: var(--beige-dim); }
+
+/* ---- contents ---- */
+.stock { position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 12px 26px 0; }
+.stockBar { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding-bottom: 9px; border-bottom: 1px dashed rgba(212, 191, 125, 0.22); }
+.stockBar .sh { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase; }
+.stockBar .n { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
+.stockBar .n .acc { color: var(--cyan); }
+/* Bottom padding matches the fade below, so the last row can clear it — the
+   catalog index shipped this exact bug with a mask anchored to the element. */
+.stockScroll {
+  position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 14px 6px 34px 0; scrollbar-width: thin;
+}
+.stock::after { content: ""; position: absolute; left: 26px; right: 26px; bottom: 0; height: 34px; pointer-events: none; background: linear-gradient(to top, #0d0d0d 10%, rgba(13, 13, 13, 0)); }
+.stockScroll::-webkit-scrollbar { width: 7px; }
+.stockScroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
+.stockScroll::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.5)); border: 1px solid #111; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+
+/* ---- one item card ---- */
+.sc { position: relative; text-align: left; background: transparent; border: 0; padding: 0; cursor: pointer; font-family: var(--font-mono); transition: transform 150ms ease, filter 170ms ease; }
+.scBody { position: relative; display: flex; flex-direction: column; min-height: 186px; background: rgba(0, 0, 0, 0.3); border-radius: 1px; }
+.scArt { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 96px; }
+.glyph { font-size: 38px; color: var(--text); line-height: 1; filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.65)); transition: color 160ms ease; }
+.catCorner { position: absolute; top: 7px; left: 8px; font-size: 10px; color: var(--muted); opacity: .85; line-height: 1; }
+.rarCorner { position: absolute; top: 7px; right: 8px; font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige-dim); }
+.scFoot { flex: 0 0 auto; padding: 9px 10px 10px; border-top: 1px solid rgba(212, 191, 125, 0.16); background: rgba(0, 0, 0, 0.34); display: flex; flex-direction: column; gap: 6px; }
+.nm { font-family: var(--font-prose); font-size: 16.5px; line-height: 1.3; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.metaRow { display: flex; align-items: baseline; gap: 7px; font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim); }
+.metaRow .qty { color: var(--beige); }
+.assignRow { display: flex; align-items: center; gap: 6px; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; padding-top: 5px; border-top: 1px dashed rgba(212, 191, 125, 0.16); }
+.assignRow.unclaimed { color: var(--beige-dim); }
+.assignRow.unclaimed i { opacity: .6; }
+.assignRow.claimed { color: var(--cyan-hot); }
+.assignRow.claimed i { color: var(--cyan); }
+.assignRow .who { font-family: var(--font-prose); font-style: italic; font-size: 11.5px; letter-spacing: 0; text-transform: none; color: var(--text); }
+.sc:hover { transform: translateY(-2px); filter: brightness(1.14); }
+.sc:focus-visible { outline: 1px solid var(--cyan-hot); outline-offset: 3px; }
+
+/* category tints + rarity frames */
+.catWeapon { background: rgba(0, 166, 214, 0.07); }
+.catAmmo { background: rgba(0, 166, 214, 0.045); }
+.catArmor { background: rgba(212, 191, 125, 0.07); }
+.catConsumable { background: rgba(63, 199, 180, 0.07); }
+.catQuest { background: rgba(122, 106, 140, 0.11); }
+.catTool { background: rgba(170, 170, 170, 0.05); }
+.catMisc { background: rgba(0, 0, 0, 0.3); }
+.rarCommon { border: 1px solid rgba(212, 191, 125, 0.42); }
+.rarCommon .catCorner { color: var(--beige-dim); }
+.rarUncommon { border: 1px solid var(--cyan); box-shadow: 0 0 8px rgba(0, 166, 214, 0.22), inset 0 0 10px rgba(0, 166, 214, 0.08); }
+.rarUncommon .glyph { color: var(--cyan-hot); }
+.rarUncommon .catCorner, .rarUncommon .rarCorner { color: var(--cyan); }
+.rarRare { border: 1px solid var(--cyan-hot); box-shadow: 0 0 12px rgba(77, 214, 255, 0.3); animation: rarePulse 9s ease-in-out infinite; }
+.rarRare .glyph { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(77, 214, 255, 0.5); }
+.rarRare .rarCorner { color: var(--cyan-hot); }
+@keyframes rarePulse { 0%, 100% { box-shadow: 0 0 12px rgba(77, 214, 255, 0.3), inset 0 0 6px rgba(77, 214, 255, 0.05); } 50% { box-shadow: 0 0 18px rgba(77, 214, 255, 0.5), inset 0 0 16px rgba(77, 214, 255, 0.2); } }
+/* The mockup's fourth frame is `quest`, a violet. Ours is `legendary`, so it
+   takes the gold — same job, our own rarity ladder. */
+.rarLegendary { border: 1px solid var(--gold-rare); box-shadow: 0 0 12px rgba(226, 176, 33, 0.28), inset 0 0 12px rgba(226, 176, 33, 0.1); }
+.rarLegendary .glyph { color: var(--gold-rare); text-shadow: 0 0 8px rgba(226, 176, 33, 0.45); }
+.rarLegendary .catCorner, .rarLegendary .rarCorner { color: var(--gold-rare); }
+
+/* A line landing while the party watches. The flash is the entire reason the
+   screen is worth having open — it is how you find out you got the sword. */
+.sc.justAssigned .scBody { animation: cellFlash 1100ms ease; }
+@keyframes cellFlash { 0% { box-shadow: 0 0 0 rgba(0, 166, 214, 0); } 25% { box-shadow: 0 0 22px rgba(0, 166, 214, 0.65), inset 0 0 18px rgba(0, 166, 214, 0.25); } 100% { box-shadow: 0 0 0 rgba(0, 166, 214, 0); } }
+.assignRow.justIn .who { animation: whoIn 420ms ease; }
+@keyframes whoIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+
+/* ---- empty roll ---- */
+.empty { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 40px; text-align: center; }
+.leGlyph {
+  width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;
+  color: var(--beige-dim); font-size: 26px;
+  border: 1px solid rgba(212, 191, 125, 0.35); background: rgba(0, 0, 0, 0.4);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.leTitle { font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase; }
+.leSub { font-family: var(--font-prose); font-style: italic; font-size: 15px; line-height: 1.6; color: var(--muted); max-width: 46ch; }
+.leStamp { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.24em; color: var(--beige-dim); text-transform: uppercase; }
+
+/* ---- footer ---- */
+.foot {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 10px; padding: 9px 26px 11px;
+  border-top: 1px solid rgba(212, 191, 125, 0.28); background: rgba(0, 0, 0, 0.4);
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige-dim);
+}
+.foot .dot { width: 5px; height: 5px; background: var(--cyan); box-shadow: 0 0 8px rgba(0, 166, 214, 0.8); }
+.foot .acc { color: var(--cyan); }
+.foot .sep { color: rgba(212, 191, 125, 0.3); }
+.foot .right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.foot .kbd { border: 1px solid rgba(212, 191, 125, 0.4); padding: 2px 6px; color: var(--beige); }
+
+@media (max-height: 760px) {
+  .head { padding: 15px 24px 12px; }
+  .portrait { width: 78px; height: 86px; font-size: 32px; }
+  .desc { font-size: 15px; max-height: 4.6em; overflow-y: auto; }
+  .scBody { min-height: 160px; }
+  .scArt { min-height: 80px; }
+  .glyph { font-size: 32px; }
+}
+@media (max-width: 900px) {
+  .head { grid-template-columns: auto 1fr; gap: 10px 16px; }
+  .leave { grid-column: 2; justify-self: end; }
+  .desc { grid-column: 1 / span 2; }
+  .name { font-size: 26px; }
+  .dist { flex-wrap: wrap; gap: 14px; }
+  .distNote { margin-left: 0; }
+}

@@ -11,6 +11,7 @@ import type {
   CatalogClassRow, CatalogClassUpdate, ClassDef,
   CatalogRaceRow, CatalogRaceUpdate, RaceDef,
   CatalogLootRow, CatalogLootUpdate, LootTable,
+  LootOpenRow, LootOpenLine, LootOpenUpdate, LootContainer,
   ConfiscatedItemRow, ConfiscatedItemInsert, InventoryItem,
   ShopCatalogRow, Shop, ShardTree,
 } from './database.types'
@@ -1109,4 +1110,89 @@ export function useDmShops(): DmShopsState {
   }, [])
 
   return { shops, loading, error, refetch: fetchAll, saveShop, createShop, deleteShop, openShop, closeShop }
+}
+
+// ── The OPEN loot roll (migration 0020) ───────────────────────────────────────
+
+export interface DmLootOpenState {
+  /** The roll on the table right now, or null. At most one by convention —
+   *  opening a new one closes the last, the way shop_open does. */
+  roll: LootOpenRow | null
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  /** Park a rolled result. Starts CLOSED: rolling and pushing are separate, so
+   *  the DM can look at what came up (and reroll it) before the party ever
+   *  sees it. */
+  create: (tableId: string | null, container: LootContainer, lines: LootOpenLine[]) => Promise<string | null>
+  /** `is_open` IS "pushed to party" — it is the only thing the player's RLS
+   *  policy reads. Assignment keeps working after a push, on purpose: the
+   *  party watching the distribution resolve is the whole point. */
+  push: (openFor?: string | null) => Promise<void>
+  setLines: (lines: LootOpenLine[]) => Promise<void>
+  /** Dismisses it for everyone, including anything left unassigned. */
+  close: () => Promise<void>
+}
+
+/** The DM's view of the open roll. Deliberately NOT a list: the console shows
+ *  one roll at a time and "Resume" reopens it, so a single row is the whole
+ *  state. Any older rows are closed on create rather than deleted, which keeps
+ *  a roll recoverable if the DM closes the wrong one. */
+export function useDmLootOpen(): DmLootOpenState {
+  const { session } = useAuth()
+  const [roll, setRoll] = useState<LootOpenRow | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setRoll(null); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase
+      .from('loot_open').select('*').order('created_at', { ascending: false }).limit(1)
+    if (err) { setError(err.message); setRoll(null) }
+    else { setRoll(((data as LootOpenRow[]) ?? [])[0] ?? null); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const create = useCallback<DmLootOpenState['create']>(async (tableId, container, lines) => {
+    // Close whatever was open first. Two open rolls would each satisfy the
+    // player policy and the takeover would have to pick one arbitrarily.
+    await supabase.from('loot_open').update({ is_open: false }).eq('is_open', true)
+    const { data, error: err } = await supabase.from('loot_open')
+      .insert({ table_id: tableId, container, lines, is_open: false })
+      .select().single<LootOpenRow>()
+    if (err) { setError(err.message); return null }
+    setRoll(data)
+    return data.id
+  }, [])
+
+  const patch = useCallback(async (id: string, p: LootOpenUpdate) => {
+    const previous = roll
+    setRoll(prev => (prev && prev.id === id ? { ...prev, ...p } as LootOpenRow : prev))
+    const { data, error: err } = await supabase.from('loot_open').update(p).eq('id', id).select().single<LootOpenRow>()
+    if (err) { setError(err.message); setRoll(previous) }
+    else if (data) setRoll(data)
+  }, [roll])
+
+  const push = useCallback<DmLootOpenState['push']>(async (openFor = null) => {
+    if (!roll) return
+    await patch(roll.id, { is_open: true, open_for: openFor })
+  }, [roll, patch])
+
+  const setLines = useCallback<DmLootOpenState['setLines']>(async (lines) => {
+    if (!roll) return
+    await patch(roll.id, { lines })
+  }, [roll, patch])
+
+  const close = useCallback<DmLootOpenState['close']>(async () => {
+    if (!roll) return
+    const previous = roll
+    setRoll(null)
+    const { error: err } = await supabase.from('loot_open').update({ is_open: false }).eq('id', previous.id)
+    if (err) { setError(err.message); setRoll(previous) }
+  }, [roll])
+
+  return { roll, loading, error, refetch: fetchAll, create, push, setLines, close }
 }
