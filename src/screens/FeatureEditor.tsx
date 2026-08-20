@@ -170,7 +170,10 @@ export default function FeatureEditor() {
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
-    const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
+    const out = auditNode(
+      { graph: draft.graph, vars: draft.vars, prose: [draft.light_description, draft.deep_description] },
+      ready ? nodes : [],
+    )
     if (!draft.name?.trim()) out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed feature', s: 'A feature needs a name before it can be granted.' })
     if (!draft.light_description?.trim()) out.push({ sev: 'warn', id: 'field:light', t: 'No card text', s: 'The collapsed card in play will have nothing to scan.' })
     if (!draft.deep_description?.trim()) out.push({ sev: 'warn', id: 'field:deep', t: 'No detail text', s: 'The expanded card will have nothing below the card text.' })
@@ -189,7 +192,10 @@ export default function FeatureEditor() {
   const libErrs = useMemo(
     () => lib.features.reduce((n, r) => {
       const c = featureContent(r)
-      return n + auditNode({ graph: c.graph, vars: c.vars }, nodes).filter(a => a.sev === 'err').length
+      return n + auditNode(
+        { graph: c.graph, vars: c.vars, prose: [c.light_description, c.deep_description] },
+        nodes,
+      ).filter(a => a.sev === 'err').length
     }, 0),
     [lib.features, nodes],
   )
@@ -508,7 +514,10 @@ export default function FeatureEditor() {
                         <div className={styles.foldRows}>
                           {rows.length ? rows.map(({ r, m }) => {
                             const d = featureContent(r)
-                            const bad = auditNode({ graph: d.graph, vars: d.vars }, nodes).some(a => a.sev === 'err')
+                            const bad = auditNode(
+                              { graph: d.graph, vars: d.vars, prose: [d.light_description, d.deep_description] },
+                              nodes,
+                            ).some(a => a.sev === 'err')
                             return (
                               <button key={r.id} type="button" draggable
                                 className={cx(

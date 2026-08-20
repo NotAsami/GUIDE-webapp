@@ -5083,7 +5083,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
     // `ready` gates the node list: auditNode skips dangling-target detection
     // entirely when it is empty, so an audit run before the libraries load
     // would report a clean class that is not clean.
-    const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
+    const out = auditNode({ graph: draft.graph, vars: draft.vars, prose: [draft.desc] }, ready ? nodes : [])
 
     if (!draft.name?.trim()) {
       out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed class', s: 'A class needs a name before it can be assigned.' })
@@ -6285,7 +6285,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
-    const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
+    const out = auditNode({ graph: draft.graph, vars: draft.vars, prose: [draft.desc] }, ready ? nodes : [])
     if (nameTwins.length) {
       out.unshift({
         sev: 'warn', id: 'field:name',
@@ -6759,7 +6759,7 @@ function BackgroundForm({ row, creating, lib, featureLib, onSelected, onCleared 
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
-    const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
+    const out = auditNode({ graph: draft.graph, vars: draft.vars, prose: [draft.desc] }, ready ? nodes : [])
     if (!draft.name?.trim()) {
       out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed background', s: 'A background needs a name before it can be assigned.' })
     }

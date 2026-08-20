@@ -1,6 +1,6 @@
 # SRD 5.2 import — stage 1 report
 
-Document: `srd-2024` · generated 2026-08-20T21:11:21.970Z
+Document: `srd-2024` · generated 2026-08-20T21:51:32.235Z
 
 
 ## Rows
@@ -9,10 +9,10 @@ Document: `srd-2024` · generated 2026-08-20T21:11:21.970Z
 |---|--:|--:|
 | backgrounds | 4 | 4 |
 | species | 9 | 9 |
-| items | 203 | 203 |
 | armor | 13 | 13 |
 | spells | 339 | 339 |
 | feats | 17 | 17 |
+| items | 203 | 203 |
 | weapons | 75 | 38 |
 | magicitems | 757 | 757 |
 | classes | 24 | 24 |

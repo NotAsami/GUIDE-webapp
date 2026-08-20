@@ -226,32 +226,36 @@ test('a row something still points at is never deleted', () => {
 test('CLASS TABLE COLUMNS READ AT THE LEVEL, not one below it', async () => {
   const { evalExpr } = await import('./expr.ts')
   const classes = JSON.parse(readFileSync(join(ROOT, 'srd-data/classes.json'), 'utf8'))
+  const features = JSON.parse(readFileSync(join(ROOT, 'srd-data/features.json'), 'utf8'))
+  // Both homes — a column sits on its feature when one shares its name.
+  const allVars = [
+    ...classes.flatMap((c: { name: string; vars?: object[] }) => (c.vars ?? []).map(v => ({ owner: c.name, v }))),
+    ...features.flatMap((f: { folder?: string; name: string; vars?: object[] }) =>
+      (f.vars ?? []).map(v => ({ owner: `${f.folder}/${f.name}`, v }))),
+  ] as { owner: string; v: { name: string; formula?: string } }[]
+  const find = (name: string) => allVars.find(x => x.v.name === name)?.v
 
-  const barb = classes.find((c: { name: string }) => c.name === 'Barbarian')
-  const mastery = barb.vars.find((v: { name: string }) => v.name === 'weaponMastery')
+  const mastery = find('weaponMastery')
+  assert.ok(mastery, 'weaponMastery must exist somewhere')
   // SRD 5.2 Barbarian: 2 weapon masteries at level 1, 3 at level 4, 4 at level 10.
   for (const [level, want] of [[1, 2], [3, 2], [4, 3], [9, 3], [10, 4], [20, 4]] as const) {
     const got = evalExpr(mastery.formula, { level })
     assert.equal(got.t === 'num' && got.flat, want, `weaponMastery at level ${level}`)
   }
-  const rages = barb.vars.find((v: { name: string }) => v.name === 'rages')
+  const rages = find('rages')!
   assert.equal((evalExpr(rages.formula, { level: 1 }) as { flat: number }).flat, 2)
   assert.equal((evalExpr(rages.formula, { level: 17 }) as { flat: number }).flat, 6)
 
   // Structural, across every class: 21 entries (level 0 plus levels 1–20), and
   // the level-0 slot is never a real value.
-  let checked = 0
-  for (const c of classes) {
-    for (const v of c.vars ?? []) {
-      const m = /^\[([^\]]*)\]\[level\]$/.exec(v.formula ?? '')
-      assert.ok(m, `${c.name}.${v.name} is not a level-indexed table: ${v.formula}`)
-      const cells = m[1].split(',')
-      assert.equal(cells.length, 21, `${c.name}.${v.name} must cover level 0 plus 1–20`)
-      assert.equal(cells[0], '0', `${c.name}.${v.name} must reserve index 0`)
-      checked++
-    }
+  for (const { owner, v } of allVars) {
+    const m = /^\[([^\]]*)\]\[level\]$/.exec(v.formula ?? '')
+    assert.ok(m, `${owner}.${v.name} is not a level-indexed table: ${v.formula}`)
+    const cells = m[1].split(',')
+    assert.equal(cells.length, 21, `${owner}.${v.name} must cover level 0 plus 1–20`)
+    assert.equal(cells[0], '0', `${owner}.${v.name} must reserve index 0`)
   }
-  assert.ok(checked >= 25, `expected the class tables to be imported, saw ${checked} columns`)
+  assert.ok(allVars.length >= 25, `expected the class tables to be imported, saw ${allVars.length} columns`)
 })
 
 test('the columns the app already owns are NOT imported a second time', () => {
@@ -319,10 +323,19 @@ test('a ref keeps its gate condition when the row is repaired', () => {
    ------------------------------------------------------------------ */
 
 test('DICE COLUMNS SPLIT INTO THE HALF THAT MOVES, and label which half', () => {
+  // A column's variable may sit on the class OR on the feature of the same
+  // name — see the ownership test below — so look in both.
   const classes = JSON.parse(readFileSync(join(ROOT, 'srd-data/classes.json'), 'utf8'))
-  const varOf = (cls: string, name: string) =>
-    classes.find((c: { name: string }) => c.name === cls)
+  const features = JSON.parse(readFileSync(join(ROOT, 'srd-data/features.json'), 'utf8'))
+  const varOf = (cls: string, name: string) => {
+    const onClass = classes.find((c: { name: string }) => c.name === cls)
       ?.vars?.find((v: { name: string }) => v.name === name)
+    if (onClass) return onClass
+    return features
+      .filter((f: { folder?: string }) => f.folder === `SRD/${cls}`)
+      .flatMap((f: { vars?: { name: string }[] }) => f.vars ?? [])
+      .find((v: { name: string }) => v.name === name)
+  }
   const at = (formula: string, level: number) =>
     Number(formula.slice(1, formula.indexOf(']')).split(',')[level])
 
@@ -351,4 +364,57 @@ test('spellcasting is a class property, so no class grants it as a feature', () 
     .filter((f: { name: string }) => f.name === 'Spellcasting' || f.name === 'Pact Magic')
     .map((f: { name: string; folder: string }) => `${f.folder}/${f.name}`)
   assert.deepEqual(bad, [])
+})
+
+/* ------------------------------------------------------------------
+   Guard: a column's variable lives where the feature can carry it.
+
+   `weaponMastery` on the CLASS exists only for a character who has that class.
+   Grant the Weapon Mastery feature on its own — to another class, as a one-off
+   reward, which the Grant Feature card exists to do — and its prose renders
+   the literal "{weaponMastery}", because the feature travelled and the variable
+   stayed behind. That is not a rendering fault; the value genuinely is not in
+   that character's scope.
+
+   So a column whose name matches a feature of the same class belongs ON that
+   feature. Columns with no matching feature are class-wide and stay put.
+   ------------------------------------------------------------------ */
+
+test('A COLUMN NAMED AFTER A FEATURE TRAVELS WITH IT', () => {
+  const features = JSON.parse(readFileSync(join(ROOT, 'srd-data/features.json'), 'utf8'))
+  const classes = JSON.parse(readFileSync(join(ROOT, 'srd-data/classes.json'), 'utf8'))
+
+  const feat = (folder: string, name: string) =>
+    features.find((f: { folder?: string; name: string }) => f.folder === folder && f.name === name)
+
+  // Both Weapon Masteries carry their own progression.
+  for (const cls of ['Barbarian', 'Fighter']) {
+    const f = feat(`SRD/${cls}`, 'Weapon Mastery')
+    assert.ok(f, `${cls} must have a Weapon Mastery feature`)
+    assert.deepEqual((f.vars ?? []).map((v: { name: string }) => v.name), ['weaponMastery'],
+      `${cls}'s Weapon Mastery must carry weaponMastery, or granting it alone renders the braces`)
+    const onClass = classes.find((c: { name: string }) => c.name === cls)
+    assert.ok(!(onClass.vars ?? []).some((v: { name: string }) => v.name === 'weaponMastery'),
+      'and it must not ALSO sit on the class — one authored value, one home')
+  }
+  assert.ok(feat('SRD/Rogue', 'Sneak Attack').vars.some((v: { name: string }) => v.name === 'sneakAttackDice'))
+  assert.ok(feat('SRD/Monk', 'Martial Arts').vars.some((v: { name: string }) => v.name === 'martialArtsDie'))
+
+  // Class-wide columns have no feature of that name and stay on the class.
+  const wizard = classes.find((c: { name: string }) => c.name === 'Wizard')
+  assert.ok((wizard.vars ?? []).some((v: { name: string }) => v.name === 'preparedSpells'))
+  assert.equal(feat('SRD/Wizard', 'Prepared Spells'), undefined)
+})
+
+test("a feature's own prose counts as reading its variable", async () => {
+  // Otherwise moving a progression variable onto the feature that prints it
+  // earns a "never used" warning for doing the right thing.
+  const { auditNode } = await import('./graph.ts')
+  const node = {
+    vars: [{ name: 'weaponMastery', kind: 'derived' as const, formula: '[0,2,2][level]' }],
+    prose: ['mastery of {weaponMastery} kinds of weapons'],
+  }
+  assert.deepEqual(auditNode(node).filter(a => /never used/i.test(a.t)), [])
+  // …and the warning still fires when nothing reads it at all.
+  assert.equal(auditNode({ ...node, prose: ['no spans here'] }).filter(a => /never used/i.test(a.t)).length, 1)
 })
