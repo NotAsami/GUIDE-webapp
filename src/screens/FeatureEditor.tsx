@@ -41,9 +41,11 @@ import type {
   CatalogFeatureData, CatalogFeatureRow, Feature, FeatureCategory, GraphEffect, VarDef,
 } from '../lib/database.types'
 import { originChain } from '../lib/featureView'
+import { SEP, depthOf, folderSet, hiddenUnder, leafOf } from '../lib/folders'
 import styles from '../components/authoring.module.css'
 import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
+import { ProsePreview } from '../components/ProsePreview'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
 
@@ -62,6 +64,29 @@ const RECHARGES: { v: '' | 'short' | 'long'; l: string }[] = [
  *  stored — `folder: undefined` is what "unfiled" means on the row. */
 const UNFILED = 'Unfiled'
 
+/** Which folders are collapsed, remembered across sessions.
+ *
+ *  Only the CLOSED ones are persisted. Storing the open set instead would mean
+ *  a folder created after the map was written is absent from it, and absent
+ *  would read as closed — every new folder would arrive collapsed. Storing the
+ *  closed set makes "not mentioned" mean open, which is the right default for
+ *  a folder set that is derived and therefore always growing. */
+const FOLD_KEY = 'guide.featureEditor.closedFolders'
+
+function useFolderCollapse() {
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(FOLD_KEY)
+      return raw ? Object.fromEntries((JSON.parse(raw) as string[]).map(f => [f, false])) : {}
+    } catch { return {} }
+  })
+  useEffect(() => {
+    const closed = Object.keys(openFolders).filter(k => openFolders[k] === false)
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify(closed)) } catch { /* private mode: forget it */ }
+  }, [openFolders])
+  return [openFolders, setOpenFolders] as const
+}
+
 
 const BLANK: CatalogFeatureData = {
   name: '', category: 'class', icon: 'fa-star', color: DEFAULT_COLOR, activation: 'none',
@@ -79,7 +104,7 @@ export default function FeatureEditor() {
   const [selId, setSelId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [query, setQuery] = useState('')
-  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({})
+  const [openFolders, setOpenFolders] = useFolderCollapse()
   const [open, setOpen] = useState({ vars: false, effects: false })
   const [openEffect, setOpenEffect] = useState<number | null>(null)
   const [moreOps, setMoreOps] = useState(false)
@@ -149,12 +174,10 @@ export default function FeatureEditor() {
   const nodeCount = lib.features.reduce((n, r) => n + (featureContent(r).graph?.length ?? 0), 0)
 
   /* ---- folders: derived from the features in them ---- */
-  const folders = useMemo(() => {
-    const set = new Set<string>()
-    for (const r of lib.features) set.add(featureContent(r).folder || UNFILED)
-    if (draft?.folder) set.add(draft.folder)
-    return [...set].sort()
-  }, [lib.features, draft?.folder])
+  const folders = useMemo(() => folderSet([
+    ...lib.features.map(r => featureContent(r).folder || UNFILED),
+    ...(draft?.folder ? [draft.folder] : []),
+  ]), [lib.features, draft?.folder])
 
   const parsed = useMemo(() => {
     const m = /^(tag|roll):(.*)$/i.exec(query.trim())
@@ -416,24 +439,43 @@ export default function FeatureEditor() {
 
             <div className={styles.rScroll}>
               {(() => {
-                let shown = 0
+                // A SEARCH OVERRIDES COLLAPSE. Leaving a folder shut while its
+                // contents match means the list answers "no results" to a query
+                // that has results — and the one place that is guaranteed to
+                // happen is the folder you closed because it was noisy.
+                const forceOpen = selectorMode || !!query.trim()
+                const isClosed = (f: string) => !forceOpen && openFolders[f] === false
+                const hits = (f: string) => (foldered[f] ?? []).filter(o => o.m.hit).length
+                /** Matches in this folder AND everything nested under it — the
+                 *  count on a collapsed parent has to speak for what it hides. */
+                const deepHits = (f: string) =>
+                  folders.reduce((n, x) => n + (x === f || x.startsWith(f + SEP) ? hits(x) : 0), 0)
+
+                const shown = folders.reduce((n, f) => n + hits(f), 0)
                 const body = folders.map(fl => {
+                  // Nested under something the DM collapsed: the parent's row is
+                  // the only thing standing in for it.
+                  if (hiddenUnder(fl, isClosed)) return null
                   const rows = (foldered[fl] ?? []).filter(o => o.m.hit)
-                  if (!rows.length && query) return null
-                  shown += rows.length
-                  const isOpen = openFolders[fl] !== false || selectorMode
+                  const deep = deepHits(fl)
+                  if (!deep && query) return null
+                  const kids = folders.some(x => x.startsWith(fl + SEP))
+                  const isOpen = !isClosed(fl)
                   return (
                     <div key={fl} className={cx(styles.fold, dropFolder === fl && styles.drop)}
+                      style={{ ['--fd' as string]: depthOf(fl) }}
                       onDragOver={e => { if (dragId) { e.preventDefault(); setDropFolder(fl) } }}
                       onDragLeave={() => setDropFolder(c => (c === fl ? null : c))}
                       onDrop={e => { e.preventDefault(); void onDrop(fl) }}>
                       <button type="button" className={cx(styles.foldHead, !isOpen && styles.closed)}
-                        onClick={() => setOpenFolders(f => ({ ...f, [fl]: f[fl] === false }))}>
+                        onClick={() => setOpenFolders(f => ({ ...f, [fl]: f[fl] === false }))}
+                        title={fl}>
                         <i className={cx('fa-solid fa-chevron-down', styles.ch)} />
                         <i className={cx('fa-solid fa-folder', styles.fi)} />
-                        <span className={styles.ft}>{fl}</span><span className={styles.fc}>{rows.length}</span>
+                        <span className={styles.ft}>{leafOf(fl)}</span>
+                        <span className={styles.fc}>{deep}</span>
                       </button>
-                      {isOpen && (
+                      {isOpen && (rows.length > 0 || !kids) && (
                         <div className={styles.foldRows}>
                           {rows.length ? rows.map(({ r, m }) => {
                             const d = featureContent(r)
@@ -858,7 +900,11 @@ function FeatureForm(p: FormProps) {
           <span className={styles.fieldLab}>Folder</span>
           <select className={styles.in} value={d.folder ?? UNFILED}
             onChange={e => set({ folder: e.target.value === 'Unfiled' ? undefined : e.target.value })}>
-            {[...new Set([UNFILED, ...p.folders])].map(f => <option key={f} value={f}>{f}</option>)}
+            {[...new Set([UNFILED, ...p.folders])].map(f => (
+              // Indent stands in for nesting: a flat list of full paths turns
+              // "SRD/Bard" and "SRD/Barbarian" into a reading exercise.
+              <option key={f} value={f}>{'  '.repeat(depthOf(f)) + leafOf(f)}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -866,6 +912,7 @@ function FeatureForm(p: FormProps) {
       <div className={styles.sec}>
         <span className={styles.fieldLab}>Card text</span>
         <span className={styles.facing}><i className="fa-solid fa-eye" /> Player-facing</span>
+        <ProsePreview text={d.light_description ?? ''} />
       </div>
       {/* No length cap. The card scales to whatever this says (Features.tsx's
           masonry sizes each card to its own text), and the DM is the one who
@@ -881,6 +928,7 @@ function FeatureForm(p: FormProps) {
       <div className={styles.sec}>
         <span className={styles.fieldLab}>Detail text</span>
         <span className={styles.facing}><i className="fa-solid fa-eye" /> Player-facing</span>
+        <ProsePreview text={d.deep_description ?? ''} />
       </div>
       <textarea data-audit="field:deep" ref={deepRef} className={styles.prose} value={d.deep_description ?? ''}
         placeholder="The full prose the player reads when the card is expanded…"
@@ -1293,10 +1341,12 @@ function Popover({ pop, onClose, draft, set, update, nodes, namesByGid, selId, r
           <div className={styles.popBody}>
             <span className={styles.fieldLab}>Folder name</span>
             <input className={styles.in} value={q} onChange={e => setQ(e.target.value)} autoFocus
-              placeholder="Warlock Pact…"
+              placeholder="Homebrew/Warlock Pact…"
               onKeyDown={e => { if (e.key === 'Enter' && q.trim() && draft) { set({ folder: q.trim() }); onClose() } }} />
             <div className={styles.mono} style={{ marginBottom: 8, color: 'var(--beige-dim)' }}>
               Folders are derived from the features filed in them, so the new folder appears once this feature moves into it.
+              <br /><b>Homebrew/Warlock Pact</b> nests — a <b>/</b> makes the part before it the parent, and any level of it that
+              does not exist yet is created.
               {folders.length > 0 && <><br />In use: {folders.join(' · ')}</>}
             </div>
             <div className={styles.btnrow}>

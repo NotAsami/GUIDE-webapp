@@ -313,9 +313,11 @@ export type Feature = {
   color?: string
   // ── Authoring-only fields (Feature Editor, slice 3). These organise the DM's
   //    catalog and reach no player screen. ──
-  /** Folder name in the Feature Editor's list. The folder set is DERIVED from
-   *  the features in it — there is no folder store to drift out of sync, and the
-   *  cost is that a folder emptied of its last member stops existing.
+  /** Folder PATH in the Feature Editor's list — `SRD/Bard` nests Bard under SRD.
+   *  The folder set is DERIVED from the features in it: there is no folder store
+   *  to drift out of sync, nesting needs no parent rows, and renaming a parent is
+   *  a find-and-replace over a prefix. The cost is that a folder emptied of its
+   *  last member stops existing. Path rules live in `src/lib/folders.ts`.
    *  ponytail: derived folders. Add a folder store if empty ones need to persist. */
   folder?: string
   /** What the player spends to use it. Independent of `uses` — a passive feature

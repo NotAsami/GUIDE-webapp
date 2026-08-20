@@ -118,14 +118,17 @@
 .flHint.sel { color: var(--amber); } .flHint.sel b { color: var(--amber-hot); }
 
 .fold { margin: 0 0 2px; }
-.foldHead { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer; background: transparent; border: 0; border-bottom: 1px solid rgba(212,191,125,.12); padding: 9px 12px; }
+/* --fd is the folder's depth, set inline from the path. Indent is the only
+   thing that says "nested" once the head shows the leaf name instead of the
+   full path, so the guide rail is not decoration. */
+.foldHead { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer; background: transparent; border: 0; border-bottom: 1px solid rgba(212,191,125,.12); padding: 9px 12px; padding-left: calc(12px + var(--fd, 0) * 15px); }
 .foldHead:hover { background: rgba(226,176,33,.05); }
 .foldHead .ch { font-size: 8px; color: var(--amber); width: 8px; transition: transform 160ms ease; }
 .foldHead.closed .ch { transform: rotate(-90deg); }
 .foldHead .fi { font-size: 10px; color: var(--beige-dim); }
 .foldHead .ft { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--beige); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .foldHead .fc { font-family: var(--font-mono); font-size: 8px; color: var(--muted); }
-.foldRows { display: flex; flex-direction: column; padding: 5px 8px 8px; gap: 4px; }
+.foldRows { display: flex; flex-direction: column; padding: 5px 8px 8px; gap: 4px; padding-left: calc(8px + var(--fd, 0) * 15px); }
 .fold.drop .foldHead { background: rgba(226,176,33,.14); }
 .fold.drop .foldHead .ft, .fold.drop .foldHead .fi { color: var(--amber-hot); }
 .fold.drop .foldRows { outline: 1px dashed rgba(226,176,33,.55); outline-offset: -3px; }
