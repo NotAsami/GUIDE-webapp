@@ -671,13 +671,60 @@ const varName = label => {
   return /^[a-z][a-zA-Z0-9]*$/.test(n) ? n : null
 }
 
-/** One column → one derived VarDef, or null with a reason logged.
+/** `[0,1,1,2,…][level]`, the level-indexed table §35 expects. */
+const table = nums => `[0,${nums.join(',')}][level]`
+
+/** A dice column splits into the two numbers it is made of.
  *
- *  NUMERIC ONLY, on purpose. `Sneak Attack` reads "1d6, 1d6, 2d6…" and `Bardic
- *  Die` reads "d6, d8…"; an array literal holds numbers, so representing those
- *  means deciding that "2d6" is really the number 2 — an interpretation, and
- *  the brief for this importer is template matching, never parsing. They are
- *  reported instead, which is the honest handoff. */
+ *  An array literal holds numbers, so `[1d6,2d6][level]` cannot be written —
+ *  the value type has a dice list, the array type does not. But "NdM" is not
+ *  ambiguous text needing interpretation; it is two numbers in a fixed format.
+ *  Splitting it is decomposition, not inference, and it is uniform: parse
+ *  count and faces, emit a variable for whichever of the two actually moves,
+ *  and skip the one that never does.
+ *
+ *  So Sneak Attack's d6 never changes and its COUNT does — `{sneakAttackDice}d6`.
+ *  Martial Arts always rolls one die and the SIZE changes — `1d{martialArtsDie}`.
+ *  Bardic Die is the same shape as Martial Arts. A column where both moved
+ *  would get both variables; none in SRD 5.2 does. */
+const DICE_CELL = /^(\d*)[dD](\d+)$/
+
+/** "Bardic Die" → "Bardic", so the die variable is `bardicDie`, not `bardicDieDie`. */
+const diceBase = name => String(name).replace(/\s+Dic?e$/i, '')
+
+function diceVars(raw, f, className, taken) {
+  const parsed = raw.map(v => {
+    if (v === '') return { n: 0, d: 0 }
+    const m = DICE_CELL.exec(v)
+    return m ? { n: m[1] === '' ? 1 : Number(m[1]), d: Number(m[2]) } : null
+  })
+  if (parsed.some(x => x === null)) return null
+
+  const counts = parsed.map(x => x.n)
+  const faces = parsed.map(x => x.d)
+  const out = []
+  const add = (suffix, nums, what) => {
+    // Only what MOVES becomes a variable. A constant one is noise the prose can
+    // simply write out — nobody needs `{sneakAttackFaces}` to render a 6.
+    if (new Set(nums).size <= 1) return
+    const name = varName(diceBase(f.name) + ' ' + suffix)
+    if (!name || taken.has(name)) {
+      report.warnings.push(`class ${className}: column "${f.name}" → no usable name for ${what}`)
+      return
+    }
+    taken.add(name)
+    out.push({ name, kind: 'derived', label: `${f.name} (${what})`, formula: table(nums) })
+  }
+  add('Dice', counts, 'number of dice')
+  add('Die', faces, 'die size')
+
+  if (!out.length) {
+    report.warnings.push(`class ${className}: column "${f.name}" never changes — left out`)
+  }
+  return out
+}
+
+/** One column → the derived VarDefs it yields, possibly none. */
 function columnVar(f, className, taken) {
   const rows = f.data_for_class_table ?? []
   if (!rows.length) return null
@@ -691,9 +738,11 @@ function columnVar(f, className, taken) {
   // absence as 0 is what the blank means; it is not an interpretation of a value.
   const bad = raw.find(v => v !== '' && !/^[+-]?\d+$/.test(v))
   if (bad) {
+    const dice = diceVars(raw, f, className, taken)
+    if (dice) return dice
     report.warnings.push(
-      `class ${className}: column "${f.name}" is not numeric (${bad}) `
-      + '— left out, a dice or ordinal progression needs a human')
+      `class ${className}: column "${f.name}" is neither a number nor NdM (${bad}) `
+      + '— left out, this one needs a human')
     return null
   }
   const name = varName(f.name)
@@ -703,10 +752,10 @@ function columnVar(f, className, taken) {
   }
   taken.add(name)
   // Index 0 is the level-0 slot §35 reserves; arr[level] then reads at the level.
-  return {
+  return [{
     name, kind: 'derived', label: f.name,
-    formula: `[0,${raw.map(v => (v === '' ? 0 : Number(v))).join(',')}][level]`,
-  }
+    formula: table(raw.map(v => (v === '' ? 0 : Number(v)))),
+  }]
 }
 
 /** A class row plus every feature it grants. */
@@ -723,8 +772,8 @@ function toClass(r) {
   for (const f of r.features ?? []) {
     // A column contributes its numbers whatever else happens to the row — a few
     // columns are typed CLASS_LEVEL_FEATURE and are a real feature AND a column.
-    const v = columnVar(f, r.name, taken)
-    if (v) vars.push(v)
+    const cols = columnVar(f, r.name, taken)
+    if (cols) vars.push(...cols)
 
     /* ONLY REAL FEATURES. Open5e models the class TABLE as features too — one
        row per column — so "Proficiency Bonus", "Cantrips", "Rages", "Sorcery
@@ -750,7 +799,7 @@ function toClass(r) {
        same for every caster and belong in a rules reference, not on a card in
        one character's feature list. Keeping it would also put the slot numbers
        in two places, which is the defect this codebase has shipped twice. */
-    if (f.name === 'Spellcasting') { note('defaults', 'skipped-spellcasting'); continue }
+    if (f.name === 'Spellcasting' || f.name === 'Pact Magic') { note('defaults', 'skipped-spellcasting'); continue }
     /* "Wizard Subclass" is NOT a feature. It says "you gain a subclass at level
        3" — which is `ClassDef.subclassLevel`, a field, not something that
        belongs on a character's feature list. Gaining a subclass is a structural

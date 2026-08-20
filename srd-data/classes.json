@@ -188,6 +188,12 @@
     ],
     "vars": [
       {
+        "name": "bardicDie",
+        "kind": "derived",
+        "label": "Bardic Die (die size)",
+        "formula": "[0,6,6,6,6,8,8,8,8,8,10,10,10,10,10,12,12,12,12,12,12][level]"
+      },
+      {
         "name": "cantrips",
         "kind": "derived",
         "label": "Cantrips",
@@ -958,6 +964,12 @@
         "kind": "derived",
         "label": "Focus Points",
         "formula": "[0,0,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20][level]"
+      },
+      {
+        "name": "martialArtsDie",
+        "kind": "derived",
+        "label": "Martial Arts (die size)",
+        "formula": "[0,6,6,6,6,8,8,8,8,8,8,10,10,10,10,10,10,12,12,12,12][level]"
       }
     ],
     "graph": [],
@@ -1348,7 +1360,14 @@
       "rogue",
       "baseclass"
     ],
-    "vars": [],
+    "vars": [
+      {
+        "name": "sneakAttackDice",
+        "kind": "derived",
+        "label": "Sneak Attack (number of dice)",
+        "formula": "[0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10][level]"
+      }
+    ],
     "graph": [],
     "subclassLevel": 3,
     "subclassLabel": "Subclass",
@@ -1530,10 +1549,6 @@
       {
         "feature_id": "srd-2024_warlock_mystic-arcanum",
         "when": "level >= 11"
-      },
-      {
-        "feature_id": "srd-2024_warlock_pact-magic",
-        "when": "level >= 1"
       }
     ],
     "tags": [
