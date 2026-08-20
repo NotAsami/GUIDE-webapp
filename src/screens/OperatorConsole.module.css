@@ -2761,6 +2761,36 @@ div.skWarn { cursor: default; }
 .lootPick:hover { border-color: var(--amber); }
 .lootPick.bad { color: var(--danger-hot); border-color: rgba(185, 58, 58, 0.5); }
 
+/* ---- a pool row's query box ----
+   Occupies the same grid cell .lootPick does, so it inherits the row's 34px
+   height rule and needs no height of its own. The match count rides INSIDE the
+   box rather than in its own column: the row's five columns are already spoken
+   for, and a sixth would misalign every other row in the table. */
+.lootPool {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(212, 191, 125, 0.28);
+  padding: 0 10px;
+}
+.lootPool:focus-within { border-color: var(--amber); }
+.lootPool > i { flex: 0 0 auto; font-size: 11px; color: var(--beige-dim); }
+.lootRow .lootPoolIn {
+  flex: 1 1 auto; min-width: 0;
+  background: none; border: 0; padding: 0;
+  font-family: var(--font-mono); font-size: 13px; color: var(--text);
+}
+.lootRow .lootPoolIn:focus { outline: none; }
+.lootRow .lootPoolIn::placeholder { color: var(--beige-dim); opacity: 0.7; }
+/* The count is the safety net for a typo'd tag — `tag:martail` matches nothing
+   and would otherwise yield silently forever. Zero reads as an error here, not
+   as a neutral number. */
+.lootPoolN {
+  flex: 0 0 auto;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em;
+  color: var(--beige-dim); white-space: nowrap;
+}
+.lootPoolN.bad { color: var(--danger-hot); }
+
 .lootRange, .lootChance { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .lootRange input, .lootChance input { min-width: 0; text-align: center; }
 
@@ -2773,44 +2803,6 @@ div.skWarn { cursor: default; }
    exactly that 10px below the select. Same cause as the loot row's bumpiness:
    a stacking margin inside a grid row. Zero it here and give both controls the
    same height, and `align-items: end` then actually aligns them. */
-.lootPickRow { align-items: end; }
-.lootPickRow .selIn { margin-bottom: 0; height: 34px; }
-.lootRollBtn { display: flex; align-items: stretch; }
-.lootRollBtn > * { width: 100%; height: 34px; }
-
-/* One rolled line. A MISS still renders — seeing what did not come up is how a
-   badly tuned table gives itself away. */
-.lootLine {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto 44px;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  margin-bottom: 4px;
-  border-left: 2px solid var(--cyan);
-  background: rgba(255, 255, 255, 0.014);
-  cursor: pointer;
-}
-.lootLine.miss {
-  border-left-color: rgba(212, 191, 125, 0.2);
-  opacity: 0.45;
-  cursor: default;
-}
-.lootLine.bad { border-left-color: var(--danger); background: rgba(185, 58, 58, 0.07); cursor: default; }
-.llName { font-family: var(--font-prose); font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.llQty { font-family: var(--font-display); font-weight: 700; font-size: 13px; color: var(--beige); }
-.lootLine.miss .llQty { color: var(--beige-dim); font-weight: 400; }
-.lootLine.bad .llQty { font-family: var(--font-mono); font-size: 8px; font-weight: 400; color: var(--danger-hot); }
-.llPct { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; color: var(--beige-dim); text-align: right; }
-
-.grantFlash {
-  margin-top: 9px; padding: 7px 10px;
-  border-left: 2px solid var(--good, var(--cyan));
-  background: rgba(0, 166, 214, 0.08);
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--cyan);
-}
-
 /* ---- item picker overlay for a loot row ---- */
 
 /* Breathing room before the audit panel — "Add Row" is the end of the row list
@@ -2903,3 +2895,29 @@ div.skWarn { cursor: default; }
   letter-spacing: 0.06em; color: var(--beige-dim);
 }
 .abHint b { color: var(--beige); font-weight: 400; }
+
+/* A dim aside inside a field label — "· optional", "· freeform". The mockup
+   carries these as inline colour; a class keeps the label markup readable and
+   the colour in one place. */
+.labHint { color: var(--beige-dim); font-weight: 400; letter-spacing: 0; }
+
+/* ---- loot index row: the table, plus a Roll control beside it ----
+   Rolling is a different verb from editing, so the row is a flex pair rather
+   than one button with two jobs. The .catRow keeps its own click target. */
+.lootIndexRow { display: flex; align-items: stretch; gap: 6px; }
+.lootIndexRow > .catRow { flex: 1 1 auto; min-width: 0; }
+.lootRollBtn {
+  flex: 0 0 auto; align-self: stretch;
+  display: flex; align-items: center; gap: 5px;
+  padding: 0 11px; cursor: pointer;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(226, 176, 33, 0.3);
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--amber);
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.lootRollBtn:hover { color: var(--amber-hot); border-color: var(--amber); background: rgba(226, 176, 33, 0.08); }
+/* A roll already open — the control resumes it rather than starting another. */
+.lootRollBtn.on { color: var(--cyan-hot); border-color: rgba(0, 166, 214, 0.5); background: rgba(0, 166, 214, 0.08); }
+.lootRollBtn .arr { font-size: 8px; opacity: 0.8; }
+.rollOpen { color: var(--amber-hot); }

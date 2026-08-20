@@ -1452,14 +1452,90 @@ export type RaceDef = {
 export type LootRow =
   | { kind: 'item'; item_id: string; min: number; max: number; chance: number }
   | { kind: 'coin'; coin: 'gold' | 'silver' | 'copper'; min: number; max: number; chance: number }
+  /** "a martial weapon, but not a relic" — the row names a QUERY instead of an
+   *  item, and the roll picks ONE match at random. `from` is the same grammar
+   *  the search boxes and starting-kit pools use (lib/catalogSearch.ts), so
+   *  tagging the martial weapons once serves every table that wants one.
+   *
+   *  Resolved at ROLL time, never stored: a table that says "a martial weapon"
+   *  should pick up a weapon added to the catalog next month without being
+   *  re-authored. That is the whole reason it is a query and not a hand-picked
+   *  list the DM has to maintain. */
+  | { kind: 'pool'; from: string; min: number; max: number; chance: number }
 
-/** A named, reusable roll table: a chest, a knight's corpse, a bookshelf. */
+/** A named, reusable roll table: a chest, a knight's corpse, a bookshelf.
+ *
+ *  The container chrome (`icon`/`kind`/`name`/`location`/`desc`) is what the
+ *  PLAYER sees when a roll is pushed to them, so all of it is player-facing —
+ *  it is the thing they open, not an authoring label. */
 export type LootTable = {
   name: string
   icon: string
+  /** What kind of container this is — "Corpse", "Chest", "Bookshelf",
+   *  "Reliquary". FREEFORM on purpose: a fixed list would need a migration
+   *  every time the campaign meets a new thing worth looting, and the value is
+   *  only ever displayed, never branched on. */
+  kind?: string
+  /** Where it was found — "Sunken Hold · Deck Three". Optional; the player
+   *  header omits the line entirely when it is blank. */
+  location?: string
+  /** Player-facing prose, shown in the loot takeover's header when the roll is
+   *  pushed. NOT a DM note — it used to be one, and nothing rendered it. */
   desc?: string
   rows: LootRow[]
   published?: boolean
+}
+
+/** The container chrome, snapshotted onto an open roll (migration 0020).
+ *  Copied rather than referenced because players cannot read `loot_catalog` —
+ *  the table's `draft` column is only safe while no player policy exists. */
+export type LootContainer = {
+  icon: string
+  name: string
+  kind?: string
+  location?: string
+  desc?: string
+}
+
+/** One rolled line the party can see. */
+export type LootOpenLine = {
+  /** Stable per line, so assigning survives a re-render and a reorder. */
+  key: string
+  item_id: string
+  /** Snapshot of the catalog item — `item_catalog` is DM-only (0004), so this
+   *  is the only way the player's grid can render a name, icon or rarity. */
+  item: CatalogItemData
+  qty: number
+  /** characters.id, or null while unclaimed. */
+  assigned_to?: string | null
+  /** Denormalised on purpose: a player cannot read another character's row, so
+   *  the name has to travel with the line for the "→ ROS" chip to render. */
+  assigned_name?: string | null
+}
+
+/** A roll the DM has taken out of the library. `is_open` gates the player's
+ *  read entirely (0020); `open_for` null means the whole party. */
+export type LootOpenRow = {
+  id: string
+  table_id: string | null
+  container: LootContainer
+  lines: LootOpenLine[]
+  is_open: boolean
+  open_for: string | null
+  created_at: string
+  updated_at: string
+}
+export type LootOpenInsert = {
+  table_id?: string | null
+  container: LootContainer
+  lines: LootOpenLine[]
+  is_open?: boolean
+  open_for?: string | null
+}
+export type LootOpenUpdate = {
+  lines?: LootOpenLine[]
+  is_open?: boolean
+  open_for?: string | null
 }
 
 export type CatalogLootRow = { id: string; data: LootTable; draft: LootTable | null; updated_at: string }
@@ -1599,6 +1675,12 @@ export type Database = {
         Row: CatalogLootRow
         Insert: CatalogLootInsert
         Update: CatalogLootUpdate
+        Relationships: []
+      }
+      loot_open: {
+        Row: LootOpenRow
+        Insert: LootOpenInsert
+        Update: LootOpenUpdate
         Relationships: []
       }
       characters: {

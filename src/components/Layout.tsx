@@ -3,11 +3,13 @@ import { useCharacter } from '../lib/character'
 import { useAuth } from '../lib/auth'
 import { useShardCatalog } from '../lib/shardCatalog'
 import { useOpenShop } from '../lib/shops'
+import { useOpenLoot } from '../lib/loot_open'
 import { Topbar } from './Topbar'
 import { Bottombar } from './Bottombar'
 import { RollToast } from './RollToast'
 import { SystemToasts } from './SystemToasts'
 import { ShopTakeover } from './ShopTakeover'
+import { LootTakeover } from './LootTakeover'
 import { RollContextPanel } from './RollContextPanel'
 import { PartyHud } from './PartyHud'
 import { usePartyPresence } from '../lib/presence'
@@ -54,6 +56,18 @@ export function Layout() {
     if (shop && !wasShopVisibleRef.current) setShopDismissed(false)
     wasShopVisibleRef.current = !!shop
   }, [shop])
+
+  /* Same lifecycle as the shop, and for the same reason: a player cannot close
+     a roll server-side, so Close is a LOCAL dismissal. A fresh push (tracked the
+     same "was it visible last render" way) clears a stale one, otherwise
+     dismissing one roll would hide the next. */
+  const { roll: lootRoll } = useOpenLoot(character?.id)
+  const [lootDismissed, setLootDismissed] = useState(false)
+  const wasLootVisibleRef = useRef(false)
+  useEffect(() => {
+    if (lootRoll && !wasLootVisibleRef.current) setLootDismissed(false)
+    wasLootVisibleRef.current = !!lootRoll
+  }, [lootRoll])
 
   /* Plain open/closed state, and ONLY THE PLAYER CHANGES IT.
      No auto-open on a roll and no restore across a reload: this panel is a modal
@@ -221,6 +235,7 @@ export function Layout() {
           (shop_catalog RLS scopes it to this character or the whole party) —
           no route, no nav entry, exists only while a shop is live. */}
       <ShopTakeover character={character} updateSection={updateSection} shop={shop} dismissed={shopDismissed} onDismiss={() => setShopDismissed(true)} />
+      <LootTakeover roll={lootRoll} dismissed={lootDismissed} onDismiss={() => setLootDismissed(true)} />
       {/* The character rides along so the panel's catalog sheet can resolve a
           roll's subject: every catalog table is DM-only, so the player's copy of
           the facts is the snapshot on their own row. */}

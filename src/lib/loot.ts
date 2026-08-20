@@ -25,6 +25,7 @@
  */
 
 import type { CatalogItemData, LootRow, LootTable } from './database.types.ts'
+import { matchesCatalogQuery, parseCatalogQuery } from './catalogSearch.ts'
 
 /** One row's outcome. MISSES ARE KEPT: the preview shows what did not come up,
  *  which is the only way to see that a table is tuned wrong without doing the
@@ -36,8 +37,13 @@ export type LootOutcome = {
   qty: number
   /** Resolved item name, for an item row that resolved. */
   name?: string
-  /** Set when an item row points at an id the catalog no longer has. */
+  /** Set when an item row points at an id the catalog no longer has, or when a
+   *  pool row's query matches nothing. Both are broken tables, not bad luck. */
   missing?: boolean
+  /** For a pool row that landed: the query it resolved through, so the preview
+   *  can say WHY this item appeared. Without it "Longsword" gives no hint that
+   *  the row said `tag:martial !relic` and could have been anything else. */
+  from?: string
 }
 
 export type LootResult = {
@@ -67,6 +73,26 @@ export function rollQty(min: number, max: number, rng: Rng): number {
  *  chance 100 always does — the two ends a DM will actually type. */
 export const rowHits = (chance: number, rng: Rng): boolean => rng() * 100 < chance
 
+/** Every catalog item a pool row's query matches, in catalog order.
+ *
+ *  A blank query resolves to NOTHING rather than to everything. "No filter"
+ *  reads as "every item in the game", which no author ever means, and a chest
+ *  that can produce any item in the game is not a bug anyone would spot from
+ *  the outcome — they would just think the table was odd. The editor's audit
+ *  says so before it can be rolled.
+ */
+export function poolItems(
+  from: string, catalog: Map<string, CatalogItemData>,
+): { item_id: string; data: CatalogItemData }[] {
+  const q = parseCatalogQuery(from)
+  if (q.mode === 'all') return []
+  const out: { item_id: string; data: CatalogItemData }[] = []
+  for (const [item_id, data] of catalog) {
+    if (matchesCatalogQuery(data, q)) out.push({ item_id, data })
+  }
+  return out
+}
+
 export function rollLoot(
   table: LootTable,
   catalog: Map<string, CatalogItemData>,
@@ -93,6 +119,23 @@ export function rollLoot(
     if (row.kind === 'coin') {
       coins[row.coin] += qty
       outcomes.push({ row, hit: true, qty })
+      continue
+    }
+
+    if (row.kind === 'pool') {
+      /* Resolved here rather than at author time so the table tracks the
+         catalog. Costs one extra rng() draw on a hit — see the note above about
+         sequence stability: the CHANCE roll is what stays positional, and a
+         row's own draws already depend on whether it hit. */
+      const pool = poolItems(row.from, catalog)
+      if (!pool.length) {
+        missing.push(row.from)
+        outcomes.push({ row, hit: true, qty, missing: true, from: row.from })
+        continue
+      }
+      const picked = pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))]
+      if (qty > 0) items.push({ item_id: picked.item_id, data: picked.data, qty })
+      outcomes.push({ row, hit: true, qty, name: picked.data.name, from: row.from })
       continue
     }
 
@@ -132,7 +175,7 @@ export function expectedYield(table: LootTable): {
     const p = Math.max(0, Math.min(100, row.chance)) / 100
     const mean = (Math.max(0, row.min) + Math.max(row.min, row.max)) / 2
     if (row.kind === 'coin') coins[row.coin] += p * mean
-    else itemCount += p * mean
+    else itemCount += p * mean   // 'item' and 'pool' both yield one stack
   }
   return { items: itemCount, coins }
 }

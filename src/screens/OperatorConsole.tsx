@@ -1,19 +1,19 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import {
-  useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, useDmClasses, useDmRaces, classContent, raceContent, featureContent, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState, type DmClassesState, type DmRacesState, useDmLoot, lootContent,
+  useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, useDmClasses, useDmRaces, classContent, raceContent, featureContent, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState, type DmClassesState, type DmRacesState, useDmLoot, useDmLootOpen, lootContent,
 } from '../lib/dm'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
-import { parseCatalogQuery, matchesCatalogQuery } from '../lib/catalogSearch'
+import { parseCatalogQuery, matchesCatalogQuery, hasPositiveTerm } from '../lib/catalogSearch'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
 import type { GraphEffect, GraphState, ProgressStory, ShardSlot, ShardTree, VarDef } from '../lib/database.types'
 import { auditNode, characterVars, type AuditItem } from '../lib/graph'
 import type { DmLootState } from '../lib/dm'
-import { chanceOfNothing, expectedYield, rollLoot, type LootOutcome } from '../lib/loot'
+import { chanceOfNothing, expectedYield, poolItems, rollLoot } from '../lib/loot'
 import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, revealAudit } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphState'
@@ -33,7 +33,7 @@ import { renderInline } from '../lib/markdown'
 import { markdownShortcuts } from '../lib/textareaHooks'
 import { useLocalDraft } from '../lib/draft'
 import type {
-  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json, QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow, CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect, Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow, EffectDuration, EffectRef, Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData, CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData, CatalogRaceRow, RaceDef, EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef, EquippedGear, CharacterLore, Relation, CatalogLootRow, LootTable, LootRow, CharacterSheet,
+  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json, QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow, CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect, Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow, EffectDuration, EffectRef, Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData, CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData, CatalogRaceRow, RaceDef, EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef, EquippedGear, CharacterLore, Relation, CatalogLootRow, LootTable, LootRow, LootOpenLine, CharacterSheet,
 } from '../lib/database.types'
 import { ITEM_SLOTS, isRingSlot } from '../lib/equip'
 import { SKILLS, ABILITY_ORDER, ABILITY_ABBR, ABILITY_NAMES, abilityMod } from '../lib/dnd'
@@ -45,6 +45,7 @@ import { normalizeTag } from '../lib/graph'
 import styles from './OperatorConsole.module.css'
 import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
+import { LootRollOverlay } from '../components/LootRollOverlay'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
  *  Stat Panel / the Operator Console mockup. */
@@ -146,6 +147,7 @@ export function OperatorConsole() {
   const shopLib = useDmShops()
   const classLib = useDmClasses()
   const lootLib = useDmLoot()
+  const lootOpen = useDmLootOpen()
   const raceLib = useDmRaces()
   const confiscated = useDmConfiscated()
   const onlineIds = usePartyPresence()
@@ -167,9 +169,12 @@ export function OperatorConsole() {
     { key: 'spells', label: 'Spells', icon: 'fa-wand-sparkles', n: spellLib.spells.length, soon: false },
     { key: 'effects', label: 'Effects', icon: 'fa-bolt', n: effectLib.effects.length, soon: false },
     { key: 'shops', label: 'Shopkeepers', icon: 'fa-shop', n: shopLib.shops.length, soon: false },
-    { key: 'races', label: 'Races', icon: 'fa-leaf', n: raceLib.races.length, soon: false },
-    { key: 'classes', label: 'Classes', icon: 'fa-shield-halved', n: classLib.classes.length, soon: false },
+    /* Loot sits with Shopkeepers because they are the same job: both are
+       containers of catalog items the DM OPENS for the party, and both are
+       reached the same way once open. */
     { key: 'loot', label: 'Loot', icon: 'fa-sack-dollar', n: lootLib.tables.length, soon: false },
+    { key: 'classes', label: 'Classes', icon: 'fa-shield-halved', n: classLib.classes.length, soon: false },
+    { key: 'races', label: 'Races', icon: 'fa-leaf', n: raceLib.races.length, soon: false },
     /* Last on purpose: these two LEAVE the catalog for their own editor, so they
        are an exit rather than another tab, and reading order should say so. */
     { key: 'features', label: 'Features', icon: 'fa-star', n: featureLib.features.length, soon: false },
@@ -182,6 +187,70 @@ export function OperatorConsole() {
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
   const log = (node: ReactNode, kind?: LogEntry['kind']) =>
     setLogEntries(prev => [{ id: crypto.randomUUID(), node, kind, time: nowStamp() }, ...prev].slice(0, 24))
+
+  /* The loot roll lives at console level, not inside the catalog tab: it has to
+     survive the DM navigating away (the mockup's index row offers "Resume"),
+     and it is a portal anyway. `lootMin` hides it without closing it —
+     minimize and close are different verbs here. */
+  const [lootMin, setLootMin] = useState(false)
+
+  /** Roll a table and park the result, CLOSED. Only hits are stored: the party
+   *  sees what is in the container, and a miss is not in the container. */
+  const rollLootTable = useCallback(async (tableId: string, table: LootTable) => {
+    const byId = new Map(catalog.items.map(r => [r.id, r.data]))
+    const result = rollLoot(table, byId)
+    const lines: LootOpenLine[] = result.items.map((it, i) => ({
+      key: `${tableId}_${i}_${Date.now().toString(36)}`,
+      item_id: it.item_id,
+      item: it.data,
+      qty: it.qty,
+      assigned_to: null,
+      assigned_name: null,
+    }))
+    await lootOpen.create(tableId, {
+      icon: table.icon, name: table.name, kind: table.kind, location: table.location, desc: table.desc,
+    }, lines)
+    setLootMin(false)
+    log(<>Rolled <span className={styles.obj}>{table.name || 'Untitled'}</span> · {lines.length
+      ? `${lines.length} item${lines.length === 1 ? '' : 's'}` : 'nothing of value'}</>, lines.length ? 'cyan' : 'danger')
+  }, [catalog.items, lootOpen, log])
+
+  /** Assigning is a REAL GRANT — the item lands on that character's sheet
+   *  through the same grantMany path Grant Item uses, so it arrives
+   *  indistinguishably from a hand-granted item. */
+  const assignLootLine = useCallback(async (key: string, memberId: string) => {
+    const roll = lootOpen.roll
+    if (!roll) return
+    const line = (roll.lines ?? []).find(l => l.key === key)
+    const target = party.find(c => c.id === memberId)
+    if (!line || !target) return
+
+    const gear = (target.equipped ?? {}) as EquippedGear
+    const inv = (target.inventory ?? []) as unknown as InventoryItem[]
+    const ok = await updateCharacter(memberId, {
+      inventory: grantMany(line.item, line.item_id, line.qty, gear, inv) as unknown as Json[],
+    })
+    if (!ok) return
+
+    const name = target.name ?? 'Unknown'
+    await lootOpen.setLines((roll.lines ?? []).map(l =>
+      l.key === key ? { ...l, assigned_to: memberId, assigned_name: name } : l))
+    void sendVoice({ kind: 'item', target: memberId, name: line.item?.name ?? 'Item', icon: line.item?.icon, rarity: line.item?.rarity })
+    log(<>Assigned <span className={styles.obj}>{line.item?.name}</span> to <span className={styles.who}>{firstName(name)}</span></>)
+  }, [lootOpen, party, updateCharacter, sendVoice, log])
+
+  /** Clears the assignment MARK only. The item stays on their sheet — taking it
+   *  back would need a remove path that does not exist, and silently deleting
+   *  someone's item because the DM mis-clicked a dropdown is worse than a stale
+   *  mark the DM can simply re-assign. */
+  const unassignLootLine = useCallback(async (key: string) => {
+    const roll = lootOpen.roll
+    if (!roll) return
+    await lootOpen.setLines((roll.lines ?? []).map(l =>
+      l.key === key ? { ...l, assigned_to: null, assigned_name: null } : l))
+    log(<>Unassigned a loot line · <span className={styles.obj}>the item stays on their sheet</span></>, 'danger')
+  }, [lootOpen, log])
+
 
   // Notify the DM when a party member's client connects or disconnects — matches the
   // mockup's own "<who> connection offline" log-line precedent. The presence channel
@@ -440,7 +509,10 @@ export function OperatorConsole() {
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
               ) : view === 'catalog' ? (
-                <CatalogSurface tab={catTab} catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} classLib={classLib} raceLib={raceLib} lootLib={lootLib} members={members} />
+                <CatalogSurface tab={catTab} catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} classLib={classLib} raceLib={raceLib} lootLib={lootLib} members={members}
+                  onRollLoot={(id, t) => { void rollLootTable(id, t) }}
+                  openLootId={lootOpen.roll?.table_id ?? null}
+                  onResumeLoot={() => setLootMin(false)} />
               ) : view === 'character' && selected && selectedRow ? (
                 charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
@@ -454,7 +526,7 @@ export function OperatorConsole() {
                     log={log}
                   />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} lootLib={lootLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
                 )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
@@ -493,6 +565,31 @@ export function OperatorConsole() {
           </div>
         </section>
       </div>
+
+      {/* The loot roll. Portalled from inside the component, so it renders over
+          everything regardless of where the DM has navigated — and survives
+          switching tabs, which is what makes "Resume" on the index row work. */}
+      {lootOpen.roll && !lootMin && (
+        <LootRollOverlay
+          roll={lootOpen.roll}
+          members={members.map(m => ({ id: m.id, name: m.name }))}
+          onAssign={(k, id) => void assignLootLine(k, id)}
+          onUnassign={k => void unassignLootLine(k)}
+          onPush={() => { void lootOpen.push(null); log(<>Pushed <span className={styles.obj}>{lootOpen.roll?.container?.name}</span> to the party</>, 'cyan') }}
+          onReroll={() => {
+            const t = lootOpen.roll?.table_id
+            const row = t ? lootLib.tables.find(r => r.id === t) : null
+            if (row) void rollLootTable(row.id, lootContent(row))
+          }}
+          onClose={() => {
+            const left = (lootOpen.roll?.lines ?? []).filter(l => !l.assigned_to).length
+            void lootOpen.close()
+            setLootMin(false)
+            log(<>Closed the loot roll{left ? ` · ${left} line${left === 1 ? '' : 's'} left unassigned` : ''}</>, 'danger')
+          }}
+          onMinimize={() => setLootMin(true)}
+        />
+      )}
 
       {/* ===== OPERATOR FOOTER ===== */}
       <footer className={styles.opfoot}>
@@ -565,7 +662,7 @@ function OverviewDashboard({
  *  never clobbered, and targets the same fields the player screens read — HP and
  *  coins on `sheet`, death saves + exhaustion on `resources` (see Stats.tsx) —
  *  keeping one source of truth per value. */
-function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, lootLib, shardCatalog, onUpdate, onVoice, log }: {
+function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, shardCatalog, onUpdate, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
   catalog: CatalogItemRow[]
@@ -574,7 +671,6 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
   spellLib: CatalogSpellRow[]
   classLib: DmClassesState
   raceLib: DmRacesState
-  lootLib: DmLootState
   shardCatalog: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
@@ -813,10 +909,6 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
         <StandingCard key={row.id} member={member} row={row} onUpdate={onUpdate} log={log} />
         </Folder>
 
-        <Folder label="Loot" icon="fa-sack-dollar">
-        <LootCard key={row.id} member={member} row={row} lootLib={lootLib} itemCatalog={catalog}
-          onUpdate={onUpdate} onVoice={onVoice} log={log} />
-        </Folder>
       </div>
 
     </>
@@ -997,9 +1089,12 @@ const COIN_LABEL: Record<'gold' | 'silver' | 'copper', string> = {
   gold: 'Gold', silver: 'Silver', copper: 'Copper',
 }
 
-function LootLibrarySurface({ lib, itemCatalog }: {
+function LootLibrarySurface({ lib, itemCatalog, onRoll, openLootId, onResume }: {
   lib: DmLootState
   itemCatalog: CatalogItemRow[]
+  onRoll: (id: string, table: LootTable) => void
+  openLootId: string | null
+  onResume: () => void
 }) {
   const { tables, loading } = lib
   const [selId, setSelId] = useState<string | null>(null)
@@ -1030,19 +1125,35 @@ function LootLibrarySurface({ lib, itemCatalog }: {
           {shown.map(r => {
             const d = lootContent(r)
             const rows = (d.rows ?? []).length
+            const rolling = openLootId === r.id
             return (
-              <button key={r.id} className={cx(styles.catRow, r.id === activeId && !creating && styles.sel)}
+              <div key={r.id} className={styles.lootIndexRow}>
+              <button className={cx(styles.catRow, r.id === activeId && !creating && styles.sel)}
                 style={{ ['--rar' as string]: 'var(--amber)' }} onClick={() => { setCreating(false); setSelId(r.id) }}>
                 <span className={styles.crIc}><Icon name={d.icon || 'fa-box-open'} /></span>
                 <span className={styles.crTx}>
                   <span className={styles.crT}>{d.name || 'Untitled'}</span>
                   <span className={styles.crS}>
-                    {rows} row{rows === 1 ? '' : 's'}
+                    {/* Kind leads, because that is how the DM thinks of the row
+                        — "the corpse", "the strongbox" — and the line count is
+                        the detail underneath. */}
+                    {d.kind?.trim() || 'Container'}<span className={styles.op}> · </span>
+                    {rows} line{rows === 1 ? '' : 's'}
                     {r.draft && <><span className={styles.op}> · </span>draft</>}
                     {!r.draft && !d.published && <><span className={styles.op}> · </span>unpublished</>}
+                    {rolling && <><span className={styles.op}> · </span><span className={styles.rollOpen}>roll open</span></>}
                   </span>
                 </span>
               </button>
+              {/* Rolling is a different verb from editing, so it is a separate
+                  control rather than a mode of the row. Resume reopens a roll
+                  the DM minimized; rolling again would discard it. */}
+              <button type="button" className={cx(styles.lootRollBtn, rolling && styles.on)}
+                title={rolling ? 'Reopen this roll' : 'Roll this table'}
+                onClick={e => { e.stopPropagation(); if (rolling) onResume(); else onRoll(r.id, d) }}>
+                {rolling ? 'Resume' : 'Roll'} <span className={styles.arr}>▸</span>
+              </button>
+              </div>
             )
           })}
         </div>
@@ -1077,6 +1188,12 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
   const [saving, setSaving] = useState(false)
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
   const [pick, setPick] = useState<number | null>(null)
+  // Add-From-Catalog panel. Its own filters rather than the row-level picker's:
+  // this one APPENDS lines and is used repeatedly while building a table, so it
+  // stays open and keeps its narrowing between picks.
+  const [pickQ, setPickQ] = useState('')
+  const [pickRar, setPickRar] = useState<ItemRarity | 'all'>('all')
+  const [pickCat, setPickCat] = useState<ItemCategory | 'all'>('all')
 
   const set = (p: Partial<LootTable>) => update(x => ({ ...x, ...p }))
   const rows = draft?.rows ?? []
@@ -1091,6 +1208,21 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
   })
 
   const byId = useMemo(() => new Map(itemCatalog.map(r => [r.id, r.data])), [itemCatalog])
+  /** How many catalog items a pool query matches right now. Recomputed per
+   *  keystroke against a map that is already in memory, so no caching earns
+   *  its keep here. */
+  const poolCount = useCallback((from: string) => poolItems(from, byId).length, [byId])
+  /** The Add-From-Catalog list. Text goes through the same parseCatalogQuery as
+   *  every other index, so `tag:martial !relic` narrows here too; the chips are
+   *  a separate axis on top of it. */
+  const pickable = useMemo(() => {
+    const q = parseCatalogQuery(pickQ)
+    return itemCatalog.filter(r => {
+      if (pickRar !== 'all' && (r.data?.rarity ?? 'common') !== pickRar) return false
+      if (pickCat !== 'all' && (r.data?.category ?? 'misc') !== pickCat) return false
+      return matchesCatalogQuery(r.data, q)
+    }).slice(0, 60)
+  }, [itemCatalog, pickQ, pickRar, pickCat])
   const yields = useMemo(() => (draft ? expectedYield(draft) : null), [draft])
   const nothing = useMemo(() => (draft ? chanceOfNothing(draft) : 1), [draft])
 
@@ -1107,6 +1239,24 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
           sev: 'err', id: `row:${i}`, t: `${where} points at a missing item`,
           s: 'That item is no longer in the catalog. The roll reports it rather than quietly yielding less — fix or remove the row.',
         })
+      }
+      if (r.kind === 'pool') {
+        if (!r.from.trim()) {
+          out.push({
+            sev: 'err', id: `row:${i}`, t: `${where} has no query`,
+            s: 'An empty query would mean "any item in the game". It resolves to nothing instead — say what the row should pick from.',
+          })
+        } else if (!poolCount(r.from)) {
+          out.push({
+            sev: 'err', id: `row:${i}`, t: `${where} matches no items`,
+            s: `Nothing in the catalog matches ${r.from}. A misspelt tag yields silently forever — the row would just never produce anything.`,
+          })
+        } else if (!hasPositiveTerm(parseCatalogQuery(r.from))) {
+          out.push({
+            sev: 'warn', id: `row:${i}`, t: `${where} only excludes`,
+            s: `${r.from} says what NOT to pick, so the row draws from the whole catalog minus those. Add a term saying what it should be.`,
+          })
+        }
       }
       if (r.chance <= 0 || r.chance > 100) {
         out.push({ sev: 'err', id: `row:${i}`, t: `${where} has an impossible chance`, s: `${r.chance}% — a chance must be between 1 and 100.` })
@@ -1174,11 +1324,29 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
         <span className={styles.cfhId}>{rows.length} row{rows.length === 1 ? '' : 's'}</span>
       </div>
 
+      {/* The container as the PLAYER will meet it. Every field below feeds this
+          card, which is the point of showing it: `kind` and `location` are
+          flavour that only makes sense read together with the name. */}
+      <div className={styles.catPrev} style={{ ['--rar' as string]: 'var(--amber)' }}>
+        <span className={styles.pvCell}>
+          <Icon name={draft.icon || 'fa-box-archive'} />
+          <span className={styles.pvCorner}><i className="fa-solid fa-dice-d6" /></span>
+        </span>
+        <span className={styles.pvTx}>
+          <span className={styles.pvName}>{draft.name || 'Untitled Loot Table'}</span>
+          <span className={styles.pvMeta}>
+            <span>{draft.kind?.trim() || 'Container'}</span>
+            <span className={styles.rar}>{rows.length} line{rows.length === 1 ? '' : 's'}</span>
+            <span>~{(yields?.items ?? 0).toFixed(1)} expected drops</span>
+          </span>
+        </span>
+      </div>
+
       <div className={styles.catGrid2}>
         <div>
           <span className={styles.fieldLab}>Name</span>
           <input data-audit="field:name" className={styles.sessIn} value={draft.name}
-            placeholder="e.g. Knight Corpse" {...NO_AUTOFILL}
+            placeholder="e.g. The Drowned Quartermaster" {...NO_AUTOFILL}
             onChange={e => set({ name: e.target.value })} />
         </div>
         <div>
@@ -1187,9 +1355,32 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
         </div>
       </div>
 
-      <span className={styles.fieldLab}>Description</span>
+      <div className={styles.catGrid2}>
+        <div>
+          <span className={styles.fieldLab}>
+            Kind <span className={styles.labHint}>· chest, corpse, bookshelf, reliquary — freeform</span>
+          </span>
+          <input className={styles.sessIn} value={draft.kind ?? ''}
+            placeholder="e.g. Corpse" {...NO_AUTOFILL}
+            onChange={e => set({ kind: e.target.value })} />
+        </div>
+        <div>
+          <span className={styles.fieldLab}>Location <span className={styles.labHint}>· optional</span></span>
+          <input className={styles.sessIn} value={draft.location ?? ''}
+            placeholder="e.g. Sunken Hold · Deck Three" {...NO_AUTOFILL}
+            onChange={e => set({ location: e.target.value })} />
+        </div>
+      </div>
+
+      {/* Player-facing since the takeover renders it. It was a DM note that
+          nothing displayed, which is why it carried no markdown and no badge. */}
+      <div className={styles.qLabRow}>
+        <span className={styles.fieldLab}>Description</span>
+        <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing</span>
+      </div>
       <textarea className={styles.catProse} value={draft.desc ?? ''}
-        placeholder="What this table is for — a note to yourself, never shown to a player."
+        placeholder="The prose the player reads when the loot is pushed…"
+        onKeyDown={markdownShortcuts(desc => set({ desc }))}
         onChange={e => set({ desc: e.target.value })} />
 
       {/* THE ONE NUMBER THAT SAYS WHETHER THE TABLE IS TUNED. Rows roll
@@ -1227,13 +1418,20 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
                 const kind = e.target.value as LootRow['kind']
                 update(x => ({
                   ...x,
-                  rows: (x.rows ?? []).map((old, j) => j !== i ? old
-                    : kind === 'coin'
-                      ? { kind: 'coin', coin: 'gold', min: old.min, max: old.max, chance: old.chance }
-                      : { kind: 'item', item_id: '', min: old.min, max: old.max, chance: old.chance }),
+                  rows: (x.rows ?? []).map((old, j) => {
+                    if (j !== i) return old
+                    // Range and chance survive every switch — they are the row's,
+                    // not the kind's, and retyping "1-10, 50%" because you picked
+                    // the wrong kind first is pure friction.
+                    const keep = { min: old.min, max: old.max, chance: old.chance }
+                    if (kind === 'coin') return { kind: 'coin', coin: 'gold', ...keep }
+                    if (kind === 'pool') return { kind: 'pool', from: '', ...keep }
+                    return { kind: 'item', item_id: '', ...keep }
+                  }),
                 }))
               }}>
               <option value="item">Item</option>
+              <option value="pool">Any of…</option>
               <option value="coin">Coin</option>
             </select>
 
@@ -1242,6 +1440,21 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
                 onChange={e => setRow(i, { coin: e.target.value as 'gold' | 'silver' | 'copper' })}>
                 {(['gold', 'silver', 'copper'] as const).map(c => <option key={c} value={c}>{COIN_LABEL[c]}</option>)}
               </select>
+            ) : r.kind === 'pool' ? (
+              /* A query, not a picker. The live count is the whole safety net:
+                 `tag:martail` is a typo that silently matches nothing, and the
+                 only moment anyone would notice is a chest that never yields —
+                 long after authoring. */
+              <span className={styles.lootPool}>
+                <i className="fa-solid fa-filter" aria-hidden="true" />
+                <input className={styles.lootPoolIn} value={r.from}
+                  onChange={e => setRow(i, { from: e.target.value })}
+                  placeholder="tag:martial !relic"
+                  aria-label="Pool query" autoComplete="off" spellCheck={false} />
+                <span className={cx(styles.lootPoolN, !poolCount(r.from) && styles.bad)}>
+                  {poolCount(r.from)} match{poolCount(r.from) === 1 ? '' : 'es'}
+                </span>
+              </span>
             ) : (
               <button type="button" className={cx(styles.lootPick, gone && styles.bad)} onClick={() => setPick(i)}>
                 {item ? <><Icon name={item.icon || 'fa-box'} /> {item.name}</>
@@ -1277,6 +1490,68 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
       <div className={styles.efAdd}>
         <Btn tone="ghost" icon="fa-plus" label="Add Row"
           onClick={() => update(x => ({ ...x, rows: [...(x.rows ?? []), { kind: 'item', item_id: '', min: 1, max: 1, chance: 50 }] }))} />
+      </div>
+
+      {/* ADD FROM CATALOG — the same panel the Shop stock form uses, because in
+          the mockup they are the same control and the DM does the same job at
+          both: browse the catalog, click, keep browsing.
+
+          It APPENDS a line rather than filling one in, which is why it lives
+          below the rows and keeps its filters between picks. The per-row picker
+          above is the other direction — changing what an existing line points
+          at — and both are worth having. */}
+      <div className={styles.skPick}>
+        <div className={styles.catFxHead}>
+          <i className="fa-solid fa-box-open" />
+          <span className={styles.t}>Add From Catalog</span>
+          <span className={styles.s}>each line rolls independently — chance and quantity are yours to tune</span>
+        </div>
+        <div className={styles.searchWrap}>
+          <i className="fa-solid fa-magnifying-glass" />
+          <input className={styles.searchIn} value={pickQ} onChange={e => setPickQ(e.target.value)}
+            placeholder="Search the item catalog…" autoComplete="off" spellCheck={false} />
+        </div>
+        <div className={styles.skFilters}>
+          <div>
+            <div className={styles.fl}>Rarity</div>
+            <div className={styles.acRow}>
+              <span className={cx(styles.acChip, pickRar === 'all' && styles.on)} onClick={() => setPickRar('all')}>All</span>
+              {RAR_ORDER.map(r => (
+                <span key={r} className={cx(styles.acChip, pickRar === r && styles.on)}
+                  onClick={() => setPickRar(r)}>{RAR_DEF[r].label}</span>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className={styles.fl}>Category</div>
+            <div className={styles.acRow}>
+              <span className={cx(styles.acChip, pickCat === 'all' && styles.on)} onClick={() => setPickCat('all')}>All</span>
+              {CAT_ORDER.map(c => (
+                <span key={c} className={cx(styles.acChip, pickCat === c && styles.on)}
+                  onClick={() => setPickCat(c)}>{CAT_DEF[c].label}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className={styles.skPicklist}>
+          {pickable.length === 0
+            ? <div className={styles.catFxNone}>No catalog items match this filter.</div>
+            : pickable.map(it => {
+              const rar = it.data?.rarity ?? 'common'
+              return (
+                <button key={it.id} type="button" className={styles.skPi}
+                  style={{ ['--rar' as string]: RAR_DEF[rar].token }}
+                  onClick={() => update(x => ({
+                    ...x,
+                    rows: [...(x.rows ?? []), { kind: 'item', item_id: it.id, min: 1, max: 1, chance: 50 }],
+                  }))}>
+                  <span className={styles.piIc}><Icon name={it.data?.icon || 'fa-box'} /></span>
+                  <span className={styles.piT}>{it.data?.name ?? 'Untitled'}</span>
+                  <span className={styles.piM}>{RAR_DEF[rar].label}</span>
+                </button>
+              )
+            })}
+        </div>
       </div>
 
       {/* .clsAudit, the same wrapper the Class and Race forms use — .catFx is the
@@ -1392,176 +1667,6 @@ function LootItemPicker({ catalog, onPick, onClose }: {
       </div>
     </div>,
     document.body,
-  )
-}
-
-// ============================================================
-// ROLL LOOT (Actions card M) — the only caller of lib/loot.ts rollLoot.
-// ============================================================
-
-/** Roll a table, look at what came up, then grant it.
- *
- *  PREVIEW BEFORE WRITE, deliberately: a roll is the one DM action whose result
- *  you may want to overrule — the 2% amulet landing on a peasant, or a quantity
- *  that reads wrong for the scene. Every other card on this tab writes on click
- *  because its result is what you typed; this one is the only one where the app
- *  decided, so it asks.
- *
- *  MISSES ARE SHOWN. Seeing what did not come up is how you notice a table is
- *  tuned wrong, and it is the difference between "the chest was empty" and "the
- *  chest is broken".
- *
- *  The write reuses the same path as Grant Item — grantMany for the stackable
- *  vs instance split, the same acquisition toast — so loot arrives on the
- *  player's screen indistinguishably from a hand-granted item. */
-function LootCard({ member, row, lootLib, itemCatalog, onUpdate, onVoice, log }: {
-  member: PartyMember
-  row: CharacterRow
-  lootLib: DmLootState
-  itemCatalog: CatalogItemRow[]
-  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
-  onVoice: (v: { kind: 'item'; target: string; name: string; icon?: string; rarity?: string }) => Promise<unknown>
-  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
-}) {
-  const [tableId, setTableId] = useState<string | null>(null)
-  const [result, setResult] = useState<LootOutcome[] | null>(null)
-  const [taken, setTaken] = useState<Set<number>>(() => new Set())
-  const [busy, setBusy] = useState(false)
-  const [flash, setFlash] = useState('')
-
-  const published = lootLib.tables.filter(t => lootContent(t).published)
-  const table = published.find(t => t.id === tableId) ?? null
-  const byId = useMemo(() => new Map(itemCatalog.map(r => [r.id, r.data])), [itemCatalog])
-
-  function roll() {
-    if (!table) return
-    const r = rollLoot(lootContent(table), byId)
-    setResult(r.outcomes)
-    // Everything that came up is taken by default; unchecking is the override.
-    setTaken(new Set(r.outcomes.flatMap((o, i) => (o.hit && !o.missing && o.qty > 0 ? [i] : []))))
-  }
-
-  const kept = (result ?? []).filter((o, i) => taken.has(i) && o.hit && !o.missing && o.qty > 0)
-  const keptItems = kept.filter(o => o.row.kind === 'item')
-  const keptCoins = kept.reduce((acc, o) => {
-    if (o.row.kind === 'coin') acc[o.row.coin] += o.qty
-    return acc
-  }, { gold: 0, silver: 0, copper: 0 })
-  const anyCoin = keptCoins.gold + keptCoins.silver + keptCoins.copper > 0
-
-  async function grant() {
-    if (!kept.length) return
-    setBusy(true)
-    let inv = ((row.inventory as unknown as InventoryItem[]) ?? [])
-    const gear = (row.equipped ?? {}) as EquippedGear
-    for (const o of keptItems) {
-      if (o.row.kind !== 'item') continue
-      const data = byId.get(o.row.item_id)
-      if (!data) continue
-      inv = grantMany(data, o.row.item_id, o.qty, gear, inv)
-    }
-
-    const patch: CharacterUpdate = { inventory: inv as unknown as Json[] }
-    if (anyCoin) {
-      const coins = (row.sheet?.coins ?? { gold: 0 }) as { gold: number; silver?: number; copper?: number }
-      patch.sheet = {
-        ...row.sheet,
-        coins: {
-          gold: (coins.gold ?? 0) + keptCoins.gold,
-          silver: (coins.silver ?? 0) + keptCoins.silver,
-          copper: (coins.copper ?? 0) + keptCoins.copper,
-        },
-      } as CharacterRow['sheet']
-    }
-    const ok = await onUpdate(patch)
-    setBusy(false)
-    if (!ok) return
-
-    /* ONE toast, not one per line. A corpse yielding four things should not
-       fire four ITEM ACQUIRED pings — the same reason Grant Item sends one
-       toast for a stack of ten. */
-    const label = lootContent(table!).name || 'Loot'
-    void onVoice({ kind: 'item', target: member.id, name: label, icon: lootContent(table!).icon })
-    log(
-      <>Rolled <span className={styles.obj}>{label}</span> for <span className={styles.who}>{firstName(member.name)}</span>
-        {' — '}{keptItems.length} item{keptItems.length === 1 ? '' : 's'}
-        {anyCoin && <> · {[keptCoins.gold && `${keptCoins.gold}g`, keptCoins.silver && `${keptCoins.silver}s`, keptCoins.copper && `${keptCoins.copper}c`].filter(Boolean).join(' ')}</>}
-      </>, 'cyan')
-    setFlash(`Granted ${keptItems.length} item${keptItems.length === 1 ? '' : 's'}${anyCoin ? ' + coin' : ''}`)
-    setResult(null)
-    setTaken(new Set())
-    setTimeout(() => setFlash(''), 2400)
-  }
-
-  const lineLabel = (o: LootOutcome) => {
-    if (o.row.kind === 'coin') return COIN_LABEL[o.row.coin]
-    const d = byId.get(o.row.item_id)
-    return d?.name ?? o.row.item_id
-  }
-
-  return (
-    <div className={styles.actCard}>
-      <div className={styles.acTitle}><i className="fa-solid fa-sack-dollar lead" /><span className={styles.num}>O</span><span className={styles.t}>Roll Loot</span></div>
-
-      <div className={cx(styles.catGrid2, styles.lootPickRow)}>
-        <div>
-          <span className={styles.fieldLab}>Table</span>
-          <select className={styles.selIn} value={tableId ?? ''}
-            onChange={e => { setTableId(e.target.value || null); setResult(null) }}>
-            <option value="">— pick a table —</option>
-            {published.map(t => <option key={t.id} value={t.id}>{lootContent(t).name || 'Untitled'}</option>)}
-          </select>
-        </div>
-        <div className={styles.lootRollBtn}>
-          <Btn tone="cyan" icon="fa-dice-d20" label={result ? 'Re-roll' : 'Roll'} onClick={roll} disabled={!table} />
-        </div>
-      </div>
-
-      {!published.length && (
-        <div className={styles.efNone}>No published loot tables — author one in Catalog · Loot.</div>
-      )}
-
-      {result && (
-        <>
-          <div className={styles.efBh}>
-            <span>Result</span>
-            <span className={styles.efRule} />
-            <span className={styles.lootYield}>{kept.length} of {result.length} taken</span>
-          </div>
-
-          {result.length === 0 && <div className={styles.efNone}>That table has no rows.</div>}
-
-          {result.map((o, i) => {
-            const dead = !o.hit || o.qty === 0
-            return (
-              <label key={i} className={cx(styles.lootLine, dead && styles.miss, o.missing && styles.bad)}>
-                <input type="checkbox" checked={taken.has(i)} disabled={dead || o.missing}
-                  onChange={e => setTaken(prev => {
-                    const next = new Set(prev)
-                    if (e.target.checked) next.add(i); else next.delete(i)
-                    return next
-                  })} />
-                <span className={styles.llName}>{lineLabel(o)}</span>
-                <span className={styles.llQty}>
-                  {o.missing ? 'missing from the catalog'
-                    : !o.hit ? '—'
-                      : `×${o.qty}`}
-                </span>
-                <span className={styles.llPct}>{o.row.chance}%</span>
-              </label>
-            )
-          })}
-
-          <div className={styles.grantAction}>
-            <Btn tone="amber" icon="fa-hand-holding-heart"
-              label={busy ? 'Granting…' : `Grant to ${firstName(member.name)}`}
-              onClick={() => void grant()} disabled={busy || !kept.length} />
-          </div>
-        </>
-      )}
-
-      {flash && <div className={styles.grantFlash}>{flash}</div>}
-    </div>
   )
 }
 
@@ -2173,9 +2278,14 @@ function BroadcastPanel({ selected, onSend, log }: {
  *  so a granted copy is mechanically real the instant it lands. */
 /** `tab` is owned by OperatorConsole: the rail that switches it hangs off
     region 01, so the state has to live above both. */
-function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib, classLib, raceLib, lootLib, members }: {
+function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib, classLib, raceLib, lootLib, members, onRollLoot, openLootId, onResumeLoot }: {
   tab: CatTab
   catalog: DmCatalogState; featureLib: DmFeaturesState; effectLib: DmEffectsState; spellLib: DmSpellsState; shopLib: DmShopsState; classLib: DmClassesState; raceLib: DmRacesState; lootLib: DmLootState; members: PartyMember[]
+  onRollLoot: (id: string, table: LootTable) => void
+  /** The table whose roll is currently open, so its index row can offer
+   *  Resume instead of Roll. */
+  openLootId: string | null
+  onResumeLoot: () => void
 }) {
   const { items, createItem, updateItem, deleteItem, loading, error } = catalog
   const [selId, setSelId] = useState<string | null>(null)
@@ -2230,7 +2340,8 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
         <EffectLibrarySurface lib={effectLib} />
       </>
       ) : tab === 'loot' ? (
-        <LootLibrarySurface lib={lootLib} itemCatalog={items} />
+        <LootLibrarySurface lib={lootLib} itemCatalog={items}
+          onRoll={onRollLoot} openLootId={openLootId} onResume={onResumeLoot} />
       ) : tab === 'races' ? (
         <RaceLibrarySurface lib={raceLib} featureLib={featureLib} members={members} />
       ) : tab === 'classes' ? (

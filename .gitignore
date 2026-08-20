@@ -29,3 +29,6 @@ dist-ssr
 *.swp
 
 # Misc
+
+# Local MCP server config (project ref, machine-specific) — not shared.
+.mcp.json
