@@ -70,8 +70,11 @@
      Derived, not guessed: the on-person grid's four rows at their floor (66px)
      plus gaps, plus the switcher / header line / utility bar above them. Set it
      higher and a laptop scrolls even when a slightly smaller grid would have
-     fitted; set it lower and the grid crushes before the scroll kicks in. */
-  --screen-min-h: 440px;
+     fitted; set it lower and the grid crushes before the scroll kicks in.
+     (Measured 468px live — the grid was overflowing its own floor by 28px,
+     clipping the last row against .rInner's overflow:hidden even at the
+     floor. 480px keeps a little headroom.) */
+  --screen-min-h: 480px;
   /* On-person grid cells. Below this a 2x1 footprint stops reading as an item. */
   --cell-min-w: 78px;
   --cell-min-h: 66px;

@@ -15,6 +15,19 @@
   grid-template-columns: minmax(480px, 1.05fr) minmax(440px, 0.95fr);
   gap: 70px;
   padding: 0 36px;
+  /* .shardCard's floor (below) can need more than this fixed box has on a
+     short viewport — scroll the whole screen rather than let .scInner's
+     clip-path hard-cut a card's buff list against its own border. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cyan-dim) transparent;
+}
+.sd::-webkit-scrollbar { width: 8px; }
+.sd::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); }
+.sd::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  border: 2px solid #111;
 }
 
 .col { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -225,7 +238,12 @@
 
 .shardCard {
   --cut: 16px;
-  position: relative; flex: 1; min-height: 0;
+  /* .scInner below is absolutely positioned, so it contributes nothing to
+     this card's intrinsic height — without a floor 3 cards just split
+     .shardCards evenly regardless of content, and a card with a full buff
+     list (measured ~143px needed) gets clipped against its own clip-path
+     border before the icon/stats/buffs are done rendering. */
+  position: relative; flex: 1; min-height: 165px;
   cursor: pointer;
   transition: transform 200ms ease;
   text-align: left;
