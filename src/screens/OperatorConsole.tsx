@@ -46,6 +46,7 @@ import { normalizeTag } from '../lib/graph'
 import styles from './OperatorConsole.module.css'
 import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
+import { ProsePreview } from '../components/ProsePreview'
 import { LootRollOverlay } from '../components/LootRollOverlay'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -1372,6 +1373,7 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
       <div className={styles.qLabRow}>
         <span className={styles.fieldLab}>Description</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing</span>
+        <ProsePreview text={draft.desc ?? ''} />
       </div>
       <textarea className={styles.catProse} value={draft.desc ?? ''}
         placeholder="The prose the player reads when the loot is pushed…"
@@ -2738,6 +2740,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
       <div className={styles.qLabRow}>
         <span className={styles.fieldLab}>Description</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing</span>
+        <ProsePreview text={flavor} />
       </div>
       <textarea className={styles.catProse} value={flavor} onChange={e => setFlavor(e.target.value)}
         onKeyDown={markdownShortcuts(setFlavor)}
@@ -3895,6 +3898,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       <div className={styles.qLabRow}>
         <span className={styles.fieldLab}>Description</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing · **bold** *italics*</span>
+        <ProsePreview text={desc} />
       </div>
       <textarea className={cx(styles.catProse, styles.player)} value={desc} onChange={e => setDesc(e.target.value)}
         onKeyDown={markdownShortcuts(setDesc)}
@@ -6848,6 +6852,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
       <LoreSecHead icon="fa-scroll" label="Backstory" first />
       <div className={styles.qLabRow}>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Players see this</span>
+        <ProsePreview text={backstory} />
       </div>
       <textarea
         className={styles.qPlayerDesc}
@@ -7200,6 +7205,7 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
       <div className={styles.qLabRow}>
         <span className={styles.fieldLab}>Player Description</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Players see this</span>
+        <ProsePreview text={description} />
       </div>
       <textarea className={styles.qPlayerDesc} value={description} onChange={e => setDescription(e.target.value)}
         onKeyDown={markdownShortcuts(setDescription)} placeholder="The prose the players read in their Journal…" />

@@ -17,13 +17,19 @@ function isSafeUrl(url: string): boolean {
  *  cannot both match at one position, so the alternation order does not matter. */
 export function renderInline(text: string): ReactNode[] {
   const out: ReactNode[] = []
-  const re = /\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]+)\]\(([^)\s]+)\)|\[([^\]]+)\]\{([^}\s]+)\}/g
+  /* A single newline is a LINE BREAK. Strict markdown collapses it and wants
+     two trailing spaces or a blank line, which is a rule nobody typing into a
+     textarea knows or should have to: a DM who pressed Enter once expects a new
+     line, and got one long paragraph instead. Blank-line paragraph breaks are
+     still <Prose>'s job — this is only the break inside a block. */
+  const re = /\n|\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]+)\]\(([^)\s]+)\)|\[([^\]]+)\]\{([^}\s]+)\}/g
   let last = 0
   let m: RegExpExecArray | null
   let i = 0
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index))
-    if (m[1] !== undefined) out.push(createElement('strong', { key: i++ }, m[1]))
+    if (m[0] === '\n') out.push(createElement('br', { key: i++ }))
+    else if (m[1] !== undefined) out.push(createElement('strong', { key: i++ }, m[1]))
     else if (m[2] !== undefined) out.push(createElement('em', { key: i++ }, m[2]))
     else if (m[5] !== undefined) {
       const color = colorOf(m[6])

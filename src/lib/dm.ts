@@ -1157,9 +1157,10 @@ export function useDmLootOpen(): DmLootOpenState {
   useEffect(() => { void fetchAll() }, [fetchAll])
 
   const create = useCallback<DmLootOpenState['create']>(async (tableId, container, lines) => {
-    // Close whatever was open first. Two open rolls would each satisfy the
-    // player policy and the takeover would have to pick one arbitrarily.
-    await supabase.from('loot_open').update({ is_open: false }).eq('is_open', true)
+    // Clear out prior rolls. Two open rolls would each satisfy the player policy
+    // and the takeover would have to pick one arbitrarily; a lingering closed
+    // one would come back as "newest" on the next reload. One row, always.
+    await supabase.from('loot_open').delete().neq('id', '00000000-0000-0000-0000-000000000000')
     const { data, error: err } = await supabase.from('loot_open')
       .insert({ table_id: tableId, container, lines, is_open: false })
       .select().single<LootOpenRow>()
@@ -1186,11 +1187,21 @@ export function useDmLootOpen(): DmLootOpenState {
     await patch(roll.id, { lines })
   }, [roll, patch])
 
+  /* DELETES the row rather than clearing is_open.
+   *
+   * is_open means "pushed to party", and a roll that has been rolled but not
+   * yet pushed also has is_open false — so clearing it made a CLOSED roll
+   * indistinguishable from a live un-pushed one, and the DM's fetch (newest row
+   * wins) handed it straight back on reload. Close did not close.
+   *
+   * Deleting is right rather than merely expedient: assignment already granted
+   * the items, so a closed roll holds nothing that is not either on a character
+   * sheet or in the activity log. There is nothing to recover. */
   const close = useCallback<DmLootOpenState['close']>(async () => {
     if (!roll) return
     const previous = roll
     setRoll(null)
-    const { error: err } = await supabase.from('loot_open').update({ is_open: false }).eq('id', previous.id)
+    const { error: err } = await supabase.from('loot_open').delete().eq('id', previous.id)
     if (err) { setError(err.message); setRoll(previous) }
   }, [roll])
 

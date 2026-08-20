@@ -183,3 +183,28 @@ test('wrapLink round-trips a selection', () => {
   const back = wrapLink(once.text, 0, once.text.length)
   assert.equal(back.text, 'the docs')
 })
+
+/* ---------- a typed newline is a line break ---------- */
+
+test('a single newline breaks the line, without a blank line or two spaces', () => {
+  // Strict markdown collapses this into one paragraph. A DM typing into a
+  // textarea pressed Enter and means it — the "two trailing spaces" rule is
+  // not something anyone knows, and the description came out as one long line.
+  const out = html(renderInline('first\nsecond'))
+  assert.match(out, /first<br\/?>second/)
+})
+
+test('breaks compose with the rest of the inline syntax', () => {
+  const out = html(renderInline('**bold**\n[Mercy]{radiant}'))
+  assert.match(out, /<strong>bold<\/strong><br\/?>/)
+  assert.match(out, /Mercy/)
+})
+
+test('Prose still separates PARAGRAPHS on a blank line', () => {
+  // The two mechanisms are different: <br> inside a block, <p> between blocks.
+  // Collapsing them would make every newline a paragraph, which is not the same
+  // shape and loses the tighter spacing a break gives.
+  const out = html(Prose({ text: 'one\ntwo\n\nthree' }))
+  assert.equal((out.match(/<p>/g) || []).length, 2)
+  assert.match(out, /one<br\/?>two/)
+})

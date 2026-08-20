@@ -304,3 +304,56 @@ test('two items granting different skills grant both', () => {
   })
   assert.deepEqual([...(effectiveSheet(c).skillProficiencies ?? [])].sort(), ['athletics', 'stealth'])
 })
+
+/* ---------- `use ability` authored on the ITEM ----------
+   It was authorable in the item editor's Rules block and reached nothing: a
+   weapon carried no fx at all, and worn gear carried only its compiled numeric
+   `effects`. A DM who put "may use WIS" on a soul-bound blade got no WIS. */
+
+const wisBlade = {
+  id: 'w1', name: 'Sanctity', category: 'weapon' as const, hand: 'main' as const,
+  ability: 'str' as const, damageDice: '1d8',
+  graph: [{ id: 'g1', op: 'useability', ability: 'wis' }],
+} as unknown as Parameters<typeof effectiveSheet>[0]['equipped'] extends never ? never : any
+
+test('a weapon can grant use-ability from its own graph', () => {
+  const c = character({
+    sheet: { ...BASE, abilities: { ...BASE.abilities, wis: 20, str: 10 } },
+    equipped: { weapons: [wisBlade] },
+  } as Partial<CharacterRow>)
+  assert.deepEqual(effectiveSheet(c).attackAbilities, ['wis'])
+})
+
+test('...and a weapon still cannot push a NUMBER onto the sheet', () => {
+  // The reason the weapon source was fx-less to begin with: a magic sword's
+  // to-hit must never become +1 AC. The narrowed type is what enforces it, and
+  // this pins the behaviour so a future widening has to break a test.
+  const plusOne = {
+    id: 'w2', name: 'Sword +1', category: 'weapon', hand: 'main',
+    effects: { ac: 5, saves: 5 },
+    // A boost IN THE GRAPH, which is the thing that must not cross over: items
+    // already reach numbers through `effects`, and a second path would be the
+    // one-value-two-routes defect again.
+    graph: [
+      { id: 'g1', op: 'useability', ability: 'wis' },
+      { id: 'g2', op: 'boost', stat: 'DEX', value: 6 },
+    ],
+  } as unknown as typeof wisBlade
+  const c = character({ sheet: { ...BASE }, equipped: { weapons: [plusOne] } } as Partial<CharacterRow>)
+  const eff = effectiveSheet(c)
+  assert.equal(eff.ac, BASE.ac, 'a weapon must not move AC')
+  assert.equal(eff.abilities?.dex, BASE.abilities.dex, 'nor an ability score, via a graph boost')
+  assert.deepEqual(eff.attackAbilities, ['wis'], 'but the permission still lands')
+})
+
+test('worn gear grants it too, without gaining a second numeric path', () => {
+  const amulet = {
+    id: 'i9', name: 'Amulet of Judgement', slot: 'neck',
+    effects: { ac: 1 },
+    graph: [{ id: 'g1', op: 'useability', ability: 'cha' }],
+  } as unknown as EquippedItem
+  const c = character({ sheet: { ...BASE }, equipped: { neck: amulet } } as Partial<CharacterRow>)
+  const eff = effectiveSheet(c)
+  assert.deepEqual(eff.attackAbilities, ['cha'])
+  assert.equal(eff.ac, BASE.ac + 1, 'its compiled effects still apply exactly once')
+})
