@@ -307,3 +307,48 @@ test('a ref keeps its gate condition when the row is repaired', () => {
   const kept = deadRefs({ features: [{ feature_id: 'a', when: 'level >= 5' }, { feature_id: 'x' }] }, new Set(['a']))
   assert.deepEqual(kept, [{ feature_id: 'a', when: 'level >= 5' }])
 })
+
+/* ------------------------------------------------------------------
+   Guard: a dice column splits into the number that actually moves.
+
+   `[1d6,2d6][level]` cannot be written — the array type holds numbers and the
+   dice live on the value type — so "NdM" is decomposed into count and faces,
+   and only the one that varies becomes a variable. Getting the halves the wrong
+   way round is silent: a Rogue with `martialArts`-style faces would read 6 at
+   every level and look like a perfectly ordinary die size.
+   ------------------------------------------------------------------ */
+
+test('DICE COLUMNS SPLIT INTO THE HALF THAT MOVES, and label which half', () => {
+  const classes = JSON.parse(readFileSync(join(ROOT, 'srd-data/classes.json'), 'utf8'))
+  const varOf = (cls: string, name: string) =>
+    classes.find((c: { name: string }) => c.name === cls)
+      ?.vars?.find((v: { name: string }) => v.name === name)
+  const at = (formula: string, level: number) =>
+    Number(formula.slice(1, formula.indexOf(']')).split(',')[level])
+
+  // Rogue: the d6 never changes, the COUNT does — 1d6 at 1, 2d6 at 3, 10d6 at 19.
+  const sneak = varOf('Rogue', 'sneakAttackDice')
+  assert.ok(sneak, 'Sneak Attack must yield a dice-count variable')
+  assert.match(sneak.label, /number of dice/)
+  assert.deepEqual([1, 3, 19, 20].map(l => at(sneak.formula, l)), [1, 2, 10, 10])
+  assert.equal(varOf('Rogue', 'sneakAttackDie'), undefined, 'a constant d6 is not a variable')
+
+  // Monk and Bard: always one die, and the SIZE moves.
+  const monk = varOf('Monk', 'martialArtsDie')
+  assert.match(monk.label, /die size/)
+  assert.deepEqual([1, 5, 11, 17].map(l => at(monk.formula, l)), [6, 8, 10, 12])
+  assert.equal(varOf('Monk', 'martialArtsDice'), undefined, 'the count is always 1')
+
+  // "Bardic Die" must not become `bardicDieDie`.
+  const bard = varOf('Bard', 'bardicDie')
+  assert.ok(bard, 'Bardic Die must yield bardicDie')
+  assert.deepEqual([1, 5, 10, 15].map(l => at(bard.formula, l)), [6, 8, 10, 12])
+})
+
+test('spellcasting is a class property, so no class grants it as a feature', () => {
+  const features = JSON.parse(readFileSync(join(ROOT, 'srd-data/features.json'), 'utf8'))
+  const bad = features
+    .filter((f: { name: string }) => f.name === 'Spellcasting' || f.name === 'Pact Magic')
+    .map((f: { name: string; folder: string }) => `${f.folder}/${f.name}`)
+  assert.deepEqual(bad, [])
+})
