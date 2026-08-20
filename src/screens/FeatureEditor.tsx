@@ -25,6 +25,10 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmFeatures, featureContent } from '../lib/dm'
 import { useLocalDraft } from '../lib/draft'
+/* Features keep their manual publish, so they do not pass through the
+ * autosave hooks that stamp this — the 44 imported SRD features would
+ * otherwise never be marked edited, and a re-import would overwrite them. */
+import { markEdited } from '../lib/autopublish'
 import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
 import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, revealAudit, splitSel } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
@@ -217,7 +221,7 @@ export default function FeatureEditor() {
   async function onSaveDraft() {
     if (!draft) return
     setSaving(true)
-    const id = await lib.saveDraft(creating ? null : selId, draft)
+    const id = await lib.saveDraft(creating ? null : selId, markEdited(draft))
     setSaving(false)
     if (!id) { fireToast('Save failed', true); return }
     if (creating) { clear(); setCreating(false); setSelId(id) }
@@ -228,7 +232,7 @@ export default function FeatureEditor() {
     if (!draft) return
     if (errs > 0) { fireToast('Publish blocked — resolve errors', true); return }
     setSaving(true)
-    const id = await lib.publishFeature(creating ? null : selId, draft)
+    const id = await lib.publishFeature(creating ? null : selId, markEdited(draft))
     setSaving(false)
     if (!id) { fireToast('Publish failed', true); return }
     clear()

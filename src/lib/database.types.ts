@@ -236,6 +236,13 @@ export type Feature = {
   kind?: FeatureKind
   /** e.g. "Fighter 1", "Variant Human", "Soldier". */
   source?: string
+  /** "Level 4+", "Strength 13+". Display-only — nothing enforces it yet, and
+   *  13 of the 17 SRD feats have one, so dropping it would lose real text. */
+  prerequisite?: string
+  /** Open5e slug, when this row was imported. See CatalogItemData.srd_key. */
+  srd_key?: string
+  /** Edited since import — re-import skips it. */
+  modified?: boolean
   /** The provenance BREADCRUMB shown in the player's feature popup —
    *  ["Fighter", "Martial Reserve", "Level 1", "Second Wind"].
    *
@@ -508,7 +515,12 @@ export type GraphEffect = {
  *  persist item-boosted scores as the new base, and unequip couldn't undo it). */
 export type EffectiveSheet = CharacterSheet & { readonly __effective: true }
 
-export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'legendary'
+/** Six, matching the SRD ladder. `very-rare` and `artifact` arrived with the
+ *  SRD 5.2 import — collapsing them into `rare`/`legendary` would have made two
+ *  genuinely different tiers indistinguishable on a shelf of 757 magic items.
+ *  Hyphenated, not camelCased, because the value doubles as a CSS token suffix
+ *  and an Open5e key. */
+export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'very-rare' | 'legendary' | 'artifact'
 
 /** The eight worn gear slots an item can occupy, laid out 4x2 on the Equipment
  *  screen. (The G.U.I.D.E. Shard is managed on the Shard screen and is not filled
@@ -646,6 +658,29 @@ export type EquippedItem = {
   /** Which gear slot this item fits; absent = not slotted gear (e.g. a weapon). */
   slot?: ItemSlot
   rarity?: ItemRarity
+  /** Armour's REPLACEMENT Armour Class — chain mail's 16, not a bonus.
+   *  Distinct from `effects.ac`, which is layered ON TOP of the sheet's AC:
+   *  writing 16 there would add 16 to the character's existing score. A silent,
+   *  large, wrong number was the reason this field exists rather than reusing
+   *  the bonus. Absent on everything that is not body armour or a shield. */
+  baseAc?: number
+  /** Whether Dex is added on top of `baseAc`, and the cap if there is one.
+   *  Storing `baseAc` alone would be the very bug that field exists to avoid:
+   *  a Breastplate is "14 + Dex (max 2)", and a bare 14 silently becomes a flat
+   *  14 the moment anything computes AC from it. Light armour: add, no cap.
+   *  Medium: add, cap 2. Heavy: no add. */
+  acAddDex?: boolean
+  acDexCap?: number
+  /** Where this row came from. 'srd' marks an Open5e SRD 5.2 import; absent
+   *  means hand-authored. Travels with the data so attribution survives an
+   *  export that leaves the repo behind. */
+  source?: 'srd'
+  /** The Open5e slug (`srd-2024_longsword`). The upsert key for re-import. */
+  srd_key?: string
+  /** An imported row a human has since edited. Re-import SKIPS these — without
+   *  the flag, one re-run after a schema change silently destroys every
+   *  hand-authored effect on every SRD item. */
+  modified?: boolean
   icon?: string
   rows?: [string, string][]
   flavor?: string
@@ -1542,6 +1577,58 @@ export type CatalogLootRow = { id: string; data: LootTable; draft: LootTable | n
 export type CatalogLootInsert = { id?: string; data?: LootTable; draft?: LootTable | null }
 export type CatalogLootUpdate = { data?: LootTable; draft?: LootTable | null }
 
+/** A BACKGROUND (migration 0021) — the third template of the same kind, after
+ *  class and race.
+ *
+ *  Every part of an SRD 5.2 background maps onto machinery that already exists,
+ *  which is why this type introduces no new concepts:
+ *
+ *    ability increases  -> `graph` boost rules, exactly as a racial +2 DEX is,
+ *                          so they layer through effectiveSheet and come back
+ *                          off when the background changes
+ *    proficiencies      -> the same Proficiencies shape the sheet stores
+ *    the granted feat   -> `features`, a FeatureGrantRef into feature_catalog
+ *    starting equipment -> `equipment`, the CLASS KIT's EquipChoice structure,
+ *                          so the pending-kit flow resolves it with no new
+ *                          player-side UI
+ */
+export type BackgroundDef = {
+  name: string
+  icon: string
+  /** Player-facing prose (EB Garamond), markdown as everywhere else. */
+  desc: string
+  /** The three abilities the SRD offers to spend the increase across. Display
+   *  and authoring only — the actual increase is a `boost` in `graph`, because
+   *  a written number could not be un-written when the background changes. */
+  abilityOptions?: AbilityKey[]
+  /** Skills this background grants outright (SRD grants two named ones), plus
+   *  how many further the player picks. Same pair as RaceDef. */
+  skills: string[]
+  skillChooseN: number
+  /** Armour/weapon/tool/language training, merged key by key onto the sheet. */
+  proficiencies: Proficiencies
+  /** SRD backgrounds grant exactly one feat; plural because nothing about the
+   *  shape needs to assume that. */
+  features: FeatureGrantRef[]
+  /** Starting gear. SRD backgrounds are all "Choose A or B", which is one
+   *  EquipChoice with two options — the same structure a class kit uses. */
+  equipment: EquipChoice[]
+  tags: string[]
+  vars: VarDef[]
+  /** Where a background's NUMBERS live — the ability increases, and anything
+   *  else a DM adds. Boost rules, never written fields. */
+  graph: GraphEffect[]
+  published?: boolean
+  /** Provenance, when imported. See CatalogItemData.srd_key. */
+  source?: 'srd'
+  srd_key?: string
+  modified?: boolean
+}
+
+export type CatalogBackgroundRow = { id: string; data: BackgroundDef; draft: BackgroundDef | null; updated_at: string }
+export type CatalogBackgroundInsert = { id?: string; data?: BackgroundDef; draft?: BackgroundDef | null }
+export type CatalogBackgroundUpdate = { data?: BackgroundDef; draft?: BackgroundDef | null }
+
 export type CatalogRaceRow = { id: string; data: RaceDef; draft: RaceDef | null; updated_at: string }
 export type CatalogRaceInsert = { id?: string; data?: RaceDef; draft?: RaceDef | null }
 export type CatalogRaceUpdate = { data?: RaceDef; draft?: RaceDef | null }
@@ -1663,6 +1750,12 @@ export type Database = {
         Row: CatalogClassRow
         Insert: CatalogClassInsert
         Update: CatalogClassUpdate
+        Relationships: []
+      }
+      background_catalog: {
+        Row: CatalogBackgroundRow
+        Insert: CatalogBackgroundInsert
+        Update: CatalogBackgroundUpdate
         Relationships: []
       }
       race_catalog: {

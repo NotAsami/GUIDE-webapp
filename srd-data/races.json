@@ -1,0 +1,386 @@
+[
+  {
+    "name": "Dragonborn",
+    "icon": "fa-user",
+    "desc": "**Traits.** Size, Speed, Draconic Ancestry, Breath Weapon, Damage Resistance, Darkvision, Draconic Flight",
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "languages": [],
+    "languageChooseN": 0,
+    "proficiencies": {},
+    "features": [
+      {
+        "id": "srd-2024_dragonborn_draconic_ancestry"
+      },
+      {
+        "id": "srd-2024_dragonborn_breath_weapon"
+      },
+      {
+        "id": "srd-2024_dragonborn_damage_resistance"
+      },
+      {
+        "id": "srd-2024_dragonborn_draconic_flight"
+      }
+    ],
+    "vars": [],
+    "graph": [
+      {
+        "id": "dragonborn_speed",
+        "op": "boost",
+        "stat": "Speed",
+        "value": 30,
+        "label": "Dragonborn speed"
+      },
+      {
+        "id": "dragonborn_dark",
+        "op": "boost",
+        "stat": "Darkvision",
+        "value": 60,
+        "label": "Dragonborn darkvision"
+      }
+    ],
+    "source": "srd",
+    "srd_key": "srd-2024_dragonborn",
+    "tags": [
+      "species",
+      "dragonborn",
+      "size:medium"
+    ]
+  },
+  {
+    "name": "Dwarf",
+    "icon": "fa-user",
+    "desc": "**Traits.** Size, Speed, Darkvision, Dwarven Resilience, Dwarven Toughness, Stonecunning",
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "languages": [],
+    "languageChooseN": 0,
+    "proficiencies": {},
+    "features": [
+      {
+        "id": "srd-2024_dwarf_dwarven_resilience"
+      },
+      {
+        "id": "srd-2024_dwarf_dwarven_toughness"
+      },
+      {
+        "id": "srd-2024_dwarf_stonecunning"
+      }
+    ],
+    "vars": [],
+    "graph": [
+      {
+        "id": "dwarf_speed",
+        "op": "boost",
+        "stat": "Speed",
+        "value": 30,
+        "label": "Dwarf speed"
+      },
+      {
+        "id": "dwarf_dark",
+        "op": "boost",
+        "stat": "Darkvision",
+        "value": 120,
+        "label": "Dwarf darkvision"
+      }
+    ],
+    "source": "srd",
+    "srd_key": "srd-2024_dwarf",
+    "tags": [
+      "species",
+      "dwarf",
+      "size:medium"
+    ]
+  },
+  {
+    "name": "Elf",
+    "icon": "fa-user",
+    "desc": "**Traits.** Size, Speed, Darkvision, Elven Lineage, Fey Ancestry, Keen Senses, Trance",
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "languages": [],
+    "languageChooseN": 0,
+    "proficiencies": {},
+    "features": [
+      {
+        "id": "srd-2024_elf_elven_lineage"
+      },
+      {
+        "id": "srd-2024_elf_fey_ancestry"
+      },
+      {
+        "id": "srd-2024_elf_keen_senses"
+      },
+      {
+        "id": "srd-2024_elf_trance"
+      }
+    ],
+    "vars": [],
+    "graph": [
+      {
+        "id": "elf_speed",
+        "op": "boost",
+        "stat": "Speed",
+        "value": 30,
+        "label": "Elf speed"
+      },
+      {
+        "id": "elf_dark",
+        "op": "boost",
+        "stat": "Darkvision",
+        "value": 60,
+        "label": "Elf darkvision"
+      }
+    ],
+    "source": "srd",
+    "srd_key": "srd-2024_elf",
+    "tags": [
+      "species",
+      "elf",
+      "size:medium"
+    ]
+  },
+  {
+    "name": "Gnome",
+    "icon": "fa-user",
+    "desc": "**Traits.** Size, Speed, Darkvision, Gnomish Cunning, Gnomish Lineage",
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "languages": [],
+    "languageChooseN": 0,
+    "proficiencies": {},
+    "features": [
+      {
+        "id": "srd-2024_gnome_gnomish_cunning"
+      },
+      {
+        "id": "srd-2024_gnome_gnomish_lineage"
+      }
+    ],
+    "vars": [],
+    "graph": [
+      {
+        "id": "gnome_speed",
+        "op": "boost",
+        "stat": "Speed",
+        "value": 30,
+        "label": "Gnome speed"
+      },
+      {
+        "id": "gnome_dark",
+        "op": "boost",
+        "stat": "Darkvision",
+        "value": 60,
+        "label": "Gnome darkvision"
+      }
+    ],
+    "source": "srd",
+    "srd_key": "srd-2024_gnome",
+    "tags": [
+      "species",
+      "gnome",
+      "size:small"
+    ]
+  },
+  {
+    "name": "Goliath",
+    "icon": "fa-user",
+    "desc": "**Traits.** Size, Speed, Giant Ancestry, Large Form, Powerful Build",
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "languages": [],
+    "languageChooseN": 0,
+    "proficiencies": {},
+    "features": [
+      {
+        "id": "srd-2024_goliath_giant_ancestry"
+      },
+      {
+        "id": "srd-2024_goliath_large_form"
+      },
+      {
+        "id": "srd-2024_goliath_powerful_build"
+      }
+    ],
+    "vars": [],
+    "graph": [
+      {
+        "id": "goliath_speed",
+        "op": "boost",
+        "stat": "Speed",
+        "value": 35,
+        "label": "Goliath speed"
+      }
+    ],
+    "source": "srd",
+    "srd_key": "srd-2024_goliath",
+    "tags": [
+      "species",
+      "goliath",
+      "size:medium"
+    ]
+  },
+  {
+    "name": "Halfling",
+    "icon": "fa-user",
+    "desc": "**Traits.** Size, Speed, Brave, Halfling Nimbleness, Luck, Naturally Stealthy",
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "languages": [],
+    "languageChooseN": 0,
+    "proficiencies": {},
+    "features": [
+      {
+        "id": "srd-2024_halfling_brave"
+      },
+      {
+        "id": "srd-2024_halfling_halfling_nimbleness"
+      },
+      {
+        "id": "srd-2024_halfling_luck"
+      },
+      {
+        "id": "srd-2024_halfling_naturally_stealthy"
+      }
+    ],
+    "vars": [],
+    "graph": [
+      {
+        "id": "halfling_speed",
+        "op": "boost",
+        "stat": "Speed",
+        "value": 30,
+        "label": "Halfling speed"
+      }
+    ],
+    "source": "srd",
+    "srd_key": "srd-2024_halfling",
+    "tags": [
+      "species",
+      "halfling",
+      "size:small"
+    ]
+  },
+  {
+    "name": "Human",
+    "icon": "fa-user",
+    "desc": "**Traits.** Size, Speed, Resourceful, Skillful, Versatile",
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "languages": [],
+    "languageChooseN": 0,
+    "proficiencies": {},
+    "features": [
+      {
+        "id": "srd-2024_human_resourceful"
+      },
+      {
+        "id": "srd-2024_human_skillful"
+      },
+      {
+        "id": "srd-2024_human_versatile"
+      }
+    ],
+    "vars": [],
+    "graph": [
+      {
+        "id": "human_speed",
+        "op": "boost",
+        "stat": "Speed",
+        "value": 30,
+        "label": "Human speed"
+      }
+    ],
+    "source": "srd",
+    "srd_key": "srd-2024_human",
+    "tags": [
+      "species",
+      "human",
+      "size:medium"
+    ]
+  },
+  {
+    "name": "Orc",
+    "icon": "fa-user",
+    "desc": "**Traits.** Size, Speed, Adrenaline Rush, Darkvision, Relentless Endurance",
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "languages": [],
+    "languageChooseN": 0,
+    "proficiencies": {},
+    "features": [
+      {
+        "id": "srd-2024_orc_adrenaline_rush"
+      },
+      {
+        "id": "srd-2024_orc_relentless_endurance"
+      }
+    ],
+    "vars": [],
+    "graph": [
+      {
+        "id": "orc_speed",
+        "op": "boost",
+        "stat": "Speed",
+        "value": 30,
+        "label": "Orc speed"
+      },
+      {
+        "id": "orc_dark",
+        "op": "boost",
+        "stat": "Darkvision",
+        "value": 120,
+        "label": "Orc darkvision"
+      }
+    ],
+    "source": "srd",
+    "srd_key": "srd-2024_orc",
+    "tags": [
+      "species",
+      "orc",
+      "size:medium"
+    ]
+  },
+  {
+    "name": "Tiefling",
+    "icon": "fa-user",
+    "desc": "**Traits.** Size, Speed, Darkvision, Fiendish Legacy, Otherworldly Presence",
+    "skillChoices": [],
+    "skillChooseN": 0,
+    "languages": [],
+    "languageChooseN": 0,
+    "proficiencies": {},
+    "features": [
+      {
+        "id": "srd-2024_tiefling_fiendish_legacy"
+      },
+      {
+        "id": "srd-2024_tiefling_otherworldly_presence"
+      }
+    ],
+    "vars": [],
+    "graph": [
+      {
+        "id": "tiefling_speed",
+        "op": "boost",
+        "stat": "Speed",
+        "value": 30,
+        "label": "Tiefling speed"
+      },
+      {
+        "id": "tiefling_dark",
+        "op": "boost",
+        "stat": "Darkvision",
+        "value": 60,
+        "label": "Tiefling darkvision"
+      }
+    ],
+    "source": "srd",
+    "srd_key": "srd-2024_tiefling",
+    "tags": [
+      "species",
+      "tiefling",
+      "size:medium"
+    ]
+  }
+]

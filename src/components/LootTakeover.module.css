@@ -247,3 +247,13 @@
   .dist { flex-wrap: wrap; gap: 14px; }
   .distNote { margin-left: 0; }
 }
+
+/* The two tiers the SRD 5.2 import added. Violet sits between rare's cyan and
+   legendary's gold; artifact takes a red-bronze so the top tier does not just
+   read as "legendary but bigger". */
+.rarVrare { border: 1px solid var(--rar-vrare); box-shadow: 0 0 10px rgba(160, 122, 214, 0.3), inset 0 0 12px rgba(160, 122, 214, 0.1); }
+.rarVrare .glyph { color: var(--rar-vrare); text-shadow: 0 0 8px rgba(160, 122, 214, 0.45); }
+.rarVrare .catCorner, .rarVrare .rarCorner { color: var(--rar-vrare); }
+.rarArtifact { border: 1px solid var(--rar-artifact); box-shadow: 0 0 14px rgba(201, 111, 63, 0.35), inset 0 0 14px rgba(201, 111, 63, 0.12); }
+.rarArtifact .glyph { color: var(--rar-artifact); text-shadow: 0 0 9px rgba(201, 111, 63, 0.5); }
+.rarArtifact .catCorner, .rarArtifact .rarCorner { color: var(--rar-artifact); }

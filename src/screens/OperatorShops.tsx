@@ -20,7 +20,7 @@ import { markdownShortcuts } from '../lib/textareaHooks'
 import { formatPrice, type PriceUnit } from '../lib/coins'
 import type { DmShopsState } from '../lib/dm'
 import { ALL_PARTY } from '../lib/voice'
-import { CAT_LABEL, CAT_ORDER, rarityLabel } from '../lib/items'
+import { CAT_LABEL, CAT_ORDER, RARITY_ORDER, rarityLabel } from '../lib/items'
 import { parseCatalogQuery, matchesCatalogQuery } from '../lib/catalogSearch'
 import { ProsePreview } from '../components/ProsePreview'
 import styles from './OperatorConsole.module.css'
@@ -34,9 +34,10 @@ const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' 
  *  says "matches Inventory") — same small per-file map SystemToasts.tsx uses
  *  rather than a shared export, since nothing else needs it. */
 const RAR_COLOR: Record<ItemRarity, string> = {
-  common: 'var(--rar-common)', uncommon: 'var(--rar-uncommon)', rare: 'var(--rar-rare)', legendary: 'var(--rar-legend)',
+  common: 'var(--rar-common)', uncommon: 'var(--rar-uncommon)', rare: 'var(--rar-rare)',
+  'very-rare': 'var(--rar-vrare)', legendary: 'var(--rar-legend)', artifact: 'var(--rar-artifact)',
 }
-const RAR_ORDER: ItemRarity[] = ['common', 'uncommon', 'rare', 'legendary']
+const RAR_ORDER = RARITY_ORDER
 /** The item picker's own category chips exclude 'quest' — same as the mock
  *  (RAR_ORDER.filter(r => r !== 'quest') / CAT_ORDER.filter(c => c !== 'quest')) —
  *  since quest-tier is blocked from shop stock entirely, not just filtered. */

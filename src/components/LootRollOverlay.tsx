@@ -39,10 +39,13 @@ const RAR_TOKEN: Record<ItemRarity, string> = {
   common: 'var(--beige)',
   uncommon: 'var(--cyan)',
   rare: 'var(--cyan-hot)',
+  'very-rare': 'var(--rar-vrare)',
   legendary: 'var(--gold-rare)',
+  artifact: 'var(--rar-artifact)',
 }
 const RAR_LABEL: Record<ItemRarity, string> = {
-  common: 'Common', uncommon: 'Uncommon', rare: 'Rare', legendary: 'Legendary',
+  common: 'Common', uncommon: 'Uncommon', rare: 'Rare',
+  'very-rare': 'Very Rare', legendary: 'Legendary', artifact: 'Artifact',
 }
 
 export type LootRollMember = { id: string; name: string }

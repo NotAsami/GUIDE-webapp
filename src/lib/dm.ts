@@ -10,6 +10,7 @@ import type {
   CatalogSpellRow, CatalogSpellInsert, CatalogSpellUpdate,
   CatalogClassRow, CatalogClassUpdate, ClassDef,
   CatalogRaceRow, CatalogRaceUpdate, RaceDef,
+  CatalogBackgroundRow, CatalogBackgroundUpdate, BackgroundDef,
   CatalogLootRow, CatalogLootUpdate, LootTable,
   LootOpenRow, LootOpenLine, LootOpenUpdate, LootContainer,
   ConfiscatedItemRow, ConfiscatedItemInsert, InventoryItem,
@@ -716,6 +717,99 @@ export function useDmRaces(): DmRacesState {
 
   return { races, loading, error, refetch: fetchAll, updateRace, deleteRace, saveDraft, publishRace, duplicateRace }
 }
+
+// ── Backgrounds (migration 0021) ─────────────────────────────────────────────
+// The race hook's twin, and deliberately identical: same table shape, same
+// draft ladder, same DM-only wall. A divergence here would be a bug rather
+// than a feature — if one grows a behaviour, the other wants it too.
+
+export interface DmBackgroundsState {
+  backgrounds: CatalogBackgroundRow[]
+  loading: boolean
+  error: string | null
+  refetch: () => Promise<void>
+  updateBackground: (id: string, patch: CatalogBackgroundUpdate) => Promise<void>
+  deleteBackground: (id: string) => Promise<void>
+  saveDraft: (id: string | null, data: BackgroundDef) => Promise<string | null>
+  publishBackground: (id: string | null, data: BackgroundDef) => Promise<string | null>
+  duplicateBackground: (id: string) => Promise<string | null>
+}
+
+/** The editable payload: the parked draft if there is one, else what is
+ *  published. Twin of classContent/featureContent. */
+export const backgroundContent = (r: CatalogBackgroundRow): BackgroundDef => r.draft ?? r.data
+
+/** The DM's race-authoring library (`background_catalog`, migration 0017) — the same
+ *  hook as useDmClasses against a different table, because a race is the same
+ *  kind of object as a class. Consumed by Assign Race, which SNAPSHOTS onto the
+ *  character (lib/backgrounds.ts assignRace), so this table stays DM-only. */
+export function useDmBackgrounds(): DmBackgroundsState {
+  const { session } = useAuth()
+  const [backgrounds, setRaces] = useState<CatalogBackgroundRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const byName = (a: CatalogBackgroundRow, b: CatalogBackgroundRow) =>
+    (backgroundContent(a).name ?? '').localeCompare(backgroundContent(b).name ?? '')
+
+  const fetchAll = useCallback(async () => {
+    if (!session) { setRaces([]); setLoading(false); return }
+    setLoading(true)
+    const { data, error: err } = await supabase.from('background_catalog').select('*')
+    if (err) { setError(err.message); setRaces([]) }
+    else { setRaces(((data as CatalogBackgroundRow[]) ?? []).sort(byName)); setError(null) }
+    setLoading(false)
+  }, [session])
+
+  useEffect(() => { void fetchAll() }, [fetchAll])
+
+  const updateBackground = useCallback<DmBackgroundsState['updateBackground']>(async (id, patch) => {
+    let previous: CatalogBackgroundRow | undefined
+    setRaces(prev => prev.map(r => { if (r.id !== id) return r; previous = r; return { ...r, ...patch } as CatalogBackgroundRow }))
+    const { data, error: err } = await supabase.from('background_catalog').update(patch).eq('id', id).select().single<CatalogBackgroundRow>()
+    if (err) { setError(err.message); if (previous) setRaces(prev => prev.map(r => (r.id === id ? previous! : r))) }
+    else if (data) setRaces(prev => prev.map(r => (r.id === id ? data : r)).sort(byName))
+  }, [])
+
+  const deleteBackground = useCallback<DmBackgroundsState['deleteBackground']>(async (id) => {
+    const snapshot = backgrounds
+    setRaces(prev => prev.filter(r => r.id !== id))
+    const { error: err } = await supabase.from('background_catalog').delete().eq('id', id)
+    if (err) { setError(err.message); setRaces(snapshot) }
+  }, [backgrounds])
+
+  const write = useCallback(async (id: string | null, data: BackgroundDef, promote: boolean): Promise<string | null> => {
+    const patch = promote ? { data: { ...data, published: true }, draft: null } : { draft: data }
+    if (id) {
+      const { data: row, error: err } = await supabase.from('background_catalog').update(patch).eq('id', id).select().single<CatalogBackgroundRow>()
+      if (err) { setError(err.message); return null }
+      setRaces(prev => prev.map(r => (r.id === id ? row : r)).sort(byName))
+      return id
+    }
+    // Minted once and frozen: a subrace names its parent by this id, and every
+    // character assigned the race keeps it.
+    const fresh = mintId(data.name ?? '', new Set(backgrounds.map(r => r.id)))
+    const { data: row, error: err } = await supabase.from('background_catalog')
+      .insert({ id: fresh, ...patch, ...(promote ? {} : { data: {} as BackgroundDef }) })
+      .select().single<CatalogBackgroundRow>()
+    if (err) { setError(err.message); return null }
+    setRaces(prev => [...prev, row].sort(byName))
+    return fresh
+  }, [backgrounds])
+
+  const saveDraft = useCallback<DmBackgroundsState['saveDraft']>((id, data) => write(id, data, false), [write])
+  const publishBackground = useCallback<DmBackgroundsState['publishBackground']>((id, data) => write(id, data, true), [write])
+
+  const duplicateBackground = useCallback<DmBackgroundsState['duplicateBackground']>(async (id) => {
+    const src = backgrounds.find(r => r.id === id)
+    if (!src) return null
+    const content = backgroundContent(src)
+    return write(null, { ...content, name: `${content.name ?? 'Untitled'} (copy)`, published: false }, false)
+  }, [backgrounds, write])
+
+  return { backgrounds, loading, error, refetch: fetchAll, updateBackground, deleteBackground, saveDraft, publishBackground, duplicateBackground }
+}
+
 
 export interface DmLootState {
   tables: CatalogLootRow[]
