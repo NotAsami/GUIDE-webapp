@@ -1979,6 +1979,21 @@ button.skWarn:focus-visible { outline: 1px solid var(--danger-hot); outline-offs
    static div, because its target lives in a different feature's editor. */
 div.skWarn { cursor: default; }
 .skWarn i { color: var(--danger-hot); font-size: 10px; }
+/* global.css paints every <b>/<strong> cyan as the app's emphasis colour. Inside
+   a red danger strip that reads as two different alarms at once, so the strip
+   reclaims its own bold. */
+.skWarn b, .skWarn strong { color: var(--danger-hot); }
+
+/* THE CONFIRM'S BUTTONS NEED A WIDTH OF THEIR OWN.
+   `.btn` paints itself entirely with two absolutely-positioned children, so it
+   has NO intrinsic width, and it carries `flex: 1; min-width: 0`. In a nowrap
+   row where the warning text measured 463px of a 521px strip, both buttons were
+   crushed to exactly 0px wide: the confirmation rendered, said the right thing,
+   and had nothing to click. It reads as the button doing nothing.
+   Elsewhere `.btn` gets its size from a grid cell or a footer row; here the
+   text is competing for the same axis, so the strip has to say who yields. */
+.skWarn .btn { flex: 0 0 auto; min-width: 88px; }
+.skWarn > span { flex: 1 1 auto; min-width: 0; }
 
 /* Save/Delete row: "Create Shopkeeper" / "Save Shopkeeper" run longer than
    every other catalog form's lg button label ("Save Item", "Save Feature",

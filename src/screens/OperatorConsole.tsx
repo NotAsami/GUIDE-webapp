@@ -1283,10 +1283,6 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
   const errs = audit.filter(a => a.sev === 'err').length
   const warns = audit.filter(a => a.sev === 'warn').length
 
-  if (!draft) {
-    return <div className={styles.catEmpty} style={{ marginTop: 40 }}>Select a loot table, or start a new one.</div>
-  }
-
   /* Typing saves; a clean record publishes itself. `creating ? null : selId`
      is the id contract the writers already had — the first write of a new
      record mints one, and onCreated adopts it so the next keystroke updates
@@ -1312,6 +1308,15 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
     setConfirm(null)
     await lib.deleteTable(selId)
     clear(); onCleared()
+  }
+
+  /* AFTER every hook, never before one. This guard used to sit higher, and
+     `useAutoPublish` below it is a hook where onSaveDraft/onPublish used to
+     be plain functions — so the render after a delete (draft becomes null)
+     called fewer hooks than the one before it and React tore the tree down:
+     "Rendered fewer hooks than expected." */
+  if (!draft) {
+    return <div className={styles.catEmpty} style={{ marginTop: 40 }}>Select a loot table, or start a new one.</div>
   }
 
   return (
@@ -1560,29 +1565,34 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
         <AuditPanel title="Loot Audit" audit={audit} onJump={a => revealAudit(a.id)} />
       </div>
 
-      {confirm === 'revert' && (
-        <div className={styles.skWarn}>
-          <i className="fa-solid fa-triangle-exclamation" />
-          <span>
-            <b>Discard this draft?</b>{' '}
-            {row?.data?.published
-              ? 'The published version comes back.'
-              : 'This table has never been published, so discarding removes it entirely.'}
-          </span>
-          <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
-          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
-        </div>
-      )}
-      {confirm === 'delete' && (
-        <div className={styles.skWarn}>
-          <i className="fa-solid fa-triangle-exclamation" />
-          <span><b>Delete {draft.name || 'this table'}?</b> Nothing already granted from it is affected.</span>
-          <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
-          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
-        </div>
-      )}
-
       <div className={styles.clsBar}>
+        {/* INSIDE the sticky footer, not above it. The footer pins itself to
+            the bottom of the scroller, so its Delete button is always on
+            screen — while a confirm rendered as a preceding sibling sat far
+            down the scrolling flow, off screen, and the click read as a
+            no-op. A confirmation has to appear where the control that opened
+            it is. */}
+        {confirm === 'revert' && (
+          <div className={styles.skWarn}>
+            <i className="fa-solid fa-triangle-exclamation" />
+            <span>
+              <b>Discard this draft?</b>{' '}
+              {row?.data?.published
+                ? 'The published version comes back.'
+                : 'This table has never been published, so discarding removes it entirely.'}
+            </span>
+            <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
+            <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+          </div>
+        )}
+        {confirm === 'delete' && (
+          <div className={styles.skWarn}>
+            <i className="fa-solid fa-triangle-exclamation" />
+            <span><b>Delete {draft.name || 'this table'}?</b> Nothing already granted from it is affected.</span>
+            <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
+            <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+          </div>
+        )}
         <div className={styles.clsBarInfo}>
           <div className={cx(styles.clsStat, errs ? styles.bad : warns ? styles.warn : undefined)}>
             <span className={styles.dot} />
@@ -5157,14 +5167,6 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
   const errs = audit.filter(a => a.sev === 'err').length
   const warns = audit.filter(a => a.sev === 'warn').length
 
-  if (!draft) {
-    return (
-      <div className={styles.catEmpty} style={{ marginTop: 40 }}>
-        Select a class, or start a new one.
-      </div>
-    )
-  }
-
   /* Typing saves; a clean record publishes itself. `creating ? null : selId`
      is the id contract the writers already had — the first write of a new
      record mints one, and onCreated adopts it so the next keystroke updates
@@ -5203,11 +5205,14 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
 
      It DOES keep spellcasting: an Eldritch Knight makes a martial class into a
      third caster, and that was the whole argument for a subclass being a row. */
-  const isSub = !!draft.parent
-  const parentClass = draft.parent ? lib.classes.find(c => c.id === draft.parent) : null
+  /* `draft?.` because the null guard now sits below the hooks — see the note
+     there. These are derived reads, and every one of them is only rendered
+     from JSX that the guard has already protected. */
+  const isSub = !!draft?.parent
+  const parentClass = draft?.parent ? lib.classes.find(c => c.id === draft.parent) : null
   const parentOptions = lib.classes.filter(c => c.id !== selId && !classContent(c).parent)
 
-  const saves = draft.saveProficiencies ?? []
+  const saves = draft?.saveProficiencies ?? []
   /** Toggling a third save drops the oldest rather than refusing the click —
    *  a control that silently does nothing reads as broken. */
   const toggleSave = (k: AbilityKey) => set({
@@ -5216,10 +5221,23 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
       : [...saves, k].slice(-2),
   })
 
-  const skillChoices = draft.skillChoices ?? []
+  const skillChoices = draft?.skillChoices ?? []
   const toggleSkill = (k: string) => set({
     skillChoices: skillChoices.includes(k) ? skillChoices.filter(x => x !== k) : [...skillChoices, k],
   })
+
+  /* AFTER every hook, never before one. This guard used to sit higher, and
+     `useAutoPublish` below it is a hook where onSaveDraft/onPublish used to
+     be plain functions — so the render after a delete (draft becomes null)
+     called fewer hooks than the one before it and React tore the tree down:
+     "Rendered fewer hooks than expected." */
+  if (!draft) {
+    return (
+      <div className={styles.catEmpty} style={{ marginTop: 40 }}>
+        Select a class, or start a new one.
+      </div>
+    )
+  }
 
   return (
     /* One wrapper so the form's vertical rhythm can be set once. A bare
@@ -5538,36 +5556,40 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
       </div>
 
       {/* ---- ACTIONS ---- */}
-      {confirm === 'revert' && (
-        <div className={styles.skWarn}>
-          <i className="fa-solid fa-triangle-exclamation" />
-          <span>
-            <b>Discard this draft?</b>{' '}
-            {row?.data?.published
-              ? 'The published version comes back and nothing a player sees changes.'
-              : 'This class has never been published, so discarding removes it entirely.'}
-          </span>
-          <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
-          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
-        </div>
-      )}
-      {confirm === 'delete' && (
-        <div className={styles.skWarn}>
-          <i className="fa-solid fa-triangle-exclamation" />
-          <span>
-            <b>Delete {draft.name || 'this class'}?</b>{' '}
-            {usedBy.length
-              ? `${usedBy.map(m => firstName(m.name)).join(', ')} ${usedBy.length === 1 ? 'is' : 'are'} on it. Their sheet keeps what it was already granted — but nothing can be re-assigned from this class again.`
-              : 'No character is on it.'}
-          </span>
-          <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
-          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
-        </div>
-      )}
 
       {/* Two explicit rows. Five buttons on one wrap line put PUBLISH — the
           whole point of the bar — alone on an orphan row below the others. */}
       <div className={styles.clsBar}>
+        {/* INSIDE the sticky footer — see the note in the loot form. A confirm
+            rendered above it sits far down the scrolling flow while the button
+            that opened it stays pinned on screen, so the click reads as a
+            no-op. */}
+        {confirm === 'revert' && (
+          <div className={styles.skWarn}>
+            <i className="fa-solid fa-triangle-exclamation" />
+            <span>
+              <b>Discard this draft?</b>{' '}
+              {row?.data?.published
+                ? 'The published version comes back and nothing a player sees changes.'
+                : 'This class has never been published, so discarding removes it entirely.'}
+            </span>
+            <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
+            <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+          </div>
+        )}
+        {confirm === 'delete' && (
+          <div className={styles.skWarn}>
+            <i className="fa-solid fa-triangle-exclamation" />
+            <span>
+              <b>Delete {draft.name || 'this class'}?</b>{' '}
+              {usedBy.length
+                ? `${usedBy.map(m => firstName(m.name)).join(', ')} ${usedBy.length === 1 ? 'is' : 'are'} on it. Their sheet keeps what it was already granted — but nothing can be re-assigned from this class again.`
+                : 'No character is on it.'}
+            </span>
+            <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
+            <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+          </div>
+        )}
         <div className={styles.clsBarInfo}>
           <div className={cx(styles.clsStat, errs ? styles.bad : warns ? styles.warn : undefined)}>
             <span className={styles.dot} />
@@ -6222,9 +6244,20 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
 
   const set = (p: Partial<RaceDef>) => update(x => ({ ...x, ...p }))
 
+  /* MATCHED BY NAME, because that is what a character stores: `identity.race`
+     is the string "Elf", not a race_catalog id. So two rows sharing a name are
+     genuinely indistinguishable from the character's side — the warning below
+     will name the same player on both, and no amount of care here can tell
+     them apart. The audit flags the collision instead. */
   const usedBy = useMemo(
     () => (draft?.name ? members.filter(m => m.race === draft.name) : []),
     [members, draft?.name],
+  )
+  const nameTwins = useMemo(
+    () => (draft?.name
+      ? lib.races.filter(r => r.id !== selId && raceContent(r).name === draft.name)
+      : []),
+    [lib.races, selId, draft?.name],
   )
   /** Races this one could belong to — anything that is not itself and not
    *  already a subrace, so the tree stays one level deep. */
@@ -6234,6 +6267,13 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
     const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
+    if (nameTwins.length) {
+      out.unshift({
+        sev: 'warn', id: 'field:name',
+        t: `Another race is also called "${draft.name}"`,
+        s: `A character records its race by NAME (identity.race is a string), so "${draft.name}" cannot point at one of these two rows rather than the other — the in-use warning below will name the same players on both. Rename one, or delete the one you do not want.`,
+      })
+    }
 
     if (!draft.name?.trim()) {
       out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed race', s: 'A race needs a name before it can be assigned.' })
@@ -6282,10 +6322,6 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
   const errs = audit.filter(a => a.sev === 'err').length
   const warns = audit.filter(a => a.sev === 'warn').length
 
-  if (!draft) {
-    return <div className={styles.catEmpty} style={{ marginTop: 40 }}>Select a race, or start a new one.</div>
-  }
-
   /* Typing saves; a clean record publishes itself. `creating ? null : selId`
      is the id contract the writers already had — the first write of a new
      record mints one, and onCreated adopts it so the next keystroke updates
@@ -6313,10 +6349,19 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
     onCleared()
   }
 
-  const skillChoices = draft.skillChoices ?? []
+  const skillChoices = draft?.skillChoices ?? []
   const toggleSkill = (k: string) => set({
     skillChoices: skillChoices.includes(k) ? skillChoices.filter(x => x !== k) : [...skillChoices, k],
   })
+
+  /* AFTER every hook, never before one. This guard used to sit higher, and
+     `useAutoPublish` below it is a hook where onSaveDraft/onPublish used to
+     be plain functions — so the render after a delete (draft becomes null)
+     called fewer hooks than the one before it and React tore the tree down:
+     "Rendered fewer hooks than expected." */
+  if (!draft) {
+    return <div className={styles.catEmpty} style={{ marginTop: 40 }}>Select a race, or start a new one.</div>
+  }
 
   return (
     <div className={styles.clsForm}>
@@ -6503,34 +6548,39 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
           onJump={a => { setVarsOpen(true); setFxOpen(true); revealAudit(a.id) }} />
       </div>
 
-      {confirm === 'revert' && (
-        <div className={styles.skWarn}>
-          <i className="fa-solid fa-triangle-exclamation" />
-          <span>
-            <b>Discard this draft?</b>{' '}
-            {row?.data?.published
-              ? 'The published version comes back and nothing a player sees changes.'
-              : 'This race has never been published, so discarding removes it entirely.'}
-          </span>
-          <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
-          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
-        </div>
-      )}
-      {confirm === 'delete' && (
-        <div className={styles.skWarn}>
-          <i className="fa-solid fa-triangle-exclamation" />
-          <span>
-            <b>Delete {draft.name || 'this race'}?</b>{' '}
-            {usedBy.length
-              ? `${usedBy.map(m => firstName(m.name)).join(', ')} ${usedBy.length === 1 ? 'is' : 'are'} on it. Their sheet keeps what it was already granted — but nothing can be re-assigned from this race again.`
-              : 'No character is on it.'}
-          </span>
-          <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
-          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
-        </div>
-      )}
-
       <div className={styles.clsBar}>
+        {/* INSIDE the sticky footer, not above it. The footer pins itself to
+            the bottom of the scroller, so its Delete button is always on
+            screen — while a confirm rendered as a preceding sibling sat far
+            down the scrolling flow, off screen, and the click read as a
+            no-op. A confirmation has to appear where the control that opened
+            it is. */}
+        {confirm === 'revert' && (
+          <div className={styles.skWarn}>
+            <i className="fa-solid fa-triangle-exclamation" />
+            <span>
+              <b>Discard this draft?</b>{' '}
+              {row?.data?.published
+                ? 'The published version comes back and nothing a player sees changes.'
+                : 'This race has never been published, so discarding removes it entirely.'}
+            </span>
+            <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
+            <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+          </div>
+        )}
+        {confirm === 'delete' && (
+          <div className={styles.skWarn}>
+            <i className="fa-solid fa-triangle-exclamation" />
+            <span>
+              <b>Delete {draft.name || 'this race'}?</b>{' '}
+              {usedBy.length
+                ? `${usedBy.map(m => firstName(m.name)).join(', ')} ${usedBy.length === 1 ? 'is' : 'are'} on it. Their sheet keeps what it was already granted — but nothing can be re-assigned from this race again.`
+                : 'No character is on it.'}
+            </span>
+            <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
+            <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+          </div>
+        )}
         <div className={styles.clsBarInfo}>
           <div className={cx(styles.clsStat, errs ? styles.bad : warns ? styles.warn : undefined)}>
             <span className={styles.dot} />
@@ -6833,24 +6883,29 @@ function BackgroundForm({ row, creating, lib, featureLib, onSelected, onCleared 
         <AuditPanel title="Background Audit" audit={audit} onJump={a => revealAudit(a.id)} />
       </div>
 
-      {confirm === 'revert' && (
-        <div className={styles.skWarn}>
-          <i className="fa-solid fa-triangle-exclamation" />
-          <span><b>Discard this draft?</b> {row?.data?.published ? 'The published version comes back.' : 'This background has never been published, so discarding removes it entirely.'}</span>
-          <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
-          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
-        </div>
-      )}
-      {confirm === 'delete' && (
-        <div className={styles.skWarn}>
-          <i className="fa-solid fa-triangle-exclamation" />
-          <span><b>Delete {draft.name || 'this background'}?</b> Characters already assigned it keep what it granted.</span>
-          <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
-          <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
-        </div>
-      )}
-
       <div className={styles.clsBar}>
+        {/* INSIDE the sticky footer, not above it. The footer pins itself to
+            the bottom of the scroller, so its Delete button is always on
+            screen — while a confirm rendered as a preceding sibling sat far
+            down the scrolling flow, off screen, and the click read as a
+            no-op. A confirmation has to appear where the control that opened
+            it is. */}
+        {confirm === 'revert' && (
+          <div className={styles.skWarn}>
+            <i className="fa-solid fa-triangle-exclamation" />
+            <span><b>Discard this draft?</b> {row?.data?.published ? 'The published version comes back.' : 'This background has never been published, so discarding removes it entirely.'}</span>
+            <Btn tone="danger" sm icon="fa-rotate-left" label="Discard" onClick={onRevert} />
+            <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+          </div>
+        )}
+        {confirm === 'delete' && (
+          <div className={styles.skWarn}>
+            <i className="fa-solid fa-triangle-exclamation" />
+            <span><b>Delete {draft.name || 'this background'}?</b> Characters already assigned it keep what it granted.</span>
+            <Btn tone="danger" sm icon="fa-trash" label="Delete" onClick={() => void onDelete()} />
+            <Btn tone="ghost" sm icon="fa-xmark" label="Cancel" onClick={() => setConfirm(null)} />
+          </div>
+        )}
         <div className={styles.clsBarInfo}>
           <span className={cx(styles.clsDirty, (autoBusy || dirty) && styles.on)}>
             {autoBusy ? '● Saving…'
