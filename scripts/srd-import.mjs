@@ -769,11 +769,29 @@ function toClass(r) {
   const vars = []
   const taken = new Set()
   let subclassAt = null
+
+  /* WHERE A COLUMN'S VARIABLE LIVES, and it is not a filing preference.
+   *
+   *  Put `weaponMastery` on the class and it only exists for a character who
+   *  has that class. Grant the Weapon Mastery feature on its own — to another
+   *  class, as a one-off reward, which the Grant Feature card exists to do —
+   *  and the prose reads "{weaponMastery}", because the variable stayed behind
+   *  with the Barbarian. The feature travels; the variable did not.
+   *
+   *  So a column whose name matches a feature of this class belongs ON that
+   *  feature: "Weapon Mastery" the column and "Weapon Mastery" the feature are
+   *  the same thing described twice, and joining them makes the feature carry
+   *  its own progression wherever it goes. Columns with no matching feature —
+   *  Cantrips, Prepared Spells — are genuinely class-wide and stay on the class.
+   */
+  const columnsByName = new Map()
   for (const f of r.features ?? []) {
-    // A column contributes its numbers whatever else happens to the row — a few
-    // columns are typed CLASS_LEVEL_FEATURE and are a real feature AND a column.
     const cols = columnVar(f, r.name, taken)
-    if (cols) vars.push(...cols)
+    if (cols?.length) columnsByName.set(norm(f.name).toLowerCase(), cols)
+  }
+  const claimed = new Set()
+
+  for (const f of r.features ?? []) {
 
     /* ONLY REAL FEATURES. Open5e models the class TABLE as features too — one
        row per column — so "Proficiency Bonus", "Cantrips", "Rages", "Sorcery
@@ -816,6 +834,8 @@ function toClass(r) {
     const levels = (f.gained_at ?? []).map(g => g.level).filter(n => typeof n === 'number')
     const at = levels.length ? Math.min(...levels) : null
     const fid = f.key
+    const own = columnsByName.get(norm(f.name).toLowerCase())
+    if (own) claimed.add(norm(f.name).toLowerCase())
     features.push({
       id: fid,
       name: f.name,
@@ -824,10 +844,15 @@ function toClass(r) {
       folder: srdFolder(r.name),
       ...featureProse(f.desc),
       source: 'srd', srd_key: fid,
+      ...(own ? { vars: own } : {}),
       tags: tag('class', r.name, f.name, at ? `level:${at}` : null),
     })
     // `when` is how this schema expresses progression — see FeatureGrantRef.
     refs.push(at ? { feature_id: fid, when: `level >= ${at}` } : { feature_id: fid })
+  }
+
+  for (const [key, cols] of columnsByName) {
+    if (!claimed.has(key)) vars.push(...cols)
   }
 
   if (!PRIMARY[baseSlug]) {

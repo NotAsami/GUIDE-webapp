@@ -109,12 +109,6 @@
         "kind": "derived",
         "label": "Rages",
         "formula": "[0,2,2,3,3,3,4,4,4,4,4,4,5,5,5,5,5,6,6,6,6][level]"
-      },
-      {
-        "name": "weaponMastery",
-        "kind": "derived",
-        "label": "Weapon Mastery",
-        "formula": "[0,2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4][level]"
       }
     ],
     "graph": [],
@@ -375,12 +369,6 @@
         "kind": "derived",
         "label": "Cantrips",
         "formula": "[0,3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,5][level]"
-      },
-      {
-        "name": "channelDivinity",
-        "kind": "derived",
-        "label": "Channel Divinity",
-        "formula": "[0,0,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4][level]"
       },
       {
         "name": "preparedSpells",
@@ -743,20 +731,7 @@
       "fighter",
       "baseclass"
     ],
-    "vars": [
-      {
-        "name": "secondWind",
-        "kind": "derived",
-        "label": "Second Wind",
-        "formula": "[0,2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4][level]"
-      },
-      {
-        "name": "weaponMastery",
-        "kind": "derived",
-        "label": "Weapon Mastery",
-        "formula": "[0,3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,6,6,6,6,6][level]"
-      }
-    ],
+    "vars": [],
     "graph": [],
     "subclassLevel": 3,
     "subclassLabel": "Subclass",
@@ -964,12 +939,6 @@
         "kind": "derived",
         "label": "Focus Points",
         "formula": "[0,0,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20][level]"
-      },
-      {
-        "name": "martialArtsDie",
-        "kind": "derived",
-        "label": "Martial Arts (die size)",
-        "formula": "[0,6,6,6,6,8,8,8,8,8,8,10,10,10,10,10,10,12,12,12,12][level]"
       }
     ],
     "graph": [],
@@ -1107,12 +1076,6 @@
       "caster"
     ],
     "vars": [
-      {
-        "name": "channelDivinity",
-        "kind": "derived",
-        "label": "Channel Divinity",
-        "formula": "[0,0,0,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3][level]"
-      },
       {
         "name": "preparedSpells",
         "kind": "derived",
@@ -1252,12 +1215,6 @@
     ],
     "vars": [
       {
-        "name": "favoredEnemy",
-        "kind": "derived",
-        "label": "Favored Enemy",
-        "formula": "[0,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6][level]"
-      },
-      {
         "name": "preparedSpells",
         "kind": "derived",
         "label": "Prepared Spells",
@@ -1360,14 +1317,7 @@
       "rogue",
       "baseclass"
     ],
-    "vars": [
-      {
-        "name": "sneakAttackDice",
-        "kind": "derived",
-        "label": "Sneak Attack (number of dice)",
-        "formula": "[0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10][level]"
-      }
-    ],
+    "vars": [],
     "graph": [],
     "subclassLevel": 3,
     "subclassLabel": "Subclass",
@@ -1563,12 +1513,6 @@
         "kind": "derived",
         "label": "Cantrips",
         "formula": "[0,2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4][level]"
-      },
-      {
-        "name": "eldritchInvocations",
-        "kind": "derived",
-        "label": "Eldritch Invocations",
-        "formula": "[0,1,3,3,3,5,5,6,6,7,7,7,8,8,8,9,9,9,10,10,10][level]"
       },
       {
         "name": "preparedSpells",

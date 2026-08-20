@@ -995,6 +995,14 @@
     "deep_description": "Whenever you finish a Long Rest, you can practice weapon drills and change one of those weapon choices.\n\nWhen you reach certain Barbarian levels, you gain the ability to use the mastery properties of more kinds of weapons, as shown in the Weapon Mastery column of the Barbarian Features table.",
     "source": "srd",
     "srd_key": "srd-2024_barbarian_weapon-mastery",
+    "vars": [
+      {
+        "name": "weaponMastery",
+        "kind": "derived",
+        "label": "Weapon Mastery",
+        "formula": "[0,2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4][level]"
+      }
+    ],
     "tags": [
       "class",
       "barbarian",
@@ -1398,6 +1406,14 @@
     "deep_description": "You start with two such effects: Divine Spark and Turn Undead, each of which is described below. Each time you use this class's Channel Divinity, choose which Channel Divinity effect from this class to create. You gain additional effect options at higher Cleric levels.\n\nYou can use this class's Channel Divinity twice. You regain one of its expended uses when you finish a Short Rest, and you regain all expended uses when you finish a Long Rest. You gain additional uses when you reach certain Cleric levels, as shown in the Channel Divinity column of the Cleric Features table.\n\nIf a Channel Divinity effect requires a saving throw, the DC equals the spell save DC from this class's Spellcasting feature.\n\n**Divine Spark.** As a Magic action, you point your Holy Symbol at another creature you can see within 30 feet of yourself and focus divine energy at it. Roll 1d8 and add your Wisdom modifier. You either restore Hit Points to the creature equal to that total or force the creature to make a Constitution saving throw. On a failed save, the creature takes Necrotic or Radiant damage (your choice) equal to that total. On a successful save, the creature takes half as much damage (round down).\n\nYou roll an additional d8 when you reach Cleric levels 7 (2d8), 13 (3d8), and 18 (4d8).\n\n**Turn Undead.** As a Magic action, you present your Holy Symbol and censure Undead creatures. Each Undead of your choice within 30 feet of you must make a Wisdom saving throw. If the creature fails its save, it has the Frightened and Incapacitated conditions for 1 minute. For that duration, it tries to move as far from you as it can on its turns. This effect ends early on the creature if it takes any damage, if you have the Incapacitated condition, or if you die.",
     "source": "srd",
     "srd_key": "srd-2024_cleric_channel-divinity",
+    "vars": [
+      {
+        "name": "channelDivinity",
+        "kind": "derived",
+        "label": "Channel Divinity",
+        "formula": "[0,0,2,2,2,2,3,3,3,3,3,3,3,3,3,3,3,3,4,4,4][level]"
+      }
+    ],
     "tags": [
       "class",
       "cleric",
@@ -2141,6 +2157,14 @@
     "deep_description": "As a Bonus Action, you can use it to regain Hit Points equal to 1d10 plus your Fighter level.\n\nYou can use this feature twice. You regain one expended use when you finish a Short Rest, and you regain all expended uses when you finish a Long Rest.\n\nWhen you reach certain Fighter levels, you gain more uses of this feature, as shown in the Second Wind column of the Fighter Features table.",
     "source": "srd",
     "srd_key": "srd-2024_fighter_second-wind",
+    "vars": [
+      {
+        "name": "secondWind",
+        "kind": "derived",
+        "label": "Second Wind",
+        "formula": "[0,2,2,2,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,4][level]"
+      }
+    ],
     "tags": [
       "class",
       "fighter",
@@ -2256,6 +2280,14 @@
     "deep_description": "Whenever you finish a Long Rest, you can practice weapon drills and change one of those weapon choices.\n\nWhen you reach certain Fighter levels, you gain the ability to use the mastery properties of more kinds of weapons, as shown in the Weapon Mastery column of the Fighter Features table.",
     "source": "srd",
     "srd_key": "srd-2024_fighter_weapon-mastery",
+    "vars": [
+      {
+        "name": "weaponMastery",
+        "kind": "derived",
+        "label": "Weapon Mastery",
+        "formula": "[0,3,3,3,4,4,4,4,4,4,5,5,5,5,5,5,6,6,6,6,6][level]"
+      }
+    ],
     "tags": [
       "class",
       "fighter",
@@ -2620,6 +2652,14 @@
     "light_description": "Your practice of martial arts gives you mastery of combat styles that use your Unarmed Strike and Monk weapons, which are the following:\n\n- Simple Melee weapons\n- Martial Melee weapons that have the Light property\n\nYou gain the following benefits while you are unarmed or wielding only Monk weapons and you aren't wearing armor or wielding a Shield.\n\n**Bonus Unarmed Strike.** You can make an Unarmed Strike as a Bonus Action.\n\n**Martial Arts Die.** You can roll 1d6 in place of the normal damage of your Unarmed Strike or Monk weapons. This die changes as you gain Monk levels, as shown in the Martial Arts column of the Monk Features table.\n\n**Dexterous Attacks.** You can use your Dexterity modifier instead of your Strength modifier for the attack and damage rolls of your Unarmed Strikes and Monk weapons. In addition, when you use the Grapple or Shove option of your Unarmed Strike, you can use your Dexterity modifier instead of your Strength modifier to determine the save DC.",
     "source": "srd",
     "srd_key": "srd-2024_monk_martial-arts",
+    "vars": [
+      {
+        "name": "martialArtsDie",
+        "kind": "derived",
+        "label": "Martial Arts (die size)",
+        "formula": "[0,6,6,6,6,8,8,8,8,8,8,10,10,10,10,10,10,12,12,12,12][level]"
+      }
+    ],
     "tags": [
       "class",
       "monk",
@@ -2955,6 +2995,14 @@
     "deep_description": "You start with one such effect: Divine Sense, which is described below. Other Paladin features give additional Channel Divinity effect options. Each time you use this class's Channel Divinity, you choose which effect from this class to create.\n\nYou can use this class's Channel Divinity twice. You regain one of its expended uses when you finish a Short Rest, and you regain all expended uses when you finish a Long Rest. You gain an additional use when you reach Paladin level 11.\n\nIf a Channel Divinity effect requires a saving throw, the DC equals the spell save DC from this class's Spellcasting feature.\n\n**Divine Sense.** As a Bonus Action, you can open your awareness to detect Celestials, Fiends, and Undead. For the next 10 minutes or until you have the Incapacitated condition, you know the location of any creature of those types within 60 feet of yourself, and you know its creature type. Within the same radius, you also detect the presence of any place or object that has been consecrated or desecrated, as with the *Hallow* spell.",
     "source": "srd",
     "srd_key": "srd-2024_paladin_channel-divinity",
+    "vars": [
+      {
+        "name": "channelDivinity",
+        "kind": "derived",
+        "label": "Channel Divinity",
+        "formula": "[0,0,0,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3][level]"
+      }
+    ],
     "tags": [
       "class",
       "paladin",
@@ -3275,6 +3323,14 @@
     "deep_description": "You can cast it twice without expending a spell slot, and you regain all expended uses of this ability when you finish a Long Rest.\n\nThe number of times you can cast the spell without a spell slot increases when you reach certain Ranger levels, as shown in the Favored Enemy column of the Ranger Features table.",
     "source": "srd",
     "srd_key": "srd-2024_ranger_favored-enemy",
+    "vars": [
+      {
+        "name": "favoredEnemy",
+        "kind": "derived",
+        "label": "Favored Enemy",
+        "formula": "[0,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,6][level]"
+      }
+    ],
     "tags": [
       "class",
       "ranger",
@@ -3626,6 +3682,14 @@
     "deep_description": "Once per turn, you can deal an extra 1d6 damage to one creature you hit with an attack roll if you have Advantage on the roll and the attack uses a Finesse or a Ranged weapon. The extra damage's type is the same as the weapon's type.\n\nYou don't need Advantage on the attack roll if at least one of your allies is within 5 feet of the target, the ally doesn't have the Incapacitated condition, and you don't have Disadvantage on the attack roll.\n\nThe extra damage increases as you gain Rogue levels, as shown in the Sneak Attack column of the Rogue Features table.",
     "source": "srd",
     "srd_key": "srd-2024_rogue_sneak-attack",
+    "vars": [
+      {
+        "name": "sneakAttackDice",
+        "kind": "derived",
+        "label": "Sneak Attack (number of dice)",
+        "formula": "[0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10][level]"
+      }
+    ],
     "tags": [
       "class",
       "rogue",
@@ -4013,6 +4077,14 @@
     "deep_description": "You gain one invocation of your choice, such as Pact of the Tome. Invocations are described in the \"Eldritch Invocation Options\" section later in this class's description.\n\n**Prerequisites.** If an invocation has a prerequisite, you must meet it to learn that invocation. For example, if an invocation requires you to be a level 5+ Warlock, you can select the invocation once you reach Warlock level 5.\n\n**Replacing and Gaining Invocations.** Whenever you gain a Warlock level, you can replace one of your invocations with another one for which you qualify. You can't replace an invocation if it's a prerequisite for another invocation that you have.\n\nWhen you gain certain Warlock levels, you gain more invocations of your choice, as shown in the Invocations column of the Warlock Features table.\n\nYou can't pick the same invocation more than once unless its description says otherwise.",
     "source": "srd",
     "srd_key": "srd-2024_warlock_eldritch-invocations",
+    "vars": [
+      {
+        "name": "eldritchInvocations",
+        "kind": "derived",
+        "label": "Eldritch Invocations",
+        "formula": "[0,1,3,3,3,5,5,6,6,7,7,7,8,8,8,9,9,9,10,10,10][level]"
+      }
+    ],
     "tags": [
       "class",
       "warlock",

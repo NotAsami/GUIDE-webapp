@@ -1031,7 +1031,16 @@ export function matchCount(selector: string, nodes: AuthoredNode[]): number {
  *  DANGLING target, one naming a catalog row that does not exist. Conflating the
  *  two makes the linter useless, which is why matchCount is a separate signal the
  *  editor renders rather than a severity here. */
-export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, nodes: AuthoredNode[] = []): AuditItem[] {
+export function auditNode(
+  /** `prose` is the node's own player-facing text. A variable read only by a
+   *  description is READ — §25 interpolation is a consumer just like a
+   *  condition is. Without it, moving a progression variable onto the feature
+   *  whose prose prints it earns a "never used" warning for doing the right
+   *  thing, and a warning that fires on correct authoring is one the DM learns
+   *  to scroll past. */
+  node: { graph?: GraphEffect[]; vars?: VarDef[]; prose?: (string | undefined)[] },
+  nodes: AuthoredNode[] = [],
+): AuditItem[] {
   const out: AuditItem[] = auditVars(node.vars ?? [])
   const known = new Set(nodes.map(n => n.gid))
   const declared = new Set((node.vars ?? []).map(v => v.name))
@@ -1317,6 +1326,11 @@ export function auditNode(node: { graph?: GraphEffect[]; vars?: VarDef[] }, node
       for (const src of interpolations(eff.text || eff.label)) {
         for (const id of freeIdents(src)) referenced.add(id)
       }
+    }
+  }
+  for (const src of node.prose ?? []) {
+    for (const span of interpolations(src ?? '')) {
+      for (const id of freeIdents(span)) referenced.add(id)
     }
   }
   for (const d of node.vars ?? []) {
