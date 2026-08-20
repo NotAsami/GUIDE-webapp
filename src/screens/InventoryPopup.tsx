@@ -122,9 +122,14 @@ export function ItemPopup({
     ['Value', item.value ? `${item.value.toLocaleString()} gp` : '—'],
     [cat === 'weapon' ? 'Damage' : cat === 'armor' ? 'Armor' : 'Key Stat',
       item.damage ?? item.damageDice ?? item.rows?.[0]?.[1] ?? '—'],
+    /* A WEAPON HAS NO `slot` — weapons live in equipped.weapons[] and are held
+       in a hand, not fitted to one of the eight gear slots. Reading the absent
+       slot as "Not equippable" told the player the opposite of the truth about
+       every sword in the game. */
     ['Slot', item.slot
       ? isRingSlot(item.slot) ? 'Ring' : item.slot.replace(/^\w/, c => c.toUpperCase())
-      : asContainer ? 'Carry' : 'Not equippable'],
+      : cat === 'weapon' ? (item.hand === 'off' ? 'Off hand' : item.hand === 'main' ? 'Main hand' : 'Held — main or off hand')
+        : asContainer ? 'Carry' : 'Not equippable'],
   ]
   if (item.attune) facts.push(['Attunement', item.attune])
   if (asContainer) {

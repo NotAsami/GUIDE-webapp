@@ -22,6 +22,7 @@ import type { DmShopsState } from '../lib/dm'
 import { ALL_PARTY } from '../lib/voice'
 import { CAT_LABEL, CAT_ORDER, rarityLabel } from '../lib/items'
 import { parseCatalogQuery, matchesCatalogQuery } from '../lib/catalogSearch'
+import { ProsePreview } from '../components/ProsePreview'
 import styles from './OperatorConsole.module.css'
 import pop from './InventoryPopup.module.css'
 import { IconPicker } from '../components/IconPicker'
@@ -280,6 +281,7 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
       <div className={styles.qLabRow}>
         <span className={styles.fieldLab}>Player-Facing Prose</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Shown when the shop opens</span>
+        <ProsePreview text={desc} label="Preview" />
       </div>
       <textarea className={styles.catProse} value={desc} onChange={e => setDesc(e.target.value)}
         onKeyDown={markdownShortcuts(setDesc)}

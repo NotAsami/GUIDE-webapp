@@ -20,7 +20,7 @@
 
 import type {
   AbilityKey, AbilityScores, ActiveEffect, CharacterRow, EffectiveSheet,
-  EquippedItem, EquippedWeapon, Feature, ItemEffects, ItemSlot, ShardNode, ShardTree, Spell,
+  EquippedItem, EquippedWeapon, Feature, GraphEffect, ItemEffects, ItemSlot, ShardNode, ShardTree, Spell,
 } from './database.types.ts'
 import { ITEM_SLOTS, getGear, getWeapons } from './equip.ts'
 import { isPrepared } from './spells.ts'
@@ -112,7 +112,12 @@ export type ActiveSource =
    *  otherwise share one graph id. See nodeGid(). */
   | { kind: 'shardnode'; obj: ShardNode; shardId: string; fx?: ItemEffects }
   | { kind: 'spell'; obj: Spell; fx?: never }
-  | { kind: 'weapon'; obj: EquippedWeapon; fx?: never }
+  /* A weapon may contribute EXACTLY ONE thing to the sheet: which abilities
+     its attacks may use. The type says so rather than a comment saying so —
+     `Pick` makes `{ ac: 2 }` on a weapon a compile error, which is the
+     guarantee `fx?: never` used to give and the reason a magic sword's +1
+     still cannot become +1 AC. */
+  | { kind: 'weapon'; obj: EquippedWeapon; fx?: Pick<ItemEffects, 'attackAbilities'> }
   | { kind: 'item'; obj: EquippedItem; fx?: ItemEffects }
   | { kind: 'effect'; obj: ActiveEffect; fx: ItemEffects }
 
@@ -134,6 +139,17 @@ export type ActiveSource =
  *  ponytail: rebuilt per call, and effectiveSheet() is called unmemoized from
  *  ~11 render paths. Memoize per character row when the resolver lands — it
  *  needs the same list and is the first thing to make the cost visible. */
+/** The attack-ability permissions an item's own graph grants, and nothing else.
+ *
+ *  Deliberately NOT the whole of sheetEffects(): that also compiles `boost`,
+ *  and an item already has a numeric path (`effects`, compiled from
+ *  effectRefs). Letting boost in here would give one authored number two ways
+ *  to reach the sheet, which is the defect this codebase keeps re-learning. */
+function grantedAbilities(graph?: GraphEffect[]): Pick<ItemEffects, 'attackAbilities'> | undefined {
+  const fx = sheetEffects(graph)
+  return fx?.attackAbilities?.length ? { attackAbilities: fx.attackAbilities } : undefined
+}
+
 export function activeSources(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): ActiveSource[] {
   const out: ActiveSource[] = []
 
@@ -180,8 +196,18 @@ export function activeSources(character: CharacterRow, shardTrees: Record<string
   // `spell.prepared` directly would silence every spell they own.
   const sb = character.spellbook
   for (const obj of sb?.spells ?? []) if (isPrepared(obj, sb)) out.push({ kind: 'spell', obj })
-  for (const obj of getWeapons(getGear(character))) out.push({ kind: 'weapon', obj })
-  for (const obj of wornGear(character)) out.push({ kind: 'item', obj, fx: obj.effects })
+  /* `useability` authored on the ITEM now reaches the sheet. It did not before:
+     a weapon carried no fx at all, and worn gear carried only `effects` — the
+     numeric bundle compiled from effectRefs — so a `use ability` rule sat in the
+     item's Rules block doing nothing while the editor happily offered it.
+     Only the permission crosses over; numbers keep their existing path. */
+  for (const obj of getWeapons(getGear(character))) {
+    out.push({ kind: 'weapon', obj, fx: grantedAbilities(obj.graph) })
+  }
+  for (const obj of wornGear(character)) {
+    const granted = grantedAbilities(obj.graph)
+    out.push({ kind: 'item', obj, fx: granted ? { ...obj.effects, ...granted } : obj.effects })
+  }
   for (const obj of activeEffects(character)) out.push({ kind: 'effect', obj, fx: obj.effects })
 
   return out

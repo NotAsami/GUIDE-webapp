@@ -258,7 +258,11 @@ function Detail({ line, container, onClose }: { line: LootOpenLine; container: s
                   {line.assigned_name ?? 'Not yet assigned'}
                 </span>
               </div>
-              <div className={pop.f}><span className={pop.k}>Slot</span><span className={pop.v}>{it.slot ?? 'Not equippable'}</span></div>
+              {/* Same trap as the Inventory popup: a weapon carries no `slot`,
+                  it carries a hand. */}
+              <div className={pop.f}><span className={pop.k}>Slot</span><span className={pop.v}>
+                {it.slot ?? (it.category === 'weapon' ? 'Held — main or off hand' : 'Not equippable')}
+              </span></div>
               <div className={pop.f}><span className={pop.k}>Weight</span><span className={pop.v}>{it.weight ? `${it.weight} lb` : '—'}</span></div>
             </div>
             {it.flavor?.trim() && <div className={pop.imDesc}>{renderInline(it.flavor)}</div>}
