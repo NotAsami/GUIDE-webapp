@@ -173,6 +173,18 @@
   font-variant-numeric: tabular-nums;
 }
 .hpBlock :global(.val.low) { color: var(--danger); }
+
+/* topLeft/topRight are nowrap flex rows with fixed min-widths (.statBlock,
+   the burden/gold/HP blocks) — below their combined min-content width they
+   overflow visibly (nothing here clips them) straight into the centered
+   .charName, since .topCenter is an `auto`-width grid column with no floor
+   of its own. Measured live: on the DM account (extra Rest/DM/fullscreen/
+   sign-out controls in .topRight) the two side columns plus the name need
+   ~1355px; dropping Burden brings that down to ~1166px. 1450px hides it with
+   margin before the overlap actually starts. */
+@media (max-width: 1450px) {
+  .burdenBlock { display: none; }
+}
 .hpStepper {
   display: inline-flex;
   align-items: center;

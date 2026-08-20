@@ -363,7 +363,7 @@ export function Spellbook() {
           </section>
 
           {/* ============ 03 SPELL DETAIL ============ */}
-          <section className={styles.col} aria-label="Spell detail">
+          <section className={`${styles.col} ${styles.detailCol}`} aria-label="Spell detail">
             <div className={styles.colHeader}>
               <span className={styles.chNum}>03</span>
               <span className={styles.chTitle}>Spell Detail</span>
