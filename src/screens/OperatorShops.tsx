@@ -13,14 +13,15 @@
  * Quest-tier items are excluded from the picker AND re-checked server-side
  * by shop_buy (notes.md: "they can't sell relics").
  */
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { CatalogItemRow, ItemCategory, ItemRarity, Shop, ShopCatalogRow, ShopStockLine, ShopStockMode } from '../lib/database.types'
+import type { CatalogItemData, CatalogItemRow, ItemCategory, ItemRarity, Shop, ShopCatalogRow, ShopStockLine, ShopStockMode } from '../lib/database.types'
 import { markdownShortcuts } from '../lib/textareaHooks'
 import { formatPrice, type PriceUnit } from '../lib/coins'
 import type { DmShopsState } from '../lib/dm'
 import { ALL_PARTY } from '../lib/voice'
 import { CAT_LABEL, CAT_ORDER, rarityLabel } from '../lib/items'
+import { parseCatalogQuery, matchesCatalogQuery } from '../lib/catalogSearch'
 import styles from './OperatorConsole.module.css'
 import pop from './InventoryPopup.module.css'
 import { IconPicker } from '../components/IconPicker'
@@ -197,13 +198,43 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
   }
 
   const inStock = new Set(stock.map(l => l.item_id))
-  const q = query.trim().toLowerCase()
+  /* The same grammar the loot pools and every catalog index use, so
+     `tag:potion !rare` narrows here too. It replaced a bespoke substring match
+     over name+category+rarity, which could not express a tag OR an exclusion —
+     the two things stocking a shop by description actually needs. */
+  const parsed = parseCatalogQuery(query)
   const pickable = itemCatalog.filter(it => {
     if (pickRar !== 'all' && (it.data?.rarity ?? 'common') !== pickRar) return false
     if (pickCat !== 'all' && (it.data?.category ?? 'misc') !== pickCat) return false
-    if (q && !`${it.data?.name ?? ''} ${it.data?.category ?? ''} ${it.data?.rarity ?? ''}`.toLowerCase().includes(q)) return false
-    return true
+    return matchesCatalogQuery(it.data ?? {}, parsed)
   })
+
+  /* What "Stock All" would actually add, and why the rest are left out.
+     Three exclusions, each for a different reason:
+       already   — shop_buy (0009) finds a line by item_id, so two lines for one
+                   item would collide. The manual picker already blocks this.
+       quest     — never for sale, same rule the picker enforces per-click.
+       unpriced  — `value` absent means priceless/unlisted, NOT free. Adding one
+                   item at 0gp by hand is a choice; sweeping twenty in at 0gp is
+                   an accident, so bulk-add refuses and says how many it skipped. */
+  const bulk = useMemo(() => {
+    const add: CatalogItemRow[] = []
+    let skippedQuest = 0, skippedUnpriced = 0, skippedAlready = 0
+    for (const it of pickable) {
+      if (inStock.has(it.id)) { skippedAlready++; continue }
+      if (it.data?.category === 'quest') { skippedQuest++; continue }
+      if (!it.data?.value) { skippedUnpriced++; continue }
+      add.push(it)
+    }
+    return { add, skippedQuest, skippedUnpriced, skippedAlready }
+  }, [pickable, stock])
+
+  function stockAll() {
+    setStock(prev => [...prev, ...bulk.add.map(it => ({
+      item_id: it.id, price: it.data?.value ?? 0, unit: it.data?.valueUnit ?? 'gp',
+      mode: 'unlimited' as ShopStockMode, qty: 1, item: it.data as CatalogItemData,
+    }))])
+  }
 
   return (
     <>
@@ -337,6 +368,32 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
             </div>
           </div>
         </div>
+        {/* Stocking by description rather than by clicking twenty times. It adds
+            REAL lines rather than storing the query: a stored query would have
+            to re-resolve on open, which silently restocks a shop the party just
+            cleared out — see docs/GUIDE_Codex_Deferred.md. Once added, each line
+            is ordinary stock the DM can reprice or delete. */}
+        <div className={styles.bulkRow}>
+          <button type="button" className={styles.bulkBtn}
+            disabled={!bulk.add.length}
+            onClick={stockAll}
+            title={bulk.add.length ? `Add ${bulk.add.length} item(s) to stock` : 'Nothing here to add'}>
+            <i className="fa-solid fa-layer-group" />
+            {bulk.add.length ? `Stock all ${bulk.add.length}` : 'Nothing to stock'}
+          </button>
+          <span className={styles.bulkNote}>
+            {(bulk.skippedAlready || bulk.skippedQuest || bulk.skippedUnpriced) ? (
+              <>skipping{' '}
+                {[
+                  bulk.skippedAlready && `${bulk.skippedAlready} already stocked`,
+                  bulk.skippedQuest && `${bulk.skippedQuest} quest`,
+                  bulk.skippedUnpriced && `${bulk.skippedUnpriced} with no value`,
+                ].filter(Boolean).join(' · ')}
+              </>
+            ) : <>prices come from each item&rsquo;s catalog value</>}
+          </span>
+        </div>
+
         <div className={styles.skPicklist}>
           {itemCatalog.length === 0 ? (
             <div className={styles.stockEmpty}>Catalog is empty — author items in the Items tab.</div>
