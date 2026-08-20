@@ -23,7 +23,10 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { createPortal } from 'react-dom'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { useDmStatus, useDmFeatures, featureContent } from '../lib/dm'
+import {
+  useDmStatus, useDmFeatures, featureContent,
+  useDmClasses, useDmRaces, useDmBackgrounds, classContent, raceContent, backgroundContent,
+} from '../lib/dm'
 import { useLocalDraft } from '../lib/draft'
 /* Features keep their manual publish, so they do not pass through the
  * autosave hooks that stamp this — the 44 imported SRD features would
@@ -42,6 +45,8 @@ import type {
 } from '../lib/database.types'
 import { originChain } from '../lib/featureView'
 import { SEP, depthOf, folderSet, hiddenUnder, leafOf } from '../lib/folders'
+import { previewScope, type VarOwner } from '../lib/previewScope'
+import type { ExprScope } from '../lib/expr'
 import styles from '../components/authoring.module.css'
 import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
@@ -146,6 +151,23 @@ export default function FeatureEditor() {
   // load-bearing rather than cosmetic.
   const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
 
+  /* WHAT THE PLAYER PREVIEW EVALUATES `{…}` AGAINST.
+     A class variable like `weaponMastery` is declared on the class, not on the
+     feature, so without these the preview printed the braces — which is the one
+     thing a preview promising the player's view must not do. Owners are read so
+     the scope can be narrowed to the classes that actually grant the feature
+     being edited; see lib/previewScope.ts for why that narrowing matters. */
+  const classLib = useDmClasses()
+  const raceLib = useDmRaces()
+  const bgLib = useDmBackgrounds()
+  // Draft-or-published, same as everywhere else: the DM previewing a feature is
+  // looking at the class as they are currently editing it, not as it last shipped.
+  const owners: VarOwner[] = useMemo(() => [
+    ...classLib.classes.map(classContent),
+    ...raceLib.races.map(raceContent),
+    ...bgLib.backgrounds.map(backgroundContent),
+  ].filter(Boolean) as VarOwner[], [classLib.classes, raceLib.races, bgLib.backgrounds])
+
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
     const out = auditNode({ graph: draft.graph, vars: draft.vars }, ready ? nodes : [])
@@ -178,6 +200,13 @@ export default function FeatureEditor() {
     ...lib.features.map(r => featureContent(r).folder || UNFILED),
     ...(draft?.folder ? [draft.folder] : []),
   ]), [lib.features, draft?.folder])
+
+  /* Rebuilt as the DM types, because a variable added to the feature has to
+     show up in its own preview immediately — that is when they check it. */
+  const pvScope = useMemo(
+    () => previewScope({ featureId: selId ?? undefined, vars: draft?.vars, owners }),
+    [selId, draft?.vars, owners],
+  )
 
   const parsed = useMemo(() => {
     const m = /^(tag|roll):(.*)$/i.exec(query.trim())
@@ -615,7 +644,7 @@ export default function FeatureEditor() {
                   </div>
                 ) : (
                   <FeatureForm
-                    d={draft} set={set} setEffect={setEffect} setVar={setVar} update={update}
+                    d={draft} previewScope={pvScope} set={set} setEffect={setEffect} setVar={setVar} update={update}
                     open={open} setOpen={setOpen} openEffect={openEffect} setOpenEffect={setOpenEffect}
                     moreOps={moreOps} setMoreOps={setMoreOps}
                     folders={folders} nodes={nodes} namesByGid={namesByGid} tagUse={tagUse}
@@ -723,6 +752,8 @@ type PopKind =
 
 type FormProps = {
   d: CatalogFeatureData
+  /** Values the player-preview evaluates `{…}` against. */
+  previewScope: ExprScope
   set: (p: Partial<CatalogFeatureData>) => void
   setEffect: (i: number, p: Partial<GraphEffect>) => void
   setVar: (i: number, p: Partial<VarDef>) => void
@@ -912,7 +943,7 @@ function FeatureForm(p: FormProps) {
       <div className={styles.sec}>
         <span className={styles.fieldLab}>Card text</span>
         <span className={styles.facing}><i className="fa-solid fa-eye" /> Player-facing</span>
-        <ProsePreview text={d.light_description ?? ''} />
+        <ProsePreview text={d.light_description ?? ''} scope={p.previewScope} />
       </div>
       {/* No length cap. The card scales to whatever this says (Features.tsx's
           masonry sizes each card to its own text), and the DM is the one who
@@ -928,7 +959,7 @@ function FeatureForm(p: FormProps) {
       <div className={styles.sec}>
         <span className={styles.fieldLab}>Detail text</span>
         <span className={styles.facing}><i className="fa-solid fa-eye" /> Player-facing</span>
-        <ProsePreview text={d.deep_description ?? ''} />
+        <ProsePreview text={d.deep_description ?? ''} scope={p.previewScope} />
       </div>
       <textarea data-audit="field:deep" ref={deepRef} className={styles.prose} value={d.deep_description ?? ''}
         placeholder="The full prose the player reads when the card is expanded…"
