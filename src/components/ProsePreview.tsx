@@ -15,6 +15,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Prose } from '../lib/markdown'
+import { interpolate, type ExprScope } from '../lib/expr'
 import styles from './ProsePreview.module.css'
 
 /** The left edge this popover will actually be cut off at.
@@ -31,11 +32,16 @@ function clipLeftOf(el: HTMLElement): number {
   return 0
 }
 
-export function ProsePreview({ text, label = 'Preview' }: {
+export function ProsePreview({ text, label = 'Preview', scope }: {
   text: string
   /** Overridable for fields where "as the player reads it" is not literally
    *  the framing — a shop greeting, a session recap. */
   label?: string
+  /** Values for `{…}` spans. Without it the preview shows the braces, which is
+   *  what it did on arrival and was simply wrong: `{weaponMastery}` is not what
+   *  the player reads, so a preview claiming to be their view had to either
+   *  evaluate the span or say it could not. Both, now — see the footer. */
+  scope?: ExprScope
 }) {
   const [open, setOpen] = useState(false)
   const [flip, setFlip] = useState(false)
@@ -74,6 +80,7 @@ export function ProsePreview({ text, label = 'Preview' }: {
   }, [open])
 
   const empty = !text?.trim()
+  const { text: shown, bad } = scope ? interpolate(text ?? '', scope) : { text: text ?? '', bad: [] }
 
   return (
     <span className={styles.wrap} ref={wrap}>
@@ -92,7 +99,12 @@ export function ProsePreview({ text, label = 'Preview' }: {
           role="dialog" aria-label="Player preview">
           <span className={styles.head}>
             <i className="fa-solid fa-user" />
-            <span className={styles.t}>As the player reads it</span>
+            <span className={styles.t}>
+              As the player reads it
+              {/* A resolved `{weaponMastery}` renders as a bare "3"; without the
+                  level beside it there is no way to tell what it is 3 OF. */}
+              {typeof scope?.level === 'number' && <em className={styles.lv}> · at level {scope.level}</em>}
+            </span>
             <button type="button" className={styles.x} onClick={() => setOpen(false)} aria-label="Close preview">
               <i className="fa-solid fa-xmark" />
             </button>
@@ -100,8 +112,17 @@ export function ProsePreview({ text, label = 'Preview' }: {
           <span className={styles.body}>
             {empty
               ? <span className={styles.none}>Nothing written yet.</span>
-              : <Prose text={text} className={styles.prose} />}
+              : <Prose text={shown} className={styles.prose} />}
           </span>
+          {bad.length > 0 && (
+            /* Named, not hidden. A span the preview cannot evaluate is either a
+               value that genuinely needs a character — prof, hp, an ability mod
+               — or a typo, and the author is the only one who can tell which. */
+            <span className={styles.unres}>
+              <i className="fa-solid fa-circle-question" />
+              needs a character: {[...new Set(bad)].join(', ')}
+            </span>
+          )}
         </span>
       )}
     </span>
