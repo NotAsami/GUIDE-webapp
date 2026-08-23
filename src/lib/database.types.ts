@@ -157,6 +157,96 @@ export type PendingSkills = {
   count: number
 }
 
+/* ---- ADVANCEMENT ----
+   `LevelUpPlan` was local to lib/levelup.ts while only the DM ever held one.
+   Releasing a level PARKS it on the sheet, so it is now a persisted shape and
+   belongs where every other parked payload's type lives. lib/levelup.ts still
+   owns the code that builds and spends one; this file only says what it is. */
+
+/** A feature a class gate makes available, and the id it would be granted
+ *  under. Carries the full `CatalogFeatureData` for the same reason
+ *  `PendingKitItem` carries `CatalogItemData`: the player cannot read the
+ *  catalog it came from. */
+export type FeatureOffer = {
+  /** `cls:<classId>:<featureId>` — the id assignClass would have used, so a
+   *  later re-assign replaces rather than duplicates. */
+  id: string
+  featureId: string
+  data: CatalogFeatureData
+  /** The class or subclass that references it. */
+  source: string
+  /** The level floor its gate names, for the row's tag. */
+  at: number | null
+  /** True when the gate opens AT the new level — those arrive pre-checked. */
+  fresh: boolean
+}
+
+/** What +1 level would do. Every number is a SUGGESTION the taker confirms;
+ *  nothing here is written until Apply. Pure data — no functions, no catalog
+ *  rows — which is what lets it survive a round trip through the sheet. */
+export type LevelUpPlan = {
+  charId: string
+  name: string
+  className: string
+  archetype: string
+  fromLevel: number
+  toLevel: number
+
+  hitDie: number
+  /** 5e's "or N" shortcut — d6→4, d8→5, d10→6, d12→7. */
+  avg: number
+  conMod: number
+  hitDiceFrom: string
+  hitDiceTo: string
+
+  abilityScores: Record<AbilityKey, number>
+
+  profFrom: number
+  profTo: number
+  /** False when the stored bonus is not what the formula gives at fromLevel —
+   *  the DM tuned it, so Apply holds it. */
+  profWritable: boolean
+
+  caster: ClassCasterType
+  slotsFrom: number[]
+  slotsTo: number[]
+  pactFrom: { count: number; level: number } | null
+  pactTo: { count: number; level: number } | null
+
+  /** Casting numbers at the new proficiency, and whether Apply may write them. */
+  castFrom: { saveDC: number; attackBonus: number } | null
+  castTo: { saveDC: number; attackBonus: number } | null
+  castWritable: boolean
+
+  /** Effective max HP minus base — the shard/gear headroom `nextCurrentHp`
+   *  clamps against, so step 01's note and the patch reach the same answer. */
+  hpMaxBonus: number
+
+  offers: FeatureOffer[]
+  /** Set when there is no class row to read — the overlay renders an empty
+   *  state instead of guessing a d8. */
+  classMissing: boolean
+}
+
+/** A level the DM has RELEASED and the player has not yet taken.
+ *
+ *  The DM resolves it against the catalogs at release time and parks the whole
+ *  thing, because `class_catalog` and `feature_catalog` have no player policy —
+ *  a player's select returns zero rows, so they could never compute this for
+ *  themselves. Same snapshot-at-the-boundary rule as `PendingKit`.
+ *
+ *  Cleared in the SAME write that applies the level. One at a time: releasing
+ *  again while one is pending replaces it. */
+export type PendingLevel = {
+  plan: LevelUpPlan
+  /** Published `category:'feat'` rows — the feat library the player cannot
+   *  read. `prereqMet` checks against the character row, not the catalog, so
+   *  this is all the feat step needs. */
+  feats: CatalogFeatureRow[]
+  /** ISO timestamp, for the DM's waiting list and the card's line. */
+  releasedAt: string
+}
+
 export type Proficiencies = {
   armor?: string[]
   weapons?: string[]
@@ -195,6 +285,8 @@ export type CharacterSheet = {
   pendingSkills?: PendingSkills
   /** A subclass choice waiting on the player — see PendingPath. */
   pendingPath?: PendingPath
+  /** A level the DM released for the player to take — see PendingLevel. */
+  pendingLevel?: PendingLevel
   /** Flat per-ability saving-throw bonuses. May be authored (a feat) OR injected
    *  by effect layering (lib/effects.ts); read by dnd.ts saveTotal. */
   saveBonuses?: Partial<Record<AbilityKey, number>>
@@ -366,18 +458,31 @@ export type VarDef = {
   initial?: number | boolean
   /** Editor + DM-console display name. */
   label?: string
-  /** `stored` only. When a rest returns this to `initial` (or the type's zero).
-   *  Mirrors Feature.recharge, which already means exactly this for uses:
+  /** `stored` only. When something returns this to `initial` (or the type's
+   *  zero). Mirrors Feature.recharge, which already means exactly this for uses:
    *  'short' = short OR long rest, 'long' = long only, absent = never resets.
    *
    *  Forced by real content — "once per rest" state like `used_this_fight` is
-   *  otherwise true forever until someone remembers to flip it back. */
-  resetOn?: 'short' | 'long'
+   *  otherwise true forever until someone remembers to flip it back.
+   *
+   *  'turn' is the odd one out and does NOT ride along with a rest: it is
+   *  cleared by Advance Turn instead. That is the whole 5e family of "until the
+   *  start of your next turn" — Reckless Attack is the one that forced it — and
+   *  a var that clears every turn has nothing left for a rest to clear. */
+  resetOn?: 'turn' | 'short' | 'long'
 }
 
 /** One-shot modifier awaiting a matching roll. Keyed by ROLL KIND from the
- *  start, never attack-only. Declared here so the stored shape is complete;
- *  nothing arms or consumes one until the armed-queue slice. */
+ *  start, never attack-only.
+ *
+ *  ONE MOD PER OP, not per node: a feature with four `once` contributions arms
+ *  four, and the attack roll consumes the one aimed at it while the damage roll
+ *  takes the rest. That split is what lets Brutal Strike cancel the advantage
+ *  and add its 1d10 from a single press.
+ *
+ *  (The queue is live: lib/graphState.ts arms and consumes, ActivationSheet
+ *  mints, RollContextPanel renders and taps, and Advance Turn drops the ones a
+ *  lapsed condition was gating.) */
 export type ArmedMod = {
   id: string
   /** The gid of the node that armed it. IDENTITY, not display: `id` is built
@@ -490,8 +595,9 @@ export type GraphEffect = {
   label: string
   /** `add` on a damage roll: the damage type, for the breakdown colour. */
   dmgType?: string
-  /** Arms once instead of applying continuously. Parsed today, honoured when the
-   *  armed queue lands. */
+  /** Arms once instead of applying continuously: the contribution waits in
+   *  `resources.graph.armed` for the next matching roll rather than riding every
+   *  one. Live — see ArmedMod. */
   once?: boolean
   /** `note` only. The rule the player reads. `label` is the short line in a
    *  breakdown; this is the sentence. Absent falls back to `label`, which is what

@@ -5,12 +5,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.types.ts'
-import { buildContext } from './graph.ts'
+import { buildContext, staleArmed } from './graph.ts'
 import { longRestPatch, shortRestPatch } from './rest.ts'
 import {
   applyOutcomes, armableFor, consumeArmed, planActivation, playerVars, restVars, scopedVars, setDmVars,
-  setVars, withArmedCleared,
+  setVars, turnGraphPatch, turnVars, withArmedCleared,
 } from './graphState.ts'
+
 
 const VARS: VarDef[] = [
   { name: 'isRaging', kind: 'stored', type: 'bool', initial: false, resetOn: 'long' },
@@ -397,4 +398,92 @@ test('an armed modifier remembers its source\u2019s NAME, not just its gid', () 
   const [o] = planActivation(RAGE([ONCE]), buildContext(c), c, 'feature:rage')
   assert.equal(o.kind === 'arm' && o.mod.source, 'feature:rage')
   assert.equal(o.kind === 'arm' && o.mod.sourceName, 'Rage')
+})
+
+// ── THE TURN BOUNDARY ───────────────────────────────────────────────────────
+//
+// "Until the start of your next turn" is the whole 5e family Reckless Attack
+// belongs to. Two halves that must happen in one order: the variables reset,
+// and THEN the arms those variables were gating are tested. Backwards, the
+// condition is still true when the gates are checked and nothing is ever
+// stale — a Brutal Strike armed last turn fires this turn as if still owed.
+
+const RECKLESS: VarDef[] = [
+  { name: 'reckless', kind: 'stored', type: 'bool', initial: false, resetOn: 'turn' },
+  ...VARS,
+]
+
+/** Reckless Attack + Brutal Strike, cut down to what the turn boundary sees. */
+const BARB = (): Feature => ({
+  id: 'barb', name: 'Barbarian', vars: RECKLESS,
+  graph: [
+    { id: 'a1', op: 'dis', label: 'Brutal Strike', when: 'reckless', once: true, target: ['roll:attack.str'] },
+    { id: 'a2', op: 'add', value: '1d6', label: 'Held Smite', once: true, target: ['roll:damage.melee'] },
+  ],
+} as unknown as Feature)
+
+const barbChar = (graph: object) =>
+  character({ sheet: { abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 }, features: [BARB()] } } as Partial<CharacterRow>, graph)
+
+const ARMED = [
+  { id: 'm-brutal', source: 'feature:barb', label: 'Brutal Strike', kind: 'attack', sub: 'str', op: 'dis', at: 0 },
+  { id: 'm-smite', source: 'feature:barb', label: 'Held Smite', kind: 'damage', sub: 'melee', op: 'add', value: '1d6', at: 0 },
+]
+
+test('turnVars picks ONLY resetOn: turn, and restVars leaves those alone', () => {
+  const c = barbChar({ vars: { reckless: true, charges: 1, isRaging: true } })
+  assert.deepEqual(turnVars(c), { reckless: false })
+  // A rest resets its own two and must not claim credit for the turn variable.
+  const rest = restVars(c, {}, 'long')
+  assert.equal('reckless' in rest, false)
+  assert.equal(rest.isRaging, false)
+  assert.equal(rest.charges, 3)
+})
+
+test('AN ARM LAPSES WITH THE CONDITION THAT AUTHORISED IT', () => {
+  const c = barbChar({ vars: { reckless: true }, armed: ARMED })
+  const patch = turnGraphPatch(c, buildContext(c))
+  assert.ok(patch)
+  const g = (patch!.resources as { graph: { vars: Record<string, unknown>; armed: { id: string }[] } }).graph
+  assert.equal(g.vars.reckless, false, 'the variable reset')
+  assert.deepEqual(g.armed.map(m => m.id), ['m-smite'], 'the gated arm went, the held one stayed')
+  assert.deepEqual(patch!.disarmed, ['Brutal Strike'])
+  assert.deepEqual(patch!.vars, ['reckless'])
+})
+
+test('AN UNGATED ARM IS NEVER TOUCHED — a held smite is a decision, not a leftover', () => {
+  const c = barbChar({ vars: { reckless: false }, armed: [ARMED[1]] })
+  const patch = turnGraphPatch(c, buildContext(c))
+  const g = (patch?.resources as { graph: { armed: { id: string }[] } } | undefined)?.graph
+  assert.deepEqual(g?.armed.map(m => m.id) ?? ['m-smite'], ['m-smite'])
+  assert.deepEqual(patch?.disarmed ?? [], [])
+})
+
+test('an arm whose SOURCE has gone is left alone rather than silently confiscated', () => {
+  // Feature unequipped, item dropped: the player can still see the chip and
+  // dismiss it. Vanishing without a line saying why is the worse failure.
+  const c = barbChar({ vars: { reckless: false }, armed: [{ ...ARMED[0], source: 'feature:ghost' }] })
+  const patch = turnGraphPatch(c, buildContext(c))
+  const g = (patch?.resources as { graph: { armed: { id: string }[] } } | undefined)?.graph
+  assert.deepEqual(g?.armed.map(m => m.id) ?? ['m-brutal'], ['m-brutal'])
+})
+
+test('nothing to do returns null, so Advance Turn skips the write and the line', () => {
+  assert.equal(turnGraphPatch(character(), buildContext(character())), null)
+})
+
+test('the reset lands BEFORE the gates are read — the ordering the whole thing turns on', () => {
+  // Same input as the lapse test. If turnGraphPatch tested the gates against the
+  // pre-reset scope, `reckless` would still be true and the arm would survive.
+  const c = barbChar({ vars: { reckless: true }, armed: ARMED })
+  assert.deepEqual(turnGraphPatch(c, buildContext(c))!.disarmed, ['Brutal Strike'])
+})
+
+test('staleArmed on its own reports ids, and an unresolvable condition stays live', () => {
+  const c = barbChar({ vars: { reckless: true }, armed: ARMED })
+  const ctx = buildContext(c)
+  assert.deepEqual(staleArmed(ctx, { ...ctx.scope, reckless: false }), ['m-brutal'])
+  // A condition the engine cannot answer is an authoring problem to see in the
+  // audit, never a reason to confiscate something the player armed.
+  assert.deepEqual(staleArmed(ctx, {}), [])
 })

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import type {
-  CharacterRow, CharacterUpdate, EquippedGear, InventoryItem, Json, PendingPathOption,
+  CharacterRow, CharacterUpdate, EquippedGear, InventoryItem, Json, PendingPathOption, ShardTree,
 } from '../lib/database.types'
+import { pendingLevelStale, takeLevelPatch, type LevelUpChoices } from '../lib/levelup'
+import { useBackdropFreeze } from '../lib/backdropFreeze'
+import { LevelUpOverlay } from './LevelUpOverlay'
 import {
   grantKitItems, grantKitOption, kitEntriesText, openQuestions, poolKey,
   type KitQuestion,
@@ -35,8 +38,11 @@ const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).jo
  * with only one answer never appears here at all: assign granted it outright,
  * because a question with one answer is not a question.
  */
-export function StartingKit({ character, onUpdate }: {
+export function StartingKit({ character, shardTrees, onUpdate }: {
   character: CharacterRow
+  /** Needed only by the level-up: `levelUpPatch` clamps current HP against the
+   *  EFFECTIVE ceiling, and a shard can move that. */
+  shardTrees: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<void>
 }) {
   const sheet = character.sheet ?? {}
@@ -44,6 +50,14 @@ export function StartingKit({ character, onUpdate }: {
   const skills = sheet.pendingSkills
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  /** The level-up overlay, opened from the level row. Its own state because it
+   *  is a portal over the card, not a section of it. */
+  const [levelling, setLevelling] = useState(false)
+
+  /* This panel's scrim carries a backdrop blur, and the Codex behind it has a
+     sigil on two infinite rotations — so without this the blur re-runs every
+     frame for as long as the card is open. See lib/backdropFreeze. */
+  useBackdropFreeze(open)
 
   // An overlay that traps you in it is worse than one that pushes layout
   // around. Escape closes, same as every other panel in the app.
@@ -62,9 +76,20 @@ export function StartingKit({ character, onUpdate }: {
   const pathDue = !!path && level >= path.level && (path.options?.length ?? 0) > 0
   const skillsTaken = (skills?.from ?? []).filter(k => (sheet.skillProficiencies ?? []).includes(k)).length
   const skillsLeft = skills ? Math.max(0, skills.count - skillsTaken) : 0
-  const total = questions.length + (skillsLeft > 0 ? 1 : 0) + (pathDue ? 1 : 0)
 
-  if (!kit && !skills && !path) return null
+  /* A LEVEL THE DM RELEASED. It is the one decision here the player was looking
+     forward to, so it leads the card — but it still does not open itself.
+     A STALE release still shows: the plan was resolved against a level the
+     character has since left and cannot be recomputed player-side (the
+     catalogs are DM-only), so the only move is to ask for a new one, and a
+     card that silently hid it would leave them waiting for nothing. */
+  const release = sheet.pendingLevel ?? null
+  const releaseStale = !!release && pendingLevelStale(character, release)
+  const releaseDue = !!release && !releaseStale
+
+  const total = questions.length + (skillsLeft > 0 ? 1 : 0) + (pathDue ? 1 : 0) + (release ? 1 : 0)
+
+  if (!kit && !skills && !path && !release) return null
   if (total === 0) return null
 
   /** One write per answer. Everything that becomes settled by this answer is
@@ -143,17 +168,57 @@ export function StartingKit({ character, onUpdate }: {
     setBusy(false)
   }
 
+  /** Take the released level. ONE WRITE — `takeLevelPatch` applies the
+   *  advancement and clears the release together, because a level applied
+   *  without the release cleared leaves the card offering it again. */
+  async function takeLevel(choices: LevelUpChoices): Promise<boolean> {
+    if (!release || busy) return false
+    setBusy(true)
+    await onUpdate(takeLevelPatch(character, release, choices, shardTrees))
+    setBusy(false)
+    return true
+  }
+
+  const className = release?.plan.className ?? kit?.className ?? skills?.className ?? path?.className
+  /** How many pips, and what colour each is. Cyan is the level, amber a class
+   *  question — the same split the accent bar makes. */
+  const pips = [
+    ...(release ? ['level'] : []),
+    ...Array(total - (release ? 1 : 0)).fill('kit'),
+  ]
+
   if (!open) {
     return (
-      <button type="button" className={styles.prompt} onClick={() => setOpen(true)}>
-        <span className={styles.pIc}><i className="fa-solid fa-sack-xmark" /></span>
+      <button type="button" className={cx(styles.prompt, release && styles.hasLevel)} onClick={() => setOpen(true)}>
+        <span className={cx(styles.pIc, release && styles.pHex)}>
+          {release
+            ? <span className={styles.pLv}>{release.plan.toLevel}</span>
+            : <i className="fa-solid fa-sack-xmark" />}
+        </span>
         <span className={styles.pTx}>
-          <span className={styles.pT}>Finish your character</span>
+          <span className={styles.pT}>
+            {!release
+              ? 'Finish your character'
+              : releaseStale
+                ? 'Your level-up is out of date'
+                : total > 1
+                  ? `Level ${release.plan.toLevel}, and ${total - 1} thing${total === 2 ? '' : 's'} to settle`
+                  : `Level ${release.plan.toLevel} is yours to take`}
+          </span>
           <span className={styles.pS}>
-            {kit?.className ?? skills?.className ?? path?.className} · {total} decision{total === 1 ? '' : 's'} left
+            {className}
+            {release && !releaseStale && ' · granted by your DM'}
+            {' · '}{total} decision{total === 1 ? '' : 's'}
           </span>
         </span>
-        <span className={styles.pGo}>Open <i className="fa-solid fa-chevron-right" /></span>
+        <span className={styles.pips} aria-hidden="true">
+          {pips.map((kind, i) => (
+            <span key={i} className={cx(styles.pip, kind === 'level' && styles.pipLevel)} />
+          ))}
+        </span>
+        <span className={styles.pGo}>
+          {release && !releaseStale ? 'Take it' : 'Open'} <i className="fa-solid fa-chevron-right" />
+        </span>
       </button>
     )
   }
@@ -164,15 +229,81 @@ export function StartingKit({ character, onUpdate }: {
           reachable from the keyboard too. */}
       <button type="button" className={styles.scrim} aria-label="Close class setup"
         onClick={() => setOpen(false)} />
-      <section className={styles.kit} role="dialog" aria-modal="true" aria-label="Class setup">
+      <section className={cx(styles.kit, release && styles.hasLevel)} role="dialog" aria-modal="true"
+        aria-label={release ? 'Your decisions' : 'Class setup'}>
       <div className={styles.kHead}>
-        <i className="fa-solid fa-sack-xmark" />
-        <span className={styles.kT}>Class Setup</span>
-        <span className={styles.kS}>{kit?.className ?? skills?.className ?? path?.className}</span>
+        <i className={release ? 'fa-solid fa-arrow-up-right-dots' : 'fa-solid fa-sack-xmark'} />
+        <span className={styles.kT}>{release ? 'Your Decisions' : 'Class Setup'}</span>
+        <span className={styles.kS}>{character.name} · {className}</span>
         <button type="button" className={styles.kX} onClick={() => setOpen(false)}>
           <i className="fa-solid fa-xmark" /> Later
         </button>
       </div>
+
+      {release && (
+        <div className={styles.kChoice}>
+          <div className={styles.kcLab}>
+            Advancement
+            <span className={cx(styles.kcCount, styles.kcCyan)}>
+              Released {new Date(release.releasedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+          <div className={cx(styles.lvRow, releaseStale && styles.lvStale, levelling && styles.lvQuiet)}>
+            <span className={styles.lvHex}><span className={styles.lvN}>{release.plan.toLevel}</span></span>
+            <span className={styles.lvTx}>
+              <span className={styles.lvT}>
+                <span className={styles.lvFrom}>Level {release.plan.fromLevel}</span>
+                <span className={styles.lvArw}>→</span>
+                <span>Level {release.plan.toLevel}</span>
+              </span>
+              {releaseStale ? (
+                <span className={styles.lvD}>
+                  This was prepared for level {release.plan.fromLevel}, and you are on{' '}
+                  {character.identity?.level ?? 1} now — the numbers in it no longer fit.
+                  Ask your DM to release it again.
+                </span>
+              ) : (
+                <>
+                  <span className={styles.lvD}>
+                    Roll your own hit die, take what {release.plan.className} opens at{' '}
+                    {release.plan.toLevel}, and spend your ability points. Nothing is written until
+                    you confirm.
+                  </span>
+                  <span className={styles.lvMeta}>
+                    <span className={styles.mchip}>1d{release.plan.hitDie} + {release.plan.conMod} HP</span>
+                    {release.plan.offers.length > 0 && (
+                      <span className={styles.mchip}>
+                        {release.plan.offers.length} feature{release.plan.offers.length === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    <span className={styles.mchip}>Ability score or feat</span>
+                  </span>
+                </>
+              )}
+            </span>
+            {releaseDue && (
+              <button type="button" className={styles.lvGo} disabled={busy}
+                onClick={() => setLevelling(true)}>
+                Begin <i className="fa-solid fa-arrow-right" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {levelling && release && (
+        <LevelUpOverlay
+          tone="player"
+          blurBackdrop={false}
+          plan={release.plan}
+          feats={release.feats}
+          row={character}
+          shardTrees={shardTrees}
+          hp={{ current: sheet.hp?.current ?? 0, max: sheet.hp?.max ?? 0 }}
+          onApply={takeLevel}
+          onClose={() => setLevelling(false)}
+        />
+      )}
 
       {skillsLeft > 0 && skills && (
         <div className={styles.kChoice}>

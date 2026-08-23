@@ -1488,6 +1488,61 @@ test('attack and damage narrow independently — one weapon, two statements', ()
   assert.equal(total(resolve(ctx, { kind: 'damage', sub: 'ranged' })).flat, 0)
 })
 
+test('AN ABILITY-NARROWED ATTACK matches the ability, not the weapon kind', () => {
+  // Reckless Attack: "Advantage on attack rolls using Strength". Nothing else in
+  // the selector vocabulary could say it — melee/ranged/spell describe the
+  // weapon, and a finesse blade swung with Dexterity is melee either way.
+  const c = withFeatures([gfeat('Reckless', [
+    { id: 'e1', op: 'adv', label: 'Reckless', target: ['roll:attack.str'] },
+  ])])
+  const ctx = buildContext(c)
+  assert.equal(resolve(ctx, { kind: 'attack', sub: 'melee', ability: 'str' }).adv, true)
+  // The same melee weapon, swung with Dexterity, gets nothing.
+  assert.equal(resolve(ctx, { kind: 'attack', sub: 'melee', ability: 'dex' }).adv, false)
+  // A Strength attack at range still counts — the ability is the condition,
+  // not the delivery. A thrown handaxe is exactly this case.
+  assert.equal(resolve(ctx, { kind: 'attack', sub: 'ranged', ability: 'str' }).adv, true)
+  // An attack carrying no ability at all matches only the unnarrowed selector.
+  assert.equal(resolve(ctx, { kind: 'attack', sub: 'melee' }).adv, false)
+})
+
+test('the ability is a SIBLING of the sub — narrowing by one never silences the other', () => {
+  // A greataxe swing is melee AND Strength-based. Folding the ability into `sub`
+  // would have made these mutually exclusive.
+  const c = withFeatures([gfeat('Both', [
+    { id: 'e1', op: 'add', value: '1', label: 'Melee', target: ['roll:attack.melee'] },
+    { id: 'e2', op: 'add', value: '2', label: 'Strong', target: ['roll:attack.str'] },
+  ])])
+  const ctx = buildContext(c)
+  assert.equal(total(resolve(ctx, { kind: 'attack', sub: 'melee', ability: 'str' })).flat, 3)
+  assert.equal(total(resolve(ctx, { kind: 'attack', sub: 'melee', ability: 'dex' })).flat, 1)
+  assert.equal(total(resolve(ctx, { kind: 'attack', sub: 'ranged', ability: 'str' })).flat, 2)
+})
+
+test('an ability selector does not leak across roll kinds', () => {
+  // `save.str` and `attack.str` share a suffix and must stay unrelated.
+  const c = withFeatures([gfeat('Saves', [
+    { id: 'e1', op: 'adv', label: 'Save only', target: ['roll:save.str'] },
+  ])])
+  const ctx = buildContext(c)
+  assert.equal(resolve(ctx, { kind: 'attack', sub: 'melee', ability: 'str' }).adv, false)
+  assert.equal(resolve(ctx, { kind: 'save', sub: 'str' }).adv, true)
+})
+
+test('ADVANTAGE AND DISADVANTAGE CANCEL — how Brutal Strike forgoes the advantage', () => {
+  // The whole design rests on this: Brutal Strike arms a `dis` on the same
+  // selector Reckless Attack's `adv` targets, and the pair resolves to a normal
+  // roll rather than to either extreme.
+  const c = withFeatures([gfeat('Barb', [
+    { id: 'e1', op: 'adv', label: 'Reckless', target: ['roll:attack.str'] },
+    { id: 'e2', op: 'dis', label: 'Brutal Strike', target: ['roll:attack.str'] },
+  ])])
+  const res = resolve(buildContext(c), { kind: 'attack', sub: 'melee', ability: 'str' })
+  assert.equal(res.adv, true)
+  assert.equal(res.dis, true)
+  // weapons.ts is what turns "both" into normal; this pins that both arrive.
+})
+
 test('every roll selector the editor offers is one a roll surface can pass', () => {
   // The guard for the class of bug this slice kept finding: an option in the
   // authoring UI that nothing downstream ever matches. `attack.spell` is the
@@ -1495,6 +1550,10 @@ test('every roll selector the editor offers is one a roll surface can pass', () 
   // here is the point, so it cannot be forgotten a second time.
   const PASSED_BY_A_SURFACE = new Set([
     'attack', 'attack.melee', 'attack.ranged',           // Equipment.attack()
+    /* Which ability the swing used, passed beside the melee/ranged sub. All six
+       are reachable, not just str/dex: `useability` exists precisely so a
+       feature can let a character attack with Wisdom. */
+    ...['str', 'dex', 'con', 'int', 'wis', 'cha'].map(a => `attack.${a}`),
     'damage', 'damage.melee', 'damage.ranged',           // Equipment.attack()
     'damage.spell',                                      // Spellbook.castSpell()
     'feature',                                           // ActivationSheet, consume
@@ -1821,4 +1880,50 @@ test('one untargeted node covers attack AND damage', () => {
   const flat = (r: { riders: { flat?: number }[] }) => r.riders.reduce((n, x) => n + (Number(x.flat) || 0), 0)
   assert.equal(flat(resolve(ctx, { kind: 'attack', subject: gid('weapon', w) })), 2)
   assert.equal(flat(resolve(ctx, { kind: 'damage', subject: gid('weapon', w) })), 2)
+})
+
+// ── AUTHORING ACROSS NODES ──────────────────────────────────────────────────
+//
+// Both of these blocked Publish on graphs that work perfectly at runtime. The
+// audit only ever saw the node in front of it, while the engine flattens every
+// active source into one scope — so the editor called correct authoring wrong.
+
+test('A VARIABLE DECLARED ON ANOTHER NODE IS NOT A TYPO', () => {
+  // Brutal Strike is gated `when: reckless`; Reckless Attack declares it.
+  const node = { graph: [{ id: 'e1', op: 'dis', label: 'Brutal Strike', when: 'reckless', target: ['roll:attack.str'] }] as GraphEffect[] }
+  const blind = auditNode(node)
+  assert.ok(blind.some(a => a.t === 'Unknown identifier'), 'with no catalog it is still unknown — degrades, never guesses')
+  assert.deepEqual(auditNode(node, [], { reckless: 'bool' }), [])
+})
+
+test('the catalog never overrides a name the node declares itself', () => {
+  // A local `charges` is the one this node reads. Letting the catalog win would
+  // type-check the author's formula against somebody else's variable.
+  const node = {
+    vars: [{ name: 'charges', kind: 'stored', type: 'num' }] as VarDef[],
+    graph: [{ id: 'e1', op: 'add', value: 'charges + 1', label: 'Spend', target: ['roll:damage'] }] as GraphEffect[],
+  }
+  assert.deepEqual(auditNode(node, [], { charges: 'bool' }), [], 'the local num wins over a catalog bool')
+})
+
+test('a genuinely unknown name is still reported with a catalog in hand', () => {
+  const node = { graph: [{ id: 'e1', op: 'dis', label: 'X', when: 'rekless', target: ['roll:attack.str'] }] as GraphEffect[] }
+  assert.ok(auditNode(node, [], { reckless: 'bool' }).some(a => a.t === 'Unknown identifier'))
+})
+
+test('AN ARMED NOTE MAY CARRY A TOGGLE — it commits a choice, it does not reveal text', () => {
+  // Brutal Strike offers Forceful Blow or Hamstring Blow. With `once` the toggle
+  // is answered at ACTIVATION and decides whether the mod is minted at all.
+  const armed = { graph: [{ id: 'e1', op: 'note', label: 'Forceful Blow', ask: 'Forceful Blow', once: true, text: 'The target is pushed 15 feet.', target: ['roll:damage.melee'] }] as GraphEffect[] }
+  assert.deepEqual(auditNode(armed).filter(a => a.t === 'Toggle on a note'), [])
+})
+
+test('a NON-armed note with a toggle and nothing to compute is still refused', () => {
+  // The original rule, intact: a toggle that only hides prose is a toggle that
+  // should have been `when`, or should not exist.
+  const plain = { graph: [{ id: 'e1', op: 'note', label: 'Forceful Blow', ask: 'Forceful Blow', text: 'The target is pushed 15 feet.', target: ['roll:damage.melee'] }] as GraphEffect[] }
+  assert.ok(auditNode(plain).some(a => a.t === 'Toggle on a note'))
+  // …and an interpolating note is allowed either way, armed or not.
+  const computed = { graph: [{ id: 'e1', op: 'note', label: 'Push', ask: 'Push?', text: 'Pushed {5 + 10} feet.', target: ['roll:damage.melee'] }] as GraphEffect[] }
+  assert.deepEqual(auditNode(computed).filter(a => a.t === 'Toggle on a note'), [])
 })

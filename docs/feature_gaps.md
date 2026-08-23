@@ -14,3 +14,9 @@ When reduced to 0 HP, you can make a DC 10 Constitution save to drop to 1 HP ins
 Unblemished Grace
 You are immune to  necrotic damage and have advantage on all saving throws (This is possible but I don't know how to do it)
 ---
+Primal Champion
+Your Strength and Constitution scores increase by 4, to a maximum of 25. (Can do boost, but not the "up to maximum of 25" part)
+---
+Persistent Rage
+When you roll Initiative, you can regain all expended uses of Rage. (Rage is special because it's an action that limit scales with your level, not possible now, and this needs to give you all uses back when you roll initiative, so a free action.)
+---

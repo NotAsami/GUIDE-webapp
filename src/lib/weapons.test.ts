@@ -254,3 +254,43 @@ test('REMOVING THE FEATURE RESTORES STRENGTH — the whole reason it is a rule',
 function proficiencyOf(sheet: CharacterSheet): number {
   return weaponAttackBonus(sword, sheet) - weaponDamageBonus(sword, sheet)
 }
+
+// ── THE PAIR IS ALWAYS ROLLED ───────────────────────────────────────────────
+//
+// The whole Brutal Strike design rests on this. "Forgo the Advantage" is a
+// PICK, not a reroll: both d20s are rolled whatever the mode, so dropping to
+// the first one takes a die that was rolled independently and never saw the
+// advantage. If this ever became "roll one under normal, two under advantage",
+// forgoing would have to reroll — and a reroll after seeing the dice is a
+// different game.
+
+test('TWO d20s ARE CONSUMED IN EVERY MODE, and normal keeps the first', () => {
+  const normal = pin([[7, 20], [19, 20], [4, 8]], () => rollWeaponAttack(SWORD, SHEET))
+  assert.equal(normal.attack.mode, 'normal')
+  assert.equal(normal.attack.d20, 7, 'the FIRST face, not the better one')
+  assert.equal(normal.attack.d20, normal.attack.rolls[0].v)
+  /* The damage die is 4, which is the THIRD pinned face — so the second d20 was
+     drawn and discarded rather than never rolled. That is the invariant: the
+     first face does not depend on the mode, so a roll made without advantage is
+     the same roll it would have been, and forgoing costs nothing in fairness.
+     (`rolls` itself keeps only the kept face here; the pair is retained for the
+     panel to strike through under adv/dis, which the next test covers.) */
+  assert.equal(normal.damage.dice[0].v, 4)
+})
+
+test('advantage keeps the higher of the SAME pair — so forgoing it is a pick', () => {
+  const adv = pin([[7, 20], [19, 20], [4, 8]],
+    () => rollWeaponAttack(SWORD, SHEET, undefined, { attack: RES({ adv: true }) }))
+  assert.deepEqual(adv.attack.rolls.map(d => d.v), [7, 19])
+  assert.equal(adv.attack.d20, 19)
+  // Same faces, same order: normal above kept 7 from this identical pair. That
+  // equivalence is what makes "forgo" honest — no die is rerolled or discarded
+  // in the player's favour.
+})
+
+test('ADV AND DIS CANCEL TO NORMAL — Brutal Strike forgoing Reckless Attack', () => {
+  const both = pin([[7, 20], [19, 20], [4, 8]],
+    () => rollWeaponAttack(SWORD, SHEET, undefined, { attack: RES({ adv: true, dis: true }) }))
+  assert.equal(both.attack.mode, 'normal')
+  assert.equal(both.attack.d20, 7, 'back to the first face, exactly as if neither applied')
+})

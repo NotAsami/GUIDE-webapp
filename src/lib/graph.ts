@@ -404,6 +404,16 @@ export type ResolveReq = {
   subject?: Gid
   /** The subject's tags, so `tag:` selectors match. */
   tags?: string[]
+  /** ATTACKS ONLY: which ability the attack actually used, so
+   *  `roll:attack.str` can mean "Strength-based attacks" — Reckless Attack's
+   *  whole condition.
+   *
+   *  A SIBLING OF `sub`, not a value inside it. `sub` already carries
+   *  melee/ranged/spell and is one string; folding the ability in would make
+   *  `attack.melee` and `attack.str` mutually exclusive when a greataxe swing
+   *  is honestly both. Both become match keys, and the target list is an OR, so
+   *  an author can narrow by either without the other going quiet. */
+  ability?: string
 }
 
 export type Rider = {
@@ -526,6 +536,46 @@ export type GraphContext = {
  *  by one activation naming one target, so it says what it hits rather than
  *  describing it. An absent `sub`/`subject` is a WIDER match ("the next attack"),
  *  not a narrower one. */
+/**
+ * Armed modifiers whose CONDITION has since gone false — the ones to drop when
+ * a turn ends.
+ *
+ * Brutal Strike arms four mods, every one of them gated `when: reckless`. If
+ * Reckless Attack lapses before the swing lands, those four are promises about
+ * a state that no longer exists, and an arm that survives what authorised it is
+ * a bonus the player will spend next turn believing they earned it.
+ *
+ * Only GATED arms are touched. A held smite with no `when` is a deliberate
+ * decision to save something, and Advance Turn has no business spending it.
+ * A source that has gone missing entirely (feature unequipped, item dropped) is
+ * also left alone: an arm the player can still see and dismiss beats one that
+ * vanishes without a line saying why.
+ *
+ * Pass the scope AFTER the turn's variable resets, or `reckless` is still true
+ * and nothing is ever stale.
+ */
+export function staleArmed(ctx: GraphContext, scope: ExprScope = ctx.scope): string[] {
+  const out: string[] = []
+  for (const m of ctx.armed) {
+    /* op + label is the address. `ArmedMod` records the owner gid, not the
+       effect id, so this is what narrows a node's several ops down to the one
+       that minted this mod — the same pair the breakdown shows the player. */
+    const effs = (ctx.byOwner.get(m.source as Gid) ?? [])
+      .filter(e => e.eff.op === m.op && e.eff.label === m.label)
+    if (!effs.length) continue
+    const live = effs.some(e => {
+      if (e.eff.when === undefined) return true
+      const cond = evalExpr(e.eff.when, scope)
+      // Unresolvable reads as STILL LIVE. A condition the engine cannot answer
+      // is the author's problem to see in the audit, not a reason to silently
+      // confiscate something the player armed.
+      return cond === null || cond.t !== 'bool' || cond.v
+    })
+    if (!live) out.push(m.id)
+  }
+  return out
+}
+
 export function armedMatches(m: ArmedMod, req: ResolveReq): boolean {
   return m.kind === req.kind
     && (!m.sub || m.sub === req.sub)
@@ -657,12 +707,19 @@ function partsOf(formula: string | undefined, scope: ExprScope): Rider['parts'] 
 export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
   const out: Resolution = { adv: false, dis: false, crit: false, riders: [], notes: [], problems: [] }
 
-  // 2. Match: the subject itself, each of its tags, the roll kind, the sub-kind.
+  // 2. Match: the subject itself, each of its tags, the roll kind, the sub-kind,
+  //    and — on an attack — the ability it was made with.
   const keys = [
     req.subject,
     ...(req.tags ?? []).map(t => `tag:${normalizeTag(t)}`),
     `roll:${req.kind}`,
     req.sub ? `roll:${req.kind}.${req.sub}` : null,
+    /* `roll:attack.str`. Its own key rather than a second meaning for `sub`,
+       because a greataxe swing is melee AND Strength-based, and an author
+       narrowing to one must not silence the other. Abilities and the existing
+       subs share no names (melee/ranged/spell vs str…cha), so one namespace
+       holds both without ambiguity. */
+    req.ability ? `roll:${req.kind}.${req.ability}` : null,
   ].filter((k): k is string => !!k)
 
   // The index is keyed the same way, so a tag target must be normalised before
@@ -1040,6 +1097,20 @@ export function auditNode(
    *  to scroll past. */
   node: { graph?: GraphEffect[]; vars?: VarDef[]; prose?: (string | undefined)[] },
   nodes: AuthoredNode[] = [],
+  /** Variables declared ELSEWHERE in the catalog, name → type.
+   *
+   *  Without this the audit builds its scope from the node's OWN declarations
+   *  and nothing else, so a feature reading another's variable — Brutal Strike
+   *  gated `when: reckless`, where Reckless Attack declares `reckless` — reports
+   *  "Unknown identifier" and errors block Publish. At RUNTIME the scope is flat
+   *  across every active source, so the same graph works perfectly; only the
+   *  editor could not see it. Cross-feature state was unauthorable.
+   *
+   *  Deliberately mirrors `characterVars`' `catalogTypes` argument, which exists
+   *  for exactly the same reason one layer down: a name that is declared
+   *  somewhere real is not a typo. Absent (a caller with no catalog to hand) it
+   *  degrades to the old behaviour rather than guessing. */
+  catalogTypes: Record<string, 'num' | 'bool'> = {},
 ): AuditItem[] {
   const out: AuditItem[] = auditVars(node.vars ?? [])
   const known = new Set(nodes.map(n => n.gid))
@@ -1047,6 +1118,12 @@ export function auditNode(
   // Type-correct, non-zero — §41. auditVars already reported anything wrong with
   // the declarations themselves, so no audit sink here.
   const scope = probeScope(node.vars ?? [])
+  /* Seeded UNDER the node's own declarations, never over them: a local variable
+     of the same name is the one this node reads, and letting the catalog win
+     would type-check the author's formula against somebody else's variable. */
+  for (const [name, t] of Object.entries(catalogTypes)) {
+    if (!(name in scope)) scope[name] = probe(t)
+  }
 
   for (const eff of node.graph ?? []) {
     if (!eff.label) {
@@ -1095,12 +1172,20 @@ export function auditNode(
         s: `${eff.label || eff.id} has both a condition and a toggle. While "${eff.when}" is false it does not surface at all — the player is not offered a choice they could not take.`,
       })
     }
-    // §40 refused every toggle on a note, on the grounds that prose has nothing
-    // to resolve. That holds for a note that only carries text — and NOT for one
-    // whose text computes something, where the toggle is what decides whether
-    // the player should see the number at all. The rule now asks the question it
-    // always meant: does answering this reveal anything?
-    if (eff.op === 'note' && eff.ask && !interpolations(eff.text || eff.label).length) {
+    /* §40 refused every toggle on a note, on the grounds that prose has nothing
+       to resolve. That holds for a note that only carries text — and NOT for one
+       whose text computes something, where the toggle is what decides whether
+       the player should see the number at all. The rule asks the question it
+       always meant: does answering this reveal anything?
+
+       AN ARMED NOTE IS A THIRD CASE, and the rule was blind to it. With `once`
+       the toggle is answered at ACTIVATION, not on a roll, and it decides
+       whether the mod is minted into the queue at all — Brutal Strike offering
+       Forceful Blow or Hamstring Blow is one choice between two, not two
+       paragraphs the player may hide. Nothing is revealed; something is
+       committed. Arming both unconditionally would hand the player both blows'
+       text on every swing and lose the choice the feature is made of. */
+    if (eff.op === 'note' && eff.ask && !eff.once && !interpolations(eff.text || eff.label).length) {
       out.push({ sev: 'err', id: eff.id, t: 'Toggle on a note', s: `${eff.label || eff.id} is prose with nothing to reveal — there is nothing for the player to resolve. Use \`when\` if it should be conditional, or interpolate a value into the text if the toggle is what decides whether they see it.` })
     }
     // An `and` list can be unsatisfiable, and silently: a roll has ONE kind and
@@ -1248,7 +1333,11 @@ export function auditNode(
     // roll context. A contribution has no name and a gid cannot be an identifier,
     // so "conditions never read another node's computed value" needs no check of
     // its own — the unknown-identifier rejection already covers it.
-    const allowed = new Set<string>([...VAR_IDENTS, ...ROLL_IDENTS, ...declared])
+    /* `catalogTypes` joins the whitelist for the same reason it seeds the probe
+       scope: a name declared on ANOTHER node is real, and at runtime the scope
+       is flat across every active source. Without it a feature reading another
+       feature's variable is unpublishable. */
+    const allowed = new Set<string>([...VAR_IDENTS, ...ROLL_IDENTS, ...declared, ...Object.keys(catalogTypes)])
     for (const [src, what] of [[eff.value, 'formula'], [eff.when, 'condition'], [eff.threshold, 'crit range']] as const) {
       if (!src) continue
       for (const id of freeIdents(src)) {

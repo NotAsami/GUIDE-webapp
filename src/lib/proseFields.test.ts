@@ -145,3 +145,53 @@ test('every excuse in RAW_ON_PURPOSE still matches something', () => {
     assert.ok(all.includes(p.match), `stale exemption, matches nothing: "${p.match}"`)
   }
 })
+
+/* ------------------------------------------------------------------
+   PREREQUISITES: SHOWING ONE OBLIGES YOU TO CHECK IT
+
+   Same family as the rule above — an authored field owes the reader what it
+   means, not just its characters — but the failure is worse, because a
+   prerequisite is a RULE and printing it unchecked implies it was enforced.
+
+   WHAT THIS DOES AND DOES NOT CATCH, stated plainly because the difference
+   matters. The bug that prompted it was an OMISSION: the level-up's offers list
+   rendered name, blurb, source and gate level and never read `prerequisite` at
+   all, while the feat picker in the same file checked it and locked the row.
+   A scanner cannot see code that is not there — and because that file already
+   imported `prereqMet` for the feats, this guard would have passed it.
+
+   So the omission is caught where it belongs, by `levelUpPatch` refusing to
+   grant an offer whose prerequisite is unmet (lib/levelup.test.ts). This guard
+   covers the OTHER half: a surface that shows the field without ever consulting
+   it, which tells the reader a rule was enforced when nothing enforced it.
+
+   `prereqClauses` counts too — the Feature Editor has no character to test
+   against and legitimately checks only readability.
+   ------------------------------------------------------------------ */
+
+/** Files that read the field for a reason other than deciding a grant. */
+const PREREQ_DISPLAY_ONLY: { match: string; why: string }[] = []
+
+test('A SURFACE THAT READS A PREREQUISITE ALSO CONSULTS IT', () => {
+  const bad: string[] = []
+  for (const f of tsxFiles()) {
+    const src = readFileSync(join(ROOT, f), 'utf8')
+    if (!/\.prerequisite\b/.test(src)) continue
+    if (/\bprereq(Met|Clauses)\b/.test(src)) continue
+    if (PREREQ_DISPLAY_ONLY.some(p => f.includes(p.match))) continue
+    const line = src.slice(0, src.search(/\.prerequisite\b/)).split('\n').length
+    bad.push(`${f}:${line}  reads .prerequisite but never calls prereqMet or prereqClauses`)
+  }
+  assert.deepEqual(bad, [],
+    'Printing a prerequisite without checking it tells the DM a rule was '
+    + 'enforced when nothing enforced it.\n'
+    + 'Call prereqMet() and gate the control on the verdict, or add the file to '
+    + 'PREREQ_DISPLAY_ONLY with the reason it cannot grant anything:\n  ' + bad.join('\n  '))
+})
+
+test('every excuse in PREREQ_DISPLAY_ONLY still matches something', () => {
+  const files = tsxFiles()
+  for (const p of PREREQ_DISPLAY_ONLY) {
+    assert.ok(files.some(f => f.includes(p.match)), `stale exemption, matches no file: "${p.match}"`)
+  }
+})

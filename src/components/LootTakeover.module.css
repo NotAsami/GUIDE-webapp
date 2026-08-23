@@ -100,7 +100,12 @@
 
 /* A fact value with nothing in it yet. Its own rule rather than borrowing the
    eyebrow's .dim, which is scoped and would resolve to a class with no rule. */
-.factDim { color: var(--beige-dim); }
+/* Repeated on purpose. This rides on `pop.v` from InventoryPopup.module.css,
+   which is `.imFacts .v` — (0,2,0). A bare `.factDim` is (0,1,0) and lost
+   outright, so "Not yet assigned" has always rendered in full --text instead of
+   dimmed. Two classes would only TIE and hand the decision to emit order;
+   three wins. Found by cssClasses.test.ts, not by anyone looking at it. */
+.factDim.factDim.factDim { color: var(--beige-dim); }
 .chip i { margin-right: 6px; opacity: .85; }
 .desc {
   grid-column: 2 / span 2; grid-row: 2; margin: 2px 0 0;

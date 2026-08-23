@@ -1,7 +1,14 @@
 /**
- * Level Up — the DM's guided advancement, as a focused overlay.
+ * Level Up — guided advancement, as a focused overlay.
  *
- * A CHECKLIST THE DM CONFIRMS, not a rules engine. Every number here is a
+ * ONE PANEL, TWO TONES. The DM runs it from the console (amber, the operator
+ * accent); the player runs it from their Codex once the DM has RELEASED the
+ * level (cyan, the player accent). The steps are identical because the
+ * decisions are — the only difference is who is making them, which `tone`
+ * carries into the accent variables and three lines of copy. A second
+ * component would have drifted from this one a fix at a time.
+ *
+ * A CHECKLIST THE TAKER CONFIRMS, not a rules engine. Every number here is a
  * suggestion computed by lib/levelup.ts; nothing is written until Apply, and
  * the summary in the footer is the full cascade so the commit is never a
  * surprise. That framing is the mockup's and it is what makes the screen
@@ -19,11 +26,12 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { AbilityKey, CatalogFeatureRow, CatalogFeatureData, CharacterRow, ShardTree } from '../lib/database.types'
+import type { AbilityKey, CatalogFeatureRow, CatalogFeatureData, CharacterRow, Feature, ShardTree } from '../lib/database.types'
 import { ABILITY_ABBR, ABILITY_ORDER, formatMod } from '../lib/dnd'
 import { ordinal } from '../lib/classes'
 import { ASI_LEVELS, asiUsed, hpGainOf, nextCurrentHp, type LevelUpChoices, type LevelUpPlan } from '../lib/levelup'
 import { prereqMet, prereqSummary } from '../lib/feats'
+import { useBackdropFreeze } from '../lib/backdropFreeze'
 import { renderInline } from '../lib/markdown'
 import { Icon } from './Icon'
 import styles from './LevelUpOverlay.module.css'
@@ -41,8 +49,17 @@ type HpMode = 'roll' | 'average' | 'manual'
 const blurb = (d: CatalogFeatureData) =>
   (d.light_description || d.summary || d.description || '').trim()
 
-export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, onApply, onClose }: {
+export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, tone = 'dm', blurBackdrop = true, onApply, onClose }: {
   plan: LevelUpPlan
+  /** Who is walking it. Repoints the accent (operator amber ↔ player cyan) and
+   *  the copy that says whose decision this is; the steps are identical,
+   *  because the decisions are. */
+  tone?: 'dm' | 'player'
+  /** False when something already-scrimmed is underneath. Two stacked
+   *  `backdrop-filter`s blur an already-blurred image for no visual gain and
+   *  double the per-frame cost, so the panel opened from the decisions card
+   *  turns its own off. */
+  blurBackdrop?: boolean
   /** Published `category: 'feat'` rows — the library a feat pick assigns from. */
   feats: CatalogFeatureRow[]
   /** The character, so a feat's prerequisite can be CHECKED rather than printed.
@@ -69,6 +86,10 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, onApply, onCl
   const [picks, setPicks] = useState<string[]>(() => plan.offers.filter(o => o.fresh).map(o => o.id))
   const [busy, setBusy] = useState(false)
 
+  /* Pause the decorations under the scrim. Without this the rotating Codex
+     sigil invalidates the backdrop blur every frame — see lib/backdropFreeze. */
+  useBackdropFreeze()
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
     document.addEventListener('keydown', onKey)
@@ -90,6 +111,26 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, onApply, onCl
     () => new Map(feats.map(f => [f.id, prereqMet(f.data.prerequisite, row, shardTrees)])),
     [feats, row, shardTrees],
   )
+  /* ---- PREREQUISITES ON THE CLASS OFFERS ----
+     Checked against the sheet PLUS whatever is ticked right now. A level that
+     opened both halves of a dependency — take Reckless Attack, then Brutal
+     Strike — would otherwise refuse the second for lacking a first that the
+     very same write is granting. Ticking one unlocks the other, live. */
+  const offerPrereq = useMemo(() => {
+    const chosen = plan.offers.filter(o => picks.includes(o.id)).map(o => o.data as unknown as Feature)
+    const withPicks = {
+      ...row,
+      sheet: { ...(row.sheet ?? {}), features: [...(row.sheet?.features ?? []), ...chosen] },
+    } as CharacterRow
+    return new Map(plan.offers.map(o => [o.id, prereqMet(o.data.prerequisite, withPicks, shardTrees)]))
+  }, [plan.offers, picks, row, shardTrees])
+
+  /** What Apply actually grants. A pre-ticked offer whose prerequisite turns out
+   *  unmet is dropped here rather than pruned out of `picks` by an effect — one
+   *  derivation, so the footer summary and the write can never disagree about
+   *  what is being taken. */
+  const effectivePicks = picks.filter(id => offerPrereq.get(id)?.ok !== false)
+
   const isAsiLevel = ASI_LEVELS.includes(plan.toLevel)
   const profChanged = plan.profTo !== plan.profFrom
   const dcChanged = !!plan.castFrom && !!plan.castTo && plan.castTo.saveDC !== plan.castFrom.saveDC
@@ -117,20 +158,25 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, onApply, onCl
       die,
       asiAlloc: adv === 'asi' ? alloc : {},
       feat: adv === 'feat' ? feat : null,
-      featureIds: picks,
+      featureIds: effectivePicks,
     })
     setBusy(false)
     if (ok) onClose()
   }
 
+  /** "This is mine to take" — the player tone. Read once so the copy and the
+   *  accent can never disagree about whose screen this is. */
+  const mine = tone === 'player'
+
   const asiParts = ABILITY_ORDER.filter(k => (alloc[k] ?? 0) > 0)
     .map(k => `+${alloc[k]} ${ABILITY_ABBR[k].toUpperCase()}`)
-  const takenFeatures = plan.offers.filter(o => picks.includes(o.id))
+  const takenFeatures = plan.offers.filter(o => effectivePicks.includes(o.id))
   const slotsGained = plan.slotsTo.reduce((a, b) => a + b, 0) - plan.slotsFrom.reduce((a, b) => a + b, 0)
 
   return createPortal(
-    <div className={styles.overlay} role="dialog" aria-modal="true" aria-label={`Level up ${plan.name}`}>
-      <div className={styles.scrim} onClick={onClose} />
+    <div className={cx(styles.overlay, mine && styles.player)} role="dialog" aria-modal="true"
+      aria-label={mine ? `Take level ${plan.toLevel}` : `Level up ${plan.name}`}>
+      <div className={cx(styles.scrim, !blurBackdrop && styles.noBlur)} onClick={onClose} />
       <div className={styles.panel}>
         <div className={styles.pnGap} />
         <div className={styles.pnLine} />
@@ -142,7 +188,7 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, onApply, onCl
           <header className={styles.head}>
             <div className={styles.sigil}><i className="fa-solid fa-angles-up" /></div>
             <div className={styles.titles}>
-              <div className={styles.kicker}>Guided Advancement · Operator</div>
+              <div className={styles.kicker}>{mine ? 'Your Advancement' : 'Guided Advancement · Operator'}</div>
               <div className={styles.hname}>{plan.name}</div>
               <div className={styles.hclass}>
                 {plan.className}
@@ -435,21 +481,42 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, onApply, onCl
               <div className={styles.card}>
                 {plan.offers.length ? <>
                   <div className={styles.pick}>
-                    {plan.offers.map(o => (
-                      <button key={o.id} type="button" className={cx(styles.row, picks.includes(o.id) && styles.sel)}
-                        onClick={() => toggle(o.id)}>
-                        <span className={styles.rk}><Icon name={o.data.icon || 'fa-certificate'} /></span>
-                        <span className={styles.rx}>
-                          <span className={styles.rn}>{o.data.name}</span>
-                          {blurb(o.data) && <span className={styles.rd}>{renderInline(blurb(o.data))}</span>}
-                        </span>
-                        <span className={styles.rsrc}>
-                          {o.source}{o.at != null && ` ${o.at}`}
-                          {!o.fresh && <span className={styles.stale}>Already open</span>}
-                        </span>
-                        <span className={styles.rcheck}><i className="fa-solid fa-check" /></span>
-                      </button>
-                    ))}
+                    {plan.offers.map(o => {
+                      /* A gate says WHEN a feature becomes available; a
+                         prerequisite says WHAT ELSE it needs. Both have to hold,
+                         and until now only the gate was read here — so a feature
+                         requiring another arrived pre-ticked with nothing on
+                         screen to say it should not have. */
+                      const pr = offerPrereq.get(o.id)
+                      const blocked = pr ? !pr.ok : false
+                      return (
+                        <button key={o.id} type="button" disabled={blocked}
+                          className={cx(styles.row, !blocked && picks.includes(o.id) && styles.sel, blocked && styles.locked)}
+                          title={blocked ? prereqSummary(pr!) ?? undefined : undefined}
+                          onClick={() => toggle(o.id)}>
+                          <span className={styles.rk}>
+                            <Icon name={blocked ? 'fa-lock' : o.data.icon || 'fa-certificate'} />
+                          </span>
+                          <span className={styles.rx}>
+                            <span className={styles.rn}>{o.data.name}</span>
+                            {blurb(o.data) && <span className={styles.rd}>{renderInline(blurb(o.data))}</span>}
+                            {o.data.prerequisite && (
+                              <span className={cx(styles.rpre, blocked && styles.rpreUnmet)}>
+                                {blocked
+                                  ? `Requires ${pr!.unmet.join(', ')}`
+                                  : <>Requires {renderInline(o.data.prerequisite)}
+                                    {pr?.unparsed.length ? <> · <span className={styles.rpreOpen}>{pr.unparsed.join(', ')} not checked</span></> : null}</>}
+                              </span>
+                            )}
+                          </span>
+                          <span className={styles.rsrc}>
+                            {o.source}{o.at != null && ` ${o.at}`}
+                            {!o.fresh && <span className={styles.stale}>Already open</span>}
+                          </span>
+                          <span className={styles.rcheck}><i className="fa-solid fa-check" /></span>
+                        </button>
+                      )
+                    })}
                   </div>
                   <div className={styles.subnote}>
                     <i className="fa-solid fa-arrow-turn-up" /> Assigns these catalog features to
@@ -528,7 +595,9 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, onApply, onCl
             <div className={styles.sumhead}>
               <span className={styles.sg}>Σ</span>
               <span className={styles.st}>Apply Summary</span>
-              <span className={styles.warn}>Review the full cascade before committing</span>
+              <span className={styles.warn}>
+                {mine ? 'One write · your DM sees the result' : 'Review the full cascade before committing'}
+              </span>
             </div>
             <div className={styles.footrow}>
               <div className={styles.summary}>
@@ -588,11 +657,14 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, onApply, onCl
               </div>
               <div className={styles.actions}>
                 <button type="button" className={cx(con.btn, con.ghost)} onClick={onClose} disabled={busy}>
-                  <span className={con.bf} /><span className={con.bi}><i className="fa-solid fa-xmark" /> Cancel</span>
+                  <span className={con.bf} /><span className={con.bi}><i className="fa-solid fa-xmark" /> {mine ? 'Not yet' : 'Cancel'}</span>
                 </button>
-                <button type="button" className={cx(con.btn, con.amber)} onClick={() => void apply()} disabled={busy}>
+                <button type="button" className={cx(con.btn, mine ? con.cyan : con.amber)} onClick={() => void apply()} disabled={busy}>
                   <span className={con.bf} />
-                  <span className={con.bi}><i className="fa-solid fa-circle-check" /> {busy ? 'Applying…' : 'Apply Level-Up'}</span>
+                  <span className={con.bi}>
+                    <i className="fa-solid fa-circle-check" />{' '}
+                    {busy ? 'Applying…' : mine ? `Confirm Level ${plan.toLevel}` : 'Apply Level-Up'}
+                  </span>
                 </button>
               </div>
             </div>

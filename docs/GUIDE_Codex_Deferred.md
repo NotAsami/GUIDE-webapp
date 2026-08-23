@@ -319,3 +319,38 @@ rather than one item at a time, where "skip it" is a much less obvious answer.
 resolving on open. That silently restocks a shop the party had just cleared out,
 and the bug reads as "the shopkeeper is cheating" rather than as a caching
 mistake.
+
+---
+
+## What the player rolled
+
+**Built:** a DM releases a level (`sheet.pendingLevel`), the player takes it
+themselves from the Codex widget, and the release is cleared in the same write.
+The DM's "out with the players" list shows every open release and lets them
+recall one.
+
+**Not built: the completed row.** The advancement tab shows what is *waiting*.
+Once a player takes their level, the row simply disappears and the roster card
+reads the new level — the DM never learns that they rolled an 8, took Alert, or
+put both points into Strength.
+
+**Trigger:** a DM asking "what did they roll?" and having no way to find out.
+Nothing at a table with two players has needed it; a table where the DM is not
+in the room while people level would.
+
+**Why it is not free.** There is no player→DM channel today. `useGuideVoice`
+(lib/voice.ts) is one hook serving both ends, so the console *could* pass an
+`onMessage` and listen — but that means a new `VoiceMsg` kind, a filter in
+`SystemToasts` so players do not see each other's, and a notice that is
+ephemeral by design: a DM whose console was closed learns nothing. The two
+honest options were weighed and both declined:
+
+| option | cost |
+|---|---|
+| **broadcast** | New VoiceMsg kind + a console listener + a SystemToasts filter. Ephemeral — an offline DM misses it entirely, which is the one case they most want it. |
+| **breadcrumb** | Stamp `pendingLevel` taken with a summary instead of clearing it. Survives an offline DM, but leaves dead state on the row that something then has to clean up, and `pendingLevelStale` stops being the thing that prevents a double take. |
+
+**Do NOT** solve it by leaving `pendingLevel` on the row after it is taken. The
+release being gone is what makes taking a level idempotent; a "taken" flag beside
+a still-present plan is a second source of truth about whether the level was
+spent, and the failure mode is a player levelling twice.

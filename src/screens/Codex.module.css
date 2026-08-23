@@ -229,3 +229,11 @@
   background-position: top left, bottom right;
   background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
+
+/* The sigil is the most expensive thing on this screen to animate and the first
+   thing covered by a panel. Under a scrim it is invisible AND ruinous — a
+   `backdrop-filter` over moving pixels re-blurs the viewport every frame — so
+   it stops until the last overlay closes. See lib/backdropFreeze. */
+:global(html[data-modal]) .glyph .rotateSlow,
+:global(html[data-modal]) .glyph .rotateRev,
+:global(html[data-modal]) .glyph .pulse { animation-play-state: paused; }

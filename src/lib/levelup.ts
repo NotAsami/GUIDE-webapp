@@ -30,12 +30,20 @@ import {
 import { abilities, abilityMod } from './dnd.ts'
 import { characterVars } from './graph.ts'
 import { effectiveSheet } from './effects.ts'
+import { prereqMet } from './feats.ts'
 import { pactSlotCount, pactSlotLevel } from './spells.ts'
 import type { ExprScope } from './expr.ts'
 import type {
   AbilityKey, CatalogClassRow, CatalogFeatureData, CatalogFeatureRow, CharacterRow,
-  CharacterUpdate, ClassCasterType, ClassDef, Feature, HP, ShardTree, SpellSlot,
+  CharacterUpdate, ClassCasterType, ClassDef, Feature, FeatureOffer, HP, LevelUpPlan,
+  PendingLevel, ShardTree, SpellSlot,
 } from './database.types.ts'
+
+/* `LevelUpPlan` and `FeatureOffer` live in database.types.ts: releasing a level
+   parks a plan on `sheet.pendingLevel`, so they are persisted shapes now. Both
+   are re-exported here because this module is where callers reach for them and
+   a second import path for the same type is a papercut, not a boundary. */
+export type { FeatureOffer, LevelUpPlan, PendingLevel }
 
 /** The SRD's standard ability-score-improvement ladder.
  *
@@ -96,66 +104,7 @@ export function resolveClass(row: CharacterRow, classRows: CatalogClassRow[]): R
   return out
 }
 
-/** A feature a gate makes available, and the id it would be granted under. */
-export type FeatureOffer = {
-  /** `cls:<classId>:<featureId>` — the id assignClass would have used, so a
-   *  later re-assign replaces rather than duplicates. */
-  id: string
-  featureId: string
-  data: CatalogFeatureData
-  /** The class or subclass that references it. */
-  source: string
-  /** The level floor its gate names, for the row's tag. */
-  at: number | null
-  /** True when the gate opens AT the new level — those arrive pre-checked. */
-  fresh: boolean
-}
-
-export type LevelUpPlan = {
-  charId: string
-  name: string
-  className: string
-  archetype: string
-  fromLevel: number
-  toLevel: number
-
-  hitDie: number
-  /** 5e's "or N" shortcut — d6→4, d8→5, d10→6, d12→7. */
-  avg: number
-  conMod: number
-  hitDiceFrom: string
-  hitDiceTo: string
-
-  abilityScores: Record<AbilityKey, number>
-
-  profFrom: number
-  profTo: number
-  /** False when the stored bonus is not what the formula gives at fromLevel —
-   *  the DM tuned it, so Apply holds it. */
-  profWritable: boolean
-
-  caster: ClassCasterType
-  slotsFrom: number[]
-  slotsTo: number[]
-  pactFrom: { count: number; level: number } | null
-  pactTo: { count: number; level: number } | null
-
-  /** Casting numbers at the new proficiency, and whether Apply may write them. */
-  castFrom: { saveDC: number; attackBonus: number } | null
-  castTo: { saveDC: number; attackBonus: number } | null
-  castWritable: boolean
-
-  /** Effective max HP minus base — the shard/gear headroom `nextCurrentHp`
-   *  clamps against, so step 01's note and the patch reach the same answer. */
-  hpMaxBonus: number
-
-  offers: FeatureOffer[]
-  /** Set when there is no class row to read — the overlay renders an empty
-   *  state instead of guessing a d8. */
-  classMissing: boolean
-}
-
-/** The DM's answers. `hpGain` is the DIE RESULT, not the total — the CON mod is
+/** The taker's answers. `hpGain` is the DIE RESULT, not the total — the CON mod is
  *  the plan's business, so a mode switch cannot forget to add it. */
 export type LevelUpChoices = {
   die: number
@@ -315,6 +264,65 @@ export function nextCurrentHp(current: number, gain: number, nextMax: number, bo
   return Math.max(current, Math.min(current + gain, nextMax + bonusMax))
 }
 
+/* ============================================================
+   RELEASING A LEVEL — the DM hands the decisions to the player
+
+   Three writes, three producers. `sheet` is written as a whole column
+   (lib/character.ts updateSections), so `pendingLevel: undefined` genuinely
+   removes it — the same way StartingKit clears `pendingKit`.
+   ============================================================ */
+
+/** Park a resolved plan on the sheet for the player to take.
+ *
+ *  `feats` rides along because `feature_catalog` has no player policy: a
+ *  parked reference would render as an empty list on the one screen that has
+ *  to show it. Releasing again REPLACES — one level at a time, so the plan a
+ *  player opens is always the one computed against the level they are on. */
+export function releaseLevelPatch(
+  row: CharacterRow,
+  plan: LevelUpPlan,
+  feats: CatalogFeatureRow[],
+  releasedAt = new Date().toISOString(),
+): CharacterUpdate {
+  return { sheet: { ...(row.sheet ?? {}), pendingLevel: { plan, feats, releasedAt } } }
+}
+
+/** Pull an untaken level back. Nothing was written, so nothing is undone. */
+export function recallLevelPatch(row: CharacterRow): CharacterUpdate {
+  return { sheet: { ...(row.sheet ?? {}), pendingLevel: undefined } }
+}
+
+/**
+ * Apply a released level AND clear the release, in one patch.
+ *
+ * The clear has to go on TOP of `levelUpPatch`'s result, because that function
+ * spreads the current sheet — which still carries the `pendingLevel` it is
+ * spending. Do it in the caller and the write succeeds while the card goes on
+ * offering a level the player already took: no error, no fallback, just a
+ * button that levels them again.
+ */
+export function takeLevelPatch(
+  row: CharacterRow,
+  pending: PendingLevel,
+  choices: LevelUpChoices,
+  shardTrees: Record<string, ShardTree> = {},
+): CharacterUpdate {
+  const patch = levelUpPatch(row, pending.plan, choices, shardTrees)
+  return { ...patch, sheet: { ...patch.sheet, pendingLevel: undefined } }
+}
+
+/**
+ * Has the row moved out from under a released plan?
+ *
+ * The plan is a snapshot taken against a specific level, and it cannot be
+ * recomputed player-side — the catalogs it was built from are DM-only. So a
+ * character whose level has changed since the release gets told to ask for a
+ * new one rather than being handed a plan whose hit die, gates and casting
+ * numbers belong to a level they are no longer on.
+ */
+export const pendingLevelStale = (row: CharacterRow, pending: PendingLevel) =>
+  (row.identity?.level ?? 1) !== pending.plan.fromLevel
+
 /** How many ASI points are spent. */
 export const asiUsed = (alloc: LevelUpChoices['asiAlloc']) =>
   ABILS.reduce((n, k) => n + (alloc[k] ?? 0), 0)
@@ -368,10 +376,26 @@ export function levelUpPatch(
     nextAbilities = next
   }
 
-  // Features: the checked offers, plus a feat if one was taken.
+  /* Features: the checked offers, plus a feat if one was taken.
+
+     PREREQUISITES ARE ENFORCED HERE, not only in the overlay. A disabled
+     checkbox is a courtesy; this is the rule. The overlay computing the same
+     verdict for its locked rows is the pattern this codebase keeps paying for
+     when only one of the two does it — so the WRITE decides, and the UI shows
+     what the write will do.
+
+     Checked against the sheet PLUS the rest of the batch, so a level that opens
+     both halves of a dependency (take Reckless Attack, then Brutal Strike)
+     satisfies itself. A lone Brutal Strike with no Reckless Attack anywhere is
+     still refused. */
   const keep = new Set(choices.featureIds)
-  const grants: Feature[] = plan.offers
-    .filter(o => keep.has(o.id))
+  const candidates = plan.offers.filter(o => keep.has(o.id))
+  const batchSheet = {
+    ...row,
+    sheet: { ...sheet, features: [...(sheet.features ?? []), ...candidates.map(o => o.data as unknown as Feature)] },
+  } as CharacterRow
+  const grants: Feature[] = candidates
+    .filter(o => prereqMet(o.data.prerequisite, batchSheet, shardTrees).ok)
     .map(o => ({ ...o.data, id: o.id, feature_id: o.featureId, source: o.source, level: plan.toLevel }))
   if (choices.feat) grants.push({ ...featureSnapshot(choices.feat), kind: 'levelup', level: plan.toLevel })
 

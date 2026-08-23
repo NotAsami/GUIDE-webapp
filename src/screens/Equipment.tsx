@@ -17,7 +17,7 @@ import {
 import { CarrySidebar } from './EquipmentCarry'
 import { effectiveSheet } from '../lib/effects'
 import {
-  handLabel, isRanged, rollWeaponAttack, weaponAttackBonus, weaponDamageString,
+  handLabel, isRanged, rollWeaponAttack, weaponAbilityKey, weaponAttackBonus, weaponDamageString,
   type AmmoBonus,
 } from '../lib/weapons'
 import { PERSON } from '../lib/placement'
@@ -192,7 +192,12 @@ export function Equipment() {
     // The attack subs had sat in the editor's dropdown since slice 3 with
     // nothing passing one, so authoring `roll:attack.melee` matched nothing.
     const sub = isRanged(weapon) ? 'ranged' : 'melee'
-    const atkRes = resolve(graph, { kind: 'attack', subject, sub, tags })
+    /* Which ability this swing actually used — the SAME answer weaponAbilityKey
+       gives the attack bonus, so `roll:attack.str` and the +STR on the sheet can
+       never disagree about what a finesse weapon is being swung with. Attack
+       only: a damage roll has no ability of its own, it inherits this one. */
+    const ability = weaponAbilityKey(weapon, sheet)
+    const atkRes = resolve(graph, { kind: 'attack', subject, sub, tags, ability })
     const dmgRes = resolve(graph, { kind: 'damage', subject, sub, tags })
 
     // `riders` comes back ANNOTATED — each contribution carrying the faces it

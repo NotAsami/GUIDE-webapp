@@ -413,3 +413,8 @@
 .ticker :global(.dim) { color: rgba(170, 170, 170, 0.4); }
 
 /* Side-rails + corner frame moved to components/Deco.tsx (per-screen). */
+
+/* The topbar's terminal cursor sits UNDER every scrim in the app and blinks
+   forever, so while a panel is open it re-blurs the whole viewport twice a
+   second for a caret nobody can see. See lib/backdropFreeze. */
+:global(html[data-modal]) .cursor { animation-play-state: paused; }

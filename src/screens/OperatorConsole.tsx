@@ -25,7 +25,10 @@ import {
   CASTER_LABEL, assignClass, assignSubclass, casterSlots, casterSummary, castingNumbers,
   castingRules, featureSnapshot, gateLevel, hitPointRules, ordinal,
 } from '../lib/classes'
-import { hpGainOf, levelUpPatch, levelUpPlan, type LevelUpChoices } from '../lib/levelup'
+import {
+  hpGainOf, levelUpPatch, levelUpPlan, pendingLevelStale, recallLevelPatch, releaseLevelPatch,
+  type LevelUpChoices, type LevelUpPlan,
+} from '../lib/levelup'
 import { assignRace } from '../lib/races'
 import { assignBackground } from '../lib/backgrounds'
 import { prereqMet, prereqSummary } from '../lib/feats'
@@ -134,7 +137,7 @@ const hpClassOf = (p: PartyMember): '' | 'warn' | 'crit' => {
 const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hpMax) * 100)) : 0)
 
 type View = 'overview' | 'character' | 'quests' | 'sessions' | 'catalog'
-type CharTab = 'actions' | 'inventory' | 'lore' | 'shards'
+type CharTab = 'actions' | 'inventory' | 'lore' | 'shards' | 'advance'
 type CatTab = 'items' | 'features' | 'spells' | 'effects' | 'shops' | 'classes' | 'races' | 'backgrounds' | 'loot'
 
 export function OperatorConsole() {
@@ -309,6 +312,22 @@ export function OperatorConsole() {
   const members = party.map(m => toMember(m, secrets[m.id], onlineIds.has(m.id), shardCatalog))
   const selected = members.find(m => m.id === selectedId) ?? null
   const selectedRow = party.find(c => c.id === selectedId) ?? null
+
+  /* THE ADVANCEMENT PLAN, BUILT ONCE.
+     Three readers now — the tab shows it, the overlay walks it, and Release
+     PARKS this exact object on the sheet. Building it per-reader is how the
+     released plan and the walked one would drift apart, and the player would
+     have no way to tell which one they got. Published content only: a draft is
+     the DM's in-progress edit and must never reach a character. */
+  const advance = (() => {
+    if (!selectedRow) return null
+    const featureData = new Map<string, CatalogFeatureData>()
+    for (const f of featureLib.features) if (f.data?.published) featureData.set(f.id, f.data)
+    return {
+      plan: levelUpPlan(selectedRow, classLib.classes, featureData, shardCatalog),
+      feats: featureLib.features.filter(f => f.data?.published && f.data.category === 'feat'),
+    }
+  })()
 
   function openOverview() {
     setView('overview')
@@ -510,9 +529,9 @@ export function OperatorConsole() {
                   Shards
                 </div>
                 <div
-                  className={cx(styles.wtab, styles.lvl)}
-                  onClick={() => setLevelUp(true)}
-                  title={`Run ${selected?.name ?? 'this character'}'s level-up`}
+                  className={cx(styles.wtab, styles.lvl, charTab === 'advance' && styles.active)}
+                  onClick={() => setCharTab('advance')}
+                  title={`Release or run ${selected?.name ?? 'this character'}'s level-up`}
                 >
                   <i className="fa-solid fa-arrow-up-right-dots" /> Level Up
                   {typeof selected?.level === 'number' && <>
@@ -537,7 +556,14 @@ export function OperatorConsole() {
                   openLootId={lootOpen.roll?.table_id ?? null}
                   onResumeLoot={() => setLootMin(false)} />
               ) : view === 'character' && selected && selectedRow ? (
-                charTab === 'lore' ? (
+                charTab === 'advance' ? (
+                  <AdvancementTab
+                    key={selectedRow.id} row={selectedRow} party={party} advance={advance}
+                    onUpdate={(id, patch) => updateCharacter(id, patch)}
+                    onWalkHere={() => setLevelUp(true)}
+                    log={log}
+                  />
+                ) : charTab === 'lore' ? (
                   <LoreTab key={selectedRow.id} row={selectedRow} member={selected} secret={secrets[selectedRow.id]} onUpdateSecret={patch => updateSecret(selectedRow.id, patch)} onUpdateChar={patch => updateCharacter(selectedRow.id, patch)} />
                 ) : charTab === 'shards' ? (
                   <ShardsTab key={selectedRow.id} row={selectedRow} member={selected} shardLib={shardLib} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
@@ -615,13 +641,8 @@ export function OperatorConsole() {
       )}
 
       {/* ===== LEVEL UP (slice: advancement) ===== */}
-      {levelUp && selectedRow && (() => {
-        /* Published content only — the same rule every grant follows: a draft is
-           the DM's in-progress edit and must not reach a character. */
-        const featureData = new Map<string, CatalogFeatureData>()
-        for (const f of featureLib.features) if (f.data?.published) featureData.set(f.id, f.data)
-        const feats = featureLib.features.filter(f => f.data?.published && f.data.category === 'feat')
-        const plan = levelUpPlan(selectedRow, classLib.classes, featureData, shardCatalog)
+      {levelUp && selectedRow && advance && (() => {
+        const { plan, feats } = advance
         const hp = selectedRow.sheet?.hp ?? { current: 0, max: 0 }
 
         const applyLevelUp = async (choices: LevelUpChoices) => {
@@ -734,6 +755,214 @@ function OverviewDashboard({
  *  never clobbered, and targets the same fields the player screens read — HP and
  *  coins on `sheet`, death saves + exhaustion on `resources` (see Stats.tsx) —
  *  keeping one source of truth per value. */
+/**
+ * ADVANCEMENT — the DM decides WHEN, the player decides WHAT.
+ *
+ * Levelling is the part of the game players look forward to, and a DM who rolls
+ * your hit die for you takes that away. So this tab's primary verb is RELEASE:
+ * it parks the resolved plan on the player's sheet and they walk the steps
+ * themselves. Walking it here stays available for a player who is not at the
+ * table, and it opens the very same overlay.
+ *
+ * The plan is RESOLVED here rather than referenced because `class_catalog` and
+ * `feature_catalog` have no player policy — a player's select returns zero rows
+ * — so a parked reference would render as an empty list on the one screen that
+ * has to show it. Same snapshot-at-the-boundary rule as `pendingKit`.
+ *
+ * The DM learns a level was taken from REALTIME, not a message: `dm-party-sync`
+ * already watches `characters`, so the waiting row disappears and the roster
+ * level moves on their own. What the player rolled is deliberately not recorded
+ * — that would need a broadcast or a breadcrumb, and neither is worth a new
+ * channel or dead state on the row (docs/GUIDE_Codex_Deferred.md).
+ */
+function AdvancementTab({ row, party, advance, onUpdate, onWalkHere, log }: {
+  row: CharacterRow
+  /** The whole party, so "out with the players" can list every open release —
+   *  a DM chasing one does not want to click through four characters first. */
+  party: CharacterRow[]
+  advance: { plan: LevelUpPlan; feats: CatalogFeatureRow[] } | null
+  onUpdate: (id: string, patch: CharacterUpdate) => Promise<boolean>
+  onWalkHere: () => void
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const pending = row.sheet?.pendingLevel ?? null
+  const out = party.filter(c => !!c.sheet?.pendingLevel)
+
+  if (!advance) return null
+  const { plan, feats } = advance
+
+  const release = async () => {
+    if (busy) return
+    setBusy(true)
+    const ok = await onUpdate(row.id, releaseLevelPatch(row, plan, feats))
+    if (ok) {
+      log(
+        <>Released <span className={styles.obj}>L{plan.toLevel}</span> to{' '}
+          <span className={styles.who}>{firstName(row.name)}</span> · theirs to take</>,
+        'cyan',
+      )
+    }
+    setBusy(false)
+  }
+
+  const recall = async (c: CharacterRow) => {
+    if (busy) return
+    setBusy(true)
+    const ok = await onUpdate(c.id, recallLevelPatch(c))
+    if (ok) {
+      log(<>Recalled <span className={styles.who}>{firstName(c.name)}</span>&apos;s unclaimed level</>)
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div className={styles.actGrid}>
+      <div className={cx(styles.actCard, styles.wide)}>
+        <div className={styles.acTitle}>
+          <span className={styles.num}>01</span>
+          <span className={styles.t}>Grant a level</span>
+          <span className={styles.advWho}>{row.name}</span>
+        </div>
+
+        {plan.classMissing ? (
+          <div className={styles.acSoon}>
+            <i className="fa-solid fa-triangle-exclamation" />
+            <span>No class row resolves for this character — assign a class before advancing.</span>
+          </div>
+        ) : (
+          <>
+            <div className={styles.advTrans}>
+              <AdvStat label="Level" from={plan.fromLevel} to={plan.toLevel} />
+              <span className={styles.advRule} />
+              <AdvStat label="Hit dice" from={plan.hitDiceFrom} to={plan.hitDiceTo} mono />
+              <span className={styles.advRule} />
+              <AdvStat label="Proficiency" from={`+${plan.profFrom}`} to={`+${plan.profTo}`}
+                flat={plan.profTo === plan.profFrom} />
+            </div>
+
+            {pending ? (
+              <div className={cx(styles.advOpt, styles.advOut)}>
+                <span className={styles.advDot} />
+                <span className={styles.advTx}>
+                  <span className={styles.advT}>Already released</span>
+                  <span className={styles.advS}>
+                    Level {pending.plan.toLevel} is with {firstName(row.name)}, waiting to be taken.
+                    Releasing again replaces it; recalling takes it back.
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <div className={styles.advOpts}>
+                <div className={cx(styles.advOpt, styles.advSel)}>
+                  <span className={styles.advIc}><i className="fa-solid fa-arrow-right" /></span>
+                  <span className={styles.advTx}>
+                    <span className={styles.advT}>Release to the player</span>
+                    <span className={styles.advS}>
+                      {firstName(row.name)} rolls their own hit die, picks their own feature and spends
+                      their own ability points. It lands on their Codex as a decision waiting to be
+                      taken — it does not open itself.
+                    </span>
+                  </span>
+                  <span className={styles.advTag}>Default</span>
+                </div>
+                <div className={styles.advOpt}>
+                  <span className={cx(styles.advIc, styles.advIcAmber)}><i className="fa-solid fa-pen" /></span>
+                  <span className={styles.advTx}>
+                    <span className={styles.advT}>Walk it here yourself</span>
+                    <span className={styles.advS}>
+                      The same five steps, run by you. For a player who is not at the table — or for a
+                      correction. They still get the toast and the log line.
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className={styles.advActs}>
+              <button type="button" className={cx(styles.btn, styles.cyan, styles.lg)} onClick={() => void release()} disabled={busy}>
+                <span className={styles.bf} />
+                <span className={styles.bi}>
+                  <i className="fa-solid fa-paper-plane" /> {pending ? `Re-release level ${plan.toLevel}` : `Release level ${plan.toLevel}`}
+                </span>
+              </button>
+              <button type="button" className={cx(styles.btn, styles.ghost, styles.lg)} onClick={onWalkHere} disabled={busy}>
+                <span className={styles.bf} />
+                <span className={styles.bi}><i className="fa-solid fa-arrow-up-right-dots" /> Open level-up here</span>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className={cx(styles.actCard, styles.wide)}>
+        <div className={styles.acTitle}>
+          <span className={styles.num}>02</span>
+          <span className={styles.t}>Out with the players</span>
+          <span className={styles.advWho}>{out.length} waiting</span>
+        </div>
+        {out.length === 0 ? (
+          <div className={styles.acSoon}>
+            <i className="fa-solid fa-inbox" />
+            <span>Nothing released. A level you release shows here until the player takes it.</span>
+          </div>
+        ) : (
+          <div className={styles.advList}>
+            {out.map(c => {
+              const p = c.sheet!.pendingLevel!
+              const stale = pendingLevelStale(c, p)
+              return (
+                <div key={c.id} className={cx(styles.advRow, stale && styles.advStale)}>
+                  <span className={styles.advDot} />
+                  <span className={styles.advTx}>
+                    <span className={styles.advN}>{c.name}</span>
+                    <span className={styles.advMeta}>
+                      {p.plan.className} {p.plan.fromLevel} → {p.plan.toLevel}
+                      {' · '}released {new Date(p.releasedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {stale
+                        ? ' · OUT OF DATE — their level moved, re-release it'
+                        : ' · not yet taken'}
+                    </span>
+                  </span>
+                  <button type="button" className={cx(styles.btn, styles.ghost, styles.sm, styles.advRecall)}
+                    onClick={() => void recall(c)} disabled={busy}>
+                    <span className={styles.bf} /><span className={styles.bi}>Recall</span>
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <p className={styles.advNote}>
+          Recall pulls an untaken level back — nothing was written, so nothing is undone. A level
+          they have <b>taken</b> is an ordinary write, and is corrected the way every other one is:
+          on the sheet.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/** One from → to readout in the advancement strip. */
+function AdvStat({ label, from, to, mono, flat }: {
+  label: string
+  from: string | number
+  to: string | number
+  mono?: boolean
+  flat?: boolean
+}) {
+  return (
+    <span className={styles.advStat}>
+      <span className={styles.advStatL}>{label}</span>
+      <span className={cx(styles.advStatV, mono && styles.advMono, flat && styles.advFlat)}>
+        <span className={styles.from}>{from}</span>
+        <span className={styles.arw}>→</span>
+        <span className={styles.to}>{to}</span>
+      </span>
+    </span>
+  )
+}
+
 function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, backgroundLib, shardCatalog, onUpdate, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
@@ -2519,8 +2748,8 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
   const [vars, setVars] = useState<VarDef[]>(d?.vars ?? [])
   const [tags, setTags] = useState<string[]>(d?.tags ?? [])
   const [gfxOpen, setGfxOpen] = useState(false)
-  const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
-  const gAudit = ready ? auditNode({ graph, vars }, nodes) : []
+  const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
+  const gAudit = ready ? auditNode({ graph, vars }, nodes, catalogTypes) : []
   const gErrs = gAudit.filter(a => a.sev === 'err')
   const [category, setCategory] = useState<ItemCategory>(d?.category ?? 'misc')
   const [rarity, setRarity] = useState<ItemRarity>(d?.rarity ?? 'common')
@@ -3899,10 +4128,10 @@ function SpellForm({ spell, onSubmit, onDelete }: {
   const [graph, setGraph] = useState<GraphEffect[]>(d?.graph ?? [])
   const [vars, setVars] = useState<VarDef[]>(d?.vars ?? [])
   const [gfxOpen, setGfxOpen] = useState(false)
-  const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
+  const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
   // auditNode skips dangling-target detection on an empty catalog, so a clean
   // report before the libraries load would be a lie. See lib/useCatalogNodes.ts.
-  const gAudit = ready ? auditNode({ graph, vars }, nodes) : []
+  const gAudit = ready ? auditNode({ graph, vars }, nodes, catalogTypes) : []
   const gErrs = gAudit.filter(a => a.sev === 'err')
   const [level, setLevel] = useState(d?.level ?? 0)
   const [school, setSchool] = useState<SpellSchool>(d?.school ?? 'Evocation')
@@ -5189,7 +5418,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
   const { draft, dirty, savedAt, update, reset, clear } =
     useLocalDraft<ClassDef>(creating ? 'class:__new__' : `class:${selId ?? 'none'}`, base)
 
-  const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
+  const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
   const [varsOpen, setVarsOpen] = useState(false)
   const [fxOpen, setFxOpen] = useState(false)
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
@@ -5209,7 +5438,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
     // `ready` gates the node list: auditNode skips dangling-target detection
     // entirely when it is empty, so an audit run before the libraries load
     // would report a clean class that is not clean.
-    const out = auditNode({ graph: draft.graph, vars: draft.vars, prose: [draft.desc] }, ready ? nodes : [])
+    const out = auditNode({ graph: draft.graph, vars: draft.vars, prose: [draft.desc] }, ready ? nodes : [], ready ? catalogTypes : {})
 
     if (!draft.name?.trim()) {
       out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed class', s: 'A class needs a name before it can be assigned.' })
@@ -6563,7 +6792,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
   const { draft, dirty, savedAt, update, reset, clear } =
     useLocalDraft<RaceDef>(creating ? 'race:__new__' : `race:${selId ?? 'none'}`, base)
 
-  const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
+  const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
   const [varsOpen, setVarsOpen] = useState(false)
   const [fxOpen, setFxOpen] = useState(false)
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
@@ -6592,7 +6821,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
-    const out = auditNode({ graph: draft.graph, vars: draft.vars, prose: [draft.desc] }, ready ? nodes : [])
+    const out = auditNode({ graph: draft.graph, vars: draft.vars, prose: [draft.desc] }, ready ? nodes : [], ready ? catalogTypes : {})
     if (nameTwins.length) {
       out.unshift({
         sev: 'warn', id: 'field:name',
@@ -7062,11 +7291,11 @@ function BackgroundForm({ row, creating, lib, featureLib, onSelected, onCleared 
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
   const set = (p: Partial<BackgroundDef>) => update(x => ({ ...x, ...p }))
 
-  const { nodes, namesByGid, ready } = useCatalogNodes()
+  const { nodes, namesByGid, catalogTypes, ready } = useCatalogNodes()
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
-    const out = auditNode({ graph: draft.graph, vars: draft.vars, prose: [draft.desc] }, ready ? nodes : [])
+    const out = auditNode({ graph: draft.graph, vars: draft.vars, prose: [draft.desc] }, ready ? nodes : [], ready ? catalogTypes : {})
     if (!draft.name?.trim()) {
       out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed background', s: 'A background needs a name before it can be assigned.' })
     }

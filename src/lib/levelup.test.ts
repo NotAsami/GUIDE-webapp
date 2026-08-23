@@ -10,7 +10,8 @@ import type {
 } from './database.types.ts'
 import {
   ASI_LEVELS, asiUsed, effectiveCaster, hpGainOf, levelUpPatch, levelUpPlan, nextCurrentHp,
-  profForLevel, resolveClass,
+  pendingLevelStale, profForLevel, recallLevelPatch, releaseLevelPatch, resolveClass,
+  takeLevelPatch,
 } from './levelup.ts'
 
 // ── fixtures ────────────────────────────────────────────────────────────────
@@ -400,4 +401,187 @@ test('a character with no resolvable class is flagged rather than guessed at', (
   assert.equal(p.classMissing, true)
   // The die still falls back to what the sheet says rather than a bare 8.
   assert.equal(p.hitDie, 10)
+})
+
+// ── RELEASING A LEVEL ───────────────────────────────────────────────────────
+//
+// The player cannot compute a plan: `class_catalog` and `feature_catalog` have
+// no player policy, so their select returns ZERO ROWS. Everything below exists
+// because the plan therefore has to survive a round trip through the sheet and
+// come back out meaning exactly what it meant when the DM built it.
+
+const FEAT_ROWS: CatalogFeatureRow[] = [
+  { id: 'srd_alert', data: { name: 'Alert', category: 'feat' }, draft: null, updated_at: '' },
+]
+
+const released = (row = char()) =>
+  releaseLevelPatch(row, plan(row), FEAT_ROWS, '2026-08-23T20:14:00.000Z').sheet!.pendingLevel!
+
+test('RELEASE PARKS THE WHOLE PLAN — a player who cannot read the catalogs still gets one', () => {
+  const p = released()
+  assert.equal(p.plan.fromLevel, 7)
+  assert.equal(p.plan.toLevel, 8)
+  assert.equal(p.plan.hitDie, 10)
+  assert.equal(p.releasedAt, '2026-08-23T20:14:00.000Z')
+  // The offers carry their catalog DATA, not ids: an id would render as a blank
+  // row on the one screen that has to show it.
+  assert.equal(p.plan.offers.find(o => o.featureId === 'f_at8')?.data.name, 'Indomitable')
+  assert.deepEqual(p.feats.map(f => f.data.name), ['Alert'])
+})
+
+test('release leaves the rest of the sheet alone', () => {
+  const row = char()
+  const next = releaseLevelPatch(row, plan(row), FEAT_ROWS).sheet!
+  assert.deepEqual(next.hp, row.sheet!.hp)
+  assert.deepEqual(next.features, row.sheet!.features)
+  assert.equal(next.proficiencyBonus, 3)
+})
+
+test('RE-RELEASING REPLACES rather than stacking — one level at a time', () => {
+  const row = char()
+  const first = char({ sheet: releaseLevelPatch(row, plan(row), FEAT_ROWS, 'A').sheet })
+  const second = releaseLevelPatch(first, plan(first), FEAT_ROWS, 'B').sheet!.pendingLevel!
+  assert.equal(second.releasedAt, 'B', 'the newer release wins')
+  assert.equal(second.plan.toLevel, 8, 'and it is still ONE level, not two queued')
+})
+
+test('recall removes the release and nothing else', () => {
+  const row = char()
+  const withRelease = char({ sheet: releaseLevelPatch(row, plan(row), FEAT_ROWS).sheet })
+  const after = recallLevelPatch(withRelease).sheet!
+  assert.equal(after.pendingLevel, undefined)
+  assert.deepEqual(after.hp, row.sheet!.hp, 'an untaken level wrote nothing, so nothing is undone')
+  assert.deepEqual(after.hitDice, row.sheet!.hitDice)
+})
+
+test('A RELEASED PLAN APPLIES IDENTICALLY to the one the DM would have walked', () => {
+  // The whole promise of releasing: the player is handed the DM's plan, not a
+  // reconstruction of it. Same row, same choices, same patch.
+  const row = char()
+  const live = levelUpPatch(row, plan(row), { ...NO_CHOICE, die: 6 })
+  const parked = char({ sheet: releaseLevelPatch(row, plan(row), FEAT_ROWS).sheet })
+  const taken = takeLevelPatch(parked, parked.sheet!.pendingLevel!, { ...NO_CHOICE, die: 6 })
+  assert.deepEqual(taken.identity, live.identity)
+  assert.deepEqual(taken.sheet!.hp, live.sheet!.hp)
+  assert.deepEqual(taken.sheet!.hitDice, live.sheet!.hitDice)
+  assert.deepEqual(taken.spellbook, live.spellbook)
+})
+
+test('TAKING CLEARS THE RELEASE IN THE SAME WRITE, and still writes the level', () => {
+  // levelUpPatch spreads the CURRENT sheet — which still carries the
+  // pendingLevel it is spending. Clear it anywhere but on top of that result
+  // and the card goes on offering a level the player already took.
+  const row = char()
+  const parked = char({ sheet: releaseLevelPatch(row, plan(row), FEAT_ROWS).sheet })
+  const patch = takeLevelPatch(parked, parked.sheet!.pendingLevel!, { ...NO_CHOICE, die: 6 })
+  assert.equal(patch.sheet!.pendingLevel, undefined, 'the release must be spent')
+  assert.equal(patch.identity!.level, 8, 'and the level must still move')
+  assert.equal(patch.sheet!.hp!.max, 61, '52 + 6 + CON 3')
+  assert.equal(patch.sheet!.hitDice!.max, 8)
+})
+
+test('taking does not disturb the OTHER parked decisions', () => {
+  const withKit = char({
+    sheet: { ...char().sheet, pendingSkills: { classId: 'arbiter', className: 'Arbiter', from: ['athletics'], count: 1 } },
+  })
+  const parked = char({ sheet: releaseLevelPatch(withKit, plan(withKit), FEAT_ROWS).sheet })
+  const patch = takeLevelPatch(parked, parked.sheet!.pendingLevel!, { ...NO_CHOICE, die: 6 })
+  assert.equal(patch.sheet!.pendingSkills?.count, 1, 'a skill pick is not a level-up casualty')
+})
+
+test('STALE ONLY WHEN THE LEVEL MOVED — the plan cannot be recomputed player-side', () => {
+  const row = char()
+  const p = released(row)
+  assert.equal(pendingLevelStale(row, p), false, 'still on the level it was built for')
+  assert.equal(pendingLevelStale(char({ identity: { class: 'Arbiter', level: 8 } }), p), true, 'levelled since')
+  assert.equal(pendingLevelStale(char({ identity: { class: 'Arbiter', level: 6 } }), p), true, 'de-levelled since')
+})
+
+test('a level taken makes its own release stale, which is what stops a double take', () => {
+  const row = char()
+  const parked = char({ sheet: releaseLevelPatch(row, plan(row), FEAT_ROWS).sheet })
+  const p = parked.sheet!.pendingLevel!
+  const patch = takeLevelPatch(parked, p, { ...NO_CHOICE, die: 6 })
+  const after = { ...parked, ...patch } as CharacterRow
+  assert.equal(pendingLevelStale(after, p), true)
+})
+
+// ── PREREQUISITES ARE ENFORCED BY THE WRITE ─────────────────────────────────
+//
+// The overlay locks the row; this is what makes it a rule rather than a
+// courtesy. A disabled checkbox is one `disabled` prop away from being gone,
+// and the bug that prompted this was exactly that: the offers list rendered
+// four fields and never looked at `prerequisite` at all, while the feat picker
+// beside it did.
+
+/** An Arbiter whose level-9 feature needs a level-2 one. */
+const DEPENDENT = new Map<string, CatalogFeatureData>([
+  ...featureData,
+  ['f_reckless', FEATURE('Reckless Attack')],
+  ['f_brutal', { name: 'Brutal Strike', category: 'class', prerequisite: 'Reckless Attack Feature' }],
+])
+
+const DEP_CLASS: CatalogClassRow[] = [{
+  id: 'arbiter',
+  data: { ...ARBITER, features: [
+    { feature_id: 'f_reckless', when: 'level >= 2' },
+    { feature_id: 'f_brutal', when: 'level >= 8' },
+  ] },
+  draft: null, updated_at: '',
+}]
+
+const depPlan = (row: CharacterRow) => levelUpPlan(row, DEP_CLASS, DEPENDENT)
+
+test('AN UNMET PREREQUISITE IS NOT GRANTED, even when it was ticked', () => {
+  // Level 7 Arbiter who never took Reckless Attack. Both offers are open at 8;
+  // ticking only Brutal Strike must not write it.
+  const row = char()
+  const p = depPlan(row)
+  const patch = levelUpPatch(row, p, { ...NO_CHOICE, die: 6, featureIds: ['cls:arbiter:f_brutal'] })
+  const names = (patch.sheet?.features ?? []).map(f => f.name)
+  assert.equal(names.includes('Brutal Strike'), false, 'the prerequisite is unmet')
+})
+
+test('THE BATCH SATISFIES ITSELF — taking both in one level works', () => {
+  const row = char()
+  const p = depPlan(row)
+  const patch = levelUpPatch(row, p, {
+    ...NO_CHOICE, die: 6,
+    featureIds: ['cls:arbiter:f_reckless', 'cls:arbiter:f_brutal'],
+  })
+  const names = (patch.sheet?.features ?? []).map(f => f.name)
+  assert.ok(names.includes('Reckless Attack'))
+  assert.ok(names.includes('Brutal Strike'), 'the dependency is granted in the same write')
+})
+
+test('a prerequisite already on the sheet satisfies it', () => {
+  const row = char({
+    sheet: { ...char().sheet, features: [
+      { id: 'cls:arbiter', name: 'Arbiter' },
+      { id: 'cls:arbiter:f_reckless', name: 'Reckless Attack', feature_id: 'f_reckless' },
+    ] },
+  })
+  const patch = levelUpPatch(row, depPlan(row), { ...NO_CHOICE, die: 6, featureIds: ['cls:arbiter:f_brutal'] })
+  assert.ok((patch.sheet?.features ?? []).some(f => f.name === 'Brutal Strike'))
+})
+
+test('AN UNREADABLE PREREQUISITE STILL NEVER BLOCKS — homebrew stays grantable', () => {
+  const odd = new Map<string, CatalogFeatureData>([
+    ...featureData,
+    ['f_odd', { name: 'Dragon Slayer', category: 'class', prerequisite: 'Must have slain a dragon' }],
+  ])
+  const cls: CatalogClassRow[] = [{
+    id: 'arbiter', data: { ...ARBITER, features: [{ feature_id: 'f_odd', when: 'level >= 8' }] },
+    draft: null, updated_at: '',
+  }]
+  const row = char()
+  const p = levelUpPlan(row, cls, odd)
+  const patch = levelUpPatch(row, p, { ...NO_CHOICE, die: 6, featureIds: ['cls:arbiter:f_odd'] })
+  assert.ok((patch.sheet?.features ?? []).some(f => f.name === 'Dragon Slayer'))
+})
+
+test('a feature with NO prerequisite is unaffected — the old behaviour is intact', () => {
+  const row = char()
+  const patch = levelUpPatch(row, plan(row), { ...NO_CHOICE, die: 6, featureIds: ['cls:arbiter:f_at8'] })
+  assert.ok((patch.sheet?.features ?? []).some(f => f.name === 'Indomitable'))
 })

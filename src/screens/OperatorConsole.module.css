@@ -1462,7 +1462,7 @@
 .qPlayerDesc, .qSegOpt, .qTag, .searchIn, .selIn, .sessIn, .sessRecap,
 .toneOpt, .bcTarget .tg, .catDmg, .ccOpt, .ccB,
 .efBlock, .efChip, .efKind .k, .efPrev, .efPrev .pc, .efRefRow, .efRefTop .ic,
-.skPick, .acChip, .loreNatArea {
+.skPick, .acChip, .loreNatArea, .advOpt, .advTag, .advRow {
   border-color: var(--bc);
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - var(--bw, 1px)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw, 1px)), transparent 0),
@@ -3000,3 +3000,97 @@ div.skWarn { cursor: default; }
   letter-spacing: 0.16em; color: var(--cyan);
   border: 1px solid rgba(0, 166, 214, 0.45); padding: 0 3px;
 }
+
+/* ============================================================
+   ADVANCEMENT TAB — release a level, or walk it here
+   The RELEASE path is cyan because the destination is the player layer; the
+   walk-it-here path stays amber because that one is the operator doing it.
+   Every chamfered box below declares --cut/--bc/--bw and joins the corner
+   diagonal recipe at the bottom of this file — a border draws nothing along an
+   oblique clip edge (docs/Chamfered_clip-path_corners_fix.md).
+   ============================================================ */
+.advWho {
+  margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--beige-dim);
+}
+.advTrans { display: flex; align-items: center; gap: 16px; margin-bottom: 13px; }
+.advRule { width: 1px; align-self: stretch; background: rgba(212,191,125,0.22); }
+.advStat { display: flex; flex-direction: column; gap: 6px; }
+.advStatL { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.26em; color: var(--beige-dim); text-transform: uppercase; }
+.advStatV {
+  display: flex; align-items: baseline; gap: 8px;
+  font-family: var(--font-display); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.advStatV .from { font-size: 18px; color: var(--muted); }
+.advStatV .arw { font-family: var(--font-mono); font-size: 12px; color: var(--amber); }
+.advStatV .to { font-size: 30px; color: var(--amber-hot); text-shadow: 0 0 16px rgba(226,176,33,0.5); }
+.advStatV.advMono .from { font-family: var(--font-mono); font-weight: 500; font-size: 14px; }
+.advStatV.advMono .to { font-family: var(--font-mono); font-weight: 500; font-size: 20px; }
+/* Nothing moved — say so quietly rather than glowing at a number that is the
+   same on both sides of the arrow. */
+.advStatV.advFlat .to { color: var(--text); text-shadow: none; }
+
+.advOpts { display: flex; flex-direction: column; gap: 9px; }
+.advOpt {
+  --cut: 7px; --bw: 1.5px; --bc: rgba(212,191,125,0.26);
+  display: flex; align-items: flex-start; gap: 13px; padding: 12px 14px;
+  background-color: rgba(0,0,0,0.4);
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.advOpt.advSel { --bc: var(--cyan); background-color: rgba(0,166,214,0.08); }
+.advOpt.advSel .advT { color: var(--cyan-hot); }
+.advOpt.advOut { --bc: rgba(0,166,214,0.38); background-color: rgba(0,166,214,0.05); align-items: center; }
+.advIc {
+  flex: 0 0 30px; width: 30px; height: 30px; position: relative; isolation: isolate;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--cyan-hot); font-size: 13px; background: var(--cyan);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.advIc::before {
+  content: ""; position: absolute; inset: 1.5px; z-index: -1; background: #0b0e10;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.advIc.advIcAmber { background: rgba(226,176,33,0.55); color: var(--amber); }
+.advIc.advIcAmber::before { background: #100f0c; }
+.advTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.advT { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); }
+.advS { font-family: var(--font-prose); font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.advTag {
+  --cut: 4px; --bw: 1.5px; --bc: rgba(0,166,214,0.45);
+  align-self: center; flex: 0 0 auto; padding: 3px 8px; color: var(--cyan);
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase;
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.advActs { display: flex; gap: 10px; margin-top: 14px; }
+.advActs .btn { flex: 1 1 0; }
+
+.advList { display: flex; flex-direction: column; gap: 8px; }
+.advRow {
+  --cut: 6px; --bw: 1.5px; --bc: rgba(0,166,214,0.38);
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  background-color: rgba(0,166,214,0.05);
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+/* The plan was resolved against a level this character is no longer on, and it
+   cannot be recomputed player-side — the catalogs it came from are DM-only. */
+.advRow.advStale { --bc: rgba(185,58,58,0.5); background-color: rgba(185,58,58,0.06); }
+.advRow.advStale .advMeta { color: var(--danger-hot); }
+.advRow.advStale .advDot { background: var(--danger-hot); box-shadow: 0 0 8px var(--danger-hot); animation: none; }
+.advDot {
+  flex: 0 0 auto; width: 7px; height: 7px; background: var(--cyan); transform: rotate(45deg);
+  box-shadow: 0 0 8px var(--cyan); animation: advBlink 1.8s ease-in-out infinite;
+}
+@keyframes advBlink { 50% { opacity: 0.3; } }
+.advN { font-family: var(--font-display); font-weight: 600; font-size: 14.5px; color: var(--text); }
+.advMeta { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.advRecall { flex: 0 0 104px; }
+.advNote {
+  margin: 13px 0 0; font-family: var(--font-mono); font-size: 9.5px; line-height: 1.7;
+  letter-spacing: 0.04em; color: var(--beige-dim);
+}
+.advNote b { color: var(--amber); font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) { .advDot { animation: none; } }
