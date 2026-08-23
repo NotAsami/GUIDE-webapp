@@ -1,11 +1,11 @@
 // Run: node --test src/lib/gameIcons.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { GAME_ICONS, GAME_ICON_AUTHORS } from './gameIconsManifest.ts'
-import { GI_PREFIX, gameIconAuthor, gameIconUrl, iconLabel, isGameIcon } from './icons.ts'
+import { GI_PREFIX, ICONS, gameIconAuthor, gameIconUrl, iconLabel, iconMatches, isGameIcon } from './icons.ts'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 
@@ -58,4 +58,41 @@ test('every author in the manifest is a real folder', () => {
 test('labels read as words in both sets, so one search box can match both', () => {
   assert.equal(iconLabel('gi:lorc/holy-symbol'), 'holy symbol')
   assert.equal(iconLabel('fa-shield-halved'), 'shield halved')
+})
+
+test('EVERY ICON IS FINDABLE BY THE NAME IT HAS ON DISK', () => {
+  // The picker used to search the LABEL, where hyphens have become spaces. The
+  // file is `bone-knife.svg`, game-icons.net calls it `bone-knife`, and that is
+  // what gets typed — so 2,824 of 4,180 glyphs answered "Nothing matches" to
+  // their own name and read as absent from a library they were sitting in.
+  const lost = GAME_ICONS.filter(n => !iconMatches(GI_PREFIX + n, n.split('/')[1]))
+  assert.deepEqual(lost.slice(0, 5), [], `${lost.length} icons cannot be found by their own filename`)
+})
+
+test('a Font Awesome class finds its own icon, pasted whole', () => {
+  const lost = ICONS.filter(i => !iconMatches(i, i))
+  assert.deepEqual(lost.slice(0, 5), [], `${lost.length} FA icons do not match their own class`)
+})
+
+test('the two spellings of one name meet in the middle', () => {
+  // Both directions: hyphens in the query, spaces in the query.
+  assert.ok(iconMatches('gi:lorc/bone-knife', 'bone-knife'))
+  assert.ok(iconMatches('gi:lorc/bone-knife', 'bone knife'))
+  assert.ok(iconMatches('gi:lorc/bone-knife', 'BONE-KNIFE'), 'case folds too')
+  assert.ok(iconMatches('fa-shield-halved', 'fa-shield'), 'a leading fa- is not part of the name')
+  assert.ok(!iconMatches('gi:lorc/bone-knife', 'boneknife'), 'a separator is still a separator')
+})
+
+test('BOTH KINDS OF ICON RENDER THE SAME TAG', () => {
+  // Not cosmetics. Colour reaches an icon through descendant selectors written
+  // against the tag — `.frIcFrame i`, `.nbtn i`, `.nInner i` — so a game icon
+  // rendered as <span> took the mask fine and ignored every tint rule in the
+  // feature editor, the grant widget and both shard trees. It looked like game
+  // icons "cannot be coloured"; around twenty rules were simply missing them.
+  // Split the tags again and every one of them breaks again, silently.
+  const src = readFileSync(join(ROOT, 'src', 'components', 'Icon.tsx'), 'utf8')
+  const tags = [...src.matchAll(/^\s*<([a-z][a-z0-9]*)$/gm)].map(m => m[1])
+  assert.equal(tags.length, 2, `expected two render branches, found ${tags.length}`)
+  assert.deepEqual([...new Set(tags)], ['i'],
+    `the two branches render <${tags.join('> and <')}> — CSS cannot tell them apart if they differ`)
 })

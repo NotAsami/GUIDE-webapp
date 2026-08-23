@@ -39,7 +39,18 @@ export function Icon({ name, className, style, title, ...rest }: IconProps) {
 
   if (isGameIcon(name)) {
     return (
-      <span
+      // AN <i>, THE SAME TAG FONT AWESOME USES, and that is load-bearing rather
+      // than tidy. Half the app colours an icon through a descendant selector
+      // written against the tag — `.frIcFrame i`, `.nbtn i`, `.nInner i`. Those
+      // rules are how the feature editor, the grant widget and both shard trees
+      // tint a glyph, and every one of them silently skipped a <span>: the game
+      // icon rendered fine and stayed the wrong colour, which reads as an icon
+      // that "does not support tinting" rather than a selector that missed.
+      // Around twenty rules were affected. Matching the tag fixes them all and keeps the
+      // next one from being written wrong, since the two branches are now
+      // indistinguishable to CSS. There is no text inside, so `<i>`'s italics
+      // are moot.
+      <i
         className={`${styles.gi}${className ? ' ' + className : ''}`}
         // The stencil. Set inline because it is per-icon data, not a rule —
         // 4180 classes would be absurd, and the mask shorthand needs the URL.
