@@ -22,7 +22,7 @@ import type {
 } from './database.types.ts'
 import { evalExpr } from './expr.ts'
 import type { GraphContext, ResolveReq } from './graph.ts'
-import { armedMatches, gid } from './graph.ts'
+import { armedMatches, gid, staleArmed } from './graph.ts'
 import { IS_ACTIVATION } from './opSchema.ts'
 
 const state = (character: CharacterRow): GraphState =>
@@ -372,10 +372,77 @@ export function restVars(
   const out: Record<string, number | boolean> = {}
   for (const { def } of playerVars(character, shardTrees)) {
     if (!def.resetOn) continue
+    // 'turn' is Advance Turn's business, not a rest's. A var that clears every
+    // turn has nothing left for a rest to clear, and folding it in here would
+    // make the rest toast claim credit for state that was already gone.
+    if (def.resetOn === 'turn') continue
     if (def.resetOn === 'long' && kind === 'short') continue
     out[def.name] = def.initial ?? zero(def.type)
   }
   return out
+}
+
+/* ---------- turn ---------- */
+
+/**
+ * Variables the START OF YOUR NEXT TURN returns to their initial value.
+ *
+ * The whole 5e family of "until the start of your next turn" — Reckless Attack
+ * is the one that forced it. Deliberately the same shape as `restVars` above:
+ * the same `resetOn` field, the same ACTIVE-set scoping, the same "initial, or
+ * the type's zero". A second mechanism for the same idea is how a var would
+ * come to reset on a rest and not on a turn.
+ */
+export function turnVars(
+  character: CharacterRow,
+  shardTrees: Record<string, ShardTree> = {},
+): Record<string, number | boolean> {
+  const out: Record<string, number | boolean> = {}
+  for (const { def } of playerVars(character, shardTrees)) {
+    if (def.resetOn !== 'turn') continue
+    out[def.name] = def.initial ?? zero(def.type)
+  }
+  return out
+}
+
+/**
+ * Everything the start of your next turn does to `resources.graph`, as ONE
+ * patch: the variables that reset, and the arms those variables authorised.
+ *
+ * ORDER IS THE WHOLE POINT and it is why this is a function rather than two
+ * calls at the caller. The variables reset FIRST, then the gates are tested
+ * against the scope that reset produced — do it the other way round and
+ * `reckless` is still true when `staleArmed` looks, so a Brutal Strike armed
+ * under it survives the turn that ended it. Nothing about that failure is
+ * visible: the arm simply fires next turn as if it were still owed.
+ *
+ * Returns null when nothing changed, so Advance Turn skips the write and the
+ * report line rather than growing an empty `graph` key for having happened —
+ * the same shape `restVarPatch` already uses.
+ */
+export function turnGraphPatch(
+  character: CharacterRow,
+  ctx: GraphContext,
+  shardTrees: Record<string, ShardTree> = {},
+): { resources: Record<string, Json>; vars: string[]; disarmed: string[] } | null {
+  const vars = turnVars(character, shardTrees)
+  const names = Object.keys(vars)
+
+  const g = state(character)
+  const nextScope = { ...ctx.scope, ...vars }
+  const stale = new Set(staleArmed(ctx, nextScope))
+  const keptArmed = (g.armed ?? []).filter(m => !stale.has(m.id))
+  const disarmed = (g.armed ?? []).filter(m => stale.has(m.id)).map(m => m.label)
+
+  if (!names.length && !disarmed.length) return null
+  return {
+    resources: {
+      ...(character.resources ?? {}),
+      graph: { ...g, vars: { ...(g.vars ?? {}), ...vars }, armed: keptArmed },
+    } as Record<string, Json>,
+    vars: names,
+    disarmed,
+  }
 }
 
 /** Convenience for the two rest paths: the `resources` patch, or null when

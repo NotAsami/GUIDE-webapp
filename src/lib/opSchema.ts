@@ -147,12 +147,19 @@ export const OPS: Record<GraphOp, OpDef> = {
   },
   note: {
     label: 'note', group: 'passive', icon: 'fa-comment',
-    blurb: 'Surfaces rules text on the target without changing a number. Takes ask only when the text computes something — then the toggle is what decides whether the player sees it.',
+    blurb: 'Surfaces rules text on the target without changing a number. Takes ask when the text computes something — the toggle decides whether the player sees it — or when it ARMS, where the toggle decides whether the note is spent on the next roll at all.',
     fields: [{
       key: 'text', type: 'text', label: 'Note text', required: true, wide: true,
       desc: 'The sentence the player reads on the matched targets. The Label above is the short line in the breakdown; this is the rule itself. {braces} compute: the player sees the value, never the expression, so the text stays true as the character levels.',
       example: 'DC {8 + prof + wis}, Wisdom save or be restrained.',
-    }],
+    },
+    /* A note ARMS like anything else. It was the one op left without this, on
+       the assumption that prose is always-on — but Brutal Strike offers
+       Forceful Blow or Hamstring Blow, and the pick is spent on one swing.
+       Without `once` the choice rides every melee damage roll forever, and the
+       `ask` that makes it a choice is refused by the audit as a toggle that
+       reveals nothing. */
+    ONCE],
   },
   resist: flag('resist', 'fa-shield-halved', 'Halves incoming damage of the matched kind. Target a tag — the tag names the damage type.'),
   vuln: flag('vuln', 'fa-heart-crack', 'Doubles incoming damage of the matched kind.'),
@@ -227,6 +234,11 @@ export const IS_DAMAGE_FLAG = (op: GraphOp) => op === 'resist' || op === 'vuln' 
  *  an OR and there is no "weapon" roll kind to name. */
 export const ROLL_SELECTORS = [
   'attack', 'attack.melee', 'attack.ranged', 'attack.spell',
+  /* WHICH ABILITY THE SWING USED. Alongside melee/ranged/spell rather than
+     instead of them — a greataxe is both, and the target list is an OR, so
+     narrowing by one must not silence the other. "Advantage on Strength-based
+     attack rolls" is `roll:attack.str` and nothing else could say it. */
+  'attack.str', 'attack.dex', 'attack.con', 'attack.int', 'attack.wis', 'attack.cha',
   'damage', 'damage.melee', 'damage.ranged', 'damage.spell',
   'save', 'save.str', 'save.dex', 'save.con', 'save.int', 'save.wis', 'save.cha',
   'check', 'check.athletics', 'check.stealth', 'check.perception',

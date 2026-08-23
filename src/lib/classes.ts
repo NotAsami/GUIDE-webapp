@@ -188,6 +188,26 @@ export function gateLevel(when?: string): number | null {
 /** Is this gate satisfied in `scope`? A gate that does not resolve to a boolean
  *  is NOT satisfied — assigning on an unreadable condition would grant something
  *  the author did not ask for, and the DM can still grant it by hand. */
+/**
+ * A GATE, and only a gate.
+ *
+ * `when` says at what point a class makes a feature available. A feature's
+ * `prerequisite` (lib/feats.ts) says what ELSE the character must already have.
+ * The two are checked in different places on purpose:
+ *
+ *  - Anywhere a person CHOOSES to take a feature — the Grant Feature card, both
+ *    pickers in the level-up — both are checked, because the sheet in front of
+ *    them is the truth.
+ *  - The ASSIGNS (assignClass, subclassGrants, assignRace, assignBackground)
+ *    check the gate ONLY. They grant every open feature in one batch, and a
+ *    prerequisite read against the pre-batch sheet would refuse a level-9
+ *    Barbarian their Brutal Strike for lacking the Reckless Attack that same
+ *    call is granting two lines earlier. Assign means "make this sheet match
+ *    the class at this level"; the prerequisites are satisfied by the operation
+ *    itself.
+ *
+ * The omission is a decision, not an oversight — hence the note at each site.
+ */
 export function gateOpen(when: string | undefined, scope: ExprScope): boolean {
   if (!when?.trim()) return true
   const v = evalExpr(when, scope)
@@ -326,6 +346,7 @@ export function subclassGrants(
   for (const ref of sub.features ?? []) {
     const d = featureData.get(ref.feature_id)
     if (!d) continue
+    // Gate only — a `prerequisite` is deliberately NOT checked here. See gateOpen.
     if (!gateOpen(ref.when, scope)) { pending.push({ name: d.name, when: ref.when ?? '' }); continue }
     granted.push(d.name)
     grants.push({ ...d, id: `${mine}:${ref.feature_id}`, feature_id: ref.feature_id, source: sub.name })
@@ -494,6 +515,7 @@ export function assignClass(
   for (const ref of cls.features ?? []) {
     const d = featureData.get(ref.feature_id)
     if (!d) continue
+    // Gate only — a `prerequisite` is deliberately NOT checked here. See gateOpen.
     if (!gateOpen(ref.when, scope)) {
       pending.push({ name: d.name, when: ref.when ?? '' })
       continue

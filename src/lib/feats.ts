@@ -53,6 +53,60 @@ const ABILITY_RE = /^(.+?)\s+(\d+)\s*\+?$/
 /** `Fighting Style Feature`, `Spellcasting Feature`. */
 const FEATURE_RE = /^(.+?)\s+feature$/
 
+/** One clause, classified. `text` is always the author's own words, verbatim,
+ *  because every message about a clause quotes it back. */
+export type PrereqClause =
+  | { text: string; kind: 'level'; level: number }
+  | { text: string; kind: 'ability'; keys: AbilityKey[]; need: number }
+  | { text: string; kind: 'feature'; name: string }
+  | { text: string; kind: 'unreadable' }
+
+/**
+ * READING the sentence, with no character in hand.
+ *
+ * Split out so the Feature Editor can tell an author whether what they typed
+ * will ever be checked, at the moment they type it. That question has no
+ * character to ask about — it is purely "can this be read" — and answering it
+ * with a second copy of the three regexes is exactly how an editor comes to
+ * call a clause readable that the enforcer below quietly ignores.
+ *
+ * So this is the ONE parser. `prereqMet` walks its output and does nothing but
+ * compare.
+ */
+export function prereqClauses(prerequisite: string | undefined): PrereqClause[] {
+  const src = (prerequisite ?? '').trim()
+  if (!src) return []
+
+  const out: PrereqClause[] = []
+  for (const raw of src.split(',')) {
+    const text = raw.trim()
+    if (!text) continue
+    const lower = text.toLowerCase()
+
+    const lvl = LEVEL_RE.exec(lower)
+    if (lvl) { out.push({ text, kind: 'level', level: parseInt(lvl[1], 10) }); continue }
+
+    const feat = FEATURE_RE.exec(lower)
+    if (feat) { out.push({ text, kind: 'feature', name: feat[1].trim() }); continue }
+
+    const ab = ABILITY_RE.exec(lower)
+    if (ab) {
+      // `or` and `/` both separate alternatives; ANY of them satisfying is enough.
+      const parts = ab[1].split(/\s+or\s+|\//).map(p => p.trim())
+      const keys = parts.map(p => NAME_TO_ABILITY.get(p))
+      // Every part must BE an ability, or this is not an ability clause at all
+      // and guessing would be worse than admitting we cannot read it.
+      if (keys.every((k): k is AbilityKey => !!k)) {
+        out.push({ text, kind: 'ability', keys, need: parseInt(ab[2], 10) })
+        continue
+      }
+    }
+
+    out.push({ text, kind: 'unreadable' })
+  }
+  return out
+}
+
 /**
  * Is this prerequisite satisfied by this character?
  *
@@ -64,8 +118,8 @@ export function prereqMet(
   character: CharacterRow,
   shardTrees: Record<string, ShardTree> = {},
 ): PrereqResult {
-  const src = (prerequisite ?? '').trim()
-  if (!src) return { ok: true, unmet: [], unparsed: [] }
+  const clauses = prereqClauses(prerequisite)
+  if (!clauses.length) return { ok: true, unmet: [], unparsed: [] }
 
   const level = character.identity?.level ?? 1
   // EFFECTIVE, not base: a racial +2 is a `boost` layered on read, so a
@@ -80,45 +134,28 @@ export function prereqMet(
   const unmet: string[] = []
   const unparsed: string[] = []
 
-  for (const raw of src.split(',')) {
-    const clause = raw.trim()
-    if (!clause) continue
-    const lower = clause.toLowerCase()
-
-    const lvl = LEVEL_RE.exec(lower)
-    if (lvl) {
-      if (level < parseInt(lvl[1], 10)) unmet.push(clause)
-      continue
-    }
-
-    const feat = FEATURE_RE.exec(lower)
-    if (feat) {
-      const want = feat[1].trim()
-      /* "Spellcasting Feature" has no feature row to find — no class in the
-         catalog references one — but the app already records the fact on
-         `spellbook.spellcasting`, which is what the Caster Profile card sets.
-         Asking the sheet's own answer beats refusing a caster for lacking a
-         feature that does not exist. */
-      const has = featureNames.has(want) || (want === 'spellcasting' && casts)
-      if (!has) unmet.push(clause)
-      continue
-    }
-
-    const ab = ABILITY_RE.exec(lower)
-    if (ab) {
-      const need = parseInt(ab[2], 10)
-      // `or` and `/` both separate alternatives; ANY of them satisfying is enough.
-      const parts = ab[1].split(/\s+or\s+|\//).map(p => p.trim())
-      const keys = parts.map(p => NAME_TO_ABILITY.get(p))
-      // Every part must BE an ability, or this is not an ability clause at all
-      // and guessing would be worse than admitting we cannot read it.
-      if (keys.every((k): k is AbilityKey => !!k)) {
-        if (!keys.some(k => (scores?.[k] ?? 0) >= need)) unmet.push(clause)
-        continue
+  for (const c of clauses) {
+    switch (c.kind) {
+      case 'level':
+        if (level < c.level) unmet.push(c.text)
+        break
+      case 'feature': {
+        /* "Spellcasting Feature" has no feature row to find — no class in the
+           catalog references one — but the app already records the fact on
+           `spellbook.spellcasting`, which is what the Caster Profile card sets.
+           Asking the sheet's own answer beats refusing a caster for lacking a
+           feature that does not exist. */
+        const has = featureNames.has(c.name) || (c.name === 'spellcasting' && casts)
+        if (!has) unmet.push(c.text)
+        break
       }
+      case 'ability':
+        if (!c.keys.some(k => (scores?.[k] ?? 0) >= c.need)) unmet.push(c.text)
+        break
+      case 'unreadable':
+        unparsed.push(c.text)
+        break
     }
-
-    unparsed.push(clause)
   }
 
   return { ok: unmet.length === 0, unmet, unparsed }

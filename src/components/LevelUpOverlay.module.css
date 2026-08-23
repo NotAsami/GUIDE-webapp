@@ -26,9 +26,32 @@
  */
 
 .overlay {
+  /* ---- THE ACCENT LAYER ----
+     One panel, two tones. The operator layer is amber-led and the player layer
+     cyan-led — a token-level rule in this app, not a preference — so the
+     player's advancement is this same overlay with the accent repointed rather
+     than a second component drifting away from it a fix at a time.
+
+     `--accRGB` is a bare TRIPLET because the sheet reaches for nineteen
+     different alphas of the accent; naming a variable per alpha would be
+     twenty tokens where `rgba(var(--accRGB), 0.4)` is one. The three named
+     colours stay separate: they are palette entries, not alpha stops. */
+  --accRGB: 226, 176, 33;
+  --acc: var(--amber);
+  --accHot: var(--amber-hot);
+  --accDim: var(--amber-dim);
+
   position: fixed; inset: 0; z-index: 200;
   display: flex; align-items: center; justify-content: center; padding: 26px;
   animation: fadeIn 200ms ease both;
+}
+.overlay.player {
+  --accRGB: 0, 166, 214;
+  --acc: var(--cyan);
+  --accHot: var(--cyan-hot);
+  --accDim: var(--cyan-dim);
+  --pnA: #101416;
+  --pnB: #0a0c0d;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -36,6 +59,16 @@
   position: absolute; inset: 0;
   background: radial-gradient(120% 100% at 50% 40%, rgba(20, 16, 8, 0.86), rgba(8, 7, 5, 0.94));
   backdrop-filter: blur(2px);
+}
+/* Opened over something already scrimmed. The blur underneath has already run;
+   a second one gaussian-blurs an ALREADY-BLURRED image — invisible, and twice
+   the per-frame cost. The darkening gradient stays, that part still stacks. */
+.scrim.noBlur { backdrop-filter: none; }
+/* The two large fields carry the tone's temperature. The small interior darks
+   (#100f0c and friends) are left warm on purpose — at that lightness the hue is
+   below the threshold of noticing, and chasing it would double this block. */
+.overlay.player .scrim {
+  background: radial-gradient(120% 100% at 50% 40%, rgba(8, 16, 20, 0.86), rgba(5, 7, 8, 0.94));
 }
 
 .panel {
@@ -49,7 +82,13 @@
 .panel::before {
   content: ""; position: absolute; inset: 0; background: var(--beige);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
-  filter: drop-shadow(0 26px 64px rgba(0, 0, 0, 0.72)) drop-shadow(0 0 44px rgba(226, 176, 33, 0.22));
+  /* ONE drop-shadow, not two. The element is clip-path'd, so box-shadow is
+     sliced away and drop-shadow is the only option — but each one is a separate
+     full-size GPU pass over 1000x884. The second was a 44px accent glow, and it
+     is DROPPED, not merged: against a scrim this dark almost none of it was
+     visible. The panel's own beige edge and .pnInner's inset glow (bumped to
+     carry it) do that job for free. */
+  filter: drop-shadow(0 20px 48px rgba(0, 0, 0, 0.78));
 }
 .pnGap {
   position: absolute; inset: 6px; background: #0a0908;
@@ -62,18 +101,23 @@
 .pnInner {
   position: absolute; inset: 8px;
   background:
-    radial-gradient(120% 90% at 50% 0%, rgba(226, 176, 33, 0.09), transparent 55%),
-    linear-gradient(180deg, #161310, #0d0c0a);
+    radial-gradient(120% 90% at 50% 0%, rgba(var(--accRGB), 0.09), transparent 55%),
+    linear-gradient(180deg, var(--pnA, #161310), var(--pnB, #0d0c0a));
   clip-path: polygon(calc(var(--cut) - 7px) 0, 100% 0, 100% calc(100% - var(--cut) + 7px), calc(100% - var(--cut) + 7px) 100%, 0 100%, 0 calc(var(--cut) - 7px));
-  box-shadow: inset 0 0 60px rgba(226, 176, 33, 0.06), inset 0 0 1px rgba(212, 191, 125, 0.25);
+  box-shadow: inset 0 0 72px rgba(var(--accRGB), 0.10), inset 0 0 1px rgba(212, 191, 125, 0.25);
   overflow: hidden; display: flex; flex-direction: column;
 }
 .pnInner::before {
   content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: repeating-linear-gradient(to bottom, rgba(226, 176, 33, 0.025) 0px, rgba(226, 176, 33, 0.025) 1px, transparent 1px, transparent 4px);
-  mix-blend-mode: screen; opacity: 0.6;
+  /* Plain alpha, NOT `mix-blend-mode: screen`. A blend mode makes this layer a
+     compositing group over the whole panel, so every repaint inside it — a
+     hovered row, a stepper, the blinking "slot gained" pip — re-composites all
+     1000x884. Over a near-black interior, screen at 0.025 and alpha at 0.045
+     are the same picture. */
+  background: repeating-linear-gradient(to bottom, rgba(var(--accRGB), 0.045) 0px, rgba(var(--accRGB), 0.045) 1px, transparent 1px, transparent 4px);
+  opacity: 0.6;
 }
-.pnCorner { position: absolute; width: 18px; height: 18px; border-color: var(--amber); opacity: 0.8; z-index: 6; pointer-events: none; }
+.pnCorner { position: absolute; width: 18px; height: 18px; border-color: var(--acc); opacity: 0.8; z-index: 6; pointer-events: none; }
 .pnCorner.tl { top: 14px; left: 14px; border-top: 1.5px solid; border-left: 1.5px solid; }
 .pnCorner.br { bottom: 14px; right: 14px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
 
@@ -85,7 +129,7 @@
 }
 .head::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1.5px;
-  background: rgba(226, 176, 33, 0.45); box-shadow: 0 0 10px rgba(226, 176, 33, 0.4);
+  background: rgba(var(--accRGB), 0.45); box-shadow: 0 0 10px rgba(var(--accRGB), 0.4);
 }
 /* A hexagon with NO border — flat amber fill, glyph knocked out dark — so a
    single clip-path is safe. Compare .die below, which needs an edge and
@@ -93,19 +137,19 @@
 .sigil {
   flex: 0 0 auto; width: 46px; height: 46px;
   display: flex; align-items: center; justify-content: center;
-  color: #14120c; font-size: 20px; background: var(--amber);
+  color: #14120c; font-size: 20px; background: var(--acc);
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  filter: drop-shadow(0 0 11px rgba(226, 176, 33, 0.45));
+  filter: drop-shadow(0 0 11px rgba(var(--accRGB), 0.45));
 }
 .titles { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .kicker {
   font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.3em;
-  color: var(--amber); text-transform: uppercase; white-space: nowrap;
+  color: var(--acc); text-transform: uppercase; white-space: nowrap;
 }
 .hname {
   font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: 0.05em;
-  color: var(--amber-hot); text-transform: uppercase; line-height: 1;
-  text-shadow: 0 0 15px rgba(226, 176, 33, 0.3);
+  color: var(--accHot); text-transform: uppercase; line-height: 1;
+  text-shadow: 0 0 15px rgba(var(--accRGB), 0.3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .hclass { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
@@ -120,8 +164,8 @@
   font-variant-numeric: tabular-nums;
 }
 .statV .from { font-size: 18px; color: var(--muted); }
-.statV .arrow { font-family: var(--font-mono); font-size: 12px; color: var(--amber); }
-.statV .to { font-size: 30px; color: var(--amber-hot); text-shadow: 0 0 16px rgba(226, 176, 33, 0.5); }
+.statV .arrow { font-family: var(--font-mono); font-size: 12px; color: var(--acc); }
+.statV .to { font-size: 30px; color: var(--accHot); text-shadow: 0 0 16px rgba(var(--accRGB), 0.5); }
 .stat.dice .statV .from, .stat.dice .statV .to { font-family: var(--font-mono); font-weight: 500; }
 .stat.dice .statV .from { font-size: 14px; }
 .stat.dice .statV .to { font-size: 20px; }
@@ -148,10 +192,10 @@
 .body {
   position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
   padding: 16px 22px 18px; display: flex; flex-direction: column; gap: 13px;
-  scrollbar-width: thin; scrollbar-color: rgba(226, 176, 33, 0.4) rgba(0, 0, 0, 0.3);
+  scrollbar-width: thin; scrollbar-color: rgba(var(--accRGB), 0.4) rgba(0, 0, 0, 0.3);
 }
 .body::-webkit-scrollbar { width: 7px; }
-.body::-webkit-scrollbar-thumb { background: rgba(226, 176, 33, 0.4); }
+.body::-webkit-scrollbar-thumb { background: rgba(var(--accRGB), 0.4); }
 .body::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
 
 .step { position: relative; }
@@ -159,7 +203,7 @@
   display: flex; align-items: center; gap: 11px; margin-bottom: 9px;
   padding: 0 2px 7px; border-bottom: 1px solid rgba(212, 191, 125, 0.22);
 }
-.sn { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; color: var(--amber); }
+.sn { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; color: var(--acc); }
 .st { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.34em; color: var(--beige); text-transform: uppercase; }
 .tag {
   --cut: 4px; --bw: 1.5px; --bc: rgba(0, 166, 214, 0.45);
@@ -168,7 +212,7 @@
   border: 1.5px solid var(--bc);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
 }
-.tag.cond { --bc: rgba(226, 176, 33, 0.5); color: var(--amber); }
+.tag.cond { --bc: rgba(var(--accRGB), 0.5); color: var(--acc); }
 .tag.off { --bc: rgba(138, 122, 74, 0.4); color: var(--beige-dim); }
 
 /* Layered like the panel: a beige silhouette with a dark interior inset 1px,
@@ -197,9 +241,9 @@
   transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
 }
 .mode i { display: block; font-size: 13px; margin-bottom: 5px; color: var(--beige-dim); }
-.mode:hover { --bc: rgba(226, 176, 33, 0.4); color: var(--amber-hot); }
-.mode.sel { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226, 176, 33, 0.08); }
-.mode.sel i { color: var(--amber); }
+.mode:hover { --bc: rgba(var(--accRGB), 0.4); color: var(--accHot); }
+.mode.sel { --bc: var(--acc); color: var(--accHot); background-color: rgba(var(--accRGB), 0.08); }
+.mode.sel i { color: var(--acc); }
 
 .modebody { min-height: 64px; display: flex; align-items: center; gap: 14px; margin-bottom: 13px; }
 /* A HEXAGON with an edge — neither 45°, so the gradient recipe lands in the
@@ -208,18 +252,18 @@
    result is a bare text node, so `isolation: isolate` + a negative z-index on
    the interior is what keeps it on top (same trick as .card). */
 .die {
-  --edge: var(--amber);
+  --edge: var(--acc);
   position: relative; isolation: isolate;
   flex: 0 0 auto; width: 62px; height: 62px; display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display); font-weight: 700; font-size: 30px; color: var(--amber-hot);
+  font-family: var(--font-display); font-weight: 700; font-size: 30px; color: var(--accHot);
   background: var(--edge);
   clip-path: polygon(50% 0, 100% 28%, 100% 72%, 50% 100%, 0 72%, 0 28%);
-  text-shadow: 0 0 14px rgba(226, 176, 33, 0.5);
-  filter: drop-shadow(0 0 10px rgba(226, 176, 33, 0.25));
+  text-shadow: 0 0 14px rgba(var(--accRGB), 0.5);
+  filter: drop-shadow(0 0 10px rgba(var(--accRGB), 0.25));
 }
 .die::before {
   content: ""; position: absolute; inset: 1.5px; z-index: -1;
-  background: radial-gradient(120% 90% at 50% 35%, rgba(226, 176, 33, 0.16), transparent 65%), #14110a;
+  background: radial-gradient(120% 90% at 50% 35%, rgba(var(--accRGB), 0.16), transparent 65%), #14110a;
   clip-path: polygon(50% 0, 100% 28%, 100% 72%, 50% 100%, 0 72%, 0 28%);
 }
 .die.flash { animation: dieRoll 460ms ease; }
@@ -231,7 +275,15 @@
 .dievals { display: flex; flex-direction: column; gap: 4px; }
 .dievals .lab { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; }
 .dievals .big { font-family: var(--font-display); font-weight: 600; font-size: 17px; color: var(--text); }
-.reroll { height: 30px; width: 148px; flex: 0 0 auto; }
+/* TWO CLASSES, and it has to be two.
+   This button wears `.btn` from OperatorConsole.module.css and `.reroll` from
+   here. Both are single-class selectors, so the winner is whichever stylesheet
+   the bundler emits LAST — and that is the console's, which sets `flex: 1`.
+   Inside `.dievals` (a COLUMN flex container sized by its content) that means
+   flex-basis 0 with no free space to grow into: the button computed to
+   `height: 0px` and the re-roll was invisible, in the DOM the whole time.
+   `.dievals .reroll` outranks it and cannot lose a source-order coin toss. */
+.dievals .reroll { height: 30px; width: 148px; flex: 0 0 auto; }
 
 .stepperbox {
   --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.3);
@@ -241,9 +293,9 @@
 }
 .stepperbox button {
   width: 34px; height: 38px; background-color: rgba(0, 0, 0, 0.45); border: 0;
-  color: var(--amber); font-size: 13px; cursor: pointer; transition: color 140ms ease, background-color 140ms ease;
+  color: var(--acc); font-size: 13px; cursor: pointer; transition: color 140ms ease, background-color 140ms ease;
 }
-.stepperbox button:hover:not(:disabled) { color: #fff; background-color: rgba(226, 176, 33, 0.14); }
+.stepperbox button:hover:not(:disabled) { color: #fff; background-color: rgba(var(--accRGB), 0.14); }
 .stepperbox button:disabled { color: var(--beige-dim); opacity: 0.4; cursor: not-allowed; }
 .stepperbox .val {
   min-width: 46px; text-align: center; font-family: var(--font-display);
@@ -251,26 +303,26 @@
 }
 
 .calc {
-  --cut: 6px; --bw: 1.5px; --bc: rgba(226, 176, 33, 0.28);
+  --cut: 6px; --bw: 1.5px; --bc: rgba(var(--accRGB), 0.28);
   display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding: 11px 13px; margin-bottom: 11px;
-  background-color: rgba(226, 176, 33, 0.05);
+  background-color: rgba(var(--accRGB), 0.05);
   border: 1.5px solid var(--bc);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--text);
 }
 .calc .chip { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; }
 .calc .chip b { color: var(--text); font-weight: 600; }
-.calc .op { color: var(--amber); font-size: 13px; }
-.calc .res { margin-left: auto; font-family: var(--font-display); font-weight: 700; font-size: 18px; color: var(--amber-hot); letter-spacing: 0.02em; }
+.calc .op { color: var(--acc); font-size: 13px; }
+.calc .res { margin-left: auto; font-family: var(--font-display); font-weight: 700; font-size: 18px; color: var(--accHot); letter-spacing: 0.02em; }
 .calc .res .pl { color: var(--good); }
 
 .newmax { display: flex; align-items: baseline; gap: 11px; flex-wrap: wrap; }
 .newmax .l { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; color: var(--beige); text-transform: uppercase; }
 .newmax .from { font-family: var(--font-display); font-weight: 600; font-size: 20px; color: var(--muted); }
-.newmax .arrow { font-family: var(--font-mono); color: var(--amber); }
+.newmax .arrow { font-family: var(--font-mono); color: var(--acc); }
 .newmax .to { font-family: var(--font-display); font-weight: 700; font-size: 26px; color: var(--good); text-shadow: 0 0 13px rgba(79, 174, 107, 0.35); }
 .note { margin-top: 10px; font-family: var(--font-mono); font-size: 9.5px; line-height: 1.6; letter-spacing: 0.04em; color: var(--beige-dim); }
-.note b { color: var(--amber); font-weight: 500; }
+.note b { color: var(--acc); font-weight: 500; }
 
 /* ---- 02 derived ---- */
 .derived { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -284,20 +336,20 @@
 .pill .pl { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; }
 .pill .pv { display: flex; align-items: baseline; gap: 7px; font-family: var(--font-display); font-weight: 700; font-variant-numeric: tabular-nums; }
 .pill .pv .from { font-size: 17px; color: var(--muted); }
-.pill .pv .arrow { font-family: var(--font-mono); font-size: 11px; color: var(--amber); }
-.pill .pv .to { font-size: 22px; color: var(--amber-hot); }
+.pill .pv .arrow { font-family: var(--font-mono); font-size: 11px; color: var(--acc); }
+.pill .pv .to { font-size: 22px; color: var(--accHot); }
 .pill.nochange .pv .to { color: var(--text); }
 .pill .badge {
   font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase;
   padding: 2px 7px; color: var(--beige-dim); border: 1.5px solid rgba(138, 122, 74, 0.4);
 }
-.pill.changed .badge { color: var(--amber); border-color: rgba(226, 176, 33, 0.5); }
+.pill.changed .badge { color: var(--acc); border-color: rgba(var(--accRGB), 0.5); }
 /* A value the DM typed. Danger-toned because "we are NOT writing this" is the
    news, and it must not read like the same kind of note as "no change". */
 .pill.held .badge { color: var(--danger-hot); border-color: rgba(185, 58, 58, 0.5); }
 .pill.held .pv .to { color: var(--text); }
 .dnote { flex: 1; min-width: 200px; font-family: var(--font-mono); font-size: 9px; line-height: 1.6; letter-spacing: 0.04em; color: var(--beige-dim); }
-.dnote b { color: var(--amber); font-weight: 500; }
+.dnote b { color: var(--acc); font-weight: 500; }
 
 /* ---- 03 ASI / feat ---- */
 .seg { display: flex; gap: 8px; margin-bottom: 14px; }
@@ -313,10 +365,10 @@
 .segopt .sx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .segopt .sx .t { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); }
 .segopt .sx .s { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em; color: var(--muted); }
-.segopt:hover { --bc: rgba(226, 176, 33, 0.4); }
-.segopt.sel { --bc: var(--amber); background-color: rgba(226, 176, 33, 0.08); }
-.segopt.sel > i { color: var(--amber); }
-.segopt.sel .sx .t { color: var(--amber-hot); }
+.segopt:hover { --bc: rgba(var(--accRGB), 0.4); }
+.segopt.sel { --bc: var(--acc); background-color: rgba(var(--accRGB), 0.08); }
+.segopt.sel > i { color: var(--acc); }
+.segopt.sel .sx .t { color: var(--accHot); }
 
 .abils { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
 .ab {
@@ -327,22 +379,22 @@
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   display: flex; flex-direction: column; gap: 7px;
 }
-.ab.bumped { --bc: var(--amber); background-color: rgba(226, 176, 33, 0.07); }
+.ab.bumped { --bc: var(--acc); background-color: rgba(var(--accRGB), 0.07); }
 .abtop { display: flex; align-items: baseline; justify-content: space-between; }
 .abname { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; color: var(--beige); text-transform: uppercase; }
 .abval { font-family: var(--font-display); font-weight: 700; font-size: 20px; color: var(--text); font-variant-numeric: tabular-nums; }
-.abval .nv { color: var(--amber-hot); }
+.abval .nv { color: var(--accHot); }
 .abval .pl { font-family: var(--font-mono); font-size: 11px; color: var(--good); margin-left: 4px; }
 .abctl { display: flex; align-items: center; gap: 7px; }
 .abctl button {
   --cut: 4px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.28);
   flex: 1; height: 26px; background-color: rgba(0, 0, 0, 0.5);
   border: 1.5px solid var(--bc);
-  color: var(--amber); font-size: 12px; cursor: pointer;
+  color: var(--acc); font-size: 12px; cursor: pointer;
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   transition: color 140ms ease, background-color 140ms ease;
 }
-.abctl button:hover:not(:disabled) { color: #fff; background-color: rgba(226, 176, 33, 0.14); }
+.abctl button:hover:not(:disabled) { color: #fff; background-color: rgba(var(--accRGB), 0.14); }
 .abctl button:disabled { color: var(--beige-dim); opacity: 0.35; cursor: not-allowed; }
 
 .asibank {
@@ -355,7 +407,7 @@
    same as .die. */
 .asibank .pip {
   position: relative; width: 12px; height: 12px;
-  background: rgba(226, 176, 33, 0.45);
+  background: rgba(var(--accRGB), 0.45);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 .asibank .pip::before {
@@ -363,9 +415,9 @@
   background: #100f0c;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
-.asibank .pip.used { background: var(--amber); filter: drop-shadow(0 0 5px rgba(226, 176, 33, 0.6)); }
-.asibank .pip.used::before { background: var(--amber); }
-.asibank .ct { color: var(--amber); }
+.asibank .pip.used { background: var(--acc); filter: drop-shadow(0 0 5px rgba(var(--accRGB), 0.6)); }
+.asibank .pip.used::before { background: var(--acc); }
+.asibank .ct { color: var(--acc); }
 
 /* ---- pick rows (feats + gated features) ---- */
 .pick { display: flex; flex-direction: column; gap: 7px; }
@@ -379,10 +431,10 @@
 }
 /* Another hexagon with an edge — two layers, not a border. */
 .rk {
-  --edge: rgba(226, 176, 33, 0.55);
+  --edge: rgba(var(--accRGB), 0.55);
   position: relative; isolation: isolate;
   flex: 0 0 auto; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
-  color: var(--amber); font-size: 13px;
+  color: var(--acc); font-size: 13px;
   background: var(--edge);
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
 }
@@ -396,7 +448,7 @@
   font-family: var(--font-prose); font-size: 12.5px; line-height: 1.4; color: var(--muted);
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.rpre { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; color: var(--amber-dim); text-transform: uppercase; }
+.rpre { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; color: var(--accDim); text-transform: uppercase; }
 .rsrc {
   flex: 0 0 auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em;
   text-transform: uppercase; color: var(--beige-dim); text-align: right;
@@ -418,11 +470,11 @@
 /* A clause the parser could not read. Never blocks — this only says so. */
 .rpreOpen { color: var(--beige-dim); }
 
-.row:hover { --bc: rgba(226, 176, 33, 0.45); }
-.row.sel { --bc: var(--amber); background-color: rgba(226, 176, 33, 0.08); }
-.row.sel .rcheck { --bc: var(--amber); color: #fff; background-color: var(--amber); }
-.row.sel .rn { color: var(--amber-hot); }
-.row.sel .rk { --edge: var(--amber); }
+.row:hover { --bc: rgba(var(--accRGB), 0.45); }
+.row.sel { --bc: var(--acc); background-color: rgba(var(--accRGB), 0.08); }
+.row.sel .rcheck { --bc: var(--acc); color: #fff; background-color: var(--acc); }
+.row.sel .rn { color: var(--accHot); }
+.row.sel .rk { --edge: var(--acc); }
 
 .empty {
   display: flex; align-items: center; gap: 11px; padding: 16px 15px;
@@ -449,7 +501,11 @@
 /* Circles, not polygons — a real border is fine here. */
 .slot .pip { width: 9px; height: 9px; background-color: rgba(0, 0, 0, 0.5); border: 1.5px solid rgba(0, 166, 214, 0.4); border-radius: 50%; }
 .slot .pip.on { background-color: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.6); }
-.slot .pip.new { background-color: var(--amber); border-color: var(--amber); box-shadow: 0 0 7px rgba(226, 176, 33, 0.7); animation: pipBlink 1.6s steps(2, end) infinite; }
+.slot .pip.new { background-color: var(--acc); border-color: var(--acc); box-shadow: 0 0 7px rgba(var(--accRGB), 0.7); animation: pipBlink 1.6s steps(2, end) infinite; }
+/* Slot pips are cyan in BOTH tones — a spell slot is a spell slot. So in the
+   player tone the accent no longer distinguishes a gained pip from a held one,
+   and the "new" marker moves to green. */
+.overlay.player .slot .pip.new { background-color: var(--good); border-color: var(--good); box-shadow: 0 0 7px rgba(79, 174, 107, 0.7); }
 @keyframes pipBlink { 50% { opacity: 0.35; } }
 
 .pactline {
@@ -457,8 +513,8 @@
   font-family: var(--font-display); font-weight: 600; font-size: 17px; color: var(--text);
 }
 .pactline .from { color: var(--muted); }
-.pactline .arrow { font-family: var(--font-mono); color: var(--amber); }
-.pactline .to { color: var(--amber-hot); }
+.pactline .arrow { font-family: var(--font-mono); color: var(--acc); }
+.pactline .to { color: var(--accHot); }
 
 /* ---- footer ---- */
 .foot {
@@ -467,10 +523,10 @@
 }
 .foot::before {
   content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 1.5px;
-  background: rgba(226, 176, 33, 0.4); box-shadow: 0 0 10px rgba(226, 176, 33, 0.35);
+  background: rgba(var(--accRGB), 0.4); box-shadow: 0 0 10px rgba(var(--accRGB), 0.35);
 }
 .sumhead { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
-.sumhead .sg { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; color: var(--amber); }
+.sumhead .sg { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; color: var(--acc); }
 .sumhead .st { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3em; color: var(--beige); text-transform: uppercase; }
 .sumhead .warn { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; }
 .footrow { display: flex; align-items: flex-end; gap: 18px; }
@@ -483,9 +539,9 @@
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.03em; color: var(--text);
 }
-.sumline > i { color: var(--amber); font-size: 10px; }
+.sumline > i { color: var(--acc); font-size: 10px; }
 .sumline .k { color: var(--beige-dim); text-transform: uppercase; font-size: 8px; letter-spacing: 0.16em; }
-.sumline .v { color: var(--amber-hot); font-weight: 500; }
+.sumline .v { color: var(--accHot); font-weight: 500; }
 .sumline.add .v { color: var(--good); }
 .sumline.muted { opacity: 0.6; }
 .actions { flex: 0 0 auto; display: flex; gap: 10px; width: 320px; }

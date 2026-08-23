@@ -36,6 +36,7 @@ import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
 import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, revealAudit, splitSel } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { auditNode, gid, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
+import { prereqClauses } from '../lib/feats'
 import {
   SOURCES, ACTIVATIONS, ACT_ORDER, COLORS, DEFAULT_COLOR,
   type ActivationKind,
@@ -149,7 +150,7 @@ export default function FeatureEditor() {
   // Every targetable thing, across all four catalogs. Shared with the spell
   // form's graph block — see lib/useCatalogNodes.ts, including why `ready` is
   // load-bearing rather than cosmetic.
-  const { nodes, namesByGid, tagUse, ready } = useCatalogNodes()
+  const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
 
   /* WHAT THE PLAYER PREVIEW EVALUATES `{…}` AGAINST.
      A class variable like `weaponMastery` is declared on the class, not on the
@@ -173,14 +174,46 @@ export default function FeatureEditor() {
     const out = auditNode(
       { graph: draft.graph, vars: draft.vars, prose: [draft.light_description, draft.deep_description] },
       ready ? nodes : [],
+      // A name declared on ANOTHER feature is not a typo — see useCatalogNodes.
+      ready ? catalogTypes : {},
     )
     if (!draft.name?.trim()) out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed feature', s: 'A feature needs a name before it can be granted.' })
     if (!draft.light_description?.trim()) out.push({ sev: 'warn', id: 'field:light', t: 'No card text', s: 'The collapsed card in play will have nothing to scan.' })
     if (!draft.deep_description?.trim()) out.push({ sev: 'warn', id: 'field:deep', t: 'No detail text', s: 'The expanded card will have nothing below the card text.' })
     if ((draft.uses?.max ?? 0) > 0 && !draft.recharge) out.push({ sev: 'warn', id: null, t: 'Uses never reset', s: 'Max uses is set but no recharge was chosen — the DM restores them by hand.' })
+
+    /* PREREQUISITES ARE SILENT WHEN WRONG. lib/feats.ts never blocks on a clause
+       it cannot read — that is what keeps homebrew prose grantable — so a typo
+       does not error, it just stops mattering. Nothing else in the app will ever
+       mention it again, which makes the moment of typing the only place to say
+       so. Both checks WARN: publishing a prerequisite as flavour text is a
+       legitimate thing to do on purpose. */
+    for (const c of prereqClauses(draft.prerequisite)) {
+      if (c.kind === 'unreadable') {
+        out.push({
+          sev: 'warn', id: 'field:prereq', t: 'Prerequisite not checked',
+          s: `"${c.text}" cannot be read, so it will never block a grant. Readable shapes: `
+            + 'Level 9+ · Strength 13+ · Strength or Dexterity 13+ · Reckless Attack Feature.',
+        })
+        continue
+      }
+      // A feature clause that names nothing in the library. It PARSES, so the
+      // reader above is happy — and then it silently never matches anything,
+      // which is the typo case the safe-by-default rule cannot catch itself.
+      if (c.kind === 'feature' && c.name !== 'spellcasting'
+        && !lib.features.some(f => (f.data?.name ?? '').trim().toLowerCase() === c.name)) {
+        out.push({
+          sev: 'warn', id: 'field:prereq', t: 'Prerequisite names no known feature',
+          s: `"${c.text}" reads as a feature requirement, but no feature in the library is called that. `
+            + 'It will never be satisfied. Check the spelling against the feature it should point at.',
+        })
+      }
+    }
     if (!out.length) out.push({ sev: 'ok', id: null, t: 'Clean', s: 'No errors, no warnings. Safe to publish.' })
     return out
-  }, [draft, nodes, ready])
+    // `lib.features` is a dep because the prerequisite check reads it: rename
+    // the feature a prerequisite points at and this warning has to appear.
+  }, [draft, nodes, ready, lib.features])
 
   const errs = audit.filter(a => a.sev === 'err').length
   const warns = audit.filter(a => a.sev === 'warn').length
@@ -194,10 +227,10 @@ export default function FeatureEditor() {
       const c = featureContent(r)
       return n + auditNode(
         { graph: c.graph, vars: c.vars, prose: [c.light_description, c.deep_description] },
-        nodes,
+        nodes, catalogTypes,
       ).filter(a => a.sev === 'err').length
     }, 0),
-    [lib.features, nodes],
+    [lib.features, nodes, catalogTypes],
   )
   const nodeCount = lib.features.reduce((n, r) => n + (featureContent(r).graph?.length ?? 0), 0)
 
@@ -516,7 +549,7 @@ export default function FeatureEditor() {
                             const d = featureContent(r)
                             const bad = auditNode(
                               { graph: d.graph, vars: d.vars, prose: [d.light_description, d.deep_description] },
-                              nodes,
+                              nodes, catalogTypes,
                             ).some(a => a.sev === 'err')
                             return (
                               <button key={r.id} type="button" draggable
@@ -921,6 +954,18 @@ function FeatureForm(p: FormProps) {
         <div>
           <span className={styles.fieldLab}>Source detail</span>
           <input className={styles.in} value={d.source ?? ''} placeholder="Fighter 1" onChange={e => set({ source: e.target.value })} />
+        </div>
+        <div>
+          {/* A plain input, NOT a prose textarea. A prerequisite is a small
+              language the app reads, not writing — and treating it as prose
+              would put it under proseFields.test.ts, which requires every such
+              field to render through renderInline() everywhere it appears. The
+              console prints the UNMET clauses as plain text, correctly, and
+              would fail that guard for doing the right thing. */}
+          <span className={styles.fieldLab}>Prerequisite</span>
+          <input data-audit="field:prereq" className={styles.in} value={d.prerequisite ?? ''}
+            placeholder="Level 9+, Reckless Attack Feature"
+            onChange={e => set({ prerequisite: e.target.value || undefined })} />
         </div>
         <div>
           <span className={styles.fieldLab}>Origin chain</span>

@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow } from './database.types.ts'
-import { prereqMet, prereqSummary } from './feats.ts'
+import { prereqClauses, prereqMet, prereqSummary } from './feats.ts'
 
 function char(over: Partial<CharacterRow> = {}): CharacterRow {
   return {
@@ -128,6 +128,58 @@ test('comma is AND — both halves must hold', () => {
   assert.equal(prereqMet('Level 19+, Spellcasting Feature', caster).ok, true)
   assert.equal(prereqMet('Level 19+, Spellcasting Feature', char({ identity: { level: 19 } })).ok, false)
   assert.equal(prereqMet('Level 19+, Spellcasting Feature', char({ spellbook: { spellcasting: true } })).ok, false)
+})
+
+// ── the classifier the editor asks ──────────────────────────────────────────
+//
+// `prereqClauses` answers "can this be READ", with no character in hand, so the
+// Feature Editor can warn while someone types. It is the same parse `prereqMet`
+// runs — a second copy is how an editor comes to call a clause readable that
+// the enforcer quietly ignores.
+
+test('every readable shape is classified, and the text is kept verbatim', () => {
+  assert.deepEqual(prereqClauses('Level 9+'), [{ text: 'Level 9+', kind: 'level', level: 9 }])
+  assert.deepEqual(prereqClauses('Reckless Attack Feature'),
+    [{ text: 'Reckless Attack Feature', kind: 'feature', name: 'reckless attack' }])
+  assert.deepEqual(prereqClauses('Strength or Dexterity 13+'),
+    [{ text: 'Strength or Dexterity 13+', kind: 'ability', keys: ['str', 'dex'], need: 13 }])
+})
+
+test('THE TEXT STAYS THE AUTHORS OWN, not a normalisation — every message quotes it back', () => {
+  const [c] = prereqClauses('  LEVEL 9+  ')
+  assert.equal(c.text, 'LEVEL 9+', 'trimmed, but not lower-cased or reformatted')
+})
+
+test('an unreadable clause is classified as such rather than guessed at', () => {
+  assert.deepEqual(prereqClauses('Must have slain a dragon'),
+    [{ text: 'Must have slain a dragon', kind: 'unreadable' }])
+  // Looks like an ability clause and is not one.
+  assert.equal(prereqClauses('Reputation 13+')[0].kind, 'unreadable')
+})
+
+test('comma splits, blanks are dropped, and nothing is a clause of nothing', () => {
+  assert.deepEqual(prereqClauses('Level 4+, , Alert Feature').map(c => c.kind), ['level', 'feature'])
+  for (const v of [undefined, '', '   ', ',,']) assert.deepEqual(prereqClauses(v), [])
+})
+
+test('THE CLASSIFIER AND THE ENFORCER AGREE — unreadable there is unparsed here', () => {
+  // The property that makes one parser worth having: whatever prereqClauses
+  // calls unreadable is exactly what prereqMet reports as unchecked, and it
+  // never lands in `unmet`.
+  const src = 'Level 8+, Blessed by the Raven Queen, Strength 13+, Slain a dragon'
+  const r = prereqMet(src, char())
+  const unreadable = prereqClauses(src).filter(c => c.kind === 'unreadable').map(c => c.text)
+  assert.deepEqual(r.unparsed, unreadable)
+  for (const t of unreadable) assert.equal(r.unmet.includes(t), false, 'unreadable must never block')
+})
+
+test('every prerequisite shape in the live catalog is readable', () => {
+  const real = ['Level 4+', 'Level 19+', 'Fighting Style Feature',
+    'Level 19+, Spellcasting Feature', 'Strength or Dexterity 13+',
+    'Level 9+, Reckless Attack Feature']
+  for (const p of real) {
+    assert.deepEqual(prereqClauses(p).filter(c => c.kind === 'unreadable'), [], `"${p}" should be readable`)
+  }
 })
 
 // ── the summary line ────────────────────────────────────────────────────────

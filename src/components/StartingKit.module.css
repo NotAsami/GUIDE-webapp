@@ -201,3 +201,167 @@
 @media (prefers-reduced-motion: reduce) {
   .prompt, .kOpt { transition: none; }
 }
+
+/* ============================================================
+   THE LEVEL VARIANT
+   Same anatomy as the prompt above — docked, silent, left accent bar, icon
+   slot, two-line text, a go chip. What a level earns is: the icon slot becomes
+   a hexagon reading the number, and the accent bar runs AMBER TO CYAN because
+   the DM granted it and the player owns it.
+
+   The bar is a positioned span, never `border-image` — that repaints all four
+   edges with the gradient and eats the hairline.
+   ============================================================ */
+.prompt.hasLevel {
+  background: linear-gradient(90deg, rgba(226,176,33,0.07), rgba(0,166,214,0.09) 60%, rgba(0,166,214,0.05));
+  border-color: rgba(0,166,214,0.34);
+  border-left: 1px solid rgba(0,166,214,0.34);
+  overflow: hidden;
+}
+.prompt.hasLevel::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: linear-gradient(180deg, var(--amber), var(--cyan));
+}
+/* A slow breath across the top edge. It marks the card as live without moving
+   anything or asking for a click — a level that pulses at you is a nag. */
+.prompt.hasLevel::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(77,214,255,0.7), transparent);
+  animation: skSweep 3.4s ease-in-out infinite;
+}
+@keyframes skSweep { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+.prompt.hasLevel:hover, .prompt.hasLevel:focus-visible {
+  background: linear-gradient(90deg, rgba(226,176,33,0.1), rgba(0,166,214,0.14) 60%, rgba(0,166,214,0.08));
+  border-color: var(--cyan);
+  border-left-color: var(--cyan);
+}
+.prompt.hasLevel .pT { color: var(--cyan-hot); }
+.prompt.hasLevel .pGo { color: var(--cyan-hot); }
+
+/* A HEXAGON WITH AN EDGE — two layers, not a border. None of its six edges is
+   45°, so the corner-diagonal recipe would paint in the wrong place and every
+   edge would stay bare (docs/Chamfered_clip-path_corners_fix.md). */
+.pIc.pHex {
+  position: relative; isolation: isolate;
+  flex: 0 0 40px; width: 40px; height: 40px; border: 0; background: var(--cyan);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  filter: drop-shadow(0 0 10px rgba(0,166,214,0.45));
+}
+.pIc.pHex::before {
+  content: ""; position: absolute; inset: 1.5px; z-index: -1; background: #0d1114;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.pLv {
+  font-family: var(--font-display); font-weight: 700; font-size: 18px; line-height: 1;
+  color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.5);
+}
+
+/* DIAMOND PIPS carry the count so the copy does not have to. Same shape as the
+   level-up overlay's ASI bank, and two layers for the same reason as the
+   hexagon. */
+.pips { flex: 0 0 auto; display: flex; gap: 5px; margin-left: auto; }
+.pip {
+  position: relative; width: 11px; height: 11px; background: rgba(226,176,33,0.55);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.pip::before {
+  content: ""; position: absolute; inset: 1.5px; background: #121110;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.pip.pipLevel { background: var(--cyan); filter: drop-shadow(0 0 5px rgba(0,166,214,0.6)); }
+.pip.pipLevel::before { background: var(--cyan); }
+
+/* ---- THE LEVEL ROW inside the open card ----
+   Deliberately the loudest thing on it: this is the one decision a player
+   looks forward to, and it should not queue behind "which martial weapon". */
+.kcCyan { color: var(--cyan); background: rgba(0,166,214,0.1); border-color: rgba(0,166,214,0.3); }
+.lvRow {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 15px; width: 100%; padding: 15px 16px;
+  background: linear-gradient(90deg, rgba(0,166,214,0.13), rgba(0,166,214,0.05));
+  border: 1px solid rgba(0,166,214,0.45); border-left: 2px solid var(--cyan);
+  box-shadow: inset 0 0 34px rgba(0,166,214,0.08);
+}
+.lvRow::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(77,214,255,0.7), transparent);
+  animation: skSweep 3.4s ease-in-out infinite;
+}
+/* Out of date: the plan was resolved against a level this character has left,
+   and it cannot be recomputed here — the catalogs it came from are DM-only. */
+.lvRow.lvStale {
+  background: rgba(185,58,58,0.06);
+  border-color: rgba(185,58,58,0.45); border-left-color: var(--danger);
+  box-shadow: none;
+}
+.lvRow.lvStale::after { display: none; }
+.lvRow.lvStale .lvHex { background: var(--danger); filter: none; }
+.lvRow.lvStale .lvN { color: var(--danger-hot); text-shadow: none; }
+.lvRow.lvStale .lvT, .lvRow.lvStale .lvT .lvArw { color: var(--danger-hot); }
+
+.lvHex {
+  position: relative; isolation: isolate; flex: 0 0 52px; width: 52px; height: 52px;
+  display: flex; align-items: center; justify-content: center; background: var(--cyan);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  filter: drop-shadow(0 0 12px rgba(0,166,214,0.45));
+}
+.lvHex::before {
+  content: ""; position: absolute; inset: 1.5px; z-index: -1; background: #0d1114;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.lvN {
+  font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1;
+  color: var(--cyan-hot); text-shadow: 0 0 14px rgba(0,166,214,0.5);
+}
+.lvTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.lvT {
+  display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+  font-family: var(--font-display); font-weight: 600; font-size: 20px;
+  letter-spacing: 0.03em; color: var(--cyan-hot);
+}
+.lvFrom { font-size: 15px; color: var(--muted); }
+.lvArw { font-family: var(--font-mono); font-size: 12px; color: var(--cyan); }
+.lvD { font-family: var(--font-prose); font-size: 14px; line-height: 1.5; color: var(--muted); }
+.lvMeta { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 4px; }
+.mchip {
+  padding: 3px 8px; background: rgba(0,0,0,0.35); border: 1px solid rgba(0,166,214,0.35);
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--cyan);
+}
+.lvGo {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 11px 18px; background: rgba(0,166,214,0.12); border: 1px solid var(--cyan);
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--cyan-hot);
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+.lvGo:hover:not(:disabled) { background: rgba(0,166,214,0.22); box-shadow: 0 0 14px rgba(0,166,214,0.35); }
+.lvGo:disabled { opacity: 0.45; cursor: wait; }
+
+@media (max-width: 620px) {
+  .lvRow { flex-wrap: wrap; }
+  .lvGo { width: 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .prompt.hasLevel::after, .lvRow::after { animation: none; }
+}
+
+/* The open panel carries the same amber→cyan bar as the collapsed prompt when
+   a level is waiting in it — the two are one card in two states, and a bar that
+   changes colour on open would say they are not. */
+.kit.hasLevel { border-color: rgba(0,166,214,0.3); border-left: 1px solid rgba(0,166,214,0.3); }
+.kit.hasLevel::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; z-index: 2;
+  background: linear-gradient(180deg, var(--amber), var(--cyan));
+}
+.kit.hasLevel { position: fixed; }
+.kit.hasLevel .kHead i { color: var(--cyan-hot); }
+.kit.hasLevel .kT { color: var(--cyan-hot); }
+.kit.hasLevel .kX:hover { color: var(--cyan); }
+
+/* ---- WHAT MOVES WHILE A SCRIM IS UP ----
+   Nothing, if it is under one. An animation beneath a `backdrop-filter` forces
+   the whole viewport to be re-blurred every frame; paused, the blur caches and
+   costs nothing. See lib/backdropFreeze for the mechanism. */
+.lvRow.lvQuiet::after { animation-play-state: paused; }
+:global(html[data-modal]) .prompt.hasLevel::after { animation-play-state: paused; }

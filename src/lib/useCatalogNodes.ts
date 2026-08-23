@@ -16,6 +16,7 @@ import { useMemo } from 'react'
 import { useDmCatalog, useDmFeatures, useDmSpells, featureContent } from './dm.ts'
 import { useShardCatalog } from './shardCatalog.ts'
 import { gid, nodeGid, normalizeTag, type AuthoredNode } from './graph.ts'
+import type { VarDef } from './database.types.ts'
 
 export type CatalogNodes = {
   nodes: AuthoredNode[]
@@ -25,6 +26,18 @@ export type CatalogNodes = {
    *  autocomplete source. Counted across all four catalogs, because a tag's
    *  whole purpose is to reach across them. */
   tagUse: Map<string, number>
+  /** Every VARIABLE declared anywhere in the catalog, name → type.
+   *
+   *  A graph reaches across nodes and so does its state: Brutal Strike is gated
+   *  `when: reckless`, and `reckless` is declared on Reckless Attack. At runtime
+   *  the scope is flat across every active source, so that works — but the
+   *  audit only ever saw the node in front of it and called the name unknown,
+   *  which blocks Publish. Cross-feature state was unauthorable until this
+   *  existed. Same job as `characterVars`' `catalogTypes`, one layer up.
+   *
+   *  First declaration wins on a collision, matching `collectVars`; the
+   *  duplicate itself is reported by the audit, not re-reported here. */
+  catalogTypes: Record<string, 'num' | 'bool'>
   /** False until every library has loaded. See the note above. */
   ready: boolean
 }
@@ -66,11 +79,28 @@ export function useCatalogNodes(): CatalogNodes {
     return m
   }, [lib.features, spellLib.spells, itemLib.items, shardCatalog])
 
+  const catalogTypes = useMemo(() => {
+    const m: Record<string, 'num' | 'bool'> = {}
+    const take = (defs: VarDef[] | undefined) => {
+      for (const d of defs ?? []) {
+        if (d.kind !== 'stored' || !d.name || m[d.name]) continue
+        m[d.name] = d.type ?? 'num'
+      }
+    }
+    for (const r of lib.features) take(featureContent(r).vars)
+    for (const r of spellLib.spells) take(r.data?.vars)
+    for (const r of itemLib.items) take(r.data?.vars)
+    for (const tree of Object.values(shardCatalog)) {
+      for (const n of tree.nodes ?? []) take(n.vars)
+    }
+    return m
+  }, [lib.features, spellLib.spells, itemLib.items, shardCatalog])
+
   const tagUse = useMemo(() => {
     const m = new Map<string, number>()
     for (const n of nodes) for (const t of n.tags ?? []) m.set(normalizeTag(t), (m.get(normalizeTag(t)) ?? 0) + 1)
     return m
   }, [nodes])
 
-  return { nodes, namesByGid, tagUse, ready: !lib.loading && !itemLib.loading && !spellLib.loading }
+  return { nodes, namesByGid, tagUse, catalogTypes, ready: !lib.loading && !itemLib.loading && !spellLib.loading }
 }

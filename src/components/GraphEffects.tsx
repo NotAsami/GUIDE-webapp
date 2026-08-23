@@ -856,16 +856,20 @@ export function VarsBlock({ vars, onChange }: {
                   <div>
                     <span className={styles.fieldLab}>Resets on<span className={styles.ty}>enum</span></span>
                     <select className={styles.in} value={v.resetOn ?? ''}
-                      onChange={e => setVar(vi, { resetOn: (e.target.value || undefined) as 'short' | 'long' | undefined })}>
+                      onChange={e => setVar(vi, { resetOn: (e.target.value || undefined) as 'turn' | 'short' | 'long' | undefined })}>
                       <option value="">Never</option>
+                      <option value="turn">Start of your turn</option>
                       <option value="short">Short rest</option>
                       <option value="long">Long rest</option>
                     </select>
                   </div>
                 </div>
                 <div className={styles.kindnote} style={{ margin: '-6px 0 11px' }}>
-                  Resets return the variable to its initial value on that rest — the same
-                  rule a feature’s uses follow. A long rest includes the short-rest ones.
+                  Resets return the variable to its initial value — the same rule a
+                  feature’s uses follow. A long rest includes the short-rest ones.
+                  “Start of your turn” is the odd one: it is cleared by Advance Turn and
+                  NOT by a rest, and it is how “until the start of your next turn” is
+                  written. Anything armed while it was true lapses with it.
                   <b> Never</b> means only an activation or the player changes it.
                 </div>
                 <div className={cx(styles.perm, !dmOnly && styles.player)}>

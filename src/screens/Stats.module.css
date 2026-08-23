@@ -425,3 +425,7 @@
   background-position: top left, bottom right;
   background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
+
+/* Same as the topbar caret: nothing under a scrim should keep painting.
+   See lib/backdropFreeze. */
+:global(html[data-modal]) .cursor { animation-play-state: paused; }

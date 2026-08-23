@@ -45,7 +45,7 @@ type Mode = 'author' | 'preview'
 /** Lattice audit — a direct port of shard-lattice.js's audit(): orphan nodes,
  *  unreachable branches, dangling/inward-flow links, ring overlaps, a free-node
  *  warning, and a total-cost-vs-capacity sanity check. */
-function audit(tree: EditorTree, nodes: AuthoredNode[] = [], ready = false): AuditItem[] {
+function audit(tree: EditorTree, nodes: AuthoredNode[] = [], ready = false, catalogTypes: Record<string, 'num' | 'bool'> = {}): AuditItem[] {
   const out: AuditItem[] = []
   const byId = (id: string) => tree.nodes.find(n => n.id === id)
   const roots = tree.nodes.filter(n => n.tier === 0).map(n => n.id)
@@ -86,7 +86,7 @@ function audit(tree: EditorTree, nodes: AuthoredNode[] = [], ready = false): Aud
   // catalog is empty, and a clean report from an unloaded catalog is a lie.
   if (ready) {
     for (const n of tree.nodes) {
-      for (const a of auditNode({ graph: n.graph, vars: n.vars }, nodes)) out.push({ ...a, id: n.id })
+      for (const a of auditNode({ graph: n.graph, vars: n.vars }, nodes, catalogTypes)) out.push({ ...a, id: n.id })
     }
   }
 
@@ -345,7 +345,7 @@ export function ShardLattice() {
   }
   async function onPublish() {
     if (!draft) return
-    if (audit(draft).some(a => a.sev === 'err')) { fireToast('Blocking issues — cannot publish', true); return }
+    if (audit(draft, catalog.nodes, catalog.ready, catalog.catalogTypes).some(a => a.sev === 'err')) { fireToast('Blocking issues — cannot publish', true); return }
     setSaving(true); await publishTree(draft); setSaving(false); clear()
     fireToast('Published — live for the party')
   }
@@ -361,7 +361,7 @@ export function ShardLattice() {
   if (!session) return <Navigate to="/login" replace />
   if (!isDm) return <Navigate to="/" replace />
 
-  const auditList = draft ? audit(draft, catalog.nodes, catalog.ready) : []
+  const auditList = draft ? audit(draft, catalog.nodes, catalog.ready, catalog.catalogTypes) : []
   const errs = auditList.filter(a => a.sev === 'err').length
   const warns = auditList.filter(a => a.sev === 'warn').length
   const totalCost = draft?.nodes.reduce((s, n) => s + n.cost, 0) ?? 0

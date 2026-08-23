@@ -17,6 +17,8 @@ import { consumeArmed } from '../lib/graphState'
 import { publicVitals, vitalsEqual } from '../lib/vitals'
 import { advanceTurn } from '../lib/turns'
 import { useRollLog } from '../lib/rolls'
+import { useGraph } from '../lib/useGraph'
+import { turnGraphPatch } from '../lib/graphState'
 import type { ActiveEffect } from '../lib/database.types'
 import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
@@ -84,12 +86,23 @@ export function Layout() {
      they read as lines. */
   const { addRoll } = useRollLog()
   const activeNow = ((character?.resources ?? {}) as { activeEffects?: ActiveEffect[] }).activeEffects ?? []
+  /* The same memo every roll uses. Advance Turn needs it to ask which armed
+     modifiers were authorised by a variable that is about to reset. */
+  const graph = useGraph(character, shardTrees)
   async function doAdvanceTurn() {
     if (!character) return
     const res = (character.resources ?? {}) as { activeEffects?: ActiveEffect[] }
     const { next, expired, counted, ticks, running } = advanceTurn(res.activeEffects ?? [])
 
-    await updateSection('resources', { ...res, activeEffects: next } as CharacterRow['resources'])
+    /* ONE WRITE for the whole turn boundary. `turnGraphPatch` resets the
+       `resetOn: 'turn'` variables and then, against the scope that reset
+       produced, drops the arms those variables were gating — order it owns
+       rather than the caller, because getting it backwards leaves a Brutal
+       Strike armed under a Reckless Attack that has already lapsed. */
+    const turn = turnGraphPatch(character, graph, shardTrees)
+    await updateSection('resources', {
+      ...(turn?.resources ?? res), activeEffects: next,
+    } as CharacterRow['resources'])
 
     addRoll({
       kind: 'custom', title: 'Turn Advanced', icon: 'fa-forward-step',
@@ -108,7 +121,18 @@ export function Layout() {
           breakdown: e.turns === 1 ? 'last turn' : 'turns remaining',
         })),
         ...expired.map(e => ({ label: e.name, total: 'cleared', breakdown: 'wore off', tone: 'buff' as const })),
+        /* A variable that reset and an arm that lapsed are both things the
+           button silently changed. Reporting them is the same rule the
+           countdowns follow: a turn that alters state and says nothing reads as
+           a button that did not work. */
+        ...(turn?.vars ?? []).map(name => ({
+          label: name, total: 'reset', breakdown: 'until the start of your turn', tone: 'buff' as const,
+        })),
+        ...(turn?.disarmed ?? []).map(label => ({
+          label, total: 'lapsed', breakdown: 'armed under something that ended', tone: 'buff' as const,
+        })),
         ...(counted.length === 0 && expired.length === 0 && ticks.length === 0
+          && !turn?.vars.length && !turn?.disarmed.length
           ? [{ label: 'No change', total: '—', breakdown: 'nothing on a timer' }]
           : []),
       ],

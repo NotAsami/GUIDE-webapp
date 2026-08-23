@@ -94,6 +94,7 @@ export function assignBackground(
   for (const ref of bg.features ?? []) {
     const d = featureData.get(ref.feature_id)
     if (!d) continue
+    // Gate only — a `prerequisite` is deliberately NOT checked here. See gateOpen.
     if (!gateOpen(ref.when, scope)) { pending.push({ name: d.name, when: ref.when ?? '' }); continue }
     granted.push(d.name)
     grants.push({
