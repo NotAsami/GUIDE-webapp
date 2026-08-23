@@ -5,7 +5,7 @@
  *
  * Simplifications (homebrew tool; bake exceptions into the weapon data, or the DM
  * can): every weapon is treated as proficient (Ros is a Fighter) and one-handed
- * (no two-handed/versatile distinction); off-hand keeps its ability mod on damage
+ * (versatile is not modelled — see isTwoHanded); off-hand keeps its ability mod on damage
  * (RAW drops it). Crit handling lives in the roller (doubles dice, not modifier).
  */
 
@@ -15,6 +15,11 @@ import { parseDice, rolledDice, type RolledDie } from './dice.ts'
 // Safe direction: graph.ts → effects.ts → equip/burden/shards, none of which
 // reach back here, so this does not close a cycle.
 import { rollResolution, type Resolution, type Rider } from './graph.ts'
+/* Re-exported, not defined here: equip.ts owns the hand rules and this file
+ * sits DOWNSTREAM of graph.ts -> effects.ts -> equip.ts. Defining it here and
+ * importing it there closed that loop and every test in the repo failed to
+ * load. See the direction note above. */
+export { isTwoHanded } from './equip.ts'
 
 /** Is this weapon fired rather than swung?
  *

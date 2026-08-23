@@ -120,6 +120,15 @@
   letter-spacing: 0.18em; text-transform: uppercase;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
+/* Nothing is waiting — this is a route, not an alert, so it drops to the beige
+   the rest of the chrome uses. Amber is reserved for "you still owe this roll an
+   answer"; spending it on every toast would teach the player to ignore it. */
+.ctaQuiet {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(212, 191, 125, 0.3);
+  color: var(--beige-dim);
+}
+.ctaQuiet:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(212, 191, 125, 0.5); color: var(--beige); }
 .cta:hover { background: rgba(226, 176, 33, 0.2); border-color: var(--amber); color: var(--amber-hot); }
 .cta:active { transform: translateY(1px); }
 .cta:focus-visible { outline: 2px solid var(--amber-hot); outline-offset: 2px; }

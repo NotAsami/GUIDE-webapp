@@ -280,6 +280,12 @@
   cursor: pointer;
   transition: color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
+/* The off hand while a two-hander is held. Reads as a rule, not a vacancy:
+   dashed-to-solid and a lock glyph, and it is a div rather than a button so
+   there is nothing to press. */
+.weaponSlotLocked { cursor: not-allowed; color: var(--beige-dim); opacity: 0.72; }
+.weaponSlotLocked i { margin-right: 6px; color: var(--amber); }
+
 .weaponSlotEmpty .em {
   display: block;
   color: var(--beige-dim);

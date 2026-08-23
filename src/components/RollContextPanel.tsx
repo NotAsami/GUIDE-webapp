@@ -814,6 +814,14 @@ function CatalogSheet({ view, entry, onClose, onLeave }: {
                   <span className={styles.k}>{k}</span><span className={styles.v}>{val}</span>
                 </div>
               ))}
+              {/* THE GRID DRAWS ITS OWN RULES, one per cell (border-right +
+                  border-bottom), which only closes when every slot in the two
+                  columns holds a cell. An odd stat count — a weapon has three:
+                  Hand, Ability, Weight — leaves the second column of the last
+                  row EMPTY, so nothing paints its right edge and the frame stops
+                  dead. The full-width Damage row underneath then reads as a line
+                  that suddenly grew a missing corner. A filler cell closes it. */}
+              {view.stats.length % 2 === 1 && <div className={styles.catCell} aria-hidden="true" />}
               {view.damage.length > 0 && (
                 <div className={cx(styles.catCell, styles.span2)}>
                   <span className={styles.k}>Damage</span>

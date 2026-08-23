@@ -11,6 +11,7 @@ import { Prose } from '../lib/markdown'
 import { rollHeal } from '../lib/dice'
 import { useRollLog, type RollLine } from '../lib/rolls'
 import { castPartyEffect, fetchPartyRoster } from '../lib/party'
+import { colorOf } from '../lib/palette'
 import type { PartyRosterRow } from '../lib/database.types'
 import {
   damageAt, isCaster, maxCastLevel, pactSlotCount, pactSlotLevel, pactSlotsAvail,
@@ -234,20 +235,29 @@ export function Spellbook() {
       })
     } else {
       noteMsg = cantrip ? `${sp.name} cast · at-will` : `${sp.name} cast · L${castLevel} slot expended`
-      // A cast that only arms still deserves an entry — otherwise the player
-      // presses Cast, sees a note flash by, and has to trust that something
-      // happened. §16's visibility argument, on the surface that armed it.
-      if (applied.length) {
-        addRoll({
-          kind: 'custom', title: sp.name,
-          subtitle: cantrip ? 'Cantrip' : `Level ${castLevel} slot`,
-          icon: spellIcon(sp),
-          subject: { kind: 'spell', id: sp.id },
-          lines: applied.map(o => (o.kind === 'arm'
+      // EVERY cast gets an entry, not just one that damages or arms. This used
+      // to be gated on `applied.length`, so a utility spell — Detect Magic,
+      // Shield, most of the list — logged nothing at all: no toast, no roll in
+      // the context panel, and therefore no "open panel" either. The player
+      // pressed Cast, saw a note flash by, and had to trust a slot had gone.
+      // §16's visibility argument does not stop at spells that roll dice.
+      addRoll({
+        kind: 'custom', title: sp.name,
+        subtitle: cantrip ? 'Cantrip' : `Level ${castLevel} slot`,
+        icon: spellIcon(sp),
+        subject: { kind: 'spell', id: sp.id },
+        lines: applied.length
+          ? applied.map(o => (o.kind === 'arm'
             ? { label: o.mod.label, total: 'armed', breakdown: o.summary, tone: 'buff' as const }
-            : { label: o.def.label ?? o.def.name, total: String(o.set ?? ''), breakdown: o.summary, tone: 'buff' as const })),
-        })
-      }
+            : { label: o.def.label ?? o.def.name, total: String(o.set ?? ''), breakdown: o.summary, tone: 'buff' as const }))
+          // Nothing mechanical to report, so the line states what the cast COST.
+          // An entry with no lines renders as an empty card, which reads as a bug.
+          : [{
+            label: 'Cast',
+            total: cantrip ? 'at-will' : `L${castLevel} slot`,
+            breakdown: `${sp.name} cast${cantrip ? ' at will' : ` using a level ${castLevel} slot`}.`,
+          }],
+      })
     }
     if (applied.some(o => o.kind === 'arm')) noteMsg = `${sp.name} — armed for your next roll`
     pushNote(noteMsg)
@@ -644,7 +654,15 @@ function SpellDetail({
   const ic = spellIcon(spell)
   const lvlLine = cantrip ? 'Cantrip' : `Level ${spell.level}`
   const castLabel = cantrip ? 'Cast · At-Will' : pact ? `Cast · Pact L${castLevel}` : `Cast · L${castLevel} Slot`
-  const dmgColorStyle = spell.dmgColor ? { ['--dmg-color' as string]: spell.dmgColor } : undefined
+  /* ONE HOME FOR THE DAMAGE PALETTE. This used to read an authored per-spell
+     `dmgColor` hex, so Fire Bolt was seeded orange (#f3a216) here while the roll
+     context panel — which asks lib/palette.ts — drew the same fire damage red.
+     Two records of one fact, and the authored one always won on this screen.
+     Now both screens ask the palette and a damage type has exactly one colour. */
+  const dmgColorStyle = (() => {
+    const c = spell.dmgType ? colorOf(spell.dmgType.toLowerCase()) : null
+    return c ? { ['--dmg-color' as string]: c } : undefined
+  })()
 
   return (
     <div className={styles.detailActive}>

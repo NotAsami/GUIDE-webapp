@@ -15,10 +15,10 @@
  * and the two assigns are done minutes apart on a fresh character.
  */
 import { characterVars } from './graph.ts'
-import { gateOpen } from './classes.ts'
+import { gateOpen, mergeProficiencies } from './classes.ts'
 import type {
   CatalogFeatureData, CharacterRow, CharacterUpdate, Feature, PendingSkills,
-  Proficiencies, RaceDef, ShardTree,
+  RaceDef, ShardTree,
 } from './database.types.ts'
 
 /** Every feature a race put on the character wears this prefix, so a second
@@ -34,17 +34,6 @@ export type RaceAssignResult = {
   skillPicks: number
   /** How many extra languages the player still picks. */
   languagePicks: number
-}
-
-/** Merge only the keys the race actually states, so a class's armour training
- *  and a race's tool training coexist instead of the later assign winning. */
-function mergeProficiencies(base: Proficiencies, add: Proficiencies): Proficiencies {
-  const out: Proficiencies = { ...base }
-  for (const k of Object.keys(add) as (keyof Proficiencies)[]) {
-    const v = add[k]
-    if (v && v.length) out[k] = v
-  }
-  return out
 }
 
 /** Languages are UNIONED, never replaced: a background may have granted one

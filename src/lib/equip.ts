@@ -147,15 +147,49 @@ export function unequipGearPatch(
 
 /* ---------- weapons ---------- */
 
+/** Does this weapon need both hands?
+ *
+ *  Same shape as `isRanged`, and for the same reason: the flag is what the item
+ *  form writes, and the free-text `properties` list is the fallback that keeps
+ *  the 454 imported weapons carrying "Two-Handed" working without a migration.
+ *
+ *  VERSATILE IS NOT TWO-HANDED. A longsword's "Versatile" means it MAY be used
+ *  in two hands for a bigger die — it does not stop you holding a shield — so
+ *  matching it here would lock the off hand on half the martial weapons in the
+ *  game. Only an explicit two-hander counts. */
+export function isTwoHanded(w: Pick<EquippedWeapon, 'twoHanded' | 'properties'>): boolean {
+  if (typeof w.twoHanded === 'boolean') return w.twoHanded
+  return (w.properties ?? []).some(p => /two[\s-]?handed/i.test(p))
+}
+
+/** Why the off hand cannot take a weapon right now, or null when it can.
+ *
+ *  One producer, because three surfaces ask: the Equipment slot renders the
+ *  reason, the inventory popup disables its Equip · Off action, and
+ *  `equipWeaponPatch` refuses. Three copies of the rule is three chances for
+ *  the button to be live while the write says no. */
+export function offHandBlockedBy(gear: EquippedGear): EquippedWeapon | null {
+  return getWeapons(gear).find(w => w.hand === 'main' && isTwoHanded(w)) ?? null
+}
+
 /** Equip a carried weapon into a hand; a weapon already in that hand is displaced
- *  back to the bag (one hand, one weapon). */
+ *  back to the bag (one hand, one weapon).
+ *
+ *  TWO-HANDED WEAPONS CLAIM BOTH. Putting one in the main hand sends whatever is
+ *  in the off hand back to the bag, and the off hand refuses a weapon while one
+ *  is held — you cannot dual-wield claymores. Returns null on that refusal
+ *  rather than writing a state the rules forbid; callers already handle a null
+ *  from `unequipWeaponPatch`. */
 export function equipWeaponPatch(
   item: InventoryItem, hand: WeaponHand, gear: EquippedGear, inventory: InventoryItem[],
-): Patch {
+): Patch | null {
   const weapons = getWeapons(gear)
+  if (hand === 'off' && (offHandBlockedBy(gear) || isTwoHanded(item))) return null
   const weaponItem = { ...toEquipped(item), category: 'weapon' as const, hand } as EquippedWeapon
-  const displaced = weapons.filter(w => w.hand === hand)
-  const kept = weapons.filter(w => w.hand !== hand)
+  // A two-hander displaces the OFF hand as well as its own.
+  const takesBoth = hand === 'main' && isTwoHanded(item)
+  const displaced = weapons.filter(w => w.hand === hand || (takesBoth && w.hand === 'off'))
+  const kept = weapons.filter(w => !displaced.includes(w))
   const nextGear = { ...gear, weapons: [...kept, weaponItem] }
   const nextInv = inventory.filter(i => i.id !== item.id)
   for (const w of displaced) nextInv.push(toCarried(w, nextInv, gear))

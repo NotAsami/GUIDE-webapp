@@ -23,9 +23,12 @@ import { effectiveSheet } from '../lib/effects'
 import { pactSlotCount, pactSlotLevel } from '../lib/spells'
 import {
   CASTER_LABEL, assignClass, assignSubclass, casterSlots, casterSummary, castingNumbers,
-  castingRules, gateLevel, hitPointRules, ordinal,
+  castingRules, featureSnapshot, gateLevel, hitPointRules, ordinal,
 } from '../lib/classes'
+import { hpGainOf, levelUpPatch, levelUpPlan, type LevelUpChoices } from '../lib/levelup'
 import { assignRace } from '../lib/races'
+import { assignBackground } from '../lib/backgrounds'
+import { prereqMet, prereqSummary } from '../lib/feats'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/voice'
 import { usePartyPresence } from '../lib/presence'
 import { useFullscreen } from '../lib/fullscreen'
@@ -34,7 +37,7 @@ import { markdownShortcuts } from '../lib/textareaHooks'
 import { useLocalDraft } from '../lib/draft'
 import { useAutoPublish, useAutoSave } from '../lib/autopublish'
 import type {
-  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json, QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow, CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect, Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow, EffectDuration, EffectRef, Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData, CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData, CatalogRaceRow, RaceDef, CatalogBackgroundRow, BackgroundDef, EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef, EquippedGear, CharacterLore, Relation, CatalogLootRow, LootTable, LootRow, LootOpenLine, CharacterSheet,
+  CharacterRow, CharacterUpdate, CharacterSecret, CharacterSecretUpdate, HP, Json, QuestRow, QuestStatus, QuestType, QuestObjective, RelatedTag, SessionRow, CatalogItemRow, CatalogItemData, InventoryItem, ItemCategory, ItemRarity, ItemSlot, AbilityKey, WeaponAbility, ActiveEffect, Feature, FeatureCategory, FeatureKind, CatalogFeatureRow, EffectKind, EffectFlagMode, EffectFlag, EffectDef, CatalogEffectRow, EffectDuration, EffectRef, Spell, SpellSchool, SpellSlot, CatalogSpellRow, CatalogSpellData, CatalogClassRow, ClassDef, ClassCasterType, FeatureGrantRef, CatalogFeatureData, CatalogRaceRow, RaceDef, CatalogBackgroundRow, BackgroundDef, EquipChoice, EquipEntry, EquipOption, EquipPick, EquipRef, EquippedGear, CharacterLore, Relation, CatalogLootRow, LootTable, LootRow, LootOpenLine, CharacterSheet, Proficiencies,
 } from '../lib/database.types'
 import { ITEM_SLOTS, isRingSlot } from '../lib/equip'
 import { SKILLS, ABILITY_ORDER, ABILITY_ABBR, ABILITY_NAMES, abilityMod } from '../lib/dnd'
@@ -49,6 +52,7 @@ import { Icon } from '../components/Icon'
 import { ProsePreview } from '../components/ProsePreview'
 import { leafOf } from '../lib/folders'
 import { LootRollOverlay } from '../components/LootRollOverlay'
+import { LevelUpOverlay } from '../components/LevelUpOverlay'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
  *  Stat Panel / the Operator Console mockup. */
@@ -198,6 +202,12 @@ export function OperatorConsole() {
      and it is a portal anyway. `lootMin` hides it without closing it —
      minimize and close are different verbs here. */
   const [lootMin, setLootMin] = useState(false)
+
+  /* Level Up is a portal too, and for the same reason as the loot roll: it
+     belongs to the console rather than to a tab. Unlike the loot roll it has NO
+     minimize — an abandoned advancement has written nothing, so there is no
+     half-finished state worth parking. */
+  const [levelUp, setLevelUp] = useState(false)
 
   /** Roll a table and park the result, CLOSED. Only hits are stored: the party
    *  sees what is in the container, and a miss is not in the container. */
@@ -499,8 +509,16 @@ export function OperatorConsole() {
                 >
                   Shards
                 </div>
-                <div className={cx(styles.wtab, styles.lvl, styles.disabled)} title="Level-up — later slice">
+                <div
+                  className={cx(styles.wtab, styles.lvl)}
+                  onClick={() => setLevelUp(true)}
+                  title={`Run ${selected?.name ?? 'this character'}'s level-up`}
+                >
                   <i className="fa-solid fa-arrow-up-right-dots" /> Level Up
+                  {typeof selected?.level === 'number' && <>
+                    {' '}<span className={styles.arr}>·</span> {selected.level}
+                    {' '}<span className={styles.arr}>→</span> {selected.level + 1}
+                  </>}
                 </div>
               </div>
             )}
@@ -531,7 +549,7 @@ export function OperatorConsole() {
                     log={log}
                   />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} backgroundLib={backgroundLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
                 )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
@@ -595,6 +613,55 @@ export function OperatorConsole() {
           onMinimize={() => setLootMin(true)}
         />
       )}
+
+      {/* ===== LEVEL UP (slice: advancement) ===== */}
+      {levelUp && selectedRow && (() => {
+        /* Published content only — the same rule every grant follows: a draft is
+           the DM's in-progress edit and must not reach a character. */
+        const featureData = new Map<string, CatalogFeatureData>()
+        for (const f of featureLib.features) if (f.data?.published) featureData.set(f.id, f.data)
+        const feats = featureLib.features.filter(f => f.data?.published && f.data.category === 'feat')
+        const plan = levelUpPlan(selectedRow, classLib.classes, featureData, shardCatalog)
+        const hp = selectedRow.sheet?.hp ?? { current: 0, max: 0 }
+
+        const applyLevelUp = async (choices: LevelUpChoices) => {
+          const gain = hpGainOf(plan, choices.die)
+          const ok = await updateCharacter(selectedRow.id, levelUpPatch(selectedRow, plan, choices, shardCatalog))
+          if (!ok) return false
+          void sendVoice({
+            kind: 'effect', target: selectedRow.id, fxKind: 'buff',
+            name: `Level ${plan.toLevel} — advancement applied`, dur: `+${gain} max HP`,
+          })
+          const bits: string[] = [`+${gain} max HP`]
+          const asi = ABILITY_ORDER
+            .filter(k => (choices.asiAlloc[k] ?? 0) > 0)
+            .map(k => `+${choices.asiAlloc[k]} ${ABILITY_ABBR[k].toUpperCase()}`)
+          if (asi.length) bits.push(`ASI ${asi.join(', ')}`)
+          if (choices.feat) bits.push(`feat: ${choices.feat.data.name}`)
+          if (choices.featureIds.length) {
+            bits.push(`${choices.featureIds.length} feature${choices.featureIds.length > 1 ? 's' : ''}`)
+          }
+          log(
+            <>Levelled <span className={styles.who}>{firstName(selectedRow.name)}</span>{' '}
+              <span className={styles.obj}>L{plan.fromLevel} → L{plan.toLevel}</span> · {bits.join(' · ')}</>,
+            'cyan',
+          )
+          return true
+        }
+
+        return (
+          <LevelUpOverlay
+            key={selectedRow.id}
+            plan={plan}
+            feats={feats}
+            row={selectedRow}
+            shardTrees={shardCatalog}
+            hp={{ current: hp.current ?? 0, max: hp.max ?? 0 }}
+            onApply={applyLevelUp}
+            onClose={() => setLevelUp(false)}
+          />
+        )
+      })()}
 
       {/* ===== OPERATOR FOOTER ===== */}
       <footer className={styles.opfoot}>
@@ -667,7 +734,7 @@ function OverviewDashboard({
  *  never clobbered, and targets the same fields the player screens read — HP and
  *  coins on `sheet`, death saves + exhaustion on `resources` (see Stats.tsx) —
  *  keeping one source of truth per value. */
-function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, shardCatalog, onUpdate, onVoice, log }: {
+function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, backgroundLib, shardCatalog, onUpdate, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
   catalog: CatalogItemRow[]
@@ -676,6 +743,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
   spellLib: CatalogSpellRow[]
   classLib: DmClassesState
   raceLib: DmRacesState
+  backgroundLib: DmBackgroundsState
   shardCatalog: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
@@ -892,6 +960,15 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
 
         <AssignClassCard
           member={member} row={row} classLib={classLib} featureLib={featureLib}
+          itemCatalog={catalog} shardCatalog={shardCatalog} onUpdate={onUpdate} log={log}
+        />
+
+        {/* Background last of the three: it is the only one whose skills are
+            granted OUTRIGHT rather than offered, so running it after race and
+            class means its two named skills union onto whatever they picked
+            instead of racing them for the same slot. */}
+        <AssignBackgroundCard
+          member={member} row={row} backgroundLib={backgroundLib} featureLib={featureLib}
           itemCatalog={catalog} shardCatalog={shardCatalog} onUpdate={onUpdate} log={log}
         />
 
@@ -2468,6 +2545,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
   const [ability, setAbility] = useState<WeaponAbility>((d?.ability as WeaponAbility) ?? 'str')
   const [damageDice, setDamageDice] = useState(d?.damageDice ?? '')
   const [ranged, setRanged] = useState(!!d?.ranged)
+  const [twoHanded, setTwoHanded] = useState(!!d?.twoHanded)
   const [dmgType, setDmgType] = useState(d?.type ?? '')
   const [heal, setHeal] = useState(d?.heal != null ? String(d.heal) : '')
   const [duration, setDuration] = useState(d?.duration ?? '')
@@ -2511,7 +2589,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
       ...(flavor.trim() ? { flavor: flavor.trim() } : {}),
       ...(category === 'weapon'
         ? {
-          ability, ...(ranged ? { ranged: true } : {}),
+          ability, ...(ranged ? { ranged: true } : {}), ...(twoHanded ? { twoHanded: true } : {}),
           ...(damageDice.trim() ? { damageDice: damageDice.trim() } : {}),
           ...(dmgType.trim() ? { type: dmgType.trim() } : {}),
         }
@@ -2636,6 +2714,17 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
                   if (e.target.checked && ability === 'str') setAbility('dex')
                 }} />
               <span>Ranged <span className={styles.dimLab}>— fires ammunition, spends a shaft per attack</span></span>
+            </label>
+          </div>
+          {/* The other flag that changes what a hand can hold. Free-text
+              "Two-Handed" in `properties` is what the SRD import wrote and what
+              isTwoHanded still falls back to; this is the half the form can
+              actually author. */}
+          <div className={styles.catSpan3}>
+            <label className={styles.catCheck}>
+              <input type="checkbox" checked={twoHanded}
+                onChange={e => setTwoHanded(e.target.checked)} />
+              <span>Two-Handed <span className={styles.dimLab}>— claims the main hand and locks the off hand; no dual-wielding it</span></span>
             </label>
           </div>
           <div>
@@ -2971,16 +3060,6 @@ const FEAT_CATS: { key: FeatureCategory; label: string }[] = [
   { key: 'other', label: 'Other' },
 ]
 
-/** Stamp a library template into a grantable Feature copy (fresh instance id +
- *  back-ref), mirroring grantSnapshot for items. */
-function featureSnapshot(row: CatalogFeatureRow): Feature {
-  return {
-    ...row.data,
-    id: `feat-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`,
-    feature_id: row.id,
-  }
-}
-
 /** Grant Feature (card F): the DM's direct path for ROLEPLAY boons — copies a
  *  library feature onto `sheet.features` (the same field the player dossier
  *  reads; sheet spread so siblings survive), and lists what the PC currently
@@ -3054,16 +3133,28 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
               <div className={styles.catListEmpty}>Library is empty — author features in the Catalog's Features tab.</div>
             ) : shown.length === 0 ? (
               <div className={styles.catListEmpty}>Nothing matches “{query.trim()}”.</div>
-            ) : shown.map(f => (
-              <button key={f.id} className={cx(styles.catItem, f.id === selId && styles.sel)} onClick={() => setSelId(f.id)}>
+            ) : shown.map(f => {
+              /* A prerequisite is CHECKED here, not just printed. Unreadable
+                 text never blocks — see lib/feats.ts — so a homebrew feat with a
+                 prose requirement stays grantable and simply says "not checked". */
+              const pr = prereqMet(f.data?.prerequisite, row)
+              const blocked = !pr.ok
+              return (
+              <button key={f.id} disabled={blocked}
+                title={blocked ? prereqSummary(pr) ?? undefined : undefined}
+                className={cx(styles.catItem, f.id === selId && styles.sel, blocked && styles.locked)}
+                onClick={() => setSelId(f.id)}>
                 <span className={styles.ciIc} style={{ color: 'var(--amber)' }}><Icon name={f.data?.icon ?? 'fa-star'} /></span>
                 <span className={styles.ciTx}>
                   <span className={styles.ciNm}>{f.data?.name ?? 'Untitled'}</span>
-                  <span className={styles.ciTy} title={f.data?.folder ?? undefined}>{featureOrigin(f.data)}</span>
+                  <span className={styles.ciTy} title={f.data?.folder ?? undefined}>
+                    {blocked ? `Requires ${pr.unmet.join(', ')}` : featureOrigin(f.data)}
+                  </span>
                 </span>
                 {f.data?.usage && <span className={styles.ciRar} style={{ color: 'var(--muted)' }}>{f.data.usage}</span>}
               </button>
-            ))}
+              )
+            })}
           </div>
           <div className={styles.grantAction}>
             <Btn tone="amber" icon="fa-arrow-right-to-bracket" label={busy ? 'Granting…' : `Grant to ${first}`} onClick={() => void grant()} disabled={!selected || busy} />
@@ -3122,6 +3213,17 @@ function Folder({ label, icon, children }: { label: string; icon: string; childr
  *  a plain on/off. Both write straight to `sheet`, spread so siblings (hp,
  *  abilities, …) survive — lib/dnd.ts's saveTotal/skillTotal already read
  *  these three arrays, so nothing downstream needs to change. */
+/** The four free-text training lists on `sheet.proficiencies`. Prose the player
+ *  reads ("All armor", "Simple weapons", "Draconic"), never keys — see the note
+ *  on TrainingRow. `fightingStyles` is deliberately absent: it is granted by a
+ *  feature, not typed by hand. */
+const TRAINING_ROWS: { key: keyof Proficiencies; label: string; placeholder: string }[] = [
+  { key: 'armor', label: 'Armour', placeholder: 'All armor, Shields…' },
+  { key: 'weapons', label: 'Weapons', placeholder: 'Simple weapons, Martial weapons…' },
+  { key: 'tools', label: 'Tools', placeholder: "Thieves' tools…" },
+  { key: 'languages', label: 'Languages', placeholder: 'Common, Elvish, Draconic…' },
+]
+
 function ProficienciesCard({ member, row, classLib, onUpdate, log }: {
   member: PartyMember
   row: CharacterRow
@@ -3134,6 +3236,16 @@ function ProficienciesCard({ member, row, classLib, onUpdate, log }: {
   const skillProfs = sheet.skillProficiencies ?? []
   const skillExp = sheet.skillExpertise ?? []
   const first = firstName(member.name)
+
+  /** One write per list, pre-spreading `proficiencies` so a sibling list a race
+   *  granted is never blanked — the same merge rule mergeProficiencies keeps. */
+  const writeTraining = async (key: keyof Proficiencies, label: string, next: string[]) => {
+    const ok = await onUpdate({
+      sheet: { ...sheet, proficiencies: { ...(sheet.proficiencies ?? {}), [key]: next } },
+    })
+    if (!ok) return
+    log(<>{label} training of <span className={styles.who}>{first}</span> → <span className={styles.obj}>{next.length ? next.join(', ') : 'none'}</span></>)
+  }
 
   /* WHICH SKILLS THIS CHARACTER'S CLASS OFFERS, and how many they may take.
      A class stores an ELIGIBLE list and a count, never the picks themselves —
@@ -3229,10 +3341,30 @@ function ProficienciesCard({ member, row, classLib, onUpdate, log }: {
           })}
         </div>
       </div>
+
+      {/* TRAINING — armour, weapons, tools and LANGUAGES.
+          `sheet.proficiencies` was written only by Assign Race / Assign Class
+          and read only for display, so nothing could edit it after the fact: a
+          character who learned Draconic mid-campaign had nowhere to record it,
+          and a wrong entry from a race was permanent. Same TrainingRow the class
+          editor uses — that one authors the TEMPLATE, this one the character. */}
+      <div className={styles.profSec}>
+        <span className={styles.fieldLab}>
+          Training <span className={styles.dimLab}>— enter or comma adds; these are prose the player reads, not keys</span>
+        </span>
+        <div>
+          {TRAINING_ROWS.map(({ key, label, placeholder }) => (
+            <TrainingRow
+              key={key} label={label} placeholder={placeholder}
+              values={sheet.proficiencies?.[key] ?? []}
+              onChange={next => void writeTraining(key, label, next)}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
-
 /* The Features tab now navigates to /dm/features — the standalone Feature
    Editor. FeatureLibrarySurface + FeatureForm lived here and were deleted with
    it: that form could only author prose, and rebuilt `data` field-by-field on
@@ -3792,7 +3924,6 @@ function SpellForm({ spell, onSubmit, onDelete }: {
   const [dice, setDice] = useState(d?.dice ?? '')
   const [scaling, setScaling] = useState(d?.scaling ?? '')
   const [dmgType, setDmgType] = useState(d?.dmgType ?? '')
-  const [dmgColor, setDmgColor] = useState(d?.dmgColor ?? '')
   // Absent (undefined in stored data) reads as "can upcast" — mirror that
   // here so a spell nobody has touched this field on still shows ON.
   const [canUpcast, setCanUpcast] = useState(d?.canUpcast !== false)
@@ -3823,7 +3954,6 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       ...(tags.length ? { tags } : {}),
       ...(hasDamage ? {
         dice: dice.trim(), scaling: scaling.trim(), dmgType: dmgType.trim(),
-        ...(dmgColor ? { dmgColor } : {}),
         canUpcast,
         ...(canUpcast && maxUpcastLevel > 0 ? { maxUpcastLevel } : {}),
       } : {}),
@@ -3949,14 +4079,10 @@ function SpellForm({ spell, onSubmit, onDelete }: {
             <div><span className={styles.fieldLab}>Per Level Above</span><input className={styles.sessIn} value={scaling} onChange={e => setScaling(e.target.value)} placeholder="e.g. 1d6" /></div>
             <div><span className={styles.fieldLab}>Damage Type</span><input className={styles.sessIn} value={dmgType} onChange={e => setDmgType(e.target.value)} placeholder="e.g. Fire" /></div>
           </div>
+          {/* No Damage Color picker. The colour follows the Damage Type through
+              lib/palette.ts — authoring it per spell was a second answer to
+              "what colour is fire", and it disagreed with the roll panel. */}
           <div className={styles.catGrid2}>
-            <div>
-              <span className={styles.fieldLab}>Damage Color</span>
-              <div className={styles.colorField}>
-                <input type="color" className={styles.colorIn} value={dmgColor || DEFAULT_SPELL_COLOR} onChange={e => setDmgColor(e.target.value)} />
-                {dmgColor && <button type="button" className={styles.colorReset} onClick={() => setDmgColor('')}>Auto</button>}
-              </div>
-            </div>
             <div>
               <span className={styles.fieldLab}>Max Upcast Level</span>
               <input
@@ -5848,6 +5974,187 @@ function AssignRaceCard({ member, row, raceLib, featureLib, shardCatalog, onUpda
  * pickers — a draft is the DM's unfinished work, not something to put on a
  * character.
  */
+/**
+ * Assign Background (card I) — the missing third of the identity trio.
+ *
+ * A background could be AUTHORED (Catalog → Backgrounds) but never reached a
+ * character: races and classes each had an assign card, backgrounds had none,
+ * so everything BackgroundForm produced sat in the library unreachable.
+ *
+ * Modelled on AssignRaceCard, minus the sub-row: a background has no subtype.
+ */
+function AssignBackgroundCard({ member, row, backgroundLib, featureLib, itemCatalog, shardCatalog, onUpdate, log }: {
+  member: PartyMember
+  row: CharacterRow
+  backgroundLib: DmBackgroundsState
+  featureLib: CatalogFeatureRow[]
+  itemCatalog: CatalogItemRow[]
+  shardCatalog: Record<string, ShardTree>
+  onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+}) {
+  const [selId, setSelId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [busy, setBusy] = useState(false)
+  const first = firstName(member.name)
+
+  const published = backgroundLib.backgrounds.filter(b => b.data?.published)
+  const shown = useMemo(() => {
+    const q = parseCatalogQuery(query)
+    return published.filter(b => matchesCatalogQuery(b.data, q))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backgroundLib.backgrounds, query])
+  const selected = shown.find(b => b.id === selId) ?? null
+
+  const featureData = useMemo(() => {
+    const m = new Map<string, CatalogFeatureData>()
+    for (const f of featureLib) if (f.data?.published) m.set(f.id, f.data)
+    return m
+  }, [featureLib])
+
+  const itemData = useMemo(() => {
+    const m = new Map<string, CatalogItemData>()
+    for (const it of itemCatalog) if (it.data) m.set(it.id, it.data)
+    return m
+  }, [itemCatalog])
+
+  const preview = useMemo(
+    () => (selected ? assignBackground(row, selected.id, selected.data, featureData, itemData, shardCatalog) : null),
+    [selected, row, featureData, itemData, shardCatalog],
+  )
+
+  const boosts = useMemo(
+    () => (selected?.data.graph ?? []).filter(g => g.op === 'boost'),
+    [selected],
+  )
+
+  async function assign() {
+    if (!selected || !preview) return
+    setBusy(true)
+    const ok = await onUpdate(preview.patch)
+    setBusy(false)
+    if (!ok) return
+    log(
+      <>Set <span className={styles.who}>{first}</span> background to <span className={styles.obj}>{selected.data.name}</span>
+        {preview.granted.length ? <> · granted {preview.granted.length} feature{preview.granted.length === 1 ? '' : 's'}</> : null}
+      </>,
+      'cyan',
+    )
+  }
+
+  return (
+    <div className={cx(styles.actCard, styles.wide)}>
+      <div className={styles.acTitle}>
+        <i className="fa-solid fa-scroll lead" /><span className={styles.num}>I</span>
+        <span className={styles.t}>Background</span>
+      </div>
+
+      <div className={styles.detailRow}>
+        <span className={styles.drLab}>Currently</span>
+        <span className={styles.drVal}>{row.identity?.background || '— none —'}</span>
+      </div>
+
+      <span className={styles.fieldLab}>Library · published backgrounds only</span>
+      <div className={styles.searchWrap}>
+        <i className="fa-solid fa-magnifying-glass" />
+        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          placeholder="Search backgrounds…" autoComplete="off" spellCheck={false} />
+      </div>
+      <div className={styles.catList}>
+        {published.length === 0 ? (
+          <div className={styles.catListEmpty}>No published backgrounds — author one in the Catalog Backgrounds tab.</div>
+        ) : shown.length === 0 ? (
+          <div className={styles.catListEmpty}>Nothing matches “{query.trim()}”.</div>
+        ) : shown.map(b => (
+          <button key={b.id} className={cx(styles.catItem, b.id === selId && styles.sel)}
+            onClick={() => setSelId(b.id)}>
+            <span className={styles.ciIc}><Icon name={b.data.icon || 'fa-scroll'} /></span>
+            <span className={styles.ciTx}>
+              <span className={styles.ciNm}>{b.data.name}</span>
+              <span className={styles.ciTy}>
+                {(b.data.skills ?? []).length} skills · {(b.data.features ?? []).length} features
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {preview && selected && (
+        <div className={styles.clsPreview}>
+          {boosts.length > 0 && (
+            <div className={styles.cpLine}>
+              <i className="fa-solid fa-arrow-up-right-dots" /> Sheet
+              <span className={styles.cpNames}>
+                {boosts.map(b => `${b.stat} ${Number(b.value) >= 0 ? '+' : ''}${b.value}`).join(' · ')}
+                {' — layered, and removed if the background changes'}
+              </span>
+            </div>
+          )}
+          <div className={styles.cpLine}>
+            <i className="fa-solid fa-star" /> Grants <b>{preview.granted.length}</b> feature{preview.granted.length === 1 ? '' : 's'}
+            {preview.granted.length > 0 && <span className={styles.cpNames}>{preview.granted.join(', ')}</span>}
+          </div>
+          {preview.skillsGranted.length > 0 && (
+            <div className={styles.cpLine}>
+              <i className="fa-solid fa-graduation-cap" /> Trains
+              <span className={styles.cpNames}>{preview.skillsGranted.join(', ')}</span>
+            </div>
+          )}
+          {preview.unknownSkills.length > 0 && (
+            <div className={cx(styles.cpLine, styles.warn)}>
+              <i className="fa-solid fa-triangle-exclamation" /> Unknown skill
+              <span className={styles.cpNames}>
+                {preview.unknownSkills.join(', ')} — matches nothing on the sheet, so it will NOT be granted.
+                Fix the name in the Backgrounds tab.
+              </span>
+            </div>
+          )}
+          {preview.pending.length > 0 && (
+            <div className={cx(styles.cpLine, styles.dim)}>
+              <i className="fa-solid fa-lock" /> <b>{preview.pending.length}</b> still gated
+              <span className={styles.cpNames}>
+                {preview.pending.slice(0, 4).map(p => `${p.name} (${p.when})`).join(', ')}
+              </span>
+            </div>
+          )}
+          {preview.kitGranted > 0 && (
+            <div className={cx(styles.cpLine, styles.dim)}>
+              <i className="fa-solid fa-sack-xmark" /> Packs <b>{preview.kitGranted}</b> item{preview.kitGranted === 1 ? '' : 's'}
+            </div>
+          )}
+          {preview.kitChoicesSkipped > 0 && (
+            <div className={cx(styles.cpLine, styles.warn)}>
+              <i className="fa-solid fa-triangle-exclamation" /> <b>{preview.kitChoicesSkipped}</b> gear choice
+              {preview.kitChoicesSkipped === 1 ? '' : 's'} not parked
+              <span className={styles.cpNames}>
+                the sheet holds one kit prompt and the class already owns it — grant these by hand
+              </span>
+            </div>
+          )}
+          {preview.skillPicks > 0 && (
+            <div className={cx(styles.cpLine, styles.dim)}>
+              <i className="fa-solid fa-graduation-cap" /> Player picks <b>{preview.skillPicks}</b> more
+              <span className={styles.cpNames}>waits on their Codex until they choose</span>
+            </div>
+          )}
+          {row.identity?.background && row.identity.background !== selected.data.name && (
+            <div className={cx(styles.cpLine, styles.warn)}>
+              <i className="fa-solid fa-triangle-exclamation" /> Replaces <b>{row.identity.background}</b> — its features
+              and sheet bonuses come off. Race and class grants are untouched.
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={styles.grantAction}>
+        <Btn tone="amber" icon="fa-arrow-right-to-bracket"
+          label={busy ? 'Assigning…' : selected ? `Assign to ${first}` : 'Assign background'}
+          onClick={() => void assign()} disabled={!selected || busy} />
+      </div>
+    </div>
+  )
+}
+
 function AssignClassCard({ member, row, classLib, featureLib, itemCatalog, shardCatalog, onUpdate, log }: {
   member: PartyMember
   row: CharacterRow
