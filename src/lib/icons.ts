@@ -158,3 +158,23 @@ export const iconLabel = (name: string): string =>
   isGameIcon(name)
     ? (name.slice(GI_PREFIX.length).split('/')[1] ?? '').replace(/-/g, ' ')
     : name.replace(/^fa-/, '').replace(/-/g, ' ')
+
+/** What a search term and an icon name are BOTH folded to before comparing.
+ *
+ *  A hyphen is not a stylistic choice here — it is the name. The folder holds
+ *  `bone-knife.svg`, game-icons.net calls it `bone-knife`, and that is what a
+ *  DM types. But the picker searched the *label*, where hyphens have already
+ *  become spaces, so `bone-knife` matched `bone knife` nowhere and the icon
+ *  read as absent from a library it was sitting in. 2,824 of the 4,180 glyphs
+ *  have a hyphen in their name, so two thirds of the set were unfindable by
+ *  the only name anyone knows them by.
+ *
+ *  Folding separators on both sides makes the two spellings meet. A leading
+ *  `fa-` goes with them, so pasting a Font Awesome class works the same way. */
+export const iconSearchKey = (s: string): string =>
+  s.toLowerCase().replace(/^fa[-_\s]/, '').replace(/[-_\s]+/g, ' ').trim()
+
+/** Does this icon answer to this search term? The ONE matcher — the picker and
+ *  its guard have to agree on what "matches" means. */
+export const iconMatches = (icon: string, term: string): boolean =>
+  iconSearchKey(iconLabel(icon)).includes(iconSearchKey(term))

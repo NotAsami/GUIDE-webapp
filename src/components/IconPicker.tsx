@@ -28,7 +28,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ICONS, GI_PREFIX, gameIconAuthor, iconLabel } from '../lib/icons'
+import { ICONS, GI_PREFIX, gameIconAuthor, iconLabel, iconMatches } from '../lib/icons'
 import { Icon } from './Icon'
 import styles from './IconPicker.module.css'
 
@@ -64,8 +64,8 @@ export function IconPicker({ value, onPick, autoFocus, auto }: {
     const hits: string[] = []
     // Font Awesome first: it is the smaller, more familiar set, and an exact
     // word match there is almost always what was meant.
-    for (const i of ICONS) if (iconLabel(i).includes(term)) hits.push(i)
-    for (const g of gi ?? []) if (iconLabel(GI_PREFIX + g).includes(term)) hits.push(GI_PREFIX + g)
+    for (const i of ICONS) if (iconMatches(i, term)) hits.push(i)
+    for (const g of gi ?? []) if (iconMatches(GI_PREFIX + g, term)) hits.push(GI_PREFIX + g)
     return { rows: hits.slice(0, LIMIT), total: hits.length }
   }, [term, gi])
 
