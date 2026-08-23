@@ -258,6 +258,11 @@
 .wtab.lvl { margin-left: auto; display: flex; align-items: center; gap: 7px; color: var(--amber-hot); }
 .wtab.lvl::before { background: #1c1709; }
 .wtab.lvl i { font-size: 10px; color: var(--amber); }
+/* The level transition printed in the tab itself ("Level Up · 7 → 8"), so the
+   DM reads what the button will do before opening it. */
+.wtab.lvl .arr { color: var(--amber); margin: 0 1px; }
+.wtab.lvl:not(.disabled):hover { color: #fff; }
+.wtab.lvl:not(.disabled):hover::before { box-shadow: inset 0 0 16px rgba(226,176,33,0.28), 0 0 12px rgba(226,176,33,0.3); }
 .wtab:not(.active):not(.disabled) { cursor: pointer; }
 .wtab:not(.active):not(.disabled):hover { color: var(--amber-hot); }
 
@@ -720,6 +725,18 @@
 .profRow:first-of-type { margin-top: 0; }
 .profLab { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; flex: 0 0 auto; }
 .profGrid { display: flex; gap: 6px; flex-wrap: wrap; }
+/* The Training block at the foot of the Proficiencies card — armour, weapons,
+   tools, languages. Ruled off from the skill grid above it because it is a
+   different KIND of statement: skills are a fixed set you tick, training is
+   free prose you type. */
+/* A catalog row whose prerequisite is unmet. Greyed and inert rather than
+   filtered out: hiding it shortens the list with no explanation, which reads as
+   the catalog being broken. The subtitle says which clause failed. */
+.catItem.locked { opacity: 0.45; cursor: not-allowed; }
+.catItem.locked .ciTy { color: var(--danger-hot); }
+
+.profSec { margin-top: 15px; padding-top: 13px; border-top: 1px dashed rgba(212, 191, 125, 0.22); }
+.profSec .trainRow:last-child { margin-bottom: 0; }
 .profChip {
   display: inline-flex; align-items: baseline; gap: 4px;
   padding: 6px 9px;

@@ -407,12 +407,26 @@
   display: flex;
   /* CENTRED, not baseline. The kind chip is 8px text inside a border and the
      name is 16px display type — aligning their BASELINES puts the chip's box
-     ~2px low against the name, which reads as a misprint rather than a choice. */
+     ~2px low against the name, which reads as a misprint rather than a choice.
+     (Measured in the browser: baseline alignment lands the chip's box 2.82px
+     below the name's cap band. This is not a trade you can win outright — see
+     the nudge on .originKind.) */
   align-items: center;
   gap: 10px;
   margin-bottom: 7px;
 }
 .originKind {
+  /* THE CHIP RIDES 1px HIGH, on purpose, and this is the last 1px of the
+     alignment problem above.
+
+     Cinzel's line box carries more leading below the caps than above (measured:
+     3.9px over, 5.9px under at 16px), so the name's CAP BAND sits 1px above the
+     centre of its own box. `align-items: center` centres the chip on that box,
+     which puts it 1px below the caps the eye is actually reading it against —
+     and a bordered chip is read as a BOX against a cap band, not as a baseline.
+     An extra 2px of bottom margin on a centred flex child raises it by half.
+     Layout only: a transform would blur the 1px border at fractional zoom. */
+  margin-bottom: 2px;
   font-family: var(--font-mono);
   font-size: 8px;
   letter-spacing: 0.22em;

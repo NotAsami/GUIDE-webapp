@@ -11,7 +11,7 @@ import { Deco } from '../components/Deco'
 import { formatMod } from '../lib/dnd'
 import {
   attunedCount, attunementCap, consumesAttunement, containerContents,
-  equipContainerPatch, equipGearPatch, equipWeaponPatch, getContainers, isRingSlot,
+  equipContainerPatch, equipGearPatch, equipWeaponPatch, getContainers, isRingSlot, offHandBlockedBy,
   stowedContainers, unequipContainerPatch, unequipGearPatch, unequipWeaponPatch,
 } from '../lib/equip'
 import { CarrySidebar } from './EquipmentCarry'
@@ -51,6 +51,9 @@ export function Equipment() {
   const sheet = effectiveSheet(character, shardTrees)
   const gear = (character.equipped ?? {}) as EquippedGear
   const weapons = gear.weapons ?? []
+  /** The two-hander holding the off hand shut, or null. One producer in
+   *  lib/equip.ts so the slot, the picker and the write cannot disagree. */
+  const twoHander = offHandBlockedBy(gear)
   const inventory = (character.inventory as unknown as InventoryItem[]) ?? []
   const { tooltip, bind } = useItemTooltip()
   const { addRoll } = useRollLog()
@@ -112,7 +115,12 @@ export function Equipment() {
    *  place. Atomic, like gear equip. */
   async function equipWeapon(item: InventoryItem, hand: WeaponHand) {
     setWeaponPicker(null)
-    await updateSections(equipWeaponPatch(item, hand, gear, inventory))
+    // Null = the rules refuse it (a two-hander is held, or this IS one and the
+    // off hand was asked for). The picker for that slot is already closed to
+    // two-handers, so this is the belt to that braces.
+    const p = equipWeaponPatch(item, hand, gear, inventory)
+    if (!p) return
+    await updateSections(p)
   }
 
   /** Move the weapon in a given hand back to the inventory (atomic). */
@@ -305,6 +313,16 @@ export function Equipment() {
                   onNock={setNocked}
                   onAttack={() => attack(w)} onManage={() => setManageWeapon(hand)}
                 />
+              ) : hand === 'off' && twoHander ? (
+                /* LOCKED, not merely empty. A two-hander in the main hand takes
+                   this slot with it, and an inert "click to equip" that then
+                   refuses is worse than a slot that says why up front. A div,
+                   not a button: there is nothing here to press. */
+                <div key={hand} className={`${styles.weaponSlotEmpty} ${styles.weaponSlotLocked}`}
+                  aria-label={`${label}: locked, ${twoHander.name} needs both hands`}>
+                  <span><i className="fa-solid fa-lock" /> {label} locked</span>
+                  <span className={styles.em}>{twoHander.name} needs both hands</span>
+                </div>
               ) : (
                 <button
                   key={hand} className={styles.weaponSlotEmpty}

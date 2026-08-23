@@ -809,6 +809,14 @@ export type WeaponData = {
    *  ranged. `isRanged` still falls back to that string so hand-authored data
    *  keeps working. */
   ranged?: boolean
+  /** Needs BOTH hands: it claims the main hand and locks the off hand.
+   *
+   *  Explicit for the same reason `ranged` is (see above). The word
+   *  "Two-Handed" does sit in `properties` on 454 of the catalog's 493
+   *  weapons, but that list is free text the item form cannot write, so no
+   *  weapon authored through the UI could ever be two-handed. `isTwoHanded`
+   *  still falls back to the string so imported data works untouched. */
+  twoHanded?: boolean
   properties?: string[]
 }
 
@@ -1242,9 +1250,11 @@ export type Spell = {
   dice?: string      // e.g. "8d6", "3d4+3"
   scaling?: string   // added per upcast level (levelled) or per tier (cantrip)
   dmgType?: string
-  /** CSS color for the damage display (expression, roll card, max-die glow).
-   *  Absent = the default cyan. */
-  dmgColor?: string
+  /* NO dmgColor. The damage display's colour comes from `dmgType` through
+     lib/palette.ts, the same place the roll context panel and `[text]{fire}`
+     prose ask. An authored per-spell hex was a second record of "what colour is
+     fire", and the two disagreed on screen — orange in the Grimoire, red in the
+     panel — for exactly as long as it existed. */
   /** Whether this spell can be cast at a level above its own. Absent = `true`.
    *  `false` = no upcast stepper on the player screen at all (control is
    *  ABSENT, not disabled) — some spells simply do nothing on upcast. */

@@ -27,6 +27,8 @@ const VISIBLE_MS = 5200
  * Only reacts to rolls created AFTER mount (so navigating to a screen doesn't
  * resurface a stale roll), and keys on entry id so two identical totals re-fire.
  */
+const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ')
+
 export function RollToast({ onOpen }: { onOpen: () => void }) {
   const { rolls } = useRollLog()
   const latest = rolls[0]
@@ -79,15 +81,24 @@ export function RollToast({ onOpen }: { onOpen: () => void }) {
 
       {/* Names what is waiting AND where to go, and is the tap target for going
           there. A real button: focusable, and it reads as pressable rather than
-          as a caption under the number. */}
-      {pending.total > 0 && (
-        <button type="button" className={styles.cta} onClick={() => { setDismissed(show.id); onOpen() }}>
+          as a caption under the number.
+
+          ALWAYS PRESENT, not only when something is unresolved. It used to be
+          gated on `pending.total > 0`, which meant a roll with nothing to answer
+          offered no route to the panel at all — you could see a result and have
+          no way to take it apart. A quiet link is not a nag: it opens nothing by
+          itself, and the count and the alert icon still appear only when there
+          is genuinely something waiting, so the urgent case still reads as
+          urgent. */}
+      <button type="button" className={cx(styles.cta, pending.total === 0 && styles.ctaQuiet)}
+        onClick={() => { setDismissed(show.id); onOpen() }}>
+        {pending.total > 0 && <>
           <i className="fa-solid fa-circle-exclamation" />
           <span className={styles.ctaN}>{pending.total}</span>
           <span>{pending.asks > 0 ? 'unresolved' : pending.total === 1 ? 'problem' : 'problems'}</span>
-          <span className={styles.ctaGo}>open panel <i className="fa-solid fa-arrow-right" /></span>
-        </button>
-      )}
+        </>}
+        <span className={styles.ctaGo}>open panel <i className="fa-solid fa-arrow-right" /></span>
+      </button>
     </div>
   )
 }

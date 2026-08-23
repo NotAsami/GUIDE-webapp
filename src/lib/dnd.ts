@@ -49,6 +49,26 @@ export const SKILLS: Skill[] = [
 ]
 
 /** D&D ability modifier: floor((score - 10) / 2). */
+/**
+ * The canonical skill KEY for whatever an author wrote — a key, or a display
+ * name, in any case.
+ *
+ * Needed because the catalogs disagree: a class stores `"insight"`, while the
+ * SRD background import stored `"Insight"`, and `"Sleight of Hand"` for a key
+ * that is `sleightOfHand`. Writing a display name into
+ * `sheet.skillProficiencies` does not error — it simply never matches, so the
+ * character silently reads as untrained in a skill their background granted.
+ *
+ * Null for anything unrecognised, and callers must REPORT that rather than drop
+ * it: a skill that vanishes without a word is the same silent-wrong-value bug in
+ * a different coat.
+ */
+export function skillKey(raw: string): string | null {
+  const v = raw.trim().toLowerCase()
+  if (!v) return null
+  return SKILLS.find(s => s.key.toLowerCase() === v || s.name.toLowerCase() === v)?.key ?? null
+}
+
 export function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2)
 }

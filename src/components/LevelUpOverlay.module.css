@@ -1,0 +1,517 @@
+/* The DM's Level Up overlay — the amber original that LootRollOverlay borrows
+ * its chrome from (see the note at the top of LootRollOverlay.module.css).
+ *
+ * TWO DIFFERENT CHAMFER FIXES LIVE HERE, and the mockup contains neither:
+ *
+ *  - The PANEL is a layered frame — a beige silhouette, a dark gap, a thin
+ *    beige line, then the interior, each its own clipped rectangle inset a few
+ *    pixels from the one behind it. The "border" is the parent showing through.
+ *  - Every 45° cut-corner box (.tag, .mode, .row, …) keeps a real border and
+ *    gets its two diagonals PAINTED by the gradient recipe at the bottom of
+ *    this file, because a straight-line border draws nothing along an oblique
+ *    clip-path edge.
+ *  - The HEXAGONS (.die, .rk) and the DIAMOND pips (.asibank .pip) can use
+ *    neither: 0.7071 is the offset of a 45° line and theirs are not 45°. They
+ *    take the two-layer frame+inner treatment instead.
+ *
+ * docs/Chamfered_clip-path_corners_fix.md has all three. chamferBorders.test.ts
+ * enforces the middle one only — the panel and the hexagons are on us, and the
+ * mockup ships the buggy version of every one of them.
+ *
+ * The shell is duplicated from LootRollOverlay rather than shared. Every
+ * overlay in this repo carries its own copy (ShopTakeover, LootTakeover) and
+ * the two panels are deliberately different sizes — coupling them so a loot
+ * roll and an advancement must always resize together would be the wrong
+ * saving.
+ */
+
+.overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center; padding: 26px;
+  animation: fadeIn 200ms ease both;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.scrim {
+  position: absolute; inset: 0;
+  background: radial-gradient(120% 100% at 50% 40%, rgba(20, 16, 8, 0.86), rgba(8, 7, 5, 0.94));
+  backdrop-filter: blur(2px);
+}
+
+.panel {
+  --cut: 24px;
+  position: relative; z-index: 1;
+  width: min(1000px, 100%); height: min(884px, 100%);
+  animation: panelIn 380ms cubic-bezier(.2, .7, .2, 1) 30ms both;
+}
+@keyframes panelIn { from { transform: translateY(10px) scale(0.985); } to { transform: none; } }
+
+.panel::before {
+  content: ""; position: absolute; inset: 0; background: var(--beige);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  filter: drop-shadow(0 26px 64px rgba(0, 0, 0, 0.72)) drop-shadow(0 0 44px rgba(226, 176, 33, 0.22));
+}
+.pnGap {
+  position: absolute; inset: 6px; background: #0a0908;
+  clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0, 100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%, 0 100%, 0 calc(var(--cut) - 5px));
+}
+.pnLine {
+  position: absolute; inset: 4px; background: var(--beige); opacity: 0.5;
+  clip-path: polygon(calc(var(--cut) - 3px) 0, 100% 0, 100% calc(100% - var(--cut) + 3px), calc(100% - var(--cut) + 3px) 100%, 0 100%, 0 calc(var(--cut) - 3px));
+}
+.pnInner {
+  position: absolute; inset: 8px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(226, 176, 33, 0.09), transparent 55%),
+    linear-gradient(180deg, #161310, #0d0c0a);
+  clip-path: polygon(calc(var(--cut) - 7px) 0, 100% 0, 100% calc(100% - var(--cut) + 7px), calc(100% - var(--cut) + 7px) 100%, 0 100%, 0 calc(var(--cut) - 7px));
+  box-shadow: inset 0 0 60px rgba(226, 176, 33, 0.06), inset 0 0 1px rgba(212, 191, 125, 0.25);
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.pnInner::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: repeating-linear-gradient(to bottom, rgba(226, 176, 33, 0.025) 0px, rgba(226, 176, 33, 0.025) 1px, transparent 1px, transparent 4px);
+  mix-blend-mode: screen; opacity: 0.6;
+}
+.pnCorner { position: absolute; width: 18px; height: 18px; border-color: var(--amber); opacity: 0.8; z-index: 6; pointer-events: none; }
+.pnCorner.tl { top: 14px; left: 14px; border-top: 1.5px solid; border-left: 1.5px solid; }
+.pnCorner.br { bottom: 14px; right: 14px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
+
+/* ---- header ---- */
+.head {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 15px; padding: 18px 22px 15px;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.32);
+}
+.head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1.5px;
+  background: rgba(226, 176, 33, 0.45); box-shadow: 0 0 10px rgba(226, 176, 33, 0.4);
+}
+/* A hexagon with NO border — flat amber fill, glyph knocked out dark — so a
+   single clip-path is safe. Compare .die below, which needs an edge and
+   therefore cannot do this. */
+.sigil {
+  flex: 0 0 auto; width: 46px; height: 46px;
+  display: flex; align-items: center; justify-content: center;
+  color: #14120c; font-size: 20px; background: var(--amber);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  filter: drop-shadow(0 0 11px rgba(226, 176, 33, 0.45));
+}
+.titles { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.kicker {
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.3em;
+  color: var(--amber); text-transform: uppercase; white-space: nowrap;
+}
+.hname {
+  font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: 0.05em;
+  color: var(--amber-hot); text-transform: uppercase; line-height: 1;
+  text-shadow: 0 0 15px rgba(226, 176, 33, 0.3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hclass { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
+.sep { color: var(--beige-dim); margin: 0 6px; }
+
+.trans { margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: 22px; }
+.stat { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.statL { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.26em; color: var(--beige-dim); text-transform: uppercase; }
+.statV {
+  display: flex; align-items: baseline; gap: 8px;
+  font-family: var(--font-display); font-weight: 700; letter-spacing: 0.02em; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.statV .from { font-size: 18px; color: var(--muted); }
+.statV .arrow { font-family: var(--font-mono); font-size: 12px; color: var(--amber); }
+.statV .to { font-size: 30px; color: var(--amber-hot); text-shadow: 0 0 16px rgba(226, 176, 33, 0.5); }
+.stat.dice .statV .from, .stat.dice .statV .to { font-family: var(--font-mono); font-weight: 500; }
+.stat.dice .statV .from { font-size: 14px; }
+.stat.dice .statV .to { font-size: 20px; }
+.vrule { width: 1px; align-self: stretch; background: rgba(212, 191, 125, 0.22); }
+
+/* Two clipped layers, so the chamfer needs no border of its own. */
+.close {
+  flex: 0 0 auto; --cut: 8px; margin-left: 6px; width: 42px; height: 42px;
+  position: relative; background: transparent; border: 0; padding: 0; cursor: pointer;
+}
+.close .clf {
+  position: absolute; inset: 0; background: var(--beige-dim); opacity: 0.7;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.close .cli {
+  position: absolute; inset: 1.5px; background: linear-gradient(180deg, #1a1813, #100f0c);
+  display: flex; align-items: center; justify-content: center; color: var(--beige); font-size: 14px;
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  transition: color 150ms ease, box-shadow 150ms ease;
+}
+.close:hover .cli { color: var(--danger-hot); box-shadow: inset 0 0 16px rgba(185, 58, 58, 0.3); }
+
+/* ---- body / steps ---- */
+.body {
+  position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  padding: 16px 22px 18px; display: flex; flex-direction: column; gap: 13px;
+  scrollbar-width: thin; scrollbar-color: rgba(226, 176, 33, 0.4) rgba(0, 0, 0, 0.3);
+}
+.body::-webkit-scrollbar { width: 7px; }
+.body::-webkit-scrollbar-thumb { background: rgba(226, 176, 33, 0.4); }
+.body::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
+
+.step { position: relative; }
+.stepHead {
+  display: flex; align-items: center; gap: 11px; margin-bottom: 9px;
+  padding: 0 2px 7px; border-bottom: 1px solid rgba(212, 191, 125, 0.22);
+}
+.sn { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; color: var(--amber); }
+.st { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.34em; color: var(--beige); text-transform: uppercase; }
+.tag {
+  --cut: 4px; --bw: 1.5px; --bc: rgba(0, 166, 214, 0.45);
+  margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em;
+  text-transform: uppercase; padding: 3px 8px; color: var(--cyan);
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.tag.cond { --bc: rgba(226, 176, 33, 0.5); color: var(--amber); }
+.tag.off { --bc: rgba(138, 122, 74, 0.4); color: var(--beige-dim); }
+
+/* Layered like the panel: a beige silhouette with a dark interior inset 1px,
+   so the chamfer carries an edge without a border to slice. */
+.card {
+  position: relative; isolation: isolate; background: var(--beige); padding: 14px 15px 15px;
+  clip-path: polygon(11px 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%, 0 11px);
+}
+.card::before {
+  content: ""; position: absolute; inset: 1px; z-index: -1;
+  background: linear-gradient(180deg, #17150f, #100f0c);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+.step.dim .card { opacity: 0.5; filter: grayscale(0.4); }
+.step.dim .card, .step.dim .card * { pointer-events: none; }
+
+/* ---- 01 hit points ---- */
+.modes { display: flex; gap: 7px; margin-bottom: 13px; }
+.mode {
+  --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.26);
+  flex: 1; position: relative; cursor: pointer; text-align: center; padding: 9px 6px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+.mode i { display: block; font-size: 13px; margin-bottom: 5px; color: var(--beige-dim); }
+.mode:hover { --bc: rgba(226, 176, 33, 0.4); color: var(--amber-hot); }
+.mode.sel { --bc: var(--amber); color: var(--amber-hot); background-color: rgba(226, 176, 33, 0.08); }
+.mode.sel i { color: var(--amber); }
+
+.modebody { min-height: 64px; display: flex; align-items: center; gap: 14px; margin-bottom: 13px; }
+/* A HEXAGON with an edge — neither 45°, so the gradient recipe lands in the
+   wrong place and all six diagonals stay bare. Two layers instead: the amber
+   fill IS the border, the interior is the same shape inset 1.5px. The die
+   result is a bare text node, so `isolation: isolate` + a negative z-index on
+   the interior is what keeps it on top (same trick as .card). */
+.die {
+  --edge: var(--amber);
+  position: relative; isolation: isolate;
+  flex: 0 0 auto; width: 62px; height: 62px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 30px; color: var(--amber-hot);
+  background: var(--edge);
+  clip-path: polygon(50% 0, 100% 28%, 100% 72%, 50% 100%, 0 72%, 0 28%);
+  text-shadow: 0 0 14px rgba(226, 176, 33, 0.5);
+  filter: drop-shadow(0 0 10px rgba(226, 176, 33, 0.25));
+}
+.die::before {
+  content: ""; position: absolute; inset: 1.5px; z-index: -1;
+  background: radial-gradient(120% 90% at 50% 35%, rgba(226, 176, 33, 0.16), transparent 65%), #14110a;
+  clip-path: polygon(50% 0, 100% 28%, 100% 72%, 50% 100%, 0 72%, 0 28%);
+}
+.die.flash { animation: dieRoll 460ms ease; }
+@keyframes dieRoll {
+  0% { transform: scale(0.7) rotate(-12deg); color: #fff; }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.dievals { display: flex; flex-direction: column; gap: 4px; }
+.dievals .lab { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; }
+.dievals .big { font-family: var(--font-display); font-weight: 600; font-size: 17px; color: var(--text); }
+.reroll { height: 30px; width: 148px; flex: 0 0 auto; }
+
+.stepperbox {
+  --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.3);
+  display: inline-flex; align-items: center;
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.stepperbox button {
+  width: 34px; height: 38px; background-color: rgba(0, 0, 0, 0.45); border: 0;
+  color: var(--amber); font-size: 13px; cursor: pointer; transition: color 140ms ease, background-color 140ms ease;
+}
+.stepperbox button:hover:not(:disabled) { color: #fff; background-color: rgba(226, 176, 33, 0.14); }
+.stepperbox button:disabled { color: var(--beige-dim); opacity: 0.4; cursor: not-allowed; }
+.stepperbox .val {
+  min-width: 46px; text-align: center; font-family: var(--font-display);
+  font-weight: 700; font-size: 20px; color: var(--text); font-variant-numeric: tabular-nums;
+}
+
+.calc {
+  --cut: 6px; --bw: 1.5px; --bc: rgba(226, 176, 33, 0.28);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding: 11px 13px; margin-bottom: 11px;
+  background-color: rgba(226, 176, 33, 0.05);
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; color: var(--text);
+}
+.calc .chip { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; }
+.calc .chip b { color: var(--text); font-weight: 600; }
+.calc .op { color: var(--amber); font-size: 13px; }
+.calc .res { margin-left: auto; font-family: var(--font-display); font-weight: 700; font-size: 18px; color: var(--amber-hot); letter-spacing: 0.02em; }
+.calc .res .pl { color: var(--good); }
+
+.newmax { display: flex; align-items: baseline; gap: 11px; flex-wrap: wrap; }
+.newmax .l { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; color: var(--beige); text-transform: uppercase; }
+.newmax .from { font-family: var(--font-display); font-weight: 600; font-size: 20px; color: var(--muted); }
+.newmax .arrow { font-family: var(--font-mono); color: var(--amber); }
+.newmax .to { font-family: var(--font-display); font-weight: 700; font-size: 26px; color: var(--good); text-shadow: 0 0 13px rgba(79, 174, 107, 0.35); }
+.note { margin-top: 10px; font-family: var(--font-mono); font-size: 9.5px; line-height: 1.6; letter-spacing: 0.04em; color: var(--beige-dim); }
+.note b { color: var(--amber); font-weight: 500; }
+
+/* ---- 02 derived ---- */
+.derived { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.pill {
+  --cut: 6px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.26);
+  display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.pill .pl { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; }
+.pill .pv { display: flex; align-items: baseline; gap: 7px; font-family: var(--font-display); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pill .pv .from { font-size: 17px; color: var(--muted); }
+.pill .pv .arrow { font-family: var(--font-mono); font-size: 11px; color: var(--amber); }
+.pill .pv .to { font-size: 22px; color: var(--amber-hot); }
+.pill.nochange .pv .to { color: var(--text); }
+.pill .badge {
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  padding: 2px 7px; color: var(--beige-dim); border: 1.5px solid rgba(138, 122, 74, 0.4);
+}
+.pill.changed .badge { color: var(--amber); border-color: rgba(226, 176, 33, 0.5); }
+/* A value the DM typed. Danger-toned because "we are NOT writing this" is the
+   news, and it must not read like the same kind of note as "no change". */
+.pill.held .badge { color: var(--danger-hot); border-color: rgba(185, 58, 58, 0.5); }
+.pill.held .pv .to { color: var(--text); }
+.dnote { flex: 1; min-width: 200px; font-family: var(--font-mono); font-size: 9px; line-height: 1.6; letter-spacing: 0.04em; color: var(--beige-dim); }
+.dnote b { color: var(--amber); font-weight: 500; }
+
+/* ---- 03 ASI / feat ---- */
+.seg { display: flex; gap: 8px; margin-bottom: 14px; }
+.segopt {
+  --cut: 7px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.26);
+  flex: 1; cursor: pointer; padding: 11px 13px; display: flex; align-items: center; gap: 11px; text-align: left;
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+.segopt > i { font-size: 16px; color: var(--beige-dim); }
+.segopt .sx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.segopt .sx .t { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); }
+.segopt .sx .s { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.04em; color: var(--muted); }
+.segopt:hover { --bc: rgba(226, 176, 33, 0.4); }
+.segopt.sel { --bc: var(--amber); background-color: rgba(226, 176, 33, 0.08); }
+.segopt.sel > i { color: var(--amber); }
+.segopt.sel .sx .t { color: var(--amber-hot); }
+
+.abils { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.ab {
+  --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.24);
+  position: relative; min-width: 0;
+  background-color: rgba(0, 0, 0, 0.4); padding: 9px 10px;
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  display: flex; flex-direction: column; gap: 7px;
+}
+.ab.bumped { --bc: var(--amber); background-color: rgba(226, 176, 33, 0.07); }
+.abtop { display: flex; align-items: baseline; justify-content: space-between; }
+.abname { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; color: var(--beige); text-transform: uppercase; }
+.abval { font-family: var(--font-display); font-weight: 700; font-size: 20px; color: var(--text); font-variant-numeric: tabular-nums; }
+.abval .nv { color: var(--amber-hot); }
+.abval .pl { font-family: var(--font-mono); font-size: 11px; color: var(--good); margin-left: 4px; }
+.abctl { display: flex; align-items: center; gap: 7px; }
+.abctl button {
+  --cut: 4px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.28);
+  flex: 1; height: 26px; background-color: rgba(0, 0, 0, 0.5);
+  border: 1.5px solid var(--bc);
+  color: var(--amber); font-size: 12px; cursor: pointer;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: color 140ms ease, background-color 140ms ease;
+}
+.abctl button:hover:not(:disabled) { color: #fff; background-color: rgba(226, 176, 33, 0.14); }
+.abctl button:disabled { color: var(--beige-dim); opacity: 0.35; cursor: not-allowed; }
+
+.asibank {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim);
+}
+.asibank .pips { display: flex; gap: 5px; }
+/* A DIAMOND — every edge is oblique, so a border would draw entirely outside
+   the clip and the empty pip would be invisible on the dark card. Two layers,
+   same as .die. */
+.asibank .pip {
+  position: relative; width: 12px; height: 12px;
+  background: rgba(226, 176, 33, 0.45);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.asibank .pip::before {
+  content: ""; position: absolute; inset: 1.5px;
+  background: #100f0c;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.asibank .pip.used { background: var(--amber); filter: drop-shadow(0 0 5px rgba(226, 176, 33, 0.6)); }
+.asibank .pip.used::before { background: var(--amber); }
+.asibank .ct { color: var(--amber); }
+
+/* ---- pick rows (feats + gated features) ---- */
+.pick { display: flex; flex-direction: column; gap: 7px; }
+.row {
+  --cut: 6px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.24);
+  display: flex; align-items: center; gap: 11px; padding: 10px 12px; cursor: pointer; text-align: left; width: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+/* Another hexagon with an edge — two layers, not a border. */
+.rk {
+  --edge: rgba(226, 176, 33, 0.55);
+  position: relative; isolation: isolate;
+  flex: 0 0 auto; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+  color: var(--amber); font-size: 13px;
+  background: var(--edge);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.rk::before {
+  content: ""; position: absolute; inset: 1.5px; z-index: -1; background: #100f0c;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.rx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rn { font-family: var(--font-display); font-weight: 600; font-size: 15px; color: var(--text); }
+.rd {
+  font-family: var(--font-prose); font-size: 12.5px; line-height: 1.4; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.rpre { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.12em; color: var(--amber-dim); text-transform: uppercase; }
+.rsrc {
+  flex: 0 0 auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--beige-dim); text-align: right;
+}
+.rsrc .stale { display: block; color: var(--danger-hot); }
+.rcheck {
+  --cut: 3px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.4);
+  flex: 0 0 auto; width: 18px; height: 18px;
+  border: 1.5px solid var(--bc);
+  display: flex; align-items: center; justify-content: center; color: transparent; font-size: 10px;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+/* A feat whose prerequisite is UNMET. Greyed and inert rather than hidden: the
+   DM should see that the feat exists and why it is out of reach, otherwise the
+   list silently shortens and looks like a catalog problem. */
+.row.locked { opacity: 0.45; cursor: not-allowed; }
+.row.locked:hover { --bc: rgba(212, 191, 125, 0.24); }
+.rpreUnmet { color: var(--danger-hot); }
+/* A clause the parser could not read. Never blocks — this only says so. */
+.rpreOpen { color: var(--beige-dim); }
+
+.row:hover { --bc: rgba(226, 176, 33, 0.45); }
+.row.sel { --bc: var(--amber); background-color: rgba(226, 176, 33, 0.08); }
+.row.sel .rcheck { --bc: var(--amber); color: #fff; background-color: var(--amber); }
+.row.sel .rn { color: var(--amber-hot); }
+.row.sel .rk { --edge: var(--amber); }
+
+.empty {
+  display: flex; align-items: center; gap: 11px; padding: 16px 15px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; line-height: 1.6; color: var(--muted);
+  background-color: rgba(0, 0, 0, 0.3); border: 1.5px dashed rgba(212, 191, 125, 0.3);
+}
+.empty > i { flex: 0 0 auto; color: var(--beige-dim); font-size: 15px; }
+.empty b { color: var(--beige); font-weight: 500; }
+.subnote { margin-top: 9px; font-family: var(--font-mono); font-size: 8.5px; line-height: 1.6; letter-spacing: 0.06em; color: var(--beige-dim); }
+.subnote > i { color: var(--cyan); }
+.subnote b { color: var(--beige); font-weight: 500; }
+
+/* ---- 05 spell slots ---- */
+.slottab { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 11px; }
+.slot {
+  --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.24);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 9px 12px; min-width: 62px;
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.slot .sl { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; }
+.slot .pips { display: flex; gap: 4px; }
+/* Circles, not polygons — a real border is fine here. */
+.slot .pip { width: 9px; height: 9px; background-color: rgba(0, 0, 0, 0.5); border: 1.5px solid rgba(0, 166, 214, 0.4); border-radius: 50%; }
+.slot .pip.on { background-color: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.6); }
+.slot .pip.new { background-color: var(--amber); border-color: var(--amber); box-shadow: 0 0 7px rgba(226, 176, 33, 0.7); animation: pipBlink 1.6s steps(2, end) infinite; }
+@keyframes pipBlink { 50% { opacity: 0.35; } }
+
+.pactline {
+  display: flex; align-items: baseline; gap: 11px; flex-wrap: wrap; margin-bottom: 11px;
+  font-family: var(--font-display); font-weight: 600; font-size: 17px; color: var(--text);
+}
+.pactline .from { color: var(--muted); }
+.pactline .arrow { font-family: var(--font-mono); color: var(--amber); }
+.pactline .to { color: var(--amber-hot); }
+
+/* ---- footer ---- */
+.foot {
+  position: relative; z-index: 3; flex: 0 0 auto;
+  border-top: 1px solid rgba(212, 191, 125, 0.3); padding: 13px 22px 15px; background: rgba(10, 9, 7, 0.7);
+}
+.foot::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 1.5px;
+  background: rgba(226, 176, 33, 0.4); box-shadow: 0 0 10px rgba(226, 176, 33, 0.35);
+}
+.sumhead { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.sumhead .sg { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; color: var(--amber); }
+.sumhead .st { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3em; color: var(--beige); text-transform: uppercase; }
+.sumhead .warn { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; }
+.footrow { display: flex; align-items: flex-end; gap: 18px; }
+.summary { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 7px 9px; }
+.sumline {
+  --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.24);
+  display: flex; align-items: center; gap: 8px; padding: 6px 11px;
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.03em; color: var(--text);
+}
+.sumline > i { color: var(--amber); font-size: 10px; }
+.sumline .k { color: var(--beige-dim); text-transform: uppercase; font-size: 8px; letter-spacing: 0.16em; }
+.sumline .v { color: var(--amber-hot); font-weight: 500; }
+.sumline.add .v { color: var(--good); }
+.sumline.muted { opacity: 0.6; }
+.actions { flex: 0 0 auto; display: flex; gap: 10px; width: 320px; }
+.actions .btn { flex: 1 1 0; height: 44px; }
+
+/* ============================================================
+   45° CHAMFER CORNER-DIAGONAL RECIPE
+   Two corner-anchored gradients whose hard stop lands --bw before the clip
+   diagonal, so exactly a --bw-thick 45° line survives the clip. Every selector
+   below declares its own --cut/--bc/--bw above; recolouring a variant means
+   setting --bc, never border-color, or the straight edges and the diagonals
+   end up different colours. docs/Chamfered_clip-path_corners_fix.md
+   ============================================================ */
+.tag, .mode, .stepperbox, .calc, .pill, .segopt, .ab, .abctl button,
+.row, .rcheck, .slot, .sumline {
+  border-color: var(--bc);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - var(--bw, 1px)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw, 1px)), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - var(--bw, 1px)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw, 1px)), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + var(--bw, 1px)) calc(var(--cut) + var(--bw, 1px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .panel, .die.flash, .slot .pip.new { animation: none !important; }
+  .panel { transform: none !important; }
+}

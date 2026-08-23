@@ -17,7 +17,7 @@ import { characterVars } from './graph.ts'
 import { abilities, abilityMod, proficiency } from './dnd.ts'
 import { grantKitItems, snapshotKit } from './kit.ts'
 import type {
-  CatalogFeatureData, CatalogItemData, CharacterRow, CharacterUpdate, ClassCasterType,
+  CatalogFeatureData, CatalogFeatureRow, CatalogItemData, CharacterRow, CharacterUpdate, ClassCasterType,
   ClassDef, EquippedGear, Feature, InventoryItem, Json, PendingPath, PendingPathOption,
   Proficiencies, ShardTree, SpellSlot,
 } from './database.types.ts'
@@ -194,13 +194,26 @@ export function gateOpen(when: string | undefined, scope: ExprScope): boolean {
   return v?.t === 'bool' ? v.v : false
 }
 
-/** Merge only the keys the class actually states. A plain spread would blank the
- *  languages a background gave with `undefined`. */
-function mergeProficiencies(base: Proficiencies, add: Proficiencies): Proficiencies {
+/**
+ * Merge only the keys the source actually states. A plain spread would blank the
+ * languages a background gave with `undefined`.
+ *
+ * LANGUAGES UNION, everything else replaces. Armour training is a statement
+ * about what this class allows and a later class should replace it; a language
+ * is something the character KNOWS, and a race, a class and a background can
+ * each teach one. Replacing there loses a language the moment a second source
+ * mentions any.
+ *
+ * Exported and shared by all three assigns (class, race, background) — it was
+ * copied into races.ts once already, and a third copy for backgrounds is how
+ * the three quietly stop agreeing.
+ */
+export function mergeProficiencies(base: Proficiencies, add: Proficiencies): Proficiencies {
   const out: Proficiencies = { ...base }
   for (const k of Object.keys(add) as (keyof Proficiencies)[]) {
     const v = add[k]
-    if (v && v.length) out[k] = v
+    if (!v || !v.length) continue
+    out[k] = k === 'languages' ? [...new Set([...(base.languages ?? []), ...v])] : v
   }
   return out
 }
@@ -210,6 +223,21 @@ function mergeProficiencies(base: Proficiencies, add: Proficiencies): Proficienc
  *  one's grants. The carrier is `cls:<classId>`, a grant is
  *  `cls:<classId>:<featureId>`. */
 export const CLASS_GRANT_PREFIX = 'cls:'
+
+/** Stamp a library template into a grantable Feature copy (fresh instance id +
+ *  back-ref), mirroring grantSnapshot for items.
+ *
+ *  Lives here rather than beside its first caller because THREE surfaces now
+ *  need it — the console's Grant Feature card, the Level Up overlay's feat pick,
+ *  and the gated class grants a few lines below — and a second copy of the
+ *  snapshot shape is exactly the drift this codebase keeps paying for. */
+export function featureSnapshot(row: CatalogFeatureRow): Feature {
+  return {
+    ...row.data,
+    id: `feat-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`,
+    feature_id: row.id,
+  }
+}
 
 /** The two spellcasting numbers a class can answer for, once it names its
  *  casting ability: DC 8 + prof + mod, attack prof + mod.
