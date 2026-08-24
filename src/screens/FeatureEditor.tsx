@@ -62,8 +62,9 @@ const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).jo
  *  attribute in v19. */
 const inertWhen = (closed: boolean) => (closed ? ({ inert: '' } as Record<string, unknown>) : {})
 
-const RECHARGES: { v: '' | 'short' | 'long'; l: string }[] = [
-  { v: '', l: 'Manual (DM)' }, { v: 'short', l: 'Short rest' }, { v: 'long', l: 'Long rest' },
+const RECHARGES: { v: '' | 'turn' | 'short' | 'long'; l: string }[] = [
+  { v: '', l: 'Manual (DM)' }, { v: 'turn', l: 'Start of your turn' },
+  { v: 'short', l: 'Short rest' }, { v: 'long', l: 'Long rest' },
 ]
 
 /** The bucket a feature with no `folder` falls into. A display name, never
@@ -1048,7 +1049,7 @@ function FeatureForm(p: FormProps) {
         <div>
           <span className={styles.fieldLab}>Resets on</span>
           <select className={styles.in} value={d.recharge ?? ''} disabled={!(d.uses?.max)}
-            onChange={e => set({ recharge: (e.target.value || undefined) as 'short' | 'long' | undefined })}>
+            onChange={e => set({ recharge: (e.target.value || undefined) as 'turn' | 'short' | 'long' | undefined })}>
             {RECHARGES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
           </select>
         </div>

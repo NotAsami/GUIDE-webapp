@@ -146,7 +146,9 @@ export function shortRestPatch(
   if (features && features.length) {
     let recharged = 0
     nextSheet.features = features.map(f => {
-      if (f.recharge === 'short' && f.uses && f.uses.current < f.uses.max) { recharged++; return { ...f, uses: { ...f.uses, current: f.uses.max } } }
+      // A rest contains turns, so anything that comes back every turn is
+      // certainly back after an hour of sitting down.
+      if ((f.recharge === 'short' || f.recharge === 'turn') && f.uses && f.uses.current < f.uses.max) { recharged++; return { ...f, uses: { ...f.uses, current: f.uses.max } } }
       return f
     })
     if (recharged > 0) lines.push({ label: 'Features', total: `${recharged}`, breakdown: 'recharged' })

@@ -1927,3 +1927,98 @@ test('a NON-armed note with a toggle and nothing to compute is still refused', (
   const computed = { graph: [{ id: 'e1', op: 'note', label: 'Push', ask: 'Push?', text: 'Pushed {5 + 10} feet.', target: ['roll:damage.melee'] }] as GraphEffect[] }
   assert.deepEqual(auditNode(computed).filter(a => a.t === 'Toggle on a note'), [])
 })
+
+/* ---------- Brutal Strike, end to end ----------
+   The authored shape, verbatim from the campaign's own feature: two `note`
+   effects, both `once`, both carrying the blow's sentence as their `ask`, both
+   targeting the melee damage roll. Pressing Use once used to arm BOTH — the
+   confirm sheet pre-ticked every ask — and the roll then showed two identical
+   rows with a Consume each and no text. */
+
+const BRUTAL: Feature = {
+  id: 'brutal', name: 'Brutal Strike',
+  graph: [
+    { id: 'e1', op: 'dis', once: true, label: 'Remove Advantage', target: ['roll:attack.str'] },
+    { id: 'e2', op: 'add', once: true, label: 'Add 1d10 to Damage Roll', value: '1d10', target: ['roll:damage.melee'] },
+    { id: 'e3', op: 'note', once: true, label: 'Forceful Blow', target: ['roll:damage.melee'],
+      ask: 'Forceful Blow: the target is pushed 15 feet.', text: '**Forceful Blow:** the target is pushed 15 feet.' },
+    { id: 'e4', op: 'note', once: true, label: 'Hamstring Blow', target: ['roll:damage.melee'],
+      ask: 'Hamstring Blow: the target’s Speed drops by 15 feet.', text: '**Hamstring Blow:** the target’s Speed drops by 15 feet.' },
+  ] as GraphEffect[],
+}
+
+/** One press of Use, accepting whatever the sheet does not ask about. */
+async function armBrutal() {
+  const { applyOutcomes, planActivation } = await import('./graphState.ts')
+  const c = character({ sheet: { ...SHEET, features: [BRUTAL] } as CharacterRow['sheet'] })
+  const outcomes = planActivation(BRUTAL, buildContext(c), c, 'feature:brutal')
+  const { resources } = applyOutcomes(c, outcomes, new Set())
+  return { ...c, resources } as CharacterRow
+}
+
+test('one press arms all four — the blows are OFFERED, never pre-ticked', async () => {
+  const armed = await armBrutal()
+  const mods = (armed.resources as { graph: { armed: { label: string; ask?: string }[] } }).graph.armed
+  assert.deepEqual(mods.map(m => m.label).sort(),
+    ['Add 1d10 to Damage Roll', 'Forceful Blow', 'Hamstring Blow', 'Remove Advantage'])
+  // Only the blows carry a question; the die and the disadvantage are taken.
+  assert.deepEqual(mods.filter(m => m.ask).map(m => m.label).sort(), ['Forceful Blow', 'Hamstring Blow'])
+})
+
+test('the blows reach the damage roll as ONE pick-one, with their prose', async () => {
+  const armed = await armBrutal()
+  const res = resolve(buildContext(armed), { kind: 'damage', sub: 'melee', subject: 'weapon:axe' })
+  const blows = res.riders.filter(r => r.choice)
+  assert.deepEqual(blows.map(r => r.label), ['Forceful Blow', 'Hamstring Blow'])
+  assert.equal(new Set(blows.map(r => r.choice)).size, 1, 'one group, not two')
+  for (const b of blows) {
+    assert.equal(b.when, 'manual', 'undecided until the player answers')
+    assert.equal(b.on, false)
+    assert.ok(b.reveal?.includes('pushed') || b.reveal?.includes('Speed'), 'carries what it does')
+  }
+  // The 1d10 was never asked about, so it applies on its own.
+  const die = res.riders.find(r => r.label === 'Add 1d10 to Damage Roll')
+  assert.equal(die?.when, 'always')
+  assert.equal(die?.choice, undefined)
+})
+
+test('an offered blow does not silently flip a flag', async () => {
+  // `dis` here is TAKEN (no ask) so it still applies — but an asked flag must
+  // not, or the roll gets a grant the player never accepted.
+  const armed = await armBrutal()
+  const atk = resolve(buildContext(armed), { kind: 'attack', sub: 'str', subject: 'weapon:axe' })
+  assert.equal(atk.dis, true, 'Remove Advantage is taken, not offered')
+
+  const asked = { ...BRUTAL, graph: [{ ...BRUTAL.graph![0], ask: 'give up advantage?' }] } as Feature
+  const { applyOutcomes, planActivation } = await import('./graphState.ts')
+  const c = character({ sheet: { ...SHEET, features: [asked] } as CharacterRow['sheet'] })
+  const { resources } = applyOutcomes(c, planActivation(asked, buildContext(c), c, 'feature:brutal'), new Set())
+  const res = resolve(buildContext({ ...c, resources } as CharacterRow), { kind: 'attack', sub: 'str' })
+  assert.equal(res.dis, false, 'an offered flag grants nothing until it is answered')
+})
+
+test('AN ABILITY-TARGETED ARM MATCHES THE SWING THAT USES THAT ABILITY', () => {
+  /* `roll:attack.str` flattens to sub:'str', but a greataxe swing resolves as
+     sub:'melee' with ability:'str' — reqKeys emits both. Comparing only against
+     req.sub made Brutal Strike's "Remove Advantage" unmatchable: it never
+     applied, never showed, could never be consumed, and blocked the feature
+     from ever being offered again. */
+  const m = { id: 'x', source: 'feature:brutal', label: 'Remove Advantage', kind: 'attack', sub: 'str', op: 'dis' as const, at: 0 }
+  assert.equal(armedMatches(m, { kind: 'attack', sub: 'melee', ability: 'str' }), true)
+  assert.equal(armedMatches(m, { kind: 'attack', sub: 'melee', ability: 'dex' }), false, 'a finesse swing is not a Strength one')
+  assert.equal(armedMatches(m, { kind: 'damage', sub: 'melee', ability: 'str' }), false)
+  // The plain sub form still matches its own namespace.
+  const melee = { ...m, sub: 'melee' }
+  assert.equal(armedMatches(melee, { kind: 'attack', sub: 'melee', ability: 'str' }), true)
+})
+
+test('forgoing advantage actually cancels it', async () => {
+  // Reckless grants adv; Brutal's armed dis removes it. Both on one swing.
+  const armed = await armBrutal()
+  const host = {
+    ...armed,
+    resources: { ...(armed.resources as object), graph: { ...((armed.resources as { graph: object }).graph) } },
+  } as CharacterRow
+  const res = resolve(buildContext(host), { kind: 'attack', sub: 'melee', ability: 'str', subject: 'weapon:axe' })
+  assert.equal(res.dis, true, 'the armed dis reaches a Strength melee swing')
+})

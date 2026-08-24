@@ -36,7 +36,8 @@ import { Prose, renderInline } from '../lib/markdown'
 import { colorOf } from '../lib/palette'
 import type { CharacterRow, ShardTree } from '../lib/database.types'
 import {
-  catalogView, lineViews, rerollAt, resolvedOf, riderAmount, riderViews, rollTotals, unresolvedOf,
+  armedIdsOf, askSections, catalogView, lineViews, openAsks, patchRiders, pickedOf, rerollAt,
+  resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
   type CatalogView, type Die, type DieAddr, type RiderView, type RollLineView,
 } from '../lib/rollView'
 import styles from './RollContextPanel.module.css'
@@ -77,7 +78,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
   shardTrees?: Record<string, ShardTree>
   /** §8 #1's consumption tap. Absent = the panel renders armed riders read-only,
    *  which is what a surface with no character to write to honestly is. */
-  onConsumeArmed?: (id: string) => void
+  onConsumeArmed?: (ids: string[]) => void
   /** Advancing a turn. Absent = no character to write to, so the control is not
    *  offered at all rather than offered and inert. */
   onAdvanceTurn?: () => void
@@ -134,15 +135,11 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
 
   const allFolded = rolls.length > 0 && rolls.every(r => folded.has(r.id))
 
-  /** Patch one rider inside one entry. The rider list is flattened across
-   *  groups for addressing, so the index walks the same order riderViews built. */
-  function patchRider(entry: RollEntry, index: number, patch: Partial<RiderView['rider']>) {
-    let i = 0
-    const riderGroups = (entry.riderGroups ?? []).map(g => ({
-      ...g,
-      riders: g.riders.map(r => (i++ === index ? { ...r, ...patch } : r)),
-    }))
-    updateRoll(entry.id, { riderGroups })
+  /** Patch riders inside one entry — always as ONE write, however many. Two
+   *  calls in a row would each rebuild the list from the same pre-patch entry
+   *  and the second would win; see patchRiders. */
+  function patchMany(entry: RollEntry, patches: { index: number; patch: Partial<RiderView['rider']> }[]) {
+    updateRoll(entry.id, { riderGroups: patchRiders(entry, patches) })
   }
 
   const catView = cat ? catalogView(character ?? null, cat.subject, shardTrees) : null
@@ -204,7 +201,8 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
                 <Entry
                   key={entry.id} entry={entry} latest={i === 0} fresh={entry.id === fresh}
                   folded={folded.has(entry.id)} onFold={() => toggleFold(entry.id)}
-                  onPatch={(idx, patch) => patchRider(entry, idx, patch)}
+                  onPatch={(idx, patch) => patchMany(entry, [{ index: idx, patch }])}
+                  onPatchMany={patches => patchMany(entry, patches)}
                   onReroll={addr => {
                     const patch = rerollAt(entry, addr)
                     if (patch) updateRoll(entry.id, patch)
@@ -214,6 +212,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
                   onOpenCat={() => { if (entry.subject) setCat(entry) }}
                   hasCat={!!entry.subject}
                   stillArmed={stillArmed} onConsumeArmed={onConsumeArmed}
+                  onLeave={onClose}
                 />
               ))}
         </div>
@@ -229,25 +228,41 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
 /* ---------------- one roll ---------------- */
 
 function Entry({
-  entry, latest, fresh, folded, onFold, onPatch, onReroll, showTip, onOpenCat, hasCat,
-  stillArmed, onConsumeArmed,
+  entry, latest, fresh, folded, onFold, onPatch, onPatchMany, onReroll, showTip, onOpenCat, hasCat,
+  stillArmed, onConsumeArmed, onLeave,
 }: {
   entry: RollEntry; latest: boolean; fresh: boolean; folded: boolean
   onFold: () => void
   onPatch: (index: number, patch: Partial<RiderView['rider']>) => void
+  /** Several at once, atomically — what an exclusive choice needs. */
+  onPatchMany: (patches: { index: number; patch: Partial<RiderView['rider']> }[]) => void
   onReroll: (addr: DieAddr) => boolean
   showTip: ShowTip
   onOpenCat: () => void
   hasCat: boolean
   stillArmed: Set<string>
-  onConsumeArmed?: (id: string) => void
+  onConsumeArmed?: (ids: string[]) => void
+  /** Following a feature link navigates away, so the rail closes with it —
+   *  leaving it open over the screen you just asked for means dismissing it
+   *  before you can read the thing you clicked through to. */
+  onLeave: () => void
 }) {
   const views = useMemo(() => riderViews(entry), [entry])
   const lines = useMemo(() => lineViews(entry), [entry])
   const totals = useMemo(() => rollTotals(entry, views), [entry, views])
-  const armed = views.filter(v => v.rider.armedId)
+  /* TAKEN arms only. An arm carrying a question is not a contribution yet — it
+     is asked below, under Your call — and listing it here too put every blow on
+     screen twice: once as a Consume row with no text, once as a real choice. */
+  const armed = views.filter(v => v.rider.armedId && v.rider.when !== 'manual')
   const resolved = resolvedOf(views).filter(v => !v.rider.armedId)
-  const unresolved = unresolvedOf(views)
+  // ONE SOURCE, ONE ROW — see sourceGroups.
+  const armedGroups = useMemo(() => sourceGroups(armed), [armed])
+  const resolvedGroups = useMemo(() => sourceGroups(resolved), [resolved])
+  const applied = armedGroups.length > 0 || resolvedGroups.length > 0
+  // Exclusive riders bundled; everything else stays one ask per row. Sections,
+  // not riders, is what the panel counts and renders — a pick-one is one
+  // question however many options it has.
+  const sections = useMemo(() => askSections(views), [views])
   // Rider fold state is local for the same reason entry fold state is: it is how
   // you are reading the list, not part of the roll.
   const [foldedRiders, setFoldedRiders] = useState<Set<number>>(new Set())
@@ -321,37 +336,73 @@ function Entry({
               </div>
             ))}
 
+            <div className={styles.spine}>
+
             {/* Armed: already spent, already applied, and waiting for the player
                 to say the roll landed. Kept apart from the resolved list because
                 it is the one contribution here that is still SPENDABLE — §8 #1
                 is explicit that nothing burns implicitly. */}
-            {armed.length > 0 && (
-              <div className={styles.contribs}>
-                {armed.map(v => (
-                  <Contribution
-                    key={v.index} v={v} showTip={showTip}
-                    armedLive={stillArmed.has(v.rider.armedId!)}
-                    onConsume={onConsumeArmed && (() => onConsumeArmed(v.rider.armedId!))}
-                  />
-                ))}
+            {/* ONE SPINE. Applied above, asked below, one rule down the side of
+                both — see the stylesheet. Without anything applied there is no
+                beige half to hand over from, so the ask keeps its own header. */}
+            {applied && (
+              <div className={styles.applied}>
+                <div className={styles.appliedH}>Applied by the engine</div>
+                {armedGroups.length > 0 && (
+                  <div className={styles.contribs}>
+                    {armedGroups.map(g => (
+                      <Contribution
+                        key={g.key} group={g} showTip={showTip} onLeave={onLeave}
+                        armedLive={armedIdsOf(g.views).some(id => stillArmed.has(id))}
+                        onConsume={onConsumeArmed && (() => onConsumeArmed(armedIdsOf(g.views)))}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* Resolved: the engine already decided. No switch, nothing to do. */}
+                {resolvedGroups.length > 0 && (
+                  <div className={styles.contribs}>
+                    {resolvedGroups.map(g => <Contribution key={g.key} group={g} showTip={showTip} onLeave={onLeave} />)}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Resolved: the engine already decided. No switch, nothing to do. */}
-            {resolved.length > 0 && (
-              <div className={styles.contribs}>
-                {resolved.map(v => <Contribution key={v.index} v={v} showTip={showTip} />)}
-              </div>
-            )}
-
-            {unresolved.length > 0 && (
+            {sections.length > 0 && (
               <>
-                <div className={styles.askH}>
-                  <i className="fa-solid fa-diamond" />Your call
-                  <span className={styles.sep} /><span>{unresolved.length}</span>
-                </div>
+                {applied
+                  ? (
+                    <div className={styles.joint}>
+                      <span className={styles.node} aria-hidden="true" />
+                      Your call
+                      <span className={styles.sep} /><span>{sections.length}</span>
+                    </div>
+                  )
+                  : (
+                    <div className={styles.askH}>
+                      <i className="fa-solid fa-diamond" />Your call
+                      <span className={styles.sep} /><span>{sections.length}</span>
+                    </div>
+                  )}
                 <div className={styles.riders}>
-                  {unresolved.map(v => (
+                  {sections.map((sec, si) => sec.choice ? (
+                    <Choice
+                      key={`c${si}`} views={sec.views} showTip={showTip}
+                      armedLive={id => stillArmed.has(id)}
+                      onPick={index => {
+                        // Exclusive: answering one declines the rest, in one
+                        // write. Local to the roll — nothing leaves the armed
+                        // queue until Consume.
+                        onPatchMany(sec.views.map(o => ({ index: o.index, patch: { on: o.index === index } })))
+                      }}
+                      onUndo={() => onPatchMany(sec.views.map(o => ({ index: o.index, patch: { on: false } })))}
+                      onConsume={onConsumeArmed && (() =>
+                        // The whole group spends as one — see consumeArmed.
+                        onConsumeArmed(sec.views.map(o => o.rider.armedId).filter((x): x is string => !!x)))}
+                      onLeave={onLeave}
+                    />
+                  ) : (
+                    sec.views.map(v => (
                     <Ask
                       key={v.index} v={v} onPatch={onPatch} showTip={showTip} spin={spin}
                       folded={foldedRiders.has(v.index)}
@@ -369,11 +420,14 @@ function Entry({
                         })
                         flash(`r${v.index}:*`)
                       }}
+                      onLeave={onLeave}
                     />
+                    ))
                   ))}
                 </div>
               </>
             )}
+            </div>
 
             <footer className={styles.eFoot}>
               <div>{totals.attack !== undefined && (
@@ -414,17 +468,24 @@ function Entry({
             {totals.pending > 0 && (
               <div className={styles.pending} {...tipProps(showTip, () => ({
                 k: 'Your call',
-                v: unresolved.filter(v => !v.live).map((v, i) => (
-                  <div key={i} style={{ marginTop: i ? 8 : 0 }}>
-                    <b style={{ color: 'var(--cyan-hot)' }}>{v.rider.label}</b>{' '}
-                    {v.rider.on ? 'not rolled' : 'not confirmed'}<br />
-                    <span style={{ color: 'var(--beige-dim)' }}>
-                      {v.rider.source} · {v.kind === 'flag'
-                        ? `grants ${v.grants}`
-                        : `${v.rider.formula}${v.rider.dmgType ? ` ${v.rider.dmgType}` : ''}`}
-                    </span>
-                  </div>
-                )),
+                v: openAsks(views, 'settled').map((sec, i) => {
+                  const v = sec.views[0]
+                  return (
+                    <div key={i} style={{ marginTop: i ? 8 : 0 }}>
+                      <b style={{ color: 'var(--cyan-hot)' }}>
+                        {sec.choice ? v.rider.source : v.rider.label}
+                      </b>{' '}
+                      {sec.choice ? 'not chosen' : v.rider.on ? 'not rolled' : 'not confirmed'}<br />
+                      <span style={{ color: 'var(--beige-dim)' }}>
+                        {sec.choice
+                          ? `one of ${sec.views.length}`
+                          : `${v.rider.source} · ${v.kind === 'flag'
+                            ? `grants ${v.grants}`
+                            : `${v.rider.formula}${v.rider.dmgType ? ` ${v.rider.dmgType}` : ''}`}`}
+                      </span>
+                    </div>
+                  )
+                }),
                 hint: 'Answer them on the riders above',
               }))}>
                 <i className="fa-solid fa-circle-question" />
@@ -455,7 +516,13 @@ function Entry({
             )}
 
             {(entry.notes ?? []).map((n, i) => (
-              <div key={i} className={styles.note}><i className="fa-solid fa-circle-info" /><span>{n}</span></div>
+              <div key={i} className={styles.note}>
+                <i className="fa-solid fa-circle-info" />
+                {/* Authored through a markdownShortcuts textarea, so it renders
+                    through renderInline like every other authored string. Printed
+                    raw it showed its own asterisks. */}
+                <span>{renderInline(n)}</span>
+              </div>
             ))}
           </div>
         )}
@@ -546,123 +613,268 @@ function Line({ line, index, showTip, spin, onReroll }: {
   )
 }
 
-/** RESOLVED — a contribution line. No switch, no button, nothing to decide.
+/** Where a rider's source is a FEATURE, the way to open it — else null.
  *
- *  Except one: an ARMED contribution is already applied but not yet spent, so it
- *  carries the single control on this list. §8 #1 — only the player knows
- *  whether the attack resolved, so an armed modifier does not burn on a miss. */
-function Contribution({ v, showTip, armedLive, onConsume }: {
-  v: RiderView; showTip: ShowTip
+ *  Only a feature can be opened: riders also come from items and shard nodes,
+ *  and the Features screen has no row for those. */
+const featureLink = (gid: string | undefined) => (gid?.startsWith('feature:') ? gid : null)
+
+/** RESOLVED — one FEATURE's contribution to this roll.
+ *
+ *  A row is a source, not an effect. Reckless Attack granting advantage used to
+ *  print as "ADVANTAGE ON ATTACK ROLLS · Reckless Attack" — the effect's
+ *  internal label shouting, the name the player actually knows whispering
+ *  beside it — and a feature doing two things printed twice. The player reads
+ *  their sheet in features; the receipt answers in the same nouns, and what the
+ *  feature DID is what opening it shows.
+ *
+ *  The name is a LINK where the source is a feature: the roll is the moment you
+ *  want the full rules text, and the Features screen already has it.
+ *
+ *  Except one control: an ARMED group is applied but not yet spent, so it
+ *  carries Consume. §8 #1 — only the player knows whether the attack resolved,
+ *  so an armed modifier does not burn on a miss. Consuming takes the WHOLE
+ *  feature: one activation spent one use.
+ */
+function Contribution({ group, showTip, armedLive, onConsume, onLeave }: {
+  group: { key: string; source: string; gid?: string; views: RiderView[] }
+  showTip: ShowTip
   armedLive?: boolean
   onConsume?: () => void
+  onLeave?: () => void
 }) {
-  const r = v.rider
-  const onAttack = v.group === 'Attack' || v.group === 'Check' || v.group === 'Save'
-  const isArmed = !!r.armedId
-  /* A resolved contribution needs no decision, so unlike an Ask it opens purely
-     to EXPLAIN. Two different questions, in the order you ask them: the prose
-     answers "should this have applied?", the derivation answers "where did the
-     number come from?". A rider with neither stays a flat row — a chevron that
-     opens onto nothing is worse than no chevron. */
+  const { views } = group
+  const isArmed = views.some(v => !!v.rider.armedId)
   const [open, setOpen] = useState(false)
-  const faces: Die[] = r.rolledDice ?? []
-  const canOpen = !!r.sourceText || !!r.parts?.length
+  /* Only a feature can be opened — riders also come from items and shard nodes,
+     and the Features screen has no row for those. */
+  const link = group.gid?.startsWith('feature:') ? group.gid : null
+  // The summary is the same on every rider from one source; take the first one
+  // that has it. A group with neither prose nor a derivation stays flat — a
+  // chevron that opens onto nothing is worse than no chevron.
+  const summary = views.find(v => v.rider.sourceText)?.rider.sourceText
+  const canOpen = !!summary || views.some(v => v.rider.parts?.length || v.rider.rolledDice?.length) || views.length > 1
+
   return (
     <div className={cx(styles.contribWrap, open && styles.cOpen)}>
     <div className={cx(styles.contrib, canOpen && styles.cClick)}
       onClick={canOpen ? () => setOpen(o => !o) : undefined}
       {...tipProps(showTip, () => ({
-      k: r.label,
+      k: group.source,
       v: (<>
         <b style={{ color: 'var(--cyan-hot)' }}>{isArmed ? 'Armed earlier, applied here' : 'Resolved by the engine'}</b><br />
-        {isArmed
-          ? 'already spent on the activation that armed it'
-          : r.when === 'always' ? 'unconditional — always part of this roll' : 'condition met from your own state'}
-        {/* The faces, beside the expression that asked for them — the whole
-            reason §49 removed the fold. */}
-        {r.dice.length > 0 && (<>
-          <br />{r.dice.join(' + ')}
-          {r.rolledDice?.length ? <> → <b style={{ color: 'var(--beige)' }}>{r.rolledDice.map(d => d.v).join(' + ')}</b></> : null}
-        </>)}
+        {views.map((v, i) => (
+          <span key={i}>{i > 0 && <br />}{v.rider.label}{v.kind === 'flag' ? ` — ${v.grants}` : ` ${riderAmount(v.rider)}`}</span>
+        ))}
       </>),
       hint: isArmed
         ? (armedLive ? 'Consume it once you know the roll landed' : 'Already consumed')
         : canOpen ? 'Nothing to decide — open it to see why' : 'Nothing to decide',
     }))}>
-      <span className={styles.cName}>{r.label}</span>
-      <span className={styles.cSrc}>{r.source}</span>
+      {link
+        ? <Link
+            to={`/features?f=${encodeURIComponent(link)}`}
+            className={cx(styles.cName, styles.cLink)}
+            title={`Open ${group.source} on the Features screen`}
+            onClick={e => { e.stopPropagation(); onLeave?.() }}
+          >
+            {group.source}<i className="fa-solid fa-arrow-up-right-from-square" />
+          </Link>
+        : <span className={styles.cName}>{group.source}</span>}
       <span className={styles.cRight}>
         {canOpen && <span className={styles.cFold}><i className="fa-solid fa-chevron-down" /></span>}
         {isArmed && (armedLive
           ? onConsume
-            ? <button type="button" className={styles.consume} onClick={onConsume}
-                title="Spend this — it stops applying to later rolls">
+            ? <button type="button" className={styles.consume}
+                onClick={e => { e.stopPropagation(); onConsume() }}
+                title="Spend it — the whole feature leaves the queue">
                 <i className="fa-solid fa-bolt" />Consume
               </button>
             : <span className={styles.armedTag}><i className="fa-solid fa-bolt" />Armed</span>
           : <span className={styles.spentTag}>Spent</span>)}
-        {v.kind === 'flag' && v.grants ? (
-          <span className={styles.flag} data-f={v.grants.toLowerCase()}>
-            <i className={`fa-solid ${FLAG_ICON[v.grants]}`} />{v.grants}
-          </span>
-        ) : (<>
-          {/* "flat →" is not a formula, it is the absence of one. */}
-          {r.formula && r.formula !== 'flat' && <span className={styles.cForm}>{r.formula} →</span>}
-          {/* The AMOUNT, not the value: a dice contribution has no number here —
-              the roller rolled it into the line's modifier — so this prints
-              "+1d6", never "+0". */}
-          <span className={styles.cVal} data-t={r.dmgType?.toLowerCase() ?? (onAttack ? 'atk' : '')}
-            style={dt(r.dmgType ?? (onAttack ? 'atk' : undefined))}>
-            {riderAmount(r)}{onAttack ? ' atk' : r.dmgType ? ` ${r.dmgType}` : ''}
-          </span>
-        </>)}
+        {views.map(v => <Amount key={v.index} v={v} />)}
       </span>
     </div>
 
     {open && (
       <div className={styles.cBody}>
-        {/* THE SUMMARY FIRST. The number is already on the row above; what the
-            row cannot tell you is whether the rule it came from was supposed to
-            fire on this roll. Prose, not renderInline, so authored paragraphs
-            and colours both survive. */}
-        {r.sourceText && <Prose text={r.sourceText} className={styles.cProse} />}
+        {/* WHAT IT DID, one line per contribution. This is the detail the row
+            used to be named after, now where detail belongs. */}
+        {views.map(v => (
+          <div key={v.index} className={styles.cWhat}>
+            <span className={styles.cwName}>{v.rider.label}</span>
+            <Amount v={v} />
+          </div>
+        ))}
+
+        {/* THE SUMMARY. What the row cannot tell you is whether the rule it came
+            from was supposed to fire on this roll. Prose, not renderInline, so
+            authored paragraphs and colours both survive. */}
+        {summary && <Prose text={summary} className={styles.cProse} />}
 
         {/* Then the derivation, one level deep — the operands at the values this
             roll used. A flat die has none and shows only its faces. */}
-        {!!r.parts?.length && (
-          <div className={styles.cDeriv}>
-            <span className={styles.form}>{r.formula}</span>
-            {r.parts.map(p => (
-              <span key={p.name} className={styles.cPart}>
-                <span className={styles.cpName}>{p.name}</span>
-                <span className={styles.cpVal}>{p.value < 0 ? p.value : `+${p.value}`}</span>
-              </span>
-            ))}
-            <span className={styles.eq}>=</span>
-            <span className={styles.res}>{r.flat}</span>
-          </div>
-        )}
-
-        {faces.length > 0 && (
-          <div className={styles.cDeriv}>
-            <span className={styles.form}>{r.dice.join(' + ')}</span>
-            {faces.map((d, i) => (
-              <span key={i}>
-                {i > 0 && <span className={styles.op}>+</span>}
-                <DieChip d={d} locked showTip={showTip} spinning={false} />
-              </span>
-            ))}
-          </div>
-        )}
+        {views.map(v => {
+          const r = v.rider
+          const faces: Die[] = r.rolledDice ?? []
+          if (!r.parts?.length && !faces.length) return null
+          return (
+            <div key={`d${v.index}`}>
+              {!!r.parts?.length && (
+                <div className={styles.cDeriv}>
+                  <span className={styles.form}>{r.formula}</span>
+                  {r.parts.map(pt => (
+                    <span key={pt.name} className={styles.cPart}>
+                      <span className={styles.cpName}>{pt.name}</span>
+                      <span className={styles.cpVal}>{pt.value < 0 ? pt.value : `+${pt.value}`}</span>
+                    </span>
+                  ))}
+                  <span className={styles.eq}>=</span>
+                  <span className={styles.res}>{r.flat}</span>
+                </div>
+              )}
+              {faces.length > 0 && (
+                <div className={styles.cDeriv}>
+                  <span className={styles.form}>{r.dice.join(' + ')}</span>
+                  {faces.map((d, i) => (
+                    <span key={i}>
+                      {i > 0 && <span className={styles.op}>+</span>}
+                      <DieChip d={d} locked showTip={showTip} spinning={false} />
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     )}
     </div>
   )
 }
 
+/** One contribution's worth — a granted flag, or the amount and its type. */
+function Amount({ v }: { v: RiderView }) {
+  const r = v.rider
+  const onAttack = v.group === 'Attack' || v.group === 'Check' || v.group === 'Save'
+  if (v.kind === 'flag' && v.grants) {
+    return (
+      <span className={styles.flag} data-f={v.grants.toLowerCase()}>
+        <i className={`fa-solid ${FLAG_ICON[v.grants]}`} />{v.grants}
+      </span>
+    )
+  }
+  if (v.kind === 'note') return null
+  return (
+    <span className={styles.cVal} data-t={r.dmgType?.toLowerCase() ?? (onAttack ? 'atk' : '')}
+      style={dt(r.dmgType ?? (onAttack ? 'atk' : undefined))}>
+      {riderAmount(r)}{onAttack ? ' atk' : r.dmgType ? ` ${r.dmgType}` : ''}
+    </span>
+  )
+}
+
+/** UNRESOLVED, EXCLUSIVE — a pick-one.
+ *
+ *  Several offered arms from one source: Brutal Strike's Forceful Blow and
+ *  Hamstring Blow are one decision, and the feature is MADE of the choice. So
+ *  there is no switch per row — a switch asks "does this apply" of each, which
+ *  is how both used to end up armed at once — and each option carries the
+ *  author's own prose, because a branch that names itself and stops is a branch
+ *  the player cannot choose between.
+ *
+ *  Clicking commits. The lock is against a stray click, not a change of mind:
+ *  Undo sits on the GROUP, never on an option, so releasing the choice is never
+ *  something you do while reaching for the branch you did not take. */
+function Choice({ views, showTip, armedLive, onPick, onUndo, onConsume, onLeave }: {
+  views: RiderView[]
+  showTip: ShowTip
+  armedLive: (id: string) => boolean
+  onPick: (index: number) => void
+  onUndo: () => void
+  onConsume?: () => void
+  onLeave?: () => void
+}) {
+  const picked = pickedOf(views)
+  const source = views[0]?.rider.source
+  const link = featureLink(views[0]?.rider.sourceGid)
+  // Every option in a spent group is gone from the queue together, so one
+  // armedId answers for all of them.
+  const live = views.some(v => v.rider.armedId && armedLive(v.rider.armedId))
+
+  return (
+    <div className={styles.choice}>
+      <div className={styles.chH}>
+        <span>
+          {link
+            ? <Link
+                to={`/features?f=${encodeURIComponent(link)}`}
+                className={styles.chLink}
+                title={`Open ${source} on the Features screen`}
+                onClick={() => onLeave?.()}
+              >
+                {source}<i className="fa-solid fa-arrow-up-right-from-square" />
+              </Link>
+            : source}
+          {source ? ' · choose one' : 'Choose one'}
+        </span>
+        <span className={styles.r}>{picked ? 'Chosen' : 'Clicking commits it'}</span>
+      </div>
+
+      {views.map(v => {
+        const r = v.rider
+        const isPicked = picked?.index === v.index
+        const passed = !!picked && !isPicked
+        // The authored prose. `reveal` is the effect's own text and `text` the
+        // question; for a blow the author writes the same sentence in both, so
+        // preferring the prose avoids printing it twice.
+        const body = r.reveal || r.text
+        return (
+          <button
+            key={v.index} type="button"
+            className={cx(styles.opt, isPicked && styles.picked, passed && styles.passed)}
+            aria-pressed={isPicked}
+            onClick={picked ? undefined : () => onPick(v.index)}
+            {...tipProps(showTip, () => ({
+              k: r.label,
+              v: isPicked ? 'Chosen for this roll' : passed ? 'Not taken — undo to change' : 'One of two — clicking commits it',
+              hint: picked ? null : 'Click to choose',
+            }))}
+          >
+            <div className={styles.optHead}>
+              <span className={styles.optMark}><i className="fa-solid fa-diamond" /></span>
+              <span className={styles.optName}>{r.label}</span>
+              {isPicked && <span className={styles.optTag}><i className="fa-solid fa-lock" />Locked in</span>}
+              {passed && <span className={styles.optTag}>Not taken</span>}
+            </div>
+            {body && <div className={styles.optText}>{renderInline(body)}</div>}
+          </button>
+        )
+      })}
+
+      {picked && (
+        <div className={styles.chFoot}>
+          {live
+            ? (<>
+                <button type="button" className={styles.undo} onClick={onUndo}>
+                  <i className="fa-solid fa-rotate-left" />Undo
+                </button>
+                {onConsume && (
+                  <button type="button" className={styles.consume} onClick={onConsume}
+                    title="Spend it — the whole choice leaves the queue">
+                    <i className="fa-solid fa-bolt" />Consume
+                  </button>
+                )}
+              </>)
+            : <span className={styles.spentTag}>Spent</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** UNRESOLVED — the toggle. Formula, never a pre-rolled number, until the
  *  player says yes. Once rolled it locks. */
-function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin }: {
+function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin, onLeave }: {
   v: RiderView
   folded: boolean
   onPatch: (index: number, patch: Partial<RiderView['rider']>) => void
@@ -670,8 +882,13 @@ function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin }: {
   onRolled: () => void
   showTip: ShowTip
   spin: string | null
+  onLeave?: () => void
 }) {
   const r = v.rider
+  /* THE ROLL IS WHEN YOU WANT THE RULE. A decision you are being asked to make
+     is exactly the moment the feature's full text is worth reaching, and the
+     Features screen already holds it. */
+  const link = featureLink(r.sourceGid)
   const locked = v.kind === 'value' && !!r.rolled
   const faces: Die[] = r.rolledDice ?? []
   const onAttack = v.group === 'Attack' || v.group === 'Check' || v.group === 'Save'
@@ -689,8 +906,25 @@ function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin }: {
           role="switch" aria-checked={r.on} aria-label={`${r.label} applies`}
           onClick={e => { e.stopPropagation(); onPatch(v.index, { on: !r.on }) }}
         />
-        <span className={styles.rdName}>{r.label}</span>
-        <span className={styles.rdSrc}>{r.source}</span>
+        {/* THE LINK GOES ON THE NAME, and the source line goes with it. An
+            effect is usually named after the feature carrying it, so printing
+            both was a stutter — and matching them to decide only worked when
+            the two strings agreed exactly, which authored data does not
+            promise ("Condemning Strike" on "Condeming Strike"). The link's
+            title names the feature, so nothing is lost by not repeating it. */}
+        {link
+          ? <Link
+              to={`/features?f=${encodeURIComponent(link)}`}
+              className={cx(styles.rdName, styles.rdLink)}
+              title={`Open ${r.source} on the Features screen`}
+              onClick={e => { e.stopPropagation(); onLeave?.() }}
+            >
+              {r.label}<i className="fa-solid fa-arrow-up-right-from-square" />
+            </Link>
+          : (<>
+              <span className={styles.rdName}>{r.label}</span>
+              <span className={styles.rdSrc}>{r.source}</span>
+            </>)}
         {v.kind === 'flag' && v.grants && (
           <span className={cx(styles.flag, !r.on && styles.ghost)} data-f={r.on ? v.grants.toLowerCase() : undefined}>
             {r.on && <i className={`fa-solid ${FLAG_ICON[v.grants]}`} />}{v.grants}

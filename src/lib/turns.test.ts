@@ -5,8 +5,8 @@
 // for and lost. Neither announces itself.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { ActiveEffect } from './database.types.ts'
-import { advanceTurn, durationTurns, turnsLabel } from './turns.ts'
+import type { ActiveEffect, Feature } from './database.types.ts'
+import { advanceTurn, durationTurns, turnRecharge, turnsLabel } from './turns.ts'
 
 const eff = (over: Partial<ActiveEffect> = {}): ActiveEffect =>
   ({ id: 'e1', name: 'Haste', effects: {}, ...over }) as ActiveEffect
@@ -87,4 +87,28 @@ test('the turn it expires it is expired, not counted', () => {
   const r = advanceTurn([eff({ turns: 1 })])
   assert.deepEqual(r.counted, [])
   assert.equal(r.expired.length, 1)
+})
+
+/* ---------- once per turn is a USE, not a variable in disguise ---------- */
+
+const useable = (over: Partial<Feature> = {}): Feature =>
+  ({ id: 'f', name: 'Brutal Strike', uses: { current: 0, max: 2 }, recharge: 'turn', ...over }) as Feature
+
+test('a per-turn feature gets its uses back, and says which', () => {
+  const r = turnRecharge([useable(), useable({ id: 'g', name: 'Rage', recharge: 'long', uses: { current: 0, max: 3 } })])
+  assert.ok(r)
+  assert.deepEqual(r.names, ['Brutal Strike'])
+  assert.equal(r.features[0].uses?.current, 2)
+  assert.equal(r.features[1].uses?.current, 0, 'a long-rest feature is not touched by a turn')
+})
+
+test('nothing to recharge returns null — the turn writes and reports nothing', () => {
+  assert.equal(turnRecharge([useable({ uses: { current: 2, max: 2 } })]), null)
+  assert.equal(turnRecharge([]), null)
+  assert.equal(turnRecharge(undefined), null)
+})
+
+test('a per-turn feature with no use counter is left alone', () => {
+  // `recharge` without `uses` is authoring noise, not a crash.
+  assert.equal(turnRecharge([useable({ uses: undefined })]), null)
 })

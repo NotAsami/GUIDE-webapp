@@ -1,0 +1,130 @@
+/* The pre-roll offer. Same vocabulary as the Roll Context rail — chamfered
+   card, cyan for the player's own voice, gold for a value that has already cost
+   something — because it is the same conversation one step earlier. */
+
+.overlay {
+  position: fixed; inset: 0; z-index: 340;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  animation: fadeIn 160ms ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.card {
+  --cut: 12px; --edge: var(--cyan);
+  position: relative; width: min(436px, calc(100vw - 32px)); max-height: calc(100vh - 64px);
+  display: flex; flex-direction: column;
+  animation: cardIn 200ms cubic-bezier(.2, .7, .2, 1);
+}
+@keyframes cardIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.frame {
+  position: absolute; inset: 0; background: var(--edge); box-shadow: 0 0 16px rgba(0, 166, 214, 0.35);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.inner {
+  position: relative; margin: 1.5px; min-height: 0;
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, #181818, #101010);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+}
+
+/* NOT A RECEIPT, so it wears none of a receipt's furniture: no timestamp, no
+   totals. The hatch is the device the rail's Problems block uses, in the
+   player's cyan rather than red — "in progress", not "settled". */
+.band {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 7px 13px;
+  border-bottom: 1px solid rgba(0, 166, 214, 0.32);
+  background: repeating-linear-gradient(45deg, rgba(0, 166, 214, 0.16) 0 5px, transparent 5px 11px);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--cyan-hot);
+}
+.band i { font-size: 7px; }
+.band .n { margin-left: auto; letter-spacing: 0.16em; color: var(--beige-dim); }
+
+.subj { flex: 0 0 auto; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 11px; padding: 11px 13px 9px; }
+.glyph { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(212, 191, 125, 0.35); background: rgba(0, 0, 0, 0.4); color: var(--beige); font-size: 13px; }
+.name { font-family: var(--font-display); font-weight: 600; font-size: 14px; letter-spacing: 0.09em; color: var(--text); }
+.flavor { font-family: var(--font-prose); font-style: italic; font-size: 13.5px; line-height: 1.3; color: var(--muted); margin-top: 2px; }
+
+.head { margin: 4px 13px 7px; display: flex; align-items: center; gap: 9px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--cyan); }
+.head i { font-size: 7px; }
+.head .sep { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(0, 166, 214, 0.4), transparent); }
+
+.list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 13px; display: flex; flex-direction: column; gap: 6px; scrollbar-width: thin; scrollbar-color: var(--beige-dim) transparent; }
+.list::-webkit-scrollbar { width: 7px; }
+.list::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.5)); border: 1px solid #111; }
+
+/* One offer. Same geometry as an unresolved rider in the rail — this IS a
+   rider, asked one step earlier, so it must not look like a different species. */
+.offer {
+  position: relative; border-left: 2px solid rgba(0, 166, 214, 0.35);
+  background: rgba(255, 255, 255, 0.016);
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.offer:hover { border-left-color: var(--cyan); background: rgba(0, 166, 214, 0.055); }
+.offer.oOpen { border-left-color: var(--cyan); background: rgba(0, 166, 214, 0.07); }
+/* The whole summary is the hit target — opening is the cheap, reversible half
+   of the gesture, so it does not need aiming at a chevron. */
+.oTop {
+  display: block; width: 100%; text-align: left; cursor: pointer; font: inherit;
+  border: 0; background: none; color: inherit; padding: 8px 10px 9px 11px;
+}
+.oFold { margin-left: 4px; font-size: 8px; color: var(--beige-dim); transition: transform 200ms ease; }
+.oOpen .oFold { transform: rotate(180deg); color: var(--cyan-hot); }
+/* Committing is the expensive half, so it gets its own control rather than
+   inheriting the row's. */
+.oCommit { padding: 0 10px 10px 11px; }
+.use { --cut: 7px; position: relative; display: block; width: 100%; background: none; border: 0; padding: 0; cursor: pointer; height: 30px; }
+.use .bFrame { position: absolute; inset: 0; background: var(--gold-rare); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+.use .bIn {
+  position: absolute; inset: 1px; background: #17130a;
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold-rare);
+  transition: background 160ms ease, color 160ms ease;
+}
+.use:hover .bIn { background: rgba(226, 176, 33, 0.2); color: var(--amber-hot); }
+.use i { font-size: 9px; }
+.oHead { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.oName { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige); }
+.offer:hover .oName { color: var(--text); }
+.oCost { margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige-dim); }
+
+/* THE TWO KINDS ARE NOT INTERCHANGEABLE, so they are not painted alike. A
+   stance is HELD (cyan, the player's own state); an arm is SPENT (gold, a value
+   that has already cost something). */
+.tag { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; padding: 2px 7px; border: 1px solid; }
+.tag i { font-size: 7.5px; }
+.tag.stance { border-color: var(--cyan); color: var(--cyan-hot); background: rgba(0, 166, 214, 0.1); }
+.tag.arm { border-color: rgba(226, 176, 33, 0.55); color: var(--gold-rare); background: rgba(226, 176, 33, 0.1); }
+
+/* What it does, in the author's own words. A chip that names a feature and
+   never says what it is is the whole complaint this screen answers. */
+.what { margin-top: 7px; font-family: var(--font-prose); font-size: 13.5px; line-height: 1.42; color: var(--muted); text-wrap: pretty; }
+.what p { margin: 0 0 6px; }
+.what p:last-child { margin-bottom: 0; }
+.oOpen .what { color: var(--text); font-size: 14px; line-height: 1.5; }
+.life { margin-top: 7px; display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim); }
+.life i { color: var(--cyan); font-size: 7px; }
+
+.none { padding: 2px 13px 4px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim); }
+
+.foot { flex: 0 0 auto; margin: 11px 13px 12px; border-top: 1px solid rgba(0, 166, 214, 0.28); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.sum { display: flex; align-items: flex-start; gap: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; line-height: 1.5; color: var(--beige-dim); }
+.sum i { color: var(--cyan); font-size: 8px; margin-top: 2px; }
+.actions { display: flex; align-items: center; gap: 9px; }
+.cancel { flex: 0 0 auto; background: none; border: 1px solid rgba(212, 191, 125, 0.3); color: var(--beige-dim); font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; padding: 0 12px; height: 34px; cursor: pointer; transition: color 150ms ease, border-color 150ms ease; }
+.cancel:hover { color: var(--danger-hot); border-color: rgba(185, 58, 58, 0.5); }
+.roll { --cut: 8px; position: relative; flex: 1 1 auto; background: none; border: 0; padding: 0; cursor: pointer; height: 34px; }
+.roll .bFrame { position: absolute; inset: 0; background: var(--cyan); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+.roll .bIn {
+  position: absolute; inset: 1px; background: #0d1417;
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan-hot);
+  transition: background 160ms ease, color 160ms ease;
+}
+.roll:hover .bIn { background: rgba(0, 166, 214, 0.22); color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .card { animation: none; }
+}
