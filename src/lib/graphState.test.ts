@@ -5,10 +5,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.types.ts'
-import { buildContext, staleArmed } from './graph.ts'
+import { buildContext, resolve, staleArmed } from './graph.ts'
 import { longRestPatch, shortRestPatch } from './rest.ts'
 import {
-  applyOutcomes, armableFor, consumeArmed, planActivation, playerVars, restVars, scopedVars, setDmVars,
+  answerArmed, applyOutcomes, armableFor, consumeArmed, planActivation, playerVars, restVars, scopedVars, setDmVars,
   setVars, turnGraphPatch, turnVars, withArmedCleared,
 } from './graphState.ts'
 
@@ -539,4 +539,42 @@ test('a stance is NOT offered on a roll it could not change', () => {
 test('a stance ALREADY HELD is not offered again — the use would buy nothing', () => {
   const c = stanceHost({ vars: { recklessly: true } })
   assert.deepEqual(armableFor(c, buildContext(c), { kind: 'attack', ability: 'str' }), [])
+})
+
+/* ---------- HELD: answering releases, undo puts it back ---------- */
+
+const ASKED: GraphEffect = {
+  id: 'e1', op: 'note', once: true, label: 'Forceful Blow', target: ['roll:damage.melee'],
+  ask: 'Forceful Blow: pushed 15 feet.', text: '**Forceful Blow**',
+} as GraphEffect
+
+test('answering marks the hold spent, and undo clears it', () => {
+  const c = character({}, {})
+  const armed = applyOutcomes(c, planActivation(RAGE([ASKED]), buildContext(c), c, 'feature:rage'), new Set())
+  const host = { ...c, resources: armed.resources } as CharacterRow
+  const id = (armed.resources.graph as { armed: { id: string }[] }).armed[0].id
+
+  const after = answerArmed(host, [id], 'roll-7')
+  assert.equal((after.graph as { armed: { spent?: string }[] }).armed[0].spent, 'roll-7')
+
+  const undone = answerArmed({ ...host, resources: after } as CharacterRow, [id], null)
+  assert.equal('spent' in (undone.graph as { armed: object[] }).armed[0], false, 'undo removes the mark, not the hold')
+  assert.equal((undone.graph as { armed: unknown[] }).armed.length, 1, 'the hold itself survives')
+})
+
+test('AN ANSWERED HOLD IS NOT OFFERED AGAIN', () => {
+  // The point of answering-as-release: the next roll must not re-ask.
+  const c = character({}, {})
+  const armed = applyOutcomes(c, planActivation(RAGE([ASKED]), buildContext(c), c, 'feature:rage'), new Set())
+  const host = { ...c, resources: armed.resources } as CharacterRow
+  const req = { kind: 'damage', sub: 'melee' } as const
+
+  assert.equal(resolve(buildContext(host), req).riders.length, 1, 'offered while unanswered')
+
+  const id = (armed.resources.graph as { armed: { id: string }[] }).armed[0].id
+  const spent = { ...host, resources: answerArmed(host, [id], 'roll-7') } as CharacterRow
+  assert.equal(resolve(buildContext(spent), req).riders.length, 0, 'gone once answered')
+
+  const undone = { ...host, resources: answerArmed(spent, [id], null) } as CharacterRow
+  assert.equal(resolve(buildContext(undone), req).riders.length, 1, 'and back if undone')
 })

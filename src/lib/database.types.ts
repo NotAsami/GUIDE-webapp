@@ -523,6 +523,19 @@ export type ArmedMod = {
    *  snapshot, so the node's text is not reachable from the roll. Without it the
    *  panel can name a blow and not say what it does — the original complaint. */
   text?: string
+  /** ANSWERED, on this roll. Set when the player takes the thing this mod was
+   *  offering — picking a blow — and cleared if they undo.
+   *
+   *  HELD replaced Consume with this. Consume was a chore: only the player knows
+   *  whether the attack landed, so the app could not spend anything for them,
+   *  and a queue that fills up when you forget is what left one mod sitting in a
+   *  live sheet for weeks. Answering is a signal the player already gives, so it
+   *  is the one the model uses — and a miss is expressed by not answering.
+   *
+   *  A flag rather than a deletion because the answer must be reversible: undo
+   *  puts the offer back, which removing the mod outright could not. The
+   *  DEADLINE is what actually deletes it. */
+  spent?: string
   at: number
 }
 

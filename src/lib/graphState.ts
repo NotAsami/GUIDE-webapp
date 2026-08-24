@@ -340,6 +340,33 @@ export const consumeArmed = (character: CharacterRow, ids: string | string[]): R
   } as Record<string, Json>
 }
 
+/** ANSWERING SPENDS IT — Held's release rule, and the replacement for Consume.
+ *
+ *  Marks rather than deletes, so undo can put the offer back; the deadline is
+ *  what deletes. `at` is the roll that answered it, which is also what makes an
+ *  answer specific: the same hold cannot be answered twice by two rolls.
+ *
+ *  Passing null for `at` is the undo. */
+export function answerArmed(
+  character: CharacterRow,
+  ids: string[],
+  at: string | null,
+): Record<string, Json> {
+  const g = state(character)
+  const hit = new Set(ids)
+  return {
+    ...(character.resources ?? {}),
+    graph: {
+      ...g,
+      armed: (g.armed ?? []).map(m => {
+        if (!hit.has(m.id)) return m
+        if (at === null) { const { spent: _drop, ...rest } = m; return rest }
+        return { ...m, spent: at }
+      }),
+    },
+  } as Record<string, Json>
+}
+
 /* ---------- rest ---------- */
 
 /** WOULD ACTIVATING THIS PUT A CONTRIBUTION ON THIS ROLL, by way of a variable?
