@@ -10,7 +10,7 @@ import type { RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
 import {
   askSections, catalogView, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf, rerollAt,
-  resolvedOf, riderAmount, riderValue, riderViews, rollTotals, unresolvedOf,
+  resolvedOf, riderAmount, riderValue, riderViews, rollTotals, sourceGroups, unresolvedOf,
 } from './rollView.ts'
 
 const rider = (over: Partial<Rider>): Rider => ({
@@ -508,4 +508,28 @@ test('ADVANTAGE AND DISADVANTAGE CANCEL, so neither is reported as granted', () 
     ] }],
   })
   assert.deepEqual(rollTotals(withCrit, riderViews(withCrit)).flags, ['CRIT'])
+})
+
+/* Brutal Strike buys extra damage WITH disadvantage. Rider order follows the
+   engine's line groups (Attack before Damage), so the row printed the price
+   before the thing bought — "DISADVANTAGE +10". */
+test('a source lists its amounts before the flags it attached', () => {
+  const views = riderViews(entry({
+    riderGroups: [
+      { label: 'Attack', riders: [rider({ sourceGid: 'feature:bs', source: 'Brutal Strike', label: 'Dis', op: 'disadvantage' })] },
+      { label: 'Damage', riders: [rider({ sourceGid: 'feature:bs', source: 'Brutal Strike', label: 'Extra', flat: 10 })] },
+    ],
+  }))
+  const [g] = sourceGroups(views)
+  assert.deepEqual(g.views.map(v => v.rider.label), ['Extra', 'Dis'])
+})
+
+test('two amounts from one source keep the order the engine gave them', () => {
+  const views = riderViews(entry({
+    riderGroups: [{ label: 'Damage', riders: [
+      rider({ sourceGid: 'feature:x', source: 'X', label: 'First', flat: 1 }),
+      rider({ sourceGid: 'feature:x', source: 'X', label: 'Second', flat: 2 }),
+    ] }],
+  }))
+  assert.deepEqual(sourceGroups(views)[0].views.map(v => v.rider.label), ['First', 'Second'])
 })
