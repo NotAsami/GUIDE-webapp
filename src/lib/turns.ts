@@ -17,7 +17,7 @@
  * an absent count as expired would delete every effect the moment the button was
  * first pressed.
  */
-import type { ActiveEffect } from './database.types.ts'
+import type { ActiveEffect, Feature } from './database.types.ts'
 
 /** Rounds per unit. A 5e round is six seconds, so a minute is ten of them —
  *  which is the conversion the user asked for in so many words. Hours and days
@@ -64,6 +64,26 @@ export type TurnAdvance = {
  *  poison with one turn left still poisons you as it wears off — resolving the
  *  damage first and the expiry second is the difference between six turns of
  *  poison and five. */
+/** Features whose uses come back at the start of your turn.
+ *
+ *  Exists so "once per turn" can be a USE rather than a variable. Expressing it
+ *  as state meant authoring a bool with `resetOn: 'turn'`, gating the feature on
+ *  it, and flipping it by hand — a counter wearing a disguise, visible to the
+ *  player as a variable that means nothing to them.
+ *
+ *  Returns null when nothing moved, so Advance Turn neither writes nor reports a
+ *  recharge that did not happen. */
+export function turnRecharge(features: Feature[] | undefined): { features: Feature[]; names: string[] } | null {
+  if (!features?.length) return null
+  const names: string[] = []
+  const next = features.map(f => {
+    if (f.recharge !== 'turn' || !f.uses || f.uses.current >= f.uses.max) return f
+    names.push(f.name)
+    return { ...f, uses: { ...f.uses, current: f.uses.max } }
+  })
+  return names.length ? { features: next, names } : null
+}
+
 export function advanceTurn(effects: ActiveEffect[]): TurnAdvance {
   const next: ActiveEffect[] = []
   const expired: ActiveEffect[] = []

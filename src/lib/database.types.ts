@@ -368,9 +368,15 @@ export type Feature = {
   /** Limited-use tracking. Absent = at-will / passive (no use to spend). `current`
    *  is player-mutable; `max` is authored. Restored by a rest (see `recharge`). */
   uses?: { current: number; max: number }
-  /** When spent uses come back. 'short' = short OR long rest; 'long' = long rest
-   *  only. Absent = doesn't recharge on rest (DM grants manually). */
-  recharge?: 'short' | 'long'
+  /** When spent uses come back. 'turn' = the start of your next turn (Advance
+   *  Turn, and a rest too — a rest contains turns); 'short' = short OR long
+   *  rest; 'long' = long rest only. Absent = doesn't recharge (DM grants
+   *  manually).
+   *
+   *  'turn' exists because the workaround for it was authoring a variable with
+   *  `resetOn: 'turn'` and gating the feature on it — state the player can see,
+   *  invented purely to express "once per turn". A per-turn use IS a use. */
+  recharge?: 'turn' | 'short' | 'long'
   /** Dice expression rolled when the feature is used, e.g. "1d10 + 7" (Second
    *  Wind). When present, using the feature shows the result in a toast — the
    *  player applies the effect themselves, like an attack roll. */
@@ -501,6 +507,22 @@ export type ArmedMod = {
   /** Carried through arming, or an armed "+2d6 radiant" lands in the untyped
    *  bucket and the damage split silently loses a colour. */
   dmgType?: string
+  /** OFFERED, NOT TAKEN. The authored `ask`, carried onto the mod.
+   *
+   *  An `ask` on a `once` effect used to be answered at ACTIVATION — the confirm
+   *  sheet pre-ticked it, so Brutal Strike armed Forceful Blow AND Hamstring Blow
+   *  and the player consumed one of two identical-looking rows. But a blow lands
+   *  at the END of the attack: whether you want one, and which, is knowable only
+   *  once the attack has a result, and on a miss the answer is neither.
+   *
+   *  So an asked arm is minted UNDECIDED and the question travels with it. The
+   *  roll panel asks it, as a `manual` rider like any other — which also keeps it
+   *  out of the roller's total until it is answered. */
+  ask?: string
+  /** The prose the `ask` reveals, carried for the same reason: an armed mod is a
+   *  snapshot, so the node's text is not reachable from the roll. Without it the
+   *  panel can name a blow and not say what it does — the original complaint. */
+  text?: string
   at: number
 }
 

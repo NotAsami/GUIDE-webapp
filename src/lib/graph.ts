@@ -476,6 +476,11 @@ export type Rider = {
    *  affordance is gone and toggling reuses the value, so reopening the panel
    *  can never re-roll (§8 #2). */
   rolled?: boolean
+  /** EXCLUSIVE GROUP KEY. Riders sharing one are a pick-one: answering any of
+   *  them declines the rest. Set on offered arms, keyed by the source that armed
+   *  them — Brutal Strike's two blows are one choice between two, which the
+   *  engine has always known (auditNode says so) and the panel could not say. */
+  choice?: string
   /** The faces that came up, once `rolled`. `dice` stays the unrolled formula.
    *  Full dice, not bare numbers: a chip that does not know it is a d4 cannot
    *  say whether a 4 was a maximum, and cannot be rerolled. */
@@ -576,9 +581,39 @@ export function staleArmed(ctx: GraphContext, scope: ExprScope = ctx.scope): str
   return out
 }
 
+/** Every index key a roll answers to. Extracted from resolve() because a second
+ *  caller needs the same answer: deciding whether activating a stance would put
+ *  a contribution on THIS roll means asking "does this effect target this roll",
+ *  and asking it a second way is how the offer and the roll come to disagree. */
+export function reqKeys(req: ResolveReq): string[] {
+  return [
+    req.subject,
+    ...(req.tags ?? []).map(t => `tag:${normalizeTag(t)}`),
+    `roll:${req.kind}`,
+    req.sub ? `roll:${req.kind}.${req.sub}` : null,
+    /* `roll:attack.str`. Its own key rather than a second meaning for `sub`,
+       because a greataxe swing is melee AND Strength-based, and an author
+       narrowing to one must not silence the other. Abilities and the existing
+       subs share no names (melee/ranged/spell vs str…cha), so one namespace
+       holds both without ambiguity. */
+    req.ability ? `roll:${req.kind}.${req.ability}` : null,
+  ].filter((k): k is string => !!k)
+}
+
+/** A target selector as the index keys it — tags normalised, everything else
+ *  verbatim. */
+export const asKey = (t: string) => (t.startsWith('tag:') ? `tag:${normalizeTag(t.slice(4))}` : t)
+
 export function armedMatches(m: ArmedMod, req: ResolveReq): boolean {
   return m.kind === req.kind
-    && (!m.sub || m.sub === req.sub)
+    /* A SUB IS EITHER NAMESPACE, exactly as reqKeys treats it. One swing answers
+       to `roll:attack.melee` AND `roll:attack.str`, and `armedFrom` flattens
+       whichever the author wrote into the same `sub` slot — so comparing it
+       against `req.sub` alone made every ability-targeted arm unmatchable.
+       Brutal Strike's "Remove Advantage" (`roll:attack.str`) therefore never
+       applied, could never be consumed because nothing ever showed it, and sat
+       in the queue suppressing the feature's own future offers. */
+    && (!m.sub || m.sub === req.sub || m.sub === req.ability)
     && (!m.subject || m.subject === req.subject)
 }
 
@@ -709,23 +744,11 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
 
   // 2. Match: the subject itself, each of its tags, the roll kind, the sub-kind,
   //    and — on an attack — the ability it was made with.
-  const keys = [
-    req.subject,
-    ...(req.tags ?? []).map(t => `tag:${normalizeTag(t)}`),
-    `roll:${req.kind}`,
-    req.sub ? `roll:${req.kind}.${req.sub}` : null,
-    /* `roll:attack.str`. Its own key rather than a second meaning for `sub`,
-       because a greataxe swing is melee AND Strength-based, and an author
-       narrowing to one must not silence the other. Abilities and the existing
-       subs share no names (melee/ranged/spell vs str…cha), so one namespace
-       holds both without ambiguity. */
-    req.ability ? `roll:${req.kind}.${req.ability}` : null,
-  ].filter((k): k is string => !!k)
+  const keys = reqKeys(req)
 
   // The index is keyed the same way, so a tag target must be normalised before
   // it can be compared against the request's keys.
   const keySet = new Set(keys)
-  const asKey = (t: string) => (t.startsWith('tag:') ? `tag:${normalizeTag(t.slice(4))}` : t)
 
   const seen = new Set<GraphEffect>()
   const matched: IndexedEffect[] = []
@@ -952,10 +975,22 @@ ${rider.reveal}` : rider.reveal
     out.riders.push(rider)
   }
 
-  // 5. The armed queue. These are already the player's — spent on an activation
-  //    and waiting for this roll — so they apply to the number automatically and
-  //    are never a toggle. `when: 'always'` says exactly that: the roller folds
-  //    it in, the panel does not, and it needs no answer.
+  /* 5. The armed queue. Two kinds, and the difference is whether the author
+        attached a question.
+
+        TAKEN (no `ask`) — spent on an activation and waiting for this roll, so
+        it applies to the number automatically and is never a toggle.
+        `when: 'always'` says exactly that: the roller folds it in, the panel
+        does not, and it needs no answer.
+
+        OFFERED (`ask`) — minted undecided, because a blow lands at the end of
+        the attack and a miss means neither. It arrives as a `manual` rider,
+        which keeps it out of the roller's total until answered, and carries
+        `choice` so the panel can render the source's offers as one pick-one. */
+  const offeredBySource = new Map<string, number>()
+  for (const m of ctx.armed) {
+    if (m.ask && armedMatches(m, req)) offeredBySource.set(m.source, (offeredBySource.get(m.source) ?? 0) + 1)
+  }
   for (const m of ctx.armed) {
     if (!armedMatches(m, req)) continue
     const v = m.op === 'add' ? evalExpr(m.value ?? '', ctx.scope) : null
@@ -968,15 +1003,26 @@ ${rider.reveal}` : rider.reveal
         continue
       }
     }
-    if (m.op === 'adv') out.adv = true
-    if (m.op === 'dis') out.dis = true
-    if (m.op === 'crit') out.crit = true
+    // An OFFERED arm has not been taken, so it grants nothing yet. Flipping a
+    // flag here would hand the roll an advantage the player never accepted.
+    if (!m.ask) {
+      if (m.op === 'adv') out.adv = true
+      if (m.op === 'dis') out.dis = true
+      if (m.op === 'crit') out.crit = true
+    }
     out.riders.push({
       // The NAME if it was captured, never the gid — every other rider's
       // `source` is a human name, and this is the same column on screen.
       label: m.label, source: m.sourceName || m.source, sourceGid: m.source as Gid, op: m.op,
       formula: m.value ?? '', flat: v?.t === 'num' ? v.flat : 0, dice: v?.t === 'num' ? v.dice : [],
-      when: 'always', on: true, armedId: m.id, dmgType: m.dmgType,
+      when: m.ask ? 'manual' : 'always', on: !m.ask, armedId: m.id, dmgType: m.dmgType,
+      // The question, and what saying yes reveals. `text` on a rider is the ask
+      // sentence and `reveal` is the prose, matching what a graph-built rider
+      // does — so the panel needs no second shape for an offered arm.
+      ...(m.ask ? { text: m.ask, reveal: m.text } : {}),
+      /* Only a REAL choice gets a group. A lone offered arm is a yes/no, and
+         painting one option as a pick-one implies a sibling that is not there. */
+      ...(m.ask && (offeredBySource.get(m.source) ?? 0) > 1 ? { choice: m.source } : {}),
       // No `sourceText`: an armed mod is a stored snapshot naming its source,
       // not a live handle on the node, so the prose is genuinely not in hand.
       parts: partsOf(m.value, ctx.scope),
@@ -1179,12 +1225,16 @@ export function auditNode(
        always meant: does answering this reveal anything?
 
        AN ARMED NOTE IS A THIRD CASE, and the rule was blind to it. With `once`
-       the toggle is answered at ACTIVATION, not on a roll, and it decides
-       whether the mod is minted into the queue at all — Brutal Strike offering
-       Forceful Blow or Hamstring Blow is one choice between two, not two
-       paragraphs the player may hide. Nothing is revealed; something is
-       committed. Arming both unconditionally would hand the player both blows'
-       text on every swing and lose the choice the feature is made of. */
+       the toggle is not a "may I hide this paragraph" — it is a COMMITMENT, and
+       Brutal Strike offering Forceful Blow or Hamstring Blow is one choice
+       between two. Arming both unconditionally would hand the player both blows'
+       text on every swing and lose the choice the feature is made of.
+
+       WHERE it is answered moved, and this rule did not have to: the question
+       used to be settled on the activation sheet, which pre-ticked it and armed
+       both. A blow lands at the END of the attack — on a miss the answer is
+       neither — so an asked arm is now minted undecided and the roll panel puts
+       the source's offers up as one pick-one. See ArmedMod.ask. */
     if (eff.op === 'note' && eff.ask && !eff.once && !interpolations(eff.text || eff.label).length) {
       out.push({ sev: 'err', id: eff.id, t: 'Toggle on a note', s: `${eff.label || eff.id} is prose with nothing to reveal — there is nothing for the player to resolve. Use \`when\` if it should be conditional, or interpolate a value into the text if the toggle is what decides whether they see it.` })
     }

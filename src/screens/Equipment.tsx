@@ -27,6 +27,7 @@ import { SHARD_SLOT_KEYS, shardSlots } from '../lib/shards'
 import { useGraph } from '../lib/useGraph'
 import { armedMatches, gid, resolve } from '../lib/graph'
 import { armableFor } from '../lib/graphState'
+import { PrimeSheet, type Offer } from '../components/PrimeSheet'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Equipment.module.css'
 import { Icon } from '../components/Icon'
@@ -138,13 +139,19 @@ export function Equipment() {
   /** Features that could arm something for this weapon's roll but have not been
    *  pressed yet. Offered ON the card, because arming is a pre-roll decision and
    *  making the player go find the feature puts it on another screen. */
-  const armableOn = (w: EquippedWeapon) => {
+  const armableOn = (w: EquippedWeapon): Offer[] => {
     const subject = gid('weapon', w)
-    const seen = new Map<string, Feature>()
-    for (const kind of ['attack', 'damage'] as const) {
-      for (const a of armableFor(character, graph, { kind, subject, tags: w.tags }, shardTrees)) {
-        seen.set(a.source, a.feature)
-      }
+    const sub = isRanged(w) ? 'ranged' : 'melee'
+    const ability = weaponAbilityKey(w, sheet)
+    const seen = new Map<string, Offer>()
+    /* The SAME requests attack() will resolve with — sub and ability included.
+       Asked more loosely, the sheet offers a stance gated `roll:attack.str` on a
+       finesse swing that will resolve as dex, and the press buys nothing. */
+    for (const o of armableFor(character, graph, { kind: 'attack', subject, sub, tags: w.tags, ability }, shardTrees)) {
+      seen.set(o.source, o)
+    }
+    for (const o of armableFor(character, graph, { kind: 'damage', subject, sub, tags: w.tags }, shardTrees)) {
+      if (!seen.has(o.source)) seen.set(o.source, o)
     }
     return [...seen.values()]
   }
@@ -157,6 +164,19 @@ export function Equipment() {
     const subject = gid('weapon', w)
     return graph.armed.filter(m =>
       armedMatches(m, { kind: 'attack', subject }) || armedMatches(m, { kind: 'damage', subject })).length
+  }
+
+  /** The weapon whose pre-roll offers are open, or null. Deliberately not
+   *  persisted and not shared: it is a step inside one press, and a half-made
+   *  decision is not state anything else should be able to see. */
+  const [priming, setPriming] = useState<EquippedWeapon | null>(null)
+  /** Pressing Attack asks first, and only when there is something to ask. An
+   *  empty offer list would make the sheet a speed bump between the player and
+   *  the dice, which is exactly how a good prompt turns into one people learn
+   *  to dismiss without reading. */
+  function pressAttack(w: EquippedWeapon) {
+    if (armableOn(w).length) { setPriming(w); return }
+    attack(w)
   }
 
   /** Roll a weapon's attack AND damage as one action, pushing the combined result
@@ -311,12 +331,12 @@ export function Equipment() {
               return w ? (
                 <WeaponCard
                   key={hand} weapon={w} sheet={sheet} bind={bind}
-                  armed={armedOn(w)} armable={armableOn(w)} onArm={activation.start}
+                  armed={armedOn(w)} armable={armableOn(w)} onArm={f => activation.start(f)}
                   dry={isRanged(w) && !activeAmmo}
                   ammo={isRanged(w) ? ammoStacks : null}
                   active={activeAmmo}
                   onNock={setNocked}
-                  onAttack={() => attack(w)} onManage={() => setManageWeapon(hand)}
+                  onAttack={() => pressAttack(w)} onManage={() => setManageWeapon(hand)}
                 />
               ) : hand === 'off' && twoHander ? (
                 /* LOCKED, not merely empty. A two-hander in the main hand takes
@@ -407,6 +427,21 @@ export function Equipment() {
       </div>
 
       {tooltip}
+      {/* The pre-roll step. Rendered ABOVE the activation sheet in the tree but
+          below it in z-order by design: pressing an offer opens the feature's
+          own confirm on top, and dismissing that returns here with the offer
+          list already recomputed against the write it just made. */}
+      {priming && (
+        <PrimeSheet
+          title={priming.name}
+          subtitle={`${handLabel(priming.hand)} · Attack`}
+          icon={priming.icon ?? 'fa-khanda'}
+          offers={armableOn(priming)}
+          onUse={f => activation.start(f)}
+          onRoll={() => { const w = priming; setPriming(null); attack(w) }}
+          onCancel={() => setPriming(null)}
+        />
+      )}
       {activation.sheet}
 
       {openSlot && (
@@ -546,7 +581,7 @@ function WeaponCard({ weapon, sheet, bind, dry, ammo, active, armed, armable, on
   /** Armed modifiers that will land on this weapon's next roll (§16). */
   armed: number
   /** Features that COULD arm one but have not been pressed. */
-  armable: Feature[]
+  armable: Offer[]
   onArm: (f: Feature) => void
   /** Ranged, with nothing left to fire. */
   dry: boolean
@@ -598,11 +633,13 @@ function WeaponCard({ weapon, sheet, bind, dry, ammo, active, armed, armable, on
               spends the use and asks whatever the author attached. */}
           {armable.map(f => (
             <button
-              key={f.id} type="button" className={styles.wcArmable}
-              onClick={e => { e.stopPropagation(); onArm(f) }}
-              title={`Use ${f.name} — arms it for this roll`}
+              key={f.feature.id} type="button" className={styles.wcArmable}
+              onClick={e => { e.stopPropagation(); onArm(f.feature) }}
+              title={f.kind === 'stance'
+                ? `Use ${f.feature.name} — a stance you hold`
+                : `Use ${f.feature.name} — arms it for this roll`}
             >
-              <i className="fa-regular fa-circle-dot" />{f.name}
+              <i className={`fa-regular ${f.kind === 'stance' ? 'fa-square' : 'fa-circle-dot'}`} />{f.feature.name}
             </button>
           ))}
           <button

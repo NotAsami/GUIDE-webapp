@@ -9,8 +9,8 @@ import type { Rider } from './graph.ts'
 import type { RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
 import {
-  catalogView, lineViews, pendingOf, pendingTotal, rerollAt, resolvedOf, riderAmount, riderValue,
-  riderViews, rollTotals, unresolvedOf,
+  askSections, catalogView, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf, rerollAt,
+  resolvedOf, riderAmount, riderValue, riderViews, rollTotals, unresolvedOf,
 } from './rollView.ts'
 
 const rider = (over: Partial<Rider>): Rider => ({
@@ -376,4 +376,136 @@ test('the badge counts things, not rolls', () => {
   assert.equal(pendingTotal([one, one]), 2)
   assert.equal(pendingTotal([two]), 2)
   assert.equal(pendingTotal([]), 0)
+})
+
+
+/* ---------- exclusive choices: pick one, and it locks ----------
+   Brutal Strike's two blows are one decision. The failure this guards is the
+   one that shipped: both offered at once, both takeable, both armed. */
+
+const blow = (label: string, over: Partial<Rider> = {}): Rider => rider({
+  label, source: 'Brutal Strike', op: 'note', formula: '', flat: 0, dice: [],
+  when: 'manual', on: false, choice: 'feature:brutal', armedId: `feature:brutal:${label}`, ...over,
+})
+
+const entryOf = (riders: Rider[]): RollEntry => ({
+  id: 'e', at: 0, kind: 'weapon', title: 'Sanctity',
+  riderGroups: [{ label: 'Damage', riders }],
+})
+
+test('riders sharing a `choice` become ONE section, in the position of the first', () => {
+  const e = entryOf([
+    rider({ label: 'Judged', when: 'manual', on: false }),
+    blow('Forceful Blow'),
+    blow('Hamstring Blow'),
+  ])
+  const secs = askSections(riderViews(e))
+  assert.equal(secs.length, 2)
+  assert.equal(secs[0].choice, undefined)
+  assert.equal(secs[1].choice, 'feature:brutal')
+  assert.deepEqual(secs[1].views.map(v => v.rider.label), ['Forceful Blow', 'Hamstring Blow'])
+})
+
+test('a LONE offered arm is a yes/no, not a pick-one', () => {
+  // Painting one option as a choice implies a sibling that is not there.
+  const secs = askSections(riderViews(entryOf([rider({ label: 'Judged', when: 'manual', on: false })])))
+  assert.equal(secs.length, 1)
+  assert.equal(secs[0].choice, undefined)
+})
+
+test('only one option in a group can be answered', () => {
+  const secs = askSections(riderViews(entryOf([blow('Forceful Blow'), blow('Hamstring Blow')])))
+  const group = secs[0].views
+  assert.equal(pickedOf(group), null, 'opens with nothing chosen')
+  // What the panel does on a pick: every sibling is patched, not just the one
+  // clicked. If it ever patches only the target, this is what catches it.
+  const picked = group.map(v => ({ ...v.rider, on: v.rider.label === 'Hamstring Blow' }))
+  assert.equal(picked.filter(r => r.on).length, 1)
+  const after = askSections(riderViews(entryOf(picked)))
+  assert.equal(pickedOf(after[0].views)?.rider.label, 'Hamstring Blow')
+})
+
+test('an unanswered offered arm contributes NOTHING to the total', () => {
+  // It is `manual`, so the roller never folded it in and the panel must not
+  // either — an offered blow is not a bonus you have.
+  const e: RollEntry = {
+    ...entryOf([blow('Big Hit', { op: 'add', formula: '1d10', flat: 8, dice: [] })]),
+    damage: { ...DAMAGE, diceExpr: '1d8', dice: faces(8, 4), bonus: 8, total: 12 },
+  }
+  const views = riderViews(e)
+  assert.equal(rollTotals(e, views).damage, 12)
+  assert.equal(views[0].live, false)
+})
+
+
+test('PICKING PATCHES THE WHOLE GROUP IN ONE WRITE', () => {
+  /* The bug this exists for: the panel patched one rider per call, and each
+     call rebuilt the list from the same pre-patch entry — so the second call
+     overwrote the first and the pick silently did nothing on screen. */
+  const e = entryOf([blow('Forceful Blow'), blow('Hamstring Blow')])
+  const groups = patchRiders(e, [
+    { index: 0, patch: { on: true } },
+    { index: 1, patch: { on: false } },
+  ])
+  assert.deepEqual(groups[0].riders.map(r => r.on), [true, false])
+  // And the view layer agrees about which one is answered.
+  assert.equal(pickedOf(askSections(riderViews({ ...e, riderGroups: groups }))[0].views)?.rider.label, 'Forceful Blow')
+})
+
+test('patching addresses riders across groups, and leaves the rest alone', () => {
+  const e: RollEntry = {
+    id: 'e', at: 0, kind: 'weapon', title: 'T',
+    riderGroups: [
+      { label: 'Attack', riders: [rider({ label: 'A' }), rider({ label: 'B' })] },
+      { label: 'Damage', riders: [rider({ label: 'C' })] },
+    ],
+  }
+  const g = patchRiders(e, [{ index: 2, patch: { label: 'patched' } }])
+  assert.deepEqual(g[0].riders.map(r => r.label), ['A', 'B'])
+  assert.deepEqual(g[1].riders.map(r => r.label), ['patched'])
+})
+
+test('A PICK-ONE IS ONE QUESTION, AND CHOOSING ANSWERS IT', () => {
+  /* Two failures in one: it counted "2 riders waiting" for a single decision,
+     and after picking it still counted 1 — the option NOT taken is unanswered
+     by construction, so the count could never reach zero. */
+  const open = entryOf([blow('Forceful Blow'), blow('Hamstring Blow')])
+  assert.equal(openAsks(riderViews(open)).length, 1, 'two options, one question')
+  assert.equal(pendingOf(open).total, 1)
+
+  const picked = entryOf([blow('Forceful Blow', { on: true }), blow('Hamstring Blow')])
+  assert.equal(openAsks(riderViews(picked)).length, 0, 'choosing answers the group')
+  assert.equal(pendingOf(picked).total, 0)
+  assert.equal(rollTotals(picked, riderViews(picked)).pending, 0)
+})
+
+test('ADVANTAGE AND DISADVANTAGE CANCEL, so neither is reported as granted', () => {
+  // Brutal Strike forgoing Reckless Attack's advantage. Printing both reads as
+  // the app not knowing what it did — the d20 line already shows the single die.
+  const e = entry({
+    attack: ATTACK,
+    riderGroups: [{ label: 'Attack', riders: [
+      rider({ op: 'adv', when: 'always', flat: 0, label: 'Reckless Attack' }),
+      rider({ op: 'dis', when: 'always', flat: 0, label: 'Brutal Strike' }),
+    ] }],
+  })
+  assert.deepEqual(rollTotals(e, riderViews(e)).flags, [])
+
+  // One on its own still reports.
+  const only = entry({
+    attack: ATTACK,
+    riderGroups: [{ label: 'Attack', riders: [rider({ op: 'adv', when: 'always', flat: 0 })] }],
+  })
+  assert.deepEqual(rollTotals(only, riderViews(only)).flags, ['ADVANTAGE'])
+
+  // A crit alongside a cancelling pair survives — only the pair cancels.
+  const withCrit = entry({
+    attack: ATTACK,
+    riderGroups: [{ label: 'Attack', riders: [
+      rider({ op: 'adv', when: 'always', flat: 0 }),
+      rider({ op: 'dis', when: 'always', flat: 0 }),
+      rider({ op: 'crit', when: 'always', flat: 0 }),
+    ] }],
+  })
+  assert.deepEqual(rollTotals(withCrit, riderViews(withCrit)).flags, ['CRIT'])
 })

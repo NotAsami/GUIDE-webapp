@@ -156,14 +156,68 @@
 .mod:hover { color: var(--beige); }
 
 /* ---------- resolved contributions (the engine decided) ---------- */
+/* ---------- ONE SPINE ----------
+   The engine's contributions and the player's questions used to be two blocks
+   that happened to sit above each other, each row prefixed by a little tick
+   that read as a bullet or a minus and meant neither. They are one line down
+   the side of the roll, changing colour where the roll stops TELLING you things
+   and starts ASKING — and the diamond is that point, sitting on the line rather
+   than beside it. */
+.spine { display: flex; flex-direction: column; margin-top: 10px; }
+.applied { border-left: 2px solid var(--beige); padding: 1px 0 3px 11px; display: flex; flex-direction: column; }
+.appliedH { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--beige-dim); padding: 4px 0 3px; }
+
+/* SYMMETRIC PADDING, or the diamond cannot be centred on its own label: the
+   node is centred on the joint's BOX and the text on its CONTENT box, so 10
+   above and 9 below put them half a pixel apart — enough to read as off on a
+   10px diamond beside 8px caps. Measured, not guessed. */
+.joint { position: relative; padding: 10px 0 10px 13px; display: flex; align-items: center; gap: 9px;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--cyan); }
+/* The blend is confined to exactly the diamond's height and centred on it, so
+   the line and the diamond sample the same colour at the same y. Faded across
+   the whole header instead, the two disagree everywhere except dead centre. */
+.joint::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: linear-gradient(180deg,
+    var(--beige) 0, var(--beige) calc(50% - 5px),
+    var(--cyan) calc(50% + 5px), var(--cyan) 100%);
+}
+/* EVEN SIZE, INTEGER OFFSET: the 2px rule's centre is x=1, so an odd-sized
+   diamond needs a half-pixel left offset that the browser rounds. Clip-path
+   rather than a rotated square — rotation turns the gradient with the element,
+   and the vertical blend is this shape's whole job. */
+.node {
+  position: absolute; left: -4px; top: 50%; width: 10px; height: 10px; margin-top: -5px;
+  background: linear-gradient(180deg, var(--beige) 0%, var(--cyan) 100%);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.joint .sep { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(0, 166, 214, 0.4), transparent); }
+/* Inside the spine the riders carry the line themselves — their own left border
+   is the cyan half — so nothing may push them off its x. */
+.spine .riders { margin-top: 0; }
+
 .contribs { display: flex; flex-direction: column; }
-.contrib { position: relative; display: flex; align-items: baseline; gap: 9px; padding: 6px 0 6px 12px; border-top: 1px solid rgba(212, 191, 125, 0.12); }
-.contrib::before { content: ""; position: absolute; left: 0; top: 12px; width: 6px; height: 1px; background: rgba(212, 191, 125, 0.4); }
+.contrib { position: relative; display: flex; align-items: baseline; gap: 9px; padding: 6px 0; border-top: 1px solid rgba(212, 191, 125, 0.12); }
 .cName { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text); }
 .cSrc { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige-dim); }
 .cRight { margin-left: auto; display: flex; align-items: center; gap: 7px; }
 .cForm { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; color: var(--beige-dim); }
 .cVal { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--dt, var(--beige)); }
+
+/* The source's NAME is the row, and where that source is a feature it is a way
+   in: the roll is exactly when you want the full rules text, and the Features
+   screen already has it. The arrow is what says "this leaves the panel" — the
+   name alone reads as a label, which is how it read before it was navigable. */
+.cLink { color: var(--text); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-bottom: 1px dotted rgba(212, 191, 125, 0.45); }
+.cLink:hover { color: var(--cyan-hot); border-bottom-color: var(--cyan); }
+.cLink i { font-size: 7.5px; opacity: 0.75; }
+.cLink:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
+
+/* WHAT THE FEATURE DID, one line per contribution — the detail the row used to
+   be named after, now one level in where detail belongs. */
+.cWhat { display: flex; align-items: baseline; gap: 9px; }
+.cwName { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige-dim); }
+.cWhat .cVal, .cWhat .flag { margin-left: auto; }
 
 /* An EXPANDED contribution. Deliberately quieter than an Ask's fold: an Ask is a
    decision waiting on you, this is a footnote you chose to open. Same geometry,
@@ -175,7 +229,7 @@
 .cOpen .cFold { transform: rotate(180deg); color: var(--beige); }
 .cBody {
   display: flex; flex-direction: column; gap: 7px;
-  margin: 0 0 7px 12px; padding: 8px 10px;
+  margin: 0 0 7px; padding: 8px 10px;
   border-left: 1px solid rgba(212, 191, 125, 0.22);
   background: rgba(0, 0, 0, 0.22);
 }
@@ -238,6 +292,18 @@
 .rider.on .rdSw::after, .rider.locked .rdSw::after { transform: translateX(12px); background: var(--cyan-hot); box-shadow: 0 0 7px rgba(0, 166, 214, 0.7); }
 .rdName { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige); }
 .rdSrc { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige-dim); }
+/* A rider's way into its feature. Inherits the row's own type — an ask's name
+   and its source are set at different sizes — and only adds the affordance: a
+   dotted underline and the arrow that says this leaves the panel. */
+.rdLink { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-bottom: 1px dotted rgba(212, 191, 125, 0.45); }
+.rdLink:hover { color: var(--cyan-hot); border-bottom-color: var(--cyan); }
+.rdLink i { font-size: 7px; opacity: 0.7; }
+.rdLink:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
+.chLink { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-bottom: 1px dotted rgba(0, 166, 214, 0.5); }
+.chLink:hover { color: var(--cyan-hot); border-bottom-color: var(--cyan); }
+.chLink i { font-size: 7px; opacity: 0.7; }
+.chLink:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
+
 .rdVal { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--cyan-hot); letter-spacing: 0.06em; }
 .rdHead .flag { margin-left: auto; }
 .rdFold { font-size: 8px; color: var(--beige-dim); transition: transform 200ms ease; }
@@ -268,6 +334,54 @@
    muted — it is the answer, not the question. */
 .rdReveal { margin-top: 8px; font-family: var(--font-prose); font-size: 14px; line-height: 1.45; color: var(--text); text-wrap: pretty; border-left: 2px solid rgba(0, 166, 214, 0.45); padding-left: 9px; }
 .rdHint { margin-top: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim); display: flex; align-items: center; gap: 7px; }
+
+/* ---------- an exclusive choice: pick one, and it locks ----------
+   Brutal Strike's two blows are one decision, not two paragraphs the player may
+   hide. Same geometry as a rider — this IS an unresolved rider, so it must not
+   look like a different species — but no switch per row: the switch says "does
+   this apply", and here the answer to one is the answer to all of them. */
+.choice {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 10px 9px 11px;
+  border-left: 2px solid var(--cyan);
+  background: rgba(0, 0, 0, 0.28);
+}
+.chH { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan); }
+.chH .r { margin-left: auto; letter-spacing: 0.14em; color: var(--beige-dim); }
+.opt {
+  display: block; width: 100%; text-align: left; cursor: pointer; font: inherit;
+  border: 1px dashed rgba(212, 191, 125, 0.32); background: rgba(255, 255, 255, 0.014);
+  padding: 8px 10px 9px; transition: border-color 150ms ease, background 150ms ease, opacity 150ms ease;
+}
+.opt:hover { border-color: var(--cyan); background: rgba(0, 166, 214, 0.07); }
+.opt.picked { border-style: solid; border-color: var(--cyan); background: rgba(0, 166, 214, 0.09); cursor: default; }
+/* Declined, not invalid — the same reading the rail gives a rider switched off.
+   Dimmed and labelled, never struck through and never removed: next turn the
+   player may choose the other way. */
+.opt.passed { opacity: 0.4; border-color: rgba(212, 191, 125, 0.2); background: transparent; cursor: default; }
+.opt.passed:hover { border-color: rgba(212, 191, 125, 0.2); background: transparent; }
+.optHead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.optMark { color: var(--beige-dim); font-size: 9px; display: inline-flex; }
+.opt:hover .optMark { color: var(--cyan); }
+.opt.picked .optMark { color: var(--cyan-hot); }
+.optName { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige); }
+.opt.picked .optName { color: var(--cyan-hot); }
+.optTag { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase; padding: 2px 7px; border: 1px solid rgba(212, 191, 125, 0.28); color: var(--beige-dim); }
+.opt.picked .optTag { border-color: var(--cyan); color: var(--cyan-hot); background: rgba(0, 166, 214, 0.1); }
+.optText { margin-top: 6px; font-family: var(--font-prose); font-size: 14px; line-height: 1.4; color: var(--muted); text-wrap: pretty; }
+.opt.picked .optText { color: var(--text); }
+/* The lock stops a STRAY click, not a change of mind. On the group rather than
+   on either option, so releasing the choice is never something you do by aiming
+   at the branch you did not take. */
+.undo {
+  margin-left: 8px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--beige-dim); border: 1px solid rgba(212, 191, 125, 0.28); background: transparent; padding: 2px 7px;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.undo:hover { color: var(--cyan-hot); border-color: var(--cyan); }
+.undo i { font-size: 8px; }
+.chFoot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
 
 /* ---------- footer totals ---------- */
 .eFoot { margin-top: 10px; border-top: 1px solid rgba(212, 191, 125, 0.28); padding-top: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

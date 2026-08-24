@@ -15,7 +15,7 @@
  *                already dropped them, which is why there is no third case.
  */
 import type { Rider } from './graph.ts'
-import type { RollEntry } from './rolls.tsx'
+import type { RiderGroup, RollEntry } from './rolls.tsx'
 import { ABILITY_ABBR, type CheckTerm } from './dnd.ts'
 import type { CharacterRow, ShardTree } from './database.types.ts'
 import { activeSources } from './effects.ts'
@@ -129,6 +129,112 @@ export function riderViews(entry: RollEntry): RiderView[] {
 export const resolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when !== 'manual')
 export const unresolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when === 'manual')
 
+/** Patch several riders at once, addressed by their flattened index.
+ *
+ *  ONE PASS, ONE RESULT, because an exclusive choice patches every option in
+ *  the group: answering one declines the rest. Done as a call per rider it
+ *  silently did nothing — each call rebuilt the whole rider list from the entry
+ *  it closed over, so the second patch was computed against the pre-first state
+ *  and overwrote it. The pick appeared to be ignored.
+ *
+ *  Pure, and here rather than in the panel, so the addressing walks the same
+ *  order `riderViews` built and the whole thing is testable without a renderer. */
+export function patchRiders(
+  entry: RollEntry,
+  patches: { index: number; patch: Partial<Rider> }[],
+): RiderGroup[] {
+  const by = new Map(patches.map(p => [p.index, p.patch]))
+  let i = 0
+  return (entry.riderGroups ?? []).map(g => ({
+    ...g,
+    riders: g.riders.map(r => {
+      const patch = by.get(i++)
+      return patch ? { ...r, ...patch } : r
+    }),
+  }))
+}
+
+/** Resolved contributions gathered under the FEATURE that produced them.
+ *
+ *  One source, one row. The panel used to print one row per EFFECT, so a
+ *  feature that grants advantage and adds a die appeared twice, each row named
+ *  after its own internals ("Advantage on Attack Rolls") with the thing the
+ *  player actually knows ("Reckless Attack") demoted to small print beside it.
+ *  A player reads their sheet in features; the receipt should answer in the
+ *  same nouns.
+ *
+ *  Keyed by gid where there is one, else by display name — an item or a shard
+ *  node has no feature gid, and merging two of those on a shared name is
+ *  better than splitting one source into two rows. Order follows first
+ *  appearance, so the engine's own ordering still shows through. */
+export function sourceGroups(views: RiderView[]): { key: string; source: string; gid?: string; views: RiderView[] }[] {
+  const out: { key: string; source: string; gid?: string; views: RiderView[] }[] = []
+  const byKey = new Map<string, { key: string; source: string; gid?: string; views: RiderView[] }>()
+  for (const v of views) {
+    const key = v.rider.sourceGid ?? `name:${v.rider.source}`
+    const existing = byKey.get(key)
+    if (existing) { existing.views.push(v); continue }
+    const g = { key, source: v.rider.source, gid: v.rider.sourceGid, views: [v] }
+    byKey.set(key, g)
+    out.push(g)
+  }
+  return out
+}
+
+/** Every armed id in a set of riders. Consuming a feature consumes ALL of it:
+ *  one activation spent one use, and leaving half its arms in the queue is how
+ *  a "Remove Advantage" outlives the swing it was bought for. */
+export const armedIdsOf = (views: RiderView[]) =>
+  views.map(v => v.rider.armedId).filter((x): x is string => !!x)
+
+/** Unresolved riders in reading order, with the exclusive ones bundled.
+ *
+ *  A section is either one plain ask or a PICK-ONE: several riders sharing a
+ *  `choice` key, of which answering any declines the rest. The group takes the
+ *  position of its first member, so a choice does not jump the queue over an
+ *  ask authored above it. */
+export function askSections(views: RiderView[]): { choice?: string; views: RiderView[] }[] {
+  const out: { choice?: string; views: RiderView[] }[] = []
+  const byKey = new Map<string, { choice?: string; views: RiderView[] }>()
+  for (const v of unresolvedOf(views)) {
+    const key = v.rider.choice
+    if (!key) { out.push({ views: [v] }); continue }
+    const existing = byKey.get(key)
+    if (existing) { existing.views.push(v); continue }
+    const section = { choice: key, views: [v] }
+    byKey.set(key, section)
+    out.push(section)
+  }
+  return out
+}
+
+/** The one answered rider in a pick-one, or null while it is still open. */
+export const pickedOf = (views: RiderView[]) => views.find(v => v.rider.on) ?? null
+
+/** Questions still waiting on the player, counted as the player sees them.
+ *
+ *  A PICK-ONE IS ONE QUESTION. Counting its options individually said "3 riders
+ *  still waiting on you" for two decisions, and — worse — kept saying one was
+ *  waiting after the choice was made, because the option NOT taken is
+ *  permanently unanswered by construction. Answering the group answers it.
+ *
+ *  TWO READINGS, deliberately, because two surfaces ask different things. The
+ *  nav badge asks whether the player has DECIDED — switching a rider on is an
+ *  answer, and a badge that keeps pulsing after you answered is one you learn
+ *  to ignore. The panel's own footer asks whether anything is still OUTSTANDING,
+ *  and a rider answered but not yet rolled is a die still owed. A choice is the
+ *  same under both: picked or not. */
+export function openAsks(
+  views: RiderView[],
+  mode: 'answered' | 'settled' = 'answered',
+): { choice?: string; views: RiderView[] }[] {
+  return askSections(views).filter(sec => {
+    if (sec.choice) return !pickedOf(sec.views)
+    const v = sec.views[0]
+    return mode === 'settled' ? !v?.live : !v?.rider.on
+  })
+}
+
 /* ---------- what "unresolved" means, once ---------- */
 
 /** The count of things on one roll that still want the player.
@@ -159,7 +265,9 @@ export type Pending = {
 
 export function pendingOf(entry: RollEntry): Pending {
   if (entry.acked) return { asks: 0, problems: 0, total: 0 }
-  const asks = unresolvedOf(riderViews(entry)).filter(v => !v.rider.on).length
+  // Counted in SECTIONS: a pick-one is one question, and declining the option
+  // you did not take is not a second one.
+  const asks = openAsks(riderViews(entry)).length
   /* `err` ONLY. An AuditItem can be 'ok' or 'warn', and counting an authoring
      note as something the player must deal with is the badge lying about the
      roll — the same filter the panel makes for the same reason. */
@@ -425,12 +533,21 @@ export function rollTotals(entry: RollEntry, views: RiderView[]): RollTotals {
     }
   }
 
+  /* THEY CANCEL, so neither was granted. Printing both is the panel restating
+     its own arithmetic as two contradictory promises — and the line above
+     already shows the single d20 that cancelling produced. Brutal Strike
+     forgoing Reckless Attack's advantage is exactly this case, and it read as
+     the app not knowing what it had done. The contributions still name both:
+     what each feature DID is a different question from what the roll HAS. */
+  const cancelled = flags.includes('ADVANTAGE') && flags.includes('DISADVANTAGE')
+  const netFlags = cancelled ? flags.filter(f => f !== 'ADVANTAGE' && f !== 'DISADVANTAGE') : flags
+
   const damageKeys = Object.keys(byType)
   return {
     attack,
     damage: damageKeys.length ? Object.values(byType).reduce((a, b) => a + b, 0) : undefined,
     byType,
-    flags,
-    pending: unresolvedOf(views).filter(v => !v.live).length,
+    flags: netFlags,
+    pending: openAsks(views, 'settled').length,
   }
 }

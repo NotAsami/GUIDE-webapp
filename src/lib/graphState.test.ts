@@ -183,15 +183,32 @@ test('arming twice yields ONE entry, refreshed — never two', () => {
   assert.ok(g.armed[0].at >= (first.resources.graph as { armed: { at: number }[] }).armed[0].at)
 })
 
-test('an `ask` gates the arming, exactly as it gates a variable write', () => {
+test('an `ask` on a `once` is OFFERED, not asked at activation', () => {
+  /* It used to gate the arming, exactly as it gates a variable write — the
+     confirm sheet pre-ticked it and Brutal Strike armed both of its blows. A
+     blow lands at the end of the attack, so the question belongs to the roll:
+     the arm is minted undecided and the panel asks. */
   const c = character({}, {})
   const outcomes = planActivation(RAGE([{ ...ONCE, ask: 'spend the charge?' }]), buildContext(c), c, 'feature:rage')
-  assert.equal(outcomes[0].ask, 'spend the charge?')
-  const declined = applyOutcomes(c, outcomes, new Set())
-  assert.equal(declined.applied.length, 0)
-  assert.equal((declined.resources.graph as { armed?: unknown[] } | undefined)?.armed, undefined)
-  const accepted = applyOutcomes(c, outcomes, new Set(['spend the charge?']))
-  assert.equal((accepted.resources.graph as { armed: unknown[] }).armed.length, 1)
+  assert.equal(outcomes[0].ask, undefined, 'the sheet must not offer it as a checkbox')
+  // Declining nothing still arms it — there was nothing to decline here.
+  const armed = applyOutcomes(c, outcomes, new Set())
+  assert.equal(armed.applied.length, 1)
+  const mods = (armed.resources.graph as { armed: { ask?: string; text?: string }[] }).armed
+  assert.equal(mods.length, 1)
+  assert.equal(mods[0].ask, 'spend the charge?', 'the question travels with the mod')
+})
+
+test('a variable write is still gated by its ask — only `once` moved', () => {
+  const c = character({}, {})
+  const outcomes = planActivation(
+    { name: 'Rage', vars: [{ kind: 'stored', name: 'raging', type: 'bool', scope: 'player', initial: false }],
+      graph: [{ id: 'v', op: 'setVar', variable: 'raging', value: 'true', label: 'Rage', ask: 'start raging?' }] },
+    buildContext(c), c, 'feature:rage',
+  )
+  assert.equal(outcomes[0].ask, 'start raging?')
+  assert.equal(applyOutcomes(c, outcomes, new Set()).applied.length, 0)
+  assert.equal(applyOutcomes(c, outcomes, new Set(['start raging?'])).applied.length, 1)
 })
 
 test('a targetless `once` arms this node\u2019s own roll', () => {
@@ -486,4 +503,40 @@ test('staleArmed on its own reports ids, and an unresolvable condition stays liv
   // A condition the engine cannot answer is an authoring problem to see in the
   // audit, never a reason to confiscate something the player armed.
   assert.deepEqual(staleArmed(ctx, {}), [])
+})
+
+/* ---------- offers: arms AND stances ----------
+   Reckless Attack is the case nothing could see. It writes a variable; a
+   SECOND effect, gated on that variable, is what grants the advantage — so the
+   activation names no roll and `armedMatches` had nothing to match. */
+
+const STANCE = {
+  id: 'reckless', name: 'Reckless Attack',
+  vars: [{ kind: 'stored', name: 'recklessly', type: 'bool', scope: 'player', initial: false, resetOn: 'turn' }],
+  graph: [
+    { id: 'v', op: 'setVar', variable: 'recklessly', value: 'true', label: 'Attack recklessly', target: [] },
+    { id: 'a', op: 'adv', when: 'recklessly', label: 'Advantage on Strength attacks', target: ['roll:attack.str'] },
+  ],
+} as unknown as Feature
+
+/** A character carrying only the stance feature, with `graph` state to taste. */
+const stanceHost = (graph: object = {}) =>
+  character({ sheet: { abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 }, features: [STANCE] } } as never, graph)
+
+test('a STANCE is offered on the roll its variable would reach', () => {
+  const c = stanceHost()
+  const offers = armableFor(c, buildContext(c), { kind: 'attack', sub: 'melee', ability: 'str' })
+  assert.deepEqual(offers.map(o => [o.feature.name, o.kind]), [['Reckless Attack', 'stance']])
+})
+
+test('a stance is NOT offered on a roll it could not change', () => {
+  const c = stanceHost()
+  // A Dexterity attack never matches `roll:attack.str`, so there is nothing to buy.
+  assert.deepEqual(armableFor(c, buildContext(c), { kind: 'attack', ability: 'dex' }), [])
+  assert.deepEqual(armableFor(c, buildContext(c), { kind: 'damage' }), [])
+})
+
+test('a stance ALREADY HELD is not offered again — the use would buy nothing', () => {
+  const c = stanceHost({ vars: { recklessly: true } })
+  assert.deepEqual(armableFor(c, buildContext(c), { kind: 'attack', ability: 'str' }), [])
 })

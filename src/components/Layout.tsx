@@ -15,7 +15,7 @@ import { PartyHud } from './PartyHud'
 import { usePartyPresence } from '../lib/presence'
 import { consumeArmed } from '../lib/graphState'
 import { publicVitals, vitalsEqual } from '../lib/vitals'
-import { advanceTurn } from '../lib/turns'
+import { advanceTurn, turnRecharge } from '../lib/turns'
 import { useRollLog } from '../lib/rolls'
 import { useGraph } from '../lib/useGraph'
 import { turnGraphPatch } from '../lib/graphState'
@@ -100,9 +100,15 @@ export function Layout() {
        rather than the caller, because getting it backwards leaves a Brutal
        Strike armed under a Reckless Attack that has already lapsed. */
     const turn = turnGraphPatch(character, graph, shardTrees)
-    await updateSection('resources', {
-      ...(turn?.resources ?? res), activeEffects: next,
-    } as CharacterRow['resources'])
+    /* Per-turn USES come back here too, and in the same write — a feature that
+       recharged but whose counter landed in a second round trip is a use the
+       player may or may not have depending on the network. */
+    const recharged = turnRecharge(character.sheet?.features)
+    const patch: Partial<Pick<CharacterRow, 'resources' | 'sheet'>> = {
+      resources: { ...(turn?.resources ?? res), activeEffects: next } as CharacterRow['resources'],
+    }
+    if (recharged) patch.sheet = { ...(character.sheet ?? {}), features: recharged.features }
+    await updateSections(patch)
 
     addRoll({
       kind: 'custom', title: 'Turn Advanced', icon: 'fa-forward-step',
@@ -131,8 +137,11 @@ export function Layout() {
         ...(turn?.disarmed ?? []).map(label => ({
           label, total: 'lapsed', breakdown: 'armed under something that ended', tone: 'buff' as const,
         })),
+        ...(recharged?.names ?? []).map(label => ({
+          label, total: 'recharged', breakdown: 'once per turn', tone: 'buff' as const,
+        })),
         ...(counted.length === 0 && expired.length === 0 && ticks.length === 0
-          && !turn?.vars.length && !turn?.disarmed.length
+          && !turn?.vars.length && !turn?.disarmed.length && !recharged
           ? [{ label: 'No change', total: '—', breakdown: 'nothing on a timer' }]
           : []),
       ],
@@ -266,7 +275,7 @@ export function Layout() {
       {rollPanelOpen && (
         <RollContextPanel
           character={character} shardTrees={shardTrees}
-          onConsumeArmed={id => void updateSection('resources', consumeArmed(character, id) as CharacterRow['resources'])}
+          onConsumeArmed={ids => void updateSection('resources', consumeArmed(character, ids) as CharacterRow['resources'])}
           onAdvanceTurn={() => void doAdvanceTurn()}
           turnState={{
             running: activeNow.filter(e => typeof e.turns === 'number').length,

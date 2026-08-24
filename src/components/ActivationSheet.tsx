@@ -41,15 +41,25 @@ export function useActivation(host: ActivationHost) {
   /** A pending activation awaiting the player's answers. Null = nothing to confirm. */
   const [pending, setPending] = useState<{ feature: Feature; outcomes: Outcome[] } | null>(null)
 
-  /** Pressing Use. Anything the feature would WRITE is shown first: an
-   *  activation is a deliberate press, so a confirm step costs nothing and is
-   *  the natural place to answer an `ask`. A feature with nothing to write skips
-   *  straight through. */
+  /** Pressing Use.
+   *
+   *  A CONFIRM IS FOR A QUESTION. It used to appear whenever the press would
+   *  write anything at all, which meant every activation ended in a second
+   *  dialog listing its own internals — "Attacking Recklessly → true" is a
+   *  variable flipping somewhere, and the player neither asked to see it nor has
+   *  any way to act on it. Two presses to use a feature, and the second one
+   *  reads like a warning about nothing.
+   *
+   *  So the sheet appears only when an outcome genuinely asks something the
+   *  engine cannot decide. Everything else runs on the press, which is what
+   *  pressing Use always meant. (Since an `ask` on a `once` effect became a
+   *  roll-time question rather than an activation one, the common case has no
+   *  questions left at all.) */
   function start(f: Feature) {
     if (busy || !canUse(f)) return
     const outcomes = planActivation(f, graph, character, gid('feature', f))
-    if (outcomes.length) { setPending({ feature: f, outcomes }); return }
-    void run(f, [])
+    if (outcomes.some(o => o.ask)) { setPending({ feature: f, outcomes }); return }
+    void run(f, outcomes)
   }
 
   /** Spend/roll a feature: roll its expression (if any), decrement its use
@@ -102,8 +112,9 @@ export function useActivation(host: ActivationHost) {
       lines.push(o.kind === 'arm'
         // An armed modifier has no number yet — it has a promise. Saying "armed"
         // rather than a value is the honest line, and the chip on the target's
-        // card is where it becomes visible (§16).
-        ? { label: o.mod.label, total: 'armed', breakdown: o.summary, tone: 'buff' }
+        // card is where it becomes visible (§16). One carrying a question is not
+        // even a promise yet: it is OFFERED, and the roll panel decides.
+        ? { label: o.mod.label, total: o.mod.ask ? 'offered' : 'armed', breakdown: o.summary, tone: 'buff' }
         : { label: o.def.label ?? o.def.name, total: String(o.delta !== undefined ? (o.current as number) + o.delta : o.set), breakdown: o.summary, tone: 'buff' })
     }
 

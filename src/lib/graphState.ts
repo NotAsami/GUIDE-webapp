@@ -22,7 +22,7 @@ import type {
 } from './database.types.ts'
 import { evalExpr } from './expr.ts'
 import type { GraphContext, ResolveReq } from './graph.ts'
-import { armedMatches, gid, staleArmed } from './graph.ts'
+import { armedMatches, asKey, gid, reqKeys, staleArmed } from './graph.ts'
 import { IS_ACTIVATION } from './opSchema.ts'
 
 const state = (character: CharacterRow): GraphState =>
@@ -163,7 +163,12 @@ export type ArmOutcome = OutcomeBase & {
  *  One mod per roll selector, with the selector in the id: two selectors are two
  *  independent pending bonuses, and consuming one must not consume the other. */
 export function armedFrom(eff: GraphEffect, source: string, sourceName?: string, at = Date.now()): ArmedMod[] {
-  const base = { source, sourceName, label: eff.label, op: eff.op, value: eff.value, dmgType: eff.dmgType, at }
+  const base = {
+    source, sourceName, label: eff.label, op: eff.op, value: eff.value, dmgType: eff.dmgType, at,
+    // An asked arm is OFFERED, not taken — the question rides along and the roll
+    // panel is what asks it. See ArmedMod.ask.
+    ...(eff.ask ? { ask: eff.ask, text: eff.text || eff.label } : {}),
+  }
   const targets = eff.target?.length ? eff.target : []
   if (!targets.length) {
     return [{ ...base, id: `${source}:${eff.id}`, kind: 'feature', subject: source }]
@@ -205,9 +210,17 @@ export function planActivation(
         if (cond === null || cond.t !== 'bool' || !cond.v) continue
       }
       for (const mod of armedFrom(eff, source, feature.name)) {
+        /* NO `ask` ON THE OUTCOME, deliberately, when the effect carries one.
+           The confirm sheet's checkboxes decide what this press WRITES; an asked
+           arm's question is not about the press at all — it is about a roll that
+           has not happened. Passing it here is what pre-ticked both of Brutal
+           Strike's blows and armed them together. Offering it is unconditional;
+           the choosing happens in the roll panel. */
         out.push({
-          kind: 'arm', eff, ask: eff.ask, mod,
-          summary: `${eff.label} armed${mod.value ? ` (${mod.value})` : ''} · next ${mod.sub ? `${mod.kind} ${mod.sub}` : mod.kind}`,
+          kind: 'arm', eff, ask: eff.ask ? undefined : eff.ask, mod,
+          summary: eff.ask
+            ? `${eff.label} offered · your call on the next ${mod.sub ? `${mod.kind} ${mod.sub}` : mod.kind}`
+            : `${eff.label} armed${mod.value ? ` (${mod.value})` : ''} · next ${mod.sub ? `${mod.kind} ${mod.sub}` : mod.kind}`,
         })
       }
       continue
@@ -312,25 +325,84 @@ export function withArmedCleared(resources: Record<string, Json> | undefined): R
   return { ...resources, graph: { ...g, armed: [] } } as Record<string, Json>
 }
 
-/** Drop one armed modifier — §8 #1's consumption tap. Only the player knows
- *  whether the attack resolved, so this is never called by a roll. */
-export const consumeArmed = (character: CharacterRow, id: string): Record<string, Json> => {
+/** Drop armed modifiers — §8 #1's consumption tap. Only the player knows
+ *  whether the attack resolved, so this is never called by a roll.
+ *
+ *  Takes a LIST because an exclusive choice spends as one: taking Forceful Blow
+ *  does not leave Hamstring Blow armed for the next swing, and clearing them in
+ *  two writes could land apart and leave half a choice in the queue. */
+export const consumeArmed = (character: CharacterRow, ids: string | string[]): Record<string, Json> => {
   const g = state(character)
+  const drop = new Set(Array.isArray(ids) ? ids : [ids])
   return {
     ...(character.resources ?? {}),
-    graph: { ...g, armed: (g.armed ?? []).filter(m => m.id !== id) },
+    graph: { ...g, armed: (g.armed ?? []).filter(m => !drop.has(m.id)) },
   } as Record<string, Json>
 }
 
 /* ---------- rest ---------- */
 
-/** Features that could arm something for THIS roll, and can still be pressed.
+/** WOULD ACTIVATING THIS PUT A CONTRIBUTION ON THIS ROLL, by way of a variable?
+ *
+ *  The other half of an offer, and the half nothing could see. An ARM announces
+ *  its target — `armedMatches` reads it straight off the mod. A STANCE does not:
+ *  Reckless Attack writes `recklessAttack = true`, and it is a SECOND effect,
+ *  gated `when: recklessAttack`, that grants the advantage. Nothing in the
+ *  activation names the roll, so the weapon card could never offer it and the
+ *  only way to hold a stance was the Features screen.
+ *
+ *  Answered exactly rather than by guessing at the text: apply the writes this
+ *  press would make to a copy of the scope, then ask which of the feature's own
+ *  gated contributions flip from false to true AND target this roll. No second
+ *  resolve, no re-indexing — the feature's own effects are the whole search.
+ *
+ *  Scoped to the feature's OWN effects on purpose. A feature gated on someone
+ *  else's variable (Brutal Strike reads Reckless Attack's) is not this feature's
+ *  offer to make — it has its own activation, and offering both as one press
+ *  would spend two uses on one tap.
+ *  ponytail: same-feature scan; widen only if a real feature needs cross-node
+ *  gating surfaced, which would mean re-resolving per candidate. */
+function stanceReaches(
+  feature: Feature, ctx: GraphContext, character: CharacterRow, req: ResolveReq, source: string,
+): boolean {
+  const writes = planActivation(feature, ctx, character, source).filter(o => o.kind === 'var')
+  if (!writes.length) return false
+  const after = { ...ctx.scope }
+  for (const o of writes) {
+    after[o.def.name] = o.delta !== undefined
+      ? (typeof o.current === 'number' ? o.current : 0) + o.delta
+      : o.set as number | boolean
+  }
+  const keys = new Set(reqKeys(req))
+  for (const eff of feature.graph ?? []) {
+    if (eff.when === undefined) continue
+    // Already applying — activating changes nothing about this roll, and an
+    // offer to turn on what is already on is the bug §16 warns about one level
+    // up: a control that costs a use and buys nothing.
+    const now = evalExpr(eff.when, ctx.scope)
+    if (now !== null && now.t === 'bool' && now.v) continue
+    const then = evalExpr(eff.when, after)
+    if (then === null || then.t !== 'bool' || !then.v) continue
+    // A targetless effect is this NODE's own roll, never the weapon's.
+    const targets = eff.target ?? []
+    if (targets.some(t => keys.has(asKey(t)))) return true
+  }
+  return false
+}
+
+/** Features worth offering before THIS roll, and what pressing one would do.
  *
  *  §16's visibility rule, one step earlier: a bonus you have armed and cannot see
  *  is worse than no bonus, and a bonus you COULD arm that the roll surface never
  *  mentions is one you will forget exists. Arming is a pre-roll decision, so
  *  making the player leave the weapon, find the feature, press Use and come back
  *  puts the decision on a different screen from the roll.
+ *
+ *  TWO KINDS, and they are not interchangeable. An `arm` mints a pending
+ *  contribution and is spent when it lands; a `stance` flips a variable the
+ *  player HOLDS until something clears it. Reported separately because the
+ *  surface has to say which — "armed for your next attack" and "held until your
+ *  next turn" are different promises.
  *
  *  Routed through planActivation rather than reading `once` directly, so `when`
  *  gating, DM-variable refusal and every other rule are honoured once. A feature
@@ -341,8 +413,8 @@ export function armableFor(
   ctx: GraphContext,
   req: ResolveReq,
   shardTrees: Record<string, ShardTree> = {},
-): { feature: Feature; source: string }[] {
-  const out: { feature: Feature; source: string }[] = []
+): { feature: Feature; source: string; kind: 'arm' | 'stance' }[] {
+  const out: { feature: Feature; source: string; kind: 'arm' | 'stance' }[] = []
   for (const s of activeSources(character, shardTrees)) {
     if (s.kind !== 'feature') continue
     const feature = s.obj
@@ -351,7 +423,8 @@ export function armableFor(
     if (ctx.armed.some(m => m.source === source)) continue
     const arms = planActivation(feature, ctx, character, source)
       .some(o => o.kind === 'arm' && armedMatches(o.mod, req))
-    if (arms) out.push({ feature, source })
+    if (arms) { out.push({ feature, source, kind: 'arm' }); continue }
+    if (stanceReaches(feature, ctx, character, req, source)) out.push({ feature, source, kind: 'stance' })
   }
   return out
 }
