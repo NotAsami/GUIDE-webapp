@@ -569,6 +569,13 @@ export function staleArmed(ctx: GraphContext, scope: ExprScope = ctx.scope): str
       .filter(e => e.eff.op === m.op && e.eff.label === m.label)
     if (!effs.length) continue
     const live = effs.some(e => {
+      /* AN UNGATED HOLD IS NOT A LEFTOVER. Held says every held thing has a
+         deadline, and the stuck-arm incident made a turn deadline tempting —
+         but that bug was a MATCH failure (see armedMatches), not a missing
+         expiry, and it is fixed at the cause. An ungated hold still has a
+         deadline: the next rest empties the queue. Confiscating a deliberately
+         held smite at turn end would take a decision away from the player to
+         solve a problem that is already solved. */
       if (e.eff.when === undefined) return true
       const cond = evalExpr(e.eff.when, scope)
       // Unresolvable reads as STILL LIVE. A condition the engine cannot answer
@@ -989,10 +996,15 @@ ${rider.reveal}` : rider.reveal
         `choice` so the panel can render the source's offers as one pick-one. */
   const offeredBySource = new Map<string, number>()
   for (const m of ctx.armed) {
-    if (m.ask && armedMatches(m, req)) offeredBySource.set(m.source, (offeredBySource.get(m.source) ?? 0) + 1)
+    if (m.ask && !m.spent && armedMatches(m, req)) offeredBySource.set(m.source, (offeredBySource.get(m.source) ?? 0) + 1)
   }
   for (const m of ctx.armed) {
     if (!armedMatches(m, req)) continue
+    /* ALREADY ANSWERED. Held's release rule: taking the thing a hold offered
+       spends it, so it is not offered again on the next roll. The roll that
+       answered it still shows it — an entry is a snapshot — and undo clears the
+       mark, which is why this is a flag and not a deletion. */
+    if (m.spent) continue
     const v = m.op === 'add' ? evalExpr(m.value ?? '', ctx.scope) : null
     if (m.op === 'add') {
       if (v === null || v.t !== 'num') {

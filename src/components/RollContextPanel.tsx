@@ -72,13 +72,14 @@ const sgn = (n: number) => `${n < 0 ? '−' : '+'} ${Math.abs(n)}`
 
 /* ---------------- the rail ---------------- */
 
-export function RollContextPanel({ onClose, character, shardTrees, onConsumeArmed, onAdvanceTurn, turnState }: {
+export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed, onAdvanceTurn, turnState }: {
   onClose: () => void
   character?: CharacterRow | null
   shardTrees?: Record<string, ShardTree>
-  /** §8 #1's consumption tap. Absent = the panel renders armed riders read-only,
-   *  which is what a surface with no character to write to honestly is. */
-  onConsumeArmed?: (ids: string[]) => void
+  /** HELD's release tap: answering spends a hold, undo puts it back. Absent =
+   *  the panel renders held riders read-only, which is what a surface with no
+   *  character to write to honestly is. */
+  onAnswerArmed?: (ids: string[], at: string | null) => void
   /** Advancing a turn. Absent = no character to write to, so the control is not
    *  offered at all rather than offered and inert. */
   onAdvanceTurn?: () => void
@@ -211,7 +212,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
                   showTip={showTip}
                   onOpenCat={() => { if (entry.subject) setCat(entry) }}
                   hasCat={!!entry.subject}
-                  stillArmed={stillArmed} onConsumeArmed={onConsumeArmed}
+                  stillArmed={stillArmed} onAnswerArmed={onAnswerArmed}
                   onLeave={onClose}
                 />
               ))}
@@ -229,7 +230,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onConsumeArme
 
 function Entry({
   entry, latest, fresh, folded, onFold, onPatch, onPatchMany, onReroll, showTip, onOpenCat, hasCat,
-  stillArmed, onConsumeArmed, onLeave,
+  stillArmed, onAnswerArmed, onLeave,
 }: {
   entry: RollEntry; latest: boolean; fresh: boolean; folded: boolean
   onFold: () => void
@@ -241,7 +242,7 @@ function Entry({
   onOpenCat: () => void
   hasCat: boolean
   stillArmed: Set<string>
-  onConsumeArmed?: (ids: string[]) => void
+  onAnswerArmed?: (ids: string[], at: string | null) => void
   /** Following a feature link navigates away, so the rail closes with it —
    *  leaving it open over the screen you just asked for means dismissing it
    *  before you can read the thing you clicked through to. */
@@ -353,8 +354,7 @@ function Entry({
                     {armedGroups.map(g => (
                       <Contribution
                         key={g.key} group={g} showTip={showTip} onLeave={onLeave}
-                        armedLive={armedIdsOf(g.views).some(id => stillArmed.has(id))}
-                        onConsume={onConsumeArmed && (() => onConsumeArmed(armedIdsOf(g.views)))}
+                        held={armedIdsOf(g.views).some(id => stillArmed.has(id))}
                       />
                     ))}
                   </div>
@@ -388,17 +388,19 @@ function Entry({
                   {sections.map((sec, si) => sec.choice ? (
                     <Choice
                       key={`c${si}`} views={sec.views} showTip={showTip}
-                      armedLive={id => stillArmed.has(id)}
                       onPick={index => {
                         // Exclusive: answering one declines the rest, in one
-                        // write. Local to the roll — nothing leaves the armed
-                        // queue until Consume.
+                        // write. And ANSWERING IS THE RELEASE — the whole group
+                        // spends together, because one press held all of it.
                         onPatchMany(sec.views.map(o => ({ index: o.index, patch: { on: o.index === index } })))
+                        onAnswerArmed?.(armedIdsOf(sec.views), entry.id)
                       }}
-                      onUndo={() => onPatchMany(sec.views.map(o => ({ index: o.index, patch: { on: false } })))}
-                      onConsume={onConsumeArmed && (() =>
-                        // The whole group spends as one — see consumeArmed.
-                        onConsumeArmed(sec.views.map(o => o.rider.armedId).filter((x): x is string => !!x)))}
+                      onUndo={() => {
+                        onPatchMany(sec.views.map(o => ({ index: o.index, patch: { on: false } })))
+                        // Undo puts the offer back — the reason answering marks
+                        // the hold rather than deleting it.
+                        onAnswerArmed?.(armedIdsOf(sec.views), null)
+                      }}
                       onLeave={onLeave}
                     />
                   ) : (
@@ -636,11 +638,10 @@ const featureLink = (gid: string | undefined) => (gid?.startsWith('feature:') ? 
  *  so an armed modifier does not burn on a miss. Consuming takes the WHOLE
  *  feature: one activation spent one use.
  */
-function Contribution({ group, showTip, armedLive, onConsume, onLeave }: {
+function Contribution({ group, showTip, held, onLeave }: {
   group: { key: string; source: string; gid?: string; views: RiderView[] }
   showTip: ShowTip
-  armedLive?: boolean
-  onConsume?: () => void
+  held?: boolean
   onLeave?: () => void
 }) {
   const { views } = group
@@ -662,13 +663,13 @@ function Contribution({ group, showTip, armedLive, onConsume, onLeave }: {
       {...tipProps(showTip, () => ({
       k: group.source,
       v: (<>
-        <b style={{ color: 'var(--cyan-hot)' }}>{isArmed ? 'Armed earlier, applied here' : 'Resolved by the engine'}</b><br />
+        <b style={{ color: 'var(--cyan-hot)' }}>{isArmed ? 'Held, and applying here' : 'Resolved by the engine'}</b><br />
         {views.map((v, i) => (
           <span key={i}>{i > 0 && <br />}{v.rider.label}{v.kind === 'flag' ? ` — ${v.grants}` : ` ${riderAmount(v.rider)}`}</span>
         ))}
       </>),
       hint: isArmed
-        ? (armedLive ? 'Consume it once you know the roll landed' : 'Already consumed')
+        ? (held ? 'Held until its deadline — nothing to spend' : 'No longer held')
         : canOpen ? 'Nothing to decide — open it to see why' : 'Nothing to decide',
     }))}>
       {link
@@ -683,15 +684,12 @@ function Contribution({ group, showTip, armedLive, onConsume, onLeave }: {
         : <span className={styles.cName}>{group.source}</span>}
       <span className={styles.cRight}>
         {canOpen && <span className={styles.cFold}><i className="fa-solid fa-chevron-down" /></span>}
-        {isArmed && (armedLive
-          ? onConsume
-            ? <button type="button" className={styles.consume}
-                onClick={e => { e.stopPropagation(); onConsume() }}
-                title="Spend it — the whole feature leaves the queue">
-                <i className="fa-solid fa-bolt" />Consume
-              </button>
-            : <span className={styles.armedTag}><i className="fa-solid fa-bolt" />Armed</span>
-          : <span className={styles.spentTag}>Spent</span>)}
+        {/* NOTHING TO PRESS. A hold is released by answering it or by its
+            deadline, so a taken hold carries no control — it reports its state
+            and stops. This is where Consume used to be. */}
+        {isArmed && (held
+          ? <span className={styles.armedTag}><i className="fa-solid fa-bolt" />Held</span>
+          : <span className={styles.spentTag}>Released</span>)}
         {views.map(v => <Amount key={v.index} v={v} />)}
       </span>
     </div>
@@ -785,21 +783,16 @@ function Amount({ v }: { v: RiderView }) {
  *  Clicking commits. The lock is against a stray click, not a change of mind:
  *  Undo sits on the GROUP, never on an option, so releasing the choice is never
  *  something you do while reaching for the branch you did not take. */
-function Choice({ views, showTip, armedLive, onPick, onUndo, onConsume, onLeave }: {
+function Choice({ views, showTip, onPick, onUndo, onLeave }: {
   views: RiderView[]
   showTip: ShowTip
-  armedLive: (id: string) => boolean
   onPick: (index: number) => void
   onUndo: () => void
-  onConsume?: () => void
   onLeave?: () => void
 }) {
   const picked = pickedOf(views)
   const source = views[0]?.rider.source
   const link = featureLink(views[0]?.rider.sourceGid)
-  // Every option in a spent group is gone from the queue together, so one
-  // armedId answers for all of them.
-  const live = views.some(v => v.rider.armedId && armedLive(v.rider.armedId))
 
   return (
     <div className={styles.choice}>
@@ -851,21 +844,14 @@ function Choice({ views, showTip, armedLive, onPick, onUndo, onConsume, onLeave 
         )
       })}
 
+      {/* ANSWERING SPENT IT. No Consume — that was the chore Held deletes — so
+          the only control left is the way back. */}
       {picked && (
         <div className={styles.chFoot}>
-          {live
-            ? (<>
-                <button type="button" className={styles.undo} onClick={onUndo}>
-                  <i className="fa-solid fa-rotate-left" />Undo
-                </button>
-                {onConsume && (
-                  <button type="button" className={styles.consume} onClick={onConsume}
-                    title="Spend it — the whole choice leaves the queue">
-                    <i className="fa-solid fa-bolt" />Consume
-                  </button>
-                )}
-              </>)
-            : <span className={styles.spentTag}>Spent</span>}
+          <button type="button" className={styles.undo} onClick={onUndo}>
+            <i className="fa-solid fa-rotate-left" />Undo
+          </button>
+          <span className={styles.spentTag}>Spent</span>
         </div>
       )}
     </div>

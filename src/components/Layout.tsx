@@ -13,7 +13,7 @@ import { LootTakeover } from './LootTakeover'
 import { RollContextPanel } from './RollContextPanel'
 import { PartyHud } from './PartyHud'
 import { usePartyPresence } from '../lib/presence'
-import { consumeArmed } from '../lib/graphState'
+import { answerArmed } from '../lib/graphState'
 import { publicVitals, vitalsEqual } from '../lib/vitals'
 import { advanceTurn, turnRecharge } from '../lib/turns'
 import { useRollLog } from '../lib/rolls'
@@ -275,7 +275,7 @@ export function Layout() {
       {rollPanelOpen && (
         <RollContextPanel
           character={character} shardTrees={shardTrees}
-          onConsumeArmed={ids => void updateSection('resources', consumeArmed(character, ids) as CharacterRow['resources'])}
+          onAnswerArmed={(ids, at) => void updateSection('resources', answerArmed(character, ids, at) as CharacterRow['resources'])}
           onAdvanceTurn={() => void doAdvanceTurn()}
           turnState={{
             running: activeNow.filter(e => typeof e.turns === 'number').length,
