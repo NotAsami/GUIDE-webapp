@@ -26,7 +26,7 @@
  * everywhere. Fold state is local: it is how you are reading the list, not part
  * of the roll.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
@@ -370,20 +370,15 @@ function Entry({
 
             {sections.length > 0 && (
               <>
-                {applied
-                  ? (
-                    <div className={styles.joint}>
-                      <span className={styles.node} aria-hidden="true" />
-                      Your call
-                      <span className={styles.sep} /><span>{sections.length}</span>
-                    </div>
-                  )
-                  : (
-                    <div className={styles.askH}>
-                      <i className="fa-solid fa-diamond" />Your call
-                      <span className={styles.sep} /><span>{sections.length}</span>
-                    </div>
-                  )}
+                {/* ALWAYS THE JOINT. The no-applied case used to get a plain
+                    header with a flat diamond and no rule, so the ask floated
+                    a gap below "Your call" instead of hanging off the spine —
+                    the same handover drawn two different ways. */}
+                <div className={styles.joint}>
+                  <span className={styles.node} aria-hidden="true" />
+                  Your call
+                  <span className={styles.sep} /><span>{sections.length}</span>
+                </div>
                 <div className={styles.riders}>
                   {sections.map((sec, si) => sec.choice ? (
                     <Choice
@@ -588,12 +583,15 @@ function Line({ line, index, showTip, spin, onReroll }: {
       </div>
       <div className={styles.lMath}>
         {line.dice.length > 0 && <span className={styles.form}>{line.formula}</span>}
+        {/* Fragment, not a wrapper span: a span makes the operator and its die
+            ONE flex item, so `.lMath`'s gap falls only to the left of the pair
+            and "1d8 + 1d8" reads with the + hugging the second die. */}
         {line.dice.map((d, i) => (
-          <span key={i}>
+          <Fragment key={i}>
             {i > 0 && <span className={styles.op}>{line.mode ? 'vs' : '+'}</span>}
             <DieChip d={d} mode={line.mode} showTip={showTip}
               spinning={spin === `${index}:${i}`} onReroll={() => onReroll(i)} />
-          </span>
+          </Fragment>
         ))}
         {line.mods !== 0 && (<>
           {/* A dice-less line ("Save DC 15") reads "15 = 15", not "+ 15 = 15". */}
@@ -684,13 +682,14 @@ function Contribution({ group, showTip, held, onLeave }: {
         : <span className={styles.cName}>{group.source}</span>}
       <span className={styles.cRight}>
         {canOpen && <span className={styles.cFold}><i className="fa-solid fa-chevron-down" /></span>}
+        {views.map(v => <Amount key={v.index} v={v} />)}
         {/* NOTHING TO PRESS. A hold is released by answering it or by its
             deadline, so a taken hold carries no control — it reports its state
-            and stops. This is where Consume used to be. */}
+            and stops. This is where Consume used to be. Last, after the
+            amounts: what the feature GAVE leads, its status trails. */}
         {isArmed && (held
           ? <span className={styles.armedTag}><i className="fa-solid fa-bolt" />Held</span>
           : <span className={styles.spentTag}>Released</span>)}
-        {views.map(v => <Amount key={v.index} v={v} />)}
       </span>
     </div>
 
@@ -735,10 +734,10 @@ function Contribution({ group, showTip, held, onLeave }: {
                 <div className={styles.cDeriv}>
                   <span className={styles.form}>{r.dice.join(' + ')}</span>
                   {faces.map((d, i) => (
-                    <span key={i}>
+                    <Fragment key={i}>
                       {i > 0 && <span className={styles.op}>+</span>}
                       <DieChip d={d} locked showTip={showTip} spinning={false} />
-                    </span>
+                    </Fragment>
                   ))}
                 </div>
               )}

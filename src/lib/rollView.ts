@@ -178,6 +178,14 @@ export function sourceGroups(views: RiderView[]): { key: string; source: string;
     byKey.set(key, g)
     out.push(g)
   }
+  /* AMOUNTS BEFORE FLAGS, within a source. Rider order follows the engine's
+     line groups — Attack before Damage — so Brutal Strike, which buys its
+     extra damage WITH disadvantage, printed the price before the thing bought:
+     "DISADVANTAGE +10". What the feature gave you leads; the condition it
+     attached rides behind it. Stable, so two amounts keep engine order. */
+  for (const g of out) {
+    g.views = [...g.views.filter(v => v.kind !== 'flag'), ...g.views.filter(v => v.kind === 'flag')]
+  }
   return out
 }
 
