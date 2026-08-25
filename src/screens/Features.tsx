@@ -13,7 +13,7 @@ import { colorOf } from '../lib/palette'
 import { affectedBy, gid, type Gid } from '../lib/graph'
 import { featureEffects, isCarrier, isUsable, originChain, toggleVar } from '../lib/featureView'
 import { useGraph } from '../lib/useGraph'
-import { playerVars, setVars, type VarRow } from '../lib/graphState'
+import { gateOf, playerVars, setVars, type VarRow } from '../lib/graphState'
 import type { ExprScope } from '../lib/expr'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Features.module.css'
@@ -51,6 +51,16 @@ const CHIPS: { key: string; label: string }[] = [
 ]
 
 const ACTS: Record<string, string> = { action: 'Action', bonus: 'Bonus', reaction: 'Reaction', free: 'Free' }
+
+/** Built-in scope identifiers said as a player would say them.
+ *
+ *  An authored variable has a `label` the DM wrote; `attacksThisTurn` has only
+ *  its name, and "Requires attacksThisTurn" is the engine talking to itself
+ *  again. A full phrase rather than a noun, because the sentence it replaces
+ *  ("Requires …") does not fit a condition about timing. */
+const GATE_PHRASE: Record<string, string> = {
+  attacksThisTurn: 'Only on your first attack',
+}
 /** Usable features cluster by activation so "what can I do as a reaction"
  *  survives the loss of group headers. */
 const ACT_ORDER = ['action', 'bonus', 'reaction', 'free', '']
@@ -154,18 +164,29 @@ export function Features() {
       ACT_ORDER.indexOf(a.f.activation ?? '') - ACT_ORDER.indexOf(b.f.activation ?? ''))
   }, [tabPool, src, tab])
 
+  /* THE PRESS OWNS WHAT THE PRESS WRITES. A variable some activation sets is
+     not the player's to flip by hand — the switch was a second door into the
+     same room with no use counter on it, so Reckless Attack's advantage could
+     be had for free with its use still in the bank. It is not shown read-only
+     either: a row saying `recklessAttack: false` is engine bookkeeping the
+     player never asked to see. The feature's own card says whether it is on. */
+  const settable = vars.filter(v => !v.locked)
+
   /** Variables this feature declares that the player may write. */
-  const varsOf = (f: Feature) => vars.filter(v => (f.vars ?? []).some(d => d.name === v.def.name))
+  const varsOf = (f: Feature) => settable.filter(v => (f.vars ?? []).some(d => d.name === v.def.name))
+  /* Reads the UNFILTERED list on purpose. A stance's hexagon is the feature's
+     own press, not the hand switch the lock removes, so a toggle variable an
+     activation also writes must still be able to report that it is on. */
   const isOn = (f: Feature) => {
     const t = toggleVar(f)
-    return !!t && varsOf(f).find(v => v.def.name === t.name)?.value === true
+    return !!t && vars.find(v => v.def.name === t.name)?.value === true
   }
 
   /* Toggles with no feature to live under — a bool declared on an equipped item
      or an attuned shard node. `playerVars` walks every active source, but only a
      FEATURE has a card to hang a switch on, so without this block a bool on the
      Cloak of Elvenkind is authorable, resolvable and impossible to flip. */
-  const looseVars = vars.filter(v => !rows.some(r => (r.f.vars ?? []).some(d => d.name === v.def.name)))
+  const looseVars = settable.filter(v => !rows.some(r => (r.f.vars ?? []).some(d => d.name === v.def.name)))
   const looseBySource = [...looseVars.reduce((m, v) => {
     const key = v.from.obj.name
     return m.set(key, [...(m.get(key) ?? []), v])
@@ -179,6 +200,20 @@ export function Features() {
     character, graph, shardTrees, updateSection, updateSections,
   })
 
+  /** WHAT THIS FEATURE IS WAITING ON, already said in the player's words.
+   *
+   *  `gateOf` hands back identifiers because the engine has no labels; the
+   *  variable rows do, and a gate on ANOTHER feature's variable (Brutal Strike
+   *  reads Reckless Attack's) is exactly the case, so the lookup is across
+   *  every player variable rather than the feature's own. Null = pressable. */
+  const gateFor = (f: Feature): string | null => {
+    const idents = gateOf(f, graph, character, gid('feature', f))
+    if (!idents) return null
+    const parts = idents.map(id =>
+      GATE_PHRASE[id] ?? `Requires ${vars.find(v => v.def.name === id)?.def.label ?? id}`)
+    return parts.length ? parts.join(' · ') : 'Not available yet'
+  }
+
   /** Armed modifiers this feature queued and nobody has spent yet. Matched by
    *  SOURCE, not by roll: the card's claim is "you armed this and it is still
    *  pending", which is a fact about the feature. */
@@ -190,7 +225,11 @@ export function Features() {
     if (busy) return
     const t = toggleVar(f)
     if (t) { void writeVar(t.name, !isOn(f)); return }
-    if (f.uses && f.uses.current <= 0) {
+    /* A GATED-SHUT FEATURE REFUSES THE SAME WAY A SPENT ONE DOES. Without
+       this the press planned nothing, wrote nothing, and still logged an empty
+       roll entry — which reads as "Brutal Strike works without Reckless
+       Attack", because nothing on screen said otherwise. */
+    if ((f.uses && f.uses.current <= 0) || gateFor(f)) {
       setDenied(f.id)
       setTimeout(() => setDenied(d => (d === f.id ? null : d)), 300)
       return
@@ -319,6 +358,7 @@ export function Features() {
                     <FeatureCard
                       key={r.f.id} row={r} busy={busy} scope={graph.scope}
                       on={isOn(r.f)} armed={armedOf(r.f)} denied={denied === r.f.id}
+                      gate={gateFor(r.f)}
                       onOpen={() => openPopup(r.f.id)} onPress={() => press(r.f)}
                     />
                   ))}
@@ -371,6 +411,7 @@ export function Features() {
       {openRow && createPortal(
         <FeaturePopup
           row={openRow} busy={busy} scope={graph.scope} on={isOn(openRow.f)} vars={varsOf(openRow.f)}
+          gate={gateFor(openRow.f)}
           back={stack.length ? byId.get(stack[stack.length - 1])?.f.name ?? null : null}
           affected={affectedBy(graph, gid('feature', openRow.f), openRow.f.tags)}
           resolveGid={g => byGid.get(g)?.f ?? null}
@@ -389,8 +430,10 @@ export function Features() {
 
 /* ---------------- card ---------------- */
 
-function FeatureCard({ row, busy, scope, on, armed, denied, onOpen, onPress }: {
+function FeatureCard({ row, busy, scope, on, armed, denied, gate, onOpen, onPress }: {
   row: Row; busy: boolean; scope: ExprScope; on: boolean; armed: number; denied: boolean
+  /** Why a press would do nothing right now, or null. */
+  gate: string | null
   onOpen: () => void; onPress: () => void
 }) {
   const { f, group } = row
@@ -402,11 +445,11 @@ function FeatureCard({ row, busy, scope, on, armed, denied, onOpen, onPress }: {
   const tag = f.source ?? f.usage ?? (f.level ? `Lv ${f.level}` : group)
 
   // The pip under the hexagon says what pressing it does, in the imperative.
-  const pip = toggle ? (on ? 'On' : 'Hold') : spent ? 'Spent' : f.uses ? 'Spend' : 'Use'
+  const pip = toggle ? (on ? 'On' : 'Hold') : gate ? 'Locked' : spent ? 'Spent' : f.uses ? 'Spend' : 'Use'
 
   return (
     <div
-      className={cx(styles.fcard, on && styles.isOn, spent && styles.spent,
+      className={cx(styles.fcard, on && styles.isOn, (spent || !!gate) && styles.spent,
         denied && styles.denied, f.color && styles.tinted)}
       style={f.color ? ({ ['--tint' as string]: f.color } as React.CSSProperties) : undefined}
       role="button" tabIndex={0} aria-haspopup="dialog"
@@ -420,14 +463,14 @@ function FeatureCard({ row, busy, scope, on, armed, denied, onOpen, onPress }: {
               spends the feature instead of opening the popup behind it. */}
           {usable ? (
             <button type="button"
-              className={cx(styles.fcHex, styles.usable, on && styles.held, spent && styles.exhausted)}
+              className={cx(styles.fcHex, styles.usable, on && styles.held, (spent || !!gate) && styles.exhausted)}
               disabled={busy}
-              title={`${toggle ? (on ? 'End' : 'Hold') : 'Use'} ${f.name}`}
+              title={gate ?? `${toggle ? (on ? 'End' : 'Hold') : 'Use'} ${f.name}`}
               onClick={e => { e.stopPropagation(); onPress() }}
             >
               <span className={styles.hxFrame} />
               <span className={styles.hxInner}><Icon name={f.icon ?? 'fa-diamond'} className={styles.fcIcon} /></span>
-              <span className={cx(styles.hxPip, spent && styles.pipOff)}>{pip}</span>
+              <span className={cx(styles.hxPip, (spent || !!gate) && styles.pipOff)}>{pip}</span>
             </button>
           ) : (
             <span className={styles.fcHex}>
@@ -496,8 +539,10 @@ function FeatureCard({ row, busy, scope, on, armed, denied, onOpen, onPress }: {
 
 /* ---------------- popup ---------------- */
 
-function FeaturePopup({ row, busy, scope, on, vars, back, affected, resolveGid, onOpenSource, onBack, onClose, onPress, onWriteVar }: {
+function FeaturePopup({ row, busy, scope, on, vars, gate, back, affected, resolveGid, onOpenSource, onBack, onClose, onPress, onWriteVar }: {
   row: Row; busy: boolean; scope: ExprScope; on: boolean; vars: VarRow[]
+  /** Why a press would do nothing right now, or null. */
+  gate: string | null
   back: string | null
   affected: ReturnType<typeof affectedBy>
   resolveGid: (g: Gid) => Feature | null
@@ -641,12 +686,16 @@ function FeaturePopup({ row, busy, scope, on, vars, back, affected, resolveGid, 
 
           <div className={styles.imActions}>
             {usable && (
-              <button type="button" className={cx(styles.ia, toggle && on && styles.ghost, spent && styles.out)}
+              <button type="button" className={cx(styles.ia, toggle && on && styles.ghost, (spent || !!gate) && styles.out)}
                 disabled={busy} onClick={onPress}>
                 <span className={styles.af} />
                 <span className={styles.ai}>
                   {toggle
                     ? (on ? <><i className="fa-solid fa-square-xmark" /> End stance</> : <><i className="fa-solid fa-play" /> Hold stance</>)
+                    /* THE REASON, not just the refusal. A locked button that
+                       does not say what unlocks it is the silent no-op with a
+                       nicer shape. */
+                    : gate ? <><i className="fa-solid fa-lock" /> {gate}</>
                     : spent ? <><i className="fa-solid fa-ban" /> No uses left</>
                     : f.uses ? <><i className="fa-solid fa-bolt" /> Spend · {f.uses.current} left</>
                     : <><i className="fa-solid fa-bolt" /> Use · at will</>}

@@ -4,11 +4,11 @@
 // the whole write path is testable without a database or a renderer.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.types.ts'
+import type { CharacterRow, Feature, GraphEffect, Json, VarDef } from './database.types.ts'
 import { buildContext, resolve, staleArmed } from './graph.ts'
 import { longRestPatch, shortRestPatch } from './rest.ts'
 import {
-  answerArmed, applyOutcomes, armableFor, consumeArmed, planActivation, playerVars, restVars, scopedVars, setDmVars,
+  answerArmed, applyOutcomes, armableFor, consumeArmed, countAttack, gateOf, planActivation, playerVars, restVars, scopedVars, setDmVars,
   setVars, turnGraphPatch, turnVars, withArmedCleared,
 } from './graphState.ts'
 
@@ -465,7 +465,21 @@ test('AN ARM LAPSES WITH THE CONDITION THAT AUTHORISED IT', () => {
   assert.equal(g.vars.reckless, false, 'the variable reset')
   assert.deepEqual(g.armed.map(m => m.id), ['m-smite'], 'the gated arm went, the held one stayed')
   assert.deepEqual(patch!.disarmed, ['Brutal Strike'])
-  assert.deepEqual(patch!.vars, ['reckless'])
+  // The FEATURE that ended, not the identifier that reset — the report is read
+  // by a player, who has never heard of `reckless`.
+  assert.deepEqual(patch!.ended, ['Barbarian'])
+})
+
+test('two turn variables on one feature report it ending ONCE', () => {
+  const f = { ...BARB(), vars: [
+    { name: 'reckless', kind: 'stored', type: 'bool', initial: false, resetOn: 'turn' },
+    { name: 'braced', kind: 'stored', type: 'bool', initial: false, resetOn: 'turn' },
+  ] } as unknown as Feature
+  const c = character(
+    { sheet: { abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 }, features: [f] } } as Partial<CharacterRow>,
+    { vars: { reckless: true, braced: true } },
+  )
+  assert.deepEqual(turnGraphPatch(c, buildContext(c))!.ended, ['Barbarian'])
 })
 
 test('AN UNGATED ARM IS NEVER TOUCHED — a held smite is a decision, not a leftover', () => {
@@ -577,4 +591,114 @@ test('AN ANSWERED HOLD IS NOT OFFERED AGAIN', () => {
 
   const undone = { ...host, resources: answerArmed(spent, [id], null) } as CharacterRow
   assert.equal(resolve(buildContext(undone), req).riders.length, 1, 'and back if undone')
+})
+
+
+// --- gated shut --------------------------------------------------------------
+
+/* Brutal Strike gates every one of its arms on Reckless Attack. With the gate
+   false, planActivation drops all four and the press wrote nothing, spent
+   nothing, and still logged an empty roll entry — which is what "I can use
+   Brutal Strike without Reckless Attack" looks like from the player's side. */
+const GATED: GraphEffect[] = [
+  { id: 'g1', op: 'dis', once: true, when: 'isRaging', label: 'Remove Advantage', target: ['roll:attack.str'] },
+  { id: 'g2', op: 'add', once: true, when: 'isRaging', value: '1d10', label: 'Add 1d10', target: ['roll:damage.melee'] },
+]
+
+const gateWith = (graph: GraphEffect[], stored: Record<string, number | boolean> = {}) => {
+  const c = character({}, { vars: stored })
+  return gateOf(RAGE(graph), buildContext(c), c, 'feature:rage')
+}
+
+test('a feature whose every activation is gated false cannot be pressed', () => {
+  assert.deepEqual(gateWith(GATED), ['isRaging'])
+})
+
+test('the same feature is pressable the moment its gate is true', () => {
+  assert.equal(gateWith(GATED, { isRaging: true }), null)
+})
+
+test('one live activation is enough — a partly gated feature still presses', () => {
+  const mixed = [...GATED, { id: 'g3', op: 'setVar', variable: 'charges', value: '1', label: 'Spend' } as GraphEffect]
+  assert.equal(gateWith(mixed), null)
+})
+
+test('a passive with no activations is not "shut", it simply has no press', () => {
+  assert.equal(gateWith([{ id: 'p1', op: 'add', value: '2', label: 'Rage Damage', target: ['roll:damage.melee'] }]), null)
+})
+
+
+// --- the press owns what the press writes ------------------------------------
+
+/* A hand switch beside a `setVar` was a second door into the same room with no
+   use counter on it: Reckless Attack costs a use and sets `recklessAttack`, so
+   flipping the switch bought the advantage and left the use in the bank. */
+const STANCE_F = (graph: GraphEffect[]): Feature => ({
+  id: 'rk', name: 'Reckless Attack',
+  vars: [{ name: 'reckless', kind: 'stored', type: 'bool', initial: false, resetOn: 'turn' }],
+  graph,
+} as unknown as Feature)
+
+const lockOf = (graph: GraphEffect[], extra: Feature[] = []) => {
+  const c = character({ sheet: {
+    abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 },
+    features: [STANCE_F(graph), ...extra],
+  } } as Partial<CharacterRow>, {})
+  return playerVars(c).find(v => v.def.name === 'reckless')?.locked
+}
+
+test('a variable an activation writes is locked out of the hand switch', () => {
+  assert.equal(lockOf([{ id: 's1', op: 'setVar', variable: 'reckless', value: 'true', label: 'Go' }]), true)
+})
+
+test('a variable nothing writes keeps its switch — the hood has no other control', () => {
+  assert.equal(lockOf([{ id: 's1', op: 'adv', label: 'Adv', when: 'reckless', target: ['roll:attack.str'] }]), false)
+})
+
+test('the writer may live on ANOTHER feature and still lock it', () => {
+  const other = { id: 'o', name: 'Other', graph: [
+    { id: 's2', op: 'setVar', variable: 'reckless', value: 'true', label: 'Go' },
+  ] } as unknown as Feature
+  assert.equal(lockOf([], [other]), true)
+})
+
+
+// --- attacksThisTurn ---------------------------------------------------------
+
+/* "On your FIRST attack roll on your turn" is a real decision point in 5e, and
+   nothing could express it: the count was never kept, so a stance stayed
+   offerable after three swings. */
+const attacksIn = (r: Record<string, Json>) =>
+  (r.graph as { attacks?: number }).attacks
+
+test('an attack roll counts, and counts again', () => {
+  const c = character({}, {})
+  const once = countAttack(c)
+  assert.equal(attacksIn(once), 1)
+  assert.equal(attacksIn(countAttack({ ...c, resources: once } as CharacterRow)), 2)
+})
+
+test('counting an attack disturbs nothing else in the graph state', () => {
+  const c = character({}, { vars: { isRaging: true }, armed: ARMED })
+  const g = countAttack(c).graph as { vars: unknown; armed: unknown[] }
+  assert.deepEqual(g.vars, { isRaging: true })
+  assert.equal(g.armed.length, 2)
+})
+
+test('the turn boundary zeroes the swing count', () => {
+  const c = barbChar({ vars: { reckless: true }, attacks: 3 })
+  assert.equal(attacksIn(turnGraphPatch(c, buildContext(c))!.resources), 0)
+})
+
+test('a turn with nothing but swings on it still resets them', () => {
+  // No turn variables, no gated arms — but three swings, so the count must not
+  // ride into next turn and hold a first-attack decision shut.
+  const c = character({}, { attacks: 3 })
+  assert.equal(attacksIn(turnGraphPatch(c, buildContext(c))!.resources), 0)
+})
+
+test('attacksThisTurn reaches an expression through the base scope', () => {
+  const c = character({}, { attacks: 2 })
+  assert.equal(buildContext(c).scope.attacksThisTurn, 2)
+  assert.equal(buildContext(character({}, {})).scope.attacksThisTurn, 0)
 })

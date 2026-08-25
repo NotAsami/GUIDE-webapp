@@ -4,7 +4,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import type {
   CharacterRow, CharacterSection, CharacterSheet, ContainerKind,
   EquippedGear, EquippedItem, EquippedWeapon, Feature, InventoryItem, ItemRarity, ItemSlot,
-  Json, ShardTree, WeaponHand,
+  ShardTree, WeaponHand,
 } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
@@ -26,7 +26,7 @@ import { useItemTooltip, type Bind, type TooltipData } from '../components/ItemT
 import { SHARD_SLOT_KEYS, shardSlots } from '../lib/shards'
 import { useGraph } from '../lib/useGraph'
 import { armedMatches, gid, resolve } from '../lib/graph'
-import { armableFor } from '../lib/graphState'
+import { armableFor, countAttack } from '../lib/graphState'
 import { PrimeSheet, type Offer } from '../components/PrimeSheet'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Equipment.module.css'
@@ -247,18 +247,25 @@ export function Equipment() {
       notes: [...atkRes.notes, ...dmgRes.notes],
       problems: [...atkRes.problems, ...dmgRes.problems],
     })
-    // Firing spends a shaft. The count is derived from quiver contents, so this
-    // is an ordinary inventory write — no separate ammo counter to drift.
-    if (stack) void spendAmmo(stack)
+    /* EVERY SWING COUNTS. `attacksThisTurn` is what lets a feature say "on your
+       first attack roll on your turn" — Reckless Attack's actual wording — so a
+       melee attack that wrote nothing left the count at zero all turn and the
+       decision stayed open after three swings. Folded into the SAME write as
+       the arrow, because two round trips can land apart and the shot that
+       counted but did not spend is the worse half to lose. */
+    void updateSections({
+      resources: countAttack(character) as CharacterRow['resources'],
+      ...(stack ? { inventory: spentAmmo(stack) as unknown as CharacterRow['inventory'] } : {}),
+    })
   }
 
-  /** Decrement (and remove at zero) the nocked ammunition stack. */
-  async function spendAmmo(stack: InventoryItem) {
+  /** The quiver after a shot: decremented, or gone at zero. Derived from
+   *  contents, so there is no separate ammo counter to drift. */
+  function spentAmmo(stack: InventoryItem) {
     const left = (stack.qty ?? 1) - 1
-    const next = left > 0
+    return left > 0
       ? inventory.map(i => (i.id === stack.id ? { ...i, qty: left } : i))
       : inventory.filter(i => i.id !== stack.id)
-    await updateSection('inventory', next as unknown as Json[])
   }
 
   /** Equip a carried container into its kind's slot. Its CONTENTS don't move —

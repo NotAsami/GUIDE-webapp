@@ -182,6 +182,10 @@ export function baseScope(character: CharacterRow, shardTrees: Record<string, Sh
        answer to a question the spellbook has already settled. Prose reaches it as
        `{saveDc}`, which is what asked for it. */
     saveDc: character.spellbook?.saveDC ?? 0,
+    /* Read straight off the store rather than through storedValue: this is not
+       an authored variable and has no VarDef to carry an initial. */
+    attacksThisTurn:
+      ((character.resources as { graph?: GraphState } | undefined)?.graph?.attacks) ?? 0,
   }
 }
 
