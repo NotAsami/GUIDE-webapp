@@ -116,7 +116,7 @@ export function ShardLattice() {
   const { session, loading: authLoading } = useAuth()
   const { isDm, loading: dmLoading } = useDmStatus()
   const nav = useNavigate()
-  const { trees, drafts, loading, error, saveTree, publishTree, createTree, deleteTree } = useDmShards()
+  const { trees, drafts, savedAt: rowSavedAt, loading, error, saveTree, publishTree, createTree, deleteTree } = useDmShards()
   const featureLib = useDmFeatures()
   // Every targetable thing, for the node's graph block and for the audit's
   // dangling-target check. `ready` gates the audit — see lib/useCatalogNodes.ts.
@@ -129,7 +129,7 @@ export function ShardLattice() {
   // tree — so reopening parked work reads clean rather than instantly dirty.
   const base = activeId ? drafts[activeId] ?? trees.find(t => t.id === activeId) ?? null : null
   const { draft, dirty, savedAt, update: updateDraft, reset, clear } =
-    useLocalDraft<EditorTree>(`shard:${activeId ?? 'none'}`, base)
+    useLocalDraft<EditorTree>(`shard:${activeId ?? 'none'}`, base, activeId ? rowSavedAt[activeId] : null)
   // Shim so the sub-inspectors keep their existing `Dispatch<SetStateAction>`
   // prop and none of them had to change: functional updates route to the
   // autosaving path, direct assignment to the reverting one.

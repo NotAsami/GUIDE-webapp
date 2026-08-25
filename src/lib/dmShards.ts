@@ -23,6 +23,14 @@ export interface DmShardsState {
   trees: EditorTree[]
   /** Parked in-progress edits, by tree id. The editor edits `drafts[id] ?? tree`. */
   drafts: Record<string, EditorTree>
+  /** When the row behind `drafts[id] ?? tree` was last written, by tree id.
+   *
+   *  For useLocalDraft's staleness check, which is the whole reason it exists —
+   *  the localStorage tier has to be able to tell "my unsaved work" from "the
+   *  copy I already replaced somewhere else". The SECRETS row's timestamp when
+   *  a draft is parked, the catalog row's otherwise, matching exactly which of
+   *  the two `base` came from. */
+  savedAt: Record<string, string>
   loading: boolean
   error: string | null
   refetch: () => Promise<void>
@@ -42,11 +50,12 @@ export function useDmShards(): DmShardsState {
   const { session } = useAuth()
   const [trees, setTrees] = useState<EditorTree[]>([])
   const [drafts, setDrafts] = useState<Record<string, EditorTree>>({})
+  const [savedAt, setSavedAt] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchAll = useCallback(async () => {
-    if (!session) { setTrees([]); setDrafts({}); setLoading(false); return }
+    if (!session) { setTrees([]); setDrafts({}); setSavedAt({}); setLoading(false); return }
     setLoading(true)
     const [catalogRes, secretsRes] = await Promise.all([
       supabase.from('shard_tree_catalog').select('*'),
@@ -61,6 +70,12 @@ export function useDmShards(): DmShardsState {
     setTrees(merged)
     setDrafts(Object.fromEntries(
       secretRows.filter(r => r.data.draft).map(r => [r.shard_id, r.data.draft as EditorTree]),
+    ))
+    setSavedAt(Object.fromEntries(
+      ((catalogRes.data as ShardTreeCatalogRow[] | null) ?? []).map(row => {
+        const sec = secretsById.get(row.id)
+        return [row.id, (sec?.data.draft ? sec.updated_at : row.updated_at) ?? '']
+      }),
     ))
     setError(null)
     setLoading(false)
@@ -123,5 +138,5 @@ export function useDmShards(): DmShardsState {
     if (err) { setError(err.message); setTrees(snapshot) }
   }, [trees])
 
-  return { trees, drafts, loading, error, refetch: fetchAll, saveTree, publishTree, createTree, deleteTree }
+  return { trees, drafts, savedAt, loading, error, refetch: fetchAll, saveTree, publishTree, createTree, deleteTree }
 }

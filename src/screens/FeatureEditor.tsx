@@ -131,7 +131,7 @@ export default function FeatureEditor() {
   // not instantly dirty.
   const base = creating ? BLANK : row ? featureContent(row) : null
   const { draft, dirty, savedAt, update, reset, clear } =
-    useLocalDraft<CatalogFeatureData>(creating ? 'feature:__new__' : `feature:${selId ?? 'none'}`, base)
+    useLocalDraft<CatalogFeatureData>(creating ? 'feature:__new__' : `feature:${selId ?? 'none'}`, base, row?.updated_at)
 
   useEffect(() => {
     const t = window.setTimeout(() => setToast(null), 2400)

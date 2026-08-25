@@ -1494,7 +1494,7 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
   const selId = row?.id ?? null
   const base = creating ? BLANK_LOOT : row ? lootContent(row) : null
   const { draft, dirty, savedAt, update, reset, clear } =
-    useLocalDraft<LootTable>(creating ? 'loot:__new__' : `loot:${selId ?? 'none'}`, base)
+    useLocalDraft<LootTable>(creating ? 'loot:__new__' : `loot:${selId ?? 'none'}`, base, row?.updated_at)
 
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
   const [pick, setPick] = useState<number | null>(null)
@@ -5416,7 +5416,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
   // one, else the published content. Reopening a parked draft must read clean.
   const base = creating ? BLANK_CLASS : row ? classContent(row) : null
   const { draft, dirty, savedAt, update, reset, clear } =
-    useLocalDraft<ClassDef>(creating ? 'class:__new__' : `class:${selId ?? 'none'}`, base)
+    useLocalDraft<ClassDef>(creating ? 'class:__new__' : `class:${selId ?? 'none'}`, base, row?.updated_at)
 
   const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
   const [varsOpen, setVarsOpen] = useState(false)
@@ -6790,7 +6790,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
   const selId = row?.id ?? null
   const base = creating ? BLANK_RACE : row ? raceContent(row) : null
   const { draft, dirty, savedAt, update, reset, clear } =
-    useLocalDraft<RaceDef>(creating ? 'race:__new__' : `race:${selId ?? 'none'}`, base)
+    useLocalDraft<RaceDef>(creating ? 'race:__new__' : `race:${selId ?? 'none'}`, base, row?.updated_at)
 
   const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
   const [varsOpen, setVarsOpen] = useState(false)
@@ -7286,7 +7286,7 @@ function BackgroundForm({ row, creating, lib, featureLib, onSelected, onCleared 
   const selId = row?.id ?? null
   const base = creating ? BLANK_BACKGROUND : row ? backgroundContent(row) : null
   const { draft, dirty, savedAt, update, reset, clear } =
-    useLocalDraft<BackgroundDef>(creating ? 'background:__new__' : `background:${selId ?? 'none'}`, base)
+    useLocalDraft<BackgroundDef>(creating ? 'background:__new__' : `background:${selId ?? 'none'}`, base, row?.updated_at)
 
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
   const set = (p: Partial<BackgroundDef>) => update(x => ({ ...x, ...p }))
