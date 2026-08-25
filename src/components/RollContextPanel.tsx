@@ -37,7 +37,7 @@ import { colorOf } from '../lib/palette'
 import type { CharacterRow, ShardTree } from '../lib/database.types'
 import {
   armedIdsOf, askSections, catalogView, lineViews, openAsks, patchRiders, pickedOf, rerollAt,
-  resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
+  releaseIdsOf, resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
   type CatalogView, type Die, type DieAddr, type RiderView, type RollLineView,
 } from '../lib/rollView'
 import styles from './RollContextPanel.module.css'
@@ -251,15 +251,17 @@ function Entry({
   const views = useMemo(() => riderViews(entry), [entry])
   const lines = useMemo(() => lineViews(entry), [entry])
   const totals = useMemo(() => rollTotals(entry, views), [entry, views])
-  /* TAKEN arms only. An arm carrying a question is not a contribution yet — it
-     is asked below, under Your call — and listing it here too put every blow on
-     screen twice: once as a Consume row with no text, once as a real choice. */
-  const armed = views.filter(v => v.rider.armedId && v.rider.when !== 'manual')
-  const resolved = resolvedOf(views).filter(v => !v.rider.armedId)
-  // ONE SOURCE, ONE ROW — see sourceGroups.
-  const armedGroups = useMemo(() => sourceGroups(armed), [armed])
-  const resolvedGroups = useMemo(() => sourceGroups(resolved), [resolved])
-  const applied = armedGroups.length > 0 || resolvedGroups.length > 0
+  /* ONE APPLIED LIST, IN THE ORDER THE ROLL BUILT IT.
+     `resolvedOf` is exactly "not still a question", which is both the engine's
+     own contributions and the TAKEN arms — an arm carrying a question is asked
+     below under Your call, never here, or every blow lands on screen twice.
+     Held arms used to be a separate block ABOVE the resolved ones, which put
+     Brutal Strike above the Reckless Attack it is gated on: an order that came
+     from how the two were stored, not from anything the player did. resolve()
+     already walks the graph before the armed queue, so one list in view order
+     puts a prerequisite ahead of what it authorises. */
+  const appliedGroups = useMemo(() => sourceGroups(resolvedOf(views)), [views])
+  const applied = appliedGroups.length > 0
   // Exclusive riders bundled; everything else stays one ask per row. Sections,
   // not riders, is what the panel counts and renders — a pick-one is one
   // question however many options it has.
@@ -349,22 +351,14 @@ function Entry({
             {applied && (
               <div className={styles.applied}>
                 <div className={styles.appliedH}>Applied by the engine</div>
-                {armedGroups.length > 0 && (
-                  <div className={styles.contribs}>
-                    {armedGroups.map(g => (
-                      <Contribution
-                        key={g.key} group={g} showTip={showTip} onLeave={onLeave}
-                        held={armedIdsOf(g.views).some(id => stillArmed.has(id))}
-                      />
-                    ))}
-                  </div>
-                )}
-                {/* Resolved: the engine already decided. No switch, nothing to do. */}
-                {resolvedGroups.length > 0 && (
-                  <div className={styles.contribs}>
-                    {resolvedGroups.map(g => <Contribution key={g.key} group={g} showTip={showTip} onLeave={onLeave} />)}
-                  </div>
-                )}
+                <div className={styles.contribs}>
+                  {appliedGroups.map(g => (
+                    <Contribution
+                      key={g.key} group={g} showTip={showTip} onLeave={onLeave}
+                      held={armedIdsOf(g.views).some(id => stillArmed.has(id))}
+                    />
+                  ))}
+                </div>
               </div>
             )}
 
@@ -385,16 +379,17 @@ function Entry({
                       key={`c${si}`} views={sec.views} showTip={showTip}
                       onPick={index => {
                         // Exclusive: answering one declines the rest, in one
-                        // write. And ANSWERING IS THE RELEASE — the whole group
-                        // spends together, because one press held all of it.
+                        // write. And ANSWERING IS THE RELEASE — the whole
+                        // ACTIVATION spends together, offered arms and taken
+                        // ones alike, because one press held all of it.
                         onPatchMany(sec.views.map(o => ({ index: o.index, patch: { on: o.index === index } })))
-                        onAnswerArmed?.(armedIdsOf(sec.views), entry.id)
+                        onAnswerArmed?.(releaseIdsOf(views, sec.views), entry.id)
                       }}
                       onUndo={() => {
                         onPatchMany(sec.views.map(o => ({ index: o.index, patch: { on: false } })))
                         // Undo puts the offer back — the reason answering marks
                         // the hold rather than deleting it.
-                        onAnswerArmed?.(armedIdsOf(sec.views), null)
+                        onAnswerArmed?.(releaseIdsOf(views, sec.views), null)
                       }}
                       onLeave={onLeave}
                     />

@@ -195,6 +195,24 @@ export function sourceGroups(views: RiderView[]): { key: string; source: string;
 export const armedIdsOf = (views: RiderView[]) =>
   views.map(v => v.rider.armedId).filter((x): x is string => !!x)
 
+/** Every armed id ONE ACTIVATION left on this roll — the whole feature, not
+ *  just the arms that carried the question.
+ *
+ *  Brutal Strike arms four: two offered blows, plus a TAKEN "Remove Advantage"
+ *  and a TAKEN +1d10. Answering the blows released only the two that asked, so
+ *  the disadvantage and the extra die stayed queued and rode the NEXT swing —
+ *  the blows correctly gone, the price still being paid, and nothing on screen
+ *  to press. `armedIdsOf` already says consuming a feature consumes ALL of it;
+ *  this is the set that sentence was about.
+ *
+ *  Keyed the way `sourceGroups` keys a row, so "one source, one row" and "one
+ *  source, one release" cannot drift apart. */
+export const releaseIdsOf = (all: RiderView[], section: RiderView[]) => {
+  const key = (v: RiderView) => v.rider.sourceGid ?? `name:${v.rider.source}`
+  const src = section[0] && key(section[0])
+  return src ? armedIdsOf(all.filter(v => key(v) === src)) : []
+}
+
 /** Unresolved riders in reading order, with the exclusive ones bundled.
  *
  *  A section is either one plain ask or a PICK-ONE: several riders sharing a

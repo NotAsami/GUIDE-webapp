@@ -20,7 +20,7 @@ import { activeSources } from './effects.ts'
 import type {
   ArmedMod, CharacterRow, Feature, GraphEffect, GraphState, Json, ShardTree, VarDef,
 } from './database.types.ts'
-import { evalExpr } from './expr.ts'
+import { evalExpr, freeIdents } from './expr.ts'
 import type { GraphContext, ResolveReq } from './graph.ts'
 import { armedMatches, asKey, gid, reqKeys, staleArmed } from './graph.ts'
 import { IS_ACTIVATION } from './opSchema.ts'
@@ -68,7 +68,20 @@ export const setDmVars = (character: CharacterRow, next: Record<string, number |
  *  ACTIVE set, so an unequipped item's variables are absent exactly as its
  *  features are. */
 export type VarScope = 'player' | 'dm'
-export type VarRow = { def: VarDef; from: ActiveSource; value: number | boolean }
+export type VarRow = {
+  def: VarDef
+  from: ActiveSource
+  value: number | boolean
+  /** An activation somewhere writes this variable, so the PRESS owns it.
+   *
+   *  A hand switch beside a `setVar` is a second door into the same room, and
+   *  the one with no lock on it: Reckless Attack costs a use and sets
+   *  `recklessAttack`, so flipping the switch bought the advantage for free and
+   *  left the use in the bank. The DM console ignores this — the split is about
+   *  bypassing a cost the player was meant to pay, and the DM is the one who
+   *  decides what a player pays. */
+  locked: boolean
+}
 
 const bucket = (scope: VarScope): 'vars' | 'dmVars' => (scope === 'dm' ? 'dmVars' : 'vars')
 
@@ -88,7 +101,16 @@ export function scopedVars(
   const store = g[bucket(scope)]
   const out: VarRow[] = []
   const seen = new Set<string>()
-  for (const from of activeSources(character, shardTrees)) {
+  const sources = activeSources(character, shardTrees)
+  /* Every variable some activation writes, across the WHOLE active set — a
+     feature may well set a variable another feature declared, and a lock that
+     only looked at the declaring node would miss exactly that. */
+  const written = new Set(
+    sources.flatMap(from => ('graph' in from.obj ? from.obj.graph ?? [] : []))
+      .filter(e => IS_ACTIVATION(e.op) && e.variable)
+      .map(e => e.variable as string),
+  )
+  for (const from of sources) {
     const defs = 'vars' in from.obj ? from.obj.vars ?? [] : []
     for (const def of defs) {
       // First wins, matching collectVars — the collision itself is reported by
@@ -97,7 +119,10 @@ export function scopedVars(
       if (def.kind !== 'stored' || seen.has(def.name)) continue
       seen.add(def.name)
       if ((def.scope === 'dm') !== (scope === 'dm')) continue
-      out.push({ def, from, value: store?.[def.name] ?? def.initial ?? zero(def.type) })
+      out.push({
+        def, from, value: store?.[def.name] ?? def.initial ?? zero(def.type),
+        locked: written.has(def.name),
+      })
     }
   }
   return out
@@ -263,6 +288,35 @@ export function planActivation(
   return out
 }
 
+/** WHAT THIS FEATURE IS WAITING ON, or null if pressing it would do something.
+ *
+ *  A `when` gates EXISTENCE (§32), and planActivation drops a false one — so a
+ *  feature whose every activation is gated shut plans nothing. Pressing it
+ *  spent nothing, wrote nothing, and still logged a roll entry with no lines:
+ *  the app agreeing you used a feature it knew could not fire. Brutal Strike is
+ *  the case — all four arms gated on Reckless Attack — and "I can use it
+ *  without Reckless Attack" is what that silence looks like from outside.
+ *
+ *  Only a feature that HAS gated activations can be shut. One with no
+ *  activation ops is a passive or a bare tracker, and one with a `roll` still
+ *  has something to do on the press, so neither is this function's business.
+ *
+ *  Returns the IDENTIFIERS the conditions read, not a sentence: the caller has
+ *  the variable labels and this module does not. Empty array = shut for a
+ *  reason nothing named, which still beats a press that lies. */
+export function gateOf(
+  feature: { name?: string; roll?: string; vars?: VarDef[]; graph?: GraphEffect[] },
+  ctx: GraphContext,
+  character: CharacterRow,
+  source?: string,
+): string[] | null {
+  if (feature.roll) return null
+  const acts = (feature.graph ?? []).filter(e => e.once || IS_ACTIVATION(e.op))
+  if (!acts.length) return null
+  if (planActivation(feature, ctx, character, source).length) return null
+  return [...new Set(acts.flatMap(e => (e.when ? freeIdents(e.when) : [])))]
+}
+
 /** Fold the outcomes the player accepted into one `resources` patch.
  *
  *  `answers` holds the ticked `ask` labels. An outcome with no `ask` is not
@@ -337,6 +391,22 @@ export const consumeArmed = (character: CharacterRow, ids: string | string[]): R
   return {
     ...(character.resources ?? {}),
     graph: { ...g, armed: (g.armed ?? []).filter(m => !drop.has(m.id)) },
+  } as Record<string, Json>
+}
+
+/** ONE MORE SWING THIS TURN — the patch an attack roll writes.
+ *
+ *  Feeds `attacksThisTurn`, which is how a feature says "on your FIRST attack
+ *  roll on your turn": the decision point that wording names is only open while
+ *  the count is zero. Reset by turnGraphPatch.
+ *
+ *  A patch, like everything else here, so a ranged attack folds it into the
+ *  same round trip that spends the arrow. */
+export const countAttack = (character: CharacterRow): Record<string, Json> => {
+  const g = state(character)
+  return {
+    ...(character.resources ?? {}),
+    graph: { ...g, attacks: (g.attacks ?? 0) + 1 },
   } as Record<string, Json>
 }
 
@@ -524,9 +594,19 @@ export function turnGraphPatch(
   character: CharacterRow,
   ctx: GraphContext,
   shardTrees: Record<string, ShardTree> = {},
-): { resources: Record<string, Json>; vars: string[]; disarmed: string[] } | null {
+): { resources: Record<string, Json>; ended: string[]; disarmed: string[] } | null {
   const vars = turnVars(character, shardTrees)
   const names = Object.keys(vars)
+  /* WHAT ENDED, NOT WHICH IDENTIFIER RESET. The report used to print the
+     variable name — "recklessAttack reset" — which is the engine talking to
+     itself in front of the player. A variable is a feature's internal state;
+     the feature is the thing they pressed and the thing that stopped. Deduped,
+     because a feature declaring two turn-scoped variables ended once. */
+  const ended = [...new Set(
+    playerVars(character, shardTrees)
+      .filter(r => r.def.resetOn === 'turn')
+      .map(r => r.from.obj.name),
+  )]
 
   const g = state(character)
   const nextScope = { ...ctx.scope, ...vars }
@@ -534,13 +614,15 @@ export function turnGraphPatch(
   const keptArmed = (g.armed ?? []).filter(m => !stale.has(m.id))
   const disarmed = (g.armed ?? []).filter(m => stale.has(m.id)).map(m => m.label)
 
-  if (!names.length && !disarmed.length) return null
+  if (!names.length && !disarmed.length && !g.attacks) return null
   return {
     resources: {
       ...(character.resources ?? {}),
-      graph: { ...g, vars: { ...(g.vars ?? {}), ...vars }, armed: keptArmed },
+      // The swing counter resets with everything else the turn boundary owns —
+      // one write, or `attacksThisTurn` disagrees with the variables it gates.
+      graph: { ...g, vars: { ...(g.vars ?? {}), ...vars }, armed: keptArmed, attacks: 0 },
     } as Record<string, Json>,
-    vars: names,
+    ended,
     disarmed,
   }
 }

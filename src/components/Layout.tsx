@@ -131,8 +131,8 @@ export function Layout() {
            button silently changed. Reporting them is the same rule the
            countdowns follow: a turn that alters state and says nothing reads as
            a button that did not work. */
-        ...(turn?.vars ?? []).map(name => ({
-          label: name, total: 'reset', breakdown: 'until the start of your turn', tone: 'buff' as const,
+        ...(turn?.ended ?? []).map(label => ({
+          label, total: 'ended', breakdown: 'lasted until the start of your turn', tone: 'buff' as const,
         })),
         ...(turn?.disarmed ?? []).map(label => ({
           label, total: 'lapsed', breakdown: 'armed under something that ended', tone: 'buff' as const,
@@ -141,7 +141,7 @@ export function Layout() {
           label, total: 'recharged', breakdown: 'once per turn', tone: 'buff' as const,
         })),
         ...(counted.length === 0 && expired.length === 0 && ticks.length === 0
-          && !turn?.vars.length && !turn?.disarmed.length && !recharged
+          && !turn?.ended.length && !turn?.disarmed.length && !recharged
           ? [{ label: 'No change', total: '—', breakdown: 'nothing on a timer' }]
           : []),
       ],

@@ -10,7 +10,7 @@ import type { RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
 import {
   askSections, catalogView, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf, rerollAt,
-  resolvedOf, riderAmount, riderValue, riderViews, rollTotals, sourceGroups, unresolvedOf,
+  releaseIdsOf, resolvedOf, riderAmount, riderValue, riderViews, rollTotals, sourceGroups, unresolvedOf,
 } from './rollView.ts'
 
 const rider = (over: Partial<Rider>): Rider => ({
@@ -532,4 +532,41 @@ test('two amounts from one source keep the order the engine gave them', () => {
     ] }],
   }))
   assert.deepEqual(sourceGroups(views)[0].views.map(v => v.rider.label), ['First', 'Second'])
+})
+
+/* ONE PRESS, ONE SWING, ONE RELEASE. Brutal Strike arms four mods on a single
+   activation: two offered blows and two TAKEN ones. Answering released only the
+   arms that asked, so "Remove Advantage" and the +1d10 stayed in the queue and
+   rode the next attack — the blows correctly gone, the price still charged. */
+const bsEntry = () => entry({
+  riderGroups: [
+    { label: 'Attack', riders: [rider({
+      sourceGid: 'feature:bs', source: 'Brutal Strike', label: 'Remove Advantage',
+      op: 'dis', when: 'always', on: true, armedId: 'a-dis',
+    })] },
+    { label: 'Damage', riders: [
+      rider({ sourceGid: 'feature:bs', source: 'Brutal Strike', label: 'Add 1d10',
+        dice: ['1d10'], flat: 0, when: 'always', on: true, armedId: 'a-add' }),
+      rider({ sourceGid: 'feature:bs', source: 'Brutal Strike', label: 'Forceful Blow',
+        op: 'note', when: 'manual', on: false, armedId: 'a-forceful', choice: 'feature:bs' }),
+      rider({ sourceGid: 'feature:bs', source: 'Brutal Strike', label: 'Hamstring Blow',
+        op: 'note', when: 'manual', on: false, armedId: 'a-hamstring', choice: 'feature:bs' }),
+      rider({ sourceGid: 'feature:rage', source: 'Rage', label: 'Rage', flat: 2, armedId: 'a-rage' }),
+    ] },
+  ],
+})
+
+test('answering a blow releases the WHOLE activation, taken arms included', () => {
+  const views = riderViews(bsEntry())
+  const [section] = askSections(views).filter(s => s.choice)
+  assert.deepEqual(
+    releaseIdsOf(views, section.views).sort(),
+    ['a-add', 'a-dis', 'a-forceful', 'a-hamstring'],
+  )
+})
+
+test('releasing one source never reaches another feature holding on the same roll', () => {
+  const views = riderViews(bsEntry())
+  const [section] = askSections(views).filter(s => s.choice)
+  assert.ok(!releaseIdsOf(views, section.views).includes('a-rage'))
 })

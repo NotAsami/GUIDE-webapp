@@ -79,9 +79,13 @@ const HELP = {
       <>
         <p><code>when</code> is a condition the app evaluates. If it reads false, the node contributes nothing and the player never sees it mentioned.</p>
         <p className={styles.mono}>Written over this feature’s variables and the character sheet. No prose, no prompt, no choice.</p>
+        <p className={styles.mono}><code>attacksThisTurn</code> counts attack rolls made since the last Advance Turn, so <code>attacksThisTurn == 0</code> is “on your first attack roll on your turn”.</p>
         <div className={styles.dl}>
           <span className={styles.k}>Example</span><span className={styles.v}>hp &lt; hpMax / 2</span>
           <span className={styles.k}>Example</span><span className={styles.v}>charges &gt; 0 &amp;&amp; isRaging</span>
+          {/* The turn counter is not a variable anyone declares, so nothing
+              else in this editor would ever mention it. */}
+          <span className={styles.k}>Example</span><span className={styles.v}>attacksThisTurn == 0</span>
           <span className={styles.k}>Empty</span><span className={styles.v}>Always true — the node always contributes.</span>
         </div>
       </>

@@ -19,7 +19,7 @@ import { rollHeal } from '../lib/dice'
 import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet } from '../lib/effects'
 import { gid, resolve, rollResolution, type GraphContext } from '../lib/graph'
-import { applyOutcomes, planActivation, type Outcome } from '../lib/graphState'
+import { applyOutcomes, gateOf, planActivation, type Outcome } from '../lib/graphState'
 import styles from './ActivationSheet.module.css'
 import { Icon } from './Icon'
 
@@ -57,6 +57,12 @@ export function useActivation(host: ActivationHost) {
    *  questions left at all.) */
   function start(f: Feature) {
     if (busy || !canUse(f)) return
+    /* GATED SHUT — every activation this feature has is `when`-false, so the
+       press would plan nothing, write nothing, and still log an empty entry.
+       The guard lives HERE rather than on the Features screen because the
+       weapon card presses Use too, and a prerequisite enforced on one surface
+       is a prerequisite. See gateOf. */
+    if (gateOf(f, graph, character, gid('feature', f))) return
     const outcomes = planActivation(f, graph, character, gid('feature', f))
     if (outcomes.some(o => o.ask)) { setPending({ feature: f, outcomes }); return }
     void run(f, outcomes)

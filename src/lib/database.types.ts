@@ -553,6 +553,12 @@ export type GraphState = {
   /** DM-only. Guarded by migration 0015, not by client good behaviour. */
   dmVars?: Record<string, number | boolean>
   armed?: ArmedMod[]
+  /** Attack rolls made since the last Advance Turn, for `attacksThisTurn`.
+   *
+   *  NOT in `vars`: that bucket is authored variables, every one of them
+   *  declared on some node, and a reserved name in it would collide with the
+   *  first DM who authors one. Reset by turnGraphPatch alongside them. */
+  attacks?: number
 }
 
 /** Deliberately a short list, not a kind×field matrix. Each exists because a

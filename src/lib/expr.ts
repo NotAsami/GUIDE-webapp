@@ -26,7 +26,15 @@ export type ExprScope = Record<string, number | boolean>
  *  declared variables; a contribution formula's adds ROLL_IDENTS. A variable that could
  *  read `cast` would stop being a function of character state and become a function of
  *  one particular roll, which is what the variable DAG's memo depends on not happening. */
-export const VAR_IDENTS = ['level', 'prof', 'str', 'dex', 'con', 'int', 'wis', 'cha', 'hp', 'hpMax', 'saveDc'] as const
+export const VAR_IDENTS = [
+  'level', 'prof', 'str', 'dex', 'con', 'int', 'wis', 'cha', 'hp', 'hpMax', 'saveDc',
+  /* How many attack rolls this character has made since the last Advance Turn.
+     Character state, not roll context: it is a fact about the turn, true before
+     the roll it might gate exists, which is exactly what keeps it on this side
+     of §33's line. "On your FIRST attack roll" — the decision point Reckless
+     Attack and its family are worded around — is `attacksThisTurn == 0`. */
+  'attacksThisTurn',
+] as const
 export const ROLL_IDENTS = ['cast'] as const
 
 // ---------------------------------------------------------------------------

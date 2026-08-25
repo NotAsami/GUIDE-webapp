@@ -2022,3 +2022,14 @@ test('forgoing advantage actually cancels it', async () => {
   const res = resolve(buildContext(host), { kind: 'attack', sub: 'melee', ability: 'str', subject: 'weapon:axe' })
   assert.equal(res.dis, true, 'the armed dis reaches a Strength melee swing')
 })
+
+test('a condition may read attacksThisTurn — "on your first attack roll" is authorable', () => {
+  // The whole point of the identifier: it has to survive the author-time audit,
+  // or the DM writes the rule and Publish refuses it.
+  const bad = auditNode({
+    id: 'feature:x', name: 'Reckless Attack',
+    graph: [{ id: 'e1', op: 'setVar', variable: 'go', value: 'true', label: 'Go', when: 'attacksThisTurn == 0' }],
+    vars: [{ name: 'go', kind: 'stored', type: 'bool', initial: false }],
+  } as never).filter(a => a.t === 'Unknown identifier')
+  assert.deepEqual(bad, [])
+})

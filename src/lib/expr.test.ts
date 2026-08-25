@@ -9,6 +9,7 @@ import { evalExpr, interpolate, interpolations, ROLL_IDENTS, VAR_IDENTS } from '
  *  Arbiter path values are §21's, which is the content that forced this engine. */
 const VARS: ExprScope = {
   level: 7, prof: 3, str: 1, dex: 3, con: 2, int: 0, wis: 4, cha: -1, hp: 52, hpMax: 52, saveDc: 15,
+  attacksThisTurn: 0,
   mercy: 12, condemnation: 5, judgementState: 1, judgementBias: 5,
   isMercy: true, isCondemnation: false, isBalance: false, perfectJudgment: false,
   canSwitchToMercy: true, canSwitchToCondemnation: false, canSwitchToBalance: false,
