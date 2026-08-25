@@ -8,6 +8,7 @@
 // tier exists to prevent.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { seedFrom } from './draft.ts'
 
 const PREFIX = 'guide:draft:'
 
@@ -52,4 +53,51 @@ test('the new-feature key is distinct from every saved row', () => {
   store.set(`${PREFIX}feature:__new__`, JSON.stringify({ at: 1, value: { name: 'Draft' } }))
   assert.equal(read<{ name: string }>(store, 'feature:__new__')?.value.name, 'Draft')
   assert.equal(read(store, 'feature:'), null)
+})
+
+
+// --- which copy the editor opens on ------------------------------------------
+
+/* The local tier is a crash cache, not a source of truth. It used to win
+   whenever it existed, so one abandoned autosave shadowed the row for good:
+   edit the feature anywhere else, reopen the editor, and there is the version
+   you already replaced. */
+const ROW = { name: 'Reckless Attack, edited' }
+const LOCAL = { at: 1000, value: { name: 'Reckless Attack, stale' } }
+
+test('a local copy OLDER than the row loses, and is deleted', () => {
+  const seed = seedFrom(LOCAL, ROW, new Date(2000).toISOString())
+  assert.deepEqual(seed.value, ROW)
+  assert.equal(seed.drop, true)
+  assert.equal(seed.savedAt, null)
+})
+
+test('a local copy NEWER than the row wins — that is unsaved work', () => {
+  const seed = seedFrom(LOCAL, ROW, new Date(500).toISOString())
+  assert.deepEqual(seed.value, LOCAL.value)
+  assert.equal(seed.drop, false)
+  assert.deepEqual(seed.savedAt, new Date(1000))
+})
+
+test('same instant is not newer — the row wins a tie', () => {
+  // Save Draft writes the row AFTER the autosave that preceded it, so a tie is
+  // the row's own write coming back, never work that outran it.
+  assert.equal(seedFrom(LOCAL, ROW, new Date(1000).toISOString()).drop, true)
+})
+
+test('no row timestamp means no row — the local copy is the only work there is', () => {
+  const seed = seedFrom(LOCAL, null, null)
+  assert.deepEqual(seed.value, LOCAL.value)
+  assert.equal(seed.drop, false)
+})
+
+test('an unparsable timestamp never silently discards unsaved work', () => {
+  assert.deepEqual(seedFrom(LOCAL, ROW, 'not a date').value, LOCAL.value)
+})
+
+test('no local copy at all just opens the row, dropping nothing', () => {
+  const seed = seedFrom(null, ROW, new Date(2000).toISOString())
+  assert.deepEqual(seed.value, ROW)
+  assert.equal(seed.drop, false)
+  assert.equal(seed.savedAt, null)
 })

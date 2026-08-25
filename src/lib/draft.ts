@@ -41,6 +41,41 @@ function read<T>(key: string): Stored<T> | null {
   }
 }
 
+/**
+ * WHICH COPY THE EDITOR OPENS ON — the local autosave, or the row.
+ *
+ * Pure and exported so it can be tested as the real thing rather than as a
+ * paraphrase of itself; the hook below is the only caller.
+ *
+ * The local tier is a CRASH CACHE, not a source of truth, and the only thing
+ * that tells the two apart is age. Without `rowAt` the local copy won every
+ * time it existed, so a single abandoned autosave shadowed the row for good:
+ * edit the feature anywhere else, reopen the editor, and there is the version
+ * you already replaced — flagged as unsaved changes, which reads as the editor
+ * having lost the save rather than found an old one.
+ *
+ * `drop` is separate from "did not win": a losing copy is DELETED. Left in
+ * place it wins again the moment the row is next written from this tab and its
+ * timestamp moves past it — the same stale content returning after it seemed
+ * to be gone, by which point nobody suspects a cache.
+ *
+ * No row timestamp means no row yet (a feature being created), and there the
+ * local copy is the only work in existence.
+ */
+export function seedFrom<T>(
+  local: Stored<T> | null,
+  base: T | null,
+  rowAt?: string | number | null,
+): { value: T | null; savedAt: Date | null; drop: boolean } {
+  const at = rowAt ? new Date(rowAt).getTime() : 0
+  const fresh = local && (!at || !Number.isFinite(at) || local.at > at) ? local : null
+  return {
+    value: fresh?.value ?? base ?? null,
+    savedAt: fresh ? new Date(fresh.at) : null,
+    drop: !!local && !fresh,
+  }
+}
+
 export interface DraftBox<T> {
   /** What the editor edits. Null only when nothing is selected. */
   draft: T | null
@@ -60,8 +95,17 @@ export interface DraftBox<T> {
  * it re-hydrates from that key's local copy. `base` is what the draft is measured
  * against — pass `row.draft ?? row.data`, so an editor reopened on a parked draft
  * starts clean rather than instantly dirty.
+ *
+ * `baseAt` is the row's `updated_at`, and it is what makes the local tier a
+ * CACHE rather than a trap. Without it the local copy won unconditionally, so
+ * one abandoned autosave shadowed the real row for good: the DM edited the
+ * feature elsewhere — another browser, another device, straight in the
+ * database — reopened the editor, and got the version they had already
+ * replaced, marked "unsaved changes" for good measure. Omit it and the old
+ * always-local behaviour is what you get, which is right only while the thing
+ * being edited has no row yet.
  */
-export function useLocalDraft<T>(key: string, base: T | null): DraftBox<T> {
+export function useLocalDraft<T>(key: string, base: T | null, baseAt?: string | number | null): DraftBox<T> {
   const [draft, setDraft] = useState<T | null>(base)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
   const timer = useRef<number | undefined>(undefined)
@@ -70,15 +114,11 @@ export function useLocalDraft<T>(key: string, base: T | null): DraftBox<T> {
   const owner = useRef(key)
 
   useEffect(() => {
-    const local = read<T>(key)
-    // Only prefer the local copy when it is actually newer work. A draft saved to
-    // the row on another device should win over a stale tab's leftovers, and
-    // there is no way to tell them apart except that the row is the shared one —
-    // so local only wins when the row has nothing parked.
-    const next = local && base === null ? local.value : (local?.value ?? base)
+    const seed = seedFrom(read<T>(key), base, baseAt)
+    if (seed.drop) { try { localStorage.removeItem(PREFIX + key) } catch { /* see read() */ } }
     owner.current = key
-    setDraft(next ?? null)
-    setSavedAt(local ? new Date(local.at) : null)
+    setDraft(seed.value)
+    setSavedAt(seed.savedAt)
     return () => window.clearTimeout(timer.current)
     // `base` deliberately absent: re-running on every refetch would clobber
     // in-flight edits with the server's copy. Selection changes are what re-seed.
