@@ -1,8 +1,9 @@
-
 <div align="center">
 <img src="public/guide-codex-logo.svg" alt="G.U.I.D.E. Codex" width="800" />
 </div>
 <br>
+
+https://github.com/user-attachments/assets/838e64f6-3285-4832-9f0a-acb5d8684348
 
 The GUIDE is a web-app that can help online D&D **players** and **dungeon masters** be more immersed in their campaign.
 It's a in-world D&D character codex with a fantasy-cyberpunk terminal UI, built for a3–4 player campaigns, though more players should not be an issue. The codex features everything you would need for a D&D campaign and more. 
@@ -13,17 +14,16 @@ Current features include:
 - **Inventory management:** Players are limited to a 4x5 grid of quick access inventory. They have access to backpacks, sacks and bag of holding. Weight is the only limitation, if a players acquires an item while their on-person inventory is full, the item is automatically routed to a backpack or bag of holding.
 - **Journal:** DMs can write journal entries such as quests and session recaps using a markdown parser to create quests / session recaps for the players to read in their journal. The quest support external linking to related stuff for World Anvil or other hosted worlds. Quests have objectives that can be marked completed or unfinished. Quests too can be active, completed or failed.
 - **Lore:**
-- **Character (pending rename):** Central screen for all your rolls, from skill checks to saves, you can roll everything here. This screen also includes a roll history printout
+- **Rolls:** Central screen for all your rolls, from skill checks to saves, you can roll everything here. This screen also includes a roll history printout
 - **Spellbook:**
 - **Shards (campaign specific):**
 - **DM-View:** The DMs can create items, set conditions, create features, spells, items or other things. The feature engine is still a work in progress, but it will be a major addition to creating features that affect rolls, other features or do special effects. The DMs can manage the journal of players, push notifications to the clients, grant items, potions and other things
-Future additions:
 - **Loot table engine:** DMs will be able to define their own loot tables or use the pre-defined ones.
   - **Shop generator:** DMs will be able to create shopkeepers with their loot tables that will dynamically generate a shop screen for the players where they will be autonomously able to spend their gold and purchase items.
   - **Loot generator:** DMs will be able to use their loot tables to create loot chests / add loot to their game, for example, you would create a chest loot table which would have chances to have some items, then you would grant roll this table to generate loot and automatically grant that loot to the players that opened the chest.
 - **Feature engine:** The DMs will be able to create features that end other status effects, grant advantage on certain saves, skill checks or other rolls, features that will grant bonus damage to attacks and many other things.
   - **Roll context panel:** Created as a part of the **Feature engine**, players will be able to see exactly what is affecting their rolls. For example: A roll could be affected by a feature called Condemning Strike, which could add +1d4 to the attacks damage. So the roll would display as:
-
+ 
 ```
 Greatsword:
 Stab an enemy with your sword:
@@ -35,6 +35,9 @@ Damage: 1d12 [8] + 2 = 10
 Total Attack: 22
 Total Damage: 13
 ```
+## Future Additions:
+- Mobile port
+- Campaign Switcher
 
 ## Stack
 
