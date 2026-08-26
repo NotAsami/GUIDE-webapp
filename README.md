@@ -1,12 +1,14 @@
 <div align="center">
 <img src="public/guide-codex-logo.svg" alt="G.U.I.D.E. Codex" width="800" />
-</div>
-<br>
 
 https://github.com/user-attachments/assets/838e64f6-3285-4832-9f0a-acb5d8684348
 
+</div>
+
+---
+
 The GUIDE is a web-app that can help online D&D **players** and **dungeon masters** be more immersed in their campaign.
-It's a in-world D&D character codex with a fantasy-cyberpunk terminal UI, built for a3–4 player campaigns, though more players should not be an issue. The codex features everything you would need for a D&D campaign and more. 
+It's a in-world D&D character codex with a fantasy-cyberpunk terminal UI, built for 3–4 player campaigns, though more players should not be an issue. The codex features everything you would need for a D&D campaign and more. 
 Current features include:
 - **Campaign progression home:** It features 3 widgets that can display current area, main quest line and other progression, authored by the DM.
 - **Equipment overview screen:** See what items and gear you have equipped, and roll attacks with your main and off-hand weapon.
