@@ -2,6 +2,22 @@ import type { CharacterRow, CharacterSection, CharacterSheet, ShardTree } from '
 import type { RollLine } from './rolls.tsx'
 import { effectiveSheet } from './effects.ts'
 import { restVarPatch, withArmedCleared, withVars } from './graphState.ts'
+import { characterVars } from './graph.ts'
+import { usesOf } from './featureView.ts'
+import { evalExpr, type ExprScope } from './expr.ts'
+
+/** `shortRecharge` as a number. A formula, like `uses.max` — see Feature. An
+ *  unreadable one gives back nothing rather than guessing, which reads as "the
+ *  rest did not help" instead of as a silently wrong count. */
+function partial(amount: number | string | undefined, scope: ExprScope): number {
+  if (typeof amount === 'number') return Math.max(0, Math.trunc(amount))
+  const raw = String(amount ?? '').trim()
+  if (!raw) return 0
+  const n = Number(raw)
+  if (Number.isFinite(n)) return Math.max(0, Math.trunc(n))
+  const v = evalExpr(raw, scope)
+  return v?.t === 'num' && !v.dice.length ? Math.max(0, Math.trunc(v.flat)) : 0
+}
 
 /** Build the long-rest result: faithful 5e long-rest defaults, applied in ONE
  *  atomic write (both sections spread from the existing data — never replaced).
@@ -53,12 +69,17 @@ export function longRestPatch(character: CharacterRow, shardTrees: Record<string
     if (gained > 0) lines.push({ label: 'Hit Dice', total: `${nextCur}${hd.die}`, breakdown: `+${gained} regained` })
   }
 
+  // A use count can be a formula (`rages`), so the refill needs the character's
+  // variable scope — not just the row.
+  const scope = characterVars(character, shardTrees).scope
+
   // Every limited-use feature recharges on a long rest.
   const features = sheet.features
   if (features && features.length) {
     let recharged = 0
     nextSheet.features = features.map(f => {
-      if (f.uses && f.uses.current < f.uses.max) { recharged++; return { ...f, uses: { ...f.uses, current: f.uses.max } } }
+      const u = usesOf(f, scope)
+      if (u && u.current < u.max) { recharged++; return { ...f, uses: { ...f.uses!, current: u.max } } }
       return f
     })
     if (recharged > 0) lines.push({ label: 'Features', total: `${recharged}`, breakdown: 'recharged' })
@@ -141,6 +162,9 @@ export function shortRestPatch(
   const hd = sheet.hitDice
   if (hd) nextSheet.hitDice = { ...hd, current: Math.max(0, (hd.current ?? 0) - opts.spend) }
 
+  // Same scope the long rest needs, and for the same reason.
+  const scope = characterVars(character, shardTrees).scope
+
   // Features that recharge on a short rest come back.
   const features = sheet.features
   if (features && features.length) {
@@ -148,8 +172,18 @@ export function shortRestPatch(
     nextSheet.features = features.map(f => {
       // A rest contains turns, so anything that comes back every turn is
       // certainly back after an hour of sitting down.
-      if ((f.recharge === 'short' || f.recharge === 'turn') && f.uses && f.uses.current < f.uses.max) { recharged++; return { ...f, uses: { ...f.uses, current: f.uses.max } } }
-      return f
+      const full = f.recharge === 'short' || f.recharge === 'turn'
+      /* PARTIAL RECOVERY. Rage gives back exactly one use on a short rest and all
+         of them on a long one — a third combination `recharge` alone cannot say,
+         and the reason this is its own field. Clamped to the max like every other
+         write to a counter. */
+      if (!full && !f.shortRecharge) return f
+      const u = usesOf(f, scope)
+      if (!u || u.current >= u.max) return f
+      const back = full ? u.max : Math.min(u.max, u.current + partial(f.shortRecharge, scope))
+      if (back <= u.current) return f
+      recharged++
+      return { ...f, uses: { ...f.uses!, current: back } }
     })
     if (recharged > 0) lines.push({ label: 'Features', total: `${recharged}`, breakdown: 'recharged' })
   }

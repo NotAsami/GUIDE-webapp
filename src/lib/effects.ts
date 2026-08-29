@@ -19,9 +19,11 @@
  */
 
 import type {
-  AbilityKey, AbilityScores, ActiveEffect, CharacterRow, EffectiveSheet,
+  AbilityKey, AbilityScores, AcBreakdown, ActiveEffect, CharacterRow, CharacterSheet, EffectiveSheet,
   EquippedItem, EquippedWeapon, Feature, GraphEffect, ItemEffects, ItemSlot, ShardNode, ShardTree, Spell,
 } from './database.types.ts'
+/* No cycle: dnd.ts imports only database.types. */
+import { abilityMod } from './dnd.ts'
 import { ITEM_SLOTS, getGear, getWeapons } from './equip.ts'
 import { isPrepared } from './spells.ts'
 import { burdenTier, capacityForStr, currentBurden } from './burden.ts'
@@ -82,6 +84,7 @@ export function summarizeEffects(e: ItemEffects): string {
   if (e.abilitySet) for (const [k, v] of Object.entries(e.abilitySet)) if (v != null) parts.push(`${k.toUpperCase()} = ${v}`)
   if (e.ac) parts.push(`${signed(e.ac)} AC`)
   if (e.attack) parts.push(`${signed(e.attack)} atk`)
+  if (e.extraAttacks) parts.push(`${signed(e.extraAttacks)} attack${Math.abs(e.extraAttacks) === 1 ? '' : 's'}`)
   if (e.damage) parts.push(`${signed(e.damage)} dmg`)
   if (e.speed) parts.push(`${signed(e.speed)} ft spd`)
   if (e.initiative) parts.push(`${signed(e.initiative)} init`)
@@ -228,11 +231,125 @@ export function carryMultiplier(character: CharacterRow, shardTrees: Record<stri
   return passiveEffects(character, shardTrees).reduce((m, e) => Math.max(m, e.carryMult ?? 1), 1)
 }
 
+/**
+ * Armour Class, and the working that produced it.
+ *
+ * THE ONE PLACE AC IS DECIDED. `baseAc`, `acAddDex` and `acDexCap` sat on 110
+ * catalog rows with nothing reading them, so equipping chain mail changed no
+ * number and the DM typed the total by hand — which made `sheet.ac` the only
+ * answer and the armour data decoration. It is now the OVERRIDE: set it and it
+ * wins outright, leave it clear and this decides.
+ *
+ * The base is a competition, never a sum — armour REPLACES what you would
+ * otherwise have, and so does an unarmored rule, so taking the best of them is
+ * the whole of 5e's "you choose which applies". Only the shield and the magic
+ * bonuses add.
+ *
+ * A SHIELD IS NOT ARMOUR here, though it shares the slot: its `baseAc` is a
+ * bonus, and wearing one must not switch off a rule the printed text says you
+ * keep while holding it.
+ */
+export function armorClass(
+  character: CharacterRow,
+  base: CharacterSheet,
+  abilities: AbilityScores,
+  /** The SOURCES, not the flattened bundles, so every line of the breakdown can
+   *  name what put it there. §7 asks every number to be traceable, and "13" with
+   *  nothing beside it is the least traceable number on the sheet.
+   *
+   *  Typed structurally rather than as `ActiveSource[]`: a weapon's `fx` is a
+   *  narrow `Pick`, and widening it here beats making every caller flatten. */
+  sources: { obj: { name: string; id?: string }; fx?: ItemEffects }[],
+): { total: number; breakdown: AcBreakdown } {
+  const dex = abilityMod(abilities.dex)
+  const worn = wornGear(character)
+  const armour = worn.find(i => !i.isShield && i.baseAc !== undefined)
+  const shield = worn.find(i => i.isShield)
+
+  /* Every candidate, as a BASE plus its named terms — never as a total. A total
+     cannot be taken apart again for the breakdown, and the version of this that
+     tried counted the second ability twice: once inside the number and once as
+     the term it also had to show. `value` is derived from the parts, so the two
+     cannot disagree. */
+  type Term = { label: string; value: number }
+  /* `cap` is armour's alone — medium armour is "+Dex, max 2" and heavy adds none
+     — which is why `baseAc` by itself was never enough to compute anything. */
+  type Candidate = { base: number; source?: string; dex: boolean; cap?: number; extra?: Term }
+  const dexOf = (c: Candidate) => (c.cap === undefined ? dex : Math.min(dex, c.cap))
+  const valueOf = (c: Candidate) => c.base + (c.dex ? dexOf(c) : 0) + (c.extra?.value ?? 0)
+  const candidates: Candidate[] = []
+  if (armour) {
+    /* THE CAP IS WHY `baseAc` ALONE WAS NEVER ENOUGH. A Breastplate is
+       "14 + Dex (max 2)" and a bare 14 silently becomes a flat 14; heavy armour
+       adds no Dex at all. */
+    candidates.push({
+      base: armour.baseAc!, source: armour.name,
+      dex: !!armour.acAddDex, ...(armour.acDexCap !== undefined ? { cap: armour.acDexCap } : {}),
+    })
+  } else {
+    // Unarmored rules apply only with no body armour on — a shield is fine.
+    for (const s of sources) {
+      for (const rule of s.fx?.unarmoredAc ?? []) {
+        const extra = rule.ability ? abilityMod(abilities[rule.ability]) : 0
+        candidates.push({
+          base: rule.base, source: s.obj.name, dex: true,
+          /* THE SECOND ABILITY IS ITS OWN TERM. Folded into the base it reads
+             "13 Unarmored Defense + 2 DEX", which hides where the 3 came from —
+             the breakdown exists to be checked, so every modifier gets a name. */
+          ...(rule.ability ? { extra: { label: rule.ability.toUpperCase(), value: extra } } : {}),
+        })
+      }
+    }
+    // The floor everybody has, and the only candidate on a character with
+    // nothing worn and nothing granted.
+    candidates.push({ base: 10, dex: true })
+  }
+
+  /* THE OVERRIDE REPLACES THE BASE, NOT THE TOTAL. A DM who typed a number did
+     so about the character's armour, not about their Cloak of Protection — and
+     eating the magic bonuses along with the armour would silently lower every
+     character who has one. It is also exactly what the old arithmetic did
+     (`base.ac + Σ effects.ac`), so a sheet with `ac` set keeps the number it has
+     always shown; clearing it is what opts into the gear being read. */
+  const best: Candidate = base.ac !== undefined
+    ? { base: base.ac, dex: false }
+    : candidates.reduce((a, b) => (valueOf(b) > valueOf(a) ? b : a))
+
+  const bonuses: Term[] = []
+  if (best.extra) bonuses.push(best.extra)
+  /* THE SHIELD IS ONE LINE, enchantment included. A Shield (+2) contributes its
+     2 as a shield and 2 more as magic, and listing those separately printed the
+     same name twice with no way to tell which was which — "+4 Shield (+2)" is
+     what the player is actually holding. */
+  const shieldSource = shield ? sources.find(s => (s.obj as { id?: string }).id === shield.id) : undefined
+  if (shield?.baseAc) bonuses.push({ label: shield.name, value: shield.baseAc + (shieldSource?.fx?.ac ?? 0) })
+  /* ONE LINE PER SOURCE otherwise. A lumped "+3 Effects" is a number the player
+     cannot check; three named ones are the working. */
+  for (const s of sources) {
+    if (s.fx?.ac && s !== shieldSource) bonuses.push({ label: s.obj.name, value: s.fx.ac })
+  }
+
+  // Dex is already one of the terms `bonuses` does NOT carry — the read-out has
+  // its own slot for it — so it is added here and nowhere else.
+  const total = best.base + (best.dex ? dexOf(best) : 0) + bonuses.reduce((n, b) => n + b.value, 0)
+  const breakdown: AcBreakdown = {
+    base: best.base,
+    ...(best.source ? { source: best.source } : {}),
+    ...(best.dex ? { dex: true } : {}),
+    ...(bonuses.length ? { bonuses } : {}),
+  }
+  return { total, breakdown }
+}
+
 /** Base sheet with all worn-gear + slotted-shard effects layered in. DERIVED,
  *  display-only. */
 export function effectiveSheet(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): EffectiveSheet {
   const base = character.sheet ?? {}
-  const fx = passiveEffects(character, shardTrees)
+  /* ONE WALK, both shapes. `fx` is what every scalar below folds; `sources` is
+     the same list with its names still attached, which the AC breakdown needs to
+     say WHERE each term came from. */
+  const sources = activeSources(character, shardTrees)
+  const fx: ItemEffects[] = sources.flatMap(s => s.fx ?? [])
 
   // Abilities: max(base, highest set) + Σ flat.
   const baseAb = base.abilities ?? ZERO
@@ -240,13 +357,23 @@ export function effectiveSheet(character: CharacterRow, shardTrees: Record<strin
   for (const key of ABILITY_KEYS) {
     let setFloor = baseAb[key]
     let flat = 0
+    // The LOWEST ceiling across every source — two "to a maximum of" clauses
+    // both have to hold, so they do not sum and they do not take the larger.
+    let cap: number | undefined
     for (const e of fx) {
       const s = e.abilitySet?.[key]
       if (s !== undefined) setFloor = Math.max(setFloor, s)
       const b = e.abilities?.[key]
       if (b !== undefined) flat += b
+      const c = e.abilityCap?.[key]
+      if (c !== undefined) cap = cap === undefined ? c : Math.min(cap, c)
     }
-    abilities[key] = setFloor + flat
+    /* CLAMPED, NEVER LOWERED. "To a maximum of 25" limits the increase, not the
+       character: a score already past the ceiling by some other route keeps what
+       it had, so `setFloor` is the floor of the clamp as well as its base. */
+    abilities[key] = cap === undefined
+      ? setFloor + flat
+      : Math.max(setFloor, Math.min(cap, setFloor + flat))
   }
 
   /* UNIONED, not summed — the one non-numeric thing an ItemEffects carries.
@@ -260,9 +387,12 @@ export function effectiveSheet(character: CharacterRow, shardTrees: Record<strin
     }
   }
 
-  // Flat scalar sums.
-  const ac = (base.ac ?? 0) + sum(fx, e => e.ac)
+  const { total: ac, breakdown: acBreakdown } = armorClass(character, base, abilities, sources)
   const initiative = (base.initiative ?? 0) + sum(fx, e => e.initiative)
+  /* ONE ATTACK IS THE FLOOR, because everybody gets one — so Extra Attack grants
+     the EXTRA and this adds it to the base rather than replacing it. Two features
+     each granting one give three, and dropping either gives an attack back. */
+  const attacksPerAction = (base.attacksPerAction ?? 1) + sum(fx, e => e.extraAttacks)
 
   // Max HP: authored base + Σ shard maxHp. The authored `sheet.hp.max` stays
   // canon (levels + CON) — a rest/heal write path spreads `hp` from the base
@@ -342,7 +472,9 @@ export function effectiveSheet(character: CharacterRow, shardTrees: Record<strin
     abilities,
     ac,
     speed,
+    acBreakdown,
     initiative,
+    attacksPerAction,
     hp,
     senses: { ...base.senses, darkvision },
     attackAbilities,

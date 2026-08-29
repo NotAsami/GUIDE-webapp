@@ -171,6 +171,24 @@
 .ablock:hover .abInner { box-shadow: inset 0 0 18px rgba(0, 166, 214, 0.18), 0 0 14px rgba(0, 166, 214, 0.26); }
 .ablock:hover .abFrame { background: var(--cyan); }
 
+/* A cell that ROLLS. Every .ablock already lights on hover, which is the mockup's
+   styling and not an affordance — so the one that is actually pressable says so
+   with the cursor and a brighter frame, and answers to the keyboard. Button
+   defaults are stripped rather than overridden piecemeal: .ablock positions the
+   two clip-path layers, and a UA background painted behind them would show
+   through the chamfered corners. */
+.rollable {
+  appearance: none; -webkit-appearance: none;
+  border: 0; margin: 0; padding: 0; background: none;
+  font: inherit; color: inherit; text-align: inherit;
+  display: block; width: 100%; cursor: pointer;
+}
+.rollable:hover .abFrame { background: var(--cyan-hot); }
+.rollable:active { transform: scale(0.97); }
+.rollable:focus-visible .abFrame { background: var(--cyan-hot); }
+.rollable:focus-visible { outline: none; }
+.rollable:focus-visible .abInner { box-shadow: inset 0 0 18px rgba(0, 166, 214, 0.3), 0 0 16px rgba(0, 166, 214, 0.4); }
+
 /* ---- 01 combat ---- */
 .combatGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; flex: 1; }
 .combatGrid .ablock { height: 76px; }
@@ -179,6 +197,10 @@
 .pbValue { font-family: var(--font-mono); font-weight: 500; font-size: 22px; letter-spacing: 0.02em; color: var(--cyan-hot); line-height: 1; text-shadow: 0 0 10px rgba(0, 166, 214, 0.35); }
 .unit { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; color: var(--cyan); margin-left: 2px; text-shadow: none; font-weight: 400; }
 .pbLabel { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase; text-align: center; margin-top: 2px; }
+/* The rolled total, in the slot the modifier normally holds — same colours the
+   Character screen's hexagons flash, so a 20 reads the same on both. */
+.crit { color: var(--gold-rare); text-shadow: 0 0 22px rgba(226, 176, 33, 0.8); }
+.fumble { color: var(--danger); text-shadow: 0 0 18px rgba(185, 58, 58, 0.8); }
 .acBreakdown {
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; color: var(--muted); text-transform: uppercase;
   display: flex; align-items: center; gap: 6px; padding-top: 6px;

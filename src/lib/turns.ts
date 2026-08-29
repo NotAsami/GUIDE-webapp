@@ -18,6 +18,8 @@
  * first pressed.
  */
 import type { ActiveEffect, Feature } from './database.types.ts'
+import type { ExprScope } from './expr.ts'
+import { usesOf } from './featureView.ts'
 
 /** Rounds per unit. A 5e round is six seconds, so a minute is ten of them —
  *  which is the conversion the user asked for in so many words. Hours and days
@@ -72,14 +74,23 @@ export type TurnAdvance = {
  *  player as a variable that means nothing to them.
  *
  *  Returns null when nothing moved, so Advance Turn neither writes nor reports a
- *  recharge that did not happen. */
-export function turnRecharge(features: Feature[] | undefined): { features: Feature[]; names: string[] } | null {
+ *  recharge that did not happen.
+ *
+ *  `scope` because a use count can be a formula — see Feature.uses. The refill
+ *  writes the resolved number into `current` and leaves the authored `max`
+ *  exactly as it was. */
+export function turnRecharge(
+  features: Feature[] | undefined,
+  scope: ExprScope,
+): { features: Feature[]; names: string[] } | null {
   if (!features?.length) return null
   const names: string[] = []
   const next = features.map(f => {
-    if (f.recharge !== 'turn' || !f.uses || f.uses.current >= f.uses.max) return f
+    if (f.recharge !== 'turn') return f
+    const u = usesOf(f, scope)
+    if (!u || u.current >= u.max) return f
     names.push(f.name)
-    return { ...f, uses: { ...f.uses, current: f.uses.max } }
+    return { ...f, uses: { ...f.uses!, current: u.max } }
   })
   return names.length ? { features: next, names } : null
 }

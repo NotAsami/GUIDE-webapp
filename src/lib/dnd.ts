@@ -186,14 +186,22 @@ export const sumTerms = (terms: CheckTerm[]): number => terms.reduce((n, t) => n
 /** Total and breakdown from ONE list, so they cannot disagree. Zero-valued terms
  *  are hidden from the text but still summed — which is free, and is the whole
  *  reason this takes terms rather than a total plus a string. */
-export function composeCheck(pick: number, terms: CheckTerm[], critFrom = 20): {
+export function composeCheck(pick: number, terms: CheckTerm[], critFrom = 20, floor?: number): {
   total: number; breakdown: string; crit: boolean; fumble: boolean
 } {
+  const raw = pick + sumTerms(terms)
+  /* A FLOOR RAISES THE TOTAL, and says so in the breakdown. Indomitable Might
+     turns a bad roll into your Strength score, and a player who saw 24 with no
+     explanation would reasonably think the maths was wrong — so the line keeps
+     what was actually rolled and names what replaced it. */
+  const floored = floor !== undefined && raw < floor
+  const parts = [String(pick), ...terms.filter(t => t.value !== 0).map(t => `${formatMod(t.value)} ${t.label}`)]
   return {
-    total: pick + sumTerms(terms),
-    breakdown: [String(pick), ...terms.filter(t => t.value !== 0).map(t => `${formatMod(t.value)} ${t.label}`)].join(' '),
+    total: floored ? floor : raw,
+    breakdown: floored ? `${parts.join(' ')} → minimum ${floor}` : parts.join(' '),
     crit: pick >= critFrom,
-    // A natural 1 is a fumble however low the crit range goes.
+    // A natural 1 is a fumble however low the crit range goes — and however high
+    // the floor: the roll still failed, the total is just not as bad.
     fumble: pick === 1,
   }
 }

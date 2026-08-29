@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, CharacterSpellbook, ShardTree, Spell, SpellSchool, SpellSlot } from '../lib/database.types'
 import { gid, resolve, rollResolution } from '../lib/graph'
-import { applyOutcomes, planActivation } from '../lib/graphState'
+import { applyOutcomes, outcomeLine, planActivation } from '../lib/graphState'
 import { useGraph } from '../lib/useGraph'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
@@ -191,13 +191,23 @@ export function Spellbook() {
     // this runs.
     const outcomes = planActivation(sp, graph, character, gid('spell', sp))
     const answers = new Set(outcomes.map(o => o.ask).filter((a): a is string => !!a))
-    const { resources, applied } = applyOutcomes(character, outcomes, answers)
+    const { resources, usesPatch, applied } = applyOutcomes(character, outcomes, answers)
+
+    /* A cast can move a FEATURE's use counter (`addUses`), and those live on
+       `sheet` rather than in `resources` — so this joins the same write. Dropping
+       it would be the quietest possible bug: the spell fires, the log says the
+       charge came back, and the sheet never hears about it. */
+    const nextFeatures = usesPatch
+      ? (character.sheet?.features ?? []).map(f =>
+        usesPatch[f.id] !== undefined ? { ...f, uses: { ...f.uses!, current: usesPatch[f.id] } } : f)
+      : null
 
     // ONE round trip. The slot spend and the armed modifier are the same press,
     // and two writes could land apart — leaving a slot spent with nothing armed.
     void updateSections({
       ...(nextSb ? { spellbook: nextSb } : {}),
       ...(applied.length ? { resources: resources as CharacterRow['resources'] } : {}),
+      ...(nextFeatures ? { sheet: { ...(character.sheet ?? {}), features: nextFeatures } } : {}),
     })
 
     let noteMsg: string
@@ -247,9 +257,7 @@ export function Spellbook() {
         icon: spellIcon(sp),
         subject: { kind: 'spell', id: sp.id },
         lines: applied.length
-          ? applied.map(o => (o.kind === 'arm'
-            ? { label: o.mod.label, total: 'armed', breakdown: o.summary, tone: 'buff' as const }
-            : { label: o.def.label ?? o.def.name, total: String(o.set ?? ''), breakdown: o.summary, tone: 'buff' as const }))
+          ? applied.map(outcomeLine)
           // Nothing mechanical to report, so the line states what the cast COST.
           // An entry with no lines renders as an empty card, which reads as a bug.
           : [{

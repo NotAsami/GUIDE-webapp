@@ -90,6 +90,183 @@ test('removing the feature takes its numbers with it', () => {
   assert.equal(without.senses!.darkvision, 0)
 })
 
+// --- armour class ----------------------------------------------------------
+
+/** BASE without an authored `ac`, so the derivation is the answer. DEX 12 = +1. */
+const BARE = { ...BASE, ac: undefined }
+const armour = (over: Partial<EquippedItem>): EquippedItem =>
+  ({ id: 'a1', name: 'Armour', slot: 'armor', ...over }) as EquippedItem
+const unarmoredRule = (base: number, ability?: string, id = 'f-ud'): Feature => ({
+  id, name: 'Unarmored Defense',
+  graph: [{ id: 'g1', op: 'unarmored', label: 'Unarmored Defense', value: String(base), ...(ability ? { ability } : {}) }],
+})
+
+test('with nothing worn, AC is ten plus Dexterity', () => {
+  assert.equal(effectiveSheet(character({ sheet: BARE })).ac, 11)
+})
+
+test('armour REPLACES the base, and the Dex cap is why baseAc alone was not enough', () => {
+  // A Breastplate is "14 + Dex (max 2)"; a bare 14 silently becomes a flat 14.
+  const dexy = { ...BARE, abilities: { ...BASE.abilities, dex: 18 } } // +4
+  const brs = { armor: armour({ name: 'Breastplate', baseAc: 14, acAddDex: true, acDexCap: 2 }) }
+  assert.equal(effectiveSheet(character({ sheet: dexy, equipped: brs })).ac, 16, 'capped at +2')
+  // Light armour: no cap.
+  const leather = { armor: armour({ name: 'Leather', baseAc: 11, acAddDex: true }) }
+  assert.equal(effectiveSheet(character({ sheet: dexy, equipped: leather })).ac, 15)
+  // Heavy: no Dex at all, however nimble.
+  const plate = { armor: armour({ name: 'Chain Mail', baseAc: 16 }) }
+  assert.equal(effectiveSheet(character({ sheet: dexy, equipped: plate })).ac, 16)
+})
+
+test('an unarmored rule competes with armour rather than stacking', () => {
+  // 10 + 1 DEX + 1 CON (13) = 12.
+  const c = character({ sheet: { ...BARE, features: [unarmoredRule(10, 'CON')] } })
+  assert.equal(effectiveSheet(c).ac, 12)
+  // Put armour on and the rule switches itself off — no `when` needed, because
+  // the sheet layer can see the slot.
+  const armoured = character({
+    sheet: { ...BARE, features: [unarmoredRule(10, 'CON')] },
+    equipped: { armor: armour({ name: 'Chain Mail', baseAc: 16 }) },
+  })
+  assert.equal(effectiveSheet(armoured).ac, 16, 'armour, not 16 + the rule')
+})
+
+test('A SHIELD IS NOT ARMOUR, though it shares the slot', () => {
+  /* Its `baseAc` is a BONUS where armour's replaces. Unflagged it would read as
+     armour twice over: AC 2, and Unarmored Defense switched off — which the
+     printed rule is explicit you keep while holding one. */
+  const withShield = character({
+    sheet: { ...BARE, features: [unarmoredRule(10, 'CON')] },
+    equipped: { armor: armour({ name: 'Shield', baseAc: 2, isShield: true }) },
+  })
+  assert.equal(effectiveSheet(withShield).ac, 14, '10 + 1 DEX + 1 CON + 2 shield')
+  const bd = effectiveSheet(withShield).acBreakdown!
+  // Every modifier named: "10 Unarmored Defense + 1 DEX + 1 CON + 2 Shield".
+  assert.equal(bd.base, 10)
+  assert.equal(bd.source, 'Unarmored Defense')
+  assert.deepEqual(bd.bonuses, [{ label: 'CON', value: 1 }, { label: 'Shield', value: 2 }])
+})
+
+test('a magic shield is ONE line, enchantment included', () => {
+  /* A Shield (+2) gives 2 as a shield and 2 more as magic. Listed apart they
+     printed the same item name twice with no way to tell which was which. */
+  const c = character({
+    sheet: BARE,
+    equipped: { armor: armour({ id: 'sh', name: 'Shield (+2)', baseAc: 2, isShield: true, effects: { ac: 2 } }) },
+  })
+  const view = effectiveSheet(c)
+  assert.equal(view.ac, 15, '10 + 1 DEX + 2 shield + 2 magic')
+  assert.deepEqual(view.acBreakdown!.bonuses, [{ label: 'Shield (+2)', value: 4 }])
+})
+
+test('two unarmored rules take the BETTER, because 5e says you pick one', () => {
+  const dexy = { ...BARE, abilities: { ...BASE.abilities, dex: 12, con: 20, wis: 11 } }
+  const c = character({ sheet: { ...dexy, features: [
+    unarmoredRule(10, 'CON'),                    // 10 + 1 + 5 = 16
+    unarmoredRule(13, undefined, 'f-drac'),      // 13 + 1     = 14
+  ] } })
+  assert.equal(effectiveSheet(c).ac, 16)
+})
+
+test('the breakdown is the working, with Dex kept as its own term', () => {
+  const c = character({
+    sheet: BARE,
+    equipped: { armor: armour({ name: 'Chain Shirt', baseAc: 13, acAddDex: true, acDexCap: 2 }), cloak },
+  })
+  const view = effectiveSheet(c)
+  assert.equal(view.ac, 15, '13 + 1 DEX + 1 cloak')
+  assert.deepEqual(view.acBreakdown, {
+    // ONE LINE PER SOURCE, named: a lumped "+1 Effects" is a number the player
+    // cannot check against anything.
+    base: 13, source: 'Chain Shirt', dex: true, bonuses: [{ label: 'Cloak of Protection', value: 1 }],
+  })
+})
+
+test('an authored ac overrides the BASE and keeps the magic bonuses', () => {
+  /* Eating them too would silently lower every character wearing a Cloak of
+     Protection — and the old arithmetic was exactly base + Σ effects.ac, so a
+     sheet with `ac` set has to keep the number it has always shown. */
+  const c = character({
+    sheet: { ...BASE, ac: 15 },
+    equipped: { cloak, armor: armour({ name: 'Chain Mail', baseAc: 16 }) },
+  })
+  assert.equal(effectiveSheet(c).ac, 16, '15 typed + 1 cloak, and the armour is ignored')
+  assert.equal(effectiveSheet(c).acBreakdown!.source, undefined, 'nothing to name — the DM typed it')
+})
+
+// --- extra attacks ---------------------------------------------------------
+
+const extraAttack = (n = 1, id = 'f-xa'): Feature => ({
+  id, name: 'Extra Attack',
+  graph: [{ id: 'g1', op: 'boost', label: 'Extra Attack', stat: 'Extra Attacks', value: String(n) }],
+})
+
+test('everyone gets ONE attack, and Extra Attack grants the extra', () => {
+  // The base is the floor rather than the whole answer: a grant of 1 means one
+  // EXTRA, so taking the feature away has to give the attack back.
+  assert.equal(effectiveSheet(character({ sheet: BASE })).attacksPerAction, 1)
+  assert.equal(effectiveSheet(character({ sheet: { ...BASE, features: [extraAttack()] } })).attacksPerAction, 2)
+})
+
+test('extra attacks SUM, across features and worn gear alike', () => {
+  const c = character({
+    sheet: { ...BASE, features: [extraAttack(), extraAttack(1, 'f-other')] },
+    equipped: { neck: { id: 'i8', name: 'Band of Blows', slot: 'neck', effects: { extraAttacks: 1 } } },
+  })
+  assert.equal(effectiveSheet(c).attacksPerAction, 4, '1 base + 1 + 1 + 1')
+  // …and unequipping takes one back, which is the whole reason it layers.
+  assert.equal(effectiveSheet(character({ sheet: { ...BASE, features: [extraAttack(), extraAttack(1, 'f-other')] } })).attacksPerAction, 3)
+})
+
+test('an authored base is respected, not overwritten', () => {
+  // `speed` has a base for the same reason: a character who simply starts with
+  // two attacks is expressible without inventing a feature to carry it.
+  const c = character({ sheet: { ...BASE, attacksPerAction: 2, features: [extraAttack()] } })
+  assert.equal(effectiveSheet(c).attacksPerAction, 3)
+})
+
+// --- "to a maximum of" -----------------------------------------------------
+
+/** Primal Champion: +4 STR and CON, to a maximum of 25. */
+const champion = (cap = '25'): Feature => ({
+  id: 'f-pc', name: 'Primal Champion',
+  graph: [
+    { id: 'g1', op: 'boost', label: 'Strength', stat: 'STR', value: '4', cap },
+    { id: 'g2', op: 'boost', label: 'Constitution', stat: 'CON', value: '4', cap },
+  ],
+})
+
+test('a capped boost stops at the ceiling instead of running past it', () => {
+  const high = { ...BASE, abilities: { ...BASE.abilities, str: 22, con: 13 } }
+  const view = effectiveSheet(character({ sheet: { ...high, features: [champion()] } }))
+  assert.equal(view.abilities!.str, 25, '22 + 4 = 26, clamped to 25')
+  assert.equal(view.abilities!.con, 17, 'under the ceiling, so untouched')
+})
+
+test('a cap NEVER lowers a score that was already past it', () => {
+  // "To a maximum of 25" limits the increase, not the character. A Belt setting
+  // STR to 27 must survive standing next to Primal Champion.
+  const c = character({
+    sheet: { ...BASE, features: [champion()] },
+    equipped: { neck: { id: 'i9', name: 'Belt', slot: 'neck', effects: { abilitySet: { str: 27 } } } },
+  })
+  assert.equal(effectiveSheet(c).abilities!.str, 27)
+})
+
+test('the LOWEST cap wins — two ceilings both have to hold', () => {
+  const c = character({ sheet: {
+    ...BASE, abilities: { ...BASE.abilities, str: 20 },
+    features: [champion('25'), { ...champion('22'), id: 'f-other' }],
+  } })
+  // 20 + 4 + 4 = 28; the tighter ceiling is the one that applies.
+  assert.equal(effectiveSheet(c).abilities!.str, 22)
+})
+
+test('no cap authored leaves the old behaviour exactly as it was', () => {
+  const c = character({ sheet: { ...BASE, abilities: { ...BASE.abilities, str: 22 }, features: [champion('')] } })
+  assert.equal(effectiveSheet(c).abilities!.str, 26)
+})
+
 test('a feature with no boosts contributes nothing, as before', () => {
   const prose: Feature = { id: 'f1', name: 'Second Wind' }
   const view = effectiveSheet(character({ sheet: { ...BASE, features: [prose] } }))

@@ -6,17 +6,15 @@ import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import {
   ABILITY_ABBR, ABILITY_NAMES, SKILLS,
-  abilityCheckTerms, abilityMod, abilities, composeCheck, effectiveMode, formatMod,
-  proficiency, saveTerms, saveTotal, skillTerms, skillTotal, type CheckTerm,
+  abilityCheckTerms, abilityMod, abilities, formatMod,
+  proficiency, saveTerms, saveTotal, skillTerms, skillTotal,
 } from '../lib/dnd'
 import type { Skill } from '../lib/dnd'
 import { effectiveSheet } from '../lib/effects'
-import { rolledDice, type RolledDie } from '../lib/dice'
-import { useRollLog } from '../lib/rolls'
-import type { RollEntry, CheckRoll } from '../lib/rolls'
+import { buildCheck, useRollLog } from '../lib/rolls'
+import type { CheckRequest, RollEntry } from '../lib/rolls'
 import { Riders } from '../components/Riders'
 import { useGraph } from '../lib/useGraph'
-import { resolve, rollResolution } from '../lib/graph'
 import styles from './Character.module.css'
 
 interface RouteContext {
@@ -59,13 +57,6 @@ export function Character() {
   const scalerRef = useRef<HTMLDivElement>(null)
   useRingScale(stageRef, scalerRef)
 
-  /** `eff` is the mode AFTER the graph has had its say — see pushCheck. */
-  function rollD20Set(eff: 'normal' | 'adv' | 'dis'): { rolls: RolledDie[]; pick: number } {
-    const rolls = rolledDice(eff === 'normal' ? 1 : 2, 20)
-    const faces = rolls.map(d => d.v)
-    return { rolls, pick: eff === 'adv' ? Math.max(...faces) : eff === 'dis' ? Math.min(...faces) : faces[0] }
-  }
-
   function flashHex(key: AbilityKey, value: number, crit: boolean, fumble: boolean) {
     const existing = flashTimers.current[key]
     if (existing) window.clearTimeout(existing)
@@ -75,39 +66,13 @@ export function Character() {
     }, FLASH_MS)
   }
 
-  /** Roll and render. Every number in here comes from lib/dnd.ts — this
-   *  function owns the dice and the log entry, nothing arithmetic. */
-  function pushCheck(opts: {
-    key: AbilityKey; kind: 'check' | 'save'; title: string; subtitle: string
-    /** The named parts, from saveTerms/skillTerms/abilityCheckTerms. */
-    terms: CheckTerm[]
-    /** Sub-key for `roll:<kind>.<sub>` — the ability for a save or an ability
-     *  check, the skill for a skill check. */
-    sub: string
-  }) {
-    // The same boundary the weapon roller uses, on a roll kind that has no
-    // subject at all — which is the point of doing both in one slice.
-    const res = resolve(graph, { kind: opts.kind, sub: opts.sub })
-    // Graph dice on a d20 roll are rolled now — the total is one number and an
-    // unrolled term has nowhere to live. (Damage dice stay unrolled so a crit
-    // can double them; a check has no crit multiplier, so `double` is never set
-    // here.) The riders come back carrying the faces they rolled.
-    const contrib = rollResolution(res)
-
-    const eff = effectiveMode(mode, res.adv, res.dis)
-    const { rolls: dice, pick } = rollD20Set(eff)
-
-    const terms = [...opts.terms, { label: 'FEAT', value: contrib.flat }]
-    const { total: totalRoll, breakdown, crit, fumble } = composeCheck(pick, terms, res.critFrom)
-
-    const check: CheckRoll = { mode: eff, rolls: dice, pick, breakdown, terms, total: totalRoll, crit, fumble }
-    flashHex(opts.key, totalRoll, crit, fumble)
-    addRoll({
-      kind: opts.kind, title: opts.title, subtitle: opts.subtitle, icon: 'fa-dice-d20', check,
-      riderGroups: contrib.riders.length ? [{ label: opts.kind === 'save' ? 'Save' : 'Check', riders: contrib.riders }] : undefined,
-      notes: res.notes.length ? res.notes : undefined,
-      problems: res.problems.length ? res.problems : undefined,
-    })
+  /** Roll, flash the hexagon, log it. The dice and the entry are lib/rolls.tsx's
+   *  `buildCheck` — shared with the Stats screen's initiative cell — so this
+   *  owns only the half that is this screen's: which hexagon lights up. */
+  function pushCheck(opts: CheckRequest & { key: AbilityKey }) {
+    const entry = buildCheck(graph, { ...opts, mode })
+    flashHex(opts.key, entry.check.total, entry.check.crit, entry.check.fumble)
+    addRoll(entry)
   }
 
   function rollAbilityCheck(key: AbilityKey) {

@@ -32,8 +32,14 @@ import { Icon } from './Icon'
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')
 const KIND_LABEL: Record<'buff' | 'cond' | 'debuff', string> = { buff: 'Buff', cond: 'Condition', debuff: 'Debuff' }
 
-export function EffectsSidebar({ open, effects, onRemove, onClose }: {
-  open: boolean; effects: ActiveEffect[]; onRemove: (id: string) => void; onClose: () => void
+export function EffectsSidebar({ open, effects, suppressed, onRemove, onClose }: {
+  open: boolean; effects: ActiveEffect[]
+  /** Ids an immunity is currently holding off — see graph.ts suppressedEffects.
+   *  SHOWN, not hidden: a condition that stopped applying because you started
+   *  raging is a thing the player needs to see is still there, so it greys out
+   *  and says why rather than vanishing and reappearing when the rage ends. */
+  suppressed?: Set<string>
+  onRemove: (id: string) => void; onClose: () => void
 }) {
   // .sidebar animates via `transform`, which gives `position: fixed`
   // descendants a new containing block — the tooltip and popup are rendered
@@ -68,18 +74,27 @@ export function EffectsSidebar({ open, effects, onRemove, onClose }: {
             ) : (
               effects.map(e => {
                 const grants = e.effects && Object.keys(e.effects).length > 0 ? summarizeEffects(e.effects) : undefined
+                const off = !!suppressed?.has(e.id)
                 return (
-                  <div key={e.id} className={cx(styles.statusChip, styles[e.kind ?? 'buff'])}
+                  <div key={e.id} className={cx(styles.statusChip, styles[e.kind ?? 'buff'], off && styles.immune)}
                     role="button" tabIndex={0}
                     onClick={() => setDetailId(e.id)}
                     onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setDetailId(e.id) } }}
-                    {...bind({ name: e.name, sub: KIND_LABEL[e.kind ?? 'buff'], rows: grants ? [['Grants', grants]] : undefined, flavor: e.desc })}>
+                    {...bind({
+                      name: e.name,
+                      sub: off ? 'Suppressed · you are immune' : KIND_LABEL[e.kind ?? 'buff'],
+                      rows: grants ? [['Grants', grants]] : undefined,
+                      flavor: e.desc,
+                    })}>
                     <span className={styles.scIcon}><Icon name={e.icon ?? 'fa-wand-sparkles'} /></span>
                     {/* The countdown, where the effect is. A number only the roll
                         panel knows is one the player cannot plan around. */}
                     {turnsLabel(e) && <span className={styles.scTurns}>{turnsLabel(e)}</span>}
                     <span className={styles.scBody}>
-                      <span className={styles.scName}>{e.name}</span>
+                      <span className={styles.scName}>
+                        {e.name}
+                        {off && <span className={styles.scImmune}><i className="fa-solid fa-shield" />Immune</span>}
+                      </span>
                       <span className={styles.scMeta}>{summarizeEffects(e.effects)}{e.note ? ` · ${e.note}` : ''}</span>
                       {e.source && <span className={styles.scSource}>From: {e.source}</span>}
                     </span>

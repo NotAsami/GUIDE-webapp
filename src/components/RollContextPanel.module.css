@@ -165,23 +165,27 @@
    than beside it. */
 .spine { display: flex; flex-direction: column; margin-top: 10px; }
 .applied { border-left: 2px solid var(--beige); padding: 1px 0 3px 11px; display: flex; flex-direction: column; }
-.appliedH { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--beige-dim); padding: 4px 0 3px; }
 
-/* SYMMETRIC PADDING, or the diamond cannot be centred on its own label: the
-   node is centred on the joint's BOX and the text on its CONTENT box, so 10
-   above and 9 below put them half a pixel apart — enough to read as off on a
-   10px diamond beside 8px caps. Measured, not guessed. */
-.joint { position: relative; padding: 10px 0 10px 13px; display: flex; align-items: center; gap: 9px;
+/* THE DIAMOND IS THE SEAM. The rule arrives from the section above, stops at the
+   diamond's centre, and the next section's rule leaves from the same point — so
+   the two halves meet inside the diamond rather than the line running past it in
+   one colour or stopping short of it in none. Two pseudo-elements, not one
+   gradient: a gradient blends across a span and what this needs is a hard
+   handover at an exact y.
+   `--up` is transparent on whichever header comes FIRST, which is what kills the
+   stub that used to climb above it to nothing.
+   SYMMETRIC PADDING still, or the diamond cannot be centred on its own label:
+   the node is centred on the joint's BOX and the text on its CONTENT box. */
+.joint { --up: var(--beige); --down: var(--cyan);
+  position: relative; padding: 6px 0 6px 13px; display: flex; align-items: center; gap: 9px;
   font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--cyan); }
-/* The blend is confined to exactly the diamond's height and centred on it, so
-   the line and the diamond sample the same colour at the same y. Faded across
-   the whole header instead, the two disagree everywhere except dead centre. */
-.joint::before {
-  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
-  background: linear-gradient(180deg,
-    var(--beige) 0, var(--beige) calc(50% - 5px),
-    var(--cyan) calc(50% + 5px), var(--cyan) 100%);
-}
+.joint::before { content: ""; position: absolute; left: 0; top: 0; height: 50%; width: 2px; background: var(--up); }
+/* OVERSHOOTS ITS OWN BOX by design. The rule below the diamond is `--down`, the
+   colour of the section it hands over to, so running it a few px into the top of
+   that section paints only where that colour already belongs — and it closes the
+   seam left by the header's own bottom padding, which no amount of tightening
+   removes entirely. Positioned, so it paints over the next block's border. */
+.joint::after { content: ""; position: absolute; left: 0; top: 50%; bottom: -7px; width: 2px; background: var(--down); }
 /* EVEN SIZE, INTEGER OFFSET: the 2px rule's centre is x=1, so an odd-sized
    diamond needs a half-pixel left offset that the browser rounds. Clip-path
    rather than a rotated square — rotation turns the gradient with the element,
@@ -192,9 +196,26 @@
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 .joint .sep { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(0, 166, 214, 0.4), transparent); }
+
+/* THE ENGINE'S OWN HEADER — the same shape in the beige half, so the two
+   sections of the spine are told apart by colour rather than by one of them
+   being a heading and the other small print. */
+.jBeige { --up: transparent; --down: var(--beige); color: var(--beige-dim); }
+.jBeige .node { background: var(--beige); }
+.jBeige .sep { background: linear-gradient(90deg, rgba(212, 191, 125, 0.4), transparent); }
+
+/* NOTHING TO HAND OVER FROM. Every diamond blends the section ABOVE into the
+   section below, so with no applied block there is no beige end to start from
+   and the diamond is simply the ask's own colour. */
+.lone { --up: transparent; }
+.lone .node { background: var(--cyan); }
 /* Inside the spine the riders carry the line themselves — their own left border
-   is the cyan half — so nothing may push them off its x. */
-.spine .riders { margin-top: 0; }
+   IS the rule — so nothing may push them off its x, and nothing may put space
+   between them: a 6px flex gap is 6px of missing spine, which is what still
+   read as a break under "Your call" once there were two sections to sit
+   between. Each section keeps its own padding and its own background tint, so
+   they stay legible as separate blocks without the rule going dotted. */
+.spine .riders { margin-top: 0; gap: 0; }
 
 .contribs { display: flex; flex-direction: column; }
 .contrib { position: relative; display: flex; align-items: baseline; gap: 9px; padding: 6px 0; border-top: 1px solid rgba(212, 191, 125, 0.12); }
@@ -296,10 +317,11 @@
 .rdLink:hover { color: var(--cyan-hot); border-bottom-color: var(--cyan); }
 .rdLink i { font-size: 7px; opacity: 0.7; }
 .rdLink:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
-.chLink { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-bottom: 1px dotted rgba(0, 166, 214, 0.5); }
-.chLink:hover { color: var(--cyan-hot); border-bottom-color: var(--cyan); }
+/* Violet, with the header it sits in — see `.choice`. */
+.chLink { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-bottom: 1px dotted rgba(160, 122, 214, 0.5); }
+.chLink:hover { color: var(--violet); border-bottom-color: var(--violet); }
 .chLink i { font-size: 7px; opacity: 0.7; }
-.chLink:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
+.chLink:focus-visible { outline: 1px solid var(--violet); outline-offset: 3px; }
 
 .rdVal { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--cyan-hot); letter-spacing: 0.06em; }
 .rdHead .flag { margin-left: auto; }
@@ -337,14 +359,47 @@
    hide. Same geometry as a rider — this IS an unresolved rider, so it must not
    look like a different species — but no switch per row: the switch says "does
    this apply", and here the answer to one is the answer to all of them. */
+/* VIOLET, because a pick-one is not the same question as the rest of the ask.
+   The panel had already spent its other strong colours — beige is the engine,
+   cyan is your call, gold is held, red is disadvantage — so violet is the one
+   left that carries no prior meaning here. `padding-top` is 4px rather than 8:
+   the card now opens with a header of its own, and stacked against the joint's
+   own bottom padding the two headings sat 18px apart with nothing between. */
 .choice {
+  /* ZERO, so the card's header sits flush at its top edge. The joint above
+     already pads below its own text, and a second inset here stacked onto it —
+     11px of dead band between two heading rows with only the rule running
+     through it, which is what kept reading as a gap.
+     ONE SOURCE FOR THE INSET even at zero: `.chH::before` has to reach exactly
+     the card's top edge to overlay the border above the diamond, and a second
+     literal would drift the first time this padding is touched. */
+  --pt: 0px;
   display: flex; flex-direction: column; gap: 6px;
-  padding: 8px 10px 9px 11px;
-  border-left: 2px solid var(--cyan);
+  padding: var(--pt) 10px 9px 11px;
+  border-left: 2px solid var(--violet);
   background: rgba(0, 0, 0, 0.28);
 }
-.chH { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan); }
-.chH .r { margin-left: auto; letter-spacing: 0.14em; color: var(--beige-dim); }
+.chH { position: relative; display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--violet); }
+/* THE SAME SEAM, one x further in. `.choice` is `border-left: 2px` +
+   `padding-left: 11px`, so from this content box the card's rule spans
+   [-13px, -11px] and its centre is -12px; the 10px diamond hangs 5px further
+   at -17px. The card's border is violet for its whole height, so this paints
+   the CYAN half back over it — from the card's top edge (hence `--pt`, the
+   card's own padding-top) down to the diamond's centre. A child's pseudo
+   paints after the parent's border, which is what makes overlaying it work. */
+.chH::before {
+  content: ""; position: absolute; left: -13px; top: calc(var(--pt) * -1); height: calc(50% + var(--pt)); width: 2px;
+  background: var(--cyan);
+}
+.chNode {
+  position: absolute; left: -17px; top: 50%; width: 10px; height: 10px; margin-top: -5px;
+  background: linear-gradient(180deg, var(--cyan) 0%, var(--violet) 100%);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.chH .sep { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(160, 122, 214, 0.45), transparent); }
+/* No longer pushed by `margin-left: auto` — the sep does the pushing now, and
+   two things both claiming the free space would fight over it. */
+.chH .r { letter-spacing: 0.14em; color: var(--beige-dim); white-space: nowrap; }
 .opt {
   display: block; width: 100%; text-align: left; cursor: pointer; font: inherit;
   border: 1px dashed rgba(212, 191, 125, 0.32); background: rgba(255, 255, 255, 0.014);

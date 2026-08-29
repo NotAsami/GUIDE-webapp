@@ -36,6 +36,65 @@ export function isRanged(w: Pick<EquippedWeapon, 'ranged' | 'properties'>): bool
   return (w.properties ?? []).some(p => /ammunition/i.test(p))
 }
 
+/** The 2024 mastery properties, with the rule each one is.
+ *
+ *  A CLOSED LIST, like DAMAGE_TYPES and for the same reason: the name is matched
+ *  against free text on 454 imported weapons, and `Vex`/`vex`/`Vexing` would all
+ *  look right to an author while only one of them matched anything.
+ *
+ *  The prose is here rather than authored because it is the SRD's, not the DM's —
+ *  a mastery is not a node anyone homebrews per campaign. What the DM authors is
+ *  WHICH weapon has which, and which of them a character may use.
+ *
+ *  `engine` says how much of the rule this app can actually carry, because the
+ *  honest answer is "most of it is yours to adjudicate". Only Vex is something
+ *  the engine does: advantage on your next attack is an armed modifier, which
+ *  §16 already built. */
+export const MASTERIES: { name: string; rule: string; engine?: 'arms' }[] = [
+  { name: 'Cleave', rule: 'On a hit with a melee weapon, make one attack roll against a second creature within 5 feet of the first that is also within your reach. On a hit it takes the weapon’s damage, without the ability modifier.' },
+  { name: 'Graze', rule: 'On a MISS, the target still takes damage equal to your ability modifier — the one the attack used. No damage type bonus, and it cannot crit.' },
+  { name: 'Nick', rule: 'The extra attack of the Light property is part of the Attack action rather than a Bonus Action, and only once per turn.' },
+  { name: 'Push', rule: 'On a hit, you can push the target up to 10 feet straight away from you if it is Large or smaller.' },
+  { name: 'Sap', rule: 'On a hit, the target has Disadvantage on its next attack roll before the start of your next turn.' },
+  { name: 'Slow', rule: 'On a hit, the target’s Speed is reduced by 10 feet until the start of your next turn. A target can be affected by only one Slow at a time.' },
+  { name: 'Topple', rule: 'On a hit, the target makes a Constitution saving throw against your save DC or has the Prone condition.' },
+  { name: 'Vex', rule: 'On a hit, you have Advantage on your next attack roll against that same creature before the end of your next turn.', engine: 'arms' },
+]
+
+const MASTERY_BY_KEY = new Map(MASTERIES.map(m => [m.name.toLowerCase(), m]))
+
+/** Which mastery this weapon has, or null.
+ *
+ *  The `properties` fallback is the whole reason nothing needed migrating: every
+ *  imported weapon already lists its mastery in that free-text array, mixed in
+ *  with Heavy and Two-Handed. Same shape as `isRanged` and `isTwoHanded`, and for
+ *  the same reason — the list is data the item form cannot write, so a weapon
+ *  authored through the UI sets the field instead. */
+export function masteryOf(w: Pick<EquippedWeapon, 'mastery' | 'properties'>): { name: string; rule: string; engine?: 'arms' } | null {
+  const named = w.mastery?.trim().toLowerCase()
+  if (named) return MASTERY_BY_KEY.get(named) ?? null
+  for (const p of w.properties ?? []) {
+    const hit = MASTERY_BY_KEY.get(p.trim().toLowerCase())
+    if (hit) return hit
+  }
+  return null
+}
+
+/** Is this weapon's mastery LIVE for this character — is its kind one they know?
+ *
+ *  Two separate facts, deliberately kept apart: the weapon has a mastery whatever
+ *  you do, and you may use it only while it is one of yours. A weapon card that
+ *  showed the property without saying which of the two it meant would be telling
+ *  the player they have something they do not. */
+export function masteryActive(
+  w: Pick<EquippedWeapon, 'mastery' | 'properties'>,
+  known: string[] | undefined,
+): boolean {
+  const m = masteryOf(w)
+  if (!m) return false
+  return (known ?? []).some(k => k.trim().toLowerCase() === m.name.toLowerCase())
+}
+
 export function handLabel(hand?: WeaponHand): string {
   return hand === 'main' ? 'Main Hand' : hand === 'off' ? 'Off Hand' : 'Equipped'
 }

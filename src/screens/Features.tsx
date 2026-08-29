@@ -11,7 +11,7 @@ import { Prose } from '../lib/markdown'
 import { interpolate } from '../lib/expr'
 import { colorOf } from '../lib/palette'
 import { affectedBy, gid, type Gid } from '../lib/graph'
-import { featureEffects, isCarrier, isUsable, originChain, toggleVar } from '../lib/featureView'
+import { featureEffects, isCarrier, isUsable, originChain, runsActivation, toggleVar, usesOf } from '../lib/featureView'
 import { useGraph } from '../lib/useGraph'
 import { gateOf, playerVars, setVars, type VarRow } from '../lib/graphState'
 import type { ExprScope } from '../lib/expr'
@@ -219,21 +219,33 @@ export function Features() {
    *  pending", which is a fact about the feature. */
   const armedOf = (f: Feature) => graph.armed.filter(m => m.source === gid('feature', f)).length
 
-  /** Pressing the hexagon. A toggle flips; anything else spends. An exhausted
-   *  feature shakes rather than silently doing nothing. */
+  /** Pressing the hexagon. Three answers, and the split is what lets a stance
+   *  cost something to enter:
+   *
+   *   - RELEASING is free. Ending a Rage spends nothing and runs nothing, so it
+   *     never reaches the activation path — otherwise turning it off would cost
+   *     a second Rage.
+   *   - ENTERING runs the activation when there is one. That is where the use is
+   *     spent and the variable written, in a single write, so "spending a use"
+   *     keeps exactly one definition.
+   *   - A stance with nothing to run (a cloak's `hoodUp`) is the write alone.
+   *
+   *  An exhausted feature shakes rather than silently doing nothing. */
   function press(f: Feature) {
     if (busy) return
     const t = toggleVar(f)
-    if (t) { void writeVar(t.name, !isOn(f)); return }
+    if (t && isOn(f)) { void writeVar(t.name, false); return }
     /* A GATED-SHUT FEATURE REFUSES THE SAME WAY A SPENT ONE DOES. Without
        this the press planned nothing, wrote nothing, and still logged an empty
        roll entry — which reads as "Brutal Strike works without Reckless
        Attack", because nothing on screen said otherwise. */
-    if ((f.uses && f.uses.current <= 0) || gateFor(f)) {
+    const u = usesOf(f, graph.scope)
+    if ((u && u.current <= 0) || gateFor(f)) {
       setDenied(f.id)
       setTimeout(() => setDenied(d => (d === f.id ? null : d)), 300)
       return
     }
+    if (t && !runsActivation(f)) { void writeVar(t.name, true); return }
     onUse(f)
   }
 
@@ -439,13 +451,17 @@ function FeatureCard({ row, busy, scope, on, armed, denied, gate, onOpen, onPres
   const { f, group } = row
   const usable = isUsable(f)
   const toggle = toggleVar(f)
-  const spent = !!f.uses && f.uses.current <= 0
+  // Resolved, never raw: `uses.max` is a formula on anything that scales.
+  const uses = usesOf(f, scope)
+  const spent = !!uses && uses.current <= 0
   const fx = featureEffects(f)
   const text = cardText(f)
   const tag = f.source ?? f.usage ?? (f.level ? `Lv ${f.level}` : group)
 
   // The pip under the hexagon says what pressing it does, in the imperative.
-  const pip = toggle ? (on ? 'On' : 'Hold') : gate ? 'Locked' : spent ? 'Spent' : f.uses ? 'Spend' : 'Use'
+  /* ON WINS OUTRIGHT, because a held stance can always be released — even when
+     its last use is spent, which is the state a raging Barbarian is usually in. */
+  const pip = on ? 'On' : gate ? 'Locked' : spent ? 'Spent' : toggle ? 'Hold' : uses ? 'Spend' : 'Use'
 
   return (
     <div
@@ -503,14 +519,21 @@ function FeatureCard({ row, busy, scope, on, armed, denied, gate, onOpen, onPres
           </div>
 
           <div className={styles.fcUse}>
+            {/* A COUNT AND A STANCE ARE NOT EXCLUSIVE — Rage is both, so the
+                count leads (it is the number the player is rationing) and the
+                label says what the press will do with it. */}
             {!usable ? <span className={styles.passBadge}>Passive</span>
-              : toggle ? <span className={styles.useLab}>{on ? 'Held · tap to end' : 'At will · tap to hold'}</span>
-              : f.uses ? (<>
-                <span className={cx(styles.useCount, spent && styles.empty)}>
-                  {f.uses.current}<span className={styles.of}>/{f.uses.max}</span>
+              : uses ? (<>
+                <span className={cx(styles.useCount, spent && !on && styles.empty)}>
+                  {uses.current}<span className={styles.of}>/{uses.max}</span>
                 </span>
-                <span className={styles.useLab}>{spent ? 'Spent' : 'Uses'}</span>
-              </>) : (<>
+                <span className={styles.useLab}>
+                  {toggle ? (on ? 'Held · tap to end' : spent ? 'Spent' : 'Tap to hold')
+                    : spent ? 'Spent' : 'Uses'}
+                </span>
+              </>)
+              : toggle ? <span className={styles.useLab}>{on ? 'Held · tap to end' : 'At will · tap to hold'}</span>
+              : (<>
                 <span className={styles.atwill}><span className={styles.inf}>∞</span> At will</span>
                 <span className={styles.useLab}>Tap glyph</span>
               </>)}
@@ -553,17 +576,24 @@ function FeaturePopup({ row, busy, scope, on, vars, gate, back, affected, resolv
   const { f, group } = row
   const usable = isUsable(f)
   const toggle = toggleVar(f)
-  const spent = !!f.uses && f.uses.current <= 0
+  const uses = usesOf(f, scope)
+  const spent = !!uses && uses.current <= 0
   const fx = featureEffects(f)
   const chain = originChain(f)
   const text = cardText(f)
 
   const facts: [string, string, string?][] = []
   if (f.activation && f.activation !== 'none') facts.push(['Activation', ACTS[f.activation], 'acc'])
-  if (toggle) facts.push(['Uses', '∞ At will', 'acc'])
-  else if (f.uses) facts.push(['Uses', `${f.uses.current} / ${f.uses.max}`, spent ? 'empty' : 'acc'])
+  // A count beats "at will" even on a stance: entering Rage costs one.
+  if (uses) facts.push(['Uses', `${uses.current} / ${uses.max}`, spent && !on ? 'empty' : 'acc'])
+  else if (toggle) facts.push(['Uses', '∞ At will', 'acc'])
   else if (usable) facts.push(['Uses', '∞ At will', 'acc'])
-  if (f.recharge) facts.push(['Resets on', f.recharge === 'short' ? 'Short rest' : 'Long rest'])
+  if (f.recharge) {
+    // A partial short-rest refill is part of the answer to "when does this come
+    // back", so it belongs on that line rather than nowhere.
+    const partial = f.recharge === 'long' && f.shortRecharge ? ` · +${f.shortRecharge} on a short` : ''
+    facts.push(['Resets on', (f.recharge === 'short' ? 'Short rest' : f.recharge === 'turn' ? 'Every turn' : 'Long rest') + partial])
+  }
   if (toggle) facts.push(['State', on ? 'Held · on' : 'Off', on ? 'acc' : undefined])
   if (group === 'gear') facts.push(['Derived from', `Equipped · ${f.source ?? 'gear'}`])
   if (group === 'shard') facts.push(['Derived from', `Shard · ${f.source ?? 'attuned'}`])
@@ -690,14 +720,14 @@ function FeaturePopup({ row, busy, scope, on, vars, gate, back, affected, resolv
                 disabled={busy} onClick={onPress}>
                 <span className={styles.af} />
                 <span className={styles.ai}>
-                  {toggle
-                    ? (on ? <><i className="fa-solid fa-square-xmark" /> End stance</> : <><i className="fa-solid fa-play" /> Hold stance</>)
+                  {toggle && on ? <><i className="fa-solid fa-square-xmark" /> End stance</>
                     /* THE REASON, not just the refusal. A locked button that
                        does not say what unlocks it is the silent no-op with a
                        nicer shape. */
                     : gate ? <><i className="fa-solid fa-lock" /> {gate}</>
                     : spent ? <><i className="fa-solid fa-ban" /> No uses left</>
-                    : f.uses ? <><i className="fa-solid fa-bolt" /> Spend · {f.uses.current} left</>
+                    : toggle ? <><i className="fa-solid fa-play" /> Hold stance{uses ? ` · ${uses.current} left` : ''}</>
+                    : uses ? <><i className="fa-solid fa-bolt" /> Spend · {uses.current} left</>
                     : <><i className="fa-solid fa-bolt" /> Use · at will</>}
                 </span>
               </button>

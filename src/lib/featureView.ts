@@ -14,6 +14,49 @@
  */
 import type { Feature, GraphEffect, GraphOp, VarDef } from './database.types.ts'
 import { IS_ACTIVATION } from './opSchema.ts'
+import { evalExpr, type ExprScope } from './expr.ts'
+
+/**
+ * A feature's use counter, resolved — or null when it has none.
+ *
+ * THE ONE READER of `uses`. `max` is a formula (see Feature.uses), so
+ * `f.uses.max` is a string on exactly the features that scale with level, and
+ * every surface that printed it raw would print `[0,2,2,3,3,3,4,…][level]` at
+ * the player. Nine call sites read this field; they all come through here.
+ *
+ * `current` is CLAMPED to the resolved max, on read and never on write — the
+ * same rule effective HP follows and for the same reason. A Barbarian who drops
+ * a level keeps their stored count underneath, so regaining the level gives the
+ * Rage back rather than having quietly destroyed it.
+ *
+ * `scope` is REQUIRED rather than defaulted. An unresolvable max is 0, which
+ * clamps `current` to 0, which reads as SPENT everywhere — so a caller that
+ * forgot to pass one would silently grey out every limited-use feature on the
+ * sheet. Making it an argument means the compiler asks. A caller that genuinely
+ * has no character (the Feature Editor) passes `{}` and says so.
+ */
+export function usesOf(f: Pick<Feature, 'uses'>, scope: ExprScope): { current: number; max: number } | null {
+  const u = f.uses
+  if (!u) return null
+  const max = resolveMax(u.max, scope)
+  // Absent `current` is FULL, not empty — a catalog template has no number to
+  // write, because the max it would copy depends on whose sheet it lands on.
+  return { current: Math.max(0, Math.min(u.current ?? max, max)), max }
+}
+
+function resolveMax(max: number | string | undefined, scope: ExprScope): number {
+  if (typeof max === 'number') return max
+  const raw = String(max ?? '').trim()
+  if (!raw) return 0
+  // `"3"` is the overwhelmingly common case and predates the formula; take it
+  // before the parser is asked, so nothing authored before this can regress.
+  const n = Number(raw)
+  if (Number.isFinite(n)) return Math.max(0, Math.trunc(n))
+  const v = evalExpr(raw, scope)
+  // Dice in a use count is nonsense — "1d4 uses" is not a thing — so a formula
+  // carrying them is refused rather than silently truncated to its flat part.
+  return v?.t === 'num' && !v.dice.length ? Math.max(0, Math.trunc(v.flat)) : 0
+}
 
 /** The mockup's operator glyphs, one per op.
  *
@@ -25,14 +68,17 @@ export const OP_GLYPH: Record<GraphOp, string> = {
   adv: '⤒',       // raises
   dis: '⊟',       // lowers
   crit: '⚔',
+  floor: '⊻',      // raises a total to a minimum — never a bonus
   note: '⊙',      // says something without changing a number
   boost: '◈',     // moves a number on the sheet, not on a roll
   useability: '◈', // also the sheet layer — which ability may swing the weapon
+  unarmored: '◈',  // and again — the base AC of an unarmoured character
   resist: '⊟',
   vuln: '⤒',
   immune: '⊘',    // cancels outright
   setVar: '⊕',    // writes
   addVar: '⊕',
+  addUses: '⊕',   // writes too — a use counter rather than a variable
 }
 
 export type FeatureEffectRow = {
@@ -126,7 +172,7 @@ const CATEGORY_LABEL: Record<string, string> = {
  *
  *  A `bool` is the only shape that reads as a switch — a number is a stepper and
  *  cannot be "held" — and `dm` scope is not the player's to write. */
-export const toggleVars = (f: Feature): VarDef[] =>
+export const toggleVars = (f: Pick<Feature, 'vars'>): VarDef[] =>
   (f.vars ?? []).filter(v => v.kind === 'stored' && v.type === 'bool' && v.scope !== 'dm')
 
 /** Can this feature be pressed at all?
@@ -149,13 +195,35 @@ export function isUsable(f: Feature): boolean {
 
 /** A feature whose press is "hold / release" rather than "spend".
  *
- *  Exactly one toggle variable and nothing else to spend — with two, the
- *  hexagon would have to pick one and the player could not tell which. Those
- *  keep their switches in the popup instead. */
-export function toggleVar(f: Feature): VarDef | null {
+ *  Exactly one toggle variable — with two, the hexagon would have to pick one
+ *  and the player could not tell which. Those keep their switches in the popup.
+ *
+ *  A STANCE MAY COST SOMETHING TO ENTER. `uses` used to disqualify a feature
+ *  here, on the reasoning that a press either spends or holds. Rage is both:
+ *  entering costs one of your Rages and it then stays on until you drop it, and
+ *  so are Wild Shape, Frenzy and most of the class resources that matter. With
+ *  the exclusion in place the only way to author Rage was a hexagon that spent a
+ *  use and did nothing visible, plus a hand switch in the popup that turned it
+ *  on for free — two doors into one room, and the free one had no lock.
+ *
+ *  What the press then does is `runsActivation`'s question, not this one: this
+ *  says only "the hexagon is a switch". `roll` still disqualifies, because a
+ *  feature that rolls dice has a result to show and a switch has nowhere to
+ *  show it. */
+export function toggleVar(f: Pick<Feature, 'vars' | 'roll'>): VarDef | null {
   const vars = toggleVars(f)
-  return vars.length === 1 && !f.uses && !f.roll ? vars[0] : null
+  return vars.length === 1 && !f.roll ? vars[0] : null
 }
+
+/** Does pressing this RUN something, or is the press only a variable write?
+ *
+ *  The difference is what a stance costs to enter. A cloak's `hoodUp` has no
+ *  activation authored, so flipping it is a write and nothing else. Rage
+ *  declares `setVar isRaging = true`, so entering goes through the activation
+ *  path — which is the ONE place a use is spent, so a stance with a cost cannot
+ *  end up with a second definition of spending it. */
+export const runsActivation = (f: Pick<Feature, 'graph'>): boolean =>
+  (f.graph ?? []).some(e => IS_ACTIVATION(e.op) || e.once)
 
 /* ---------- carriers ---------- */
 

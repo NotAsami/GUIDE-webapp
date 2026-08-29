@@ -5,6 +5,8 @@ import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet } from '../lib/effects'
 import { parseDice, rollDice } from '../lib/dice'
 import { longRestPatch, pactShortRestPatch, shortRestPatch } from '../lib/rest'
+import { characterVars } from '../lib/graph'
+import { usesOf } from '../lib/featureView'
 import styles from './RestButton.module.css'
 
 interface Props {
@@ -34,11 +36,19 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
   const hdDie = hd?.die ?? 'd10'
   const hdSides = parseDice(hdDie)?.sides ?? 10
   const conMod = Math.floor(((effectiveSheet(character, shardTrees).abilities?.con ?? 10) - 10) / 2)
+  // A use count can be a formula, so deciding whether a rest would recharge
+  // anything needs the character's variable scope — see Feature.uses.
+  const scope = characterVars(character, shardTrees).scope
   const activeCount = Array.isArray(character.resources?.activeEffects)
     ? (character.resources!.activeEffects as unknown[]).length : 0
   // A short rest is worth taking (even with 0 dice) if it would recharge a feature.
-  const shortRechargeable = (character.sheet?.features ?? [])
-    .some(f => f.recharge === 'short' && f.uses && f.uses.current < f.uses.max)
+  const shortRechargeable = (character.sheet?.features ?? []).some(f => {
+    // A partial refill counts too — a Barbarian sits down for an hour and gets a
+    // Rage back, so the button must not claim there is nothing to gain.
+    if (f.recharge !== 'short' && !f.shortRecharge) return false
+    const u = usesOf(f, scope)
+    return !!u && u.current < u.max
+  })
   // ...or restore a Warlock's Pact Magic slots — their defining trait.
   const pactPatch = pactShortRestPatch(character)
 

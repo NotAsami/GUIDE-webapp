@@ -253,15 +253,45 @@ export type Proficiencies = {
   tools?: string[]
   languages?: string[]
   fightingStyles?: string[]
+  /** The weapon MASTERIES this character may use — the kinds their Weapon
+   *  Mastery feature covers, by mastery name ("Cleave", "Vex").
+   *
+   *  A proficiency in every sense that matters here: authored per character,
+   *  not derivable, and the thing that decides whether a weapon's own mastery is
+   *  live. HOW MANY they may hold is a different question and a derived one —
+   *  the class's `weaponMastery` variable answers it (2 at level 1, 3 at 5, 4 at
+   *  11 for a Barbarian), so the cap is never stored beside the list. */
+  masteries?: string[]
 }
 
 export type CharacterSheet = {
   abilities?: AbilityScores
   hp?: HP
   hitDice?: { current: number; max: number; die: string }
+  /** A DM OVERRIDE, not the answer. `effectiveSheet` derives Armour Class from
+   *  what is worn (see armorClass) — set this and the derived value is discarded
+   *  in its favour, which is the escape hatch for a monster, a curse, or a number
+   *  the rules do not cover.
+   *
+   *  It used to be the ONLY answer: `baseAc`/`acAddDex`/`acDexCap` sat on 110
+   *  catalog rows with nothing reading them, so equipping chain mail changed
+   *  nothing and the DM typed the total by hand. Clearing this is how a character
+   *  opts into their armour actually counting. */
   ac?: number
+  /** DERIVED, display-only — `effectiveSheet` writes it. Never author it: it is
+   *  the working of the sum above, and a hand-written one would be a second
+   *  claim about a number the engine already knows. */
   acBreakdown?: AcBreakdown
   initiative?: number
+  /** How many attacks one Attack action buys. Absent = 1, which is everyone
+   *  without Extra Attack.
+   *
+   *  LAYERED, not authored in practice: `effectiveSheet` adds every
+   *  `extraAttacks` a feature or item grants on top of this, so Extra Attack is a
+   *  `boost` like any other number and taking the feature away gives the attack
+   *  back. A base is allowed for the same reason `speed` has one — a character
+   *  who starts with two is expressible without a feature to carry it. */
+  attacksPerAction?: number
   speed?: number
   proficiencyBonus?: number
   coins?: { gold: number; silver?: number; copper?: number }
@@ -366,8 +396,30 @@ export type Feature = {
   /** Optional label/value detail rows (like item `rows`), e.g. ["Range","60 ft"]. */
   rows?: [string, string][]
   /** Limited-use tracking. Absent = at-will / passive (no use to spend). `current`
-   *  is player-mutable; `max` is authored. Restored by a rest (see `recharge`). */
-  uses?: { current: number; max: number }
+   *  is player-mutable; `max` is authored. Restored by a rest (see `recharge`).
+   *
+   *  `max` IS A FORMULA, not just a number, and that is the whole of how a 5e
+   *  resource scales: a Barbarian has "the number of Rages shown for your level",
+   *  and so does Bardic Inspiration, Channel Divinity, Wild Shape and the rest.
+   *  A number and `"3"` both still work — Number() takes them before the parser
+   *  is asked — so nothing authored before this needs migrating.
+   *
+   *  ONE ANSWER, deliberately. A second `maxByLevel` field beside a number would
+   *  be two records of the same fact, and the pair would disagree the first time
+   *  somebody edited one; the formula language already indexes level tables
+   *  (`[0,2,2,3,…][level]`) and already reads variables, so "the Rages column" is
+   *  literally `rages` off the class carrier.
+   *
+   *  NEVER READ THIS DIRECTLY — `featureView.ts usesOf(f, scope)` resolves it and
+   *  clamps `current` to it, the way effective HP is clamped on read. A raw
+   *  `f.uses.max` is a string on exactly the features that scale.
+   *
+   *  ABSENT `current` MEANS FULL. A catalog template cannot know what its own max
+   *  comes to — that depends on the character it is granted to and the level they
+   *  are — so the editor writes no `current` at all and the first spend is what
+   *  creates one. It also means a granted copy needs no fix-up pass at grant
+   *  time, in `assignClass` and in every other path that hands out a feature. */
+  uses?: { current?: number; max: number | string }
   /** When spent uses come back. 'turn' = the start of your next turn (Advance
    *  Turn, and a rest too — a rest contains turns); 'short' = short OR long
    *  rest; 'long' = long rest only. Absent = doesn't recharge (DM grants
@@ -377,12 +429,39 @@ export type Feature = {
    *  `resetOn: 'turn'` and gating the feature on it — state the player can see,
    *  invented purely to express "once per turn". A per-turn use IS a use. */
   recharge?: 'turn' | 'short' | 'long'
+  /** How many uses a SHORT rest gives back when `recharge` is 'long'.
+   *
+   *  A separate field because 5e's Rage is a third combination the one-word
+   *  `recharge` cannot express: *all* of them on a long rest, but only *one* on a
+   *  short. Saying `recharge: 'short'` would hand back the lot after an hour
+   *  sitting down; saying 'long' alone loses the short-rest use entirely.
+   *
+   *  A FORMULA, like `uses.max` — "regain a number equal to half your level" is
+   *  the shape this will meet next. Clamped to the max, so it can never bank
+   *  past the ceiling. Ignored when `recharge` is 'short' or 'turn', which
+   *  already refill completely; a full refill is never improved by a partial
+   *  one. */
+  shortRecharge?: number | string
   /** Dice expression rolled when the feature is used, e.g. "1d10 + 7" (Second
    *  Wind). When present, using the feature shows the result in a toast — the
    *  player applies the effect themselves, like an attack roll. */
   roll?: string
   /** Label for the roll line in the toast, e.g. "Healing". Defaults to "Result". */
   rollLabel?: string
+  /** HOW MANY of this feature's offered choices the player may take. Absent = 1.
+   *
+   *  Only means anything on a feature with two or more `once` effects carrying an
+   *  `ask` — those are the pick-one the roll panel renders, and this is what makes
+   *  it a pick-two. Improved Brutal Strike (Enhanced) is exactly that and nothing
+   *  else: "you can use two different Brutal Strike effects".
+   *
+   *  A FORMULA, because the count is a level thing — `level >= 17 ? 2 : 1` — and
+   *  it lives on the feature rather than on each effect because it is a property
+   *  of the GROUP. Repeating it per effect would be four copies that can disagree
+   *  about one number. Resolved when the arms are minted and snapshotted onto
+   *  them, the same way `sourceName` is: by the time the panel reads it the
+   *  feature may not be on the sheet any more. */
+  picks?: number | string
   /** Optional toast tone for the roll line ('heal' green / 'buff' cyan). */
   rollTone?: 'heal' | 'buff'
   /** Variables this feature introduces (lib/graph.ts). Shape only for now — no
@@ -457,6 +536,23 @@ export type VarDef = {
   /** `derived` only. Expression over the VARIABLE whitelist (lib/expr.ts
    *  VAR_IDENTS) plus other variables — never roll context. */
   formula?: string
+  /** `derived` only, INSTEAD of a formula: the gid of a feature whose USE
+   *  COUNTER this variable reads. "How many Rages have I got left" is not
+   *  something a formula could reach — uses live on `sheet.features`, not in the
+   *  variable store — so a `when` could not ask it and a note could not print it.
+   *
+   *  Derived rather than a third kind because that is exactly what it is:
+   *  recomputed on every read, never stored, and it goes stale the moment
+   *  anything spends a use.
+   *
+   *  BOUND AFTER the derived walk, which is a real limit and not an accident:
+   *  resolving a counter needs the whole scope (a use MAX is itself a formula —
+   *  Rage's is `rages`), so it cannot be available to the walk that produces
+   *  that scope. A use-counter variable may therefore be read by a `when`, a
+   *  contribution, an activation or a note — everything that runs against the
+   *  finished scope — but NOT by another derived variable's formula, which
+   *  `auditVars` refuses rather than letting it silently read zero. */
+  uses?: string
   /** `stored` only. Which bucket the value lands in, and therefore who may write
    *  it. Absent = 'player'. */
   scope?: 'player' | 'dm'
@@ -507,6 +603,10 @@ export type ArmedMod = {
   /** Carried through arming, or an armed "+2d6 radiant" lands in the untyped
    *  bucket and the damage split silently loses a colour. */
   dmgType?: string
+  /** How many of the offering source's arms may be taken, when more than one.
+   *  Snapshotted at arm time from `Feature.picks`, because the level it was
+   *  resolved at is the level it was armed at. Absent = one. */
+  picks?: number
   /** OFFERED, NOT TAKEN. The authored `ask`, carried onto the mod.
    *
    *  An `ask` on a `once` effect used to be answered at ACTIVATION — the confirm
@@ -570,6 +670,12 @@ export type GraphState = {
  *  lib/graph.ts reads them through damageFlags(), never through resolve(). */
 export type GraphOp =
   | 'add' | 'adv' | 'dis' | 'crit' | 'note'
+  /** A MINIMUM on the finished total, not a bonus. Indomitable Might is "if your
+   *  total for a Strength check is less than your Strength score, use the score
+   *  instead" — which no `add` can express, because it changes nothing on a good
+   *  roll and a great deal on a bad one. Highest floor wins, the mirror of
+   *  `crit` taking the lowest threshold. */
+  | 'floor'
   | 'resist' | 'vuln' | 'immune'
   /** SHEET layer. Unlike everything else here, this does not touch a roll at
    *  all — it changes a number ON THE SHEET (an ability score, speed,
@@ -584,11 +690,25 @@ export type GraphOp =
    *  a substitution: weaponAbilityKey picks the best score among everything
    *  allowed, exactly as finesse already picks the better of STR/DEX. */
   | 'useability'
+  /** Also SHEET layer: "while you aren't wearing armor, your base Armor Class
+   *  equals 10 plus your Dexterity and Constitution modifiers". A base AC RULE
+   *  rather than a bonus — it replaces what armour would have given, competes
+   *  with it rather than stacking, and switches itself off the moment body
+   *  armour goes on. The one condition it carries is structural (is there armour
+   *  in the slot?), which is why it needs no `when`: the sheet layer can see the
+   *  answer, where an expression could not. */
+  | 'unarmored'
   /** ACTIVATION outcomes. Unlike everything above, these do not modify a roll —
    *  they run when the player presses Use, and they WRITE. resolve() skips them
    *  for that reason: folding them into a Resolution would fire them on every
-   *  roll instead of on a press. */
-  | 'setVar' | 'addVar'
+   *  roll instead of on a press.
+   *
+   *  `addUses` is the odd one: it is the only activation that reaches ANOTHER
+   *  node, because "expend a use of your Rage to restore this" and "regain all
+   *  expended uses of Rage" are both one feature writing a second one's counter.
+   *  It therefore keeps the normal `target` list (feature gids only) where the
+   *  other two name a variable. */
+  | 'setVar' | 'addVar' | 'addUses'
 
 /** One structured contribution a node makes to a roll. Absent `graph` = a pure
  *  prose node, which stays a legitimate outcome — the effect block is opt-in per
@@ -609,6 +729,15 @@ export type GraphEffect = {
    *  MOD_STATS / SKILL_STATS, the same vocabulary the item and shard-node
    *  modifier rows use, so one compiler serves all three. */
   stat?: string
+  /** `boost` on an ABILITY only. The ceiling the increase may not push past —
+   *  "your Strength and Constitution scores increase by 4, to a maximum of 25".
+   *
+   *  Not a second way to write the amount: it clamps the RESULT, after every
+   *  boost has summed, so two features each granting +4 under one cap of 25 stop
+   *  at 25 rather than at 25 twice. It also never LOWERS — a score already above
+   *  the cap by some other route keeps what it had, because "to a maximum of" is
+   *  a limit on the increase and not on the character. */
+  cap?: string
   /** `useability` only. Which ability the carrier MAY use for attack rolls.
    *  Stored uppercase as the enum offers it; read case-insensitively. */
   ability?: string
@@ -644,6 +773,8 @@ export type GraphEffect = {
    *  breakdown; this is the sentence. Absent falls back to `label`, which is what
    *  notes authored before this field existed relied on. */
   text?: string
+  /** `floor` only. The lowest the finished total may be, as a formula. */
+  minimum?: string
   /** `crit` only. Lowest d20 face that counts as a critical hit, as a formula.
    *  The LOWEST threshold across every applying node wins — two features that
    *  both improve the range pick the better one rather than stacking. */
@@ -742,6 +873,23 @@ export type ItemEffects = {
    *  sum: two features granting WIS grant WIS, not WIS twice, so effectiveSheet
    *  UNIONS these. Read by weapons.ts weaponAbilityKey. */
   attackAbilities?: AbilityKey[]
+  /** Unarmored AC rules this source grants — "your base AC equals 10 plus your
+   *  Dexterity and Constitution modifiers". A LIST, because two of them can be
+   *  active at once (a Barbarian who multiclasses into Monk) and 5e says you pick
+   *  one: armorClass takes the best rather than summing or taking the first.
+   *
+   *  `base` is the constant (10 for Unarmored Defense, 13 for Draconic
+   *  Resilience) and DEX is always added — every printed rule adds it. `ability`
+   *  is the optional SECOND modifier, which is what distinguishes the Barbarian's
+   *  CON from the Monk's WIS. Applies only while no body armour is worn; a shield
+   *  is fine. */
+  unarmoredAc?: { base: number; ability?: AbilityKey }[]
+  /** Ceilings a boost may not push an ability past (`GraphEffect.cap`). Does not
+   *  sum either — the LOWEST cap wins, because two "to a maximum of" clauses both
+   *  have to hold. INJECTED ONLY, from sheetEffects; effectiveSheet applies it
+   *  after the flat bonuses have summed, and never below what the score already
+   *  was without them. */
+  abilityCap?: Partial<Record<AbilityKey, number>>
   /** Flat saving-throw bonus: a number applies to ALL saves; object = per-ability. */
   saves?: number | Partial<Record<AbilityKey, number>>
   /** Flat per-skill bonus, keyed by skill key (see lib/dnd.ts SKILLS). */
@@ -759,6 +907,11 @@ export type ItemEffects = {
   speed?: number
   /** Initiative bonus (added to the stored initiative; does not recompute from DEX). */
   initiative?: number
+  /** EXTRA attacks per Attack action — one grant is "you can attack twice". Summed
+   *  across every source and added to the sheet's base of one, so two features
+   *  each granting one give three attacks, and unequipping the item that granted
+   *  one takes it back. */
+  extraAttacks?: number
   /** Darkvision granted/extended, in feet (takes the max). */
   darkvision?: number
   /** Flat bonus to max HP (shard nodes; no item grants this today). Folded into
@@ -813,6 +966,12 @@ export type EquippedItem = {
    *  large, wrong number was the reason this field exists rather than reusing
    *  the bonus. Absent on everything that is not body armour or a shield. */
   baseAc?: number
+  /** A SHIELD, not body armour — its `baseAc` is a BONUS on top of whatever else
+   *  you are wearing, where armour's replaces it. Both live in the `armor` slot
+   *  today, so without this flag a shield reads as armour twice over: it would
+   *  replace your AC with 2, and it would switch off Unarmored Defense, which the
+   *  rules are explicit you keep while holding one. */
+  isShield?: boolean
   /** Whether Dex is added on top of `baseAc`, and the cap if there is one.
    *  Storing `baseAc` alone would be the very bug that field exists to avoid:
    *  a Breastplate is "14 + Dex (max 2)", and a bare 14 silently becomes a flat
@@ -964,6 +1123,16 @@ export type WeaponData = {
    *  weapon authored through the UI could ever be two-handed. `isTwoHanded`
    *  still falls back to the string so imported data works untouched. */
   twoHanded?: boolean
+  /** The ONE mastery property this kind of weapon has — Cleave on a Greataxe,
+   *  Vex on a Rapier. A character may use it only while that weapon kind is one
+   *  of the ones their Weapon Mastery feature covers.
+   *
+   *  Explicit for the same reason `ranged` and `twoHanded` are: `properties` is
+   *  free text the item form cannot write, so no weapon authored through the UI
+   *  could ever have one. `masteryOf` still falls back to that list, which is
+   *  where all 454 imported weapons carry theirs today — Greataxe's reads
+   *  ["Cleave", "Heavy", "Two-Handed"] — so nothing needs migrating. */
+  mastery?: string
   properties?: string[]
 }
 

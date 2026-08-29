@@ -35,7 +35,7 @@ import { markEdited } from '../lib/autopublish'
 import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
 import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, revealAudit, splitSel } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
-import { auditNode, gid, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
+import { auditNode, gid, normalizeTag, probeScope, type AuditItem, type AuthoredNode } from '../lib/graph'
 import { prereqClauses } from '../lib/feats'
 import {
   SOURCES, ACTIVATIONS, ACT_ORDER, COLORS, DEFAULT_COLOR,
@@ -44,10 +44,11 @@ import {
 import type {
   CatalogFeatureData, CatalogFeatureRow, Feature, FeatureCategory, GraphEffect, VarDef,
 } from '../lib/database.types'
-import { originChain } from '../lib/featureView'
+import { originChain, runsActivation, toggleVar } from '../lib/featureView'
 import { SEP, depthOf, folderSet, hiddenUnder, leafOf } from '../lib/folders'
 import { previewScope, type VarOwner } from '../lib/previewScope'
 import type { ExprScope } from '../lib/expr'
+import { VAR_IDENTS, evalExpr, freeIdents } from '../lib/expr'
 import styles from '../components/authoring.module.css'
 import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
@@ -151,7 +152,7 @@ export default function FeatureEditor() {
   // Every targetable thing, across all four catalogs. Shared with the spell
   // form's graph block — see lib/useCatalogNodes.ts, including why `ready` is
   // load-bearing rather than cosmetic.
-  const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
+  const { nodes, namesByGid, tagUse, catalogTypes, featureList, ready } = useCatalogNodes()
 
   /* WHAT THE PLAYER PREVIEW EVALUATES `{…}` AGAINST.
      A class variable like `weaponMastery` is declared on the class, not on the
@@ -181,7 +182,45 @@ export default function FeatureEditor() {
     if (!draft.name?.trim()) out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed feature', s: 'A feature needs a name before it can be granted.' })
     if (!draft.light_description?.trim()) out.push({ sev: 'warn', id: 'field:light', t: 'No card text', s: 'The collapsed card in play will have nothing to scan.' })
     if (!draft.deep_description?.trim()) out.push({ sev: 'warn', id: 'field:deep', t: 'No detail text', s: 'The expanded card will have nothing below the card text.' })
-    if ((draft.uses?.max ?? 0) > 0 && !draft.recharge) out.push({ sev: 'warn', id: null, t: 'Uses never reset', s: 'Max uses is set but no recharge was chosen — the DM restores them by hand.' })
+    if (draft.uses && !draft.recharge) out.push({ sev: 'warn', id: null, t: 'Uses never reset', s: 'Max uses is set but no recharge was chosen — the DM restores them by hand.' })
+    /* A STANCE THAT COSTS SOMETHING HAS TO SPEND IT. The hexagon on a single-
+       toggle feature enters the stance, and entering only spends a use when
+       there is an activation to run — so a feature with uses, a toggle and no
+       activation hands the player a free stance and a counter that never moves.
+       Warn rather than block: it is a legitimate half-finished state to save. */
+    /* `picks` WIDENS A CHOICE THAT HAS TO EXIST. Set on a feature with fewer than
+       two armed offers it is stored, editable and inert — the roll panel only
+       ever renders a group where there is something to choose between. */
+    const offerCount = (draft.graph ?? []).filter(e => e.once && e.ask?.trim()).length
+    if (draft.picks !== undefined && String(draft.picks).trim() && offerCount < 2) {
+      out.push({
+        sev: 'warn', id: 'field:picks', t: 'Nothing to choose between',
+        s: `This feature lets the player take more than one offer, but it has ${offerCount === 1 ? 'only one' : 'none'} — a pick needs two or more armed effects carrying a toggle.`,
+      })
+    }
+    if (draft.uses && toggleVar(draft) && !runsActivation(draft)) {
+      out.push({
+        sev: 'warn', id: 'field:uses', t: 'The stance is free',
+        s: `${toggleVar(draft)!.label ?? toggleVar(draft)!.name} is a switch and this feature has uses, but nothing spends one — add a setVar activation writing it, and entering will cost a use.`,
+      })
+    }
+    /* A USE COUNT IS A FORMULA (Feature.uses), and an unreadable one resolves to
+       0 — which reads as "spent" on the player's card, on every surface, with no
+       error anywhere. Checked against the same whitelist a contribution is, plus
+       the catalog's variables, so `rages` off the class carrier is legal here
+       exactly as it is in a `when`. */
+    const maxRaw = String(draft.uses?.max ?? '').trim()
+    if (maxRaw && !Number.isFinite(Number(maxRaw))) {
+      const allowed = new Set<string>([...VAR_IDENTS, ...(draft.vars ?? []).map(v => v.name), ...Object.keys(ready ? catalogTypes : {})])
+      const unknown = freeIdents(maxRaw).filter(i => !allowed.has(i))
+      if (unknown.length) {
+        out.push({ sev: 'err', id: 'field:uses', t: 'Unknown identifier in max uses', s: `Max uses reads "${unknown[0]}", which nothing declares. It would resolve to 0, and the feature would read as spent.` })
+        // Same scope auditNode types every other formula against — including the
+        // catalog, or a name that passed the check above fails this one.
+      } else if (evalExpr(maxRaw, probeScope(draft.vars ?? [], undefined, ready ? catalogTypes : {})) === null) {
+        out.push({ sev: 'err', id: 'field:uses', t: 'Max uses does not evaluate', s: `"${maxRaw}" produced no number. It would resolve to 0, and the feature would read as spent.` })
+      }
+    }
 
     /* PREREQUISITES ARE SILENT WHEN WRONG. lib/feats.ts never blocks on a clause
        it cannot read — that is what keeps homebrew prose grantable — so a typo
@@ -690,7 +729,7 @@ export default function FeatureEditor() {
                     d={draft} previewScope={pvScope} set={set} setEffect={setEffect} setVar={setVar} update={update}
                     open={open} setOpen={setOpen} openEffect={openEffect} setOpenEffect={setOpenEffect}
                     moreOps={moreOps} setMoreOps={setMoreOps}
-                    folders={folders} nodes={nodes} namesByGid={namesByGid} tagUse={tagUse}
+                    folders={folders} nodes={nodes} namesByGid={namesByGid} featureList={featureList} tagUse={tagUse}
                     tagInput={tagInput} setTagInput={setTagInput} tagAcOpen={tagAcOpen} setTagAcOpen={setTagAcOpen}
                     addTag={addTag} setPop={setPop} openOrigin={() => setOverlay('origin')}
                   />
@@ -810,6 +849,8 @@ type FormProps = {
   folders: string[]
   nodes: AuthoredNode[]
   namesByGid: Map<string, { name: string; kind: string }>
+  /** Every feature by gid + name, for a use-counter variable to point at. */
+  featureList: { gid: string; name: string }[]
   tagUse: Map<string, number>
   tagInput: string
   setTagInput: (v: string) => void
@@ -916,6 +957,10 @@ function FeatureForm(p: FormProps) {
   const act = ACTIVATIONS[(d.activation ?? 'none') as ActivationKind] ?? ACTIVATIONS.none
   const vars = d.vars ?? []
   const graph = d.graph ?? []
+  /* The armed offers — a `once` effect carrying an `ask`. Two or more of them
+     are the pick-one the roll panel renders, and the only place `picks` means
+     anything. */
+  const offers = graph.filter(e => e.once && e.ask?.trim()).length
   const varErr = vars.some(v => !v.name?.trim() || (v.kind === 'derived' && !v.formula?.trim()))
   const effErr = graph.some(e => !e.label?.trim())
 
@@ -1038,22 +1083,63 @@ function FeatureForm(p: FormProps) {
       <div className={styles.grid2} style={{ marginBottom: 2 }}>
         <div>
           <span className={styles.fieldLab}>Max uses</span>
-          <input className={styles.in} type="number" min={0} value={d.uses?.max ?? 0}
-            placeholder="0 = at-will"
+          {/* A FORMULA, not a number input. "The Rages column of the Barbarian
+              table" is `rages`, and a spinner cannot say that. Blank or 0 is
+              at-will; `current` is deliberately not written, because absent
+              means FULL and a template cannot know what its own max comes to on
+              a character it has not met. */}
+          <input className={styles.in} type="text" value={String(d.uses?.max ?? '')}
+            placeholder="0 = at-will · or rages"
             onChange={e => {
-              const max = Math.max(0, parseInt(e.target.value, 10) || 0)
-              // Granted copies start full — same rule the old console form used.
-              set({ uses: max > 0 ? { current: max, max } : undefined, ...(max > 0 ? {} : { recharge: undefined }) })
+              const raw = e.target.value.trim()
+              const n = Number(raw)
+              const off = !raw || (Number.isFinite(n) && Math.trunc(n) <= 0)
+              set({
+                uses: off ? undefined : { max: Number.isFinite(n) ? Math.trunc(n) : raw },
+                ...(off ? { recharge: undefined } : {}),
+              })
             }} />
         </div>
         <div>
           <span className={styles.fieldLab}>Resets on</span>
-          <select className={styles.in} value={d.recharge ?? ''} disabled={!(d.uses?.max)}
-            onChange={e => set({ recharge: (e.target.value || undefined) as 'turn' | 'short' | 'long' | undefined })}>
+          <select className={styles.in} value={d.recharge ?? ''} disabled={!d.uses}
+            onChange={e => set({ recharge: (e.target.value || undefined) as 'turn' | 'short' | 'long' | undefined,
+              // A full short-rest refill makes a partial one meaningless.
+              ...(e.target.value === 'short' || e.target.value === 'turn' ? { shortRecharge: undefined } : {}) })}>
             {RECHARGES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
           </select>
         </div>
       </div>
+      {/* A PICK-TWO. Only means anything where there is a pick to widen — two or
+          more armed offers from this feature — so it is offered exactly there
+          rather than sitting inert on every form. */}
+      {offers >= 2 && (
+        <div style={{ marginBottom: 2 }}>
+          <span className={styles.fieldLab}>Of its {offers} offers, the player may take</span>
+          <input className={styles.in} type="text" value={String(d.picks ?? '')}
+            placeholder="blank = one · 2 · level >= 17 ? 2 : 1"
+            onChange={e => {
+              const raw = e.target.value.trim()
+              const n = Number(raw)
+              set({ picks: !raw ? undefined : Number.isFinite(n) ? Math.max(1, Math.trunc(n)) : raw })
+            }} />
+        </div>
+      )}
+      {/* THE THIRD COMBINATION. "All of them on a long rest, one on a short" is
+          Rage, and no single value of Resets-on says it — so it is its own field,
+          offered only where it means something. */}
+      {d.recharge === 'long' && (
+        <div style={{ marginBottom: 2 }}>
+          <span className={styles.fieldLab}>…and on a short rest, give back</span>
+          <input className={styles.in} type="text" value={String(d.shortRecharge ?? '')}
+            placeholder="blank = nothing · 1 · a formula"
+            onChange={e => {
+              const raw = e.target.value.trim()
+              const n = Number(raw)
+              set({ shortRecharge: !raw ? undefined : Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : raw })
+            }} />
+        </div>
+      )}
       <div className={styles.actNote} style={{ ['--an' as string]: 'var(--beige-dim)', marginTop: -2 }}>
         <i className="fa-solid fa-rotate" />
         <span>Uses are independent of activation — <b>0 means at-will</b>, and a passive feature can still track uses.</span>
@@ -1074,7 +1160,7 @@ function FeatureForm(p: FormProps) {
         </button>
         {p.open.vars && (
           <div className={styles.blkBody}>
-            <VarsBlock vars={vars} onChange={next => update(x => ({ ...x, vars: next }))} />
+            <VarsBlock vars={vars} onChange={next => update(x => ({ ...x, vars: next }))} features={p.featureList} />
           </div>
         )}
       </div>

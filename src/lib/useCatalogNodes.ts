@@ -13,9 +13,12 @@
  * gate on it.
  */
 import { useMemo } from 'react'
-import { useDmCatalog, useDmFeatures, useDmSpells, featureContent } from './dm.ts'
+import {
+  useDmBackgrounds, useDmCatalog, useDmClasses, useDmFeatures, useDmRaces, useDmSpells,
+  backgroundContent, classContent, featureContent, raceContent,
+} from './dm.ts'
 import { useShardCatalog } from './shardCatalog.ts'
-import { gid, nodeGid, normalizeTag, type AuthoredNode } from './graph.ts'
+import { gid, nodeGid, normalizeTag, probeScope, type AuthoredNode } from './graph.ts'
 import type { VarDef } from './database.types.ts'
 
 export type CatalogNodes = {
@@ -38,6 +41,10 @@ export type CatalogNodes = {
    *  First declaration wins on a collision, matching `collectVars`; the
    *  duplicate itself is reported by the audit, not re-reported here. */
   catalogTypes: Record<string, 'num' | 'bool'>
+  /** Just the FEATURES, gid + name, sorted. A use-counter variable points at one
+   *  (VarDef.uses), and every editor that shows the variables block needs the
+   *  same list — deriving it per screen would be seven copies of one filter. */
+  featureList: { gid: string; name: string }[]
   /** False until every library has loaded. See the note above. */
   ready: boolean
 }
@@ -47,6 +54,16 @@ export function useCatalogNodes(): CatalogNodes {
   const itemLib = useDmCatalog()
   const spellLib = useDmSpells()
   const { catalog: shardCatalog } = useShardCatalog()
+  /* CARRIERS DECLARE VARIABLES TOO. A class/race/background is not TARGETABLE —
+     it has no gid, so it contributes nothing to `nodes` — but assignClass and its
+     twins snapshot its `vars` onto the sheet as a carrier feature, which puts
+     them in the flat runtime scope like any other. Without them here the audit
+     called `rageDamage` unknown, and an unknown identifier is an error that
+     blocks Publish: a feature reading its own class's progression was
+     authorable only by hand-editing the row. */
+  const classLib = useDmClasses()
+  const raceLib = useDmRaces()
+  const bgLib = useDmBackgrounds()
 
   /* A WEAPON IS AN ITEM WEARING A SECOND GID. `gid('weapon', …)` and
      `gid('item', …)` both resolve for a catalog row with category 'weapon';
@@ -81,10 +98,18 @@ export function useCatalogNodes(): CatalogNodes {
 
   const catalogTypes = useMemo(() => {
     const m: Record<string, 'num' | 'bool'> = {}
+    /* DERIVED VARIABLES COUNT. Their type is not declared — it comes from the
+       formula — so this runs probeScope, the same walk auditNode uses to type a
+       node's own declarations. Skipping them meant every progression table
+       (`rageDamage`, `weaponMastery`) read as unknown, since a table is always
+       derived. Defaulting them to `num` instead would make a derived BOOL a type
+       error wherever another node read it. */
     const take = (defs: VarDef[] | undefined) => {
-      for (const d of defs ?? []) {
-        if (d.kind !== 'stored' || !d.name || m[d.name]) continue
-        m[d.name] = d.type ?? 'num'
+      if (!defs?.length) return
+      const scope = probeScope(defs)
+      for (const d of defs) {
+        if (!d.name || m[d.name] || !(d.name in scope)) continue
+        m[d.name] = typeof scope[d.name] === 'boolean' ? 'bool' : 'num'
       }
     }
     for (const r of lib.features) take(featureContent(r).vars)
@@ -93,8 +118,17 @@ export function useCatalogNodes(): CatalogNodes {
     for (const tree of Object.values(shardCatalog)) {
       for (const n of tree.nodes ?? []) take(n.vars)
     }
+    for (const r of classLib.classes) take(classContent(r).vars)
+    for (const r of raceLib.races) take(raceContent(r).vars)
+    for (const r of bgLib.backgrounds) take(backgroundContent(r).vars)
     return m
-  }, [lib.features, spellLib.spells, itemLib.items, shardCatalog])
+  }, [lib.features, spellLib.spells, itemLib.items, shardCatalog, classLib.classes, raceLib.races, bgLib.backgrounds])
+
+  const featureList = useMemo(() =>
+    lib.features
+      .map(r => ({ gid: gid('feature', { feature_id: r.id }), name: featureContent(r).name ?? r.id }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  [lib.features])
 
   const tagUse = useMemo(() => {
     const m = new Map<string, number>()
@@ -102,5 +136,12 @@ export function useCatalogNodes(): CatalogNodes {
     return m
   }, [nodes])
 
-  return { nodes, namesByGid, tagUse, catalogTypes, ready: !lib.loading && !itemLib.loading && !spellLib.loading }
+  /* The carrier libraries join `ready` for the same reason the others are in it:
+     an audit that runs before they load sees a whitelist missing their variables
+     and reports a clean node as broken. */
+  return {
+    nodes, namesByGid, tagUse, catalogTypes, featureList,
+    ready: !lib.loading && !itemLib.loading && !spellLib.loading
+      && !classLib.loading && !raceLib.loading && !bgLib.loading,
+  }
 }

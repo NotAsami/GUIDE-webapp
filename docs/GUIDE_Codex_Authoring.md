@@ -52,6 +52,7 @@ An **effect** answers five questions, and only the first three are required:
 | `add` | adds to the roll. Dice allowed, and they stay unrolled so a crit can double them | `2d6`, `prof + wis`, `level / 2` |
 | `adv` / `dis` | advantage / disadvantage. Never a number — the target list IS the statement | — |
 | `crit` | lowers the crit threshold. Lowest across all applying nodes wins | `19` |
+| `floor` | a MINIMUM on the finished total. Not a bonus — it changes nothing on a good roll. Highest floor wins, the mirror of `crit`. Checks and saves only | `strScore` |
 | `note` | prose on the roll, no number. Can compute — see Inline compute | `DC {saveDc}, Wisdom save` |
 
 **Spells also have a Saving throw field**, beside Damage. Two different abilities
@@ -77,6 +78,28 @@ target a damage *type*, not a roll:
 |---|---|
 | `resist` / `vuln` / `immune` | halves / doubles / nullifies incoming damage of the matched kind. Target a tag naming the type |
 
+**`immune` also covers CONDITIONS**, and it is the same statement: an `immune`
+op targeting a tag. Mindless Rage is
+
+```
+effect   immune   → tag:frightened    when isRaging
+effect   immune   → tag:charmed       when isRaging
+```
+
+and nothing else. The tag is matched against the effect's **name**, normalised on
+both sides, so an effect called *Frightened* answers to `tag:frightened` with no
+extra authoring. A condition you are immune to greys out in the Effects panel
+with an **Immune** chip and stops counting, and the DM's Apply card refuses to
+land it in the first place, saying why.
+
+> **Suppressed, not deleted.** An immunity can be conditional, and a condition
+> deleted while you were raging could not come back when the rage ended. The ✕ in
+> the Effects panel is still the only thing that really removes one.
+>
+> A suppressed effect's **numbers** do still layer, because the sheet is computed
+> below the graph. No SRD condition carries any, so this bites nothing today —
+> but a homebrew condition with a `-2 AC` on it would grey out and keep the −2.
+
 **Sheet ops** — these change the character *sheet*, not a roll. They take **no
 target**, because there is nothing to match against: they apply to whoever
 carries the node. They cannot be conditional either — a `when` on one is an
@@ -87,8 +110,20 @@ error, since the sheet is not evaluated per-roll.
 | `boost` | moves a number on the sheet itself — an ability score, speed, darkvision. A racial +2 DEX is this: the score moves, so every save, skill and derived value made from it moves with it | `DEX` `+2` |
 | `use ability` | lets the carrier use a different ability for **attack rolls** | `WIS` |
 
+One stat is worth calling out because two entries in the list sound alike:
+**Attack** is the to-hit bonus, and **Extra Attacks** is how many swings one
+Attack action buys. Extra Attack grants `+1` of the second — everyone already has
+one, so the grant is the EXTRA, and the Equipment screen's stat rail starts
+showing *Attacks 2 / 2* counting down as you swing. Advance Turn resets it.
+
 `boost` takes a **plain number, not a formula**. There is no roll to compute
 against at sheet level, so `prof + wis` has nothing to read.
+
+It also takes an optional **Up to a maximum of** — Primal Champion is "+4, to a
+maximum of 25". The ceiling clamps the RESULT after every boost has summed, and
+it never *lowers* a score that was already past it by some other route, because
+"to a maximum of" limits the increase and not the character. Ability scores
+only; a cap on Speed or AC is refused, because nothing clamps those.
 
 **`use ability` is a MAY, not a swap.** "You may use Wisdom instead of Strength
 or Dexterity" is a permission, so the attack uses the **best** score among
@@ -102,6 +137,30 @@ fighter who picks the same blade off a corpse swings it with Strength. Take the
 feature away and the attack goes back to STR on its own, with nothing stored to
 clean up.
 
+**`unarmored AC`** is the third sheet op, and the only one that answers a
+question the others cannot: *"while you aren't wearing armor, your base Armor
+Class equals 10 plus your Dexterity and Constitution modifiers"*.
+
+| | |
+|---|---|
+| **Base** | the constant — 10 for Unarmored Defense, 13 for Draconic Resilience |
+| **Plus (besides DEX)** | the optional second modifier: a Barbarian's CON, a Monk's WIS |
+
+Dexterity is always included, because every printed version of the rule adds it.
+It **replaces** what armour would have given rather than stacking with it, so it
+competes and the better of the two wins — and it switches itself off the moment
+body armour goes on. That condition needs no `when`: the sheet layer can see the
+slot, where an expression could not.
+
+> **A shield still helps**, and still adds on top. Shields share the armour slot
+> with body armour, so an item marked **Shield** in the item form adds its number
+> instead of replacing yours, and leaves an unarmored rule standing.
+
+> **AC is now derived.** `sheet.ac` is a DM **override** of the base — set it and
+> the armour is ignored, clear it and what the character is wearing decides.
+> Magic bonuses apply either way. The Stat Panel shows the working:
+> `AC 17 = 10 [Unarmored Defense] + 2 DEX + 3 CON + 2 Shield`.
+
 > **Boost vs an Effect.** Use `boost` for what a thing *is* and cannot be
 > separated from — an elf's Dexterity. Use an Effect (the Effects tab) for
 > something applied to you or carried by an object, which can **end**: Bless,
@@ -113,6 +172,18 @@ clean up.
 |---|---|
 | `setVar` | stores a value into one of this node's variables |
 | `addVar` | adds a signed amount to one |
+| `addUses` | moves a **use counter** — this feature's, or **another feature's** |
+
+`addUses` is the only activation that reaches a second node, because that is what
+the rules keep asking for: *"regain all expended uses of Rage"* is a positive
+amount aimed at Rage, and *"expend a use of your Rage"* is a negative one. Target
+a **feature**, or leave the target empty for this one's own counter. It clamps to
+the target's own max, so naming the max itself is how you say **all of them**.
+
+> **A cost you cannot pay refuses the whole press.** A negative `addUses` bigger
+> than what the target has left cancels the activation outright — every outcome,
+> not just that one. "Expend a Rage to restore this" is one transaction, and a
+> player with no Rages left must not get the benefit for free.
 
 ---
 
@@ -209,6 +280,19 @@ decide whether the creature was judged puts a thumb on the decision. Answering
 rolls it — and once rolled it locks, so reopening the panel is never a free
 reroll.
 
+**Several offers from one node become a pick-one.** Two or more `once` effects
+carrying an `ask` are one decision — Brutal Strike's blows — and the roll panel
+renders them as options, not switches, because the feature is *made* of the
+choice.
+
+> **Letting the player take two.** The feature's **Of its N offers, the player
+> may take** field widens it. A formula, because the count is usually a level
+> thing: Improved Brutal Strike (Enhanced) is `level >= 17 ? 2 : 1` and nothing
+> else. It lives on the feature rather than on each effect because it is a
+> property of the group — four copies of one number would eventually disagree.
+> Taking fewer than the limit is a decision, so the roll stops asking after the
+> first pick either way.
+
 **Effects sharing one `ask` become one checkbox.** That is how "it hit, so deal
 the damage AND reveal the DC" is one decision instead of two. Type the same
 sentence in both — the editor now offers the ones already on the node in a
@@ -233,15 +317,22 @@ State a node carries. Two axes:
 - **DM-only** — only you can, from the console's *Feature State* card. The
   database enforces this; a player client's attempt is reverted.
 
-What a formula can read: `level`, `prof`, `str`…`cha` (modifiers), `hp`,
-`hpMax`, plus every variable in scope. Contribution formulas can also read
-`cast` (the level a spell was cast at).
+What a formula can read: `level`, `prof`, `str`…`cha` (modifiers),
+`strScore`…`chaScore` (the raw scores — Indomitable Might wants 20, not +5),
+`hp`, `hpMax`, `saveDc`, `attacksThisTurn`, plus every variable in scope.
+Contribution formulas can also read `cast` (the level a spell was cast at).
+
+A variable declared on a **class, race or background** is in scope too, on any
+character carrying it — that is how a feature reads its own class's progression.
+`rageDamage` and `rages` live on the Barbarian, and Frenzy's damage is literally
+`1d6 * rageDamage`.
 
 ```
 saveDc          derived    8 + prof + wis
 isRaging        stored     bool, initial false, player
 mercy           stored     num, DM-only
 canSwitchMercy  derived    mercy - condemnation >= 5
+rageUses        derived    uses of <Rage>          (picked, not typed)
 ```
 
 Arithmetic is integer — `level / 2` at level 7 is 3, matching 5e's rounding.
@@ -346,19 +437,83 @@ Same `ask` on both → **one** checkbox that reveals the DC and applies the dice
 progression is a 5e-style table. Filling slots 1, 5 and 11 means "3 from level 11
 up", not "nothing at 12".
 
-**A toggle the player flips** — Rage.
+**A toggle the player flips** — a cloak's hood.
 
 ```
-variable   isRaging   stored, bool, initial false, player
-effect     add   2   roll:damage.melee   when isRaging
+variable   hoodUp   stored, bool, initial false, player
+effect     adv   roll:check.stealth   when hoodUp
 ```
 
-The player toggles it on their Features screen; every melee damage roll picks it
-up while it is on. A `long` reset returns it to `false` on a rest.
+The player toggles it on their Features screen; every matching roll picks it up
+while it is on. A `long` reset returns it to `false` on a rest.
+
+**Give a resource back** — Persistent Rage: on a long-rest charge of its own,
+refill Rage completely.
+
+```
+uses       1
+recharge   long
+effect     addUses   rages   →  <Rage>          (picked from the catalog)
+```
+
+`rages` is Rage's own max, and the clamp turns "add six" into "fill it". The same
+op with `-1` is what *spends* a resource, and the two together on one node are a
+trade: the cost is checked first, so the press is refused rather than half-done.
+
+**A stance that COSTS something to enter** — Rage. The same toggle, plus the two
+fields that make entering it cost one:
+
+```
+uses       rages                   (a formula — the class's own Rages column)
+recharge   long
+variable   isRaging   stored, bool, initial false, player, resets on short
+effect     setVar   isRaging = true   label "Enter Rage"
+effect     add      rageDamage        roll:damage.melee    when isRaging
+effect     resist   tag:bludgeoning                        when isRaging
+```
+
+One hexagon, three states. Pressing it while OFF runs the activation — which
+spends the use and sets the variable in a single write — and pressing it while
+ON releases the stance for free. **Releasing never costs**, so ending a Rage
+does not eat a second one.
+
+> The `setVar` is what makes the press own the switch: a variable an activation
+> writes loses its hand switch in the popup, so there is exactly one door and it
+> is the one with the cost on it. Author the uses without it and the editor warns
+> that the stance is free.
+
+**A total that cannot go below something** — Indomitable Might: "if your total
+for a Strength check is less than your Strength score, use the score instead".
+
+```
+op       floor
+minimum  strScore
+target   roll:check.str · roll:check.athletics · roll:save.str
+```
+
+No `add` can say this: it is worth nothing on a good roll and everything on a bad
+one. The breakdown keeps what was rolled and names what replaced it, so a player
+seeing 20 from a natural 2 can tell why.
 
 **Once per rest, spend a use** — pair `uses` + `recharge` on the node with an
 `ask` on the effect, so pressing Use spends the charge and the toggle decides
 whether it applied.
+
+**A use count that scales** — **Max uses is a formula**, not just a number. "The
+number of Rages shown for your level" is `rages`, read off the class; an inline
+table (`[0,2,2,3,3,3,4][level]`) works with nothing to declare. A plain number
+still means exactly what it always did.
+
+> Leave the count alone once it is authored: the character's *current* uses live
+> on their sheet and the max is recomputed on every read, so levelling up raises
+> the ceiling without touching what they have spent. A granted copy starts full.
+
+**Back in part, not in full** — Rage gives back *one* use on a short rest and
+*all* of them on a long one. Set **Resets on** to `Long rest`, and the field that
+appears under it — *…and on a short rest, give back* — takes the partial amount
+(a number or a formula). No single value of Resets-on can say this, which is why
+it is its own field; a full short-rest refill hides it, because a full refill is
+never improved by a partial one.
 
 **Cast a spell, then hit harder** — the armed shape.
 
@@ -423,6 +578,34 @@ Use `ask` instead when the condition is judged **per roll** rather than held —
 "did at least one of them fail the save?" is not a stance you leave switched on.
 
 ---
+
+## Weapon mastery
+
+A weapon has ONE mastery property; a character may use it only while that kind of
+weapon is one they have trained. Two facts, kept apart everywhere — the weapon
+card says `Vex` when it is yours and `Vex · not one of yours` when it is not,
+because naming it without the qualifier tells the player they have something they
+do not.
+
+**Nothing needed migrating.** All 454 imported weapons already list theirs in the
+free-text `properties` array (a Greataxe reads `["Cleave", "Heavy",
+"Two-Handed"]`), and `masteryOf` falls back to it — the same pattern `ranged` and
+`twoHanded` use. The item form now has a **Mastery** select for weapons you author
+yourself, which is the half the UI could never write.
+
+**Who may use which** is on the character, in the console's Proficiencies card,
+and the cap is `weaponMastery` — a derived variable on the class, so it follows a
+level-up with nothing to remember. Zero means no Weapon Mastery feature and the
+section stays off that character's card entirely.
+
+**What the app does with it.** On a swing with a mastery that is yours, the rule
+rides on the roll as a note. That is deliberately all it does: of the eight, seven
+are things only the player can resolve — Graze wants to know you *missed*, Cleave
+wants a second creature, Sap and Slow and Push modify the TARGET rather than you
+(see `GUIDE_Codex_Deferred.md`). Vex is the one the engine could arm and does not:
+"advantage on your next attack against *that same creature*" needs a target
+identity nothing here tracks, so arming it would hand out advantage against
+whoever you swung at next. A wrong number is worse than a sentence.
 
 ## Colouring prose
 

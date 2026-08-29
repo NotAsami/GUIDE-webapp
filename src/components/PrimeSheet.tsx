@@ -25,6 +25,8 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Feature } from '../lib/database.types'
+import type { ExprScope } from '../lib/expr'
+import { usesOf } from '../lib/featureView'
 import { Prose } from '../lib/markdown'
 import styles from './PrimeSheet.module.css'
 import { Icon } from './Icon'
@@ -40,15 +42,22 @@ const blurb = (f: Feature) => f.light_description || ''
  *  feature never lands on an empty panel with a button under it. */
 const detail = (f: Feature) => f.deep_description || f.light_description || ''
 
-const usesLabel = (f: Feature) =>
-  f.uses ? `${f.uses.current} / ${f.uses.max} uses` : (f.usage || 'At will')
+/** `scope` because a use count can be a formula — printing `f.uses.max` raw put
+ *  `[0,2,2,3,…][level]` in front of the player on every feature that scales. */
+const usesLabel = (f: Feature, scope: ExprScope) => {
+  const u = usesOf(f, scope)
+  return u ? `${u.current} / ${u.max} uses` : (f.usage || 'At will')
+}
 
-export function PrimeSheet({ title, subtitle, icon, offers, onUse, onRoll, onCancel }: {
+export function PrimeSheet({ title, subtitle, icon, offers, scope, onUse, onRoll, onCancel }: {
   /** What is about to be rolled — the weapon, the spell, the check. */
   title: string
   subtitle?: string
   icon?: string
   offers: Offer[]
+  /** The character's variable scope, so a formula use count resolves to a number
+   *  before it is printed. */
+  scope: ExprScope
   /** Confirming an offer IS pressing Use on the feature — same spend, same
    *  writes. One definition of an activation, so a use spent here spends exactly
    *  what it spends on the Features screen. */
@@ -86,7 +95,7 @@ export function PrimeSheet({ title, subtitle, icon, offers, onUse, onRoll, onCan
             ? <div className={styles.none}>Nothing left to turn on</div>
             : (
               <div className={styles.list}>
-                {offers.map(o => <OfferRow key={o.source} offer={o} onUse={onUse} />)}
+                {offers.map(o => <OfferRow key={o.source} offer={o} scope={scope} onUse={onUse} />)}
               </div>
             )}
 
@@ -119,7 +128,7 @@ export function PrimeSheet({ title, subtitle, icon, offers, onUse, onRoll, onCan
  *  the moment you are about to spend a use is exactly when you want to read what
  *  you are buying. The commit lives HERE rather than in a second dialog on top:
  *  a confirm that only restates the press is a press. */
-function OfferRow({ offer, onUse }: { offer: Offer; onUse: (f: Feature) => void }) {
+function OfferRow({ offer, scope, onUse }: { offer: Offer; scope: ExprScope; onUse: (f: Feature) => void }) {
   const [open, setOpen] = useState(false)
   const f = offer.feature
   const text = open ? detail(f) : blurb(f)
@@ -134,7 +143,7 @@ function OfferRow({ offer, onUse }: { offer: Offer; onUse: (f: Feature) => void 
           {offer.kind === 'stance'
             ? <span className={`${styles.tag} ${styles.stance}`}><i className="fa-solid fa-angles-up" />Stance</span>
             : <span className={`${styles.tag} ${styles.arm}`}><i className="fa-solid fa-bolt" />Arms</span>}
-          <span className={styles.oCost}>{usesLabel(f)}</span>
+          <span className={styles.oCost}>{usesLabel(f, scope)}</span>
           <span className={styles.oFold}><i className="fa-solid fa-chevron-down" /></span>
         </div>
         {text && <Prose text={text} className={styles.what} />}
