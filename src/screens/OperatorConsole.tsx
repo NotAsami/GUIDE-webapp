@@ -11,7 +11,8 @@ import { parseCatalogQuery, matchesCatalogQuery, hasPositiveTerm } from '../lib/
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
 import type { GraphEffect, GraphState, ProgressStory, ShardSlot, ShardTree, VarDef } from '../lib/database.types'
-import { auditNode, characterVars, type AuditItem } from '../lib/graph'
+import { auditNode, buildContext, characterVars, immuneTo, type AuditItem } from '../lib/graph'
+import { MASTERIES, masteryOf } from '../lib/weapons'
 import type { DmLootState } from '../lib/dm'
 import { chanceOfNothing, expectedYield, poolItems, rollLoot } from '../lib/loot'
 import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, revealAudit } from '../components/GraphEffects'
@@ -1116,7 +1117,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
         </div>
 
         {/* C — APPLY EFFECT: push a status effect onto this PC (slice 6) */}
-        <ApplyEffectCard member={member} effectLib={effectLib} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
+        <ApplyEffectCard member={member} effectLib={effectLib} row={row} shardTrees={shardCatalog} onUpdate={onUpdate} onVoice={onVoice} log={log} />
 
         {/* D — GRANT ITEM: snapshot a catalog template into this PC's inventory */}
         <GrantItemCard member={member} catalog={catalog} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
@@ -1201,7 +1202,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
           itemCatalog={catalog} shardCatalog={shardCatalog} onUpdate={onUpdate} log={log}
         />
 
-        <ProficienciesCard member={member} row={row} classLib={classLib} onUpdate={onUpdate} log={log} />
+        <ProficienciesCard member={member} row={row} classLib={classLib} shardTrees={shardCatalog} onUpdate={onUpdate} log={log} />
         </Folder>
 
         <Folder label="Spells" icon="fa-hat-wizard">
@@ -2375,10 +2376,14 @@ const EFFECT_KIND_TO_ACTIVE: Record<'buff' | 'debuff' | 'condition', 'buff' | 'c
  *  the SAME field the player's potion-drinking writes and the effects tray reads,
  *  so the DM's push shows up in the tray, layers into the effective sheet, clears
  *  on rest, and the player can shrug it off manually (all existing behavior). */
-function ApplyEffectCard({ member, effectLib, row, onUpdate, onVoice, log }: {
+function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice, log }: {
   member: PartyMember
   effectLib: CatalogEffectRow[]
   row: CharacterRow
+  /** For the immunity check — an immunity can be granted by an attuned shard
+   *  node as easily as by a feature, and a context built without the trees would
+   *  quietly miss those. */
+  shardTrees: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
   log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
@@ -2405,8 +2410,21 @@ function ApplyEffectCard({ member, effectLib, row, onUpdate, onVoice, log }: {
   const active = (resources.activeEffects as ActiveEffect[] | undefined) ?? []
   const first = firstName(member.name)
 
+  /* IMMUNITY, asked of the effect's NAME — the same `immune → tag:frightened`
+     an author writes for damage, because "immune to fire" and "immune to
+     Frightened" are one statement. Built per render rather than memoised: the
+     answer moves with `isRaging`, so a stale one would offer the DM a condition
+     the character shrugged off two seconds ago. */
+  const immune = selected ? immuneTo(buildContext(row, shardTrees), selected.data.name) : false
+
   async function apply() {
     if (!selected) return
+    /* REFUSED, WITH THE REASON. Applying it anyway and letting the sheet grey it
+       out would be the DM watching a thing they just did quietly not happen. */
+    if (immune) {
+      log(<>“{selected.data.name}” does not stick — <span className={styles.who}>{first}</span> is immune</>, 'danger')
+      return
+    }
     const d = selected.data
     setBusy(true)
     // Modifiers compile into the same ItemEffects the engine already reads
@@ -2500,7 +2518,14 @@ function ApplyEffectCard({ member, effectLib, row, onUpdate, onVoice, log }: {
       </div>
 
       <div className={styles.btnMount}>
-        <Btn tone="amber" icon="fa-bolt" label={busy ? 'Applying…' : selected ? `Apply ${selected.data?.name ?? 'Effect'}` : 'Apply Effect'} onClick={() => void apply()} disabled={busy || !selected} />
+        {/* THE REASON BEFORE THE CLICK, not after it. A button that looks
+            available and then refuses is the silent no-op wearing a nicer
+            shape — the same argument the Features screen's gate line makes. */}
+        <Btn
+          tone={immune ? 'danger' : 'amber'} icon={immune ? 'fa-shield' : 'fa-bolt'}
+          label={immune ? `${first} is immune` : busy ? 'Applying…' : selected ? `Apply ${selected.data?.name ?? 'Effect'}` : 'Apply Effect'}
+          onClick={() => void apply()} disabled={busy || !selected || immune}
+        />
       </div>
 
       <div className={styles.fxActive}>
@@ -2748,7 +2773,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
   const [vars, setVars] = useState<VarDef[]>(d?.vars ?? [])
   const [tags, setTags] = useState<string[]>(d?.tags ?? [])
   const [gfxOpen, setGfxOpen] = useState(false)
-  const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
+  const { nodes, namesByGid, tagUse, catalogTypes, featureList, ready } = useCatalogNodes()
   const gAudit = ready ? auditNode({ graph, vars }, nodes, catalogTypes) : []
   const gErrs = gAudit.filter(a => a.sev === 'err')
   const [category, setCategory] = useState<ItemCategory>(d?.category ?? 'misc')
@@ -2770,11 +2795,25 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
   const [icon, setIcon] = useState(d?.icon ?? 'fa-box')
   const [slot, setSlot] = useState<ItemSlot>((d?.slot as ItemSlot) ?? 'ring1')
   const [attune, setAttune] = useState(!!d?.attune)
+  /* ARMOUR, which had no controls at all until AC became derived. The three
+     fields sat on 110 imported rows readable by nothing and writable only by
+     editing JSON — this project's most repeated bug — and the moment
+     `armorClass` started reading them, a DM authoring a breastplate needed to be
+     able to say "14 + Dex, max 2". */
+  const [baseAc, setBaseAc] = useState(d?.baseAc !== undefined ? String(d.baseAc) : '')
+  const [acAddDex, setAcAddDex] = useState(!!d?.acAddDex)
+  const [acDexCap, setAcDexCap] = useState(d?.acDexCap !== undefined ? String(d.acDexCap) : '')
+  const [isShield, setIsShield] = useState(!!d?.isShield)
   const [flavor, setFlavor] = useState(d?.flavor ?? '')
   const [ability, setAbility] = useState<WeaponAbility>((d?.ability as WeaponAbility) ?? 'str')
   const [damageDice, setDamageDice] = useState(d?.damageDice ?? '')
   const [ranged, setRanged] = useState(!!d?.ranged)
   const [twoHanded, setTwoHanded] = useState(!!d?.twoHanded)
+  /* The mastery, as a field rather than free text — the third flag in the family
+     `ranged` and `twoHanded` started. Seeded through `masteryOf` so opening an
+     imported weapon shows the Cleave it has always carried in `properties`,
+     instead of an empty select beside a weapon that plainly has one. */
+  const [mastery, setMastery] = useState(d ? (masteryOf(d)?.name ?? '') : '')
   const [dmgType, setDmgType] = useState(d?.type ?? '')
   const [heal, setHeal] = useState(d?.heal != null ? String(d.heal) : '')
   const [duration, setDuration] = useState(d?.duration ?? '')
@@ -2815,10 +2854,21 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
         },
       } : {}),
       ...(attune ? { attune: name.trim() } : {}),
+      ...(Number.isFinite(parseInt(baseAc, 10))
+        ? {
+          baseAc: parseInt(baseAc, 10),
+          ...(isShield ? { isShield: true } : {}),
+          // A shield adds; it never carries Dex of its own, so the two Dex
+          // fields are body armour's alone.
+          ...(!isShield && acAddDex ? { acAddDex: true } : {}),
+          ...(!isShield && acAddDex && Number.isFinite(parseInt(acDexCap, 10)) ? { acDexCap: parseInt(acDexCap, 10) } : {}),
+        }
+        : {}),
       ...(flavor.trim() ? { flavor: flavor.trim() } : {}),
       ...(category === 'weapon'
         ? {
           ability, ...(ranged ? { ranged: true } : {}), ...(twoHanded ? { twoHanded: true } : {}),
+          ...(mastery ? { mastery } : {}),
           ...(damageDice.trim() ? { damageDice: damageDice.trim() } : {}),
           ...(dmgType.trim() ? { type: dmgType.trim() } : {}),
         }
@@ -2957,6 +3007,13 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
             </label>
           </div>
           <div>
+            <span className={styles.fieldLab}>Mastery</span>
+            <select className={styles.selIn} value={mastery} onChange={e => setMastery(e.target.value)}>
+              <option value="">— none —</option>
+              {MASTERIES.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
+            </select>
+          </div>
+          <div>
             <span className={styles.fieldLab}>Attack Ability</span>
             <select className={styles.selIn} value={ability} onChange={e => setAbility(e.target.value as WeaponAbility)}>
               {WEAPON_ABILITIES.map(a => <option key={a} value={a}>{a === 'finesse' ? 'Finesse' : a.toUpperCase()}</option>)}
@@ -3064,6 +3121,39 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
           >
             {SLOT_OPTIONS.map(s => <option key={s} value={s}>{SLOT_LABEL[s]}</option>)}
           </select>
+        </>
+      )}
+
+      {category === 'armor' && (
+        <>
+          <div className={styles.qGrid2}>
+            <div>
+              <span className={styles.fieldLab}>{isShield ? 'AC bonus' : 'Base AC'}</span>
+              <input className={styles.in} type="number" value={baseAc}
+                placeholder={isShield ? '2' : '14'}
+                onChange={e => setBaseAc(e.target.value)} />
+            </div>
+            {!isShield && acAddDex && (
+              <div>
+                <span className={styles.fieldLab}>Dex cap</span>
+                <input className={styles.in} type="number" value={acDexCap}
+                  placeholder="blank = no cap" onChange={e => setAcDexCap(e.target.value)} />
+              </div>
+            )}
+          </div>
+          {/* A SHIELD IS NOT ARMOUR, though it shares the slot: its number is a
+              BONUS where armour's REPLACES, and it must not switch off an
+              unarmored rule the printed text says you keep while holding one. */}
+          <div className={cx(styles.catTog, isShield && styles.on)} onClick={() => setIsShield(v => !v)} role="switch" aria-checked={isShield}>
+            <span className={styles.tgSw} />
+            <span className={styles.tgLab}><span className={styles.t}>Shield</span><span className={styles.s}>Adds to Armour Class instead of replacing it, and leaves an unarmored rule standing</span></span>
+          </div>
+          {!isShield && (
+            <div className={cx(styles.catTog, acAddDex && styles.on)} onClick={() => setAcAddDex(v => !v)} role="switch" aria-checked={acAddDex}>
+              <span className={styles.tgSw} />
+              <span className={styles.tgLab}><span className={styles.t}>Adds Dexterity</span><span className={styles.s}>Light armour: no cap. Medium: cap 2. Heavy: off.</span></span>
+            </div>
+          )}
         </>
       )}
 
@@ -3248,7 +3338,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
         {gfxOpen && (
           <div className={styles.gfxBody}>
             <GraphEffects graph={graph} vars={vars} nodes={nodes} namesByGid={namesByGid} onChange={setGraph} onVarsChange={setVars} />
-            <VarsBlock vars={vars} onChange={setVars} />
+            <VarsBlock vars={vars} onChange={setVars} features={featureList} />
           </div>
         )}
       </div>
@@ -3453,10 +3543,12 @@ const TRAINING_ROWS: { key: keyof Proficiencies; label: string; placeholder: str
   { key: 'languages', label: 'Languages', placeholder: 'Common, Elvish, Draconic…' },
 ]
 
-function ProficienciesCard({ member, row, classLib, onUpdate, log }: {
+function ProficienciesCard({ member, row, classLib, shardTrees, onUpdate, log }: {
   member: PartyMember
   row: CharacterRow
   classLib: DmClassesState
+  /** For the mastery cap, which is a derived class variable — see below. */
+  shardTrees: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
 }) {
@@ -3465,6 +3557,31 @@ function ProficienciesCard({ member, row, classLib, onUpdate, log }: {
   const skillProfs = sheet.skillProficiencies ?? []
   const skillExp = sheet.skillExpertise ?? []
   const first = firstName(member.name)
+
+  /* HOW MANY MASTERIES, from the class's own progression variable rather than a
+     number stored beside the list. `weaponMastery` is authored on the Barbarian
+     (2 at level 1, 3 at 5, 4 at 11), so the cap follows a level-up with nothing
+     to remember. Zero means this character has no Weapon Mastery feature, and
+     the whole section stays off their card rather than offering a choice they
+     cannot make. */
+  const masteryCap = (() => {
+    const v = characterVars(row, shardTrees).scope.weaponMastery
+    return typeof v === 'number' ? v : 0
+  })()
+  const masteries = sheet.proficiencies?.masteries ?? []
+
+  const toggleMastery = async (name: string) => {
+    const on = masteries.includes(name)
+    // At the cap, the only move left is taking one off — refusing silently would
+    // read as a dead button, so the chip says so in its title instead.
+    if (!on && masteries.length >= masteryCap) return
+    const next = on ? masteries.filter(m => m !== name) : [...masteries, name]
+    const ok = await onUpdate({
+      sheet: { ...sheet, proficiencies: { ...(sheet.proficiencies ?? {}), masteries: next } },
+    })
+    if (!ok) return
+    log(<><span className={styles.who}>{first}</span> {on ? 'gives up' : 'masters'} <span className={styles.obj}>{name}</span></>)
+  }
 
   /** One write per list, pre-spreading `proficiencies` so a sibling list a race
    *  granted is never blanked — the same merge rule mergeProficiencies keeps. */
@@ -3570,6 +3687,35 @@ function ProficienciesCard({ member, row, classLib, onUpdate, log }: {
           })}
         </div>
       </div>
+
+      {/* WEAPON MASTERY — a fixed set you tick, like the skills above and unlike
+          the free prose below. Shown only where the character has the feature:
+          the cap comes from the class's own `weaponMastery` variable, and 0 means
+          there is no choice to offer. */}
+      {masteryCap > 0 && (
+        <div className={styles.profSec}>
+          <span className={styles.fieldLab}>
+            Weapon mastery <span className={styles.dimLab}>— {masteries.length} of {masteryCap} chosen; one may be swapped on a long rest</span>
+          </span>
+          <div className={styles.profGrid}>
+            {MASTERIES.map(m => {
+              const on = masteries.includes(m.name)
+              const full = !on && masteries.length >= masteryCap
+              return (
+                <button
+                  key={m.name} type="button"
+                  className={cx(styles.profChip, on && styles.on, full && styles.locked)}
+                  onClick={() => void toggleMastery(m.name)}
+                  title={full ? `Already mastering ${masteryCap} — drop one first` : `${m.name} — ${m.rule}`}
+                >
+                  <ProfDots n={on ? 1 : 0} />
+                  {m.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* TRAINING — armour, weapons, tools and LANGUAGES.
           `sheet.proficiencies` was written only by Assign Race / Assign Class
@@ -4128,7 +4274,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
   const [graph, setGraph] = useState<GraphEffect[]>(d?.graph ?? [])
   const [vars, setVars] = useState<VarDef[]>(d?.vars ?? [])
   const [gfxOpen, setGfxOpen] = useState(false)
-  const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
+  const { nodes, namesByGid, tagUse, catalogTypes, featureList, ready } = useCatalogNodes()
   // auditNode skips dangling-target detection on an empty catalog, so a clean
   // report before the libraries load would be a lie. See lib/useCatalogNodes.ts.
   const gAudit = ready ? auditNode({ graph, vars }, nodes, catalogTypes) : []
@@ -4396,7 +4542,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
         {gfxOpen && (
           <div className={styles.gfxBody}>
             <GraphEffects graph={graph} vars={vars} nodes={nodes} namesByGid={namesByGid} onChange={setGraph} onVarsChange={setVars} />
-            <VarsBlock vars={vars} onChange={setVars} />
+            <VarsBlock vars={vars} onChange={setVars} features={featureList} />
             {/* Tags reach ACROSS catalogs — `tag:fire` should match this spell,
                 a weapon and a shard node alike. */}
           </div>
@@ -5418,7 +5564,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
   const { draft, dirty, savedAt, update, reset, clear } =
     useLocalDraft<ClassDef>(creating ? 'class:__new__' : `class:${selId ?? 'none'}`, base, row?.updated_at)
 
-  const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
+  const { nodes, namesByGid, tagUse, catalogTypes, featureList, ready } = useCatalogNodes()
   const [varsOpen, setVarsOpen] = useState(false)
   const [fxOpen, setFxOpen] = useState(false)
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
@@ -5897,7 +6043,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
         </div>
         {varsOpen && (
           <div className={styles.gfxBody}>
-            <VarsBlock vars={draft.vars ?? []} onChange={vars => set({ vars })} />
+            <VarsBlock vars={draft.vars ?? []} onChange={vars => set({ vars })} features={featureList} />
           </div>
         )}
       </div>
@@ -6792,7 +6938,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
   const { draft, dirty, savedAt, update, reset, clear } =
     useLocalDraft<RaceDef>(creating ? 'race:__new__' : `race:${selId ?? 'none'}`, base, row?.updated_at)
 
-  const { nodes, namesByGid, tagUse, catalogTypes, ready } = useCatalogNodes()
+  const { nodes, namesByGid, tagUse, catalogTypes, featureList, ready } = useCatalogNodes()
   const [varsOpen, setVarsOpen] = useState(false)
   const [fxOpen, setFxOpen] = useState(false)
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
@@ -7072,7 +7218,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
         </div>
         {varsOpen && (
           <div className={styles.gfxBody}>
-            <VarsBlock vars={draft.vars ?? []} onChange={vars => set({ vars })} />
+            <VarsBlock vars={draft.vars ?? []} onChange={vars => set({ vars })} features={featureList} />
           </div>
         )}
       </div>
@@ -7291,7 +7437,7 @@ function BackgroundForm({ row, creating, lib, featureLib, onSelected, onCleared 
   const [confirm, setConfirm] = useState<null | 'revert' | 'delete'>(null)
   const set = (p: Partial<BackgroundDef>) => update(x => ({ ...x, ...p }))
 
-  const { nodes, namesByGid, catalogTypes, ready } = useCatalogNodes()
+  const { nodes, namesByGid, catalogTypes, featureList, ready } = useCatalogNodes()
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
@@ -7430,7 +7576,7 @@ function BackgroundForm({ row, creating, lib, featureLib, onSelected, onCleared 
       {/* ---- SHARED AUTHORING BLOCKS — identical to the class and race forms ---- */}
       <GraphEffects graph={draft.graph ?? []} vars={draft.vars ?? []} nodes={nodes} namesByGid={namesByGid}
         onChange={graph => set({ graph })} onVarsChange={vars => set({ vars })} />
-      <VarsBlock vars={draft.vars ?? []} onChange={vars => set({ vars })} />
+      <VarsBlock vars={draft.vars ?? []} onChange={vars => set({ vars })} features={featureList} />
       <div className={styles.catSecLab}><span className={styles.fieldLab}>Targeting tags</span></div>
       <TagsBlock tags={draft.tags ?? []} tagUse={new Map()} onChange={tags => set({ tags })} />
 

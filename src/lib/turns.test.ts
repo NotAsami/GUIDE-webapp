@@ -95,7 +95,7 @@ const useable = (over: Partial<Feature> = {}): Feature =>
   ({ id: 'f', name: 'Brutal Strike', uses: { current: 0, max: 2 }, recharge: 'turn', ...over }) as Feature
 
 test('a per-turn feature gets its uses back, and says which', () => {
-  const r = turnRecharge([useable(), useable({ id: 'g', name: 'Rage', recharge: 'long', uses: { current: 0, max: 3 } })])
+  const r = turnRecharge([useable(), useable({ id: 'g', name: 'Rage', recharge: 'long', uses: { current: 0, max: 3 } })], {})
   assert.ok(r)
   assert.deepEqual(r.names, ['Brutal Strike'])
   assert.equal(r.features[0].uses?.current, 2)
@@ -103,12 +103,22 @@ test('a per-turn feature gets its uses back, and says which', () => {
 })
 
 test('nothing to recharge returns null — the turn writes and reports nothing', () => {
-  assert.equal(turnRecharge([useable({ uses: { current: 2, max: 2 } })]), null)
-  assert.equal(turnRecharge([]), null)
-  assert.equal(turnRecharge(undefined), null)
+  assert.equal(turnRecharge([useable({ uses: { current: 2, max: 2 } })], {}), null)
+  assert.equal(turnRecharge([], {}), null)
+  assert.equal(turnRecharge(undefined, {}), null)
+})
+
+test('a per-turn recharge resolves a FORMULA max, not just a number', () => {
+  // `uses.max` is a formula, so the refill has to evaluate it — filling to the
+  // string would put "rages" in a number field, and filling to 0 would hand the
+  // player a feature that is permanently spent.
+  const r = turnRecharge([useable({ uses: { current: 1, max: 'rages' } })], { rages: 4, level: 9 })
+  assert.ok(r)
+  assert.equal(r.features[0].uses?.current, 4)
+  assert.equal(r.features[0].uses?.max, 'rages', 'the authored formula survives the write')
 })
 
 test('a per-turn feature with no use counter is left alone', () => {
   // `recharge` without `uses` is authoring noise, not a crash.
-  assert.equal(turnRecharge([useable({ uses: undefined })]), null)
+  assert.equal(turnRecharge([useable({ uses: undefined })], {}), null)
 })

@@ -569,7 +569,7 @@ export function ShardLattice() {
                     ) : tab === 'shard' ? (
                       <ShardInspector draft={draft} setDraft={setDraft} onDelete={onDeleteShard} fireToast={fireToast} featureLib={featureLib} />
                     ) : selNode ? (
-                      <NodeInspector draft={draft} node={selNode} snap={snap} rings={rings} isRoot={isRoot} setDraft={setDraft} onDelete={deleteSel} featureLib={featureLib} nodes={catalog.nodes} namesByGid={catalog.namesByGid} tagUse={catalog.tagUse} />
+                      <NodeInspector draft={draft} node={selNode} snap={snap} rings={rings} isRoot={isRoot} setDraft={setDraft} onDelete={deleteSel} featureLib={featureLib} nodes={catalog.nodes} namesByGid={catalog.namesByGid} featureList={catalog.featureList} tagUse={catalog.tagUse} />
                     ) : (
                       <div className={styles.inspEmpty}>
                         <div className={styles.icBig}><span className={styles.icBigFrame} /><span className={styles.icBigInner}><i className="fa-solid fa-diagram-project" /></span></div>
@@ -730,7 +730,7 @@ function NewBranchRow({ draft, set }: { draft: EditorTree; set: (fn: (t: EditorT
 }
 
 /* ================= Node tab ================= */
-function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, featureLib, nodes, namesByGid, tagUse }: {
+function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, featureLib, nodes, namesByGid, featureList, tagUse }: {
   draft: EditorTree; node: EditorNode; snap: boolean; rings: number
   isRoot: (n: EditorNode) => boolean
   setDraft: React.Dispatch<React.SetStateAction<EditorTree | null>>
@@ -739,6 +739,8 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
   /** The catalog a target selector is picked from and counted against. */
   nodes: AuthoredNode[]
   namesByGid: Map<string, { name: string; kind: string }>
+  /** Every feature by gid + name, for a use-counter variable to point at. */
+  featureList: { gid: string; name: string }[]
   tagUse: Map<string, number>
 }) {
   const set = (fn: (t: EditorTree) => EditorTree) => setDraft(prev => (prev ? fn(prev) : prev))
@@ -827,7 +829,7 @@ function NodeInspector({ draft, node, snap, rings, isRoot, setDraft, onDelete, f
         onChange={graph => setNode({ graph })}
         onVarsChange={vars => setNode({ vars })}
       />
-      <VarsBlock vars={node.vars ?? []} onChange={vars => setNode({ vars })} />
+      <VarsBlock vars={node.vars ?? []} onChange={vars => setNode({ vars })} features={featureList} />
       {/* Tags on a node are what `tag:` selectors match it by — the fourth and
           last kind to get the control. Secrets-routed like the rest when the
           node is concealed. */}

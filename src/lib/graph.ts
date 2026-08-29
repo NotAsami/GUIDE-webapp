@@ -25,10 +25,12 @@
 import type { ArmedMod, CharacterRow, GraphEffect, GraphOp, GraphState, ShardTree, VarDef } from './database.types.ts'
 import type { ExprScope, FormulaValue } from './expr.ts'
 import { ROLL_IDENTS, VAR_IDENTS, evalExpr, freeIdents, interpolate, interpolations } from './expr.ts'
-import { type ActiveSource, activeSources, effectiveSheet } from './effects.ts'
+import { type ActiveSource, activeEffects, activeSources, effectiveSheet } from './effects.ts'
 import { IS_ACTIVATION, IS_SHEET, OPS, OP_TITLE } from './opSchema.ts'
-import { MOD_STAT_SET } from './modEditor.ts'
+import { MOD_STAT_SET, isAbility } from './modEditor.ts'
 import { abilities, abilityMod, proficiency } from './dnd.ts'
+/* No cycle: featureView imports only database.types, opSchema and expr. */
+import { usesOf } from './featureView.ts'
 import { rolledDiceTerms, type RolledDie } from './dice.ts'
 
 /** Lifted from ShardLattice.tsx so the engine and the lattice editor share one
@@ -116,11 +118,33 @@ function walkDerived(
  *  author time, and §40 already built the runtime answer for it in
  *  `Resolution.problems`. Author time and roll time now cover disjoint cases
  *  instead of the former swallowing content it cannot judge. */
-export function probeScope(defs: VarDef[] = [], audit?: AuditItem[]): ExprScope {
+export function probeScope(
+  defs: VarDef[] = [],
+  audit?: AuditItem[],
+  /** Variables declared ELSEWHERE in the catalog, name -> type.
+   *
+   *  SEEDED HERE rather than by each caller, because a caller that forgot is
+   *  exactly the bug this argument exists to end: the Feature Editor checked
+   *  "max uses reads a name nothing declares" against a whitelist that INCLUDED
+   *  the catalog and "max uses evaluates" against a scope that did not — so
+   *  Rage's `rages`, declared on the class, passed the first and failed the
+   *  second, and the feature could not be saved.
+   *
+   *  Seeded UNDER the node's own declarations, never over them: a local variable
+   *  of the same name is the one this node reads, and letting the catalog win
+   *  would type-check the author's formula against somebody else's variable. */
+  catalogTypes: Record<string, 'num' | 'bool'> = {},
+): ExprScope {
   const scope: ExprScope = {}
   for (const k of VAR_IDENTS) scope[k] = 1
   for (const k of ROLL_IDENTS) scope[k] = 1
   for (const d of defs) if (d.kind === 'stored') scope[d.name] = probe(d.type)
+  /* A use-counter variable is a number the author cannot be shown at author time
+     — it depends on the character — so it probes like any other. Bound BEFORE
+     the derived walk here only so that a formula reading one is a known
+     identifier rather than an unknown one; auditVars is what refuses it, with
+     the reason, instead of letting the walk report "unknown". */
+  for (const d of defs) if (d.kind === 'derived' && d.uses) scope[d.name] = 1
 
   // Only the derived variable's TYPE is wanted, never its probe value: binding
   // the computed number would let `level - 1` reintroduce the zero this exists
@@ -131,6 +155,9 @@ export function probeScope(defs: VarDef[] = [], audit?: AuditItem[]): ExprScope 
   // reference to it reads as an unknown identifier and the error lands on the
   // reader instead of the declaration.
   for (const d of defs) if (!(d.name in scope)) scope[d.name] = probe(d.type)
+  for (const [name, t] of Object.entries(catalogTypes)) {
+    if (!(name in scope)) scope[name] = probe(t)
+  }
   return scope
 }
 
@@ -174,6 +201,10 @@ export function baseScope(character: CharacterRow, shardTrees: Record<string, Sh
     prof: proficiency(view),
     str: abilityMod(ab.str), dex: abilityMod(ab.dex), con: abilityMod(ab.con),
     int: abilityMod(ab.int), wis: abilityMod(ab.wis), cha: abilityMod(ab.cha),
+    /* The raw scores, beside their modifiers. Same source, so the two can never
+       disagree about a character. */
+    strScore: ab.str, dexScore: ab.dex, conScore: ab.con,
+    intScore: ab.int, wisScore: ab.wis, chaScore: ab.cha,
     hp: character.sheet?.hp?.current ?? 0,
     hpMax: view.hp?.max ?? character.sheet?.hp?.max ?? 0,
     /* The spell save DC the character IMPOSES. Read from the spellbook rather
@@ -251,6 +282,21 @@ export function characterVars(
     audit,
   )
 
+  /* USE COUNTERS, LAST. A counter's ceiling is itself a formula (Rage's max is
+     `rages`, off the class carrier), so resolving one needs the scope the walk
+     above has only just finished producing — which is why a derived variable
+     cannot read one and auditVars says so. Everything that runs against the
+     FINISHED scope can: a `when`, a contribution, an activation, a note.
+
+     A feature that is not on the sheet reads 0 rather than going missing, the
+     same silence catalogTypes buys one declared elsewhere: "how many Rages have
+     I got" on a character who was never granted Rage is none, not an error. */
+  for (const { def } of bindings.values()) {
+    if (def.kind !== 'derived' || !def.uses) continue
+    const target = (character.sheet?.features ?? []).find(f => gid('feature', f) === def.uses)
+    scope[def.name] = (target && usesOf(target, scope)?.current) ?? 0
+  }
+
   return { scope, audit }
 }
 
@@ -283,6 +329,8 @@ export function varCollisions(decls: { name: string; from: string }[], sev: 'war
 export function auditVars(defs: VarDef[]): AuditItem[] {
   const out: AuditItem[] = []
   const declared = new Set(defs.map(d => d.name))
+  // Which of them read a feature's use counter — see the rule below.
+  const usesVars = new Set(defs.filter(d => d.kind === 'derived' && d.uses).map(d => d.name))
 
   for (const d of defs) {
     if (!NAME_RE.test(d.name)) {
@@ -297,11 +345,30 @@ export function auditVars(defs: VarDef[]): AuditItem[] {
       if (d.formula) {
         out.push({ sev: 'err', id: d.name, t: 'Stored variable has a formula', s: `${label(d)} is stored — it is written, never computed. Make it derived or drop the formula.` })
       }
+    } else if (d.uses) {
+      // A use counter is READ, not computed: the two are alternatives, and a
+      // variable carrying both says two different things about where its value
+      // comes from.
+      if (d.formula?.trim()) {
+        out.push({ sev: 'err', id: d.name, t: 'Both a formula and a use counter', s: `${label(d)} reads a feature's uses AND has a formula. It can only have one source — drop whichever is not meant.` })
+      }
+      if (!d.uses.startsWith('feature:')) {
+        out.push({ sev: 'err', id: d.name, t: 'Not a feature', s: `${label(d)} reads uses from "${d.uses}". Only a feature has a use counter.` })
+      }
     } else {
       if (!d.formula) {
-        out.push({ sev: 'err', id: d.name, t: 'Missing formula', s: `${label(d)} is derived, so it needs one.` })
+        out.push({ sev: 'err', id: d.name, t: 'Missing formula', s: `${label(d)} is derived, so it needs a formula or a feature to read uses from.` })
       }
       for (const id of freeIdents(d.formula ?? '')) {
+        /* A DERIVED VARIABLE CANNOT READ A USE COUNTER, and this is the only
+           place that can say so. Counters are bound after the derived walk (see
+           characterVars) because resolving one needs the finished scope, so a
+           formula reading one would silently see zero — a wrong number with no
+           error, on content that looks perfectly reasonable. */
+        if (usesVars.has(id)) {
+          out.push({ sev: 'err', id: d.name, t: 'A derived variable cannot read a use counter', s: `${label(d)} reads "${id}", which is a feature's use count. Those are resolved after every derived variable — a formula would read zero. Put the condition on the effect's when instead, where it works.` })
+          continue
+        }
         if (declared.has(id) || (VAR_IDENTS as readonly string[]).includes(id)) continue
         out.push({ sev: 'err', id: d.name, t: 'Unknown identifier', s: `${label(d)} reads "${id}", which no variable declares and the character state whitelist does not contain.` })
       }
@@ -384,8 +451,14 @@ const DAMAGE_FLAGS: GraphOp[] = ['resist', 'vuln', 'immune']
  *    is not an error.
  *
  *  Index 0 is skipped on purpose: character levels start at 1, and putting that
- *  off-by-one in one place beats living with it in every authored expression. */
-function levelFormula(eff: GraphEffect, level: number | boolean | undefined): string | undefined {
+ *  off-by-one in one place beats living with it in every authored expression.
+ *
+ *  EXPORTED because resolve() is not the only reader. An `once` contribution
+ *  never passes through here — it is armed by graphState.ts armedFrom(), which
+ *  snapshots the value onto the ArmedMod — so a level table on an armed effect
+ *  silently produced the level-1 value forever. Brutal Strike's 1d10 stayed 1d10
+ *  at level 17. One table, one reader. */
+export function levelFormula(eff: GraphEffect, level: number | boolean | undefined): string | undefined {
   const arr = eff.byLevel
   if (!arr?.some((x, i) => i > 0 && String(x ?? '').trim())) return undefined
   const lvl = typeof level === 'number' ? level : 1
@@ -485,6 +558,11 @@ export type Rider = {
    *  them — Brutal Strike's two blows are one choice between two, which the
    *  engine has always known (auditNode says so) and the panel could not say. */
   choice?: string
+  /** HOW MANY of that group may be taken. Absent = one, which is what a pick-one
+   *  has always been. Carried from the armed mod so the panel stops accepting
+   *  clicks at the limit rather than after the first — Improved Brutal Strike
+   *  (Enhanced) is "two different Brutal Strike effects" and nothing else. */
+  picks?: number
   /** The faces that came up, once `rolled`. `dice` stays the unrolled formula.
    *  Full dice, not bare numbers: a chip that does not know it is a d4 cannot
    *  say whether a 4 was a maximum, and cannot be rerolled. */
@@ -495,6 +573,13 @@ export type Resolution = {
   adv: boolean
   dis: boolean
   crit: boolean
+  /** The lowest this roll's TOTAL may come to, when a `floor` node applied one.
+   *  Absent = no floor. HIGHEST wins — two features each guaranteeing a minimum
+   *  both hold, so the better guarantee is the one in force. The mirror of
+   *  `critFrom`, which takes the lowest. Applied by composeCheck, after every
+   *  contribution, because a minimum on a total means nothing until the total
+   *  exists. */
+  floor?: number
   /** Lowest d20 face that crits, when a `crit` node applied one. Absent = 20.
    *  Lowest wins: Improved Critical (19) and a hypothetical 18 node give 18, not
    *  17 — a crit range is a threshold, not a bonus that stacks. */
@@ -836,6 +921,17 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     out.critFrom = out.critFrom === undefined ? t.flat : Math.min(out.critFrom, t.flat)
   }
 
+  /** A floor raises the total to a minimum. HIGHEST wins, because two guarantees
+   *  both hold and the better one is the one you feel. */
+  function applyFloor(eff: GraphEffect): void {
+    const t = evalExpr(eff.minimum ?? '', ctx.scope)
+    if (t === null || t.t !== 'num' || t.dice.length) {
+      out.problems.push({ sev: 'err', id: eff.id, t: 'Minimum did not resolve', s: `${eff.label}'s minimum "${eff.minimum ?? ''}" produced no number at these values.` })
+      return
+    }
+    out.floor = out.floor === undefined ? t.flat : Math.max(out.floor, t.flat)
+  }
+
   // 4. Partition. `when` gates EXISTENCE, `ask` gates RESOLUTION — orthogonal.
   //    Two of the six combinations do not surface at all.
   const askGroups = new Map<string, Rider>()
@@ -919,6 +1015,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
       if (eff.op === 'adv') out.adv = true
       if (eff.op === 'dis') out.dis = true
       if (eff.op === 'crit') applyCrit(eff)
+      if (eff.op === 'floor') applyFloor(eff)
       out.riders.push({
         label: eff.label, source: from.obj.name, sourceGid: e.owner, op: eff.op,
         formula: eff.value ?? '', flat: v.flat, dice: v.dice,
@@ -982,6 +1079,7 @@ ${rider.reveal}` : rider.reveal
       if (eff.op === 'adv') out.adv = true
       if (eff.op === 'dis') out.dis = true
       if (eff.op === 'crit') applyCrit(eff)
+      if (eff.op === 'floor') applyFloor(eff)
     }
     out.riders.push(rider)
   }
@@ -1038,7 +1136,9 @@ ${rider.reveal}` : rider.reveal
       ...(m.ask ? { text: m.ask, reveal: m.text } : {}),
       /* Only a REAL choice gets a group. A lone offered arm is a yes/no, and
          painting one option as a pick-one implies a sibling that is not there. */
-      ...(m.ask && (offeredBySource.get(m.source) ?? 0) > 1 ? { choice: m.source } : {}),
+      ...(m.ask && (offeredBySource.get(m.source) ?? 0) > 1
+        ? { choice: m.source, ...(m.picks && m.picks > 1 ? { picks: m.picks } : {}) }
+        : {}),
       // No `sourceText`: an armed mod is a stored snapshot naming its source,
       // not a live handle on the node, so the prose is genuinely not in hand.
       parts: partsOf(m.value, ctx.scope),
@@ -1068,6 +1168,39 @@ export function damageFlags(ctx: GraphContext, dmgType: string): { resist: boole
     if (eff.op === 'vuln') out.vuln = true
     if (eff.op === 'immune') out.immune = true
   }
+  return out
+}
+
+/**
+ * Is this character immune to a NAMED thing right now — a condition, by name?
+ *
+ * ONE MATCHER, TWO QUESTIONS. `damageFlags` asks it of a damage type and this
+ * asks it of a condition, because "immune to fire" and "immune to Frightened"
+ * are the SAME authored statement: an `immune` op targeting a tag. Giving
+ * conditions an op of their own would be a second way to write one rule, and the
+ * two would drift the first time either gained a feature.
+ *
+ * `when` is honoured by the shared matcher, which is what makes "while your Rage
+ * is active" expressible at all — Mindless Rage is `immune → tag:frightened`
+ * gated on `isRaging`, and nothing else.
+ */
+export const immuneTo = (ctx: GraphContext, name: string): boolean => damageFlags(ctx, name).immune
+
+/**
+ * The active effects an immunity is currently suppressing, by id.
+ *
+ * MATCHED BY NAME, because an ActiveEffect is a SNAPSHOT: the catalog row it came
+ * from carries tags, the copy on the character does not, and the name is the one
+ * thing the player and the author both see. `normalizeTag` on both sides means
+ * "Frightened" matches `tag:frightened` without the DM having to think about it.
+ *
+ * Suppression rather than deletion: an immunity can be conditional, and a
+ * condition removed while raging could not come back when the rage ended. The
+ * DM's ✕ is still how something is really gone.
+ */
+export function suppressedEffects(ctx: GraphContext, character: CharacterRow): Set<string> {
+  const out = new Set<string>()
+  for (const e of activeEffects(character)) if (immuneTo(ctx, e.name)) out.add(e.id)
   return out
 }
 
@@ -1179,13 +1312,7 @@ export function auditNode(
   const declared = new Set((node.vars ?? []).map(v => v.name))
   // Type-correct, non-zero — §41. auditVars already reported anything wrong with
   // the declarations themselves, so no audit sink here.
-  const scope = probeScope(node.vars ?? [])
-  /* Seeded UNDER the node's own declarations, never over them: a local variable
-     of the same name is the one this node reads, and letting the catalog win
-     would type-check the author's formula against somebody else's variable. */
-  for (const [name, t] of Object.entries(catalogTypes)) {
-    if (!(name in scope)) scope[name] = probe(t)
-  }
+  const scope = probeScope(node.vars ?? [], undefined, catalogTypes)
 
   for (const eff of node.graph ?? []) {
     if (!eff.label) {
@@ -1217,10 +1344,24 @@ export function auditNode(
        The fix is always the same shape, and it is the one §04 of the authoring
        guide describes: a stance the player holds is a stored bool they flip
        BEFORE rolling, with `when` reading it, so the engine knows in time. */
-    if (eff.ask?.trim() && (eff.op === 'adv' || eff.op === 'dis' || eff.op === 'crit')) {
+    /* A FLOOR NEEDS A TOTAL TO RAISE, and only a d20 roll has one that reaches
+       composeCheck. On a damage roll it would be stored, shown in the editor and
+       silently do nothing — so the target is checked rather than the shape being
+       left to the author to discover at the table. */
+    if (eff.op === 'floor') {
+      const ts = eff.target ?? []
+      const bad = ts.filter(t => !/^roll:(check|save)(\.|$)/.test(t))
+      if (!ts.length || bad.length) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'A floor needs a check or a save',
+          s: `${eff.label || eff.id} ${ts.length ? `aims at "${bad[0]}"` : 'has no target'}. Only a d20 roll has a total to raise — target roll:check or roll:save.`,
+        })
+      }
+    }
+    if (eff.ask?.trim() && (eff.op === 'adv' || eff.op === 'dis' || eff.op === 'crit' || eff.op === 'floor')) {
       out.push({
         sev: 'err', id: eff.id, t: `${OP_TITLE[eff.op]} cannot be asked`,
-        s: `${eff.label || eff.id} asks "${eff.ask.trim()}", but ${eff.op} changes how the d20 is rolled and an ask is answered after it already has been. Use a player toggle instead: press "player toggle" on the when row, and the player holds it before rolling.`,
+        s: `${eff.label || eff.id} asks "${eff.ask.trim()}", but ${eff.op} changes how the roll itself resolves and an ask is answered after it already has. Use a player toggle instead: press "player toggle" on the when row, and the player holds it before rolling.`,
       })
     }
     // Not an error — §32 makes the combination legal and §24 needs it. But the
@@ -1341,12 +1482,45 @@ export function auditNode(
           s: `${eff.label || eff.id} has "${eff.value ?? ''}". The sheet has no roll to compute against, so dice and formulas cannot apply here.`,
         })
       }
+      /* A CAP ONLY MEANS SOMETHING ON AN ABILITY SCORE. effectiveSheet clamps
+         `abilities`, and nothing else — a ceiling typed onto Speed or AC would
+         be stored, shown in the editor, and quietly do nothing, which is the
+         defect this file exists to refuse. */
+      if (eff.cap !== undefined && String(eff.cap).trim() !== '') {
+        if (!Number.isFinite(Number(eff.cap))) {
+          out.push({
+            sev: 'err', id: eff.id, t: 'Cap needs a plain number',
+            s: `${eff.label || eff.id} caps at "${eff.cap}". Like the amount, a ceiling on the sheet has nothing to compute against.`,
+          })
+        } else if (!isAbility(eff.stat ?? '')) {
+          out.push({
+            sev: 'err', id: eff.id, t: 'Cap on a stat that has no ceiling',
+            s: `${eff.label || eff.id} boosts "${eff.stat ?? ''}", and only ability scores are clamped. A cap here would be stored and never applied.`,
+          })
+        }
+      }
       continue
     }
 
     if (IS_ACTIVATION(eff.op)) {
-      // An activation names a variable rather than a target: it writes state, it
-      // does not reach out at other nodes.
+      /* `addUses` IS THE ONE THAT REACHES OUT. It writes a use counter rather
+         than a variable, and the counter it writes is usually somebody else's —
+         "expend a use of your Rage to restore this" is Intimidating Presence
+         aiming at Rage. So it keeps the normal target list, and everything below
+         (which is about naming a variable) does not apply to it. */
+      if (eff.op === 'addUses') {
+        for (const t of eff.target ?? []) {
+          if (!t.startsWith('feature:')) {
+            out.push({
+              sev: 'err', id: eff.id, t: 'addUses targets a feature',
+              s: `${eff.label || eff.id} aims at "${t}". Only a feature has a use counter — pick one from the catalog, or leave the target empty to move this feature's own.`,
+            })
+          }
+        }
+        continue
+      }
+      // Every other activation names a variable rather than a target: it writes
+      // state, it does not reach out at other nodes.
       const v = (node.vars ?? []).find(x => x.name === eff.variable)
       if (!v) {
         out.push({ sev: 'err', id: eff.id, t: 'Unknown variable', s: `${eff.label || eff.id} writes "${eff.variable ?? ''}", which this node does not declare.` })

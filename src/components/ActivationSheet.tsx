@@ -19,7 +19,9 @@ import { rollHeal } from '../lib/dice'
 import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet } from '../lib/effects'
 import { gid, resolve, rollResolution, type GraphContext } from '../lib/graph'
-import { applyOutcomes, gateOf, planActivation, type Outcome } from '../lib/graphState'
+import { applyOutcomes, gateOf, outcomeLine, planActivation, type Outcome } from '../lib/graphState'
+import { usesOf } from '../lib/featureView'
+import type { ExprScope } from '../lib/expr'
 import styles from './ActivationSheet.module.css'
 import { Icon } from './Icon'
 
@@ -31,8 +33,15 @@ export type ActivationHost = {
   updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
 }
 
-/** Can this feature be pressed at all? A spent one cannot. */
-export const canUse = (f: Feature) => !(f.uses && f.uses.current <= 0)
+/** Can this feature be pressed at all? A spent one cannot.
+ *
+ *  Takes the SCOPE because `uses.max` is a formula and `current` is clamped to
+ *  it — a feature whose max is `rages` is spent when the level table says it is,
+ *  not when a stored number happens to reach zero. */
+export const canUse = (f: Feature, scope: ExprScope) => {
+  const u = usesOf(f, scope)
+  return !(u && u.current <= 0)
+}
 
 export function useActivation(host: ActivationHost) {
   const { character, graph, shardTrees = {}, updateSection, updateSections } = host
@@ -56,7 +65,7 @@ export function useActivation(host: ActivationHost) {
    *  roll-time question rather than an activation one, the common case has no
    *  questions left at all.) */
   function start(f: Feature) {
-    if (busy || !canUse(f)) return
+    if (busy || !canUse(f, graph.scope)) return
     /* GATED SHUT — every activation this feature has is `when`-false, so the
        press would plan nothing, write nothing, and still log an empty entry.
        The guard lives HERE rather than on the Features screen because the
@@ -71,7 +80,7 @@ export function useActivation(host: ActivationHost) {
   /** Spend/roll a feature: roll its expression (if any), decrement its use
    *  counter (if any), apply the accepted activation outcomes — in ONE write. */
   async function run(f: Feature, outcomes: Outcome[], answers = new Set<string>()) {
-    if (busy || !canUse(f)) return
+    if (busy || !canUse(f, graph.scope)) return
     setBusy(true)
 
     const sheet = character.sheet ?? {}
@@ -104,24 +113,27 @@ export function useActivation(host: ActivationHost) {
       }
     }
 
-    let remaining = f.uses?.current ?? null
-    if (f.uses) {
-      remaining = f.uses.current - 1
+    // Spend from the RESOLVED count, but write back the authored `max`
+    // untouched — it is a formula, and resolving it into the row would freeze
+    // this character's Rages at whatever the table said the day they pressed it.
+    const u = usesOf(f, graph.scope)
+    let remaining = u?.current ?? null
+    if (u) {
+      remaining = u.current - 1
       nextSheet = { ...nextSheet, features: features.map(x =>
         x.id === f.id ? { ...x, uses: { ...f.uses!, current: remaining! } } : x) }
     }
 
     // The variable writes join the SAME write as the roll and the use counter —
     // two writes could land apart and leave a feature spent but not activated.
-    const { resources, applied } = applyOutcomes(character, outcomes, answers)
-    for (const o of applied) {
-      lines.push(o.kind === 'arm'
-        // An armed modifier has no number yet — it has a promise. Saying "armed"
-        // rather than a value is the honest line, and the chip on the target's
-        // card is where it becomes visible (§16). One carrying a question is not
-        // even a promise yet: it is OFFERED, and the roll panel decides.
-        ? { label: o.mod.label, total: o.mod.ask ? 'offered' : 'armed', breakdown: o.summary, tone: 'buff' }
-        : { label: o.def.label ?? o.def.name, total: String(o.delta !== undefined ? (o.current as number) + o.delta : o.set), breakdown: o.summary, tone: 'buff' })
+    const { resources, usesPatch, applied } = applyOutcomes(character, outcomes, answers)
+    for (const o of applied) lines.push(outcomeLine(o))
+    /* Folded in AFTER the spend above, and as a patch, so a press that spends
+       its own charge AND moves another feature's counter lands both — Persistent
+       Rage spends itself to refill Rage in one write. */
+    if (usesPatch) {
+      nextSheet = { ...nextSheet, features: (nextSheet.features ?? []).map(x =>
+        usesPatch[x.id] !== undefined ? { ...x, uses: { ...x.uses!, current: usesPatch[x.id] } } : x) }
     }
 
     if (applied.length) {
@@ -131,7 +143,7 @@ export function useActivation(host: ActivationHost) {
     }
     setBusy(false)
 
-    const subtitle = f.uses ? `${remaining} / ${f.uses.max} uses left` : (f.usage ?? 'Feature')
+    const subtitle = u ? `${remaining} / ${u.max} uses left` : (f.usage ?? 'Feature')
     addRoll({
       kind: 'custom', title: f.name, subtitle, icon: f.icon, lines,
       subject: { kind: 'feature', id: f.id },

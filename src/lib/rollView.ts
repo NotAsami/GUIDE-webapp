@@ -15,6 +15,8 @@
  *                already dropped them, which is why there is no third case.
  */
 import type { Rider } from './graph.ts'
+import { characterVars } from './graph.ts'
+import { usesOf } from './featureView.ts'
 import type { RiderGroup, RollEntry } from './rolls.tsx'
 import { ABILITY_ABBR, type CheckTerm } from './dnd.ts'
 import type { CharacterRow, ShardTree } from './database.types.ts'
@@ -234,8 +236,21 @@ export function askSections(views: RiderView[]): { choice?: string; views: Rider
   return out
 }
 
-/** The one answered rider in a pick-one, or null while it is still open. */
+/** The FIRST answered rider in a choice, or null while it is still open.
+ *
+ *  "Has the player engaged with this group at all" — which is what decides
+ *  whether the badge still counts it. One pick answers the question even when
+ *  two were on offer: taking fewer than the limit is a decision, not an
+ *  omission, and a badge that pulsed until the player used every option would be
+ *  nagging them into it. */
 export const pickedOf = (views: RiderView[]) => views.find(v => v.rider.on) ?? null
+
+/** How many of a choice may be taken. Absent = one, which is what a pick-one has
+ *  always been — the group's own count, so every member agrees by construction. */
+export const picksAllowed = (views: RiderView[]) => views[0]?.rider.picks ?? 1
+
+/** Which of a choice have been taken. */
+export const picksTaken = (views: RiderView[]) => views.filter(v => v.rider.on)
 
 /** Questions still waiting on the player, counted as the player sees them.
  *
@@ -477,12 +492,15 @@ export function catalogView(
   }
   if (src.kind === 'feature') {
     const f = src.obj
+    // Resolved, not raw — `uses.max` is a formula on anything that scales, and
+    // this sheet is player-facing.
+    const u = usesOf(f, characterVars(character, shardTrees).scope)
     return {
       name: f.name, icon: f.icon ?? 'fa-star',
       kind: joinKind(f.kind && cap(f.kind), f.source, f.level ? `Level ${f.level}` : undefined),
       stats: [
         ...(f.usage ? [['Usage', f.usage] as [string, string]] : []),
-        ...(f.uses ? [['Uses', `${f.uses.current} / ${f.uses.max}`] as [string, string]] : []),
+        ...(u ? [['Uses', `${u.current} / ${u.max}`] as [string, string]] : []),
         ...(f.rows ?? []),
       ],
       damage: [],

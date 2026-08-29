@@ -17,7 +17,7 @@ import {
 import { CarrySidebar } from './EquipmentCarry'
 import { effectiveSheet } from '../lib/effects'
 import {
-  handLabel, isRanged, rollWeaponAttack, weaponAbilityKey, weaponAttackBonus, weaponDamageString,
+  handLabel, isRanged, masteryActive, masteryOf, rollWeaponAttack, weaponAbilityKey, weaponAttackBonus, weaponDamageString,
   type AmmoBonus,
 } from '../lib/weapons'
 import { PERSON } from '../lib/placement'
@@ -26,7 +26,7 @@ import { useItemTooltip, type Bind, type TooltipData } from '../components/ItemT
 import { SHARD_SLOT_KEYS, shardSlots } from '../lib/shards'
 import { useGraph } from '../lib/useGraph'
 import { armedMatches, gid, resolve } from '../lib/graph'
-import { armableFor, countAttack } from '../lib/graphState'
+import { armableFor, armsSpentBy, attackRolled } from '../lib/graphState'
 import { PrimeSheet, type Offer } from '../components/PrimeSheet'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Equipment.module.css'
@@ -50,6 +50,12 @@ export function Equipment() {
   // Built once per character, not per roll — see lib/useGraph.ts.
   const graph = useGraph(character, shardTrees)
   const sheet = effectiveSheet(character, shardTrees)
+  /* Attacks this turn, against how many the Attack action buys. `attacksThisTurn`
+     is already in the graph scope — this is the same number, read for display
+     rather than for a `when`, so the counter the engine keeps and the counter the
+     player reads cannot disagree. */
+  const attacksPerAction = sheet.attacksPerAction ?? 1
+  const attacksLeft = Math.max(0, attacksPerAction - (typeof graph.scope.attacksThisTurn === 'number' ? graph.scope.attacksThisTurn : 0))
   const gear = (character.equipped ?? {}) as EquippedGear
   const weapons = gear.weapons ?? []
   /** The two-hander holding the off hand shut, or null. One producer in
@@ -225,7 +231,7 @@ export function Equipment() {
     const { attack: atk, damage, riders } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack), {
       attack: atkRes, damage: dmgRes,
     })
-    addRoll({
+    const entry = addRoll({
       kind: 'weapon',
       title: weapon.name,
       subtitle: stack
@@ -242,19 +248,37 @@ export function Equipment() {
         { label: 'Attack', riders: riders.attack },
         { label: 'Damage', riders: riders.damage },
       ].filter(g => g.riders.length),
+      /* THE MASTERY RULE, AT THE MOMENT IT APPLIES. Seven of the eight are
+         things only the player can resolve — Graze wants to know you missed,
+         Cleave wants a second creature — so the app's job is to put the sentence
+         in front of them on the swing rather than to pretend it can adjudicate
+         it. Only while the mastery is one of theirs; a Greataxe's Cleave is not
+         a rule for someone who never trained it.
+
+         Vex is deliberately NOT armed automatically, though the engine could:
+         "advantage on your next attack against THAT SAME creature" needs a target
+         identity nothing here has, so arming it would hand out advantage against
+         whoever you swung at next. A wrong number is worse than a sentence. */
       // Notes and problems stay flat — a note is prose about the action and a
       // problem is an engine failure; neither needs attributing to a sub-roll.
-      notes: [...atkRes.notes, ...dmgRes.notes],
+      notes: [
+        ...(masteryActive(weapon, sheet.proficiencies?.masteries)
+          ? [`**${masteryOf(weapon)!.name}.** ${masteryOf(weapon)!.rule}`]
+          : []),
+        ...atkRes.notes, ...dmgRes.notes,
+      ],
       problems: [...atkRes.problems, ...dmgRes.problems],
     })
-    /* EVERY SWING COUNTS. `attacksThisTurn` is what lets a feature say "on your
-       first attack roll on your turn" — Reckless Attack's actual wording — so a
-       melee attack that wrote nothing left the count at zero all turn and the
-       decision stayed open after three swings. Folded into the SAME write as
-       the arrow, because two round trips can land apart and the shot that
-       counted but did not spend is the worse half to lose. */
+    /* EVERY SWING COUNTS, and every arm it used is spent HERE. See attackRolled:
+       a `when` gate is read when the arm is minted and never again, so an arm
+       that survives its roll fires next time under a condition nobody
+       re-checks. Folded into the SAME write as the arrow, because two round
+       trips can land apart and the shot that counted but did not spend is the
+       worse half to lose. */
     void updateSections({
-      resources: countAttack(character) as CharacterRow['resources'],
+      resources: attackRolled(
+        character, armsSpentBy(riders.attack, riders.damage), entry.id,
+      ) as CharacterRow['resources'],
       ...(stack ? { inventory: spentAmmo(stack) as unknown as CharacterRow['inventory'] } : {}),
     })
   }
@@ -377,6 +401,15 @@ export function Equipment() {
               <StatLine label="AC" value={sheet.ac ?? '—'} />
               <StatLine label="Speed" value={<>{sheet.speed ?? '—'}<span className={styles.unit}>ft</span></>} />
               <StatLine label="Init" value={formatMod(sheet.initiative ?? 0)} />
+              {/* WHAT IS LEFT, not what is spent — the same reading HP gets one
+                  line up, because "2 / 2" wants to mean "two still to swing".
+                  The engine has counted attack rolls all along (`attacksThisTurn`
+                  gates Reckless Attack); until Extra Attack there was nothing to
+                  count them AGAINST, so the number had nowhere to be shown.
+                  Advance Turn resets it. */}
+              {attacksPerAction > 1 && (
+                <StatLine label="Attacks" value={<>{attacksLeft}<span className={styles.unit}>/ {attacksPerAction}</span></>} />
+              )}
               <StatLine label="Prof" value={formatMod(sheet.proficiencyBonus ?? 0)} />
               <StatLine label="Hit Dice" value={sheet.hitDice ? `${sheet.hitDice.max}${sheet.hitDice.die}` : '—'} />
             </div>
@@ -444,6 +477,7 @@ export function Equipment() {
           subtitle={`${handLabel(priming.hand)} · Attack`}
           icon={priming.icon ?? 'fa-khanda'}
           offers={armableOn(priming)}
+          scope={graph.scope}
           onUse={f => activation.start(f)}
           onRoll={() => { const w = priming; setPriming(null); attack(w) }}
           onCancel={() => setPriming(null)}
@@ -684,6 +718,16 @@ function buildWeaponRows(w: EquippedWeapon, sheet: CharacterSheet): [string, str
   rows.push(['Attack', formatMod(weaponAttackBonus(w, sheet))])
   rows.push(['Damage', `${weaponDamageString(w, sheet)}${w.type ? ` ${w.type.toLowerCase()}` : ''}`])
   if (w.hand) rows.push(['Slot', handLabel(w.hand)])
+  /* MASTERY, AND WHETHER IT IS YOURS. Two different facts and the row says both:
+     the weapon has the property whatever you do, and you may use it only while
+     its kind is one you have trained. Naming it without that qualifier would tell
+     the player they have something they do not. */
+  const m = masteryOf(w)
+  if (m) {
+    rows.push(['Mastery', masteryActive(w, sheet.proficiencies?.masteries)
+      ? m.name
+      : `${m.name} · not one of yours`])
+  }
   return rows
 }
 

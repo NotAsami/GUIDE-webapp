@@ -120,6 +120,11 @@ export const OPS: Record<GraphOp, OpDef> = {
         desc: 'How far the stat moves. A plain number, not a formula: this layers onto the sheet, which has no roll to compute against. Negative is allowed.',
         example: '2',
       },
+      {
+        key: 'cap', type: 'number', label: 'Up to a maximum of',
+        desc: 'A ceiling the increase cannot push the score past — Primal Champion is "+4, to a maximum of 25". ABILITY SCORES ONLY: every "to a maximum of" in the rules is one, and the other stats have no such ceiling. It never lowers a score that was already above it; it only refuses to raise one past it. Leave blank for no ceiling.',
+        example: '25',
+      },
     ],
   },
   useability: {
@@ -134,6 +139,23 @@ export const OPS: Record<GraphOp, OpDef> = {
       },
     ],
   },
+  unarmored: {
+    label: 'unarmored AC', group: 'sheet', icon: 'fa-shirt',
+    blurb: 'A base Armour Class for a character wearing no body armour — "while you aren’t wearing armor, your base AC equals 10 plus your Dexterity and Constitution modifiers". Not a bonus: it REPLACES what armour would have given, so it competes with armour rather than stacking, and it switches itself off the moment body armour goes on. A SHIELD still helps, and still adds on top. Dexterity is always included (every printed version of this rule adds it); the ability below is the optional second modifier that tells a Barbarian’s Constitution from a Monk’s Wisdom. Two rules at once take the better, because 5e lets you pick one. No target: it applies to whoever carries this node.',
+    fields: [
+      {
+        key: 'value', type: 'number', label: 'Base', required: true,
+        desc: 'The constant the modifiers are added to. Ten for Unarmored Defense; thirteen for Draconic Resilience and the Dragon Hide feat, which add no second ability.',
+        example: '10',
+      },
+      {
+        key: 'ability', type: 'enum', label: 'Plus (besides DEX)',
+        options: ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'],
+        desc: 'The SECOND modifier, on top of Dexterity. Constitution for a Barbarian, Wisdom for a Monk. Leave blank for a rule that is just a number plus Dexterity.',
+        example: 'CON',
+      },
+    ],
+  },
   adv: flag('adv', 'fa-angles-up', 'Grants advantage on the matched rolls. The target list is the whole statement.', [ONCE]),
   dis: flag('dis', 'fa-angles-down', 'Imposes disadvantage on the matched rolls.', [ONCE]),
   crit: {
@@ -144,6 +166,15 @@ export const OPS: Record<GraphOp, OpDef> = {
       desc: 'Lowest d20 face that counts as a critical hit. The lowest threshold across every applying node wins.',
       example: '19',
     }, ONCE],
+  },
+  floor: {
+    label: 'floor', group: 'passive', icon: 'fa-arrows-up-to-line',
+    blurb: 'Sets a MINIMUM on the finished total — "if your total is less than your Strength score, use the score instead". Not a bonus: it changes nothing on a good roll and a great deal on a bad one, which is why no `add` can say it. The HIGHEST floor across every applying node wins, the mirror of how crit takes the lowest threshold. Only a d20 roll has a total to raise, so target a check or a save.',
+    fields: [{
+      key: 'minimum', type: 'formula', label: 'At least', required: true,
+      desc: 'The lowest the total may come to. A formula, so it can be a score rather than a fixed number — `strScore` is what Indomitable Might wants.',
+      example: 'strScore',
+    }],
   },
   note: {
     label: 'note', group: 'passive', icon: 'fa-comment',
@@ -180,6 +211,17 @@ export const OPS: Record<GraphOp, OpDef> = {
       },
     ],
   },
+  addUses: {
+    label: 'addUses', group: 'activation', icon: 'fa-battery-half',
+    blurb: 'On activation, moves the USE COUNTER of a feature — this one, or another. The only activation that reaches a second node, because that is what the rules keep asking for: "expend a use of your Rage to restore this" is a negative amount aimed at Rage, and "regain all expended uses of Rage" is a positive one. Clamped to that feature’s own max, so a big number means "all of them" and can never bank more than the feature has. Target a FEATURE, or leave it empty to move this one’s own counter.',
+    fields: [
+      {
+        key: 'value', type: 'formula', label: 'Change by', required: true,
+        desc: 'Signed expression added to the target’s current uses, clamped to its max. Negative spends. To restore everything, name the max itself — a Barbarian’s is `rages` — and the clamp does the rest.',
+        example: 'rages',
+      },
+    ],
+  },
   addVar: {
     label: 'addVar', group: 'activation', icon: 'fa-plus-minus',
     blurb: 'On activation, increments one of this feature’s variables. Use a negative value to spend a charge.',
@@ -200,14 +242,14 @@ export const OPS: Record<GraphOp, OpDef> = {
 
 /** Palette order — what an author reaches for first, and what hides behind MORE. */
 export const PALETTE = ['add', 'adv', 'dis', 'crit', 'resist'] as const satisfies readonly GraphOp[]
-export const PALETTE_MORE = ['vuln', 'immune', 'note'] as const satisfies readonly GraphOp[]
+export const PALETTE_MORE = ['vuln', 'immune', 'floor', 'note'] as const satisfies readonly GraphOp[]
 /** Activation outcomes get their own palette group — they answer a different
  *  question ("what happens when I press this") from every op above. */
-export const PALETTE_ACT = ['setVar', 'addVar'] as const satisfies readonly GraphOp[]
+export const PALETTE_ACT = ['setVar', 'addVar', 'addUses'] as const satisfies readonly GraphOp[]
 /** The sheet layer gets its own palette group for the same reason activation
  *  outcomes do: it answers a different question from every roll op above it —
  *  "what is this character's DEX", not "what does this roll add". */
-export const PALETTE_SHEET = ['boost', 'useability'] as const satisfies readonly GraphOp[]
+export const PALETTE_SHEET = ['boost', 'useability', 'unarmored'] as const satisfies readonly GraphOp[]
 export const OP_ORDER: GraphOp[] = [...PALETTE, ...PALETTE_MORE, ...PALETTE_SHEET, ...PALETTE_ACT]
 
 export const IS_ACTIVATION = (op: GraphOp) => OPS[op].group === 'activation'
@@ -215,10 +257,10 @@ export const IS_ACTIVATION = (op: GraphOp) => OPS[op].group === 'activation'
 export const IS_SHEET = (op: GraphOp) => OPS[op].group === 'sheet'
 
 export const OP_TITLE: Record<GraphOp, string> = {
-  add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', note: 'Note', boost: 'Boost',
-  useability: 'Use Ability',
+  add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', floor: 'Floor', note: 'Note', boost: 'Boost',
+  useability: 'Use Ability', unarmored: 'Unarmored AC',
   resist: 'Resist', vuln: 'Vuln', immune: 'Immune',
-  setVar: 'Set Var', addVar: 'Add Var',
+  setVar: 'Set Var', addVar: 'Add Var', addUses: 'Add Uses',
 }
 
 /** The ops whose target names a damage kind rather than a roll. Mirrors the
@@ -242,6 +284,12 @@ export const ROLL_SELECTORS = [
   'damage', 'damage.melee', 'damage.ranged', 'damage.spell',
   'save', 'save.str', 'save.dex', 'save.con', 'save.int', 'save.wis', 'save.cha',
   'check', 'check.athletics', 'check.stealth', 'check.perception',
+  /* INITIATIVE IS A DEXTERITY CHECK — the 2024 rules say so outright — so it is a
+     sub-kind here rather than a sixth roll kind. It behaves exactly as
+     `check.stealth` does: a roll has ONE sub, so `roll:check.dex` does not catch
+     it, the same way it does not catch a Stealth check. `roll:check` catches
+     everything, including this. */
+  'check.initiative',
   'feature',
 ]
 

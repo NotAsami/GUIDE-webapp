@@ -28,6 +28,13 @@ export type ExprScope = Record<string, number | boolean>
  *  one particular roll, which is what the variable DAG's memo depends on not happening. */
 export const VAR_IDENTS = [
   'level', 'prof', 'str', 'dex', 'con', 'int', 'wis', 'cha', 'hp', 'hpMax', 'saveDc',
+  /* THE SCORE, not the modifier. `str` is +3; `strScore` is 16. Almost every rule
+     wants the modifier, which is why those got the short names — but a handful
+     name the score itself and could not be written at all: Indomitable Might is
+     "if the total is less than your Strength SCORE, use the score", and there was
+     no way to say 16. Derived from the same effective sheet the modifiers are, so
+     a Belt of Giant Strength moves both together. */
+  'strScore', 'dexScore', 'conScore', 'intScore', 'wisScore', 'chaScore',
   /* How many attack rolls this character has made since the last Advance Turn.
      Character state, not roll context: it is a fact about the turn, true before
      the roll it might gate exists, which is exactly what keeps it on this side

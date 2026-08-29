@@ -14,9 +14,12 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { AttackRoll, DamageRoll } from './weapons'
-import type { AuditItem, Rider } from './graph'
+import type { AuditItem, GraphContext, Rider } from './graph'
+import { resolve, rollResolution } from './graph'
 import type { RolledDie } from './dice'
+import { rolledDice } from './dice'
 import type { CheckTerm } from './dnd'
+import { composeCheck, effectiveMode } from './dnd'
 import type { AbilityKey } from './database.types'
 
 /** A d20 roll behind an ability check, saving throw, or skill check — rolled on
@@ -113,6 +116,66 @@ interface RollLogValue {
    *  to patch its own roll has the id. */
   updateRoll: (id: string, patch: Partial<RollEntry>) => void
   clear: () => void
+}
+
+/* ---------- building a d20 check ---------- */
+
+export type CheckRequest = {
+  kind: 'check' | 'save'
+  /** Sub-key for `roll:<kind>.<sub>` — the ability for a save or an ability
+   *  check, the skill key for a skill check, `initiative` for initiative. */
+  sub: string
+  title: string
+  subtitle?: string
+  icon?: string
+  /** The named parts, from saveTerms / skillTerms / abilityCheckTerms. */
+  terms: CheckTerm[]
+  /** The player's OWN adv/dis switch, before the graph has had its say. Absent
+   *  is 'normal' — a surface with no switch (the Stats screen's initiative cell)
+   *  still picks up advantage the engine grants, which is the whole of Feral
+   *  Instinct. */
+  mode?: 'normal' | 'adv' | 'dis'
+}
+
+/**
+ * One d20 check, resolved against the graph and shaped into a log entry.
+ *
+ * SHARED because it now has two callers. It lived inside Character.tsx, which
+ * was correct while the hex ring was the only thing that rolled a d20 — but
+ * initiative rolls from the Stats screen's Combat widget, and a second copy of
+ * "resolve, apply adv/dis, roll, compose, attach riders" is a second answer to
+ * how a check is made. They would agree today and drift on the first change.
+ *
+ * Returns the entry rather than logging it: the caller owns what happens next
+ * (Character flashes the ability hexagon, Stats flashes its cell), and a builder
+ * that also wrote to the log could not be called by a surface that wants to look
+ * at the result first.
+ */
+export function buildCheck(graph: GraphContext, req: CheckRequest): Omit<RollEntry, 'id' | 'at'> & { check: CheckRoll } {
+  // The same boundary the weapon roller uses, on a roll kind that has no subject.
+  const res = resolve(graph, { kind: req.kind, sub: req.sub })
+  /* Graph dice on a d20 roll are rolled NOW — the total is one number and an
+     unrolled term has nowhere to live. (Damage dice stay unrolled so a crit can
+     double them; a check has no crit multiplier, so `double` is never set.) */
+  const contrib = rollResolution(res)
+
+  const eff = effectiveMode(req.mode ?? 'normal', res.adv, res.dis)
+  const rolls = rolledDice(eff === 'normal' ? 1 : 2, 20)
+  const faces = rolls.map(d => d.v)
+  const pick = eff === 'adv' ? Math.max(...faces) : eff === 'dis' ? Math.min(...faces) : faces[0]
+
+  const terms = [...req.terms, { label: 'FEAT', value: contrib.flat }]
+  const { total, breakdown, crit, fumble } = composeCheck(pick, terms, res.critFrom, res.floor)
+
+  return {
+    kind: req.kind, title: req.title, subtitle: req.subtitle, icon: req.icon ?? 'fa-dice-d20',
+    check: { mode: eff, rolls, pick, breakdown, terms, total, crit, fumble },
+    riderGroups: contrib.riders.length
+      ? [{ label: req.kind === 'save' ? 'Save' : 'Check', riders: contrib.riders }]
+      : undefined,
+    notes: res.notes.length ? res.notes : undefined,
+    problems: res.problems.length ? res.problems : undefined,
+  }
 }
 
 const MAX_ROLLS = 50

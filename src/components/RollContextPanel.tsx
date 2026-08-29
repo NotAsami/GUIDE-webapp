@@ -36,7 +36,8 @@ import { Prose, renderInline } from '../lib/markdown'
 import { colorOf } from '../lib/palette'
 import type { CharacterRow, ShardTree } from '../lib/database.types'
 import {
-  armedIdsOf, askSections, catalogView, lineViews, openAsks, patchRiders, pickedOf, rerollAt,
+  armedIdsOf, askSections, catalogView, lineViews, openAsks, patchRiders, pickedOf,
+  picksAllowed, picksTaken, rerollAt,
   releaseIdsOf, resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
   type CatalogView, type Die, type DieAddr, type RiderView, type RollLineView,
 } from '../lib/rollView'
@@ -148,7 +149,8 @@ export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed
   // and still-armed means the id is still in the queue. One record answers it on
   // every surface, including one consumed on another device.
   const stillArmed = useMemo(
-    () => new Set((character?.resources as { graph?: { armed?: { id: string }[] } } | undefined)?.graph?.armed?.map(m => m.id) ?? []),
+    () => new Set(((character?.resources as { graph?: { armed?: { id: string; spent?: string }[] } } | undefined)
+      ?.graph?.armed ?? []).filter(m => !m.spent).map(m => m.id)),
     [character],
   )
 
@@ -341,34 +343,38 @@ function Entry({
 
             <div className={styles.spine}>
 
-            {/* Armed: already spent, already applied, and waiting for the player
-                to say the roll landed. Kept apart from the resolved list because
-                it is the one contribution here that is still SPENDABLE — §8 #1
-                is explicit that nothing burns implicitly. */}
-            {/* ONE SPINE. Applied above, asked below, one rule down the side of
-                both — see the stylesheet. Without anything applied there is no
-                beige half to hand over from, so the ask keeps its own header. */}
+            {/* ONE SPINE, THREE HEADERS OF ONE SHAPE. Applied above, asked
+                below, and every header a diamond on the rule with its label and
+                a fading sep — see the stylesheet. "Applied by the engine" used
+                to be small print inside its own block, which made the ask below
+                it look like the only real section. */}
             {applied && (
-              <div className={styles.applied}>
-                <div className={styles.appliedH}>Applied by the engine</div>
-                <div className={styles.contribs}>
-                  {appliedGroups.map(g => (
-                    <Contribution
-                      key={g.key} group={g} showTip={showTip} onLeave={onLeave}
-                      held={armedIdsOf(g.views).some(id => stillArmed.has(id))}
-                    />
-                  ))}
+              <>
+                <div className={cx(styles.joint, styles.jBeige)}>
+                  <span className={styles.node} aria-hidden="true" />
+                  Applied by the engine
+                  <span className={styles.sep} /><span>{appliedGroups.length}</span>
                 </div>
-              </div>
+                <div className={styles.applied}>
+                  <div className={styles.contribs}>
+                    {appliedGroups.map(g => (
+                      <Contribution
+                        key={g.key} group={g} showTip={showTip} onLeave={onLeave}
+                        held={armedIdsOf(g.views).some(id => stillArmed.has(id))}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
 
             {sections.length > 0 && (
               <>
-                {/* ALWAYS THE JOINT. The no-applied case used to get a plain
-                    header with a flat diamond and no rule, so the ask floated
-                    a gap below "Your call" instead of hanging off the spine —
-                    the same handover drawn two different ways. */}
-                <div className={styles.joint}>
+                {/* THE HANDOVER, and only where there is something to hand over
+                    FROM. With nothing applied the beige half was a stub of
+                    engine-colour above a roll the engine contributed nothing to
+                    — small, but it still claimed a section that was not there. */}
+                <div className={cx(styles.joint, !applied && styles.lone)}>
                   <span className={styles.node} aria-hidden="true" />
                   Your call
                   <span className={styles.sep} /><span>{sections.length}</span>
@@ -378,19 +384,32 @@ function Entry({
                     <Choice
                       key={`c${si}`} views={sec.views} showTip={showTip}
                       onPick={index => {
-                        // Exclusive: answering one declines the rest, in one
-                        // write. And ANSWERING IS THE RELEASE — the whole
-                        // ACTIVATION spends together, offered arms and taken
-                        // ones alike, because one press held all of it.
-                        onPatchMany(sec.views.map(o => ({ index: o.index, patch: { on: o.index === index } })))
+                        /* ADDITIVE, up to the group's limit. A pick-one is the
+                           common case and still declines the rest by reaching
+                           its limit on the first click; a pick-two lets the
+                           second click stand beside the first rather than
+                           replacing it — which a plain `o.index === index`
+                           silently did, so choosing a second blow un-chose the
+                           first with nothing on screen to say so.
+                           And ANSWERING IS THE RELEASE — the whole ACTIVATION
+                           spends together, offered arms and taken ones alike,
+                           because one press held all of it. */
+                        onPatchMany(sec.views.map(o => ({
+                          index: o.index,
+                          patch: { on: o.index === index || !!o.rider.on },
+                        })))
                         onAnswerArmed?.(releaseIdsOf(views, sec.views), entry.id)
                       }}
-                      onUndo={() => {
-                        onPatchMany(sec.views.map(o => ({ index: o.index, patch: { on: false } })))
-                        // Undo puts the offer back — the reason answering marks
-                        // the hold rather than deleting it.
-                        onAnswerArmed?.(releaseIdsOf(views, sec.views), null)
-                      }}
+                      /* UNDO IS ABOUT THIS ENTRY, not the queue. Clearing the
+                         picks is the whole of it: the choice is rendered from
+                         the entry's own riders, so it goes back to unanswered
+                         and can be decided again. What it must NOT do is
+                         un-spend the arms — the roll consumed those whichever
+                         way the player decided, and handing them back would put
+                         the disadvantage and the die on the next swing. */
+                      onUndo={() => onPatchMany(
+                        sec.views.map(o => ({ index: o.index, patch: { on: false } })),
+                      )}
                       onLeave={onLeave}
                     />
                   ) : (
@@ -765,6 +784,10 @@ function Amount({ v }: { v: RiderView }) {
   )
 }
 
+/** Small counts read better as words in a sentence — "choose two", not
+ *  "choose 2". Past three, a numeral is clearer than a word nobody scans. */
+const COUNT_WORD: Record<number, string> = { 1: 'one', 2: 'two', 3: 'three' }
+
 /** UNRESOLVED, EXCLUSIVE — a pick-one.
  *
  *  Several offered arms from one source: Brutal Strike's Forceful Blow and
@@ -785,12 +808,24 @@ function Choice({ views, showTip, onPick, onUndo, onLeave }: {
   onLeave?: () => void
 }) {
   const picked = pickedOf(views)
+  /* HOW MANY, not whether. A pick-one is the group with a limit of one, so the
+     same component renders both and the "two different Brutal Strike effects" of
+     level 17 is a number rather than a second design. */
+  const limit = picksAllowed(views)
+  const taken = picksTaken(views)
+  const full = taken.length >= limit
   const source = views[0]?.rider.source
   const link = featureLink(views[0]?.rider.sourceGid)
 
   return (
     <div className={styles.choice}>
+      {/* THE SAME HEADER SHAPE AS THE SPINE'S — diamond, label, fading rule.
+          Without the diamond this read as the first row of the ask above it
+          rather than as a section of its own, which is what the gap under
+          "Your call" actually was. Its node sits on the CARD's left rule, one
+          x further in than the spine's; the offset is in the stylesheet. */}
       <div className={styles.chH}>
+        <span className={styles.chNode} aria-hidden="true" />
         <span>
           {link
             ? <Link
@@ -802,15 +837,22 @@ function Choice({ views, showTip, onPick, onUndo, onLeave }: {
                 {source}<i className="fa-solid fa-arrow-up-right-from-square" />
               </Link>
             : source}
-          {source ? ' · choose one' : 'Choose one'}
+          {`${source ? ' · ' : ''}${source ? 'choose' : 'Choose'} ${COUNT_WORD[limit] ?? limit}`}
         </span>
-        <span className={styles.r}>{picked ? 'Chosen' : 'Clicking commits it'}</span>
+        <span className={styles.sep} />
+        {/* THE COUNT, once there is one to keep track of. "Chosen" alone cannot
+            say that a second pick is still owed, and a player who took one of
+            two would reasonably read the group as finished. */}
+        <span className={styles.r}>
+          {full ? 'Chosen' : limit > 1 && taken.length ? `${taken.length} of ${limit} chosen` : 'Clicking commits it'}
+        </span>
       </div>
 
       {views.map(v => {
         const r = v.rider
-        const isPicked = picked?.index === v.index
-        const passed = !!picked && !isPicked
+        const isPicked = !!v.rider.on
+        // Only what the limit actually excluded reads as passed over.
+        const passed = full && !isPicked
         // The authored prose. `reveal` is the effect's own text and `text` the
         // question; for a blow the author writes the same sentence in both, so
         // preferring the prose avoids printing it twice.
@@ -820,11 +862,13 @@ function Choice({ views, showTip, onPick, onUndo, onLeave }: {
             key={v.index} type="button"
             className={cx(styles.opt, isPicked && styles.picked, passed && styles.passed)}
             aria-pressed={isPicked}
-            onClick={picked ? undefined : () => onPick(v.index)}
+            onClick={full || isPicked ? undefined : () => onPick(v.index)}
             {...tipProps(showTip, () => ({
               k: r.label,
-              v: isPicked ? 'Chosen for this roll' : passed ? 'Not taken — undo to change' : 'One of two — clicking commits it',
-              hint: picked ? null : 'Click to choose',
+              v: isPicked ? 'Chosen for this roll'
+                : passed ? 'Not taken — undo to change'
+                : `One of ${views.length} — clicking commits it`,
+              hint: full ? null : 'Click to choose',
             }))}
           >
             <div className={styles.optHead}>

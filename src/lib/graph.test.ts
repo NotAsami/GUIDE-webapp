@@ -7,9 +7,10 @@ import { VAR_IDENTS, evalExpr } from './expr.ts'
 import { parseDice, rerollDie, rollDice } from './dice.ts'
 import {
   armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid, rollResolution,
-  damageFlags, matchCount, nodeGid, normalizeTag, resolve, total, varCollisions, type ResolveReq,
+  damageFlags, immuneTo, matchCount, nodeGid, normalizeTag, probeScope, resolve, suppressedEffects, total, varCollisions, type ResolveReq,
 } from './graph.ts'
 import { activeSources } from './effects.ts'
+import { composeCheck } from './dnd.ts'
 import { OPS, OP_ORDER, OP_TITLE, ROLL_SELECTORS } from './opSchema.ts'
 import type { GraphOp } from './database.types.ts'
 
@@ -198,6 +199,86 @@ test('a dm-scoped variable is not read out of the player bucket', () => {
   assert.equal(characterVars(c).scope.mercy, 0)
 })
 
+// --- a variable that READS a use counter ------------------------------------
+
+test('a derived variable can read a feature USE COUNTER, resolved and clamped', () => {
+  /* Uses live on `sheet.features`, where no formula can reach — so "have I got a
+     Rage left?" was unaskable, and a trade like "expend a use of your Rage" had
+     no way to say what it cost. */
+  const rageFeature = (current?: number) => ({
+    id: 'f-rage', feature_id: 'rage', name: 'Rage',
+    uses: current === undefined ? { max: 'rages' } : { current, max: 'rages' },
+  })
+  const reader = {
+    id: 'f-read', feature_id: 'read', name: 'Reader',
+    vars: [
+      // A level table on the class carrier, exactly as the real Barbarian has.
+      { name: 'rages', kind: 'derived', formula: '[0,2,2,3,3,3,4][level]' },
+      { name: 'rageUses', kind: 'derived', uses: 'feature:rage' },
+    ] as VarDef[],
+  }
+  const at = (current: number | undefined, level = 6) =>
+    characterVars(character({ identity: { level }, sheet: { ...SHEET, features: [rageFeature(current), reader] } })).scope
+
+  assert.equal(at(2).rages, 4, 'the ordinary derived walk still runs first')
+  assert.equal(at(2).rageUses, 2)
+  assert.equal(at(0).rageUses, 0)
+  // Absent `current` is FULL, and the ceiling is itself a formula — which is the
+  // whole reason a counter cannot be bound before the derived walk.
+  assert.equal(at(undefined).rageUses, 4)
+  assert.equal(at(undefined, 1).rageUses, 2, 'and it follows the level table')
+  // Stored above the ceiling reads clamped, exactly as usesOf does everywhere.
+  assert.equal(at(9).rageUses, 4)
+})
+
+test('a use counter for a feature that is not on the sheet reads 0, not missing', () => {
+  // "How many Rages have I got" on a character never granted Rage is none. An
+  // absent binding would make every formula reading it an unknown identifier.
+  const reader = {
+    id: 'f-read', feature_id: 'read', name: 'Reader',
+    vars: [{ name: 'rageUses', kind: 'derived', uses: 'feature:rage' }] as VarDef[],
+  }
+  assert.equal(characterVars(character({ sheet: { ...SHEET, features: [reader] } })).scope.rageUses, 0)
+})
+
+test('a DERIVED formula may not read a use counter — it would read zero', () => {
+  /* Counters are bound after the derived walk, so a formula reading one sees
+     nothing. Refused with the reason rather than silently computing on 0, which
+     is the exact shape of wrong number this file exists to prevent. */
+  const bad = auditVars([
+    { name: 'rageUses', kind: 'derived', uses: 'feature:rage' },
+    { name: 'canRenew', kind: 'derived', formula: 'rageUses > 0' },
+  ])
+  assert.ok(bad.some(a => a.sev === 'err' && a.t === 'A derived variable cannot read a use counter'))
+  // The counter itself is fine, and so is an effect's `when` reading it — that
+  // runs against the finished scope.
+  assert.deepEqual(auditVars([{ name: 'rageUses', kind: 'derived', uses: 'feature:rage' }]), [])
+})
+
+test('probeScope SEEDS THE CATALOG, so one whitelist serves every check', () => {
+  /* Rage could not be saved: its max uses is `rages`, declared on the CLASS.
+     The editor's "reads a name nothing declares" check consulted a whitelist
+     that included the catalog, and its "does it evaluate" check a scope that did
+     not — so the same identifier passed one and failed the other, and the error
+     named a formula that was perfectly good. Seeding lives here now, so a caller
+     cannot have one without the other. */
+  const own: VarDef[] = [{ name: 'isRaging', kind: 'stored', type: 'bool', initial: false }]
+  assert.equal(evalExpr('rages', probeScope(own)), null, 'not declared here')
+  assert.notEqual(evalExpr('rages', probeScope(own, undefined, { rages: 'num' })), null)
+  // A LOCAL declaration still wins — the catalog is seeded under it, never over.
+  const shadow: VarDef[] = [{ name: 'rages', kind: 'stored', type: 'bool', initial: false }]
+  assert.equal(typeof probeScope(shadow, undefined, { rages: 'num' }).rages, 'boolean')
+})
+
+test('a use counter is a variable, so the usual declaration rules still hold', () => {
+  assert.ok(auditVars([{ name: 'x', kind: 'derived', uses: 'feature:rage', formula: 'level' }])
+    .some(a => a.t === 'Both a formula and a use counter'))
+  assert.ok(auditVars([{ name: 'x', kind: 'derived', uses: 'roll:attack' }])
+    .some(a => a.t === 'Not a feature'))
+  // Neither source at all is still the old error.
+  assert.ok(auditVars([{ name: 'x', kind: 'derived' }]).some(a => a.t === 'Missing formula'))
+})
+
 // --- base scope -------------------------------------------------------------
 
 test('baseScope keys are exactly VAR_IDENTS, so the whitelist cannot drift', () => {
@@ -213,6 +294,11 @@ test('base scope carries ability MODIFIERS off the effective sheet, not scores',
   const s = baseScope(c)
   assert.equal(s.str, 5) // set to 21 by gear → mod +5, not the base 14 → +2
   assert.equal(s.wis, 4)
+  /* And the SCORE beside it, off the same effective sheet — Indomitable Might
+     compares a total against 21, not against +5. Two names, one source, so a
+     rule that wants the score can no longer only approximate it. */
+  assert.equal(s.strScore, 21)
+  assert.equal(s.wisScore, 18)
   assert.equal(s.level, 7)
   assert.equal(s.prof, 3)
   assert.equal(s.hp, 41) // current, base
@@ -342,6 +428,141 @@ test('auditNode holds a boost to its own shape', () => {
   // No roll to compute against, so dice cannot apply.
   assert.ok(auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'DEX', value: '1d6' }] })
     .some(a => a.t === 'Boost needs a plain number'))
+})
+
+/* ---------- immunity reaches conditions, not just damage ---------- */
+
+const mindlessRage = gfeat('Mindless Rage', [
+  { id: 'm1', op: 'immune', label: 'Mindless Rage', when: 'isRaging', target: ['tag:frightened'] },
+  { id: 'm2', op: 'immune', label: 'Mindless Rage', when: 'isRaging', target: ['tag:charmed'] },
+], { vars: [{ name: 'isRaging', kind: 'stored', type: 'bool', initial: false }] })
+
+const raging = (on: boolean, effects: { id: string; name: string }[] = []) =>
+  character({
+    sheet: { ...SHEET, features: [mindlessRage] },
+    resources: { graph: { vars: { isRaging: on } }, activeEffects: effects },
+  })
+
+test('ONE MATCHER, TWO QUESTIONS — immunity answers for a condition by name', () => {
+  /* "Immune to fire" and "immune to Frightened" are the same authored statement:
+     an `immune` op targeting a tag. A second op for conditions would be a second
+     way to write one rule. */
+  assert.equal(immuneTo(buildContext(raging(true)), 'Frightened'), true)
+  assert.equal(immuneTo(buildContext(raging(true)), 'Charmed'), true)
+  assert.equal(immuneTo(buildContext(raging(true)), 'Poisoned'), false)
+  // Normalised on both sides, so the DM never has to think about the casing.
+  assert.equal(immuneTo(buildContext(raging(true)), 'frightened'), true)
+})
+
+test('a conditional immunity is only on while its condition holds', () => {
+  // The whole of Mindless Rage: "while your Rage is active".
+  assert.equal(immuneTo(buildContext(raging(false)), 'Frightened'), false)
+  // …and the damage question still works through the same matcher.
+  assert.equal(damageFlags(buildContext(raging(true)), 'Frightened').immune, true)
+})
+
+test('suppressedEffects names the active effects an immunity is holding off', () => {
+  const on = [{ id: 'e1', name: 'Frightened' }, { id: 'e2', name: 'Poisoned' }]
+  assert.deepEqual([...suppressedEffects(buildContext(raging(true, on)), raging(true, on))], ['e1'])
+  // Suppression, never deletion: stop raging and it applies again, because a
+  // condition removed while raging could not come back when the rage ended.
+  assert.deepEqual([...suppressedEffects(buildContext(raging(false, on)), raging(false, on))], [])
+})
+
+test('a floor raises the TOTAL, and the highest floor wins', () => {
+  /* Indomitable Might: "if your total is less than your Strength score, use the
+     score instead". No `add` can say that — it changes nothing on a good roll
+     and a great deal on a bad one. */
+  const c = withFeatures([gfeat('Might', [
+    { id: 'f1', op: 'floor', label: 'Indomitable Might', minimum: 'strScore', target: ['roll:check.str'] },
+  ])])
+  const res = resolve(buildContext(c), { kind: 'check', sub: 'str' })
+  assert.equal(res.floor, 14, 'the SHEET score, not the modifier')
+  // A different check is untouched.
+  assert.equal(resolve(buildContext(c), { kind: 'check', sub: 'dex' }).floor, undefined)
+
+  // Highest wins — the mirror of crit taking the lowest. Two guarantees both
+  // hold, so the better one is the one you feel.
+  const two = withFeatures([gfeat('A', [
+    { id: 'f1', op: 'floor', label: 'Low', minimum: '10', target: ['roll:check'] },
+    { id: 'f2', op: 'floor', label: 'High', minimum: '18', target: ['roll:check'] },
+  ])])
+  assert.equal(resolve(buildContext(two), { kind: 'check', sub: 'str' }).floor, 18)
+})
+
+test('a floor is CONDITIONAL like anything else, and never asked', () => {
+  const gated = (when: string) => resolve(buildContext(withFeatures([gfeat('F', [
+    { id: 'f1', op: 'floor', label: 'Held', minimum: '20', when, target: ['roll:save.str'] },
+  ])])), { kind: 'save', sub: 'str' }).floor
+  assert.equal(gated('level >= 7'), 20)
+  assert.equal(gated('level >= 99'), undefined)
+
+  // An `ask` is answered AFTER the dice land, and a floor decides what the total
+  // came to — the same reason adv/dis/crit cannot be asked.
+  assert.ok(auditNode({ graph: [{ id: 'f1', op: 'floor', label: 'F', minimum: '10', ask: 'did it?', target: ['roll:check'] }] })
+    .some(a => a.sev === 'err' && a.t === 'Floor cannot be asked'))
+})
+
+test('a floor needs a check or a save — anywhere else it would do nothing', () => {
+  // Only a d20 roll reaches composeCheck, so a floor on damage would be stored,
+  // shown in the editor and silently inert.
+  const bad = (target: string[]) => auditNode({ graph: [{ id: 'f1', op: 'floor', label: 'F', minimum: '10', target }] })
+    .filter(a => a.sev === 'err')
+  assert.deepEqual(bad(['roll:check.str']), [])
+  assert.deepEqual(bad(['roll:save']), [])
+  assert.ok(bad(['roll:damage.melee']).some(a => a.t === 'A floor needs a check or a save'))
+  assert.ok(bad([]).some(a => a.t === 'A floor needs a check or a save'))
+})
+
+test('composeCheck applies the floor and SAYS SO in the breakdown', () => {
+  // A player who saw 24 with no explanation would reasonably think the maths
+  // was wrong, so the line keeps what was rolled and names what replaced it.
+  const terms = [{ label: 'STR', value: 3 }]
+  const low = composeCheck(4, terms, 20, 20)
+  assert.equal(low.total, 20)
+  assert.match(low.breakdown, /minimum 20/)
+  // A good roll is untouched, breakdown included.
+  const high = composeCheck(18, terms, 20, 20)
+  assert.equal(high.total, 21)
+  assert.ok(!high.breakdown.includes('minimum'))
+  // A natural 1 is still a fumble — the roll failed, the total is just not as bad.
+  assert.equal(composeCheck(1, terms, 20, 20).fumble, true)
+  // No floor at all behaves exactly as it always did.
+  assert.equal(composeCheck(4, terms, 20).total, 7)
+})
+
+test('addUses targets a FEATURE, and only a feature', () => {
+  /* The one activation that reaches another node, so it keeps the target list
+     the other two are refused. What it must NOT accept is a roll kind or a tag:
+     only a feature has a use counter, and a target that matches nothing would
+     restore nothing with no error anywhere. */
+  const ok = (target: string[]) => auditNode({ graph: [{ id: 'u1', op: 'addUses', label: 'Regain Rages', value: 'rages', target }] })
+    .filter(a => a.sev === 'err')
+  assert.deepEqual(ok(['feature:rage']), [])
+  assert.deepEqual(ok([]), [], 'empty is legal — it means this feature')
+  assert.ok(ok(['roll:attack']).some(a => a.t === 'addUses targets a feature'))
+  assert.ok(ok(['tag:fire']).some(a => a.t === 'addUses targets a feature'))
+  // And it is NOT held to the variable rules the other activations are: it
+  // declares no variable, and a target on it is the point rather than an error.
+  assert.deepEqual(ok(['feature:rage']).map(a => a.t), [])
+})
+
+test('a boost cap is legal on an ability and refused everywhere else', () => {
+  // Only `abilities` is clamped, so a ceiling on Speed would be stored, shown
+  // in the editor and silently do nothing — the failure this file exists for.
+  const ok = auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'STR', value: '4', cap: '25' }] })
+  assert.deepEqual(ok.filter(a => a.sev === 'err'), [])
+
+  assert.ok(auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'Speed', value: '10', cap: '60' }] })
+    .some(a => a.t === 'Cap on a stat that has no ceiling'))
+
+  assert.ok(auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'STR', value: '4', cap: 'level' }] })
+    .some(a => a.t === 'Cap needs a plain number'))
+
+  // Blank is "no ceiling", not a malformed one.
+  assert.deepEqual(
+    auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'Speed', value: '10', cap: '' }] })
+      .filter(a => a.sev === 'err'), [])
 })
 
 // --- target matching, all three namespaces (§11) ----------------------------
@@ -1097,8 +1318,10 @@ test('every GraphEffect field is authorable, or is explicitly recorded as not ye
     when: 'universal', ask: 'universal',
     // Rendered from OPS[op].fields — asserted below.
     value: 'schema', byLevel: 'schema', variable: 'schema', text: 'schema',
+    /* `cap` and `target` aside, addUses adds no field of its own — it reuses the
+       universal target list, which is exactly why it needed no new field type. */
     threshold: 'schema', dmgType: 'schema', once: 'schema', stat: 'schema',
-    ability: 'schema',
+    ability: 'schema', cap: 'schema', minimum: 'schema',
     // Nothing is deferred today. The category stays because it is the honest
     // place to put a field that is stored but not yet authorable, and saying so
     // out loud beats leaving it silently uncovered.
@@ -1560,6 +1783,7 @@ test('every roll selector the editor offers is one a roll surface can pass', () 
     'save', 'check',                                     // Character.pushCheck()
     ...['str', 'dex', 'con', 'int', 'wis', 'cha'].map(a => `save.${a}`),
     ...['athletics', 'stealth', 'perception'].map(s => `check.${s}`),
+    'check.initiative',                                  // Stats.rollInitiative()
   ])
   const KNOWN_DEAD = new Set(['attack.spell'])
   const stray = ROLL_SELECTORS.filter(r => !PASSED_BY_A_SURFACE.has(r) && !KNOWN_DEAD.has(r))

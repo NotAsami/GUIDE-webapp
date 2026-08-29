@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import type {
   AbilityKey, CharacterRow, CharacterSection, CharacterSheet, EquippedWeapon, Json, ShardTree,
@@ -14,6 +14,9 @@ import { activeEffects, effectiveSheet } from '../lib/effects'
 import { burden, burdenTier, type BurdenTier } from '../lib/burden'
 import { handLabel, weaponAttackBonus, weaponDamageString } from '../lib/weapons'
 import { EffectsSidebar } from '../components/EffectsSidebar'
+import { buildCheck, useRollLog } from '../lib/rolls'
+import { useGraph } from '../lib/useGraph'
+import { suppressedEffects } from '../lib/graph'
 import styles from './Stats.module.css'
 import { Icon } from '../components/Icon'
 
@@ -24,6 +27,10 @@ interface RouteContext {
 }
 
 type DeathSaves = { successes: number; failures: number }
+/** What the INIT cell shows for a moment after a roll, instead of the modifier —
+ *  the same two seconds the Character screen's hexagons flash for. */
+type FlashState = { value: number; crit: boolean; fumble: boolean }
+const FLASH_MS = 2000
 
 const EXHAUSTION_EFFECTS = [
   'No effect',
@@ -58,6 +65,30 @@ export function Stats() {
   // button on the Senses widget rather than its own permanent panel slot.
   const [effectsOpen, setEffectsOpen] = useState(false)
   const effects = activeEffects(character)
+
+  // Initiative, and the immunity check below. Built once per character, not per
+  // roll — see lib/useGraph.ts.
+  const graph = useGraph(character, shardTrees)
+  /* Effects an immunity is currently holding off. They stay in the list — a
+     Frightened suppressed by Mindless Rage is still on you — but they stop
+     counting, because a badge that keeps saying "2" for something that is not
+     applying is the badge lying. */
+  const suppressed = suppressedEffects(graph, character)
+  const { addRoll } = useRollLog()
+  const [initFlash, setInitFlash] = useState<FlashState | null>(null)
+  const initTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => { if (initTimer.current) window.clearTimeout(initTimer.current) }, [])
+
+  function rollInitiative() {
+    const entry = buildCheck(graph, {
+      kind: 'check', sub: 'initiative', title: 'INITIATIVE', subtitle: 'Dexterity Check',
+      terms: [{ label: 'INIT', value: view.initiative ?? 0 }],
+    })
+    if (initTimer.current) window.clearTimeout(initTimer.current)
+    setInitFlash({ value: entry.check.total, crit: entry.check.crit, fumble: entry.check.fumble })
+    initTimer.current = window.setTimeout(() => setInitFlash(null), FLASH_MS)
+    addRoll(entry)
+  }
   async function removeEffect(id: string) {
     await updateSection('resources', {
       ...character.resources, activeEffects: effects.filter(e => e.id !== id),
@@ -99,13 +130,13 @@ export function Stats() {
           </header>
 
           <div className={styles.grid}>
-            <Combat sheet={view} />
+            <Combat sheet={view} onRollInit={rollInitiative} flash={initFlash} />
             <HitPoints sheet={view} character={character} updateSection={updateSection} />
             <HitDice sheet={view} character={character} updateSection={updateSection} />
             <AbilityScores sheet={view} base={base.abilities} exhaustion={exhaustion} tier={tier} />
             <Senses
               sheet={view} character={character} exhaustion={exhaustion} tier={tier}
-              effectCount={effects.length} onOpenEffects={() => setEffectsOpen(true)}
+              effectCount={effects.length - suppressed.size} onOpenEffects={() => setEffectsOpen(true)}
             />
             <SavingThrows sheet={view} />
             <DeathSavesWidget character={character} updateSection={updateSection} />
@@ -118,7 +149,7 @@ export function Stats() {
       </div>
 
       <EffectsSidebar
-        open={effectsOpen} effects={effects}
+        open={effectsOpen} effects={effects} suppressed={suppressed}
         onRemove={id => void removeEffect(id)} onClose={() => setEffectsOpen(false)}
       />
     </>
@@ -165,10 +196,25 @@ function Widget(props: {
 
 /* ---------- 01 Combat ---------- */
 
-function Combat({ sheet }: { sheet: CharacterSheet }) {
+/** The INIT cell ROLLS. Initiative is a Dexterity check in the 2024 rules, so it
+ *  goes through the same `buildCheck` the ability hexagons do, on
+ *  `roll:check.initiative` — which is what lets Feral Instinct's advantage reach
+ *  it without this screen owning an adv/dis switch of its own. The cell is a
+ *  button rather than a fifth control somewhere, because the number is already
+ *  here and already effective. */
+function Combat({ sheet, onRollInit, flash }: {
+  sheet: CharacterSheet
+  onRollInit: () => void
+  flash: FlashState | null
+}) {
   const cells = [
     { marker: 'A.C', value: <>{sheet.ac ?? '—'}</>, label: 'Armor Class' },
-    { marker: 'INIT', value: <>{formatMod(sheet.initiative ?? 0)}</>, label: 'Initiative' },
+    {
+      marker: 'INIT', label: 'Initiative', onClick: onRollInit,
+      value: flash
+        ? <span className={flash.crit ? styles.crit : flash.fumble ? styles.fumble : undefined}>{flash.value}</span>
+        : <>{formatMod(sheet.initiative ?? 0)}</>,
+    },
     { marker: 'SPD', value: <>{sheet.speed ?? '—'}<span className={styles.unit}>ft</span></>, label: 'Speed' },
     { marker: 'PROF', value: <>{formatMod(sheet.proficiencyBonus ?? 2)}</>, label: 'Proficiency' },
   ]
@@ -176,16 +222,27 @@ function Combat({ sheet }: { sheet: CharacterSheet }) {
   return (
     <Widget num="01" title="Combat" meta="Quick stats" span={5}>
       <div className={styles.combatGrid}>
-        {cells.map(c => (
-          <div key={c.marker} className={styles.ablock}>
-            <span className={styles.abFrame} /><span className={styles.abInner} />
-            <span className={styles.pbMarker}>{c.marker}</span>
-            <div className={styles.pbContent}>
-              <div className={styles.pbValue}>{c.value}</div>
-              <div className={styles.pbLabel}>{c.label}</div>
-            </div>
-          </div>
-        ))}
+        {cells.map(c => {
+          const body = (
+            <>
+              <span className={styles.abFrame} /><span className={styles.abInner} />
+              <span className={styles.pbMarker}>{c.marker}</span>
+              <div className={styles.pbContent}>
+                <div className={styles.pbValue}>{c.value}</div>
+                <div className={styles.pbLabel}>{c.label}</div>
+              </div>
+            </>
+          )
+          return c.onClick
+            ? (
+              <button
+                key={c.marker} type="button" onClick={c.onClick}
+                className={`${styles.ablock} ${styles.rollable}`}
+                title={`Roll Initiative (${formatMod(sheet.initiative ?? 0)})`}
+              >{body}</button>
+            )
+            : <div key={c.marker} className={styles.ablock}>{body}</div>
+        })}
       </div>
       {bd && (
         <div className={styles.acBreakdown}>

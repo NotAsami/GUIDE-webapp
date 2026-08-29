@@ -9,7 +9,8 @@ import type { Rider } from './graph.ts'
 import type { RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
 import {
-  askSections, catalogView, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf, rerollAt,
+  askSections, catalogView, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf,
+  picksAllowed, picksTaken, rerollAt,
   releaseIdsOf, resolvedOf, riderAmount, riderValue, riderViews, rollTotals, sourceGroups, unresolvedOf,
 } from './rollView.ts'
 
@@ -423,6 +424,36 @@ test('only one option in a group can be answered', () => {
   assert.equal(picked.filter(r => r.on).length, 1)
   const after = askSections(riderViews(entryOf(picked)))
   assert.equal(pickedOf(after[0].views)?.rider.label, 'Hamstring Blow')
+})
+
+test('a group may allow TWO picks, and the count belongs to the group', () => {
+  /* Improved Brutal Strike (Enhanced): "you can use two different Brutal Strike
+     effects". The limit rides on the riders, so every member agrees about it by
+     construction rather than by two fields staying in step. */
+  const two = [blow('Forceful Blow', { picks: 2 }), blow('Hamstring Blow', { picks: 2 }), blow('Staggering Blow', { picks: 2 })]
+  const open = askSections(riderViews(entryOf(two)))[0].views
+  assert.equal(picksAllowed(open), 2)
+  assert.deepEqual(picksTaken(open), [])
+
+  // One taken: the group is ANSWERED — taking fewer than the limit is a
+  // decision, not an omission — but it is not full, so a second is still open.
+  const one = two.map(r => ({ ...r, on: r.label === 'Forceful Blow' }))
+  const afterOne = askSections(riderViews(entryOf(one)))[0].views
+  assert.equal(pickedOf(afterOne)?.rider.label, 'Forceful Blow')
+  assert.equal(picksTaken(afterOne).length, 1)
+  assert.equal(openAsks(riderViews(entryOf(one))).length, 0, 'answered, so the badge stops counting it')
+
+  // Two taken, and they STAND TOGETHER: the panel's patch is additive, so the
+  // second pick does not un-pick the first.
+  const both = two.map(r => ({ ...r, on: r.label !== 'Staggering Blow' }))
+  const afterTwo = askSections(riderViews(entryOf(both)))[0].views
+  assert.deepEqual(picksTaken(afterTwo).map(v => v.rider.label), ['Forceful Blow', 'Hamstring Blow'])
+  assert.equal(picksTaken(afterTwo).length >= picksAllowed(afterTwo), true, 'full')
+})
+
+test('a group with no picks count is a pick-one, exactly as before', () => {
+  const group = askSections(riderViews(entryOf([blow('Forceful Blow'), blow('Hamstring Blow')])))[0].views
+  assert.equal(picksAllowed(group), 1)
 })
 
 test('an unanswered offered arm contributes NOTHING to the total', () => {

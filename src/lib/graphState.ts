@@ -20,10 +20,11 @@ import { activeSources } from './effects.ts'
 import type {
   ArmedMod, CharacterRow, Feature, GraphEffect, GraphState, Json, ShardTree, VarDef,
 } from './database.types.ts'
-import { evalExpr, freeIdents } from './expr.ts'
-import type { GraphContext, ResolveReq } from './graph.ts'
-import { armedMatches, asKey, gid, reqKeys, staleArmed } from './graph.ts'
+import { evalExpr, freeIdents, type ExprScope } from './expr.ts'
+import type { GraphContext, ResolveReq, Rider } from './graph.ts'
+import { armedMatches, asKey, gid, levelFormula, reqKeys, staleArmed } from './graph.ts'
 import { IS_ACTIVATION } from './opSchema.ts'
+import { usesOf } from './featureView.ts'
 
 const state = (character: CharacterRow): GraphState =>
   ((character.resources as { graph?: GraphState } | undefined)?.graph ?? {})
@@ -142,7 +143,7 @@ export const playerVars = (character: CharacterRow, shardTrees: Record<string, S
  *  `ask` gates both identically (§32 does not care what is being resolved), and
  *  both land in one `resources` patch. Splitting them into two lists would mean
  *  two confirm sheets and two write paths for one press. */
-export type Outcome = VarOutcome | ArmOutcome
+export type Outcome = VarOutcome | ArmOutcome | UsesOutcome
 
 type OutcomeBase = {
   eff: GraphEffect
@@ -173,6 +174,21 @@ export type ArmOutcome = OutcomeBase & {
   mod: ArmedMod
 }
 
+/** `addUses`: a use counter moves — this feature's, or another's.
+ *
+ *  THE ONLY OUTCOME THAT LANDS ON `sheet`, because that is where uses live while
+ *  variables live in `resources`. It is what makes applyOutcomes return a
+ *  features patch beside the resources one; a press that restored a Rage and set
+ *  a variable has to write both together or neither. */
+export type UsesOutcome = OutcomeBase & {
+  kind: 'uses'
+  /** The feature whose counter moves — the row ON THE SHEET, not a catalog id. */
+  target: Feature
+  /** Before, after: both resolved and clamped, so the summary needs no maths. */
+  current: number
+  next: number
+}
+
 /** The armed modifiers one `once` effect mints, given the node that owns it.
  *
  *  §16 keys the queue by ROLL KIND, so that is what an effect's selectors have to
@@ -186,10 +202,18 @@ export type ArmOutcome = OutcomeBase & {
  *  authoring error caught by auditNode, not silently dropped here.
  *
  *  One mod per roll selector, with the selector in the id: two selectors are two
- *  independent pending bonuses, and consuming one must not consume the other. */
-export function armedFrom(eff: GraphEffect, source: string, sourceName?: string, at = Date.now()): ArmedMod[] {
+ *  independent pending bonuses, and consuming one must not consume the other.
+ *
+ *  `level` RESOLVES THE BY-LEVEL TABLE, and leaving it out was a silent wrong
+ *  number. resolve() was the only reader of levelFormula(), so an `once`
+ *  contribution — which never reaches resolve(), it is snapshotted here —
+ *  armed slot 1 of its table forever. Optional so a caller with no scope
+ *  degrades to the authored `value` rather than guessing at level 1. */
+export function armedFrom(eff: GraphEffect, source: string, sourceName?: string, level?: number, at = Date.now()): ArmedMod[] {
   const base = {
-    source, sourceName, label: eff.label, op: eff.op, value: eff.value, dmgType: eff.dmgType, at,
+    source, sourceName, label: eff.label, op: eff.op,
+    value: (level === undefined ? undefined : levelFormula(eff, level)) ?? eff.value,
+    dmgType: eff.dmgType, at,
     // An asked arm is OFFERED, not taken — the question rides along and the roll
     // panel is what asks it. See ArmedMod.ask.
     ...(eff.ask ? { ask: eff.ask, text: eff.text || eff.label } : {}),
@@ -205,6 +229,19 @@ export function armedFrom(eff: GraphEffect, source: string, sourceName?: string,
   })
 }
 
+/** `Feature.picks` as a number. A formula, because the count is a level thing —
+ *  `level >= 17 ? 2 : 1`. Anything unreadable is one, which is the behaviour
+ *  every pick-one had before this existed. */
+function pickCount(picks: number | string | undefined, scope: ExprScope): number {
+  if (typeof picks === 'number') return Math.max(1, Math.trunc(picks))
+  const raw = String(picks ?? '').trim()
+  if (!raw) return 1
+  const n = Number(raw)
+  if (Number.isFinite(n)) return Math.max(1, Math.trunc(n))
+  const v = evalExpr(raw, scope)
+  return v?.t === 'num' && !v.dice.length ? Math.max(1, Math.trunc(v.flat)) : 1
+}
+
 /** What pressing Use would do, given the character's current state.
  *
  *  `when` is evaluated here and false outcomes are DROPPED — §32 gates existence
@@ -213,8 +250,9 @@ export function armedFrom(eff: GraphEffect, source: string, sourceName?: string,
  *  wrongly enable. `ask` outcomes come back listed but undecided. */
 export function planActivation(
   /** `name` is display only, carried onto an armed modifier so the roll panel
-   *  can say "Sacred Flame" rather than `spell:<uuid>`. */
-  feature: { name?: string; vars?: VarDef[]; graph?: GraphEffect[] },
+   *  can say "Sacred Flame" rather than `spell:<uuid>`. `picks` is how many of
+   *  this node's offers the player may take — see Feature.picks. */
+  feature: { name?: string; picks?: number | string; vars?: VarDef[]; graph?: GraphEffect[] },
   ctx: GraphContext,
   character: CharacterRow,
   /** The node's gid — what an armed modifier records as its source, and half of
@@ -225,6 +263,11 @@ export function planActivation(
   const g = state(character)
   const out: Outcome[] = []
 
+  /* RESOLVED ONCE, HERE, and snapshotted onto every arm this press mints. It is
+     a property of the GROUP, so it must be one number: computing it per effect
+     would be four answers to "how many may I take". */
+  const picks = pickCount(feature.picks, ctx.scope)
+
   for (const eff of feature.graph ?? []) {
     // §16: a `once` contribution is not an activation op, but pressing Use is
     // what arms it — so it is planned here, alongside the variable writes, and
@@ -234,7 +277,10 @@ export function planActivation(
         const cond = evalExpr(eff.when, ctx.scope)
         if (cond === null || cond.t !== 'bool' || !cond.v) continue
       }
-      for (const mod of armedFrom(eff, source, feature.name)) {
+      for (const raw of armedFrom(eff, source, feature.name, typeof ctx.scope.level === 'number' ? ctx.scope.level : undefined)) {
+        // Only worth carrying when it changes anything — one is what a pick has
+        // always been, and an explicit 1 on every mod is noise in the store.
+        const mod = picks > 1 ? { ...raw, picks } : raw
         /* NO `ask` ON THE OUTCOME, deliberately, when the effect carries one.
            The confirm sheet's checkboxes decide what this press WRITES; an asked
            arm's question is not about the press at all — it is about a roll that
@@ -251,6 +297,47 @@ export function planActivation(
       continue
     }
     if (!IS_ACTIVATION(eff.op)) continue
+
+    /* `addUses` reaches a FEATURE, not a variable, so it is resolved before the
+       variable machinery below rather than through it. An empty target means
+       this node — the same "no target = me" rule the rest of the language uses —
+       which is how Intimidating Presence restores its own charge. */
+    if (eff.op === 'addUses') {
+      if (eff.when !== undefined) {
+        const cond = evalExpr(eff.when, ctx.scope)
+        if (cond === null || cond.t !== 'bool' || !cond.v) continue
+      }
+      const wanted = eff.target?.length ? eff.target : (source ? [source] : [])
+      const delta = evalExpr(eff.value ?? '', ctx.scope)
+      if (delta === null || delta.t !== 'num' || delta.dice.length) continue
+      for (const gidStr of wanted) {
+        const target = (character.sheet?.features ?? []).find(f => gid('feature', f) === gidStr)
+        // Not on the sheet, or on it with no counter: nothing to move. Silent,
+        // because "restore Rage" on a character who has not got Rage yet is a
+        // gate the level table already enforces, not an error.
+        const u = target && usesOf(target, ctx.scope)
+        if (!target || !u) continue
+        // CLAMPED HERE, not on read. "Regain all expended uses" is authored as
+        // the max itself and the clamp is what makes that mean "all"; without it
+        // the stored count would bank past the ceiling and survive a rest.
+        const amount = Math.trunc(delta.flat)
+        /* A COST THAT CANNOT BE PAID REFUSES THE WHOLE PRESS.
+           "Expend a use of your Rage to restore this" is one transaction, and
+           clamping a negative at zero would hand out the benefit for free — the
+           player with no Rages left gets the charge back and pays nothing. Same
+           rule `canUse` already applies to a feature's own counter, one level
+           out: you cannot spend what you have not got. */
+        if (amount < 0 && u.current + amount < 0) return []
+        const next = Math.max(0, Math.min(u.max, u.current + amount))
+        if (next === u.current) continue
+        out.push({
+          kind: 'uses', eff, ask: eff.ask, target, current: u.current, next,
+          summary: `${target.name} ${next > u.current ? '+' : '−'}${Math.abs(next - u.current)} → ${next} / ${u.max}`,
+        })
+      }
+      continue
+    }
+
     const def = (feature.vars ?? []).find(v => v.name === eff.variable)
     // auditNode blocks all three of these at author time; a granted snapshot
     // could still predate the rule, so skipping beats writing nonsense.
@@ -325,7 +412,7 @@ export function applyOutcomes(
   character: CharacterRow,
   outcomes: Outcome[],
   answers: Set<string>,
-): { resources: Record<string, Json>; applied: Outcome[] } {
+): { resources: Record<string, Json>; usesPatch?: Record<string, number>; applied: Outcome[] } {
   const applied = outcomes.filter(o => !o.ask || answers.has(o.ask))
   const next: Record<string, number | boolean> = {}
   for (const o of applied) {
@@ -343,7 +430,44 @@ export function applyOutcomes(
   // of a single press must land together or not at all — §16's Lifetime note
   // makes the same argument about rests.
   const arms = applied.filter((o): o is ArmOutcome => o.kind === 'arm').map(o => o.mod)
-  return { resources: withArmed(setVars(character, next), arms), applied }
+
+  /* THE USE COUNTERS, which live on `sheet` rather than in `resources`. Returned
+     as feature id -> new count rather than as a rebuilt feature list, on purpose:
+     the caller has usually ALREADY edited that list (pressing Use spends the
+     feature's own charge before this runs), and handing back an array rebuilt
+     from the original row would silently undo that edit. A patch composes; a
+     snapshot overwrites.
+
+     Undefined when nothing moved, so a caller that ignores it ignores nothing.
+     Later outcomes win on the same feature — they were planned in order against
+     the same starting count, so the last is the settled answer. */
+  const moved = applied.filter((o): o is UsesOutcome => o.kind === 'uses')
+  const usesPatch = moved.length
+    ? Object.fromEntries(moved.map(o => [o.target.id, o.next]))
+    : undefined
+
+  return { resources: withArmed(setVars(character, next), arms), usesPatch, applied }
+}
+
+/** One activation outcome as a line in the roll log.
+ *
+ *  SHARED, because two surfaces press Use — the Features screen and the
+ *  Spellbook — and both were rendering this inline with a two-way branch on
+ *  `kind`. Adding a third kind broke both at once, which is the argument for
+ *  one function: a new outcome is a case here and nowhere else. */
+export function outcomeLine(o: Outcome): { label: string; total: string; breakdown?: string; tone: 'buff' } {
+  const base = { breakdown: o.summary, tone: 'buff' as const }
+  // An armed modifier has no number yet — it has a promise. Saying "armed"
+  // rather than a value is the honest line, and the chip on the target's card is
+  // where it becomes visible (§16). One carrying a question is not even a promise
+  // yet: it is OFFERED, and the roll panel decides.
+  if (o.kind === 'arm') return { ...base, label: o.mod.label, total: o.mod.ask ? 'offered' : 'armed' }
+  if (o.kind === 'uses') return { ...base, label: o.target.name, total: `${o.next} uses` }
+  return {
+    ...base,
+    label: o.def.label ?? o.def.name,
+    total: String(o.delta !== undefined ? (o.current as number) + o.delta : o.set),
+  }
 }
 
 /** Merge armed modifiers into an already-built `resources` object.
@@ -394,19 +518,51 @@ export const consumeArmed = (character: CharacterRow, ids: string | string[]): R
   } as Record<string, Json>
 }
 
-/** ONE MORE SWING THIS TURN — the patch an attack roll writes.
+/** Every arm a roll consumed — the offered blows as much as the taken mods.
  *
- *  Feeds `attacksThisTurn`, which is how a feature says "on your FIRST attack
- *  roll on your turn": the decision point that wording names is only open while
- *  the count is zero. Reset by turnGraphPatch.
+ *  THE QUEUE IS NOT WHAT MAKES A CHOICE ANSWERABLE. That was the mistake in the
+ *  first pass at this: offered arms were left queued so the player could still
+ *  decide after seeing whether the attack hit. But the panel renders a choice
+ *  from the ENTRY's own rider snapshot, so answering never depended on the queue
+ *  at all — all that leaving them there did was offer the same two blows again
+ *  on the next swing, a decision to make with no feature behind it.
  *
- *  A patch, like everything else here, so a ranged attack folds it into the
- *  same round trip that spends the arrow. */
-export const countAttack = (character: CharacterRow): Record<string, Json> => {
+ *  An arm is for "your next attack". The next attack happened. Both halves are
+ *  spent by it, and the entry keeps the question exactly as long as it keeps
+ *  everything else about that roll: forever. */
+export const armsSpentBy = (...groups: Rider[][]) =>
+  groups.flat().map(r => r.armedId).filter((x): x is string => !!x)
+
+/** EVERYTHING AN ATTACK ROLL WRITES, as one patch.
+ *
+ *  Two things, and they must land together. The swing COUNTS, feeding
+ *  `attacksThisTurn` — how a feature says "on your FIRST attack roll on your
+ *  turn". And the arms it consumed are marked SPENT.
+ *
+ *  That second half was missing, and `when` is what made it bite: a gate is
+ *  evaluated when the arm is MINTED, never again. So Brutal Strike armed under
+ *  Reckless Attack, went unanswered because the player declined both blows, and
+ *  its disadvantage and its 1d10 rode the next swing — by which point the
+ *  condition that authorised them was long false and nothing would re-check it.
+ *  Declining is an answer the panel cannot make on the player's behalf; the ROLL
+ *  can say the taken half is used up, because it is the thing that used it.
+ *
+ *  `at` is the roll that spent them, the same mark answering writes, so one
+ *  record still answers "was this spent, and by what". */
+export function attackRolled(
+  character: CharacterRow,
+  spent: string[],
+  at: string,
+): Record<string, Json> {
   const g = state(character)
+  const hit = new Set(spent)
   return {
     ...(character.resources ?? {}),
-    graph: { ...g, attacks: (g.attacks ?? 0) + 1 },
+    graph: {
+      ...g,
+      attacks: (g.attacks ?? 0) + 1,
+      armed: (g.armed ?? []).map(m => (hit.has(m.id) ? { ...m, spent: at } : m)),
+    },
   } as Record<string, Json>
 }
 
@@ -515,7 +671,8 @@ export function armableFor(
   for (const s of activeSources(character, shardTrees)) {
     if (s.kind !== 'feature') continue
     const feature = s.obj
-    if (feature.uses && feature.uses.current <= 0) continue
+    const u = usesOf(feature, ctx.scope)
+    if (u && u.current <= 0) continue
     const source = gid('feature', feature)
     if (ctx.armed.some(m => m.source === source)) continue
     const arms = planActivation(feature, ctx, character, source)

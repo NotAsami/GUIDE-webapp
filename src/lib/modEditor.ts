@@ -16,7 +16,10 @@ export type { Mod }
 
 /** The numeric modifiers the engine (lib/effects.ts) actually reads. `Note`
  *  and other descriptive perks are authored as Detail rows instead, not here. */
-export const MOD_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'AC', 'Attack', 'Damage', 'Saves', 'Speed', 'Initiative', 'Darkvision', 'Max HP', 'Carry Capacity ×'] as const
+/* `Attack` is the TO-HIT bonus and `Extra Attacks` is how many swings one Attack
+   action buys — two different questions that a shorter name for the second would
+   blur. The plural is doing work: a grant of 1 means one EXTRA. */
+export const MOD_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'AC', 'Attack', 'Extra Attacks', 'Damage', 'Saves', 'Speed', 'Initiative', 'Darkvision', 'Max HP', 'Carry Capacity ×'] as const
 
 /** Per-skill bonuses, as modifier rows.
  *
@@ -54,6 +57,7 @@ export function compileEffects(mods: Mod[], skills?: Pick<EffectDef, 'skillProfi
     if (ak) { if (m.set) (eff.abilitySet ??= {})[ak] = n; else (eff.abilities ??= {})[ak] = n }
     else if (m.stat === 'AC') eff.ac = n
     else if (m.stat === 'Attack') eff.attack = n
+    else if (m.stat === 'Extra Attacks') eff.extraAttacks = n
     else if (m.stat === 'Damage') eff.damage = n
     else if (m.stat === 'Saves') eff.saves = n
     else if (m.stat === 'Speed') eff.speed = n
@@ -92,7 +96,22 @@ export function sheetEffects(graph?: GraphEffect[]): ItemEffects | undefined {
      through compileEffects with the rest — it is a set of permissions, collected
      separately and unioned onto the compiled result. */
   const attackAbilities: AbilityKey[] = []
+  /* A CAP IS NOT A MODIFIER ROW, so it goes the same way `useability` does —
+     beside compileEffects rather than through it. `Mod` is the item editor's
+     shape too, and the item form has no cap control; widening it would put a
+     field in that UI that nothing there can author. */
+  const abilityCap: Partial<Record<AbilityKey, number>> = {}
+  /* Unarmored AC rules, collected rather than summed — two of them compete and
+     armorClass takes the better, because 5e says you pick one. */
+  const unarmoredAc: { base: number; ability?: AbilityKey }[] = []
   for (const g of graph) {
+    if (g.op === 'unarmored') {
+      const base = Number(g.value)
+      if (!Number.isFinite(base)) continue
+      const key = (g.ability ?? '').toLowerCase() as AbilityKey
+      unarmoredAc.push({ base, ...(ABILITY_KEYS.includes(key) ? { ability: key } : {}) })
+      continue
+    }
     if (g.op === 'useability') {
       const key = (g.ability ?? '').toLowerCase() as AbilityKey
       if (ABILITY_KEYS.includes(key) && !attackAbilities.includes(key)) attackAbilities.push(key)
@@ -102,10 +121,19 @@ export function sheetEffects(graph?: GraphEffect[]): ItemEffects | undefined {
     const amt = Number(g.value)
     if (!Number.isFinite(amt)) continue
     mods.push({ stat: g.stat, amt })
+    const cap = Number(g.cap)
+    const ak = g.stat.toLowerCase() as AbilityKey
+    // Lowest wins: two "to a maximum of" clauses both have to hold.
+    if (g.cap !== undefined && String(g.cap).trim() !== '' && Number.isFinite(cap) && ABILITY_KEYS.includes(ak)) {
+      abilityCap[ak] = abilityCap[ak] === undefined ? cap : Math.min(abilityCap[ak], cap)
+    }
   }
-  if (!mods.length && !attackAbilities.length) return undefined
+  const caps = Object.keys(abilityCap).length ? abilityCap : undefined
+  if (!mods.length && !attackAbilities.length && !unarmoredAc.length) return undefined
   const out: ItemEffects = mods.length ? (compileEffects(mods) ?? {}) : {}
   if (attackAbilities.length) out.attackAbilities = attackAbilities
+  if (unarmoredAc.length) out.unarmoredAc = unarmoredAc
+  if (caps) out.abilityCap = caps
   return out
 }
 
@@ -120,6 +148,7 @@ export function effectsToMods(eff?: ItemEffects): Mod[] {
   for (const [k, v] of Object.entries(eff.abilitySet ?? {})) mods.push({ stat: up(k), amt: v as number, set: true })
   if (eff.ac != null) mods.push({ stat: 'AC', amt: eff.ac })
   if (eff.attack != null) mods.push({ stat: 'Attack', amt: eff.attack })
+  if (eff.extraAttacks != null) mods.push({ stat: 'Extra Attacks', amt: eff.extraAttacks })
   if (eff.damage != null) mods.push({ stat: 'Damage', amt: eff.damage })
   if (typeof eff.saves === 'number') mods.push({ stat: 'Saves', amt: eff.saves })
   if (eff.speed != null) mods.push({ stat: 'Speed', amt: eff.speed })

@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, GraphOp } from './database.types.ts'
-import { OP_GLYPH, featureEffects, isUsable, originChain, toggleVar, isCarrier, origins } from './featureView.ts'
+import { OP_GLYPH, featureEffects, isUsable, originChain, runsActivation, toggleVar, isCarrier, origins, usesOf } from './featureView.ts'
 import type { Feature } from './database.types.ts'
 import { OPS } from './opSchema.ts'
 import { affectedBy, baseScope, buildContext, gid } from './graph.ts'
@@ -94,15 +94,38 @@ test('isUsable — a real activation, or something to press', () => {
   assert.equal(isUsable(feat({ light_description: 'prose only' })), false)
 })
 
-test('a toggle is one bool and nothing else to spend', () => {
-  const v = (name: string) => ({ name, kind: 'stored' as const, type: 'bool' as const, scope: 'player' as const })
+const v = (name: string) => ({ name, kind: 'stored' as const, type: 'bool' as const, scope: 'player' as const })
+
+test('a toggle is one bool the player owns', () => {
   assert.equal(toggleVar(feat({ vars: [v('a')] }))?.name, 'a')
   // Two switches: the hexagon cannot pick one and the player cannot tell which.
   assert.equal(toggleVar(feat({ vars: [v('a'), v('b')] })), null)
-  // Uses make it a spend, not a hold.
-  assert.equal(toggleVar(feat({ vars: [v('a')], uses: { current: 1, max: 1 } })), null)
   // A DM-scoped bool is not the player's to flip.
   assert.equal(toggleVar(feat({ vars: [{ ...v('a'), scope: 'dm' }] })), null)
+  // A feature that rolls dice has a result to show; a switch has nowhere to
+  // show it, so the press stays a roll.
+  assert.equal(toggleVar(feat({ vars: [v('a')], roll: '1d10' })), null)
+})
+
+test('A STANCE MAY COST A USE TO ENTER — Rage is a switch and a counter', () => {
+  /* `uses` used to disqualify a toggle outright, on the reasoning that a press
+     either spends or holds. Rage does both, and so do Wild Shape and Frenzy. The
+     exclusion left exactly one authorable shape: a hexagon that spent a use and
+     showed nothing, beside a free hand switch in the popup that turned the thing
+     on for nothing. */
+  const rage = feat({ vars: [v('isRaging')], uses: { max: 'rages' } })
+  assert.equal(toggleVar(rage)?.name, 'isRaging')
+  // What the press DOES is a separate question, and this is its answer: with an
+  // activation to run, entering goes through the path that spends the use.
+  assert.equal(runsActivation(rage), false, 'nothing authored to run, so nothing is spent')
+  const armed = feat({
+    vars: [v('isRaging')], uses: { max: 'rages' },
+    graph: [eff({ op: 'setVar', variable: 'isRaging', value: 'true', label: 'Enter Rage' })],
+  })
+  assert.equal(runsActivation(armed), true)
+  // An armed `once` counts too — arming IS the press, §16.
+  assert.equal(runsActivation(feat({ graph: [eff({ once: true, target: ['roll:attack'] })] })), true)
+  assert.equal(runsActivation(feat({ graph: [eff({ op: 'add', value: '2' })] })), false, 'a passive contribution runs nothing')
 })
 
 /* ---------- the reverse lookup ---------- */
@@ -229,4 +252,50 @@ test('a carrier with no description contributes no section', () => {
   assert.deepEqual(origins([carrier('cls:arbiter', { name: 'Arbiter' })]), [])
   assert.deepEqual(origins([carrier('cls:arbiter', { name: 'Arbiter', light_description: '   ' })]), [])
   assert.deepEqual(origins(undefined), [])
+})
+
+/* ---------- uses: the max is a formula ---------- */
+
+test('a plain number max still reads exactly as it always did', () => {
+  assert.deepEqual(usesOf(feat({ uses: { current: 1, max: 3 } }), {}), { current: 1, max: 3 })
+  // …and so does the string form a JSON round-trip or a text input produces.
+  assert.deepEqual(usesOf(feat({ uses: { current: 1, max: '3' } }), {}), { current: 1, max: 3 })
+  assert.equal(usesOf(feat(), {}), null, 'no counter is null, not zero')
+})
+
+test('a FORMULA max resolves against the character scope', () => {
+  // The whole point: "the Rages column of the Barbarian table" is `rages`, which
+  // the class carrier declares. Without this the max was a fixed number typed by
+  // the DM, and a level-5 Barbarian and a level-17 one had the same Rages.
+  const rage = feat({ uses: { current: 2, max: 'rages' } })
+  assert.deepEqual(usesOf(rage, { rages: 3 }), { current: 2, max: 3 })
+  assert.deepEqual(usesOf(rage, { rages: 6 }), { current: 2, max: 6 })
+  // A level table indexes inline just as well, with no variable to declare.
+  const tbl = feat({ uses: { current: 9, max: '[0,2,2,3,3,3,4][level]' } })
+  assert.equal(usesOf(tbl, { level: 1 })!.max, 2)
+  assert.equal(usesOf(tbl, { level: 6 })!.max, 4)
+})
+
+test('ABSENT current means FULL — a template cannot know its own max', () => {
+  // A catalog row is granted to a character it has never met, so there is no
+  // number for it to copy. Writing 0 would hand out a permanently spent feature.
+  assert.deepEqual(usesOf(feat({ uses: { max: 'rages' } }), { rages: 4 }), { current: 4, max: 4 })
+  assert.deepEqual(usesOf(feat({ uses: { max: 2 } }), {}), { current: 2, max: 2 })
+})
+
+test('current is CLAMPED on read and the stored value is never rewritten', () => {
+  // Same rule effective HP follows: losing the level that raised the max must
+  // not destroy the count, because regaining it has to give the use back.
+  const f = feat({ uses: { current: 5, max: 'rages' } })
+  assert.equal(usesOf(f, { rages: 3 })!.current, 3)
+  assert.equal(f.uses!.current, 5, 'the row is untouched')
+  assert.equal(usesOf(f, { rages: 6 })!.current, 5, 'and comes back when the ceiling rises')
+})
+
+test('an unresolvable max is 0 rather than a guess', () => {
+  // 0 reads as "spent" everywhere, which is the loud failure. The Feature Editor
+  // refuses to publish one, so this is the shape of a row edited by hand.
+  assert.deepEqual(usesOf(feat({ uses: { current: 2, max: 'nonsense' } }), {}), { current: 0, max: 0 })
+  // Dice in a use count is not a thing — refused, not truncated to its flat part.
+  assert.equal(usesOf(feat({ uses: { current: 2, max: '1d4 + 2' } }), {})!.max, 0)
 })

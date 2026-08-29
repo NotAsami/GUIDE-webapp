@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import type { CharacterRow, CharacterSheet, EquippedWeapon } from './database.types.ts'
 import type { Resolution } from './graph.ts'
 import { buildContext, gid, resolve, total } from './graph.ts'
-import { rollWeaponAttack, isRanged, weaponAbilityKey, weaponAttackBonus, weaponDamageBonus } from './weapons.ts'
+import { MASTERIES, masteryActive, masteryOf, rollWeaponAttack, isRanged, weaponAbilityKey, weaponAttackBonus, weaponDamageBonus } from './weapons.ts'
 
 const SHEET = {
   abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 },
@@ -293,4 +293,43 @@ test('ADV AND DIS CANCEL TO NORMAL — Brutal Strike forgoing Reckless Attack', 
     () => rollWeaponAttack(SWORD, SHEET, undefined, { attack: RES({ adv: true, dis: true }) }))
   assert.equal(both.attack.mode, 'normal')
   assert.equal(both.attack.d20, 7, 'back to the first face, exactly as if neither applied')
+})
+
+/* ---------- weapon mastery ---------- */
+
+test('the mastery is READ OFF the imported free text, so nothing needed migrating', () => {
+  /* Every one of the 454 imported weapons already lists its mastery in
+     `properties`, mixed in with Heavy and Two-Handed — the same situation
+     `ranged` and `twoHanded` are in, and the same fallback. */
+  assert.equal(masteryOf({ properties: ['Cleave', 'Heavy', 'Two-Handed'] })?.name, 'Cleave')
+  assert.equal(masteryOf({ properties: ['Finesse', 'Vex'] })?.name, 'Vex')
+  assert.equal(masteryOf({ properties: ['Finesse', 'Light', 'Nick', 'Thrown'] })?.name, 'Nick')
+  // A weapon with no mastery at all is null, not a guess.
+  assert.equal(masteryOf({ properties: ['Heavy', 'Two-Handed'] }), null)
+  assert.equal(masteryOf({}), null)
+})
+
+test('an authored field wins over the free text, and is matched case-blind', () => {
+  assert.equal(masteryOf({ mastery: 'Topple', properties: ['Cleave'] })?.name, 'Topple')
+  assert.equal(masteryOf({ mastery: 'vex' })?.name, 'Vex')
+  // A name that is not one of the eight is nothing — `Vexing` looks right to an
+  // author and matches nothing, which is why the list is closed.
+  assert.equal(masteryOf({ mastery: 'Vexing' }), null)
+})
+
+test('HAVING a mastery and being able to USE it are different questions', () => {
+  // A weapon card that showed the property without saying which it meant would
+  // tell the player they have something they do not.
+  const rapier = { properties: ['Finesse', 'Vex'] }
+  assert.equal(masteryActive(rapier, ['Cleave', 'Topple']), false)
+  assert.equal(masteryActive(rapier, ['Cleave', 'Vex']), true)
+  assert.equal(masteryActive(rapier, undefined), false)
+  // …and a weapon with no mastery is never active, however long the list.
+  assert.equal(masteryActive({ properties: ['Heavy'] }, ['Cleave', 'Vex']), false)
+})
+
+test('every mastery carries its rule, and only Vex claims the engine does it', () => {
+  assert.equal(MASTERIES.length, 8)
+  for (const m of MASTERIES) assert.ok(m.rule.length > 20, `${m.name} needs its rule text`)
+  assert.deepEqual(MASTERIES.filter(m => m.engine).map(m => m.name), ['Vex'])
 })

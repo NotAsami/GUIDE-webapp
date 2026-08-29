@@ -8,7 +8,8 @@ import type { CharacterRow, Feature, GraphEffect, Json, VarDef } from './databas
 import { buildContext, resolve, staleArmed } from './graph.ts'
 import { longRestPatch, shortRestPatch } from './rest.ts'
 import {
-  answerArmed, applyOutcomes, armableFor, consumeArmed, countAttack, gateOf, planActivation, playerVars, restVars, scopedVars, setDmVars,
+  answerArmed, applyOutcomes, armableFor, attackRolled, consumeArmed, gateOf, planActivation, playerVars, restVars, scopedVars, setDmVars,
+  armsSpentBy,
   setVars, turnGraphPatch, turnVars, withArmedCleared,
 } from './graphState.ts'
 
@@ -169,6 +170,30 @@ test('pressing Use arms a `once` contribution instead of applying it', () => {
   const g = resources.graph as { armed: { id: string; kind: string }[] }
   assert.equal(g.armed.length, 1)
   assert.equal(g.armed[0].kind, 'attack')
+})
+
+test('an armed contribution resolves its BY-LEVEL table, not slot one', () => {
+  /* levelFormula() lived only inside resolve(), and a `once` contribution never
+     reaches resolve() — it is snapshotted here. So a level table on an armed
+     effect silently armed the level-1 value forever: Brutal Strike's 1d10 stayed
+     1d10 at level 17, with no error anywhere. A silent wrong number. */
+  const tiered: GraphEffect = {
+    ...ONCE, value: '1d6',
+    byLevel: ['', '', '', '', '', '', '', '', '', '1d10', '', '', '', '', '', '', '', '2d10', '', '', ''],
+  }
+  const armAt = (level: number) => {
+    const c = character({ identity: { level } } as Partial<CharacterRow>, {})
+    const [o] = planActivation(RAGE([tiered]), buildContext(c), c, 'feature:rage')
+    return o.kind === 'arm' ? o.mod.value : null
+  }
+  assert.equal(armAt(5), '0', 'below the first filled slot the feature is not online yet')
+  assert.equal(armAt(9), '1d10')
+  assert.equal(armAt(16), '1d10', 'a sparse table STEPS — an empty slot walks down')
+  assert.equal(armAt(17), '2d10')
+  // No table = the authored value, untouched.
+  const c = character({ identity: { level: 17 } } as Partial<CharacterRow>, {})
+  const [plain] = planActivation(RAGE([ONCE]), buildContext(c), c, 'feature:rage')
+  assert.equal(plain.kind === 'arm' && plain.mod.value, '1d6')
 })
 
 test('arming twice yields ONE entry, refreshed — never two', () => {
@@ -673,16 +698,47 @@ const attacksIn = (r: Record<string, Json>) =>
 
 test('an attack roll counts, and counts again', () => {
   const c = character({}, {})
-  const once = countAttack(c)
+  const once = attackRolled(c, [], 'r1')
   assert.equal(attacksIn(once), 1)
-  assert.equal(attacksIn(countAttack({ ...c, resources: once } as CharacterRow)), 2)
+  assert.equal(attacksIn(attackRolled({ ...c, resources: once } as CharacterRow, [], 'r2')), 2)
 })
 
 test('counting an attack disturbs nothing else in the graph state', () => {
   const c = character({}, { vars: { isRaging: true }, armed: ARMED })
-  const g = countAttack(c).graph as { vars: unknown; armed: unknown[] }
+  const g = attackRolled(c, [], 'r1').graph as { vars: unknown; armed: unknown[] }
   assert.deepEqual(g.vars, { isRaging: true })
   assert.equal(g.armed.length, 2)
+})
+
+/* DECLINING IS AN ANSWER THE PANEL CANNOT MAKE. Brutal Strike arms under
+   Reckless Attack; the player takes neither blow, so nothing was ever answered
+   and the taken half stayed queued. A `when` gate is read when the arm is
+   minted and never again, so on the next swing its disadvantage and its 1d10
+   applied under a condition that had long gone false. */
+const armsOf = (r: Record<string, Json>) =>
+  (r.graph as { armed: { id: string; spent?: string }[] }).armed
+
+test('the roll spends the arms it just used, answered or not', () => {
+  const c = character({}, { armed: ARMED })
+  const armed = armsOf(attackRolled(c, ['m-brutal'], 'roll-7'))
+  assert.equal(armed.find(m => m.id === 'm-brutal')?.spent, 'roll-7')
+  assert.equal(armed.find(m => m.id === 'm-smite')?.spent, undefined, 'an untouched hold is not spent')
+})
+
+/* THE OFFERED BLOWS GO TOO. Left queued they were offered again on the next
+   swing — a choice of blows with no feature behind it. The entry keeps the
+   question; the queue does not need to. */
+test('armsSpentBy takes the offered arms as well as the taken ones', () => {
+  const ids = armsSpentBy(
+    [{ label: 'Dis', source: 'BS', op: 'dis', formula: '', flat: 0, dice: [], when: 'always', on: true, armedId: 'a-dis' }],
+    [
+      { label: 'Add', source: 'BS', op: 'add', formula: '', flat: 0, dice: [], when: 'always', on: true, armedId: 'a-add' },
+      { label: 'Forceful', source: 'BS', op: 'note', formula: '', flat: 0, dice: [], when: 'manual', on: false, armedId: 'a-blow' },
+      // Not from the queue at all — a live graph contribution, nothing to spend.
+      { label: 'Rage', source: 'Rage', op: 'add', formula: '', flat: 2, dice: [], when: 'always', on: true },
+    ],
+  )
+  assert.deepEqual(ids.sort(), ['a-add', 'a-blow', 'a-dis'])
 })
 
 test('the turn boundary zeroes the swing count', () => {
@@ -701,4 +757,194 @@ test('attacksThisTurn reaches an expression through the base scope', () => {
   const c = character({}, { attacks: 2 })
   assert.equal(buildContext(c).scope.attacksThisTurn, 2)
   assert.equal(buildContext(character({}, {})).scope.attacksThisTurn, 0)
+})
+
+/* ---------- addUses: one feature writes another's counter ---------- */
+
+/** A Barbarian carrying Rage (a scaling counter) and Persistent Rage (which
+ *  refills it). The two-feature shape is the point — every other activation op
+ *  writes state on the node that declares it. */
+const RAGE_F: Feature = {
+  id: 'cls:b:rage', feature_id: 'rage', name: 'Rage',
+  uses: { current: 1, max: 'rages' }, recharge: 'long',
+} as Feature
+const PERSISTENT = (value = 'rages'): Feature => ({
+  id: 'cls:b:persistent', feature_id: 'persistent', name: 'Persistent Rage',
+  uses: { current: 1, max: 1 }, recharge: 'long',
+  graph: [{ id: 'p1', op: 'addUses', label: 'Regain all Rages', value, target: ['feature:rage'] }],
+} as Feature)
+const BARBARIAN = (over: Partial<Feature>[] = [], vars: object = {}) => character({
+  identity: { level: 12 },
+  sheet: {
+    abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 },
+    features: [
+      { id: 'cls:b', name: 'Barbarian', vars: [{ name: 'rages', kind: 'derived', formula: '[0,2,2,3,3,3,4,4,4,4,4,4,5][level]' }] },
+      { ...RAGE_F, ...(over[0] ?? {}) },
+      { ...PERSISTENT(), ...(over[1] ?? {}) },
+    ],
+  },
+} as Partial<CharacterRow>, vars)
+
+const planPersistent = (c: CharacterRow) => planActivation(
+  (c.sheet!.features ?? []).find(f => f.name === 'Persistent Rage')!,
+  buildContext(c), c, 'feature:persistent')
+
+test('addUses moves the counter of ANOTHER feature, resolved and clamped', () => {
+  const c = BARBARIAN()
+  const [o] = planPersistent(c)
+  assert.equal(o.kind, 'uses')
+  assert.equal(o.kind === 'uses' && o.target.name, 'Rage')
+  // Level 12 -> 5 Rages. Restoring "all" is authored as the max itself and the
+  // clamp is what makes that mean all: 1 + 5 = 6, held at 5.
+  assert.equal(o.kind === 'uses' && o.next, 5)
+  assert.equal(o.summary, 'Rage +4 → 5 / 5')
+})
+
+test('the patch is keyed by feature id, so it composes with a spend', () => {
+  /* Returned as id -> count rather than a rebuilt feature list, because the
+     caller has ALREADY spent Persistent Rage's own charge by the time this runs.
+     A snapshot rebuilt from the original row would silently put that back. */
+  const c = BARBARIAN()
+  const { usesPatch } = applyOutcomes(c, planPersistent(c), new Set())
+  assert.deepEqual(usesPatch, { 'cls:b:rage': 5 })
+})
+
+test('a negative addUses SPENDS — "expend a use of your Rage"', () => {
+  const c = BARBARIAN([{ uses: { current: 3, max: 'rages' } }])
+  const f = (c.sheet!.features ?? []).find(x => x.name === 'Persistent Rage')!
+  const spend = { ...f, graph: [{ ...f.graph![0], value: '-1', label: 'Expend a Rage' }] } as Feature
+  const [o] = planActivation(spend, buildContext(c), c, 'feature:persistent')
+  assert.equal(o.kind === 'uses' && o.next, 2)
+  // …and it cannot go below zero.
+  const empty = BARBARIAN([{ uses: { current: 0, max: 'rages' } }])
+  assert.equal(planActivation(spend, buildContext(empty), empty, 'feature:persistent').length, 0,
+    'nothing to spend is no outcome, not a negative count')
+})
+
+test('a cost that cannot be paid refuses the WHOLE press, benefit included', () => {
+  /* "Expend a use of your Rage to restore this" is one transaction. Clamping the
+     negative at zero would hand out the benefit for free to exactly the player
+     who cannot afford it — the silent wrong number this engine keeps re-learning. */
+  // Both spent: no Rage to pay with, AND a charge genuinely waiting to be
+  // restored — so a rule that only clamped the cost would still hand it over.
+  const broke = BARBARIAN([{ uses: { current: 0, max: 'rages' } }, { uses: { current: 0, max: 1 } }])
+  const f = (broke.sheet!.features ?? []).find(x => x.name === 'Persistent Rage')!
+  const trade = { ...f, graph: [
+    { id: 'cost', op: 'addUses', label: 'Expend a Rage', value: '-1', target: ['feature:rage'] },
+    { id: 'gain', op: 'addUses', label: 'Restore this', value: '1', target: [] },
+  ] } as Feature
+  // Nothing at all is planned, so gateOf reports it shut rather than the press
+  // spending nothing and quietly succeeding.
+  assert.deepEqual(planActivation(trade, buildContext(broke), broke, 'feature:persistent'), [])
+  assert.ok(gateOf(trade, buildContext(broke), broke, 'feature:persistent'))
+
+  // With a Rage in hand, both halves land — and the benefit is real, so this
+  // feature's own charge has to be spent for there to be something to restore.
+  const rich = BARBARIAN([{ uses: { current: 2, max: 'rages' } }, { uses: { current: 0, max: 1 } }])
+  const both = planActivation(trade, buildContext(rich), rich, 'feature:persistent')
+  assert.deepEqual(both.map(o => o.kind === 'uses' ? [o.target.name, o.next] : null),
+    [['Rage', 1], ['Persistent Rage', 1]])
+})
+
+test('an empty target means THIS feature — the same "no target = me" rule', () => {
+  const c = BARBARIAN()
+  const f = (c.sheet!.features ?? []).find(x => x.name === 'Persistent Rage')!
+  const self = { ...f, graph: [{ ...f.graph![0], target: [], value: '-1' }] } as Feature
+  const [o] = planActivation(self, buildContext(c), c, 'feature:persistent')
+  assert.equal(o.kind === 'uses' && o.target.name, 'Persistent Rage')
+  assert.equal(o.kind === 'uses' && o.next, 0)
+})
+
+test('a target that is not on the sheet is silent, not an error', () => {
+  // "Restore Rage" on a character who has not been granted Rage yet is a level
+  // gate doing its job, not a broken feature.
+  const c = character({ sheet: { features: [PERSISTENT()] } } as Partial<CharacterRow>)
+  assert.equal(planPersistent(c).length, 0)
+})
+
+test('a press that changes nothing plans nothing', () => {
+  const full = BARBARIAN([{ uses: { current: 5, max: 'rages' } }])
+  assert.equal(planPersistent(full).length, 0, 'already at max — no outcome, no empty log line')
+})
+
+test('the authored max survives the write', () => {
+  const c = BARBARIAN()
+  const { usesPatch } = applyOutcomes(c, planPersistent(c), new Set())
+  // The patch carries only the COUNT. `max` is a formula and resolving it into
+  // the row would freeze this character's ceiling at level 12 forever.
+  assert.deepEqual(Object.values(usesPatch!), [5])
+  assert.equal(RAGE_F.uses!.max, 'rages')
+})
+
+/* ---------- partial short-rest recovery ---------- */
+
+const usesFeat = (over: Partial<Feature>): Feature =>
+  ({ id: 'f-rage', feature_id: 'rage', name: 'Rage', ...over }) as Feature
+
+const restedShort = (f: Feature) => {
+  const c = character({ sheet: {
+    abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 },
+    hp: { current: 20, max: 40 }, features: [f],
+  } } as Partial<CharacterRow>)
+  const out = (shortRestPatch(c, { spend: 0, rolls: [], conMod: 0 }).patch.sheet as { features: Feature[] })
+  return out.features[0].uses
+}
+
+test('a SHORT rest gives back only what shortRecharge says', () => {
+  /* Rage is 5e's third combination: all of them on a long rest, exactly one on a
+     short. `recharge: 'short'` would hand back the lot after an hour sitting
+     down, and 'long' alone would lose the short-rest use entirely. */
+  assert.deepEqual(restedShort(usesFeat({ uses: { current: 1, max: 5 }, recharge: 'long', shortRecharge: 1 })),
+    { current: 2, max: 5 })
+  // Clamped: it can never bank past the ceiling.
+  assert.deepEqual(restedShort(usesFeat({ uses: { current: 4, max: 5 }, recharge: 'long', shortRecharge: 3 })),
+    { current: 5, max: 5 })
+  // And a full short-rest refill is untouched by all of this.
+  assert.deepEqual(restedShort(usesFeat({ uses: { current: 0, max: 5 }, recharge: 'short' })),
+    { current: 5, max: 5 })
+  // No shortRecharge on a long-rest feature: a short rest still does nothing.
+  assert.deepEqual(restedShort(usesFeat({ uses: { current: 1, max: 5 }, recharge: 'long' })),
+    { current: 1, max: 5 })
+})
+
+test('shortRecharge is a FORMULA and resolves against the character', () => {
+  // Same rule `uses.max` follows, for the same reason: "half your level" is the
+  // shape this meets next, and a number could not say it.
+  assert.deepEqual(restedShort(usesFeat({ uses: { current: 0, max: 9 }, recharge: 'long', shortRecharge: 'level / 2' })),
+    { current: 2, max: 9 }, 'level 5 -> 2')
+  // A max that is itself a formula still resolves — the two compose.
+  assert.deepEqual(restedShort(usesFeat({ uses: { current: 0, max: 'level' }, recharge: 'long', shortRecharge: 2 })),
+    { current: 2, max: 'level' }, 'the authored max survives the write')
+})
+
+/* ---------- picks: widening a pick-one ---------- */
+
+const OFFER = (id: string, ask: string): GraphEffect =>
+  ({ id, op: 'note', label: ask, text: ask, ask, once: true, target: ['roll:damage.melee'] })
+
+const offerer = (picks?: number | string): Feature =>
+  ({ id: 'brutal', name: 'Brutal Strike', picks, graph: [OFFER('b1', 'Forceful'), OFFER('b2', 'Hamstring')] } as Feature)
+
+const pickArms = (f: Feature, level = 9) => {
+  const c = character({ identity: { level } } as Partial<CharacterRow>, {})
+  return planActivation(f, buildContext(c), c, 'feature:brutal')
+    .map(o => (o.kind === 'arm' ? o.mod : null))
+}
+
+test('picks is snapshotted onto every arm, and absent when it changes nothing', () => {
+  /* A property of the GROUP, so one number on all of them: resolving it per
+     effect would be two answers to "how many may I take". Absent at 1 because
+     one is what a pick has always been, and an explicit 1 in the store is noise. */
+  assert.deepEqual(pickArms(offerer()).map(m => m?.picks), [undefined, undefined])
+  assert.deepEqual(pickArms(offerer(2)).map(m => m?.picks), [2, 2])
+  assert.deepEqual(pickArms(offerer(1)).map(m => m?.picks), [undefined, undefined])
+})
+
+test('picks is a FORMULA, because the count is a level thing', () => {
+  // Improved Brutal Strike (Enhanced): two effects from level 17, one before.
+  const f = offerer('level >= 17 ? 2 : 1')
+  assert.deepEqual(pickArms(f, 16).map(m => m?.picks), [undefined, undefined])
+  assert.deepEqual(pickArms(f, 17).map(m => m?.picks), [2, 2])
+  // Unreadable is one — the behaviour every pick-one had before this existed.
+  assert.deepEqual(pickArms(offerer('nonsense')).map(m => m?.picks), [undefined, undefined])
 })

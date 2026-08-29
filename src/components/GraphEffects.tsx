@@ -798,9 +798,13 @@ export function AuditPanel({ title, audit, onJump }: {
  *  Extracted with the effect block for the same reason: a spell declaring
  *  `shardsHeld` is the same declaration a feature makes, and §31's player/DM
  *  split is a property of the variable, not of what declared it. */
-export function VarsBlock({ vars, onChange }: {
+export function VarsBlock({ vars, onChange, features }: {
   vars: VarDef[]
   onChange: (next: VarDef[]) => void
+  /** Every feature in the catalog, gid -> name, for a use-counter variable to
+   *  point at. Optional: a host with no catalog to hand simply does not offer
+   *  the choice, rather than offering a gid the DM would have to type. */
+  features?: { gid: string; name: string }[]
 }) {
   const setVar = (i: number, p: Partial<VarDef>) =>
     onChange(vars.map((v, j) => (j === i ? { ...v, ...p } : v)))
@@ -821,7 +825,7 @@ export function VarsBlock({ vars, onChange }: {
                 onChange={e => setVar(vi, { name: e.target.value })} />
               <span className={styles.seg}>
                 <button type="button" className={cx(stored && styles.on)}
-                  onClick={() => setVar(vi, { kind: 'stored', formula: undefined, type: v.type ?? 'num' })}>
+                  onClick={() => setVar(vi, { kind: 'stored', formula: undefined, uses: undefined, type: v.type ?? 'num' })}>
                   <i className="fa-solid fa-database" /> Stored
                 </button>
                 <button type="button" className={cx(!stored && styles.on)}
@@ -893,9 +897,40 @@ export function VarsBlock({ vars, onChange }: {
             ) : (
               <>
                 <div className={styles.kindnote}>Derived — never stored. Its type comes from the formula, so there is no type to pick.</div>
-                <span className={styles.fieldLab}>Formula<span className={styles.req}>*</span></span>
-                <input className={cx(styles.in, !v.formula?.trim() && styles.bad)} value={v.formula ?? ''} spellCheck={false}
-                  placeholder="level / 4 + 1" onChange={e => setVar(vi, { formula: e.target.value })} />
+                {/* TWO SOURCES FOR A DERIVED VALUE, and they are alternatives. A
+                    formula computes; a use counter is READ off a feature, which
+                    is the only way to ask "how many Rages have I got left" —
+                    uses live on the sheet, where no formula can reach. */}
+                {features?.length ? (
+                  <span className={styles.seg} style={{ marginBottom: 4 }}>
+                    <button type="button" className={cx(!v.uses && styles.on)}
+                      onClick={() => setVar(vi, { uses: undefined })}>
+                      <i className="fa-solid fa-function" /> Formula
+                    </button>
+                    <button type="button" className={cx(!!v.uses && styles.on)}
+                      onClick={() => setVar(vi, { uses: v.uses ?? features[0].gid, formula: undefined })}>
+                      <i className="fa-solid fa-battery-half" /> Feature uses
+                    </button>
+                  </span>
+                ) : null}
+                {v.uses ? (<>
+                  <span className={styles.fieldLab}>Reads the uses of<span className={styles.req}>*</span></span>
+                  <select className={styles.in} value={v.uses}
+                    onChange={e => setVar(vi, { uses: e.target.value })}>
+                    {features?.some(f => f.gid === v.uses)
+                      ? null
+                      : <option value={v.uses}>{v.uses} — not in the catalog</option>}
+                    {(features ?? []).map(f => <option key={f.gid} value={f.gid}>{f.name}</option>)}
+                  </select>
+                  <div className={styles.kindnote}>
+                    Resolved after every other variable, so a formula cannot read this one —
+                    use it in an effect’s <b>when</b>, a value, or a note.
+                  </div>
+                </>) : (<>
+                  <span className={styles.fieldLab}>Formula<span className={styles.req}>*</span></span>
+                  <input className={cx(styles.in, !v.formula?.trim() && styles.bad)} value={v.formula ?? ''} spellCheck={false}
+                    placeholder="level / 4 + 1" onChange={e => setVar(vi, { formula: e.target.value })} />
+                </>)}
               </>
             )}
             <span className={styles.fieldLab}>Display label</span>

@@ -103,7 +103,7 @@ export function Layout() {
     /* Per-turn USES come back here too, and in the same write — a feature that
        recharged but whose counter landed in a second round trip is a use the
        player may or may not have depending on the network. */
-    const recharged = turnRecharge(character.sheet?.features)
+    const recharged = turnRecharge(character.sheet?.features, graph.scope)
     const patch: Partial<Pick<CharacterRow, 'resources' | 'sheet'>> = {
       resources: { ...(turn?.resources ?? res), activeEffects: next } as CharacterRow['resources'],
     }
