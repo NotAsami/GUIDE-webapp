@@ -140,7 +140,16 @@ export function proficientSkillCount(sheet: CharacterSheet): number {
  */
 
 /** One named contribution to a d20 roll. */
-export type CheckTerm = { label: string; value: number }
+export type CheckTerm = {
+  label: string
+  value: number
+  /** THIS TERM IS THE PROFICIENCY BONUS. Marked rather than recognised by its
+   *  label: `proficient` in the graph scope is "does this roll already count
+   *  proficiency", and sniffing for a string that is 'PROF' here and 'PROF x2'
+   *  there is a rule that breaks the day someone renames a column. Set on the
+   *  term, read once, in buildCheck. */
+  prof?: boolean
+}
 
 /** Advantage a feature grants and advantage the player asked for are the same
  *  request, so they OR together; one of each cancels, per 5e. The engine never
@@ -160,12 +169,15 @@ export function effectiveMode(
 export function saveTerms(sheet: CharacterSheet, key: AbilityKey): CheckTerm[] {
   return [
     { label: ABILITY_ABBR[key].toUpperCase(), value: abilityMod(abilities(sheet)[key]) },
-    { label: 'PROF', value: (sheet.saveProficiencies ?? []).includes(key) ? proficiency(sheet) : 0 },
+    { label: 'PROF', value: (sheet.saveProficiencies ?? []).includes(key) ? proficiency(sheet) : 0, prof: true },
     { label: 'MISC', value: sheet.saveBonuses?.[key] ?? 0 },
   ]
 }
 
-/** An ability check: the modifier alone — proficiency does not apply. */
+/** An ability check: the modifier alone — proficiency does not apply.
+ *
+ *  No `prof` term at all, which is the honest shape and is what makes a raw
+ *  Strength check read `proficient: false` to the graph. */
 export function abilityCheckTerms(sheet: CharacterSheet, key: AbilityKey): CheckTerm[] {
   return [{ label: ABILITY_ABBR[key].toUpperCase(), value: abilityMod(abilities(sheet)[key]) }]
 }
@@ -176,12 +188,27 @@ export function skillTerms(sheet: CharacterSheet, skill: Skill): CheckTerm[] {
   const mult = expertise ? 2 : (sheet.skillProficiencies ?? []).includes(skill.key) ? 1 : 0
   return [
     { label: ABILITY_ABBR[skill.ability].toUpperCase(), value: abilityMod(abilities(sheet)[skill.ability]) },
-    { label: expertise ? 'PROF x2' : 'PROF', value: proficiency(sheet) * mult },
+    { label: expertise ? 'PROF x2' : 'PROF', value: proficiency(sheet) * mult, prof: true },
     { label: 'MISC', value: sheet.skillBonuses?.[skill.key] ?? 0 },
   ]
 }
 
 export const sumTerms = (terms: CheckTerm[]): number => terms.reduce((n, t) => n + t.value, 0)
+
+/** Does this roll ALREADY count the proficiency bonus — the graph's `proficient`.
+ *
+ *  Jack of All Trades is "any ability check that doesn't otherwise use your
+ *  Proficiency Bonus", so the question is about the roll's parts and nothing
+ *  else. Lives here, beside the builders that mark the term, rather than in the
+ *  roll surface: two surfaces build checks and a second copy of this rule would
+ *  eventually answer differently for a skill and for a save.
+ *
+ *  A marked term worth ZERO does not count. saveTerms and skillTerms both emit a
+ *  PROF term unconditionally — 0 when the character is not proficient — so
+ *  testing for the term's presence rather than its value would say every save in
+ *  the game uses proficiency. */
+export const usesProficiency = (terms: CheckTerm[]): boolean =>
+  terms.some(t => t.prof && t.value !== 0)
 
 /** Total and breakdown from ONE list, so they cannot disagree. Zero-valued terms
  *  are hidden from the text but still summed — which is free, and is the whole

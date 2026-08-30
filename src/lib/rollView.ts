@@ -18,10 +18,10 @@ import type { Rider } from './graph.ts'
 import { characterVars } from './graph.ts'
 import { usesOf } from './featureView.ts'
 import type { RiderGroup, RollEntry } from './rolls.tsx'
-import { ABILITY_ABBR, type CheckTerm } from './dnd.ts'
+import { ABILITY_ABBR, composeCheck, type CheckTerm } from './dnd.ts'
 import type { CharacterRow, ShardTree } from './database.types.ts'
 import { activeSources } from './effects.ts'
-import { rerollDie, type RolledDie } from './dice.ts'
+import { rerollDie, rolledDice, type RolledDie } from './dice.ts'
 
 /** `dropped` is a property of this LINE, not of the die — the same face is kept
  *  under advantage and discarded under disadvantage — so it lives here and not
@@ -128,8 +128,15 @@ export function riderViews(entry: RollEntry): RiderView[] {
   return out
 }
 
-export const resolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when !== 'manual')
-export const unresolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when === 'manual')
+/* A REROLL IS NEITHER OF THESE. It is not an applied contribution — it adds no
+   number and it may never be taken — and it is not a checkbox question either:
+   the answer is a button that re-rolls dice, not a yes. Kept out of both lists so
+   it renders as its own control and stops counting as an outstanding `ask`. */
+const isReroll = (r: RiderView) => r.rider.op === 'reroll'
+export const resolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when !== 'manual' && !isReroll(r))
+export const unresolvedOf = (v: RiderView[]) => v.filter(r => r.rider.when === 'manual' && !isReroll(r))
+/** The rerolls this roll is still offering — taken ones drop out. */
+export const rerollsOf = (v: RiderView[]) => v.filter(r => isReroll(r) && !r.rider.on)
 
 /** Patch several riders at once, addressed by their flattened index.
  *
@@ -434,6 +441,44 @@ export function rerollAt(entry: RollEntry, addr: DieAddr): Partial<RollEntry> | 
     return { check: { ...entry.check, rolls, pick, total: pick + line.mods } }
   }
   return null
+}
+
+/** RE-RUN A WHOLE d20 ROLL, the `reroll` op's payout.
+ *
+ *  Not `rerollAt`: that replaces ONE die in place, which is the plainer thing
+ *  and is what the player does by clicking a die. This changes the shape of the
+ *  roll — `advantage` adds a second d20 to a roll that had one — so it recomposes
+ *  the total from the entry's own terms rather than adjusting a number.
+ *
+ *  `crit`/`fumble` ARE recomputed here, unlike rerollAt. The reasoning that
+ *  freezes them there is about damage: a crit already decided how many damage
+ *  dice exist, and un-deciding it would strand a doubled roll on a hit that is
+ *  no longer a crit. A check or a save has no damage hanging off it, so the flag
+ *  is free to follow the die that now counts — and a save that reads "CRIT" on a
+ *  natural 20 the player rerolled away is simply wrong.
+ *
+ *  Returns null when there is no d20 to re-run. Pure: it rolls, it does not write. */
+export function rerollD20(entry: RollEntry, keep: 'advantage' | 'new'): Partial<RollEntry> | null {
+  const c = entry.check
+  if (!c || !c.rolls.length) return null
+
+  /* ADVANTAGE ADDS, IT DOES NOT REPLACE. "The save is rerolled, and the new roll
+     has Advantage" is two dice with the original still among them — the player
+     can see what they escaped, and a natural 20 already rolled is not thrown
+     away by a feature that was meant to help. */
+  const rolls = keep === 'advantage'
+    ? [...c.rolls, ...rolledDice(1, 20)]
+    : c.rolls.map((d, i) => (i === 0 ? rerollDie(d) : d))
+  const mode = keep === 'advantage' ? 'adv' as const : c.mode
+  const faces = rolls.map(d => d.v)
+  const pick = mode === 'adv' ? Math.max(...faces) : mode === 'dis' ? Math.min(...faces) : faces[0]
+
+  /* The terms are what the total was built from, so recomposing from them keeps
+     the breakdown honest. An entry with none — nothing in the app builds one
+     today, but the field is optional — falls back to the mods it already had. */
+  const terms = c.terms ?? [{ label: 'MOD', value: c.total - c.pick }]
+  const { total, breakdown, crit, fumble } = composeCheck(pick, terms)
+  return { check: { ...c, rolls, mode, pick, total, breakdown, crit, fumble } }
 }
 
 /* ---------------- the catalog sheet ----------------

@@ -19,7 +19,7 @@ import { resolve, rollResolution } from './graph'
 import type { RolledDie } from './dice'
 import { rolledDice } from './dice'
 import type { CheckTerm } from './dnd'
-import { composeCheck, effectiveMode } from './dnd'
+import { composeCheck, effectiveMode, usesProficiency } from './dnd'
 import type { AbilityKey } from './database.types'
 
 /** A d20 roll behind an ability check, saving throw, or skill check — rolled on
@@ -153,7 +153,8 @@ export type CheckRequest = {
  */
 export function buildCheck(graph: GraphContext, req: CheckRequest): Omit<RollEntry, 'id' | 'at'> & { check: CheckRoll } {
   // The same boundary the weapon roller uses, on a roll kind that has no subject.
-  const res = resolve(graph, { kind: req.kind, sub: req.sub })
+  // `proficient` is read off the terms that built this check — see usesProficiency.
+  const res = resolve(graph, { kind: req.kind, sub: req.sub, proficient: usesProficiency(req.terms) })
   /* Graph dice on a d20 roll are rolled NOW — the total is one number and an
      unrolled term has nowhere to live. (Damage dice stay unrolled so a crit can
      double them; a check has no crit multiplier, so `double` is never set.) */

@@ -37,7 +37,7 @@ import { colorOf } from '../lib/palette'
 import type { CharacterRow, ShardTree } from '../lib/database.types'
 import {
   armedIdsOf, askSections, catalogView, lineViews, openAsks, patchRiders, pickedOf,
-  picksAllowed, picksTaken, rerollAt,
+  picksAllowed, picksTaken, rerollAt, rerollD20, rerollsOf,
   releaseIdsOf, resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
   type CatalogView, type Die, type DieAddr, type RiderView, type RollLineView,
 } from '../lib/rollView'
@@ -211,6 +211,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed
                     if (patch) updateRoll(entry.id, patch)
                     return !!patch
                   }}
+                  onPatchEntry={patch => updateRoll(entry.id, patch)}
                   showTip={showTip}
                   onOpenCat={() => { if (entry.subject) setCat(entry) }}
                   hasCat={!!entry.subject}
@@ -231,7 +232,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed
 /* ---------------- one roll ---------------- */
 
 function Entry({
-  entry, latest, fresh, folded, onFold, onPatch, onPatchMany, onReroll, showTip, onOpenCat, hasCat,
+  entry, latest, fresh, folded, onFold, onPatch, onPatchMany, onReroll, onPatchEntry, showTip, onOpenCat, hasCat,
   stillArmed, onAnswerArmed, onLeave,
 }: {
   entry: RollEntry; latest: boolean; fresh: boolean; folded: boolean
@@ -240,6 +241,9 @@ function Entry({
   /** Several at once, atomically — what an exclusive choice needs. */
   onPatchMany: (patches: { index: number; patch: Partial<RiderView['rider']> }[]) => void
   onReroll: (addr: DieAddr) => boolean
+  /** Rewrite this entry's own roll — what a `reroll` rider does. Separate from
+   *  `onPatch`, which addresses a RIDER; this replaces the dice themselves. */
+  onPatchEntry: (patch: Partial<RollEntry>) => void
   showTip: ShowTip
   onOpenCat: () => void
   hasCat: boolean
@@ -268,6 +272,9 @@ function Entry({
   // not riders, is what the panel counts and renders — a pick-one is one
   // question however many options it has.
   const sections = useMemo(() => askSections(views), [views])
+  /* OFFERED REROLLS. Their own list because a reroll is neither an applied
+     contribution nor a checkbox: the answer is a button that re-rolls dice. */
+  const rerolls = useMemo(() => rerollsOf(views), [views])
   // Rider fold state is local for the same reason entry fold state is: it is how
   // you are reading the list, not part of the roll.
   const [foldedRiders, setFoldedRiders] = useState<Set<number>>(new Set())
@@ -326,6 +333,28 @@ function Entry({
             {lines.map((l, i) => (
               <Line key={i} line={l} index={i} showTip={showTip} spin={spin}
                 onReroll={die => reroll({ line: i, die }, `${i}:${die}`)} />
+            ))}
+
+            {/* RE-RUN THE ROLL. Directly under the dice, because that is what it
+                acts on — and only while it is still on offer: taking it patches
+                the rider `on`, which drops it out of `rerollsOf`. One press,
+                because there is one of the feature. */}
+            {rerolls.map(v => (
+              <button
+                key={v.index} type="button" className={styles.rrBtn}
+                onClick={() => {
+                  const patch = rerollD20(entry, v.rider.keep ?? 'new')
+                  if (!patch) return
+                  onPatchEntry(patch)
+                  onPatch(v.index, { on: true })
+                }}
+              >
+                <i className="fa-solid fa-rotate" />
+                <span className={styles.rrLab}>{v.rider.source}</span>
+                <span className={styles.rrVal}>
+                  {v.rider.keep === 'advantage' ? 'reroll with advantage' : 'reroll'}
+                </span>
+              </button>
             ))}
 
             {/* NON-DICE RESULTS — a rest's restored slots, a potion's healing, a

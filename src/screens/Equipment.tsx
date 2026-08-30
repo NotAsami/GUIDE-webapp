@@ -223,7 +223,11 @@ export function Equipment() {
        never disagree about what a finesse weapon is being swung with. Attack
        only: a damage roll has no ability of its own, it inherits this one. */
     const ability = weaponAbilityKey(weapon, sheet)
-    const atkRes = resolve(graph, { kind: 'attack', subject, sub, tags, ability })
+    /* PROFICIENT, ALWAYS — the same assumption the whole weapon model already
+       makes (weapons.ts: "every weapon is treated as proficient"), stated here
+       so the graph's `proficient` agrees with the PROF term in the breakdown
+       rather than quietly contradicting it. */
+    const atkRes = resolve(graph, { kind: 'attack', subject, sub, tags, ability, proficient: true })
     const dmgRes = resolve(graph, { kind: 'damage', subject, sub, tags })
 
     // `riders` comes back ANNOTATED — each contribution carrying the faces it

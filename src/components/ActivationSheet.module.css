@@ -81,3 +81,22 @@
   color: var(--muted); border-color: var(--beige-dim);
   background: transparent; cursor: default;
 }
+
+/* The recipient picker — a `grant` asks who, and the answer is a person rather
+   than a yes/no, so it gets its own titled block under the outcome list instead
+   of another row in it. Reuses .cfRow/.cfAsk/.cfOn: the rows are the same shape
+   and a second set of near-identical rules is how two lists drift apart. */
+.cfGrant {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 0 20px 14px;
+}
+.cfGrantHead {
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige);
+  padding: 6px 0 4px;
+  border-top: 1px solid rgba(212, 191, 125, 0.16);
+}
+.cfGrantNote {
+  font-family: var(--font-prose); font-size: 13px; color: var(--muted);
+  padding: 6px 2px;
+}

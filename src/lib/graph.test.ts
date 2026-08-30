@@ -6,7 +6,7 @@ import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.type
 import { VAR_IDENTS, evalExpr } from './expr.ts'
 import { parseDice, rerollDie, rollDice } from './dice.ts'
 import {
-  armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid, rollResolution,
+  armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid, reqKeys, rollResolution,
   damageFlags, immuneTo, matchCount, nodeGid, normalizeTag, probeScope, resolve, suppressedEffects, total, varCollisions, type ResolveReq,
 } from './graph.ts'
 import { activeSources } from './effects.ts'
@@ -402,6 +402,118 @@ test('a boost never surfaces as a roll contribution', () => {
   const res = resolve(buildContext(c), { kind: 'attack', subject: 'feature:F' })
   assert.ok(res.riders.some(r => r.label === 'Real'), 'a targetless add still applies to its own roll')
   assert.ok(!res.riders.some(r => r.label === 'Elven Grace'), 'the boost must not')
+})
+
+test('THE ROLL SCOPE IS BOUND — a whitelisted identifier reaches the formula', () => {
+  /* The regression this closes: ROLL_IDENTS was on the audit's allow-list from
+     the start, so `when: "cast >= 3"` published clean — and resolve() evaluated
+     every formula against ctx.scope, which never held `cast`. The result was not
+     a wrong number but a "condition did not resolve" problem on every roll, from
+     a node the editor had just called correct. */
+  const c = withFeatures([gfeat('Caster', [
+    { id: 'e1', op: 'add', label: 'Upcast', value: 'cast * 2', target: ['roll:damage'] },
+    { id: 'e2', op: 'add', label: 'Jack', value: '2', when: '!proficient', target: ['roll:check'] },
+  ])])
+  const ctx = buildContext(c)
+
+  const up = resolve(ctx, { kind: 'damage', cast: 3 })
+  assert.deepEqual(up.problems, [], 'no "did not resolve"')
+  assert.equal(total(up).flat, 6)
+  // Absent reads as 0, not as a broken formula: most rolls are not casts.
+  assert.equal(total(resolve(ctx, { kind: 'damage' })).flat, 0)
+
+  // `proficient` gates existence, so the rider is there or it is not.
+  assert.equal(resolve(ctx, { kind: 'check', proficient: false }).riders.length, 1)
+  assert.equal(resolve(ctx, { kind: 'check', proficient: true }).riders.length, 0)
+  assert.deepEqual(resolve(ctx, { kind: 'check', proficient: true }).problems, [])
+})
+
+test('roll context stays OUT of a variable, which is what makes useGraph memoisable', () => {
+  // §33's line, restated now that the roll scope is real: a variable reading
+  // `cast` would make the whole context a function of one particular roll.
+  const c = withFeatures([gfeat('Caster', [], { vars: [{ name: 'echo', kind: 'derived', formula: 'cast' }] })])
+  const { audit } = characterVars(c)
+  assert.ok(audit.some(a => a.sev === 'err'), 'a variable may not read roll context')
+})
+
+test('auditNode holds a reroll to its own shape', () => {
+  const rr = (over: Record<string, unknown> = {}) =>
+    auditNode({ graph: [{ id: 'r1', op: 'reroll', label: 'Countercharm', keep: 'advantage', target: ['roll:save'], ...over }] })
+
+  assert.deepEqual(rr().filter(a => a.sev === 'err'), [])
+  assert.deepEqual(rr({ target: ['roll:d20'] }).filter(a => a.sev === 'err'), [])
+  assert.deepEqual(rr({ target: ['roll:attack'] }).filter(a => a.sev === 'err'), [])
+
+  // Only a d20 can be re-run. Damage dice stay unrolled so a crit can double
+  // them, which is a different mechanism entirely.
+  for (const t of [[], ['roll:damage'], ['tag:fire'], ['feature:X']]) {
+    assert.ok(rr({ target: t }).some(a => a.t === 'Reroll needs a d20 target'), JSON.stringify(t))
+  }
+
+  // It IS the question, so a second one in front of it is an authoring error.
+  assert.ok(rr({ ask: 'Use Countercharm?' }).some(a => a.t === 'Toggle on a reroll'))
+  // And arming waits for the NEXT roll, which is not what this acts on.
+  assert.ok(rr({ once: true }).some(a => a.t === 'A reroll cannot arm'))
+})
+
+test('a reroll surfaces as an OFFER — never applied, never a number', () => {
+  const c = withFeatures([gfeat('Bard', [
+    { id: 'e1', op: 'reroll', label: 'Countercharm', keep: 'advantage', target: ['roll:save'] },
+  ])])
+  const res = resolve(buildContext(c), { kind: 'save', sub: 'wis' })
+  const r = res.riders.find(x => x.label === 'Countercharm')!
+  assert.ok(r)
+  assert.equal(r.when, 'manual', "the engine must not reroll on the player's behalf")
+  assert.equal(r.on, false)
+  assert.equal(r.keep, 'advantage')
+  // It contributes nothing to the number — it changes which dice there are.
+  assert.equal(total(res).flat, 0)
+  assert.deepEqual(total(res).dice, [])
+  // And it is not offered on a roll it does not target.
+  assert.equal(resolve(buildContext(c), { kind: 'damage' }).riders.length, 0)
+})
+
+test('auditNode holds a grant to its own shape', () => {
+  const grant = (over: Record<string, unknown> = {}) =>
+    auditNode({ graph: [{ id: 'g1', op: 'grant', label: 'Bardic Inspiration', value: '1d8', target: ['roll:d20'], ...over }] })
+
+  assert.deepEqual(grant().filter(a => a.sev === 'err'), [])
+
+  /* AN EMPTY TARGET IS THE ONE SHAPE THAT CANNOT WORK. armedFrom turns it into
+     `{ kind: 'feature', subject: <the granter's node> }`, naming a feature the
+     RECIPIENT does not have — so the die sits on their row matching nothing,
+     forever, with no error anywhere to say so. */
+  assert.ok(grant({ target: [] }).some(a => a.t === 'Grant needs a roll target' && a.sev === 'err'))
+  assert.ok(grant({ target: undefined }).some(a => a.t === 'Grant needs a roll target'))
+  // A tag or a gid means nothing on a sheet this audit cannot see.
+  assert.ok(grant({ target: ['tag:fire'] }).some(a => a.t === 'Grant needs a roll target'))
+  assert.ok(grant({ target: ['feature:X'] }).some(a => a.t === 'Grant needs a roll target'))
+
+  // Two selectors is two dice off one press — legal, but almost never meant.
+  const wide = grant({ target: ['roll:check', 'roll:attack'] })
+  assert.deepEqual(wide.filter(a => a.sev === 'err'), [])
+  assert.ok(wide.some(a => a.t === 'Grant hands out one bonus per target' && a.sev === 'warn'))
+
+  /* AND IT IS NOT A VARIABLE WRITE. Every other activation names a variable on
+     this character; running those checks over a grant reported two errors on a
+     correct node and blocked Publish. */
+  for (const t of ['Unknown variable', 'Target on an activation']) {
+    assert.ok(!grant().some(a => a.t === t), t)
+  }
+})
+
+test('roll:d20 is a target an author may write, and a kind no roll ever is', () => {
+  // Widening the audit's list without widening RollKind is the point: reqKeys
+  // emits `roll:d20` as an extra key, nothing ever passes it as `req.kind`.
+  assert.deepEqual(
+    auditNode({ graph: [{ id: 'a1', op: 'add', label: 'Guidance', value: '1d4', target: ['roll:d20'] }] })
+      .filter(a => a.sev === 'err'), [])
+  assert.ok(auditNode({ graph: [{ id: 'a1', op: 'add', label: 'X', value: '1', target: ['roll:d21'] }] })
+    .some(a => a.t === 'Unknown roll kind'))
+  // A floor raises a d20 total, and roll:d20 is three kinds of those.
+  assert.deepEqual(
+    auditNode({ graph: [{ id: 'f1', op: 'floor', label: 'Might', minimum: 'strScore', target: ['roll:d20'] }] })
+      .filter(a => a.sev === 'err'), [])
 })
 
 test('auditNode holds a boost to its own shape', () => {
@@ -1321,7 +1433,7 @@ test('every GraphEffect field is authorable, or is explicitly recorded as not ye
     /* `cap` and `target` aside, addUses adds no field of its own — it reuses the
        universal target list, which is exactly why it needed no new field type. */
     threshold: 'schema', dmgType: 'schema', once: 'schema', stat: 'schema',
-    ability: 'schema', cap: 'schema', minimum: 'schema',
+    ability: 'schema', cap: 'schema', minimum: 'schema', level: 'schema', oneOf: 'schema', keep: 'schema',
     // Nothing is deferred today. The category stays because it is the honest
     // place to put a field that is stored but not yet authorable, and saying so
     // out loud beats leaving it silently uncovered.
@@ -1400,6 +1512,32 @@ test('the armed predicate: kind must match, sub and subject narrow', () => {
   assert.equal(armedMatches({ ...base, kind: 'save', subject: 'feature:Other' }, req), false)
   // A sub on the mod but none on the request: the request is the wider one, so no.
   assert.equal(armedMatches({ ...base, kind: 'save', sub: 'dex' }, { kind: 'save' }), false)
+})
+
+test('a d20 arm answers to a check, a save OR an attack, and to nothing else', () => {
+  const base = { id: 'a', source: 's', label: 'l', op: 'add' as const, kind: 'd20', at: 1 }
+  for (const kind of ['check', 'save', 'attack'] as const) {
+    assert.equal(armedMatches(base, { kind }), true, kind)
+  }
+  // Damage is not a D20 Test, and neither is a feature's own roll.
+  assert.equal(armedMatches(base, { kind: 'damage' }), false)
+  assert.equal(armedMatches(base, { kind: 'feature' }), false)
+  // A sub still narrows: "your next Dexterity save" is not "your next D20 Test".
+  assert.equal(armedMatches({ ...base, sub: 'dex' }, { kind: 'save', sub: 'dex' }), true)
+  assert.equal(armedMatches({ ...base, sub: 'dex' }, { kind: 'check', sub: 'stealth' }), false)
+})
+
+test('ONE d20 arm rides whichever roll comes first — the point of the kind', () => {
+  /* Three selectors would be three independent bonuses off one press (armedFrom
+     mints one mod per selector), which is a die handed out three times. */
+  const arm = { id: 'bi', source: 'feature:BardicInspiration', sourceName: 'Bardic Inspiration', label: 'Bardic Inspiration', kind: 'd20', op: 'add' as const, value: '1d8', at: 1 }
+  const ctx = buildContext(armedChar([arm]))
+  for (const req of [{ kind: 'check' as const, sub: 'persuasion' }, { kind: 'save' as const, sub: 'wis' }, { kind: 'attack' as const }]) {
+    const r = resolve(ctx, req)
+    assert.deepEqual(r.riders.map(x => x.dice).flat(), ['1d8'], JSON.stringify(req))
+  }
+  // …and it is ONE rider each time, never three.
+  assert.equal(resolve(ctx, { kind: 'check' }).riders.length, 1)
 })
 
 test('an armed modifier whose formula breaks is reported and STAYS armed', () => {
@@ -1784,7 +1922,15 @@ test('every roll selector the editor offers is one a roll surface can pass', () 
     ...['str', 'dex', 'con', 'int', 'wis', 'cha'].map(a => `save.${a}`),
     ...['athletics', 'stealth', 'perception'].map(s => `check.${s}`),
     'check.initiative',                                  // Stats.rollInitiative()
+    /* Emitted as an EXTRA key by reqKeys on all three D20 rolls, rather than
+       passed as a req.kind by anything — which is why the assertion below
+       proves it reaches a roll instead of this line just saying so. */
+    'd20',
   ])
+  for (const kind of ['check', 'save', 'attack'] as const) {
+    assert.ok(reqKeys({ kind }).includes('roll:d20'), `${kind} answers to roll:d20`)
+  }
+  assert.ok(!reqKeys({ kind: 'damage' }).includes('roll:d20'))
   const KNOWN_DEAD = new Set(['attack.spell'])
   const stray = ROLL_SELECTORS.filter(r => !PASSED_BY_A_SURFACE.has(r) && !KNOWN_DEAD.has(r))
   assert.deepEqual(stray, [], `selector(s) no roll surface passes: ${stray.join(', ')}`)

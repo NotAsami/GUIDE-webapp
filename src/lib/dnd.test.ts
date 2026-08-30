@@ -13,7 +13,7 @@ import type { AbilityKey, CharacterSheet } from './database.types.ts'
 import { SKILLS } from './dnd.ts'
 import {
   abilityCheckTerms, composeCheck, effectiveMode, saveTerms, saveTotal,
-  skillTerms, skillTotal, sumTerms,
+  skillTerms, skillTotal, sumTerms, usesProficiency,
 } from './dnd.ts'
 
 /** STR 16 (+3), DEX 14 (+2). Proficient in STR saves, +1 elsewhere from gear. */
@@ -37,11 +37,11 @@ test('save terms sum to saveTotal, for every ability', () => {
   }
   // Pin the shape too, so a relabel does not quietly become a re-sum.
   assert.deepEqual(saveTerms(SHEET, 'str'), [
-    { label: 'STR', value: 3 }, { label: 'PROF', value: 4 }, { label: 'MISC', value: 1 },
+    { label: 'STR', value: 3 }, { label: 'PROF', value: 4, prof: true }, { label: 'MISC', value: 1 },
   ])
   // Not proficient, but still carries gear: PROF is 0 and MISC survives.
   assert.deepEqual(saveTerms(SHEET, 'dex'), [
-    { label: 'DEX', value: 2 }, { label: 'PROF', value: 0 }, { label: 'MISC', value: 2 },
+    { label: 'DEX', value: 2 }, { label: 'PROF', value: 0, prof: true }, { label: 'MISC', value: 2 },
   ])
 })
 
@@ -90,4 +90,18 @@ test('a feature and the player asking for advantage are one request, and cancel'
   assert.equal(effectiveMode('dis', true, false), 'normal')
   assert.equal(effectiveMode('adv', false, true), 'normal')
   assert.equal(effectiveMode('normal', true, true), 'normal')
+})
+
+test('usesProficiency reads the roll, not the character', () => {
+  // Jack of All Trades' exact question. A PROF term worth zero is what a
+  // non-proficient save looks like, and counting it would say every save in the
+  // game already uses proficiency — silently switching the feature off forever.
+  assert.equal(usesProficiency(saveTerms(SHEET, 'str')), true)   // proficient
+  assert.equal(usesProficiency(saveTerms(SHEET, 'dex')), false)  // PROF term, value 0
+  assert.equal(usesProficiency(skillTerms(SHEET, skill('stealth'))), true)  // expertise counts
+  assert.equal(usesProficiency(abilityCheckTerms(SHEET, 'str')), false)     // no PROF term at all
+  // Every skill agrees with skillTotal's own answer — one rule, two readers.
+  for (const s of SKILLS) {
+    assert.equal(usesProficiency(skillTerms(SHEET, s)), skillTotal(SHEET, s).proficient, s.key)
+  }
 })

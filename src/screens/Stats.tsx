@@ -15,6 +15,7 @@ import { burden, burdenTier, type BurdenTier } from '../lib/burden'
 import { handLabel, weaponAttackBonus, weaponDamageString } from '../lib/weapons'
 import { EffectsSidebar } from '../components/EffectsSidebar'
 import { buildCheck, useRollLog } from '../lib/rolls'
+import { armsSpent, armsSpentBy } from '../lib/graphState'
 import { useGraph } from '../lib/useGraph'
 import { suppressedEffects } from '../lib/graph'
 import styles from './Stats.module.css'
@@ -87,7 +88,13 @@ export function Stats() {
     if (initTimer.current) window.clearTimeout(initTimer.current)
     setInitFlash({ value: entry.check.total, crit: entry.check.crit, fumble: entry.check.fumble })
     initTimer.current = window.setTimeout(() => setInitFlash(null), FLASH_MS)
-    addRoll(entry)
+    const logged = addRoll(entry)
+    // And whatever it consumed is spent — see armsSpent. Initiative is a check
+    // like any other, and Superior Inspiration hands out arms right before one.
+    const ids = armsSpentBy(...(logged.riderGroups ?? []).map(g => g.riders))
+    if (ids.length) {
+      void updateSection('resources', armsSpent(character, ids, logged.id) as CharacterRow['resources'])
+    }
   }
   async function removeEffect(id: string) {
     await updateSection('resources', {

@@ -581,3 +581,30 @@
 .catRider .rLink:hover { color: var(--cyan); border-bottom-color: var(--cyan); }
 .catRider .rLink i { font-size: 7.5px; opacity: 0.75; }
 .catRider .rLink:focus-visible { outline: 1px solid var(--cyan); outline-offset: 3px; }
+
+/* THE REROLL OFFER — one row, directly under the dice it would re-run. Shaped
+   like .xLine because it sits in that stack, but it is a control rather than a
+   result: cyan like every other thing the panel lets you DO, and it disappears
+   once taken rather than going grey, since there is one of the feature and it
+   has been used. */
+.rrBtn {
+  display: flex; align-items: baseline; gap: 9px; width: 100%;
+  padding: 6px 8px; margin: 2px 0;
+  text-align: left; cursor: pointer;
+  background: rgba(0, 166, 214, 0.07);
+  border: 1px solid rgba(0, 166, 214, 0.3);
+  border-left: 2px solid var(--cyan);
+  color: var(--text);
+  transition: background 120ms;
+}
+.rrBtn:hover { background: rgba(0, 166, 214, 0.16); }
+.rrBtn > i { font-size: 10px; color: var(--cyan-hot); }
+.rrLab {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--text);
+}
+.rrVal {
+  margin-left: auto; flex: 0 0 auto;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--cyan-hot);
+}

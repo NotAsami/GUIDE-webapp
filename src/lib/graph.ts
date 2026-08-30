@@ -24,7 +24,7 @@
 
 import type { ArmedMod, CharacterRow, GraphEffect, GraphOp, GraphState, ShardTree, VarDef } from './database.types.ts'
 import type { ExprScope, FormulaValue } from './expr.ts'
-import { ROLL_IDENTS, VAR_IDENTS, evalExpr, freeIdents, interpolate, interpolations } from './expr.ts'
+import { ROLL_IDENTS, ROLL_IDENT_PROBE, VAR_IDENTS, evalExpr, freeIdents, interpolate, interpolations } from './expr.ts'
 import { type ActiveSource, activeEffects, activeSources, effectiveSheet } from './effects.ts'
 import { IS_ACTIVATION, IS_SHEET, OPS, OP_TITLE } from './opSchema.ts'
 import { MOD_STAT_SET, isAbility } from './modEditor.ts'
@@ -137,7 +137,7 @@ export function probeScope(
 ): ExprScope {
   const scope: ExprScope = {}
   for (const k of VAR_IDENTS) scope[k] = 1
-  for (const k of ROLL_IDENTS) scope[k] = 1
+  for (const k of ROLL_IDENTS) scope[k] = ROLL_IDENT_PROBE[k] ?? 1
   for (const d of defs) if (d.kind === 'stored') scope[d.name] = probe(d.type)
   /* A use-counter variable is a number the author cannot be shown at author time
      — it depends on the character — so it probes like any other. Bound BEFORE
@@ -475,6 +475,16 @@ export type RollKind = 'attack' | 'damage' | 'save' | 'check' | 'feature'
 
 export type ResolveReq = {
   kind: RollKind
+  /** THE LEVEL A SPELL WENT OFF AT, for `cast`. Absent on every roll that is not
+   *  a cast, where the scope reads it as 0. */
+  cast?: number
+  /** DOES THIS ROLL ALREADY COUNT THE PROFICIENCY BONUS, for `proficient`.
+   *
+   *  A fact about the roll's own parts, which is exactly why no expression could
+   *  answer it and why Jack of All Trades — "any ability check that doesn't
+   *  otherwise use your Proficiency Bonus" — was unauthorable without it. The
+   *  surface that built the terms is the one that knows; see buildCheck. */
+  proficient?: boolean
   /** Sub-key: 'dex' for a save, 'investigation' for a check. */
   sub?: string
   /** The gid of the thing being rolled — a weapon, spell, or feature. */
@@ -518,6 +528,11 @@ export type Rider = {
   when: 'always' | 'manual' | 'active'
   /** `active` and `always` riders arrive already resolved; `manual` ones start off. */
   on: boolean
+  /** `reroll` only. What pressing it does — see GraphEffect.keep. Carried on the
+   *  rider because the entry is a SNAPSHOT: the panel acts on a roll that has
+   *  already happened, and the node that offered the reroll may be unequipped or
+   *  unprepared by the time the player presses it. */
+  keep?: 'advantage' | 'new'
   /** Set on a rider that came from the armed queue rather than from the graph.
    *  It is already applied — §8 #1 — and this is the handle the panel consumes
    *  it by. Consumed-ness is NOT stored here: the panel asks whether this id is
@@ -677,6 +692,10 @@ export function staleArmed(ctx: GraphContext, scope: ExprScope = ctx.scope): str
   return out
 }
 
+/** Ability check, saving throw, attack roll — the three rolls the rules call a
+ *  D20 Test. Damage is not one, and neither is a feature's own roll. */
+export const isD20 = (kind: RollKind) => kind === 'check' || kind === 'save' || kind === 'attack'
+
 /** Every index key a roll answers to. Extracted from resolve() because a second
  *  caller needs the same answer: deciding whether activating a stance would put
  *  a contribution on THIS roll means asking "does this effect target this roll",
@@ -686,6 +705,13 @@ export function reqKeys(req: ResolveReq): string[] {
     req.subject,
     ...(req.tags ?? []).map(t => `tag:${normalizeTag(t)}`),
     `roll:${req.kind}`,
+    /* THE D20 TEST, as the 2024 rules name it: an ability check, a saving throw
+       or an attack roll, and nothing else. Its own key rather than a fourth
+       thing to list, because the rules keep saying "a D20 Test" as one phrase —
+       Bardic Inspiration is "when the creature fails a D20 Test", and spelling
+       that as three selectors is what mints three separate bonuses for one die
+       (see armedFrom: one mod per selector). One key, one arm. */
+    isD20(req.kind) ? 'roll:d20' : null,
     req.sub ? `roll:${req.kind}.${req.sub}` : null,
     /* `roll:attack.str`. Its own key rather than a second meaning for `sub`,
        because a greataxe swing is melee AND Strength-based, and an author
@@ -701,7 +727,9 @@ export function reqKeys(req: ResolveReq): string[] {
 export const asKey = (t: string) => (t.startsWith('tag:') ? `tag:${normalizeTag(t.slice(4))}` : t)
 
 export function armedMatches(m: ArmedMod, req: ResolveReq): boolean {
-  return m.kind === req.kind
+  // `d20` is a KIND here as well as an index key: an arm minted for "your next
+  // D20 Test" answers to all three, and is spent by whichever comes first.
+  return (m.kind === 'd20' ? isD20(req.kind) : m.kind === req.kind)
     /* A SUB IS EITHER NAMESPACE, exactly as reqKeys treats it. One swing answers
        to `roll:attack.melee` AND `roll:attack.str`, and `armedFrom` flattens
        whichever the author wrote into the same `sub` slot — so comparing it
@@ -838,6 +866,28 @@ function partsOf(formula: string | undefined, scope: ExprScope): Rider['parts'] 
 export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
   const out: Resolution = { adv: false, dis: false, crit: false, riders: [], notes: [], problems: [] }
 
+  /* THE ROLL SCOPE — §33's second whitelist, finally bound.
+     `ROLL_IDENTS` has always been on the audit's allow-list, so `when: "cast >= 3"`
+     passed Publish; nothing ever put `cast` in the scope a formula was evaluated
+     against, so at the table it resolved to nothing and reported "condition did
+     not resolve" on every roll instead. The whitelist promised an identifier the
+     engine did not supply.
+     Built HERE and not in ctx.scope, which is the whole reason the two lists are
+     separate: a VARIABLE may not read roll context (useGraph's memo is keyed on
+     the character alone and would be wrong per cast level), while a
+     CONTRIBUTION may. */
+  const scope: ExprScope = {
+    ...ctx.scope,
+    /* The level the spell went off at. Absent on everything that is not a cast,
+       where 0 reads as "not upcast" rather than as a broken formula. */
+    cast: req.cast ?? 0,
+    /* Does this roll ALREADY include the proficiency bonus — Jack of All Trades'
+       exact question ("that doesn't otherwise use your Proficiency Bonus"), and
+       one no expression could reach because it is a fact about the roll's own
+       parts. False on a damage roll, which has no proficiency to include. */
+    proficient: req.proficient ?? false,
+  }
+
   // 2. Match: the subject itself, each of its tags, the roll kind, the sub-kind,
   //    and — on an attack — the ability it was made with.
   const keys = reqKeys(req)
@@ -894,8 +944,8 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
   }
 
   function value(e: IndexedEffect): { flat: number; dice: string[] } | null {
-    const src = levelFormula(e.eff, ctx.scope.level) ?? e.eff.value ?? ''
-    const v = evalExpr(src, ctx.scope)
+    const src = levelFormula(e.eff, scope.level) ?? e.eff.value ?? ''
+    const v = evalExpr(src, scope)
     if (v === null || v.t !== 'num') {
       out.problems.push({
         sev: 'err', id: e.eff.id, t: 'Contribution did not resolve',
@@ -913,7 +963,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
   function applyCrit(eff: GraphEffect): void {
     out.crit = true
     if (!eff.threshold) return
-    const t = evalExpr(eff.threshold, ctx.scope)
+    const t = evalExpr(eff.threshold, scope)
     if (t === null || t.t !== 'num' || t.dice.length) {
       out.problems.push({ sev: 'err', id: eff.id, t: 'Crit range did not resolve', s: `${eff.label}'s threshold "${eff.threshold}" produced no number at these values.` })
       return
@@ -924,7 +974,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
   /** A floor raises the total to a minimum. HIGHEST wins, because two guarantees
    *  both hold and the better one is the one you feel. */
   function applyFloor(eff: GraphEffect): void {
-    const t = evalExpr(eff.minimum ?? '', ctx.scope)
+    const t = evalExpr(eff.minimum ?? '', scope)
     if (t === null || t.t !== 'num' || t.dice.length) {
       out.problems.push({ sev: 'err', id: eff.id, t: 'Minimum did not resolve', s: `${eff.label}'s minimum "${eff.minimum ?? ''}" produced no number at these values.` })
       return
@@ -940,7 +990,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     const { eff, from } = e
 
     if (eff.when !== undefined) {
-      const cond = evalExpr(eff.when, ctx.scope)
+      const cond = evalExpr(eff.when, scope)
       if (cond === null || cond.t !== 'bool') {
         out.problems.push({ sev: 'err', id: eff.id, t: 'Condition did not resolve', s: `${eff.label}'s condition "${eff.when}" is not a yes/no answer at these values.` })
         continue
@@ -962,7 +1012,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     // checkbox, whether the fact is a bonus or a DC.
     let reveal: string | undefined
     if (eff.op === 'note') {
-      const { text, bad } = interpolate(eff.text || eff.label, ctx.scope)
+      const { text, bad } = interpolate(eff.text || eff.label, scope)
       for (const src of bad) {
         out.problems.push({
           sev: 'err', id: eff.id, t: 'Note did not compute',
@@ -1002,6 +1052,26 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     const v = eff.op === 'add' ? value(e) : { flat: 0, dice: [] }
     if (!v) continue
 
+    /* A REROLL IS ALWAYS AN OFFER, never automatic — which is why it leaves
+       before the branch below could make it an `always` rider.
+       Its moment is after the roll: the player has to see the number to know
+       whether they want a different one, and an engine that rerolled a save on
+       their behalf would be spending Countercharm on a save that passed. So it
+       arrives `manual` and switched off, and the roll panel is the only thing
+       that can take it. A `when` still gates existence as usual; an `ask` would
+       be a second question in front of the one this already is, and the audit
+       refuses it. */
+    if (eff.op === 'reroll') {
+      out.riders.push({
+        label: eff.label, source: from.obj.name, sourceGid: e.owner, op: eff.op,
+        formula: '', flat: 0, dice: [],
+        when: 'manual', on: false,
+        keep: eff.keep === 'advantage' ? 'advantage' : 'new',
+        sourceText: summaryOf(from.obj),
+      })
+      continue
+    }
+
     // Unconditional and undecided → folds into flat/dice, AND surfaces as an
     // `always` rider carrying its label and source.
     //
@@ -1020,7 +1090,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
         label: eff.label, source: from.obj.name, sourceGid: e.owner, op: eff.op,
         formula: eff.value ?? '', flat: v.flat, dice: v.dice,
         when: 'always', on: true, dmgType: eff.dmgType,
-        sourceText: summaryOf(from.obj), parts: partsOf(eff.value, ctx.scope),
+        sourceText: summaryOf(from.obj), parts: partsOf(eff.value, scope),
       })
       continue
     }
@@ -1039,7 +1109,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
       reveal,
       dmgType: eff.dmgType,
       sourceText: summaryOf(from.obj),
-      parts: partsOf(eff.value, ctx.scope),
+      parts: partsOf(eff.value, scope),
     }
 
     // One fact, one checkbox: effects sharing an `ask` label are one decision.
@@ -1107,7 +1177,7 @@ ${rider.reveal}` : rider.reveal
        answered it still shows it — an entry is a snapshot — and undo clears the
        mark, which is why this is a flag and not a deletion. */
     if (m.spent) continue
-    const v = m.op === 'add' ? evalExpr(m.value ?? '', ctx.scope) : null
+    const v = m.op === 'add' ? evalExpr(m.value ?? '', scope) : null
     if (m.op === 'add') {
       if (v === null || v.t !== 'num') {
         out.problems.push({
@@ -1141,7 +1211,7 @@ ${rider.reveal}` : rider.reveal
         : {}),
       // No `sourceText`: an armed mod is a stored snapshot naming its source,
       // not a live handle on the node, so the prose is genuinely not in hand.
-      parts: partsOf(m.value, ctx.scope),
+      parts: partsOf(m.value, scope),
     })
   }
 
@@ -1263,6 +1333,10 @@ export type AuthoredNode = { gid: Gid; tags?: string[] }
 
 const SELECTOR_KINDS: readonly string[] = ['feature', 'spell', 'item', 'weapon', 'shardnode']
 const ROLL_KINDS: readonly RollKind[] = ['attack', 'damage', 'save', 'check', 'feature']
+/* WHAT AN AUTHOR MAY TARGET, which is one wider than what a roll may BE. No roll
+   is ever raised with kind `d20` — reqKeys emits it as an extra key on the three
+   that are — so it belongs here and not in RollKind. */
+const TARGETABLE_ROLL_KINDS: readonly string[] = [...ROLL_KINDS, 'd20']
 
 /** How many catalogued things a selector currently matches. `roll:` selectors
  *  match a roll, not a node, so they have no count — they are always live. */
@@ -1350,11 +1424,11 @@ export function auditNode(
        left to the author to discover at the table. */
     if (eff.op === 'floor') {
       const ts = eff.target ?? []
-      const bad = ts.filter(t => !/^roll:(check|save)(\.|$)/.test(t))
+      const bad = ts.filter(t => !/^roll:(check|save|d20)(\.|$)/.test(t))
       if (!ts.length || bad.length) {
         out.push({
           sev: 'err', id: eff.id, t: 'A floor needs a check or a save',
-          s: `${eff.label || eff.id} ${ts.length ? `aims at "${bad[0]}"` : 'has no target'}. Only a d20 roll has a total to raise — target roll:check or roll:save.`,
+          s: `${eff.label || eff.id} ${ts.length ? `aims at "${bad[0]}"` : 'has no target'}. Only a d20 roll has a total to raise — target roll:check, roll:save or roll:d20.`,
         })
       }
     }
@@ -1430,6 +1504,63 @@ export function auditNode(
         sev: 'err', id: eff.id, t: 'Armed modifier needs a roll target',
         s: `${eff.label || eff.id} arms once, so every target must be a roll: kind — "roll:attack", not a thing or a tag. Leave the target empty to arm this node's own roll.`,
       })
+    }
+
+    /* A GRANT LANDS ON A SHEET THIS AUDIT CANNOT SEE. Everything an arm needs
+       must therefore be in the mod itself, and an empty target is the one shape
+       that cannot be: armedFrom turns it into `{ kind: 'feature', subject }`
+       naming a feature the RECIPIENT does not have, so the die would sit on
+       their row matching nothing, forever. Only `add` is worth granting for the
+       same reason — an `adv` or a `note` snapshot reads fine, but the rules that
+       hand something to an ally hand them a die. */
+    /* A REROLL RE-RUNS A d20. Damage dice are a different mechanism entirely
+       (they stay unrolled so a crit can double them), and an `add` has no roll
+       to re-run at all — so the target list is the same one `floor` accepts,
+       plus `roll:attack`, which has a d20 too. */
+    if (eff.op === 'reroll') {
+      const ts = eff.target ?? []
+      const bad = ts.filter(t => !/^roll:(check|save|attack|d20)(\.|$)/.test(t))
+      if (!ts.length || bad.length) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'Reroll needs a d20 target',
+          s: `${eff.label || eff.id} ${ts.length ? `aims at "${bad[0]}"` : 'has no target'}. Only a d20 roll can be re-run — target roll:check, roll:save, roll:attack, or roll:d20 for all three.`,
+        })
+      }
+      /* IT IS ALREADY THE QUESTION. A reroll arrives switched off and the panel
+         asks it; an `ask` in front would be a checkbox whose only answer is
+         "yes, show me the button I was already going to press". */
+      if (eff.ask) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'Toggle on a reroll',
+          s: `${eff.label || eff.id} is offered on the finished roll and the player takes it or does not — that IS the question. Use \`when\` if it should only appear sometimes.`,
+        })
+      }
+      // Arming waits for the NEXT roll; a reroll acts on the one just made.
+      if (eff.once) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'A reroll cannot arm',
+          s: `${eff.label || eff.id} acts on a roll that has already happened, so there is nothing to wait for. Drop "arms once".`,
+        })
+      }
+    }
+
+    if (eff.op === 'grant') {
+      const ts = eff.target ?? []
+      if (!ts.length || ts.some(t => !t.startsWith('roll:'))) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'Grant needs a roll target',
+          s: `${eff.label || eff.id} lands on another player's sheet, so it must name the roll it answers to there — "roll:d20" for their next D20 Test. It cannot be left empty, and a thing or a tag means nothing on a sheet this one cannot see.`,
+        })
+      }
+      /* One selector, one mod (armedFrom) — and the recipient is being handed a
+         die, not a die per kind of roll. `roll:d20` exists to say all three
+         without minting three. */
+      if (ts.length > 1) {
+        out.push({
+          sev: 'warn', id: eff.id, t: 'Grant hands out one bonus per target',
+          s: `${eff.label || eff.id} names ${ts.length} rolls, which places ${ts.length} separate bonuses on the recipient — they can use every one. For "their next D20 Test", target roll:d20 alone.`,
+        })
+      }
     }
 
     if (IS_SHEET(eff.op)) {
@@ -1519,6 +1650,23 @@ export function auditNode(
         }
         continue
       }
+      /* `addSlot` MOVES A SLOT, not a variable — the spellbook's counter, which
+         no `target` and no declaration on this node describes. */
+      if (eff.op === 'addSlot') {
+        if (eff.target?.length) {
+          out.push({
+            sev: 'err', id: eff.id, t: 'Target on a slot cost',
+            s: `${eff.label || eff.id} moves this character's own spell slots. It has no target, and one set here does nothing.`,
+          })
+        }
+        continue
+      }
+
+      /* `grant` REACHES OUT FURTHER STILL — past this character altogether — so
+         it names a roll on someone else's sheet, not a variable here. Its own
+         rules are checked above, beside the other target-bearing ops. */
+      if (eff.op === 'grant') continue
+
       // Every other activation names a variable rather than a target: it writes
       // state, it does not reach out at other nodes.
       const v = (node.vars ?? []).find(x => x.name === eff.variable)
@@ -1555,8 +1703,8 @@ export function auditNode(
       if (t.startsWith('tag:')) continue // a tag matching nothing is legal — see matchCount
       if (t.startsWith('roll:')) {
         const [k, sub] = t.slice(5).split('.')
-        if (!(ROLL_KINDS as readonly string[]).includes(k) || (sub !== undefined && !sub)) {
-          out.push({ sev: 'err', id: eff.id, t: 'Unknown roll kind', s: `"${t}" is not a roll. Kinds are ${ROLL_KINDS.join(', ')}.` })
+        if (!TARGETABLE_ROLL_KINDS.includes(k) || (sub !== undefined && !sub)) {
+          out.push({ sev: 'err', id: eff.id, t: 'Unknown roll kind', s: `"${t}" is not a roll. Kinds are ${TARGETABLE_ROLL_KINDS.join(', ')}.` })
         }
         continue
       }

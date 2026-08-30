@@ -69,6 +69,7 @@ export const OP_GLYPH: Record<GraphOp, string> = {
   dis: '⊟',       // lowers
   crit: '⚔',
   floor: '⊻',      // raises a total to a minimum — never a bonus
+  reroll: '↻',    // re-runs a roll already made — the only op that acts afterwards
   note: '⊙',      // says something without changing a number
   boost: '◈',     // moves a number on the sheet, not on a roll
   useability: '◈', // also the sheet layer — which ability may swing the weapon
@@ -79,6 +80,8 @@ export const OP_GLYPH: Record<GraphOp, string> = {
   setVar: '⊕',    // writes
   addVar: '⊕',
   addUses: '⊕',   // writes too — a use counter rather than a variable
+  addSlot: '⊕',   // writes a spell slot — the spellbook's counter, not the sheet's
+  grant: '⇥',     // writes onto SOMEONE ELSE — the only op that leaves this sheet
 }
 
 export type FeatureEffectRow = {
