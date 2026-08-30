@@ -77,7 +77,8 @@ export function useActivation(host: ActivationHost) {
     /* A GRANT IS A QUESTION THE ENGINE CANNOT ANSWER — who gets the die. Same
        reason an `ask` opens this sheet: the press cannot complete without a
        human, so it stops and asks rather than guessing at a recipient. */
-    if (outcomes.some(o => o.ask || o.kind === 'grant' || (o.kind === 'slot' && o.level === undefined))) {
+    if (outcomes.some(o => o.ask || o.kind === 'grant'
+      || (o.kind === 'slot' && (o.level === undefined || o.budget !== undefined)))) {
       setPending({ feature: f, outcomes }); return
     }
     void run(f, outcomes)
@@ -90,7 +91,7 @@ export function useActivation(host: ActivationHost) {
    *  (which `ask`s, who receives a grant, which slot to spend) and a fourth
    *  would have been a fourth parameter nobody could read at the call site. */
   async function run(f: Feature, outcomes: Outcome[], picked: Picked = { answers: new Set() }) {
-    const { answers, recipient, slotLevel } = picked
+    const { answers, recipient, slotLevel, slots } = picked
     if (busy || !canUse(f, graph.scope)) return
     setBusy(true)
 
@@ -161,7 +162,7 @@ export function useActivation(host: ActivationHost) {
 
     // The variable writes join the SAME write as the roll and the use counter —
     // two writes could land apart and leave a feature spent but not activated.
-    const { resources, usesPatch, spellbook, applied } = applyOutcomes(character, outcomes, answers, { slotLevel })
+    const { resources, usesPatch, spellbook, applied } = applyOutcomes(character, outcomes, answers, { slotLevel, slots })
     // A grant already has its line — naming the recipient, which the plan could
     // not — so it is not re-summarised from the outcome.
     for (const o of applied) if (o.kind !== 'grant') lines.push(outcomeLine(o))
@@ -215,7 +216,13 @@ export function useActivation(host: ActivationHost) {
  *  Every outcome is listed, so a write is never invisible. Ones carrying an
  *  `ask` are unticked checkboxes — §32 makes that a human's call, and unlike a
  *  roll rider this is answered on a deliberate press, so it needs no panel. */
-export type Picked = { answers: Set<string>; recipient?: string; slotLevel?: number }
+export type Picked = {
+  answers: Set<string>
+  recipient?: string
+  slotLevel?: number
+  /** A budget plan: slot level → how many of that level to restore. */
+  slots?: Record<number, number>
+}
 
 function ActivationConfirm({ feature, outcomes, character, busy, onCancel, onConfirm }: {
   feature: Feature; outcomes: Outcome[]; character: CharacterRow; busy: boolean
@@ -248,10 +255,29 @@ function ActivationConfirm({ feature, outcomes, character, busy, onCancel, onCon
      — from what they actually have left, since an empty level is not a choice.
      Only asked when the author left the level open; a rule that names one, and
      a Pact Magic caster, both arrive already answered. */
-  const slots = outcomes.filter((o): o is SlotOutcome => o.kind === 'slot')
-  const openSlot = slots.find(o => o.level === undefined && (!o.ask || answers.has(o.ask)))
+  const slotOutcomes = outcomes.filter((o): o is SlotOutcome => o.kind === 'slot')
+  const live = (o: SlotOutcome) => !o.ask || answers.has(o.ask)
+  const openSlot = slotOutcomes.find(o => o.budget === undefined && o.level === undefined && live(o))
   const [slotLevel, setSlotLevel] = useState<number | undefined>(undefined)
   const ladder = openSlot ? slotLadder(character).filter(r => r.avail >= Math.abs(openSlot.delta)) : []
+
+  /* A BUDGET IN LEVELS, spent across whatever is expended. Its own picker
+     because the question is different: not "which slot" but "how many of each,
+     until the levels run out". */
+  const budgetSlot = slotOutcomes.find(o => o.budget !== undefined && live(o))
+  const [plan, setPlan] = useState<Record<number, number>>({})
+  const spentLevels = Object.entries(plan).reduce((n, [lv, c]) => n + Number(lv) * c, 0)
+  const budgetRows = budgetSlot
+    ? slotLadder(character).filter(r =>
+        r.avail < r.total
+        && (budgetSlot.maxLevel === undefined || r.level <= budgetSlot.maxLevel)
+        && r.level <= (budgetSlot.budget ?? 0))
+    : []
+  const bump = (level: number, by: number, expended: number) => setPlan(p => {
+    const next = Math.max(0, Math.min(expended, (p[level] ?? 0) + by))
+    if (by > 0 && spentLevels + level > (budgetSlot?.budget ?? 0)) return p
+    return { ...p, [level]: next }
+  })
 
   return (
     <div className={styles.overlay} onClick={onCancel}>
@@ -288,6 +314,34 @@ function ActivationConfirm({ feature, outcomes, character, busy, onCancel, onCon
 
         {needsRecipient && <RecipientPicker value={recipient} onPick={setRecipient} />}
 
+        {budgetSlot && (
+          <div className={styles.cfGrant}>
+            <div className={styles.cfGrantHead}>
+              Slots to recover · {spentLevels} of {budgetSlot.budget} levels
+            </div>
+            {budgetRows.length === 0 && (
+              <div className={styles.cfGrantNote}>Nothing is expended that this could bring back.</div>
+            )}
+            {budgetRows.map(r => {
+              const expended = r.total - r.avail
+              const taken = plan[r.level] ?? 0
+              return (
+                <div key={r.level} className={styles.cfRow}>
+                  <i className="fa-solid fa-wand-magic-sparkles" />
+                  <span className={styles.cfLabel}>Level {r.level}</span>
+                  <span className={styles.cfVal}>{expended} spent</span>
+                  <button type="button" className={styles.cfStep} aria-label={`One fewer level ${r.level} slot`}
+                    disabled={taken === 0} onClick={() => bump(r.level, -1, expended)}>−</button>
+                  <span className={styles.cfCount}>{taken}</span>
+                  <button type="button" className={styles.cfStep} aria-label={`One more level ${r.level} slot`}
+                    disabled={taken >= expended || spentLevels + r.level > (budgetSlot.budget ?? 0)}
+                    onClick={() => bump(r.level, 1, expended)}>+</button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
         {openSlot && (
           <div className={styles.cfGrant}>
             <div className={styles.cfGrantHead}>Which slot to {openSlot.delta < 0 ? 'spend' : 'restore'}</div>
@@ -312,8 +366,11 @@ function ActivationConfirm({ feature, outcomes, character, busy, onCancel, onCon
           <button type="button" className={styles.cfCancel} onClick={onCancel}>Cancel</button>
           <button
             type="button" className={styles.pUse}
-            disabled={busy || (needsRecipient && !recipient) || (!!openSlot && slotLevel === undefined)}
-            onClick={() => onConfirm({ answers, recipient, slotLevel })}
+            disabled={busy
+              || (needsRecipient && !recipient)
+              || (!!openSlot && slotLevel === undefined)
+              || (!!budgetSlot && spentLevels === 0)}
+            onClick={() => onConfirm({ answers, recipient, slotLevel, slots: plan })}
           >Confirm</button>
         </div>
       </div>

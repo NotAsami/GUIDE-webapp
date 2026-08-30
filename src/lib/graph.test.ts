@@ -436,6 +436,24 @@ test('roll context stays OUT of a variable, which is what makes useGraph memoisa
   assert.ok(audit.some(a => a.sev === 'err'), 'a variable may not read roll context')
 })
 
+test('a variable read only by the use count is NOT dead state', () => {
+  /* Channel Divinity declares its own progression table and reads it nowhere
+     except as `uses.max` — which is the entire point of the variable. Without
+     `uses` in the audited shape that correct node earned a "never used" warning,
+     and a warning that fires on the right answer is one the DM scrolls past. */
+  const vars: VarDef[] = [{ name: 'channelDivinity', kind: 'derived', formula: '[0,0,2][level]' }]
+  assert.ok(auditNode({ vars }).some(a => a.t === 'Variable is never used'), 'unused is still unused')
+  assert.deepEqual(
+    auditNode({ vars, uses: { max: 'channelDivinity' } }).filter(a => a.t === 'Variable is never used'), [])
+  // The partial-recharge formula reads variables too — Bardic Inspiration's
+  // `level >= 5 ? inspirations : 0` is the only thing that reads `inspirations`
+  // on a bard who never looks at the number.
+  assert.deepEqual(
+    auditNode({ vars, shortRecharge: 'channelDivinity' }).filter(a => a.t === 'Variable is never used'), [])
+  // A plain number reads nothing, so it rescues nothing.
+  assert.ok(auditNode({ vars, uses: { max: 3 } }).some(a => a.t === 'Variable is never used'))
+})
+
 test('auditNode holds a reroll to its own shape', () => {
   const rr = (over: Record<string, unknown> = {}) =>
     auditNode({ graph: [{ id: 'r1', op: 'reroll', label: 'Countercharm', keep: 'advantage', target: ['roll:save'], ...over }] })
@@ -444,11 +462,19 @@ test('auditNode holds a reroll to its own shape', () => {
   assert.deepEqual(rr({ target: ['roll:d20'] }).filter(a => a.sev === 'err'), [])
   assert.deepEqual(rr({ target: ['roll:attack'] }).filter(a => a.sev === 'err'), [])
 
-  // Only a d20 can be re-run. Damage dice stay unrolled so a crit can double
-  // them, which is a different mechanism entirely.
-  for (const t of [[], ['roll:damage'], ['tag:fire'], ['feature:X']]) {
-    assert.ok(rr({ target: t }).some(a => a.t === 'Reroll needs a d20 target'), JSON.stringify(t))
+  // Damage is the other half, and it is legal — with the settings that suit it.
+  assert.deepEqual(rr({ target: ['roll:damage.melee'], keep: 'new', faces: '2' }).filter(a => a.sev === 'err'), [])
+  assert.deepEqual(rr({ target: ['roll:damage'], keep: 'better' }).filter(a => a.sev === 'err'), [])
+
+  for (const t of [[], ['tag:fire'], ['feature:X']]) {
+    assert.ok(rr({ target: t }).some(a => a.t === 'Reroll needs a roll target'), JSON.stringify(t))
   }
+  /* ONE KIND OF DIE PER EFFECT — the rider carries a single `rerolls`, so an
+     effect claiming both would silently reroll only one of them. */
+  assert.ok(rr({ target: ['roll:save', 'roll:damage'] }).some(a => a.t === 'Reroll spans two kinds of die'))
+  // Damage has no advantage, and a d20 has only one total to be better than.
+  assert.ok(rr({ target: ['roll:damage'], keep: 'advantage' }).some(a => a.t === 'Advantage on a damage roll'))
+  assert.ok(rr({ target: ['roll:save'], keep: 'better' }).some(a => a.t === 'A d20 has one total'))
 
   // It IS the question, so a second one in front of it is an authoring error.
   assert.ok(rr({ ask: 'Use Countercharm?' }).some(a => a.t === 'Toggle on a reroll'))
@@ -1433,7 +1459,8 @@ test('every GraphEffect field is authorable, or is explicitly recorded as not ye
     /* `cap` and `target` aside, addUses adds no field of its own — it reuses the
        universal target list, which is exactly why it needed no new field type. */
     threshold: 'schema', dmgType: 'schema', once: 'schema', stat: 'schema',
-    ability: 'schema', cap: 'schema', minimum: 'schema', level: 'schema', oneOf: 'schema', keep: 'schema',
+    ability: 'schema', cap: 'schema', minimum: 'schema', level: 'schema', oneOf: 'schema', keep: 'schema', faces: 'schema',
+    budget: 'schema', maxLevel: 'schema',
     // Nothing is deferred today. The category stays because it is the honest
     // place to put a field that is stored but not yet authorable, and saying so
     // out loud beats leaving it silently uncovered.

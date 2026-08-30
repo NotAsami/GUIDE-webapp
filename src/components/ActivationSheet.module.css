@@ -100,3 +100,20 @@
   font-family: var(--font-prose); font-size: 13px; color: var(--muted);
   padding: 6px 2px;
 }
+
+/* The budget stepper — one row per slot level, minus / count / plus. Sits in a
+   .cfRow so it lines up with the pickers above it; the controls are what make
+   it a row you edit rather than a row you choose. */
+.cfStep {
+  flex: 0 0 auto; width: 22px; height: 22px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1;
+  color: var(--cyan-hot); background: rgba(0, 166, 214, 0.1);
+  border: 1px solid rgba(0, 166, 214, 0.4);
+}
+.cfStep:hover:not(:disabled) { background: rgba(0, 166, 214, 0.2); }
+.cfStep:disabled { color: var(--muted); border-color: var(--beige-dim); background: transparent; cursor: default; }
+.cfCount {
+  flex: 0 0 auto; min-width: 16px; text-align: center;
+  font-family: var(--font-mono); font-size: 12px; color: var(--text);
+}

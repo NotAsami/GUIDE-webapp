@@ -37,7 +37,7 @@ import { colorOf } from '../lib/palette'
 import type { CharacterRow, ShardTree } from '../lib/database.types'
 import {
   armedIdsOf, askSections, catalogView, lineViews, openAsks, patchRiders, pickedOf,
-  picksAllowed, picksTaken, rerollAt, rerollD20, rerollsOf,
+  picksAllowed, picksTaken, rerollAt, rerollD20, rerollDamage, rerollsOf,
   releaseIdsOf, resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
   type CatalogView, type Die, type DieAddr, type RiderView, type RollLineView,
 } from '../lib/rollView'
@@ -343,7 +343,16 @@ function Entry({
               <button
                 key={v.index} type="button" className={styles.rrBtn}
                 onClick={() => {
-                  const patch = rerollD20(entry, v.rider.keep ?? 'new')
+                  /* WHICH DICE — the rider says so (`rerolls`), because
+                     `keep: 'new'` reads identically on a d20 and on damage and
+                     guessing here would reroll the wrong ones. */
+                  const keep = v.rider.keep ?? 'new'
+                  const patch = v.rider.rerolls === 'damage'
+                    ? rerollDamage(entry, keep === 'better' ? 'better' : 'new', v.rider.faces)
+                    : rerollD20(entry, keep === 'advantage' ? 'advantage' : 'new', v.rider.faces)
+                  /* NOTHING QUALIFIED — a threshold no die met. The offer stays
+                     up rather than being marked taken: the player pressed it and
+                     got nothing, and burning it would be worse than the press. */
                   if (!patch) return
                   onPatchEntry(patch)
                   onPatch(v.index, { on: true })
@@ -352,7 +361,10 @@ function Entry({
                 <i className="fa-solid fa-rotate" />
                 <span className={styles.rrLab}>{v.rider.source}</span>
                 <span className={styles.rrVal}>
-                  {v.rider.keep === 'advantage' ? 'reroll with advantage' : 'reroll'}
+                  {v.rider.keep === 'advantage' ? 'reroll with advantage'
+                    : v.rider.keep === 'better' ? 'reroll · keep the better total'
+                    : v.rider.faces !== undefined ? `reroll ${v.rider.faces === 1 ? '1s' : `1s–${v.rider.faces}s`}`
+                    : 'reroll'}
                 </span>
               </button>
             ))}

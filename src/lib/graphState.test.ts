@@ -4,7 +4,7 @@
 // the whole write path is testable without a database or a renderer.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { ArmedMod, CharacterRow, Feature, GraphEffect, GraphState, Json, VarDef } from './database.types.ts'
+import type { ArmedMod, CharacterRow, CharacterSpellbook, Feature, GraphEffect, GraphState, Json, VarDef } from './database.types.ts'
 import { buildContext, resolve, staleArmed } from './graph.ts'
 import { longRestPatch, shortRestPatch } from './rest.ts'
 import {
@@ -1228,4 +1228,64 @@ test('armedFrom stamps a group only when oneOf names more than one queue', () =>
   // Without oneOf they stay independent — "+2 to your attack AND its damage".
   const both = armedFrom({ ...two, oneOf: undefined }, 'feature:f')
   assert.deepEqual(both.map(m => m.group), [undefined, undefined])
+})
+
+/* ---------- a slot budget: levels, not a count of slots ---------- */
+
+const BUDGET: GraphEffect = { id: 'nr', op: 'addSlot', label: 'Natural Recovery', value: '1', budget: '3', maxLevel: '5' }
+
+test('a budget offers a plan, not a level — and refuses when nothing is expended', () => {
+  const full = caster([{ level: 1, total: 4, expended: 0 }], [BUDGET])
+  assert.deepEqual(planActivation(full.sheet!.features![0], buildContext(full), full, 'feature:f'), [],
+    'nothing spent, nothing to bring back')
+
+  const c = caster(LADDER, [BUDGET])
+  const [o] = planActivation(c.sheet!.features![0], buildContext(c), c, 'feature:f')
+  assert.equal(o.kind, 'slot')
+  assert.equal((o as { budget?: number }).budget, 3)
+  assert.equal((o as { maxLevel?: number }).maxLevel, 5)
+  assert.equal((o as { level?: number }).level, undefined, 'the level is not the question')
+})
+
+test('the budget buys slots at their LEVEL, and the write clamps it', () => {
+  const c = caster(LADDER, [BUDGET])   // L1 4/4 spent, L2 1 spent, L3 0 spent
+  const out = planActivation(c.sheet!.features![0], buildContext(c), c, 'feature:f')
+  const at = (lv: number, sb?: CharacterSpellbook) => sb?.slots?.find(s => s.level === lv)
+
+  // Three level-1 slots: 1 + 1 + 1 = 3.
+  let sb = applyOutcomes(c, out, new Set(), { slots: { 1: 3 } }).spellbook
+  assert.deepEqual(at(1, sb), { level: 1, total: 4, expended: 1 })
+
+  // A level-2 and a level-1: 2 + 1 = 3.
+  sb = applyOutcomes(c, out, new Set(), { slots: { 1: 1, 2: 1 } }).spellbook
+  assert.deepEqual(at(1, sb), { level: 1, total: 4, expended: 3 })
+  assert.deepEqual(at(2, sb), { level: 2, total: 3, expended: 0 })
+
+  /* OVERSPENDING IS CLAMPED IN THE WRITE, not only in the picker. Asking for
+     four level-1 slots against a budget of three buys three — the sheet is a UI
+     and this is the thing that actually moves the numbers. */
+  sb = applyOutcomes(c, out, new Set(), { slots: { 1: 4 } }).spellbook
+  assert.deepEqual(at(1, sb), { level: 1, total: 4, expended: 1 }, 'three, not four')
+
+  /* A SLOT COSTS ITS LEVEL, not one. Two level-2 slots is four levels against a
+     budget of three, so only one of them comes back — and `left -= 1` passes
+     every assertion above while getting this exactly wrong. */
+  const deep = caster([{ level: 2, total: 3, expended: 3 }], [BUDGET])
+  const dout = planActivation(deep.sheet!.features![0], buildContext(deep), deep, 'feature:f')
+  const dsb = applyOutcomes(deep, dout, new Set(), { slots: { 2: 2 } }).spellbook
+  assert.deepEqual(at(2, dsb), { level: 2, total: 3, expended: 2 }, 'three levels buys ONE level-2 slot')
+
+  // A level above the cap buys nothing, however much budget is left.
+  const capped = caster(LADDER, [{ ...BUDGET, budget: '9', maxLevel: '1' }])
+  const cout = planActivation(capped.sheet!.features![0], buildContext(capped), capped, 'feature:f')
+  const csb = applyOutcomes(capped, cout, new Set(), { slots: { 2: 1, 1: 1 } }).spellbook
+  assert.deepEqual(at(2, csb), { level: 2, total: 3, expended: 1 }, 'level 2 is over the cap — untouched')
+  assert.deepEqual(at(1, csb), { level: 1, total: 4, expended: 3 })
+})
+
+test('a budget never banks past what was expended', () => {
+  const c = caster([{ level: 1, total: 2, expended: 1 }], [{ ...BUDGET, budget: '9' }])
+  const out = planActivation(c.sheet!.features![0], buildContext(c), c, 'feature:f')
+  const sb = applyOutcomes(c, out, new Set(), { slots: { 1: 5 } }).spellbook
+  assert.deepEqual(sb?.slots?.[0], { level: 1, total: 2, expended: 0 })
 })

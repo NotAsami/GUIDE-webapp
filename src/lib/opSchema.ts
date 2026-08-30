@@ -186,12 +186,16 @@ export const OPS: Record<GraphOp, OpDef> = {
   },
   reroll: {
     label: 'reroll', group: 'passive', icon: 'fa-rotate',
-    blurb: 'Offers to RE-RUN a d20 roll that has already happened. Every other contribution is decided while the roll is being built; this one appears on the finished roll in the roll panel, because "if you fail the save, you can reroll it" is a decision nobody can make before seeing the number. It is an offer, never automatic — the player presses it or does not. Target a d20 roll: roll:save, roll:check, roll:attack, or roll:d20 for all three. Rerolling DAMAGE dice is a different feature and this is not it.',
+    blurb: 'Offers to RE-RUN a roll that has already happened — a d20 roll, or a damage roll. Every other contribution is decided while the roll is being built; this one appears on the finished roll in the roll panel, because "if you fail the save, you can reroll it" is a decision nobody can make before seeing the number. It is an offer, never automatic — the player presses it or does not. Target a d20 roll (roll:save, roll:check, roll:attack, or roll:d20 for all three) OR a damage roll (roll:damage and its kinds) — one or the other, never both in the same effect: they are different dice and the settings that suit one are meaningless on the other.',
     fields: [{
       key: 'keep', type: 'enum', label: 'The new roll is', required: true,
-      options: ['advantage', 'new'],
-      desc: 'advantage — a second d20 joins the first and the higher one counts (Countercharm). new — the die is replaced and the result stands, better or worse (Halfling Lucky).',
+      options: ['advantage', 'new', 'better'],
+      desc: 'advantage — a second d20 joins the first and the higher one counts (Countercharm); a d20 roll only. new — the dice are replaced and the result stands, better or worse (Halfling Lucky, Great Weapon Fighting). better — the damage is rolled again and whichever TOTAL is higher counts (Savage Attacker); a damage roll only.',
       example: 'advantage',
+    }, {
+      key: 'faces', type: 'formula', label: 'Only dice showing at most',
+      desc: 'Narrows it to the dice that came up low. Great Weapon Fighting rerolls a 1 or a 2, so this is 2; Halfling Lucky rerolls a natural 1, so this is 1. Leave blank to reroll everything, which is what Countercharm and Savage Attacker do.',
+      example: '2',
     }],
   },
   note: {
@@ -253,6 +257,16 @@ export const OPS: Record<GraphOp, OpDef> = {
         key: 'level', type: 'formula', label: 'Slot level',
         desc: 'Which level of slot moves. LEAVE BLANK for "a spell slot" — the player is asked at the press and picks from what they have. Fill it in only when the rule names a level.',
         example: '3',
+      },
+      {
+        key: 'budget', type: 'formula', label: 'Or a budget of levels', wide: true,
+        desc: 'RESTORING ONLY, and it replaces both fields above. A budget in COMBINED LEVELS, not a count of slots: three levels buys one level-3 slot, or a level-2 and a level-1, or three level-1s — and which is the player’s call, so the press opens a picker. This is Natural Recovery, Arcane Recovery and Font of Magic, which are one sentence with a different number.',
+        example: '(level + 1) / 2',
+      },
+      {
+        key: 'maxLevel', type: 'formula', label: '…and no slot above level',
+        desc: 'The ceiling on what the budget may buy. Every printed version of this rule has one — "none of them can be level 6+" is 5. Leave blank for no cap beyond what the caster owns.',
+        example: '5',
       },
     ],
   },

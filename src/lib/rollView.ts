@@ -458,20 +458,28 @@ export function rerollAt(entry: RollEntry, addr: DieAddr): Partial<RollEntry> | 
  *  natural 20 the player rerolled away is simply wrong.
  *
  *  Returns null when there is no d20 to re-run. Pure: it rolls, it does not write. */
-export function rerollD20(entry: RollEntry, keep: 'advantage' | 'new'): Partial<RollEntry> | null {
+export function rerollD20(entry: RollEntry, keep: 'advantage' | 'new', faces?: number): Partial<RollEntry> | null {
   const c = entry.check
   if (!c || !c.rolls.length) return null
+  /* A THRESHOLD THAT NOTHING MEETS CHANGES NOTHING. Halfling Lucky rerolls a
+     natural 1 and no other face, so pressing it on a 14 must leave the roll
+     alone rather than quietly handing out a free reroll. */
+  if (faces !== undefined && !c.rolls.some(d => d.v <= faces)) return null
 
   /* ADVANTAGE ADDS, IT DOES NOT REPLACE. "The save is rerolled, and the new roll
      has Advantage" is two dice with the original still among them — the player
      can see what they escaped, and a natural 20 already rolled is not thrown
      away by a feature that was meant to help. */
+  const qualifies = (d: RolledDie, i: number) =>
+    faces !== undefined ? d.v <= faces : i === 0
   const rolls = keep === 'advantage'
     ? [...c.rolls, ...rolledDice(1, 20)]
-    : c.rolls.map((d, i) => (i === 0 ? rerollDie(d) : d))
+    : c.rolls.map((d, i) => (qualifies(d, i) ? rerollDie(d) : d))
   const mode = keep === 'advantage' ? 'adv' as const : c.mode
-  const faces = rolls.map(d => d.v)
-  const pick = mode === 'adv' ? Math.max(...faces) : mode === 'dis' ? Math.min(...faces) : faces[0]
+  // `shown`, not `faces` — the parameter above is the threshold, and shadowing
+  // it here is how the qualifying test silently starts reading the rolled dice.
+  const shown = rolls.map(d => d.v)
+  const pick = mode === 'adv' ? Math.max(...shown) : mode === 'dis' ? Math.min(...shown) : shown[0]
 
   /* The terms are what the total was built from, so recomposing from them keeps
      the breakdown honest. An entry with none — nothing in the app builds one
@@ -479,6 +487,40 @@ export function rerollD20(entry: RollEntry, keep: 'advantage' | 'new'): Partial<
   const terms = c.terms ?? [{ label: 'MOD', value: c.total - c.pick }]
   const { total, breakdown, crit, fumble } = composeCheck(pick, terms)
   return { check: { ...c, rolls, mode, pick, total, breakdown, crit, fumble } }
+}
+
+/** RE-ROLL A DAMAGE ROLL, the other half of the `reroll` op.
+ *
+ *  Separate from rerollD20 because damage is a different shape and a different
+ *  question. A d20 has one die that counts and a total built from named terms; a
+ *  damage roll is a handful of dice plus a flat bonus, and the interesting
+ *  variants are about WHICH dice and WHICH total:
+ *
+ *    `new`    + faces 2 — Great Weapon Fighting: reroll the 1s and 2s, and the
+ *                         new faces stand however bad.
+ *    `better`          — Savage Attacker: roll the lot again, keep whichever
+ *                         total came out higher.
+ *
+ *  `crit` is untouched, as everywhere else in this file: it decided how many
+ *  dice exist, and these are those dice.
+ *
+ *  Returns null when there is nothing to reroll — no damage, or a threshold no
+ *  die met, which must not silently pass for a reroll that happened. */
+export function rerollDamage(
+  entry: RollEntry, keep: 'new' | 'better', faces?: number,
+): Partial<RollEntry> | null {
+  const d = entry.damage
+  if (!d || !d.dice.length) return null
+  if (faces !== undefined && !d.dice.some(x => x.v <= faces)) return null
+
+  const rolled = d.dice.map(x => (faces === undefined || x.v <= faces ? rerollDie(x) : x))
+  /* KEEP THE BETTER TOTAL, not the better dice. "Use either total" is one
+     choice over the whole roll — picking the higher face of each die
+     individually would be a different, much stronger feature. */
+  const next = keep === 'better' && damageTotal(rolled, d.bonus) < damageTotal(d.dice, d.bonus)
+    ? d.dice
+    : rolled
+  return { damage: { ...d, dice: next, total: damageTotal(next, d.bonus) } }
 }
 
 /* ---------------- the catalog sheet ----------------

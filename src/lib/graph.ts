@@ -22,7 +22,7 @@
  * `'num' | 'bool'`. One representation, no adapter.
  */
 
-import type { ArmedMod, CharacterRow, GraphEffect, GraphOp, GraphState, ShardTree, VarDef } from './database.types.ts'
+import type { ArmedMod, CharacterRow, Feature, GraphEffect, GraphOp, GraphState, ShardTree, VarDef } from './database.types.ts'
 import type { ExprScope, FormulaValue } from './expr.ts'
 import { ROLL_IDENTS, ROLL_IDENT_PROBE, VAR_IDENTS, evalExpr, freeIdents, interpolate, interpolations } from './expr.ts'
 import { type ActiveSource, activeEffects, activeSources, effectiveSheet } from './effects.ts'
@@ -532,7 +532,15 @@ export type Rider = {
    *  rider because the entry is a SNAPSHOT: the panel acts on a roll that has
    *  already happened, and the node that offered the reroll may be unequipped or
    *  unprepared by the time the player presses it. */
-  keep?: 'advantage' | 'new'
+  keep?: 'advantage' | 'new' | 'better'
+  /** `reroll` only. WHICH DICE this one re-runs — the d20 of a check, save or
+   *  attack, or the dice of a damage roll. Resolved from the effect's targets
+   *  here rather than guessed at in the panel: `keep: 'new'` reads the same on
+   *  both, and a panel that picked wrong would reroll the wrong dice. */
+  rerolls?: 'd20' | 'damage'
+  /** `reroll` only. Only dice showing at most this count — already evaluated,
+   *  because the scope is gone by the time the player presses. */
+  faces?: number
   /** Set on a rider that came from the armed queue rather than from the graph.
    *  It is already applied — §8 #1 — and this is the handle the panel consumes
    *  it by. Consumed-ness is NOT stored here: the panel asks whether this id is
@@ -1062,11 +1070,29 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
        be a second question in front of the one this already is, and the audit
        refuses it. */
     if (eff.op === 'reroll') {
+      /* THE FACE THRESHOLD IS RESOLVED NOW, not carried as a formula. The panel
+         acts on a finished entry, possibly long after — the scope that could
+         read `2` out of an expression is gone by then, and an armed value that
+         re-evaluates later is the byLevel bug in a different coat. */
+      let faces: number | undefined
+      if (eff.faces?.trim()) {
+        const v = evalExpr(eff.faces, scope)
+        if (v === null || v.t !== 'num' || v.dice.length) {
+          out.problems.push({
+            sev: 'err', id: eff.id, t: 'Reroll threshold did not resolve',
+            s: `${eff.label}'s "only dice showing at most ${eff.faces}" produced no number at these values.`,
+          })
+          continue
+        }
+        faces = Math.trunc(v.flat)
+      }
       out.riders.push({
         label: eff.label, source: from.obj.name, sourceGid: e.owner, op: eff.op,
         formula: '', flat: 0, dice: [],
         when: 'manual', on: false,
-        keep: eff.keep === 'advantage' ? 'advantage' : 'new',
+        keep: eff.keep === 'advantage' ? 'advantage' : eff.keep === 'better' ? 'better' : 'new',
+        rerolls: (eff.target ?? []).some(t => t.startsWith('roll:damage')) ? 'damage' : 'd20',
+        ...(faces !== undefined ? { faces } : {}),
         sourceText: summaryOf(from.obj),
       })
       continue
@@ -1364,7 +1390,12 @@ export function auditNode(
    *  whose prose prints it earns a "never used" warning for doing the right
    *  thing, and a warning that fires on correct authoring is one the DM learns
    *  to scroll past. */
-  node: { graph?: GraphEffect[]; vars?: VarDef[]; prose?: (string | undefined)[] },
+  /** `uses` is the node's OWN use-count formula, and it counts as a reader.
+   *  Channel Divinity declares `channelDivinity` and reads it nowhere except as
+   *  its own max — which is the whole point of the variable — and without this
+   *  the audit called a correct node's progression table dead state. A warning
+   *  that fires on the right answer is one the DM learns to scroll past. */
+  node: { graph?: GraphEffect[]; vars?: VarDef[]; prose?: (string | undefined)[]; uses?: Feature['uses']; shortRecharge?: number | string },
   nodes: AuthoredNode[] = [],
   /** Variables declared ELSEWHERE in the catalog, name → type.
    *
@@ -1519,11 +1550,36 @@ export function auditNode(
        plus `roll:attack`, which has a d20 too. */
     if (eff.op === 'reroll') {
       const ts = eff.target ?? []
-      const bad = ts.filter(t => !/^roll:(check|save|attack|d20)(\.|$)/.test(t))
+      const d20 = ts.filter(t => /^roll:(check|save|attack|d20)(\.|$)/.test(t))
+      const dmg = ts.filter(t => /^roll:damage(\.|$)/.test(t))
+      const bad = ts.filter(t => !d20.includes(t) && !dmg.includes(t))
       if (!ts.length || bad.length) {
         out.push({
-          sev: 'err', id: eff.id, t: 'Reroll needs a d20 target',
-          s: `${eff.label || eff.id} ${ts.length ? `aims at "${bad[0]}"` : 'has no target'}. Only a d20 roll can be re-run — target roll:check, roll:save, roll:attack, or roll:d20 for all three.`,
+          sev: 'err', id: eff.id, t: 'Reroll needs a roll target',
+          s: `${eff.label || eff.id} ${ts.length ? `aims at "${bad[0]}"` : 'has no target'}. Only dice already rolled can be re-run — target a d20 roll (roll:check, roll:save, roll:attack, or roll:d20) or a damage roll.`,
+        })
+      }
+      /* ONE KIND OF DIE PER EFFECT. A rider carries a single `rerolls`, and the
+         panel re-rolls what it says — an effect claiming both would silently
+         reroll only the damage. Two effects say it honestly. */
+      if (d20.length && dmg.length) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'Reroll spans two kinds of die',
+          s: `${eff.label || eff.id} targets a d20 roll AND a damage roll. They are different dice with different settings — split it into two effects.`,
+        })
+      }
+      // `advantage` needs a second d20 to keep the higher OF; `better` needs two
+      // damage totals to choose between. Neither exists on the other side.
+      if (eff.keep === 'advantage' && dmg.length) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'Advantage on a damage roll',
+          s: `${eff.label || eff.id} rerolls damage with "advantage", and damage has none. Use "better" to keep whichever total is higher, or "new" to be stuck with the reroll.`,
+        })
+      }
+      if (eff.keep === 'better' && !dmg.length) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'A d20 has one total',
+          s: `${eff.label || eff.id} keeps the "better" of two totals, which only a damage roll has. On a d20 that is advantage — use it instead.`,
         })
       }
       /* IT IS ALREADY THE QUESTION. A reroll arrives switched off and the panel
@@ -1809,6 +1865,11 @@ export function auditNode(
     for (const span of interpolations(src ?? '')) {
       for (const id of freeIdents(span)) referenced.add(id)
     }
+  }
+  // The use count and its partial-recharge sibling are formulas too, and a
+  // variable that exists to BE one is read exactly there and nowhere else.
+  for (const src of [node.uses?.max, node.shortRecharge]) {
+    if (typeof src === 'string') for (const id of freeIdents(src)) referenced.add(id)
   }
   for (const d of node.vars ?? []) {
     if (referenced.has(d.name)) continue
