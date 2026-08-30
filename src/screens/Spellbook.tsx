@@ -213,7 +213,9 @@ export function Spellbook() {
     let noteMsg: string
     // The same boundary the weapon roller uses, on the roll kind a spell has:
     // the spell IS the subject, so a feature can target it by gid or by tag.
-    const res = resolve(graph, { kind: 'damage', sub: 'spell', subject: gid('spell', sp), tags: sp.tags })
+    // `cast` becomes real here: the level the slot was actually spent at, which
+    // is what "1d6 per level above 1st" has always wanted to read.
+    const res = resolve(graph, { kind: 'damage', sub: 'spell', subject: gid('spell', sp), tags: sp.tags, cast: castLevel })
     const roll = sp.hasDamage ? rollSpellDamage(sp, castLevel, charLevel, rollResolution(res)) : null
     if (roll) {
       setLastRollById(prev => ({ ...prev, [sp.id]: roll }))

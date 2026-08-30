@@ -75,6 +75,13 @@ const ONCE: OpField = {
   example: 'on, with target roll:attack',
 }
 
+/** Beside ONCE, and only meaningful with it. */
+const ONE_OF: OpField = {
+  key: 'oneOf', type: 'boolean', label: 'One across all targets',
+  desc: 'The targets share ONE bonus instead of getting one each. Peerless Skill is "an ability check or an attack roll" — one Bardic Inspiration die, offered on both, and taking it on either spends it. Leave off when the targets are genuinely separate things that all happen: "+2 to your next attack and to its damage" is two bonuses.',
+  example: 'on, with targets roll:check and roll:attack',
+}
+
 const AMOUNT: OpField = {
   key: 'value', type: 'formula', label: 'Amount', required: true,
   desc: 'Number or expression contributed to every matched target. Dice are allowed and stay unrolled, so a crit can still double them.',
@@ -98,6 +105,7 @@ export const OPS: Record<GraphOp, OpDef> = {
         example: 'radiant',
       },
       ONCE,
+      ONE_OF,
       {
         key: 'byLevel', type: 'array', label: 'By level', wide: true,
         desc: 'Level-indexed progression. When any slot is filled it overrides Amount. Index 0 is unused — character levels start at 1.',
@@ -156,8 +164,8 @@ export const OPS: Record<GraphOp, OpDef> = {
       },
     ],
   },
-  adv: flag('adv', 'fa-angles-up', 'Grants advantage on the matched rolls. The target list is the whole statement.', [ONCE]),
-  dis: flag('dis', 'fa-angles-down', 'Imposes disadvantage on the matched rolls.', [ONCE]),
+  adv: flag('adv', 'fa-angles-up', 'Grants advantage on the matched rolls. The target list is the whole statement.', [ONCE, ONE_OF]),
+  dis: flag('dis', 'fa-angles-down', 'Imposes disadvantage on the matched rolls.', [ONCE, ONE_OF]),
   crit: {
     label: 'crit', group: 'passive', icon: 'fa-burst',
     blurb: 'Lowers the critical-hit threshold on the matched attack rolls.',
@@ -165,7 +173,7 @@ export const OPS: Record<GraphOp, OpDef> = {
       key: 'threshold', type: 'formula', label: 'Crits on', required: true,
       desc: 'Lowest d20 face that counts as a critical hit. The lowest threshold across every applying node wins.',
       example: '19',
-    }, ONCE],
+    }, ONCE, ONE_OF],
   },
   floor: {
     label: 'floor', group: 'passive', icon: 'fa-arrows-up-to-line',
@@ -174,6 +182,16 @@ export const OPS: Record<GraphOp, OpDef> = {
       key: 'minimum', type: 'formula', label: 'At least', required: true,
       desc: 'The lowest the total may come to. A formula, so it can be a score rather than a fixed number — `strScore` is what Indomitable Might wants.',
       example: 'strScore',
+    }],
+  },
+  reroll: {
+    label: 'reroll', group: 'passive', icon: 'fa-rotate',
+    blurb: 'Offers to RE-RUN a d20 roll that has already happened. Every other contribution is decided while the roll is being built; this one appears on the finished roll in the roll panel, because "if you fail the save, you can reroll it" is a decision nobody can make before seeing the number. It is an offer, never automatic — the player presses it or does not. Target a d20 roll: roll:save, roll:check, roll:attack, or roll:d20 for all three. Rerolling DAMAGE dice is a different feature and this is not it.',
+    fields: [{
+      key: 'keep', type: 'enum', label: 'The new roll is', required: true,
+      options: ['advantage', 'new'],
+      desc: 'advantage — a second d20 joins the first and the higher one counts (Countercharm). new — the die is replaced and the result stands, better or worse (Halfling Lucky).',
+      example: 'advantage',
     }],
   },
   note: {
@@ -190,7 +208,7 @@ export const OPS: Record<GraphOp, OpDef> = {
        Without `once` the choice rides every melee damage roll forever, and the
        `ask` that makes it a choice is refused by the audit as a toggle that
        reveals nothing. */
-    ONCE],
+    ONCE, ONE_OF],
   },
   resist: flag('resist', 'fa-shield-halved', 'Halves incoming damage of the matched kind. Target a tag — the tag names the damage type.'),
   vuln: flag('vuln', 'fa-heart-crack', 'Doubles incoming damage of the matched kind.'),
@@ -222,6 +240,34 @@ export const OPS: Record<GraphOp, OpDef> = {
       },
     ],
   },
+  addSlot: {
+    label: 'addSlot', group: 'activation', icon: 'fa-wand-magic-sparkles',
+    blurb: 'On activation, spends or restores a SPELL SLOT. The only resource that lives in the spellbook rather than on the sheet, and so the only one nothing else here can reach: "you can expend a spell slot to regain one expended use of Bardic Inspiration" needed this and had no way to say it. Leave the level blank and the player picks which slot at the press, which is what "a spell slot" means — name a level only when the rule does. A cost that cannot be paid refuses the whole press, so a caster with nothing left simply cannot use the feature. A Pact Magic caster has one slot level by construction and is never asked.',
+    fields: [
+      {
+        key: 'value', type: 'formula', label: 'Change by', required: true,
+        desc: 'Signed number of slots. Negative spends; positive restores, clamped to what the caster owns at that level.',
+        example: '-1',
+      },
+      {
+        key: 'level', type: 'formula', label: 'Slot level',
+        desc: 'Which level of slot moves. LEAVE BLANK for "a spell slot" — the player is asked at the press and picks from what they have. Fill it in only when the rule names a level.',
+        example: '3',
+      },
+    ],
+  },
+  grant: {
+    label: 'grant', group: 'activation', icon: 'fa-hand-holding-heart',
+    blurb: 'On activation, arms a bonus on ANOTHER party member instead of on yourself — "that creature gains one of your Bardic Inspiration dice". The press asks who; the die then waits on their sheet and rides the roll they choose, which you never see. Target the roll it answers to, exactly as an arming contribution does: roll:d20 is "their next D20 Test", which is what most of these grants say. The amount is resolved against YOUR character at the moment you press, and snapshotted — your die does not shrink because the recipient is a lower level.',
+    fields: [
+      AMOUNT,
+      {
+        key: 'byLevel', type: 'array', label: 'By level', wide: true,
+        desc: 'Level-indexed progression, read at YOUR level when the grant is made. When any slot is filled it overrides Amount. Index 0 is unused.',
+        example: 'slot 1 = 1d6, slot 5 = 1d8, slot 10 = 1d10, slot 15 = 1d12',
+      },
+    ],
+  },
   addVar: {
     label: 'addVar', group: 'activation', icon: 'fa-plus-minus',
     blurb: 'On activation, increments one of this feature’s variables. Use a negative value to spend a charge.',
@@ -242,10 +288,10 @@ export const OPS: Record<GraphOp, OpDef> = {
 
 /** Palette order — what an author reaches for first, and what hides behind MORE. */
 export const PALETTE = ['add', 'adv', 'dis', 'crit', 'resist'] as const satisfies readonly GraphOp[]
-export const PALETTE_MORE = ['vuln', 'immune', 'floor', 'note'] as const satisfies readonly GraphOp[]
+export const PALETTE_MORE = ['vuln', 'immune', 'floor', 'reroll', 'note'] as const satisfies readonly GraphOp[]
 /** Activation outcomes get their own palette group — they answer a different
  *  question ("what happens when I press this") from every op above. */
-export const PALETTE_ACT = ['setVar', 'addVar', 'addUses'] as const satisfies readonly GraphOp[]
+export const PALETTE_ACT = ['setVar', 'addVar', 'addUses', 'addSlot', 'grant'] as const satisfies readonly GraphOp[]
 /** The sheet layer gets its own palette group for the same reason activation
  *  outcomes do: it answers a different question from every roll op above it —
  *  "what is this character's DEX", not "what does this roll add". */
@@ -257,10 +303,10 @@ export const IS_ACTIVATION = (op: GraphOp) => OPS[op].group === 'activation'
 export const IS_SHEET = (op: GraphOp) => OPS[op].group === 'sheet'
 
 export const OP_TITLE: Record<GraphOp, string> = {
-  add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', floor: 'Floor', note: 'Note', boost: 'Boost',
+  add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', floor: 'Floor', reroll: 'Reroll', note: 'Note', boost: 'Boost',
   useability: 'Use Ability', unarmored: 'Unarmored AC',
   resist: 'Resist', vuln: 'Vuln', immune: 'Immune',
-  setVar: 'Set Var', addVar: 'Add Var', addUses: 'Add Uses',
+  setVar: 'Set Var', addVar: 'Add Var', addUses: 'Add Uses', addSlot: 'Add Slot', grant: 'Grant',
 }
 
 /** The ops whose target names a damage kind rather than a roll. Mirrors the
@@ -275,6 +321,11 @@ export const IS_DAMAGE_FLAG = (op: GraphOp) => op === 'resist' || op === 'vuln' 
  *  `damage.melee` + `damage.ranged` — two selectors, because the target list is
  *  an OR and there is no "weapon" roll kind to name. */
 export const ROLL_SELECTORS = [
+  /* THE THREE D20 ROLLS AT ONCE, under the name the rules use. Not sugar for
+     listing them: an armed effect mints one modifier PER selector, so
+     `[roll:check, roll:save, roll:attack]` is three separate bonuses off one
+     press, while `roll:d20` is the one die the rule actually grants. */
+  'd20',
   'attack', 'attack.melee', 'attack.ranged', 'attack.spell',
   /* WHICH ABILITY THE SWING USED. Alongside melee/ranged/spell rather than
      instead of them — a greataxe is both, and the target list is an OR, so

@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { useAuth } from './auth'
-import type { PartyRosterRow } from './database.types'
+import type { ArmedMod, Json, PartyRosterRow } from './database.types'
 
 /** Other bound characters (never your own row) — the projection and nothing
  *  else. The shape is `PartyRosterRow` (database.types.ts), which is where the
@@ -74,4 +74,28 @@ export async function castPartyEffect(
   })
   if (error) return { ok: false, reason: error.message }
   return data as PartyCastResult
+}
+
+export type PartyGrantResult =
+  | { ok: true; target_name: string; label: string; value: string | null }
+  | { ok: false; reason: string }
+
+/** Places one armed modifier on `targetId`'s row — the `grant` op's write.
+ *
+ *  The mod arrives WITHOUT `id`, `source`, `sourceName` or `at`: migration 0022
+ *  stamps all four, and rebuilds the rest of the object from a whitelist. This
+ *  is the one path where a player hands the server a payload bound for another
+ *  player's row, so what it may contain is the server's answer, not ours.
+ *
+ *  Dumb in the same way castPartyEffect is: no range check, no "can they see or
+ *  hear you", no one-die-at-a-time rule. The bard applies those at the table. */
+export async function grantPartyArm(
+  targetId: string,
+  /** Without `id`/`at`: the server stamps those, and `picks`/`spent` are
+   *  dropped by its whitelist — a granted die is one die, not a pick group. */
+  mod: Omit<ArmedMod, 'id' | 'at'>,
+): Promise<PartyGrantResult> {
+  const { data, error } = await supabase.rpc('grant_party_arm', { p_target: targetId, p_mod: mod as Json })
+  if (error) return { ok: false, reason: error.message }
+  return data as PartyGrantResult
 }

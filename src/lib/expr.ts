@@ -42,7 +42,16 @@ export const VAR_IDENTS = [
      Attack and its family are worded around — is `attacksThisTurn == 0`. */
   'attacksThisTurn',
 ] as const
-export const ROLL_IDENTS = ['cast'] as const
+export const ROLL_IDENTS = ['cast', 'proficient'] as const
+
+/** What each roll identifier IS, for the author-time probe. A type map rather
+ *  than a bare list because `proficient` is a boolean: probing it as 1 would
+ *  make `!proficient` a type error in the audit while working perfectly at the
+ *  table, which is the audit lying in the more damaging direction. */
+export const ROLL_IDENT_PROBE: Record<string, number | boolean> = {
+  cast: 1,
+  proficient: false,
+}
 
 // ---------------------------------------------------------------------------
 

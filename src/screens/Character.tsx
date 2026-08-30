@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import type { AbilityKey, CharacterRow, CharacterSheet, ShardTree } from '../lib/database.types'
+import type { AbilityKey, CharacterRow, CharacterSection, CharacterSheet, ShardTree } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import {
@@ -12,6 +12,7 @@ import {
 import type { Skill } from '../lib/dnd'
 import { effectiveSheet } from '../lib/effects'
 import { buildCheck, useRollLog } from '../lib/rolls'
+import { armsSpent, armsSpentBy } from '../lib/graphState'
 import type { CheckRequest, RollEntry } from '../lib/rolls'
 import { Riders } from '../components/Riders'
 import { useGraph } from '../lib/useGraph'
@@ -19,6 +20,7 @@ import styles from './Character.module.css'
 
 interface RouteContext {
   character: CharacterRow
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
   shardTrees?: Record<string, ShardTree>
 }
 
@@ -39,7 +41,7 @@ const FLASH_MS = 2000
  *  this screen renders in full (every roll made anywhere in the app, not just
  *  here), not persisted to the character row. */
 export function Character() {
-  const { character, shardTrees = {} } = useOutletContext<RouteContext>()
+  const { character, updateSection, shardTrees = {} } = useOutletContext<RouteContext>()
   const view = effectiveSheet(character, shardTrees)
   const { rolls, addRoll } = useRollLog()
   // Built once per character, not per roll — see lib/useGraph.ts.
@@ -72,7 +74,21 @@ export function Character() {
   function pushCheck(opts: CheckRequest & { key: AbilityKey }) {
     const entry = buildCheck(graph, { ...opts, mode })
     flashHex(opts.key, entry.check.total, entry.check.crit, entry.check.fumble)
-    addRoll(entry)
+    const logged = addRoll(entry)
+    /* AND THE ARMS IT USED ARE SPENT. The weapon card has always done this
+       (attackRolled); these two screens did not, so a `once` contribution aimed
+       at a check applied to that check and to every check after it, until a rest
+       emptied the queue. See armsSpent. */
+    void spendArms(logged)
+  }
+
+  /** Mark whatever this roll consumed. Nothing to write on a roll with no arms,
+   *  which is almost all of them — so the round trip only happens when it earned
+   *  one. */
+  async function spendArms(entry: RollEntry) {
+    const ids = armsSpentBy(...(entry.riderGroups ?? []).map(g => g.riders))
+    if (!ids.length) return
+    await updateSection('resources', armsSpent(character, ids, entry.id) as CharacterRow['resources'])
   }
 
   function rollAbilityCheck(key: AbilityKey) {

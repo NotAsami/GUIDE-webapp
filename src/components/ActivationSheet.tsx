@@ -19,7 +19,8 @@ import { rollHeal } from '../lib/dice'
 import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet } from '../lib/effects'
 import { gid, resolve, rollResolution, type GraphContext } from '../lib/graph'
-import { applyOutcomes, gateOf, outcomeLine, planActivation, type Outcome } from '../lib/graphState'
+import { applyOutcomes, gateOf, outcomeLine, planActivation, slotLadder, type GrantOutcome, type Outcome, type SlotOutcome } from '../lib/graphState'
+import { grantPartyArm, usePartyRoster } from '../lib/party'
 import { usesOf } from '../lib/featureView'
 import type { ExprScope } from '../lib/expr'
 import styles from './ActivationSheet.module.css'
@@ -73,15 +74,49 @@ export function useActivation(host: ActivationHost) {
        is a prerequisite. See gateOf. */
     if (gateOf(f, graph, character, gid('feature', f))) return
     const outcomes = planActivation(f, graph, character, gid('feature', f))
-    if (outcomes.some(o => o.ask)) { setPending({ feature: f, outcomes }); return }
+    /* A GRANT IS A QUESTION THE ENGINE CANNOT ANSWER — who gets the die. Same
+       reason an `ask` opens this sheet: the press cannot complete without a
+       human, so it stops and asks rather than guessing at a recipient. */
+    if (outcomes.some(o => o.ask || o.kind === 'grant' || (o.kind === 'slot' && o.level === undefined))) {
+      setPending({ feature: f, outcomes }); return
+    }
     void run(f, outcomes)
   }
 
   /** Spend/roll a feature: roll its expression (if any), decrement its use
    *  counter (if any), apply the accepted activation outcomes — in ONE write. */
-  async function run(f: Feature, outcomes: Outcome[], answers = new Set<string>()) {
+  /** What the confirm sheet came back with. An object rather than three
+   *  positional arguments: the sheet now asks up to three different questions
+   *  (which `ask`s, who receives a grant, which slot to spend) and a fourth
+   *  would have been a fourth parameter nobody could read at the call site. */
+  async function run(f: Feature, outcomes: Outcome[], picked: Picked = { answers: new Set() }) {
+    const { answers, recipient, slotLevel } = picked
     if (busy || !canUse(f, graph.scope)) return
     setBusy(true)
+
+    /* THE GRANTS GO FIRST, and a failure aborts the whole press.
+       Everything else in this function is a local write that cannot fail
+       halfway; a grant is a network call to another player's row. Spending the
+       die and then discovering the RPC refused would leave the bard a use down
+       with nothing delivered — so the fallible half runs while there is still
+       nothing to undo. */
+    const grants = outcomes.filter((o): o is GrantOutcome => o.kind === 'grant' && (!o.ask || answers.has(o.ask)))
+    const granted: RollLine[] = []
+    for (const g of grants) {
+      const res = recipient
+        ? await grantPartyArm(recipient, g.mod)
+        : ({ ok: false, reason: 'no_recipient' } as const)
+      if (!res.ok) {
+        setBusy(false)
+        addRoll({
+          kind: 'custom', title: f.name, subtitle: 'Not delivered', icon: f.icon,
+          lines: [{ label: g.mod.label, total: 'failed', breakdown: `The grant was refused (${res.reason}) — nothing was spent.` }],
+          subject: { kind: 'feature', id: f.id },
+        })
+        return
+      }
+      granted.push({ label: res.target_name, total: res.value ?? g.mod.label, breakdown: `${g.mod.label} armed on their sheet`, tone: 'buff' })
+    }
 
     const sheet = character.sheet ?? {}
     const features = sheet.features ?? []
@@ -126,8 +161,11 @@ export function useActivation(host: ActivationHost) {
 
     // The variable writes join the SAME write as the roll and the use counter —
     // two writes could land apart and leave a feature spent but not activated.
-    const { resources, usesPatch, applied } = applyOutcomes(character, outcomes, answers)
-    for (const o of applied) lines.push(outcomeLine(o))
+    const { resources, usesPatch, spellbook, applied } = applyOutcomes(character, outcomes, answers, { slotLevel })
+    // A grant already has its line — naming the recipient, which the plan could
+    // not — so it is not re-summarised from the outcome.
+    for (const o of applied) if (o.kind !== 'grant') lines.push(outcomeLine(o))
+    lines.push(...granted)
     /* Folded in AFTER the spend above, and as a patch, so a press that spends
        its own charge AND moves another feature's counter lands both — Persistent
        Rage spends itself to refill Rage in one write. */
@@ -136,8 +174,15 @@ export function useActivation(host: ActivationHost) {
         usesPatch[x.id] !== undefined ? { ...x, uses: { ...x.uses!, current: usesPatch[x.id] } } : x) }
     }
 
+    /* THREE COLUMNS, ONE WRITE. Variables land in `resources`, use counters on
+       `sheet`, spell slots in `spellbook` — and a press that spends a slot to
+       refill a counter has to land both or neither. */
     if (applied.length) {
-      await updateSections({ ...(nextSheet !== sheet ? { sheet: nextSheet } : {}), resources: resources as CharacterRow['resources'] })
+      await updateSections({
+        ...(nextSheet !== sheet ? { sheet: nextSheet } : {}),
+        ...(spellbook ? { spellbook } : {}),
+        resources: resources as CharacterRow['resources'],
+      })
     } else if (nextSheet !== sheet) {
       await updateSection('sheet', nextSheet)
     }
@@ -155,9 +200,9 @@ export function useActivation(host: ActivationHost) {
 
   const sheet = pending && createPortal(
     <ActivationConfirm
-      feature={pending.feature} outcomes={pending.outcomes} busy={busy}
+      feature={pending.feature} outcomes={pending.outcomes} character={character} busy={busy}
       onCancel={() => setPending(null)}
-      onConfirm={answers => { const p = pending; setPending(null); void run(p.feature, p.outcomes, answers) }}
+      onConfirm={picked => { const p = pending; setPending(null); void run(p.feature, p.outcomes, picked) }}
     />,
     document.body,
   )
@@ -170,9 +215,11 @@ export function useActivation(host: ActivationHost) {
  *  Every outcome is listed, so a write is never invisible. Ones carrying an
  *  `ask` are unticked checkboxes — §32 makes that a human's call, and unlike a
  *  roll rider this is answered on a deliberate press, so it needs no panel. */
-function ActivationConfirm({ feature, outcomes, busy, onCancel, onConfirm }: {
-  feature: Feature; outcomes: Outcome[]; busy: boolean
-  onCancel: () => void; onConfirm: (answers: Set<string>) => void
+export type Picked = { answers: Set<string>; recipient?: string; slotLevel?: number }
+
+function ActivationConfirm({ feature, outcomes, character, busy, onCancel, onConfirm }: {
+  feature: Feature; outcomes: Outcome[]; character: CharacterRow; busy: boolean
+  onCancel: () => void; onConfirm: (picked: Picked) => void
 }) {
   /* PRE-TICKED. The sheet already lists everything the press will do, so
      Confirm accepting it is the plain reading and unticking is how you decline —
@@ -188,6 +235,23 @@ function ActivationConfirm({ feature, outcomes, busy, onCancel, onConfirm }: {
       if (next.has(label)) next.delete(label); else next.add(label)
       return next
     })
+
+  /* WHO GETS IT. Only asked when a grant is actually on the plan, and only
+     ONE recipient per press: every rule shaped like this hands the die to "a
+     creature", singular, and a picker that allowed two would be inventing a
+     feature the rules do not have. */
+  const grants = outcomes.filter((o): o is GrantOutcome => o.kind === 'grant')
+  const [recipient, setRecipient] = useState<string | undefined>(undefined)
+  const needsRecipient = grants.some(o => !o.ask || answers.has(o.ask))
+
+  /* WHICH SLOT. "Expend a spell slot" does not name a level, so the player picks
+     — from what they actually have left, since an empty level is not a choice.
+     Only asked when the author left the level open; a rule that names one, and
+     a Pact Magic caster, both arrive already answered. */
+  const slots = outcomes.filter((o): o is SlotOutcome => o.kind === 'slot')
+  const openSlot = slots.find(o => o.level === undefined && (!o.ask || answers.has(o.ask)))
+  const [slotLevel, setSlotLevel] = useState<number | undefined>(undefined)
+  const ladder = openSlot ? slotLadder(character).filter(r => r.avail >= Math.abs(openSlot.delta)) : []
 
   return (
     <div className={styles.overlay} onClick={onCancel}>
@@ -222,11 +286,74 @@ function ActivationConfirm({ feature, outcomes, busy, onCancel, onConfirm }: {
           ))}
         </div>
 
+        {needsRecipient && <RecipientPicker value={recipient} onPick={setRecipient} />}
+
+        {openSlot && (
+          <div className={styles.cfGrant}>
+            <div className={styles.cfGrantHead}>Which slot to {openSlot.delta < 0 ? 'spend' : 'restore'}</div>
+            {ladder.length === 0 && (
+              <div className={styles.cfGrantNote}>No slot is available to pay this, so the feature cannot be used.</div>
+            )}
+            {ladder.map(r => (
+              <button
+                key={r.level} type="button"
+                className={`${styles.cfRow} ${styles.cfAsk} ${slotLevel === r.level ? styles.cfOn : ''}`}
+                aria-pressed={slotLevel === r.level} onClick={() => setSlotLevel(r.level)}
+              >
+                <i className={`fa-${slotLevel === r.level ? 'solid fa-circle-dot' : 'regular fa-circle'}`} />
+                <span className={styles.cfLabel}>Level {r.level}</span>
+                <span className={styles.cfVal}>{r.avail} / {r.total} left</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className={styles.cfFoot}>
           <button type="button" className={styles.cfCancel} onClick={onCancel}>Cancel</button>
-          <button type="button" className={styles.pUse} disabled={busy} onClick={() => onConfirm(answers)}>Confirm</button>
+          <button
+            type="button" className={styles.pUse}
+            disabled={busy || (needsRecipient && !recipient) || (!!openSlot && slotLevel === undefined)}
+            onClick={() => onConfirm({ answers, recipient, slotLevel })}
+          >Confirm</button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** The party roster as a one-of list — the recipient of a `grant`.
+ *
+ *  Its own component so the roster is fetched only when a press actually needs
+ *  it: every other confirm sheet in the app is a local question, and making all
+ *  of them wait on a round trip to answer one would be a cost paid by the
+ *  common case for the rare one.
+ *
+ *  An empty roster DISABLES the press rather than letting it through: a die
+ *  granted to nobody is a use spent for nothing, and "no party members are
+ *  bound" is something the player needs told, not worked around.
+ */
+function RecipientPicker({ value, onPick }: { value?: string; onPick: (id: string) => void }) {
+  const { roster, loading, error } = usePartyRoster()
+
+  return (
+    <div className={styles.cfGrant}>
+      <div className={styles.cfGrantHead}>Who receives it</div>
+      {loading && <div className={styles.cfGrantNote}>Reading the party roster…</div>}
+      {!loading && error && <div className={styles.cfGrantNote}>The roster could not be read — {error}</div>}
+      {!loading && !error && roster.length === 0 && (
+        <div className={styles.cfGrantNote}>No other characters are bound, so there is nobody to give this to.</div>
+      )}
+      {roster.map(p => (
+        <button
+          key={p.id} type="button"
+          className={`${styles.cfRow} ${styles.cfAsk} ${value === p.id ? styles.cfOn : ''}`}
+          aria-pressed={value === p.id} onClick={() => onPick(p.id)}
+        >
+          <i className={`fa-${value === p.id ? 'solid fa-circle-dot' : 'regular fa-circle'}`} />
+          <span className={styles.cfLabel}>{p.name}</span>
+          <span className={styles.cfVal}>{[p.class, p.level ? `L${p.level}` : null].filter(Boolean).join(' · ')}</span>
+        </button>
+      ))}
     </div>
   )
 }

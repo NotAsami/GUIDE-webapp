@@ -623,6 +623,16 @@ export type ArmedMod = {
    *  snapshot, so the node's text is not reachable from the roll. Without it the
    *  panel can name a blow and not say what it does — the original complaint. */
   text?: string
+  /** ONE BONUS OFFERED IN SEVERAL PLACES — the id shared by every mod a single
+   *  `oneOf` effect minted.
+   *
+   *  armedFrom mints one mod PER roll selector, which is right for "+2 to your
+   *  attack AND its damage" and wrong for "one die, on a check or an attack":
+   *  Peerless Skill spends one Bardic Inspiration die, so the two offers are the
+   *  same die standing in two queues. Spending or answering either spends the
+   *  group; undo releases it. Absent = an ordinary independent arm, which is
+   *  what every mod minted before this was. */
+  group?: string
   /** ANSWERED, on this roll. Set when the player takes the thing this mod was
    *  offering — picking a blow — and cleared if they undo.
    *
@@ -670,6 +680,18 @@ export type GraphState = {
  *  lib/graph.ts reads them through damageFlags(), never through resolve(). */
 export type GraphOp =
   | 'add' | 'adv' | 'dis' | 'crit' | 'note'
+  /** RE-RUNS A D20 ROLL THAT HAS ALREADY HAPPENED. The only op whose moment is
+   *  AFTER the roll: every other contribution is decided while the roll is being
+   *  built, and this one is offered on the finished entry in the roll panel,
+   *  because "if you fail the save, you can reroll it" is a decision nobody can
+   *  make until they have seen the number.
+   *
+   *  Countercharm is the shape. Halfling Lucky and Indomitable are the same
+   *  sentence with a different `keep`. Rerolling DAMAGE dice (Great Weapon
+   *  Fighting, Savage Attacker) is a different job and deliberately not this one:
+   *  damage dice stay unrolled until the roller sees them, so the two cannot
+   *  share a mechanism. */
+  | 'reroll'
   /** A MINIMUM on the finished total, not a bonus. Indomitable Might is "if your
    *  total for a Strength check is less than your Strength score, use the score
    *  instead" — which no `add` can express, because it changes nothing on a good
@@ -709,6 +731,31 @@ export type GraphOp =
    *  It therefore keeps the normal `target` list (feature gids only) where the
    *  other two name a variable. */
   | 'setVar' | 'addVar' | 'addUses'
+  /** The only op that leaves this character entirely: it arms a modifier on
+   *  ANOTHER party member's row. Bardic Inspiration is the shape — "that
+   *  creature gains one of your Bardic Inspiration dice", rolled by them, on a
+   *  roll you will never see.
+   *
+   *  A SNAPSHOT, like every other arm: the value is resolved against the
+   *  GRANTER's scope at press time, because the die is the bard's and a level-14
+   *  bard's d10 does not shrink because the fighter reading it is level 3. The
+   *  recipient's session never re-evaluates it.
+   *
+   *  Crosses the RLS wall through grant_party_arm (migration 0022), the same
+   *  SECURITY DEFINER pattern cast_party_effect already uses — a player may not
+   *  write another player's row directly and this does not change that. */
+  | 'grant'
+  /** Spends or restores a SPELL SLOT — the one resource that lives in
+   *  `spellbook` rather than on the sheet or in `resources`, and so the one no
+   *  activation could reach. "You can expend a spell slot to regain one
+   *  expended use of Bardic Inspiration" is the shape; Divine Smite and Font of
+   *  Magic are the same sentence with a different payout.
+   *
+   *  WHICH slot is usually the player's call — the rules say "a spell slot", not
+   *  "a 1st-level slot" — so `level` is optional and an absent one is asked at
+   *  the press, like a grant's recipient. A Pact Magic caster has one slot level
+   *  by construction, so the question does not arise there. */
+  | 'addSlot'
 
 /** One structured contribution a node makes to a roll. Absent `graph` = a pure
  *  prose node, which stays a legitimate outcome — the effect block is opt-in per
@@ -765,6 +812,15 @@ export type GraphEffect = {
   label: string
   /** `add` on a damage roll: the damage type, for the breakdown colour. */
   dmgType?: string
+  /** ONE BONUS ACROSS EVERY TARGET, rather than one per target. Only meaningful
+   *  beside `once`: an arming effect mints a modifier per roll selector, and
+   *  this says those modifiers are the same bonus standing in several queues —
+   *  take it on any one roll and the rest are spent with it.
+   *
+   *  Off (the default) is what every arming effect has always done, and is
+   *  correct whenever the targets are genuinely separate bonuses: "+2 to your
+   *  next attack and to its damage" is two things, both of which happen. */
+  oneOf?: boolean
   /** Arms once instead of applying continuously: the contribution waits in
    *  `resources.graph.armed` for the next matching roll rather than riding every
    *  one. Live — see ArmedMod. */
@@ -775,6 +831,15 @@ export type GraphEffect = {
   text?: string
   /** `floor` only. The lowest the finished total may be, as a formula. */
   minimum?: string
+  /** `reroll` only. WHAT THE NEW ROLL IS.
+   *   - `advantage` adds a second d20 and keeps the higher — Countercharm.
+   *   - `new` replaces the die and you are stuck with it — Halfling Lucky.
+   *  Absent reads as `new`, the plainer of the two. */
+  keep?: 'advantage' | 'new'
+  /** `addSlot` only. WHICH slot level moves, as a formula. Absent means the
+   *  player chooses at the press — which is what "expend a spell slot" says.
+   *  Ignored for a Pact Magic caster, whose slots are all one level. */
+  level?: string
   /** `crit` only. Lowest d20 face that counts as a critical hit, as a formula.
    *  The LOWEST threshold across every applying node wins — two features that
    *  both improve the range pick the better one rather than stacking. */
@@ -2181,6 +2246,10 @@ export type Database = {
       /** Migration 0011's only path that can write another PC's HP or
        *  activeEffects — see the migration's header comment. */
       cast_party_effect: { Args: { p_target: string; p_heal: number | null; p_effect: Json | null }; Returns: Json }
+      /** Migration 0022's only path that can arm a modifier on another PC's
+       *  sheet — the `grant` op's write. The mod is rebuilt from a whitelist
+       *  server-side; see the migration's header comment for why. */
+      grant_party_arm: { Args: { p_target: string; p_mod: Json }; Returns: Json }
     }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>

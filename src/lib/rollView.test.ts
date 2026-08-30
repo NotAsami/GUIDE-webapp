@@ -6,11 +6,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Rider } from './graph.ts'
-import type { RollEntry } from './rolls.tsx'
+import type { CheckRoll, RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
 import {
   askSections, catalogView, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf,
-  picksAllowed, picksTaken, rerollAt,
+  picksAllowed, picksTaken, rerollAt, rerollD20, rerollsOf,
   releaseIdsOf, resolvedOf, riderAmount, riderValue, riderViews, rollTotals, sourceGroups, unresolvedOf,
 } from './rollView.ts'
 
@@ -600,4 +600,68 @@ test('releasing one source never reaches another feature holding on the same rol
   const views = riderViews(bsEntry())
   const [section] = askSections(views).filter(s => s.choice)
   assert.ok(!releaseIdsOf(views, section.views).includes('a-rage'))
+})
+
+/* ---------- `reroll`: re-running a roll that already happened ---------- */
+
+const checked = (over: Partial<CheckRoll> = {}): RollEntry => ({
+  id: 'r1', at: 1, kind: 'save', title: 'WIS SAVE',
+  check: {
+    mode: 'normal', rolls: [{ v: 7, sides: 20 }], pick: 7,
+    terms: [{ label: 'WIS', value: 4 }, { label: 'PROF', value: 3, prof: true }],
+    breakdown: '7 +4 WIS +3 PROF', total: 14, crit: false, fumble: false, ...over,
+  },
+})
+
+test('reroll with advantage ADDS a die and keeps the higher', () => {
+  const before = checked()
+  const patch = rerollD20(before, 'advantage')!
+  const c = patch.check!
+  assert.equal(c.rolls.length, 2, 'the original die is still there')
+  assert.equal(c.rolls[0].v, 7, '…and it is the one that was rolled')
+  assert.equal(c.mode, 'adv')
+  assert.equal(c.pick, Math.max(...c.rolls.map(d => d.v)))
+  // The total is recomposed from the terms, so the breakdown cannot drift.
+  assert.equal(c.total, c.pick + 7)
+  assert.ok(c.breakdown.startsWith(`${c.pick} `))
+})
+
+test('reroll `new` replaces the die — better or worse, you are stuck with it', () => {
+  const c = rerollD20(checked(), 'new')!.check!
+  assert.equal(c.rolls.length, 1, 'no second die')
+  assert.equal(c.mode, 'normal')
+  assert.equal(c.pick, c.rolls[0].v)
+  assert.equal(c.total, c.pick + 7)
+})
+
+test('a rerolled d20 recomputes crit and fumble — unlike a single-die reroll', () => {
+  /* rerollAt freezes them on purpose: a crit already decided how many damage
+     dice exist. A check or a save has no damage hanging off it, so a save still
+     reading CRIT on a natural 20 the player just rerolled away is simply wrong. */
+  for (let i = 0; i < 200; i++) {
+    const c = rerollD20(checked({ rolls: [{ v: 20, sides: 20 }], pick: 20, crit: true, total: 27 }), 'new')!.check!
+    assert.equal(c.crit, c.pick === 20, `crit follows the die that counts (${c.pick})`)
+    assert.equal(c.fumble, c.pick === 1)
+  }
+})
+
+test('a reroll rider is an offer, not a contribution and not a checkbox', () => {
+  const entry: RollEntry = {
+    ...checked(),
+    riderGroups: [{ label: 'Save', riders: [
+      { label: 'Countercharm', source: 'Countercharm', op: 'reroll', formula: '', flat: 0, dice: [], when: 'manual', on: false, keep: 'advantage' },
+      { label: 'Bless', source: 'Bless', op: 'add', formula: '1d4', flat: 0, dice: ['1d4'], when: 'always', on: true },
+    ] }],
+  }
+  const views = riderViews(entry)
+  assert.deepEqual(resolvedOf(views).map(v => v.rider.label), ['Bless'], 'not an applied line')
+  assert.deepEqual(unresolvedOf(views).map(v => v.rider.label), [], 'not an outstanding ask')
+  assert.deepEqual(rerollsOf(views).map(v => v.rider.label), ['Countercharm'])
+  // Taken, it stops being offered.
+  const taken = patchRiders(entry, [{ index: 0, patch: { on: true } }])
+  assert.equal(rerollsOf(riderViews({ ...entry, riderGroups: taken })).length, 0)
+})
+
+test('a roll with no d20 cannot be rerolled', () => {
+  assert.equal(rerollD20({ id: 'x', at: 1, kind: 'weapon', title: 'Axe' }, 'advantage'), null)
 })

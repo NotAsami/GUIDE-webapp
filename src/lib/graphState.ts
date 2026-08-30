@@ -18,13 +18,14 @@ import type {
 } from './effects.ts'
 import { activeSources } from './effects.ts'
 import type {
-  ArmedMod, CharacterRow, Feature, GraphEffect, GraphState, Json, ShardTree, VarDef,
+  ArmedMod, CharacterRow, CharacterSpellbook, Feature, GraphEffect, GraphState, Json, ShardTree, VarDef,
 } from './database.types.ts'
 import { evalExpr, freeIdents, type ExprScope } from './expr.ts'
 import type { GraphContext, ResolveReq, Rider } from './graph.ts'
 import { armedMatches, asKey, gid, levelFormula, reqKeys, staleArmed } from './graph.ts'
 import { IS_ACTIVATION } from './opSchema.ts'
 import { usesOf } from './featureView.ts'
+import { pactSlotCount, pactSlotLevel } from './spells.ts'
 
 const state = (character: CharacterRow): GraphState =>
   ((character.resources as { graph?: GraphState } | undefined)?.graph ?? {})
@@ -143,7 +144,7 @@ export const playerVars = (character: CharacterRow, shardTrees: Record<string, S
  *  `ask` gates both identically (§32 does not care what is being resolved), and
  *  both land in one `resources` patch. Splitting them into two lists would mean
  *  two confirm sheets and two write paths for one press. */
-export type Outcome = VarOutcome | ArmOutcome | UsesOutcome
+export type Outcome = VarOutcome | ArmOutcome | UsesOutcome | GrantOutcome | SlotOutcome
 
 type OutcomeBase = {
   eff: GraphEffect
@@ -174,6 +175,43 @@ export type ArmOutcome = OutcomeBase & {
   mod: ArmedMod
 }
 
+/** `addSlot`: a spell slot is spent or restored.
+ *
+ *  THE THIRD PLACE A PRESS CAN WRITE. Variables live in `resources`, use
+ *  counters on `sheet`, and slots in `spellbook` — three columns, and a press
+ *  that touches two of them has to land both or neither, which is why
+ *  applyOutcomes returns a patch per column rather than one object.
+ *
+ *  `level` is ABSENT until the player picks one, because "expend a spell slot"
+ *  does not name a level. A Pact Magic caster is the exception: every pact slot
+ *  is the same level, so `pact` is set and the level is not a question. */
+export type SlotOutcome = OutcomeBase & {
+  kind: 'slot'
+  /** Which slot level moves. Undefined = the player has not chosen yet. */
+  level?: number
+  /** Signed: negative spends. */
+  delta: number
+  /** Pact Magic, where the counter is `pactExpended` and there is no ladder. */
+  pact: boolean
+}
+
+/** `grant`: an armed modifier bound for ANOTHER party member's row.
+ *
+ *  THE ONE OUTCOME `applyOutcomes` CANNOT APPLY. Every other kind folds into the
+ *  patch this character is about to write; this one crosses the RLS wall and can
+ *  only travel through grant_party_arm, which is a network call. So it comes back
+ *  in `applied` carrying its payload and nothing else, and the caller — which
+ *  already has the recipient the player picked — sends it.
+ *
+ *  `mod` has no `id` and no recipient: the server stamps both, exactly as
+ *  cast_party_effect stamps an effect's id and source. A client-chosen id on
+ *  someone else's row is a client-chosen collision. */
+export type GrantOutcome = OutcomeBase & {
+  kind: 'grant'
+  /** The armed modifier to place, minus what the server owns. */
+  mod: Omit<ArmedMod, 'id' | 'at'>
+}
+
 /** `addUses`: a use counter moves — this feature's, or another's.
  *
  *  THE ONLY OUTCOME THAT LANDS ON `sheet`, because that is where uses live while
@@ -187,6 +225,51 @@ export type UsesOutcome = OutcomeBase & {
   /** Before, after: both resolved and clamped, so the summary needs no maths. */
   current: number
   next: number
+}
+
+/** WHAT SLOTS THIS CASTER HAS, in the one shape the rest of this file uses.
+ *
+ *  Two storage schemes behind one reading: a standard caster owns a ladder at
+ *  `spellbook.slots[]`, and a Pact Magic caster owns N slots of ONE level with
+ *  only `pactExpended` stored — both `total` and `level` are pure functions of
+ *  character level there, never authored. Collapsing them here is what lets
+ *  `addSlot` be one op rather than two.
+ *
+ *  `avail` is what may still be spent; `total` is the ceiling a restore clamps
+ *  to. A caster with neither scheme comes back empty, which reads as "cannot pay"
+ *  rather than as an error — a Barbarian pressing a slot cost is a bad grant, not
+ *  a crash. */
+export function slotLadder(character: CharacterRow): { level: number; avail: number; total: number }[] {
+  const sb = character.spellbook
+  if (!sb) return []
+  if (sb.pactMagic) {
+    const total = pactSlotCount(character.identity?.level ?? 1)
+    return [{ level: pactSlotLevel(character.identity?.level ?? 1), total, avail: Math.max(0, total - (sb.pactExpended ?? 0)) }]
+  }
+  return (sb.slots ?? [])
+    .filter(s => s.total > 0)
+    .map(s => ({ level: s.level, total: s.total, avail: Math.max(0, s.total - s.expended) }))
+}
+
+/** Fold one slot movement into a spellbook patch. Clamped at both ends: a spend
+ *  cannot go past what is available and a restore cannot bank past `total`,
+ *  which is what makes "regain all your expended slots" authorable as a big
+ *  positive number. Returns null when nothing moved. */
+export function slotPatch(
+  character: CharacterRow, level: number, delta: number,
+): CharacterSpellbook | null {
+  const sb = character.spellbook
+  if (!sb) return null
+  if (sb.pactMagic) {
+    const total = pactSlotCount(character.identity?.level ?? 1)
+    const spent = Math.min(total, Math.max(0, (sb.pactExpended ?? 0) - delta))
+    return spent === (sb.pactExpended ?? 0) ? null : { ...sb, pactExpended: spent }
+  }
+  const row = (sb.slots ?? []).find(s => s.level === level)
+  if (!row) return null
+  const spent = Math.min(row.total, Math.max(0, row.expended - delta))
+  if (spent === row.expended) return null
+  return { ...sb, slots: (sb.slots ?? []).map(s => (s.level === level ? { ...s, expended: spent } : s)) }
 }
 
 /** The armed modifiers one `once` effect mints, given the node that owns it.
@@ -222,10 +305,14 @@ export function armedFrom(eff: GraphEffect, source: string, sourceName?: string,
   if (!targets.length) {
     return [{ ...base, id: `${source}:${eff.id}`, kind: 'feature', subject: source }]
   }
+  /* ONE BONUS OR SEVERAL. A group id only when the author said `oneOf` AND there
+     is more than one queue to stand in — a lone arm needs no group, and stamping
+     one would imply a sibling that is not there. */
+  const group = eff.oneOf && targets.length > 1 ? `${source}:${eff.id}` : undefined
   return targets.flatMap(t => {
     if (!t.startsWith('roll:')) return []
     const [kind, sub] = t.slice(5).split('.')
-    return [{ ...base, id: `${source}:${eff.id}:${t}`, kind, ...(sub ? { sub } : {}) }]
+    return [{ ...base, id: `${source}:${eff.id}:${t}`, kind, ...(sub ? { sub } : {}), ...(group ? { group } : {}) }]
   })
 }
 
@@ -297,6 +384,79 @@ export function planActivation(
       continue
     }
     if (!IS_ACTIVATION(eff.op)) continue
+
+    /* `grant` leaves this character. It is minted by armedFrom like any other
+       arm — one compiler, so a granted die resolves its by-level table exactly
+       as an armed one does — and then handed OUT rather than stored. Planned
+       here, sent by the caller: see GrantOutcome. */
+    if (eff.op === 'grant') {
+      if (eff.when !== undefined) {
+        const cond = evalExpr(eff.when, ctx.scope)
+        if (cond === null || cond.t !== 'bool' || !cond.v) continue
+      }
+      /* AGAINST THE GRANTER'S SCOPE AND THEN FROZEN. The recipient's session
+         never re-evaluates it, and must not: `1d6` off a bard's own table means
+         nothing on the fighter's sheet, where `bardicDie` is not declared. */
+      for (const raw of armedFrom(eff, source ?? '', feature.name, typeof ctx.scope.level === 'number' ? ctx.scope.level : undefined)) {
+        /* IT ARRIVES AS AN `add`, not as a `grant`. `grant` names how the mod
+           TRAVELLED; on the recipient's sheet it is an ordinary armed bonus, and
+           resolve() evaluates a mod's formula only when `op === 'add'` — left as
+           'grant' the die would sit on their roll panel worth exactly zero, with
+           nothing to report it. */
+        const { id: _id, at: _at, ...mod } = { ...raw, op: 'add' as const }
+        out.push({
+          kind: 'grant', eff, ask: eff.ask, mod,
+          summary: `${eff.label}${mod.value ? ` (${mod.value})` : ''} · to a party member`,
+        })
+      }
+      continue
+    }
+
+    /* `addSlot` reaches the SPELLBOOK. Planned beside addUses for the same
+       reason — it moves a counter rather than a variable — and refuses an
+       unpayable cost by the same rule. */
+    if (eff.op === 'addSlot') {
+      if (eff.when !== undefined) {
+        const cond = evalExpr(eff.when, ctx.scope)
+        if (cond === null || cond.t !== 'bool' || !cond.v) continue
+      }
+      const d = evalExpr(eff.value ?? '', ctx.scope)
+      if (d === null || d.t !== 'num' || d.dice.length) continue
+      const delta = Math.trunc(d.flat)
+      if (delta === 0) continue
+
+      const ladder = slotLadder(character)
+      const pact = !!character.spellbook?.pactMagic
+
+      /* WHICH LEVEL. Authored if the rule names one; otherwise the player's,
+         except for a pact caster who has exactly one to choose from. */
+      let level: number | undefined
+      if (eff.level?.trim()) {
+        const lv = evalExpr(eff.level, ctx.scope)
+        if (lv === null || lv.t !== 'num' || lv.dice.length) continue
+        level = Math.trunc(lv.flat)
+      } else if (pact || ladder.length === 1) {
+        level = ladder[0]?.level
+      }
+
+      /* A COST THAT CANNOT BE PAID REFUSES THE WHOLE PRESS, exactly as addUses
+         does. With a named level that is "no slot of that level"; with the
+         player's choice still open it is the weaker but honest "no slot at all",
+         and the picker refuses the individual levels that are empty. */
+      if (delta < 0) {
+        const payable = level === undefined
+          ? ladder.some(r => r.avail >= -delta)
+          : (ladder.find(r => r.level === level)?.avail ?? 0) >= -delta
+        if (!payable) return []
+      }
+
+      const what = pact ? 'Pact slot' : level === undefined ? 'a spell slot' : `L${level} slot`
+      out.push({
+        kind: 'slot', eff, ask: eff.ask, level, delta, pact,
+        summary: `${delta < 0 ? 'Spend' : 'Restore'} ${Math.abs(delta)} × ${what}`,
+      })
+      continue
+    }
 
     /* `addUses` reaches a FEATURE, not a variable, so it is resolved before the
        variable machinery below rather than through it. An empty target means
@@ -412,7 +572,18 @@ export function applyOutcomes(
   character: CharacterRow,
   outcomes: Outcome[],
   answers: Set<string>,
-): { resources: Record<string, Json>; usesPatch?: Record<string, number>; applied: Outcome[] } {
+  /** What the confirm sheet asked and the player answered, beyond the `ask`
+   *  checkboxes. `slotLevel` fills in an `addSlot` whose level was the player's
+   *  to choose — see SlotOutcome. */
+  picked: { slotLevel?: number } = {},
+): {
+  resources: Record<string, Json>
+  usesPatch?: Record<string, number>
+  /** The third column. Undefined when no slot moved, so a caller that ignores
+   *  it ignores nothing. */
+  spellbook?: CharacterSpellbook
+  applied: Outcome[]
+} {
   const applied = outcomes.filter(o => !o.ask || answers.has(o.ask))
   const next: Record<string, number | boolean> = {}
   for (const o of applied) {
@@ -446,7 +617,21 @@ export function applyOutcomes(
     ? Object.fromEntries(moved.map(o => [o.target.id, o.next]))
     : undefined
 
-  return { resources: withArmed(setVars(character, next), arms), usesPatch, applied }
+  /* THE SLOTS, which live in `spellbook` — a third column beside `resources` and
+     `sheet`. Folded one at a time so two movements compose (spend a slot, then
+     restore two) rather than the last overwriting the first. */
+  let spellbook: CharacterSpellbook | undefined
+  for (const o of applied) {
+    if (o.kind !== 'slot') continue
+    const level = o.level ?? picked.slotLevel
+    // No level chosen and none implied: nothing to move. The confirm sheet does
+    // not let this through, and silently skipping beats guessing at a level.
+    if (level === undefined) continue
+    const next = slotPatch({ ...character, spellbook: spellbook ?? character.spellbook }, level, o.delta)
+    if (next) spellbook = next
+  }
+
+  return { resources: withArmed(setVars(character, next), arms), usesPatch, spellbook, applied }
 }
 
 /** One activation outcome as a line in the roll log.
@@ -463,6 +648,10 @@ export function outcomeLine(o: Outcome): { label: string; total: string; breakdo
   // yet: it is OFFERED, and the roll panel decides.
   if (o.kind === 'arm') return { ...base, label: o.mod.label, total: o.mod.ask ? 'offered' : 'armed' }
   if (o.kind === 'uses') return { ...base, label: o.target.name, total: `${o.next} uses` }
+  // A grant is armed too — on someone else's sheet. `to` is filled in by the
+  // caller once the recipient is known; this line is what the plan can say.
+  if (o.kind === 'grant') return { ...base, label: o.mod.label, total: 'granted' }
+  if (o.kind === 'slot') return { ...base, label: o.pact ? 'Pact Magic' : 'Spell Slots', total: o.summary }
   return {
     ...base,
     label: o.def.label ?? o.def.name,
@@ -555,13 +744,40 @@ export function attackRolled(
   at: string,
 ): Record<string, Json> {
   const g = state(character)
+  return {
+    ...armsSpent(character, spent, at),
+    graph: { ...(armsSpent(character, spent, at).graph as GraphState), attacks: (g.attacks ?? 0) + 1 },
+  } as Record<string, Json>
+}
+
+/** THE ARMS ONE ROLL USED UP, marked spent — the half of `attackRolled` that is
+ *  not about attacks.
+ *
+ *  Split out because only the weapon card was doing it. A `once` contribution
+ *  aimed at `roll:check` was minted, applied to the next check, and then applied
+ *  to every check after that: Character and Stats build a roll and log it, and
+ *  nothing on either screen ever told the queue the arm had been used. Peerless
+ *  Skill spent one Bardic Inspiration die and paid out on every ability check
+ *  until the next long rest emptied the queue.
+ *
+ *  An arm is for "your NEXT check". The next check happened. */
+export function armsSpent(
+  character: CharacterRow,
+  spent: string[],
+  at: string,
+): Record<string, Json> {
+  const g = state(character)
+  /* GROUP SIBLINGS GO WITH IT. `roll:check` and `roll:attack` on one `oneOf`
+     effect are one die offered in two places, so spending either spends both —
+     see ArmedMod.group. */
+  const groups = new Set((g.armed ?? []).filter(m => spent.includes(m.id) && m.group).map(m => m.group))
   const hit = new Set(spent)
   return {
     ...(character.resources ?? {}),
     graph: {
       ...g,
-      attacks: (g.attacks ?? 0) + 1,
-      armed: (g.armed ?? []).map(m => (hit.has(m.id) ? { ...m, spent: at } : m)),
+      armed: (g.armed ?? []).map(m =>
+        (hit.has(m.id) || (m.group && groups.has(m.group))) ? { ...m, spent: at } : m),
     },
   } as Record<string, Json>
 }
@@ -580,12 +796,16 @@ export function answerArmed(
 ): Record<string, Json> {
   const g = state(character)
   const hit = new Set(ids)
+  // Answering one member of a `oneOf` group answers the group: the die was
+  // offered on two rolls and there is only one of it. Undo releases all of them
+  // together for the same reason.
+  const groups = new Set((g.armed ?? []).filter(m => hit.has(m.id) && m.group).map(m => m.group))
   return {
     ...(character.resources ?? {}),
     graph: {
       ...g,
       armed: (g.armed ?? []).map(m => {
-        if (!hit.has(m.id)) return m
+        if (!hit.has(m.id) && !(m.group && groups.has(m.group))) return m
         if (at === null) { const { spent: _drop, ...rest } = m; return rest }
         return { ...m, spent: at }
       }),

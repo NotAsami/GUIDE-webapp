@@ -4,13 +4,14 @@
 // the whole write path is testable without a database or a renderer.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { CharacterRow, Feature, GraphEffect, Json, VarDef } from './database.types.ts'
+import type { ArmedMod, CharacterRow, Feature, GraphEffect, GraphState, Json, VarDef } from './database.types.ts'
 import { buildContext, resolve, staleArmed } from './graph.ts'
 import { longRestPatch, shortRestPatch } from './rest.ts'
 import {
   answerArmed, applyOutcomes, armableFor, attackRolled, consumeArmed, gateOf, planActivation, playerVars, restVars, scopedVars, setDmVars,
   armsSpentBy,
-  setVars, turnGraphPatch, turnVars, withArmedCleared,
+  setVars, slotLadder, slotPatch, turnGraphPatch, turnVars, withArmedCleared,
+  armedFrom, armsSpent,
 } from './graphState.ts'
 
 
@@ -947,4 +948,284 @@ test('picks is a FORMULA, because the count is a level thing', () => {
   assert.deepEqual(pickArms(f, 17).map(m => m?.picks), [2, 2])
   // Unreadable is one — the behaviour every pick-one had before this existed.
   assert.deepEqual(pickArms(offerer('nonsense')).map(m => m?.picks), [undefined, undefined])
+})
+
+/* ---------- `grant`: the one outcome that leaves this sheet ---------- */
+
+const BARDIC: GraphEffect = {
+  id: 'bi_grant', op: 'grant', label: 'Bardic Inspiration',
+  target: ['roll:d20'], value: '1d6',
+  byLevel: ['', '1d6', '', '', '', '1d8', '', '', '', '', '1d10', '', '', '', '', '1d12', '', '', '', '', ''],
+}
+
+const bard = (level: number) => character({
+  identity: { level },
+  sheet: { abilities: { str: 8, dex: 14, con: 12, int: 12, wis: 10, cha: 20 }, features: [{ id: 'bi', name: 'Bardic Inspiration', graph: [BARDIC] } as Feature] },
+} as Partial<CharacterRow>)
+
+test('a grant plans a mod for someone else and writes NOTHING here', () => {
+  const c = bard(14)
+  const f = c.sheet!.features![0]
+  const out = planActivation(f, buildContext(c), c, 'feature:bi')
+  assert.equal(out.length, 1)
+  assert.equal(out[0].kind, 'grant')
+
+  // The local patch is untouched: no arm of our own, no variable, no counter.
+  const applied = applyOutcomes(c, out, new Set())
+  assert.equal(applied.usesPatch, undefined)
+  assert.deepEqual((applied.resources.graph as { armed?: unknown[] }).armed ?? [], [])
+  // …but it comes back in `applied`, because the caller is what sends it.
+  assert.equal(applied.applied.length, 1)
+})
+
+test("a granted die is snapshotted at the GRANTER's level, not the recipient's", () => {
+  // The recipient's session never re-evaluates it — and could not: `bardicDie`
+  // is not declared on a fighter's sheet.
+  const at = (level: number) => {
+    const c = bard(level)
+    const out = planActivation(c.sheet!.features![0], buildContext(c), c, 'feature:bi')
+    return (out[0] as { mod: { value?: string } }).mod.value
+  }
+  assert.equal(at(1), '1d6')
+  assert.equal(at(4), '1d6')   // the table walks DOWN to the last filled slot
+  assert.equal(at(5), '1d8')
+  assert.equal(at(14), '1d10')
+  assert.equal(at(20), '1d12')
+})
+
+test('a granted mod carries no id and no timestamp — the server stamps both', () => {
+  // A client-chosen id on someone else's row is a client-chosen collision, and
+  // `source`/`sourceName` name the GRANTER, which only the server can vouch for.
+  const c = bard(5)
+  const out = planActivation(c.sheet!.features![0], buildContext(c), c, 'feature:bi')
+  const mod = (out[0] as { mod: Record<string, unknown> }).mod
+  assert.equal('id' in mod, false)
+  assert.equal('at' in mod, false)
+  assert.equal(mod.kind, 'd20')
+  assert.equal(mod.op, 'add')
+})
+
+test('ONE grant per press, because roll:d20 is one selector', () => {
+  // The bug this kind exists to prevent: three selectors would place three
+  // separate dice on the recipient, all usable, for one expended use.
+  const c = bard(5)
+  const out = planActivation(c.sheet!.features![0], buildContext(c), c, 'feature:bi')
+  assert.equal(out.filter(o => o.kind === 'grant').length, 1)
+
+  const wide = character({
+    identity: { level: 5 },
+    sheet: { features: [{ id: 'bi', name: 'BI', graph: [{ ...BARDIC, target: ['roll:check', 'roll:save', 'roll:attack'] }] } as Feature] },
+  } as Partial<CharacterRow>)
+  assert.equal(planActivation(wide.sheet!.features![0], buildContext(wide), wide, 'feature:bi').length, 3)
+})
+
+test('a grant honours `when` like every other activation', () => {
+  const c = character({
+    identity: { level: 5 },
+    sheet: { features: [{ id: 'bi', name: 'BI', vars: VARS, graph: [{ ...BARDIC, when: 'isRaging' }] } as Feature] },
+  } as Partial<CharacterRow>, { vars: { isRaging: false } })
+  assert.deepEqual(planActivation(c.sheet!.features![0], buildContext(c), c, 'feature:bi'), [])
+})
+
+test('THE END TO END: a planned grant, stamped and placed, rides the recipient\'s roll', () => {
+  /* The half no unit boundary covers on its own — the granter plans it, the
+     server stamps it, and it is the RECIPIENT's resolve() that has to make a
+     number of it. The mod left here carrying `op: 'grant'` once, and every
+     assertion above still passed while the die landed worth zero. */
+  const giver = bard(14)
+  const out = planActivation(giver.sheet!.features![0], buildContext(giver), giver, 'feature:bi')
+  const planned = (out[0] as { mod: Record<string, unknown> }).mod
+
+  // What migration 0022 adds, and nothing the client sent.
+  const stamped = { ...planned, id: 'srv-1', at: 1, source: 'party:giver', sourceName: 'The Bard' }
+
+  // A recipient who has never heard of a bard: no bardicDie, no features.
+  const ally = character({
+    identity: { level: 3 },
+    sheet: { abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 8 }, features: [] },
+  } as Partial<CharacterRow>, { armed: [stamped] })
+
+  const ctx = buildContext(ally)
+  for (const kind of ['check', 'save', 'attack'] as const) {
+    const r = resolve(ctx, { kind })
+    assert.deepEqual(r.riders.map(x => x.dice).flat(), ['1d10'], kind)
+    assert.equal(r.riders[0].source, 'The Bard')
+    assert.deepEqual(r.problems, [])
+  }
+  // Not on a damage roll — a D20 Test is the three above and nothing else.
+  assert.deepEqual(resolve(ctx, { kind: 'damage' }).riders, [])
+})
+
+/* ---------- `addSlot`: the third column ---------- */
+
+const caster = (slots: { level: number; total: number; expended: number }[], graph: GraphEffect[], over: object = {}) =>
+  character({
+    identity: { level: 9 },
+    sheet: { abilities: { str: 8, dex: 14, con: 12, int: 12, wis: 10, cha: 18 }, features: [{ id: 'f', name: 'Font', graph } as Feature] },
+    spellbook: { spellcasting: true, slots },
+    ...over,
+  } as Partial<CharacterRow>)
+
+const SPEND: GraphEffect = { id: 's1', op: 'addSlot', label: 'Expend a spell slot', value: '-1' }
+const LADDER = [
+  { level: 1, total: 4, expended: 4 },   // empty
+  { level: 2, total: 3, expended: 1 },
+  { level: 3, total: 2, expended: 0 },
+]
+
+test('slotLadder reads both storage schemes as one shape', () => {
+  assert.deepEqual(slotLadder(caster(LADDER, [])), [
+    { level: 1, total: 4, avail: 0 },
+    { level: 2, total: 3, avail: 2 },
+    { level: 3, total: 2, avail: 2 },
+  ])
+  // A Pact caster stores only `pactExpended`; total and level are derived.
+  const pact = caster([], [], { spellbook: { spellcasting: true, pactMagic: true, pactExpended: 1 } })
+  assert.deepEqual(slotLadder(pact), [{ level: 5, total: 2, avail: 1 }])
+  // A non-caster has no slots, which reads as "cannot pay" and never as an error.
+  assert.deepEqual(slotLadder(character()), [])
+})
+
+test('an unnamed slot level stays the PLAYER\'s question', () => {
+  const c = caster(LADDER, [SPEND])
+  const [o] = planActivation(c.sheet!.features![0], buildContext(c), c, 'feature:f')
+  assert.equal(o.kind, 'slot')
+  assert.equal((o as { level?: number }).level, undefined, '"a spell slot" names no level')
+
+  // …unless the rule names one, or there is only one to name.
+  const named = caster(LADDER, [{ ...SPEND, level: '2' }])
+  assert.equal((planActivation(named.sheet!.features![0], buildContext(named), named, 'feature:f')[0] as { level?: number }).level, 2)
+  const only = caster([{ level: 3, total: 2, expended: 0 }], [SPEND])
+  assert.equal((planActivation(only.sheet!.features![0], buildContext(only), only, 'feature:f')[0] as { level?: number }).level, 3)
+})
+
+test('a slot cost that cannot be paid refuses the whole press', () => {
+  // Nothing left anywhere.
+  const dry = caster([{ level: 1, total: 4, expended: 4 }], [SPEND])
+  assert.deepEqual(planActivation(dry.sheet!.features![0], buildContext(dry), dry, 'feature:f'), [])
+  assert.deepEqual(gateOf(dry.sheet!.features![0], buildContext(dry), dry, 'feature:f'), [])
+
+  // A NAMED level that is empty, while other levels are full: still refused —
+  // the rule said which slot, and a different one is not a substitute.
+  const wrong = caster(LADDER, [{ ...SPEND, level: '1' }])
+  assert.deepEqual(planActivation(wrong.sheet!.features![0], buildContext(wrong), wrong, 'feature:f'), [])
+
+  // A non-caster granted this by mistake cannot press it either.
+  const barb = character({ sheet: { features: [{ id: 'f', name: 'Font', graph: [SPEND] } as Feature] } } as Partial<CharacterRow>)
+  assert.deepEqual(planActivation(barb.sheet!.features![0], buildContext(barb), barb, 'feature:f'), [])
+})
+
+test('applyOutcomes moves the slot the player picked, and clamps both ends', () => {
+  const c = caster(LADDER, [SPEND])
+  const out = planActivation(c.sheet!.features![0], buildContext(c), c, 'feature:f')
+
+  const spent = applyOutcomes(c, out, new Set(), { slotLevel: 2 }).spellbook
+  assert.deepEqual(spent?.slots?.find(s => s.level === 2), { level: 2, total: 3, expended: 2 })
+  // Only that level moved.
+  assert.deepEqual(spent?.slots?.find(s => s.level === 3), { level: 3, total: 2, expended: 0 })
+
+  // No level chosen and none implied: nothing moves, rather than a guess.
+  assert.equal(applyOutcomes(c, out, new Set()).spellbook, undefined)
+
+  /* THE OTHER END OF THE CLAMP, exercised directly: planActivation refuses an
+     unpayable cost before applyOutcomes ever sees it, so nothing above can reach
+     this branch — and an invariant no test can reach is one that quietly stops
+     holding. Spending five from a level with two left banks two, never seven. */
+  assert.deepEqual(
+    slotPatch(c, 3, -5)?.slots?.find(s => s.level === 3),
+    { level: 3, total: 2, expended: 2 },
+  )
+
+  // "Regain all your expended slots" is a big positive number plus the clamp.
+  const all = caster(LADDER, [{ id: 's2', op: 'addSlot', label: 'Refill', value: '99', level: '1' }])
+  const back = applyOutcomes(all, planActivation(all.sheet!.features![0], buildContext(all), all, 'feature:f'), new Set()).spellbook
+  assert.deepEqual(back?.slots?.find(s => s.level === 1), { level: 1, total: 4, expended: 0 })
+})
+
+test('a Pact caster spends the one slot level they have, never a ladder', () => {
+  const pact = caster([], [SPEND], { spellbook: { spellcasting: true, pactMagic: true, pactExpended: 0 } })
+  const out = planActivation(pact.sheet!.features![0], buildContext(pact), pact, 'feature:f')
+  assert.equal((out[0] as { pact: boolean }).pact, true)
+  assert.equal(applyOutcomes(pact, out, new Set()).spellbook?.pactExpended, 1)
+})
+
+test('FONT OF INSPIRATION: one press spends a slot AND refills a counter', () => {
+  /* The transaction the op exists for, and the reason applyOutcomes returns a
+     patch per column: the slot lives in `spellbook`, the use counter on `sheet`,
+     and landing one without the other is a free die or a lost slot. */
+  const bi: Feature = { id: 'bi', name: 'Bardic Inspiration', uses: { max: 4, current: 1 } } as Feature
+  const font: Feature = { id: 'font', name: 'Font of Inspiration', graph: [
+    SPEND,
+    { id: 'g1', op: 'addUses', label: 'Regain a die', value: '1', target: ['feature:bi'] },
+  ] } as Feature
+  const c = character({
+    identity: { level: 9 },
+    sheet: { abilities: { str: 8, dex: 14, con: 12, int: 12, wis: 10, cha: 18 }, features: [bi, font] },
+    spellbook: { spellcasting: true, slots: LADDER },
+  } as Partial<CharacterRow>)
+
+  const out = planActivation(font, buildContext(c), c, 'feature:font')
+  const res = applyOutcomes(c, out, new Set(), { slotLevel: 3 })
+  assert.deepEqual(res.spellbook?.slots?.find(s => s.level === 3), { level: 3, total: 2, expended: 1 })
+  assert.deepEqual(res.usesPatch, { bi: 2 })
+
+  // And with no slots left, neither half happens.
+  const dry = character({ ...c, spellbook: { spellcasting: true, slots: [{ level: 1, total: 4, expended: 4 }] } } as Partial<CharacterRow>)
+  assert.deepEqual(planActivation(font, buildContext(dry), dry, 'feature:font'), [])
+})
+
+/* ---------- an arm is for the NEXT roll, whichever kind ---------- */
+
+const armOf = (over: Partial<ArmedMod> = {}): ArmedMod =>
+  ({ id: 'a1', source: 'feature:ps', sourceName: 'Peerless Skill', label: 'Peerless Skill', kind: 'check', op: 'add', value: '1d10', at: 1, ...over })
+
+const armedIn = (armed: ArmedMod[]) => character({}, { armed })
+const armedAfter = (r: Record<string, Json>) => (r.graph as GraphState).armed ?? []
+
+test('A CHECK SPENDS ITS ARMS TOO — not only an attack', () => {
+  /* The bug: attackRolled was the only thing that ever wrote `spent`, and only
+     the weapon card called it. A `once` add aimed at roll:check applied to that
+     check and to every check afterwards, paying out one expended Bardic
+     Inspiration die over and over until a long rest emptied the queue. */
+  const c = armedIn([armOf()])
+  const after = armedAfter(armsSpent(c, ['a1'], 'roll-7'))
+  assert.equal(after[0].spent, 'roll-7')
+  // …and it does NOT count as an attack, which is attackRolled's other half.
+  assert.equal((armsSpent(c, ['a1'], 'roll-7').graph as GraphState).attacks, undefined)
+  assert.equal((attackRolled(c, ['a1'], 'roll-7').graph as GraphState).attacks, 1)
+})
+
+test('a `oneOf` group is spent together — one die, two queues', () => {
+  const group = [
+    armOf({ id: 'a:check', kind: 'check', group: 'feature:ps:e1' }),
+    armOf({ id: 'a:attack', kind: 'attack', group: 'feature:ps:e1' }),
+    armOf({ id: 'other', kind: 'check' }),   // ungrouped: untouched
+  ]
+  const c = armedIn(group)
+
+  // Taking it on the check spends the attack offer with it.
+  const spentByCheck = armedAfter(armsSpent(c, ['a:check'], 'roll-7'))
+  assert.equal(spentByCheck.find(m => m.id === 'a:attack')?.spent, 'roll-7')
+  assert.equal(spentByCheck.find(m => m.id === 'other')?.spent, undefined)
+
+  // Answering works the same way, and undo releases the whole group.
+  const answered = armedAfter(answerArmed(c, ['a:attack'], 'roll-9'))
+  assert.equal(answered.find(m => m.id === 'a:check')?.spent, 'roll-9')
+  const undone = armedAfter(answerArmed({ ...c, resources: answerArmed(c, ['a:attack'], 'roll-9') } as CharacterRow, ['a:attack'], null))
+  assert.equal(undone.find(m => m.id === 'a:check')?.spent, undefined)
+})
+
+test('armedFrom stamps a group only when oneOf names more than one queue', () => {
+  const one = { id: 'e1', op: 'add' as const, label: 'X', value: '1d6', once: true, oneOf: true, target: ['roll:check'] }
+  assert.equal(armedFrom(one, 'feature:f')[0].group, undefined, 'a lone arm has no siblings')
+
+  const two = { ...one, target: ['roll:check', 'roll:attack'] }
+  const mods = armedFrom(two, 'feature:f')
+  assert.equal(mods.length, 2)
+  assert.equal(mods[0].group, mods[1].group)
+  assert.ok(mods[0].group)
+
+  // Without oneOf they stay independent — "+2 to your attack AND its damage".
+  const both = armedFrom({ ...two, oneOf: undefined }, 'feature:f')
+  assert.deepEqual(both.map(m => m.group), [undefined, undefined])
 })
