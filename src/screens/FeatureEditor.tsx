@@ -174,7 +174,12 @@ export default function FeatureEditor() {
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
     const out = auditNode(
-      { graph: draft.graph, vars: draft.vars, prose: [draft.light_description, draft.deep_description] },
+      {
+        graph: draft.graph, vars: draft.vars,
+        prose: [draft.light_description, draft.deep_description],
+        // The use count reads variables too — see auditNode's `uses`.
+        uses: draft.uses, shortRecharge: draft.shortRecharge,
+      },
       ready ? nodes : [],
       // A name declared on ANOTHER feature is not a typo — see useCatalogNodes.
       ready ? catalogTypes : {},
@@ -198,6 +203,25 @@ export default function FeatureEditor() {
         s: `This feature lets the player take more than one offer, but it has ${offerCount === 1 ? 'only one' : 'none'} — a pick needs two or more armed effects carrying a toggle.`,
       })
     }
+    /* THE PRESS ROLL IS DICE, NOT A FORMULA. rollHeal() reads `NdM + K` or a
+       plain number, and falls back to parseInt for anything else — so
+       `5 + con` heals 5, silently, forever. It is not the expression engine and
+       cannot be: the roll happens before any scope is built. An `add` with no
+       target lands on this feature's own roll and is where a formula goes. */
+    const rollRaw = String(draft.roll ?? '').trim()
+    if (rollRaw && !/^\s*(\d+\s*d\s*\d+\s*([+-]\s*\d+)?|\d+)\s*$/i.test(rollRaw)) {
+      out.push({
+        sev: 'err', id: 'field:roll', t: 'Press roll is not dice',
+        s: `"${rollRaw}" is not dice. Only \`2d6 + 2\` or a plain number is read — anything else is silently truncated to the leading number. Put the formula in an add effect with no target instead.`,
+      })
+    }
+    if (rollRaw && draft.rollTone === undefined) {
+      out.push({
+        sev: 'warn', id: 'field:roll', t: 'The roll is shown, not applied',
+        s: 'This press rolls something with no tone set, so the number is displayed and the player applies it by hand. Choose "healing" if it should raise HP.',
+      })
+    }
+
     if (draft.uses && toggleVar(draft) && !runsActivation(draft)) {
       out.push({
         sev: 'warn', id: 'field:uses', t: 'The stance is free',
@@ -1144,6 +1168,53 @@ function FeatureForm(p: FormProps) {
         <i className="fa-solid fa-rotate" />
         <span>Uses are independent of activation — <b>0 means at-will</b>, and a passive feature can still track uses.</span>
       </div>
+
+      {/* THE PRESS CAN ROLL SOMETHING. `roll`/`rollTone`/`rollLabel` have been in
+          the type and read by the activation sheet since Second Wind was
+          designed, and nothing ever rendered a control — so the ONE feature that
+          needed them (Survivor's Heroic Rally) had to be authored by hand, and
+          the DM could not see the number they were handing out. Exactly the
+          "engine reads it, editor cannot write it" shape the effect-field guard
+          exists to catch, one level up from the graph. */}
+      <div className={styles.grid2} style={{ marginBottom: 2 }}>
+        <div>
+          <span className={styles.fieldLab}>Press rolls</span>
+          <input className={styles.in} type="text" value={String(d.roll ?? '')}
+            placeholder="blank = nothing · 2d6 + 2 · 0"
+            onChange={e => {
+              const raw = e.target.value.trim()
+              set({ roll: raw || undefined, ...(raw ? {} : { rollTone: undefined, rollLabel: undefined }) })
+            }} />
+        </div>
+        <div>
+          <span className={styles.fieldLab}>and that is</span>
+          <select className={styles.in} value={d.rollTone ?? ''} disabled={!d.roll}
+            onChange={e => set({ rollTone: (e.target.value || undefined) as 'heal' | 'buff' | undefined })}>
+            <option value="">shown only</option>
+            <option value="heal">healing — raises HP</option>
+            <option value="buff">a buff</option>
+          </select>
+        </div>
+      </div>
+      {d.roll && (
+        <div style={{ marginBottom: 2 }}>
+          <span className={styles.fieldLab}>Called</span>
+          <input className={styles.in} type="text" value={String(d.rollLabel ?? '')}
+            placeholder={d.rollTone === 'heal' ? 'Healed' : 'Result'}
+            onChange={e => set({ rollLabel: e.target.value.trim() || undefined })} />
+        </div>
+      )}
+      {d.roll && (
+        <div className={styles.actNote} style={{ ['--an' as string]: 'var(--good)', marginTop: -2 }}>
+          <i className="fa-solid fa-dice" />
+          <span>
+            Dice only — <b>{'`2d6 + 2`'}</b> or a plain number. A formula belongs in an <b>add</b> effect
+            with no target, which lands on this feature&rsquo;s own roll: that is how
+            &ldquo;5 plus your Constitution modifier&rdquo; is written, and it is the only half that can
+            carry a condition. <b>heal</b> raises real HP; anything else is shown and applied by hand.
+          </span>
+        </div>
+      )}
 
       {/* --- 02 tags --- */}
       <div className={styles.sec}><span className={styles.num}>02</span><span className={styles.fieldLab}>Tags</span></div>

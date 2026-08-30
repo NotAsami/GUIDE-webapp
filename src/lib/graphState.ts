@@ -193,6 +193,13 @@ export type SlotOutcome = OutcomeBase & {
   delta: number
   /** Pact Magic, where the counter is `pactExpended` and there is no ladder. */
   pact: boolean
+  /** A BUDGET IN COMBINED LEVELS instead of a count — see GraphEffect.budget.
+   *  Present means `level`/`delta` are not the question: the player spends this
+   *  many levels across whatever they have expended, and the answer comes back
+   *  as `picked.slots`. */
+  budget?: number
+  /** The highest level the budget may buy. */
+  maxLevel?: number
 }
 
 /** `grant`: an armed modifier bound for ANOTHER party member's row.
@@ -428,6 +435,34 @@ export function planActivation(
       const ladder = slotLadder(character)
       const pact = !!character.spellbook?.pactMagic
 
+      /* A BUDGET IS A DIFFERENT QUESTION, and it short-circuits the rest: not
+         "how many slots of which level" but "here are N levels, spend them".
+         Restoring only — a cost measured in combined levels is not a thing any
+         rule asks for, and the refusal logic below has nothing to check. */
+      const budgetRaw = eff.budget?.trim()
+      if (budgetRaw) {
+        const b = evalExpr(budgetRaw, ctx.scope)
+        if (b === null || b.t !== 'num' || b.dice.length) continue
+        const budget = Math.trunc(b.flat)
+        if (budget <= 0) continue
+        let maxLevel: number | undefined
+        if (eff.maxLevel?.trim()) {
+          const m = evalExpr(eff.maxLevel, ctx.scope)
+          if (m === null || m.t !== 'num' || m.dice.length) continue
+          maxLevel = Math.trunc(m.flat)
+        }
+        /* NOTHING EXPENDED, NOTHING TO RECOVER. Refusing the whole press beats
+           opening a picker with no rows and calling that a use of the feature. */
+        const recoverable = ladder.some(r =>
+          r.avail < r.total && (maxLevel === undefined || r.level <= maxLevel) && r.level <= budget)
+        if (!recoverable) return []
+        out.push({
+          kind: 'slot', eff, ask: eff.ask, delta: 1, pact, budget, maxLevel,
+          summary: `Recover up to ${budget} level${budget === 1 ? '' : 's'} of slots`,
+        })
+        continue
+      }
+
       /* WHICH LEVEL. Authored if the rule names one; otherwise the player's,
          except for a pact caster who has exactly one to choose from. */
       let level: number | undefined
@@ -575,7 +610,7 @@ export function applyOutcomes(
   /** What the confirm sheet asked and the player answered, beyond the `ask`
    *  checkboxes. `slotLevel` fills in an `addSlot` whose level was the player's
    *  to choose — see SlotOutcome. */
-  picked: { slotLevel?: number } = {},
+  picked: { slotLevel?: number; slots?: Record<number, number> } = {},
 ): {
   resources: Record<string, Json>
   usesPatch?: Record<string, number>
@@ -621,14 +656,33 @@ export function applyOutcomes(
      `sheet`. Folded one at a time so two movements compose (spend a slot, then
      restore two) rather than the last overwriting the first. */
   let spellbook: CharacterSpellbook | undefined
+  const fold = (level: number, delta: number) => {
+    const next = slotPatch({ ...character, spellbook: spellbook ?? character.spellbook }, level, delta)
+    if (next) spellbook = next
+  }
   for (const o of applied) {
     if (o.kind !== 'slot') continue
+    /* A BUDGET COMES BACK AS A PLAN — level → how many of them — because one
+       press can restore several slots at several levels. Clamped to the budget
+       HERE and not only in the picker: the sheet is a UI and this is the write. */
+    if (o.budget !== undefined) {
+      let left = o.budget
+      for (const [lv, n] of Object.entries(picked.slots ?? {})) {
+        const level = Number(lv)
+        if (!Number.isFinite(level) || level < 1) continue
+        if (o.maxLevel !== undefined && level > o.maxLevel) continue
+        for (let i = 0; i < n && left >= level; i++) {
+          fold(level, 1)
+          left -= level
+        }
+      }
+      continue
+    }
     const level = o.level ?? picked.slotLevel
     // No level chosen and none implied: nothing to move. The confirm sheet does
     // not let this through, and silently skipping beats guessing at a level.
     if (level === undefined) continue
-    const next = slotPatch({ ...character, spellbook: spellbook ?? character.spellbook }, level, o.delta)
-    if (next) spellbook = next
+    fold(level, o.delta)
   }
 
   return { resources: withArmed(setVars(character, next), arms), usesPatch, spellbook, applied }

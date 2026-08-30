@@ -10,7 +10,7 @@ import type { CheckRoll, RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
 import {
   askSections, catalogView, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf,
-  picksAllowed, picksTaken, rerollAt, rerollD20, rerollsOf,
+  picksAllowed, picksTaken, rerollAt, rerollD20, rerollDamage, rerollsOf,
   releaseIdsOf, resolvedOf, riderAmount, riderValue, riderViews, rollTotals, sourceGroups, unresolvedOf,
 } from './rollView.ts'
 
@@ -664,4 +664,68 @@ test('a reroll rider is an offer, not a contribution and not a checkbox', () => 
 
 test('a roll with no d20 cannot be rerolled', () => {
   assert.equal(rerollD20({ id: 'x', at: 1, kind: 'weapon', title: 'Axe' }, 'advantage'), null)
+})
+
+/* ---------- rerolling DAMAGE: Great Weapon Fighting and Savage Attacker ---- */
+
+const damaged = (dice: number[], bonus = 4): RollEntry => ({
+  id: 'd1', at: 1, kind: 'weapon', title: 'Greataxe',
+  damage: { dice: dice.map(v => ({ v, sides: 12 })), bonus, total: dice.reduce((a, b) => a + b, 0) + bonus, diceExpr: '2d12', type: 'slashing', crit: false },
+})
+
+test('GREAT WEAPON FIGHTING: only the low dice are rerolled, and they stand', () => {
+  for (let i = 0; i < 200; i++) {
+    const before = damaged([1, 2, 11])
+    const d = rerollDamage(before, 'new', 2)!.damage!
+    // The high die was never touched; the low two were.
+    assert.equal(d.dice[2].v, 11, 'a die above the threshold is left alone')
+    assert.ok(d.dice[0].v >= 1 && d.dice[0].v <= 12)
+    // Whatever came up, it counts — this is not "keep the better".
+    assert.equal(d.total, d.dice.reduce((a, b) => a + b.v, 0) + d.bonus)
+  }
+})
+
+test('a threshold no die meets is not a reroll at all', () => {
+  // Pressing Halfling Lucky on a 14 must leave the roll alone, not hand out a
+  // free reroll — and null is what tells the panel to keep the offer up.
+  assert.equal(rerollDamage(damaged([7, 9]), 'new', 2), null)
+  assert.equal(rerollD20(checked({ rolls: [{ v: 14, sides: 20 }], pick: 14 }), 'new', 1), null)
+  // …and at the threshold it does fire.
+  assert.ok(rerollDamage(damaged([2, 9]), 'new', 2))
+  assert.ok(rerollD20(checked({ rolls: [{ v: 1, sides: 20 }], pick: 1 }), 'new', 1))
+})
+
+test('SAVAGE ATTACKER: the whole roll again, and the better TOTAL wins', () => {
+  /* Better total, never better dice: picking the higher face of each die
+     individually would be a much stronger feature than the one printed. */
+  for (let i = 0; i < 300; i++) {
+    const before = damaged([12, 12])
+    const d = rerollDamage(before, 'better')!.damage!
+    assert.equal(d.total, 28, 'a maximum roll can only be matched, never beaten')
+  }
+  for (let i = 0; i < 300; i++) {
+    const before = damaged([1, 1])
+    const d = rerollDamage(before, 'better')!.damage!
+    assert.ok(d.total >= 6, 'the worst roll can only improve')
+    assert.equal(d.total, d.dice.reduce((a, b) => a + b.v, 0) + d.bonus)
+  }
+})
+
+test('a roll with no damage cannot have its damage rerolled', () => {
+  assert.equal(rerollDamage(checked(), 'better'), null)
+  assert.equal(rerollDamage({ id: 'x', at: 1, kind: 'weapon', title: 'Axe' }, 'new'), null)
+})
+
+test('a damage reroll rider says WHICH dice it re-runs', () => {
+  // `keep: 'new'` reads identically on a d20 and on damage, so the panel cannot
+  // guess — the rider carries `rerolls`.
+  const entry: RollEntry = {
+    ...damaged([1, 5]),
+    riderGroups: [{ label: 'Damage', riders: [
+      { label: 'Great Weapon Fighting', source: 'Fighting Style', op: 'reroll', formula: '', flat: 0, dice: [], when: 'manual', on: false, keep: 'new', rerolls: 'damage', faces: 2 },
+    ] }],
+  }
+  const [v] = rerollsOf(riderViews(entry))
+  assert.equal(v.rider.rerolls, 'damage')
+  assert.equal(v.rider.faces, 2)
 })

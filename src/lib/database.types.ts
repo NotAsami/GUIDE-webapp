@@ -833,9 +833,36 @@ export type GraphEffect = {
   minimum?: string
   /** `reroll` only. WHAT THE NEW ROLL IS.
    *   - `advantage` adds a second d20 and keeps the higher — Countercharm.
-   *   - `new` replaces the die and you are stuck with it — Halfling Lucky.
-   *  Absent reads as `new`, the plainer of the two. */
-  keep?: 'advantage' | 'new'
+   *     A d20 roll only: damage has no advantage.
+   *   - `new` replaces the dice and you are stuck with the result — Halfling
+   *     Lucky on a d20, Great Weapon Fighting on damage.
+   *   - `better` rolls the damage again and keeps whichever TOTAL is higher —
+   *     Savage Attacker. Damage only: it needs two totals to choose between,
+   *     and a d20 that kept the better roll would just be advantage.
+   *  Absent reads as `new`, the plainest of the three. */
+  keep?: 'advantage' | 'new' | 'better'
+  /** `reroll` only. WHICH DICE QUALIFY — only those showing at most this many
+   *  pips. Great Weapon Fighting rerolls a 1 or a 2 (`2`); Halfling Lucky
+   *  rerolls a natural 1 (`1`). Absent = every die is fair game, which is what
+   *  Countercharm and Savage Attacker want.
+   *
+   *  A formula, so it can scale, but it is compared against a rolled face and
+   *  therefore may not itself carry dice. */
+  faces?: string
+  /** `addSlot` restoring slots only. A BUDGET IN COMBINED LEVELS rather than a
+   *  count of slots — "you can recover expended slots whose combined level is
+   *  equal to or less than half your Druid level". Three levels buys one L3
+   *  slot, or an L2 and an L1, or three L1s, and which is the player's call.
+   *
+   *  Set it and `value` and `level` are both ignored: the press opens a picker
+   *  and the player spends the budget across the levels they actually have
+   *  expended. Natural Recovery, Arcane Recovery and Font of Magic are the same
+   *  sentence with a different number. */
+  budget?: string
+  /** `addSlot` with a budget. The highest slot level the budget may buy — every
+   *  printed version of this rule caps it ("none of them can be level 6+", so
+   *  this is 5). Absent = no cap beyond what the caster owns. */
+  maxLevel?: string
   /** `addSlot` only. WHICH slot level moves, as a formula. Absent means the
    *  player chooses at the press — which is what "expend a spell slot" says.
    *  Ignored for a Pact Magic caster, whose slots are all one level. */
