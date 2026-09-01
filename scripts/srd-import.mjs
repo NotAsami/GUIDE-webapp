@@ -636,6 +636,25 @@ const PRIMARY = {
   rogue: 'dex', sorcerer: 'cha', warlock: 'cha', wizard: 'int',
 }
 
+/** SRD 5.2 spellcasting abilities — SUPPLIED DATA, exactly like PRIMARY above,
+ *  and deliberately a SECOND table rather than a reading of the first.
+ *
+ *  The two disagree precisely where it costs most: a Paladin's primary ability
+ *  is Strength and it casts on Charisma; a Ranger's is Dexterity and it casts on
+ *  Wisdom. Deriving one from the other would put every Paladin and Ranger save
+ *  DC off by the gap between two of their scores.
+ *
+ *  A CASTER WITH NO ENTRY IS A WARNING, never a default, for the same reason
+ *  PRIMARY refuses to fall back to 'str': the failure is silent downstream.
+ *  castingNumbers() returns null without this and assignClass still writes
+ *  `spellcasting: true`, so the class assigns cleanly, the slots are right, and
+ *  the save DC is simply absent. The original import shipped that way for six
+ *  of the nine casters and nothing complained for months. */
+const CASTING = {
+  bard: 'cha', cleric: 'wis', druid: 'wis', paladin: 'cha',
+  ranger: 'wis', sorcerer: 'cha', warlock: 'cha', wizard: 'int',
+}
+
 const CLASS_ICON = {
   barbarian: 'fa-hand-fist', bard: 'fa-music', cleric: 'fa-cross', druid: 'fa-leaf',
   fighter: 'fa-shield-halved', monk: 'fa-hand-sparkles', paladin: 'fa-scale-balanced',
@@ -859,6 +878,11 @@ function toClass(r) {
     report.warnings.push(`class ${r.name}: no primary ability supplied for "${baseSlug}" — add it to PRIMARY`)
   }
 
+  const casterKind = CASTER[r.caster_type] ?? 'none'
+  if (casterKind !== 'none' && !CASTING[baseSlug]) {
+    report.warnings.push(`class ${r.name}: casts (${casterKind}) but no spellcasting ability supplied for "${baseSlug}" — add it to CASTING`)
+  }
+
   const cls = {
     name: r.name,
     icon: CLASS_ICON[baseSlug] ?? 'fa-shield-halved',
@@ -870,10 +894,13 @@ function toClass(r) {
     skillChoices: [], skillChooseN: 0,
     proficiencies: {},
     startingEquipment: [],
-    caster: CASTER[r.caster_type] ?? 'none',
+    caster: casterKind,
+    /* Omitted rather than set undefined on a non-caster: ClassDef makes this
+       optional exactly so a Fighter carries no spellcasting ability at all. */
+    ...(casterKind !== 'none' && CASTING[baseSlug] ? { castingAbility: CASTING[baseSlug] } : {}),
     features: refs,
     tags: tag('class', r.name, parentKey ? 'subclass' : 'baseclass',
-      CASTER[r.caster_type] !== 'none' ? 'caster' : null),
+      casterKind !== 'none' ? 'caster' : null),
     vars, graph: [],
     ...(parentKey ? { parent: parentKey } : { subclassLevel: subclassAt ?? 3, subclassLabel: 'Subclass' }),
     source: 'srd', srd_key: r.key,
