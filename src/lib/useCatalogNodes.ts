@@ -19,6 +19,7 @@ import {
 } from './dm.ts'
 import { useShardCatalog } from './shardCatalog.ts'
 import { gid, nodeGid, normalizeTag, probeScope, type AuthoredNode } from './graph.ts'
+import { hasIdent } from './expr.ts'
 import type { VarDef } from './database.types.ts'
 
 export type CatalogNodes = {
@@ -117,6 +118,17 @@ export function useCatalogNodes(): CatalogNodes {
     for (const r of itemLib.items) take(r.data?.vars)
     for (const tree of Object.values(shardCatalog)) {
       for (const n of tree.nodes ?? []) take(n.vars)
+    }
+    /* EVERY FEATURE IS ALSO A QUESTION: `has_<its name>`, a boolean.
+       Seeding the real ones here is what keeps the runtime rule honest. At roll
+       time an unknown `has_*` reads false, because the catalog is not in hand
+       and an unowned feature must not break a condition. That leniency would
+       also swallow `has_imrpoved_brutal_strike` forever, so author time is
+       where the name is checked - and it is checked against the catalog, which
+       only this hook has. */
+    for (const r of lib.features) {
+      const nm = featureContent(r).name
+      if (nm) m[hasIdent(nm)] = 'bool'
     }
     for (const r of classLib.classes) take(classContent(r).vars)
     for (const r of raceLib.races) take(raceContent(r).vars)

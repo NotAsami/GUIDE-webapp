@@ -3,7 +3,7 @@
 // Guard: a field whose text is RENDERED as markdown must also OFFER markdown.
 //
 // The mismatch this catches is silent and one-directional. A prose textarea
-// without `markdownShortcuts` still works — you can type `**bold**` by hand and
+// without `proseField` still works — you can type `**bold**` by hand and
 // it renders — so nothing looks broken; you simply never learn the shortcut
 // exists, and the field feels different from the one beside it. That is exactly
 // how eight fields ended up wired and fifteen not.
@@ -66,7 +66,7 @@ const PLAIN_ON_PURPOSE: { match: string; why: string }[] = [
 test('EVERY PROSE TEXTAREA OFFERS THE SHORTCUTS, or is listed as plain on purpose', () => {
   const bare: string[] = []
   for (const { file, line, tag } of textareas()) {
-    if (tag.includes('markdownShortcuts')) continue
+    if (tag.includes('proseField')) continue
     const excused = PLAIN_ON_PURPOSE.find(p => tag.includes(p.match))
     if (excused) continue
     const ph = /placeholder="([^"]{0,50})/.exec(tag)
@@ -74,7 +74,7 @@ test('EVERY PROSE TEXTAREA OFFERS THE SHORTCUTS, or is listed as plain on purpos
   }
   assert.deepEqual(bare, [],
     'These prose fields render markdown but do not offer Ctrl+B/I/K.\n'
-    + 'Add `onKeyDown={markdownShortcuts(setX)}`, or add the field to '
+    + 'Spread `{...proseField(setX)}` onto it, or add the field to '
     + 'PLAIN_ON_PURPOSE with the reason it renders nowhere:\n  ' + bare.join('\n  '))
 })
 
@@ -83,7 +83,7 @@ test('the scanner actually sees the codebase', () => {
   // test above pass forever — the failure mode of every source scan.
   const all = textareas()
   assert.ok(all.length > 15, `only found ${all.length} textareas`)
-  assert.ok(all.some(t => t.tag.includes('markdownShortcuts')), 'found none wired at all')
+  assert.ok(all.some(t => t.tag.includes('proseField')), 'found none wired at all')
 })
 
 test('every excuse in PLAIN_ON_PURPOSE still matches something', () => {
@@ -110,7 +110,7 @@ test('every excuse in PLAIN_ON_PURPOSE still matches something', () => {
    valid React that renders something plausible.
    ------------------------------------------------------------------ */
 
-/** Field names whose value is authored through a `markdownShortcuts` textarea
+/** Field names whose value is authored through a `proseField` textarea
  *  somewhere, so every render of them owes the reader the formatting. */
 const MARKDOWN_FIELDS = ['flavor', 'desc', 'description']
 

@@ -32,7 +32,7 @@ import { useLocalDraft } from '../lib/draft'
  * autosave hooks that stamp this — the 44 imported SRD features would
  * otherwise never be marked edited, and a re-import would overwrite them. */
 import { markEdited } from '../lib/autopublish'
-import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
+import { proseField, useAutoGrow } from '../lib/textareaHooks'
 import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, revealAudit, splitSel } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
 import { auditNode, gid, normalizeTag, probeScope, type AuditItem, type AuthoredNode } from '../lib/graph'
@@ -1075,7 +1075,7 @@ function FeatureForm(p: FormProps) {
           into the deep description, where the player has to open the card to
           find it. */}
       <input data-audit="field:light" className={cx(styles.in, styles.sumline)} value={d.light_description ?? ''}
-        onKeyDown={markdownShortcuts(light_description => set({ light_description }))}
+        {...proseField(light_description => set({ light_description }))}
         placeholder="One line — what the player reads while scanning the card…"
         onChange={e => set({ light_description: e.target.value })} />
       <div className={styles.subHint}>One line, on the collapsed card in play. Supports **bold** and *italics*.</div>
@@ -1087,7 +1087,7 @@ function FeatureForm(p: FormProps) {
       </div>
       <textarea data-audit="field:deep" ref={deepRef} className={styles.prose} value={d.deep_description ?? ''}
         placeholder="The full prose the player reads when the card is expanded…"
-        onKeyDown={markdownShortcuts(deep_description => set({ deep_description }))}
+        {...proseField(deep_description => set({ deep_description }))}
         onChange={e => set({ deep_description: e.target.value })} />
       <div className={styles.subHint}>The detail, on the expanded card.</div>
 

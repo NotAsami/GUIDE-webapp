@@ -5,7 +5,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ArmedMod, CharacterRow, CharacterSpellbook, Feature, GraphEffect, GraphState, Json, VarDef } from './database.types.ts'
-import { buildContext, resolve, staleArmed } from './graph.ts'
+import {auditNode, buildContext, resolve, staleArmed } from './graph.ts'
 import { longRestPatch, shortRestPatch } from './rest.ts'
 import {
   answerArmed, applyOutcomes, armableFor, attackRolled, consumeArmed, gateOf, planActivation, playerVars, restVars, scopedVars, setDmVars,
@@ -1288,4 +1288,93 @@ test('a budget never banks past what was expended', () => {
   const out = planActivation(c.sheet!.features![0], buildContext(c), c, 'feature:f')
   const sb = applyOutcomes(c, out, new Set(), { slots: { 1: 5 } }).spellbook
   assert.deepEqual(sb?.slots?.[0], { level: 1, total: 2, expended: 0 })
+})
+
+/* `setHp` — the one stored number on the sheet nothing could reach.
+   Relentless Rage: "if you succeed, your Hit Points instead change to a number
+   equal to twice your Barbarian level". A SET, not a heal: the same answer
+   whether you were on 0 or below it, which `+=` cannot say. */
+
+const hpChar = (current: number, max: number, graph: GraphEffect[]) =>
+  character({ sheet: {
+    abilities: { str: 16, dex: 10, con: 16, int: 10, wis: 10, cha: 10 },
+    hp: { current, max }, features: [RAGE(graph)],
+  } } as Partial<CharacterRow>)
+
+const planHp = (c: CharacterRow, graph: GraphEffect[]) =>
+  planActivation(RAGE(graph), buildContext(c), c)
+
+test('SET HP WRITES THE NUMBER, and the plan says both ends', () => {
+  const g: GraphEffect[] = [{ id: 'a1', op: 'setHp', value: '2 * level', label: 'Relentless Rage' }]
+  const c = hpChar(0, 52, g)
+  const outcomes = planHp(c, g)
+  assert.equal(outcomes.length, 1)
+  assert.equal(outcomes[0].kind, 'hp')
+  // The fixture character is level 5.
+  assert.deepEqual({ from: outcomes[0].from, to: outcomes[0].to }, { from: 0, to: 10 })
+  assert.equal(applyOutcomes(c, outcomes, new Set()).hp, 10)
+})
+
+test('it is a SET, not a heal — the same answer from any starting point', () => {
+  const g: GraphEffect[] = [{ id: 'a1', op: 'setHp', value: '2 * level', label: 'RR' }]
+  for (const start of [0, 9, 30]) {
+    const c = hpChar(start, 52, g)
+    assert.equal(applyOutcomes(c, planHp(c, g), new Set()).hp, 10, `from ${start}`)
+  }
+})
+
+test('CLAMPED AT PLAN TIME, so the sheet cannot promise what the write will not do', () => {
+  // A summary reading "0 → 400" that quietly lands on 52 is the log lying.
+  const g: GraphEffect[] = [{ id: 'a1', op: 'setHp', value: '400', label: 'Big' }]
+  const c = hpChar(0, 52, g)
+  const o = planHp(c, g)[0]
+  assert.equal(o.to, 52)
+  assert.match(o.summary, /0 → 52/)
+
+  const neg: GraphEffect[] = [{ id: 'a1', op: 'setHp', value: '0 - 20', label: 'Down' }]
+  const c2 = hpChar(30, 52, neg)
+  assert.equal(planHp(c2, neg)[0].to, 0, 'never below zero')
+})
+
+test('healing is the same op pointed the other way', () => {
+  const g: GraphEffect[] = [{ id: 'a1', op: 'setHp', value: 'hp + 10', label: 'Bandage' }]
+  const c = hpChar(20, 52, g)
+  assert.equal(applyOutcomes(c, planHp(c, g), new Set()).hp, 30)
+})
+
+test('AN UNTICKED ASK WRITES NOTHING — the failed save must not heal', () => {
+  const g: GraphEffect[] = [{
+    id: 'a1', op: 'setHp', value: '2 * level', label: 'Relentless Rage',
+    ask: 'Did the Constitution save succeed?',
+  }]
+  const c = hpChar(0, 52, g)
+  const outcomes = planHp(c, g)
+  assert.equal(outcomes[0].ask, 'Did the Constitution save succeed?')
+  assert.equal(applyOutcomes(c, outcomes, new Set()).hp, undefined, 'declined = no write')
+  assert.equal(applyOutcomes(c, outcomes, new Set([outcomes[0].ask!])).hp, 10)
+})
+
+test('a when-false setHp is not planned at all', () => {
+  const g: GraphEffect[] = [{ id: 'a1', op: 'setHp', value: '2 * level', label: 'RR', when: 'false' }]
+  const c = hpChar(0, 52, g)
+  assert.deepEqual(planHp(c, g), [])
+})
+
+test('SET HP PUBLISHES CLEAN — it names no variable, and that is not an omission', () => {
+  // The audit asks every other activation which variable it writes. setHp
+  // writes the one number that was never a variable, and without an exemption
+  // Relentless Rage could not be saved at all.
+  const items = auditNode({
+    graph: [{ id: 'a1', op: 'setHp', value: '2 * level', label: 'Relentless Rage', ask: 'Save succeeded' }],
+    vars: [],
+  })
+  assert.deepEqual(items.filter(i => i.sev === 'err'), [])
+})
+
+test('but its formula is still checked like any other', () => {
+  const items = auditNode({
+    graph: [{ id: 'a1', op: 'setHp', value: '2 * levle', label: 'Typo' }],
+    vars: [],
+  })
+  assert.ok(items.some(i => i.t === 'Unknown identifier'), 'a typo in the amount must not pass')
 })

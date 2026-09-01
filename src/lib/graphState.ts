@@ -144,7 +144,7 @@ export const playerVars = (character: CharacterRow, shardTrees: Record<string, S
  *  `ask` gates both identically (§32 does not care what is being resolved), and
  *  both land in one `resources` patch. Splitting them into two lists would mean
  *  two confirm sheets and two write paths for one press. */
-export type Outcome = VarOutcome | ArmOutcome | UsesOutcome | GrantOutcome | SlotOutcome
+export type Outcome = VarOutcome | ArmOutcome | UsesOutcome | GrantOutcome | SlotOutcome | HpOutcome
 
 type OutcomeBase = {
   eff: GraphEffect
@@ -173,6 +173,20 @@ export type VarOutcome = OutcomeBase & {
 export type ArmOutcome = OutcomeBase & {
   kind: 'arm'
   mod: ArmedMod
+}
+
+/** `setHp`: current Hit Points become a computed number.
+ *
+ *  Both ends are carried because the player is owed the arithmetic - "HP 0 -> 40"
+ *  says what happened in a way "40" does not, and the confirm sheet and the roll
+ *  log both print it. Clamped here rather than at the write so the summary the
+ *  player reads and the number that lands are the same one. */
+export type HpOutcome = OutcomeBase & {
+  kind: 'hp'
+  /** Before. */
+  from: number
+  /** After, already clamped to 0..effective max. */
+  to: number
 }
 
 /** `addSlot`: a spell slot is spent or restored.
@@ -419,6 +433,31 @@ export function planActivation(
       continue
     }
 
+    /* `setHp` reaches the one stored number on the SHEET. Clamped here, at plan
+       time, so the summary the player is shown on the confirm sheet is the
+       number that will actually land - a "0 -> 60" that silently becomes 52
+       when it hits the maximum is the roll log lying about what it did. */
+    if (eff.op === 'setHp') {
+      if (eff.when !== undefined) {
+        const cond = evalExpr(eff.when, ctx.scope)
+        if (cond === null || cond.t !== 'bool' || !cond.v) continue
+      }
+      const v = evalExpr(eff.value ?? '', ctx.scope)
+      if (v === null || v.t !== 'num' || v.dice.length) continue
+      const from = character.sheet?.hp?.current ?? 0
+      /* The EFFECTIVE maximum, the same ceiling a heal is held to, so a
+         temporary +HP effect raises this too rather than being trimmed away by
+         the authored base. */
+      const max = typeof ctx.scope.hpMax === 'number' ? ctx.scope.hpMax : (character.sheet?.hp?.max ?? 0)
+      const to = Math.max(0, Math.min(max, Math.round(v.flat)))
+      out.push({
+        kind: 'hp', eff, ask: eff.ask,
+        from, to,
+        summary: `${eff.label || 'Hit Points'} · HP ${from} → ${to}`,
+      })
+      continue
+    }
+
     /* `addSlot` reaches the SPELLBOOK. Planned beside addUses for the same
        reason — it moves a counter rather than a variable — and refuses an
        unpayable cost by the same rule. */
@@ -614,6 +653,8 @@ export function applyOutcomes(
 ): {
   resources: Record<string, Json>
   usesPatch?: Record<string, number>
+  /** New current Hit Points, when a `setHp` ran. Undefined otherwise. */
+  hp?: number
   /** The third column. Undefined when no slot moved, so a caller that ignores
    *  it ignores nothing. */
   spellbook?: CharacterSpellbook
@@ -647,6 +688,13 @@ export function applyOutcomes(
      Undefined when nothing moved, so a caller that ignores it ignores nothing.
      Later outcomes win on the same feature — they were planned in order against
      the same starting count, so the last is the settled answer. */
+  /* HIT POINTS. Last write wins on purpose: two setHps in one press were
+     planned in order against the same starting value, so the later is the
+     settled answer, exactly as two use-counter movements resolve. Undefined
+     when none ran, so a caller that ignores it ignores nothing. */
+  const hpOut = applied.filter((o): o is HpOutcome => o.kind === 'hp')
+  const hp = hpOut.length ? hpOut[hpOut.length - 1].to : undefined
+
   const moved = applied.filter((o): o is UsesOutcome => o.kind === 'uses')
   const usesPatch = moved.length
     ? Object.fromEntries(moved.map(o => [o.target.id, o.next]))
@@ -685,7 +733,7 @@ export function applyOutcomes(
     fold(level, o.delta)
   }
 
-  return { resources: withArmed(setVars(character, next), arms), usesPatch, spellbook, applied }
+  return { resources: withArmed(setVars(character, next), arms), usesPatch, spellbook, hp, applied }
 }
 
 /** One activation outcome as a line in the roll log.
@@ -706,6 +754,9 @@ export function outcomeLine(o: Outcome): { label: string; total: string; breakdo
   // caller once the recipient is known; this line is what the plan can say.
   if (o.kind === 'grant') return { ...base, label: o.mod.label, total: 'granted' }
   if (o.kind === 'slot') return { ...base, label: o.pact ? 'Pact Magic' : 'Spell Slots', total: o.summary }
+  // Both ends, because the arithmetic IS the news: "40" alone does not say
+  // whether it was a rescue from 0 or a trim from 52.
+  if (o.kind === 'hp') return { ...base, label: o.eff.label || 'Hit Points', total: `${o.from} → ${o.to}` }
   return {
     ...base,
     label: o.def.label ?? o.def.name,

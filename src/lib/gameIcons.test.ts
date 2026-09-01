@@ -90,8 +90,8 @@ test('BOTH KINDS OF ICON RENDER THE SAME TAG', () => {
   // feature editor, the grant widget and both shard trees. It looked like game
   // icons "cannot be coloured"; around twenty rules were simply missing them.
   // Split the tags again and every one of them breaks again, silently.
-  const src = readFileSync(join(ROOT, 'src', 'components', 'Icon.tsx'), 'utf8')
-  const tags = [...src.matchAll(/^\s*<([a-z][a-z0-9]*)$/gm)].map(m => m[1])
+  const src = readFileSync(join(ROOT, 'src', 'components', 'Icon.ts'), 'utf8')
+  const tags = [...src.matchAll(/createElement\('([a-z][a-z0-9]*)'/g)].map(m => m[1])
   assert.equal(tags.length, 2, `expected two render branches, found ${tags.length}`)
   assert.deepEqual([...new Set(tags)], ['i'],
     `the two branches render <${tags.join('> and <')}> — CSS cannot tell them apart if they differ`)

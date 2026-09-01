@@ -93,10 +93,16 @@ import { join } from 'node:path'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 
+/** Every file that can render, `.ts` INCLUDED. It used to walk .tsx alone,
+ *  which was fine while every component was JSX. Icon itself is now a plain
+ *  .ts built with createElement (so lib/markdown.ts can import it for the
+ *  `[]{icon fa-fire}` token, under a test runner that cannot load .tsx), and a
+ *  scanner that skips .ts would quietly stop covering the very file this guard
+ *  was written around. */
 function tsxFiles(dir = 'src', out: string[] = []): string[] {
   for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
     if (e.isDirectory()) tsxFiles(`${dir}/${e.name}`, out)
-    else if (e.name.endsWith('.tsx')) out.push(`${dir}/${e.name}`)
+    else if (/\.tsx?$/.test(e.name) && !e.name.endsWith('.test.ts')) out.push(`${dir}/${e.name}`)
   }
   return out
 }
@@ -136,14 +142,29 @@ function literalOnly(expr: string): boolean {
 /** Every glyph slot in the file: the interpolation immediately after
  *  `fa-solid `, wherever in the template it sits — `${styles.x} fa-solid ${…}`
  *  is a real shape, so anchoring on the backtick would miss it. */
-function glyphSlots(src: string): { expr: string; index: number }[] {
+/** Comments blanked, so PROSE ABOUT the bug is not mistaken for the bug.
+ *  The doc comment on lib/icons.ts explains the defect by quoting its own
+ *  shape, and the scan duly reported the explanation as an offence.
+ *
+ *  Whitespace of the SAME LENGTH replaces each comment, so every reported
+ *  line number still points where it did. A `//` preceded by a colon is
+ *  left alone, which keeps a URL inside a string from eating its line. */
+function code(src: string): string {
+  return src.replace(
+    /\/\*[\s\S]*?\*\/|(^|[^:])\/\/[^\n]*/g,
+    (m: string, pre = '') => pre + m.slice(pre.length).replace(/[^\n]/g, ' '),
+  )
+}
+
+function glyphSlots(raw: string): { expr: string; index: number }[] {
+  const src = code(raw)
   return [...src.matchAll(/fa-solid \$\{([^}]*)\}/g)].map(m => ({ expr: m[1], index: m.index! }))
 }
 
 test('EVERY AUTHORED ICON RENDERS THROUGH <Icon>, never raw into a fa-solid class', () => {
   const bare: string[] = []
   for (const f of tsxFiles()) {
-    if (f.endsWith('components/Icon.tsx')) continue   // the one place that may branch
+    if (f.endsWith('components/Icon.ts')) continue    // the one place that may branch
     const src = readFileSync(join(ROOT, f), 'utf8')
     for (const { expr, index } of glyphSlots(src)) {
       if (literalOnly(expr)) continue

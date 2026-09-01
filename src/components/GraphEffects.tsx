@@ -29,7 +29,7 @@ import {
   OPS, OP_ORDER, OP_TITLE, PALETTE, PALETTE_MORE, PALETTE_ACT, PALETTE_SHEET, ROLL_SELECTORS,
   IS_ACTIVATION, IS_DAMAGE_FLAG, IS_SHEET, type OpField,
 } from '../lib/opSchema'
-import { markdownShortcuts, useAutoGrow } from '../lib/textareaHooks'
+import { proseField, useAutoGrow } from '../lib/textareaHooks'
 import { matchCount, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
 import styles from './authoring.module.css'
 import { Icon } from './Icon'
@@ -642,7 +642,7 @@ function SchemaField({ fd, eff, ei, setEffect, vars }: {
   }
   if (fd.type === 'text') {
     return <>{label}<textarea ref={textRef} className={cx(styles.prose, styles.short)} value={String(raw ?? '')}
-      placeholder={fd.example} onKeyDown={markdownShortcuts(put)}
+      placeholder={fd.example} {...proseField(put)}
       onChange={e => put(e.target.value)} /></>
   }
   if (fd.type === 'enum') {

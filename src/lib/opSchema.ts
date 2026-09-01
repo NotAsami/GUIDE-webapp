@@ -233,6 +233,17 @@ export const OPS: Record<GraphOp, OpDef> = {
       },
     ],
   },
+  setHp: {
+    label: 'setHp', group: 'activation', icon: 'fa-heart-pulse',
+    blurb: 'On activation, SETS current Hit Points to a computed value \u2014 the one number on the sheet nothing else here could reach. Relentless Rage is why it exists: "your Hit Points instead change to a number equal to twice your Barbarian level" is a set, not a heal, and stays the same number whether you were on 0 or below it. Clamped between 0 and the effective maximum, so a generous formula means "full" and can never bank more than the character has. To HEAL instead, write the current total into the formula \u2014 `hp + 10` \u2014 which is the same op pointed the other way. Pair it with an `ask` when the rule only applies on a success: the player answers after the roll, and an unticked box writes nothing.',
+    fields: [
+      {
+        key: 'value', type: 'formula', label: 'Hit Points become', required: true,
+        desc: 'Expression evaluated at activation. Reads the whole character scope, so `2 * level` and `hp + 2d4 + 2` are both fine. Clamped to 0..max.',
+        example: '2 * level',
+      },
+    ],
+  },
   addUses: {
     label: 'addUses', group: 'activation', icon: 'fa-battery-half',
     blurb: 'On activation, moves the USE COUNTER of a feature — this one, or another. The only activation that reaches a second node, because that is what the rules keep asking for: "expend a use of your Rage to restore this" is a negative amount aimed at Rage, and "regain all expended uses of Rage" is a positive one. Clamped to that feature’s own max, so a big number means "all of them" and can never bank more than the feature has. Target a FEATURE, or leave it empty to move this one’s own counter.',
@@ -305,7 +316,7 @@ export const PALETTE = ['add', 'adv', 'dis', 'crit', 'resist'] as const satisfie
 export const PALETTE_MORE = ['vuln', 'immune', 'floor', 'reroll', 'note'] as const satisfies readonly GraphOp[]
 /** Activation outcomes get their own palette group — they answer a different
  *  question ("what happens when I press this") from every op above. */
-export const PALETTE_ACT = ['setVar', 'addVar', 'addUses', 'addSlot', 'grant'] as const satisfies readonly GraphOp[]
+export const PALETTE_ACT = ['setVar', 'addVar', 'addUses', 'addSlot', 'setHp', 'grant'] as const satisfies readonly GraphOp[]
 /** The sheet layer gets its own palette group for the same reason activation
  *  outcomes do: it answers a different question from every roll op above it —
  *  "what is this character's DEX", not "what does this roll add". */
@@ -320,7 +331,7 @@ export const OP_TITLE: Record<GraphOp, string> = {
   add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', floor: 'Floor', reroll: 'Reroll', note: 'Note', boost: 'Boost',
   useability: 'Use Ability', unarmored: 'Unarmored AC',
   resist: 'Resist', vuln: 'Vuln', immune: 'Immune',
-  setVar: 'Set Var', addVar: 'Add Var', addUses: 'Add Uses', addSlot: 'Add Slot', grant: 'Grant',
+  setVar: 'Set Var', addVar: 'Add Var', addUses: 'Add Uses', addSlot: 'Add Slot', setHp: 'Set HP', grant: 'Grant',
 }
 
 /** The ops whose target names a damage kind rather than a roll. Mirrors the

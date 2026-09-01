@@ -321,6 +321,11 @@ export function Features() {
           </button>
         </div>
 
+        {/* ONE ROW. The tabs are 46px tall and the chips 28px, and stacking them
+            spent two bands of a laptop's vertical budget on controls while
+            leaving a wide empty gutter to the right of the tabs. The chips fill
+            that gutter instead. */}
+        <div className={styles.controls}>
         <div className={styles.tabrow}>
           {(['usable', 'passive'] as const).map(t => (
             <button key={t} type="button" className={cx(styles.tab, tab === t && styles.tabOn)}
@@ -357,6 +362,7 @@ export function Features() {
               <span className="dim"> · never stored on the character</span>
             </div>
           )}
+        </div>
         </div>
 
         <div className={styles.region}>

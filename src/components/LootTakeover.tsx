@@ -20,7 +20,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LootOpenRow, LootOpenLine, ItemCategory, ItemRarity } from '../lib/database.types'
-import { renderInline } from '../lib/markdown'
+import { Inline } from '../lib/markdown'
 import { Icon } from './Icon'
 import styles from './LootTakeover.module.css'
 /* The item detail modal is the same one the Inventory and the shop use — same
@@ -128,7 +128,7 @@ export function LootTakeover({ roll, dismissed, onDismiss }: {
               <span className={styles.leaveFrame} />
               <span className={styles.leaveInner}><i className="fa-solid fa-xmark" /> Close</span>
             </button>
-            {c.desc?.trim() && <p className={styles.desc}>{renderInline(c.desc)}</p>}
+            {c.desc?.trim() && <p className={styles.desc}><Inline text={c.desc} /></p>}
           </header>
 
           <div className={styles.dist}>
@@ -267,7 +267,7 @@ function Detail({ line, container, onClose }: { line: LootOpenLine; container: s
               </span></div>
               <div className={pop.f}><span className={pop.k}>Weight</span><span className={pop.v}>{it.weight ? `${it.weight} lb` : '—'}</span></div>
             </div>
-            {it.flavor?.trim() && <div className={pop.imDesc}>{renderInline(it.flavor)}</div>}
+            {it.flavor?.trim() && <div className={pop.imDesc}><Inline text={it.flavor} /></div>}
           </div>
           <div className={pop.imActions}>
             <button type="button" className={pop.ia} onClick={onClose}>

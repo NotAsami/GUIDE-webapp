@@ -117,3 +117,32 @@
   flex: 0 0 auto; min-width: 16px; text-align: center;
   font-family: var(--font-mono); font-size: 12px; color: var(--text);
 }
+
+/* The rolled result, shown above the questions it decides. Deliberately the
+   loudest thing on the sheet: a Relentless Rage save is the whole reason the
+   press stopped to ask, and a number the player has to hunt for is a number
+   they will answer around. */
+.cfRoll {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, rgba(0, 166, 214, 0.14), rgba(0, 166, 214, 0.04));
+  border-left: 2px solid var(--cyan);
+}
+.cfRollLab {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em;
+  color: var(--cyan-hot); text-transform: uppercase;
+}
+.cfRollTotal {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  font-family: var(--font-display); font-size: 30px; font-weight: 600;
+  line-height: 1; color: var(--text); font-variant-numeric: tabular-nums;
+}
+.cfRollBreak {
+  grid-column: 1;
+  font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+}

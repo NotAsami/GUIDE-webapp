@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ExprScope } from './expr.ts'
-import { evalExpr, interpolate, interpolations, ROLL_IDENTS, VAR_IDENTS } from './expr.ts'
+import { evalExpr, interpolate, interpolations, ROLL_IDENTS, VAR_IDENTS, hasIdent, isHasIdent} from './expr.ts'
 
 /** A variable formula's scope (§33): the whitelist plus declared variables. The
  *  Arbiter path values are §21's, which is the content that forced this engine. */
@@ -224,4 +224,36 @@ test('string literals exist only to be chosen between', () => {
   assert.equal(evalExpr('"a" + "b"', {}), null)        // no string arithmetic
   assert.equal(evalExpr('true ? "a" : 1', {}), null)   // §36: branches share a type
   assert.equal(evalExpr('"unterminated', {}), null)
+})
+
+/* FEATURE PRESENCE (`has_<name>`).
+   Rules gate on owning a thing, not on being a level. `level >= 13` was the
+   only way to say it and it is only right for a single-classed character - a
+   Barbarian 9 / Fighter 4 is level 13 with no Improved Brutal Strike. */
+
+test('a name becomes a legal identifier however it is punctuated', () => {
+  assert.equal(hasIdent('Improved Brutal Strike'), 'has_improved_brutal_strike')
+  // Parentheses would be a syntax error inside a condition, so they collapse.
+  assert.equal(hasIdent('Improved Brutal Strike (Enhanced)'), 'has_improved_brutal_strike_enhanced')
+  assert.equal(hasIdent("Hunter's Mark"), 'has_hunter_s_mark')
+  assert.ok(isHasIdent(hasIdent('Improved Brutal Strike (Enhanced)')))
+  assert.ok(!isHasIdent('level'))
+})
+
+test('AN UNOWNED FEATURE READS FALSE, it does not break the roll', () => {
+  /* The scope can only name what a character HAS. Rejecting the absent case
+     would make every character who lacks the feature - which is most of them -
+     hit "condition did not resolve" on every roll. */
+  assert.deepEqual(evalExpr('has_improved_brutal_strike', {}), { t: 'bool', v: false })
+  assert.deepEqual(evalExpr('has_nothing_at_all ? 2 : 1', {}), { t: 'num', flat: 1, dice: [] })
+})
+
+test('an owned one reads true', () => {
+  assert.deepEqual(evalExpr('has_rage', { has_rage: true }), { t: 'bool', v: true })
+})
+
+test('the leniency is ONLY for has_ — an ordinary typo still fails', () => {
+  // Otherwise every misspelling in the language would silently become false.
+  assert.equal(evalExpr('levle', {}), null)
+  assert.equal(evalExpr('hasRage', {}), null, 'camelCase is not the presence shape')
 })

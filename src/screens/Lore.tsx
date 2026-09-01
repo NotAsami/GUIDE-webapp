@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import type { CharacterRow, Relation } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
-import { Prose, renderInline } from '../lib/markdown'
+import { Prose, Inline } from '../lib/markdown'
 import { origins } from '../lib/featureView'
 import { Icon } from '../components/Icon'
 import styles from './Lore.module.css'
@@ -172,7 +172,7 @@ export function Lore() {
                             <div className={styles.ncInner}>
                               <div className={styles.ncKey}><i className="fa-solid fa-circle-dot" /> {label}</div>
                               <div className={styles.ncVal}>
-                                {lore.personality?.[key] ? renderInline(lore.personality[key]!) : '—'}
+                                {lore.personality?.[key] ? <Inline text={lore.personality[key]!} /> : '—'}
                               </div>
                             </div>
                           </div>
@@ -257,7 +257,7 @@ function RelationRow({ r }: { r: Relation }) {
         </span>
         <span className={styles.attLabel}>{attLabel}</span>
       </div>
-      <div className={styles.relDesc}>{renderInline(r.desc)}</div>
+      <div className={styles.relDesc}><Inline text={r.desc} /></div>
     </div>
   )
 }
