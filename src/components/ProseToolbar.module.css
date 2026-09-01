@@ -1,0 +1,80 @@
+/* The floating icon-insert button, and the picker it opens.
+   Fixed-position: it tracks a field inside panes that scroll, so it cannot be
+   a child of anything with `overflow`. */
+.bar {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* Chamfered the way every small control here is, but as a FRAME plus an INNER
+   rather than a bordered box. A 45° clip-path over a plain `border` slices both
+   diagonals bare — the recurring bug in docs/Chamfered_clip-path_corners_fix.md
+   — and the two-layer shape sidesteps it entirely instead of paying the
+   gradient recipe for a 22px button. */
+.btn {
+  --cut: 5px;
+  position: relative;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: rgba(212, 191, 125, 0.4);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 150ms ease;
+}
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  background: linear-gradient(180deg, #1c1c1c, #121212);
+  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
+}
+/* The interior is opaque and painted by ::before, so the glyph needs a stacking
+   context of its own or it renders underneath. */
+.btn i {
+  position: relative;
+  z-index: 1;
+  font-size: 10px;
+  color: var(--beige-dim);
+  transition: color 150ms ease;
+}
+.btn:hover { background: var(--cyan); }
+.btn:hover i { color: var(--cyan-hot); }
+.btn:focus-visible { outline: 2px solid var(--cyan-hot); outline-offset: 2px; }
+.on { background: var(--cyan); }
+.on i { color: var(--cyan-hot); }
+
+/* Anchored to the button's RIGHT edge so it opens leftward, back over the
+   field. The button is clamped to the viewport edge, so a left-anchored panel
+   would open straight off the screen. */
+.pop {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  width: 320px;
+  padding: 10px;
+  background: linear-gradient(180deg, #171717, #101010);
+  border: 1px solid rgba(212, 191, 125, 0.4);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
+}
+
+.close {
+  margin-top: 8px;
+  width: 100%;
+  padding: 5px 0;
+  background: transparent;
+  border: 1px solid rgba(212, 191, 125, 0.28);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+.close:hover { color: var(--cyan-hot); border-color: var(--cyan); }

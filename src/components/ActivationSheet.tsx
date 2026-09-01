@@ -44,12 +44,44 @@ export const canUse = (f: Feature, scope: ExprScope) => {
   return !(u && u.current <= 0)
 }
 
+/** THE PRESS, RESOLVED AND ROLLED — once, and once only.
+ *
+ *  `Feature.roll` is LITERAL DICE: rollHeal() reads `NdM + K` or a plain number
+ *  and falls back to the leading integer for anything else, so `1d20 + con` is
+ *  not a formula that rolls badly — it rolls a constant 1. The formula half goes
+ *  in an `add` with no target, which §4 lands on this feature's own roll, and
+ *  the rider is therefore PART OF THE NUMBER rather than a footnote to it.
+ *
+ *  Computed in one place because rollResolution ROLLS the rider dice. start()
+ *  needs the total early — the confirm sheet asks a human to judge that number
+ *  against a DC, and a bare d20 beside a DC that includes CON is a question
+ *  nobody can answer — and run() needs the SAME one. Two calls would show one
+ *  number and log another. */
+function pressRoll(f: Feature, graph: GraphContext) {
+  const res = resolve(graph, { kind: 'feature', subject: gid('feature', f), tags: f.tags })
+  const contrib = rollResolution(res)
+  const base = f.roll ? rollHeal(f.roll) : { total: 0, breakdown: '' }
+  return {
+    total: Math.max(0, base.total + contrib.flat),
+    breakdown: contrib.flat ? `${base.breakdown} + ${contrib.flat}` : base.breakdown,
+    riders: contrib.riders,
+    notes: res.notes,
+    problems: res.problems,
+  }
+}
+
 export function useActivation(host: ActivationHost) {
   const { character, graph, shardTrees = {}, updateSection, updateSections } = host
   const { addRoll } = useRollLog()
   const [busy, setBusy] = useState(false)
   /** A pending activation awaiting the player's answers. Null = nothing to confirm. */
-  const [pending, setPending] = useState<{ feature: Feature; outcomes: Outcome[] } | null>(null)
+  const [pending, setPending] = useState<{
+    feature: Feature
+    outcomes: Outcome[]
+    /** Already resolved and rolled, because the sheet is going to ask something
+     *  about the number. See start() and pressRoll(). */
+    press: ReturnType<typeof pressRoll>
+  } | null>(null)
 
   /** Pressing Use.
    *
@@ -79,7 +111,16 @@ export function useActivation(host: ActivationHost) {
        human, so it stops and asks rather than guessing at a recipient. */
     if (outcomes.some(o => o.ask || o.kind === 'grant'
       || (o.kind === 'slot' && (o.level === undefined || o.budget !== undefined)))) {
-      setPending({ feature: f, outcomes }); return
+      /* THE DIE FALLS BEFORE THE QUESTION, when there is both a roll and a
+         question. Relentless Rage is the case that forced it: "make a DC 10
+         Constitution saving throw; if you succeed, your Hit Points instead
+         change to twice your level" cannot be answered before you have seen
+         the number, and asking first turns a save into a guess. So the roll
+         happens here and rides on `pending` to be shown beside the checkbox;
+         run() uses that result rather than rolling a second time, which would
+         be two different numbers for one press. */
+      setPending({ feature: f, outcomes, press: pressRoll(f, graph) })
+      return
     }
     void run(f, outcomes)
   }
@@ -90,7 +131,13 @@ export function useActivation(host: ActivationHost) {
    *  positional arguments: the sheet now asks up to three different questions
    *  (which `ask`s, who receives a grant, which slot to spend) and a fourth
    *  would have been a fourth parameter nobody could read at the call site. */
-  async function run(f: Feature, outcomes: Outcome[], picked: Picked = { answers: new Set() }) {
+  async function run(
+    f: Feature,
+    outcomes: Outcome[],
+    picked: Picked = { answers: new Set() },
+    /** The press already resolved in start(), when a confirm sheet was shown. */
+    pre?: ReturnType<typeof pressRoll>,
+  ) {
     const { answers, recipient, slotLevel, slots } = picked
     if (busy || !canUse(f, graph.scope)) return
     setBusy(true)
@@ -127,12 +174,10 @@ export function useActivation(host: ActivationHost) {
     // A feature could contribute to every roll in the app except its own. Its
     // `roll` is a roll like any other, and §4's "no target = this node's own
     // roll" is exactly the selector that reaches it.
-    const res = resolve(graph, { kind: 'feature', subject: gid('feature', f), tags: f.tags })
-    const contrib = rollResolution(res)
+    const press = pre ?? pressRoll(f, graph)
 
     if (f.roll) {
-      const { total: rolled, breakdown } = rollHeal(f.roll)
-      const total = Math.max(0, rolled + contrib.flat)
+      const { total, breakdown } = press
       if (f.rollTone === 'heal') {
         // Heal-tagged rolls raise real HP, like a potion — clamped to the
         // EFFECTIVE max, but the persisted `max` stays the authored base.
@@ -162,7 +207,14 @@ export function useActivation(host: ActivationHost) {
 
     // The variable writes join the SAME write as the roll and the use counter —
     // two writes could land apart and leave a feature spent but not activated.
-    const { resources, usesPatch, spellbook, applied } = applyOutcomes(character, outcomes, answers, { slotLevel, slots })
+    const { resources, usesPatch, spellbook, hp, applied } = applyOutcomes(character, outcomes, answers, { slotLevel, slots })
+    /* `setHp` lands on the SAME sheet object the use counter and a heal-tagged
+       roll already edit, so a feature that spends a charge and rewrites Hit
+       Points is one write, not a race between two. */
+    if (hp !== undefined) {
+      const cur = nextSheet.hp ?? { current: 0, max: 0 }
+      nextSheet = { ...nextSheet, hp: { ...cur, current: hp } }
+    }
     // A grant already has its line — naming the recipient, which the plan could
     // not — so it is not re-summarised from the outcome.
     for (const o of applied) if (o.kind !== 'grant') lines.push(outcomeLine(o))
@@ -193,17 +245,18 @@ export function useActivation(host: ActivationHost) {
     addRoll({
       kind: 'custom', title: f.name, subtitle, icon: f.icon, lines,
       subject: { kind: 'feature', id: f.id },
-      riderGroups: contrib.riders.length ? [{ label: 'Feature', riders: contrib.riders }] : undefined,
-      notes: res.notes.length ? res.notes : undefined,
-      problems: res.problems.length ? res.problems : undefined,
+      riderGroups: press.riders.length ? [{ label: 'Feature', riders: press.riders }] : undefined,
+      notes: press.notes.length ? press.notes : undefined,
+      problems: press.problems.length ? press.problems : undefined,
     })
   }
 
   const sheet = pending && createPortal(
     <ActivationConfirm
       feature={pending.feature} outcomes={pending.outcomes} character={character} busy={busy}
+      rolled={pending.feature.roll ? pending.press : undefined}
       onCancel={() => setPending(null)}
-      onConfirm={picked => { const p = pending; setPending(null); void run(p.feature, p.outcomes, picked) }}
+      onConfirm={picked => { const p = pending; setPending(null); void run(p.feature, p.outcomes, picked, p.press) }}
     />,
     document.body,
   )
@@ -224,8 +277,12 @@ export type Picked = {
   slots?: Record<number, number>
 }
 
-function ActivationConfirm({ feature, outcomes, character, busy, onCancel, onConfirm }: {
+function ActivationConfirm({ feature, outcomes, character, busy, rolled, onCancel, onConfirm }: {
   feature: Feature; outcomes: Outcome[]; character: CharacterRow; busy: boolean
+  /** Already rolled in start(), when this feature has both a roll and a
+   *  question. Shown at the top, because it is what the questions are about.
+   *  Riders are already folded into `total` — see pressRoll. */
+  rolled?: { total: number; breakdown: string }
   onCancel: () => void; onConfirm: (picked: Picked) => void
 }) {
   /* PRE-TICKED. The sheet already lists everything the press will do, so
@@ -289,6 +346,17 @@ function ActivationConfirm({ feature, outcomes, character, busy, onCancel, onCon
             <div className={styles.pSub}>Will apply</div>
           </div>
         </div>
+
+        {/* THE ROLL, FIRST AND BIGGEST. Every checkbox below it is a decision
+            about this number - "did the save beat the DC" - so putting it
+            anywhere else asks the player to decide and then find out. */}
+        {rolled && (
+          <div className={styles.cfRoll}>
+            <span className={styles.cfRollLab}>{feature.rollLabel ?? 'Result'}</span>
+            <span className={styles.cfRollTotal}>{rolled.total}</span>
+            <span className={styles.cfRollBreak}>{rolled.breakdown}</span>
+          </div>
+        )}
 
         <div className={styles.cfList}>
           {outcomes.map((o, i) => (

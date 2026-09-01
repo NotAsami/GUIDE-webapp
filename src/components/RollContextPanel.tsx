@@ -32,7 +32,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useRollLog, type RollEntry } from '../lib/rolls'
 import { rolledDiceTerms } from '../lib/dice'
-import { Prose, renderInline } from '../lib/markdown'
+import { Prose, Inline } from '../lib/markdown'
 import { colorOf } from '../lib/palette'
 import type { CharacterRow, ShardTree } from '../lib/database.types'
 import {
@@ -571,9 +571,9 @@ function Entry({
               <div key={i} className={styles.note}>
                 <i className="fa-solid fa-circle-info" />
                 {/* Authored through a markdownShortcuts textarea, so it renders
-                    through renderInline like every other authored string. Printed
+                    through Inline like every other authored string. Printed
                     raw it showed its own asterisks. */}
-                <span>{renderInline(n)}</span>
+                <span><Inline text={n} /></span>
               </div>
             ))}
           </div>
@@ -760,7 +760,7 @@ function Contribution({ group, showTip, held, onLeave }: {
         ))}
 
         {/* THE SUMMARY. What the row cannot tell you is whether the rule it came
-            from was supposed to fire on this roll. Prose, not renderInline, so
+            from was supposed to fire on this roll. Prose, not Inline, so
             authored paragraphs and colours both survive. */}
         {summary && <Prose text={summary} className={styles.cProse} />}
 
@@ -918,7 +918,7 @@ function Choice({ views, showTip, onPick, onUndo, onLeave }: {
               {isPicked && <span className={styles.optTag}><i className="fa-solid fa-lock" />Locked in</span>}
               {passed && <span className={styles.optTag}>Not taken</span>}
             </div>
-            {body && <div className={styles.optText}>{renderInline(body)}</div>}
+            {body && <div className={styles.optText}><Inline text={body} /></div>}
           </button>
         )
       })}
@@ -1006,14 +1006,14 @@ function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin, onLeave }: {
         <div className={styles.rdBody}>
           {/* The authored question, verbatim. It is the only thing that says what
               the player is actually being asked. */}
-          {r.text && <div className={styles.rdText}>{renderInline(r.text)}</div>}
+          {r.text && <div className={styles.rdText}><Inline text={r.text} /></div>}
 
           {/* What answering YES reveals. Rendered for ANY rider carrying it, not
               just a note-kind one: a note grouped with a contribution becomes a
               VALUE rider (the contribution outranks the prose), and gating this
               on the kind is how the prose then vanished. §25's inline compute
               already ran, so this is the sentence with its number in it. */}
-          {r.on && r.reveal && <div className={styles.rdReveal}>{renderInline(r.reveal)}</div>}
+          {r.on && r.reveal && <div className={styles.rdReveal}><Inline text={r.reveal} /></div>}
 
           {v.kind === 'note' ? (
             // Prose and nothing else — there is no value, so there is nothing to
@@ -1165,7 +1165,7 @@ function CatalogSheet({ view, entry, onClose, onLeave }: {
                 </div>
                 <div className={styles.rt}>
                   {r.text
-                    ? renderInline(r.text)
+                    ? <Inline text={r.text} />
                     : r.op === 'add'
                       ? `Adds ${r.formula || r.flat}${r.dmgType ? ` ${r.dmgType}` : ''} to this roll.`
                       : `Grants ${r.op}.`}

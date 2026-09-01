@@ -748,6 +748,45 @@ test('an effect with no target applies to its own node\'s roll', () => {
   assert.equal(total(resolve(ctx, { kind: 'feature', subject: 'feature:Other' })).flat, 0)
 })
 
+/* AN EMPTY TARGET IS AN ABSENT ONE, and this is not a nicety: the effect editor
+   writes `target: []` rather than omitting the key, so the catalog is full of
+   them. If the two ever diverged, every hand-authored self-targeting effect
+   would keep working and every editor-authored one would silently target
+   nothing. */
+test('target: [] reaches the node\'s own roll exactly as an absent target does', () => {
+  const c = withFeatures([gfeat('SelfBuff', [{ id: 'e1', op: 'add', value: '3', label: 'Self', target: [] }])])
+  const ctx = buildContext(c)
+  assert.equal(total(resolve(ctx, { kind: 'feature', subject: 'feature:SelfBuff' })).flat, 3)
+  assert.equal(total(resolve(ctx, { kind: 'feature', subject: 'feature:Other' })).flat, 0)
+})
+
+/* THE PRESS ROLL IS LITERAL DICE, so a feature that scales is authored as a
+   fixed `roll` plus a no-target `add` carrying the level table — Breath Weapon
+   is `1d10` plus a table that adds 1d10 at 5, 2d10 at 11, 3d10 at 17.
+   `Feature.roll` cannot hold the formula: dice.ts rollHeal() parses `NdM + K`
+   and falls back to the leading integer, so `1d20 + con` rolls a constant 1
+   rather than failing loudly. That is what makes this the only shape available,
+   and levelFormula's "0 below the first filled slot" is what keeps levels 1-4
+   at the base die instead of the level-1 cell. */
+test('a byLevel table on a no-target add scales the feature\'s OWN press roll', () => {
+  const table = ['', '', '', '', '', '1d10', '', '', '', '', '', '2d10', '', '', '', '', '', '3d10', '', '', '']
+  const dice = (level: number) => {
+    const c = withFeatures([gfeat('Breath', [
+      { id: 'e1', op: 'add', value: '0', label: 'Higher levels', target: [], byLevel: table },
+    ])])
+    c.identity = { ...(c.identity ?? {}), level }
+    return resolve(buildContext(c), { kind: 'feature', subject: 'feature:Breath' })
+      .riders.flatMap(r => r.dice ?? [])
+  }
+  assert.deepEqual(dice(1), [], 'nothing before the first filled slot')
+  assert.deepEqual(dice(4), [], 'still nothing at 4')
+  assert.deepEqual(dice(5), ['1d10'])
+  assert.deepEqual(dice(10), ['1d10'], 'sparse means "from here up", not "only here"')
+  assert.deepEqual(dice(11), ['2d10'])
+  assert.deepEqual(dice(17), ['3d10'])
+  assert.deepEqual(dice(20), ['3d10'])
+})
+
 // --- chaining (§13 step 3) --------------------------------------------------
 
 test('a two-level chain: B boosts A\'s contribution, A contributes to the roll', () => {
@@ -2429,4 +2468,122 @@ test('a condition may read attacksThisTurn — "on your first attack roll" is au
     vars: [{ name: 'go', kind: 'stored', type: 'bool', initial: false }],
   } as never).filter(a => a.t === 'Unknown identifier')
   assert.deepEqual(bad, [])
+})
+
+/* §25 EVERYWHERE, NOT JUST IN A NOTE.
+   `{...}` was honoured for a note's body and nowhere else. A DM wrote
+   "Add {level >= 17 ? 2d10 : 1d10} to Damage Roll" on Brutal Strike, saw it
+   compute on the Features screen — which had a private `live()` helper doing
+   the interpolation itself — and saw the braces printed raw in the roll panel
+   and the toast. One authored string, two render paths, the second silently
+   wrong. Riders are minted in one place, so that is where the text computes. */
+
+test('A RIDER LABEL COMPUTES — the braces never reach a screen', () => {
+  const c = withFeatures([gfeat('Brutal', [
+    { id: 'e1', op: 'add', value: '1d10', target: ['roll:damage'],
+      label: 'Add {level >= 17 ? 2d10 : 1d10} to Damage Roll' },
+  ])])
+  const r = resolve(buildContext(c), { kind: 'damage' }).riders.find(x => x.op === 'add')
+  assert.equal(r?.label, 'Add 1d10 to Damage Roll', 'level 7 takes the false branch')
+  assert.ok(!r?.label.includes('{'), 'no authored braces survive to the panel')
+})
+
+test('an ask sentence computes too — it is the question the player is asked', () => {
+  const c = withFeatures([gfeat('Ask', [
+    // No `once` — that mints an ARM, which is a different path and needs armed
+    // state on the character. A plain asked contribution is the rider path.
+    { id: 'e1', op: 'add', value: '2', target: ['roll:attack'],
+      label: 'Precision', ask: 'Spend it? You are level {level}.' },
+  ])])
+  const r = resolve(buildContext(c), { kind: 'attack' }).riders.find(x => x.text)
+  assert.equal(r?.text, 'Spend it? You are level 7.')
+})
+
+test('an unresolvable span stays literal rather than vanishing', () => {
+  // interpolate()'s contract: what cannot be known is left exactly as written,
+  // so a typo reads as a typo instead of as an empty gap in a sentence.
+  const c = withFeatures([gfeat('Typo', [
+    { id: 'e1', op: 'add', value: '1', target: ['roll:damage'], label: 'Add {levle} damage' },
+  ])])
+  const r = resolve(buildContext(c), { kind: 'damage' }).riders.find(x => x.op === 'add')
+  assert.equal(r?.label, 'Add {levle} damage')
+})
+
+/* GATING ON WHAT YOU OWN, not on what level you are.
+   Brutal Strike had `level >= 13` on its two extra blows and `level >= 17 ? 2 : 1`
+   on its pick count, so a Barbarian 9 / Fighter 4 - character level 13, no
+   Improved Brutal Strike - got both upgrades, and so did anyone the DM granted
+   Brutal Strike to on its own. The upgrade features themselves carried a `note`
+   with an empty target and did nothing at all. */
+
+test('BASE SCOPE NAMES THE FEATURES A CHARACTER HAS', () => {
+  const c = withFeatures([
+    gfeat('Brutal Strike', []),
+    gfeat('Improved Brutal Strike (Enhanced)', []),
+  ])
+  const scope = baseScope(c)
+  assert.equal(scope.has_brutal_strike, true)
+  assert.equal(scope.has_improved_brutal_strike_enhanced, true, 'punctuation collapses')
+  assert.ok(!('has_improved_brutal_strike' in scope), 'only what is actually held')
+})
+
+test('THE UPGRADE GATES ON THE UPGRADE, not on the character level', () => {
+  const blows = (extra: string[]) => {
+    const c = withFeatures([
+      gfeat('Brutal Strike', [
+        { id: 'b1', op: 'add', value: '1d10', label: 'Base', target: ['roll:damage.melee'] },
+        { id: 'b2', op: 'note', text: 'Staggering Blow', label: 'Staggering',
+          when: 'has_improved_brutal_strike', target: ['roll:damage.melee'] },
+      ]),
+      ...extra.map(n => gfeat(n, [])),
+    ])
+    // identity.level is 7 in the fixture; raise it past every old gate so the
+    // ONLY thing that can decide is the presence of the upgrade.
+    c.identity = { level: 20 }
+    return resolve(buildContext(c), { kind: 'damage', sub: 'melee' })
+  }
+
+  const alone = blows([])
+  assert.deepEqual(alone.problems, [], 'an absent feature is false, never "did not resolve"')
+  assert.ok(!alone.notes.some(n => n.includes('Staggering')),
+    'level 20 alone must NOT grant the upgrade')
+
+  const upgraded = blows(['Improved Brutal Strike'])
+  assert.ok(upgraded.notes.some(n => n.includes('Staggering')),
+    'owning the feature is what grants it')
+})
+
+test('the extra die follows the same rule', () => {
+  const dmg = (own: boolean) => {
+    const c = withFeatures([
+      gfeat('Brutal Strike', [{
+        id: 'b1', op: 'add', label: 'Brutal',
+        value: 'has_improved_brutal_strike_enhanced ? 2d10 : 1d10',
+        target: ['roll:damage.melee'],
+      }]),
+      ...(own ? [gfeat('Improved Brutal Strike (Enhanced)', [])] : []),
+    ])
+    c.identity = { level: 20 }
+    return total(resolve(buildContext(c), { kind: 'damage', sub: 'melee' })).dice
+  }
+  assert.deepEqual(dmg(false), ['1d10'], 'level 20 on its own is still 1d10')
+  assert.deepEqual(dmg(true), ['2d10'])
+})
+
+test('A PRESENCE TYPO IS CAUGHT AT AUTHOR TIME, where it can be fixed', () => {
+  /* Runtime is deliberately lenient - it has no catalog and must not break a
+     roll - so this is the only place a misspelling can be reported. The
+     catalog supplies the real names as `catalogTypes`. */
+  const known = { has_improved_brutal_strike: 'bool' as const }
+  const bad = auditNode(
+    { graph: [{ id: 'e1', op: 'add', value: '1', label: 'X', target: ['roll:damage'], when: 'has_imrpoved_brutal_strike' }] },
+    [], known,
+  )
+  assert.ok(bad.some(i => i.t === 'Unknown identifier'), 'a misspelt feature name must not pass')
+
+  const good = auditNode(
+    { graph: [{ id: 'e1', op: 'add', value: '1', label: 'X', target: ['roll:damage'], when: 'has_improved_brutal_strike' }] },
+    [], known,
+  )
+  assert.deepEqual(good.filter(i => i.sev === 'err'), [])
 })

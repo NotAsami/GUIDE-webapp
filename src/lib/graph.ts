@@ -24,7 +24,7 @@
 
 import type { ArmedMod, CharacterRow, Feature, GraphEffect, GraphOp, GraphState, ShardTree, VarDef } from './database.types.ts'
 import type { ExprScope, FormulaValue } from './expr.ts'
-import { ROLL_IDENTS, ROLL_IDENT_PROBE, VAR_IDENTS, evalExpr, freeIdents, interpolate, interpolations } from './expr.ts'
+import { ROLL_IDENTS, ROLL_IDENT_PROBE, VAR_IDENTS, evalExpr, freeIdents, hasIdent, interpolate, interpolations } from './expr.ts'
 import { type ActiveSource, activeEffects, activeSources, effectiveSheet } from './effects.ts'
 import { IS_ACTIVATION, IS_SHEET, OPS, OP_TITLE } from './opSchema.ts'
 import { MOD_STAT_SET, isAbility } from './modEditor.ts'
@@ -196,7 +196,22 @@ export function collectVars(sources: ActiveSource[]): Map<string, VarBinding> {
 export function baseScope(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): ExprScope {
   const view = effectiveSheet(character, shardTrees)
   const ab = abilities(view)
+
+  /* WHAT THIS CHARACTER HAS, as booleans a condition can read. Only the true
+     ones are bound; an unowned feature is absent from the scope and expr.ts
+     reads that as false, which is the whole point - the alternative would be
+     enumerating the catalog on every roll.
+     Read off `sheet.features`, the granted snapshots. Gear- and shard-derived
+     features are deliberately NOT counted: those come and go with what is
+     equipped, and "do you have this feature" as a gate has always meant the
+     permanent grant. */
+  const has: ExprScope = {}
+  for (const f of character.sheet?.features ?? []) {
+    if (f.name) has[hasIdent(f.name)] = true
+  }
+
   return {
+    ...has,
     level: character.identity?.level ?? 1,
     prof: proficiency(view),
     str: abilityMod(ab.str), dex: abilityMod(ab.dex), con: abilityMod(ab.con),
@@ -896,6 +911,20 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     proficient: req.proficient ?? false,
   }
 
+  /* AUTHORED TEXT COMPUTES WHEREVER IT IS SHOWN, not only where someone
+     remembered to ask.
+     §25's `{...}` was honoured for a note's body and for nothing else, so
+     "Add {level >= 17 ? 2d10 : 1d10} to Damage Roll" resolved on the Features
+     screen — which had its own private `live()` helper — and printed its own
+     braces in the roll panel, the toast and the context list. One authored
+     string, two render paths, the second silently wrong: the same defect as
+     the icons and the markdown before it.
+     Labels and ask-sentences go through here, at the one place a rider is
+     minted, so every surface downstream reads a computed string and none of
+     them needs to know that interpolation exists. */
+  const say = <T extends string | undefined>(t: T): T =>
+    (t ? (interpolate(t, scope).text as T) : t)
+
   // 2. Match: the subject itself, each of its tags, the roll kind, the sub-kind,
   //    and — on an attack — the ability it was made with.
   const keys = reqKeys(req)
@@ -1087,7 +1116,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
         faces = Math.trunc(v.flat)
       }
       out.riders.push({
-        label: eff.label, source: from.obj.name, sourceGid: e.owner, op: eff.op,
+        label: say(eff.label), source: from.obj.name, sourceGid: e.owner, op: eff.op,
         formula: '', flat: 0, dice: [],
         when: 'manual', on: false,
         keep: eff.keep === 'advantage' ? 'advantage' : eff.keep === 'better' ? 'better' : 'new',
@@ -1113,7 +1142,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
       if (eff.op === 'crit') applyCrit(eff)
       if (eff.op === 'floor') applyFloor(eff)
       out.riders.push({
-        label: eff.label, source: from.obj.name, sourceGid: e.owner, op: eff.op,
+        label: say(eff.label), source: from.obj.name, sourceGid: e.owner, op: eff.op,
         formula: eff.value ?? '', flat: v.flat, dice: v.dice,
         when: 'always', on: true, dmgType: eff.dmgType,
         sourceText: summaryOf(from.obj), parts: partsOf(eff.value, scope),
@@ -1122,7 +1151,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     }
 
     const rider: Rider = {
-      label: eff.label,
+      label: say(eff.label),
       source: from.obj.name,
       sourceGid: e.owner,
       op: eff.op,
@@ -1131,7 +1160,7 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
       dice: v.dice,
       when: eff.ask ? 'manual' : 'active',
       on: !eff.ask,
-      text: eff.ask,
+      text: say(eff.ask),
       reveal,
       dmgType: eff.dmgType,
       sourceText: summaryOf(from.obj),
@@ -1223,13 +1252,13 @@ ${rider.reveal}` : rider.reveal
     out.riders.push({
       // The NAME if it was captured, never the gid — every other rider's
       // `source` is a human name, and this is the same column on screen.
-      label: m.label, source: m.sourceName || m.source, sourceGid: m.source as Gid, op: m.op,
+      label: say(m.label), source: m.sourceName || m.source, sourceGid: m.source as Gid, op: m.op,
       formula: m.value ?? '', flat: v?.t === 'num' ? v.flat : 0, dice: v?.t === 'num' ? v.dice : [],
       when: m.ask ? 'manual' : 'always', on: !m.ask, armedId: m.id, dmgType: m.dmgType,
       // The question, and what saying yes reveals. `text` on a rider is the ask
       // sentence and `reveal` is the prose, matching what a graph-built rider
       // does — so the panel needs no second shape for an offered arm.
-      ...(m.ask ? { text: m.ask, reveal: m.text } : {}),
+      ...(m.ask ? { text: say(m.ask), reveal: say(m.text) } : {}),
       /* Only a REAL choice gets a group. A lone offered arm is a yes/no, and
          painting one option as a pick-one implies a sibling that is not there. */
       ...(m.ask && (offeredBySource.get(m.source) ?? 0) > 1
@@ -1723,21 +1752,31 @@ export function auditNode(
          rules are checked above, beside the other target-bearing ops. */
       if (eff.op === 'grant') continue
 
-      // Every other activation names a variable rather than a target: it writes
-      // state, it does not reach out at other nodes.
-      const v = (node.vars ?? []).find(x => x.name === eff.variable)
-      if (!v) {
-        out.push({ sev: 'err', id: eff.id, t: 'Unknown variable', s: `${eff.label || eff.id} writes "${eff.variable ?? ''}", which this node does not declare.` })
-      } else if (v.kind !== 'stored') {
-        out.push({ sev: 'err', id: eff.id, t: 'Writing a derived variable', s: `${label(v)} is derived — it is computed from its formula on every read, so writing it would be discarded.` })
-      } else if (v.scope === 'dm') {
-        // §31's whole point: writability is a LOCATION. A player presses this
-        // button, and migration 0015's trigger reverts a player write to dmVars —
-        // so without this check the activation would silently no-op at the table.
-        out.push({ sev: 'err', id: eff.id, t: 'Activation writes a DM variable', s: `${label(v)} is DM-only, and the player is the one pressing this. The write would be reverted by the database.` })
+      /* `setHp` NAMES NO VARIABLE. It writes the one number on the sheet that
+         was never an authored variable, so the declaration checks below cannot
+         apply to it - the audit would ask which variable it writes and the
+         honest answer is none, which is what made Relentless Rage
+         unpublishable.
+         NARROWED, not skipped: an earlier version of this `continue`d the whole
+         effect and took the formula check out with it, so `2 * levle` published
+         clean. Everything after this block still runs. */
+      if (eff.op !== 'setHp') {
+        // Every other activation names a variable rather than a target: it writes
+        // state, it does not reach out at other nodes.
+        const v = (node.vars ?? []).find(x => x.name === eff.variable)
+        if (!v) {
+          out.push({ sev: 'err', id: eff.id, t: 'Unknown variable', s: `${eff.label || eff.id} writes "${eff.variable ?? ''}", which this node does not declare.` })
+        } else if (v.kind !== 'stored') {
+          out.push({ sev: 'err', id: eff.id, t: 'Writing a derived variable', s: `${label(v)} is derived — it is computed from its formula on every read, so writing it would be discarded.` })
+        } else if (v.scope === 'dm') {
+          // §31's whole point: writability is a LOCATION. A player presses this
+          // button, and migration 0015's trigger reverts a player write to dmVars —
+          // so without this check the activation would silently no-op at the table.
+          out.push({ sev: 'err', id: eff.id, t: 'Activation writes a DM variable', s: `${label(v)} is DM-only, and the player is the one pressing this. The write would be reverted by the database.` })
+        }
       }
       if (eff.target?.length) {
-        out.push({ sev: 'err', id: eff.id, t: 'Target on an activation', s: `${eff.label || eff.id} writes a variable on this character; it has no target to reach out at.` })
+        out.push({ sev: 'err', id: eff.id, t: 'Target on an activation', s: `${eff.label || eff.id} writes to this character; it has no target to reach out at.` })
       }
     }
 

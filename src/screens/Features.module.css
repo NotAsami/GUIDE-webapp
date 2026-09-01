@@ -49,6 +49,11 @@
 .closeScreen:hover { color: var(--cyan-hot); border-color: var(--cyan); }
 
 /* ---- tab strip ---- */
+/* Tabs and source chips share one band. `align-items: center` rather than
+   flex-end so the 28px chips sit against the middle of the 46px tabs instead of
+   hanging off their baseline, and the chip block grows so the gear note can
+   still push itself to the far right. */
+.controls { flex: 0 0 auto; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .tabrow { flex: 0 0 auto; display: flex; align-items: flex-end; gap: 10px; }
 .tab { --cut: 10px; position: relative; background: transparent; border: 0; padding: 0; width: 214px; height: 46px; cursor: pointer; }
 .tFrame {
@@ -71,7 +76,7 @@
 .tabOn .tLab, .tabOn .tCount { color: var(--cyan-hot); }
 
 /* ---- source filter chips ---- */
-.filterrow { flex: 0 0 auto; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.filterrow { flex: 1 1 320px; min-width: 0; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .chips { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .chip { --cut: 6px; position: relative; display: inline-flex; background: transparent; border: 0; padding: 1px; height: 28px; cursor: pointer; }
 .cf {

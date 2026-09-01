@@ -32,7 +32,7 @@ import { ordinal } from '../lib/classes'
 import { ASI_LEVELS, asiUsed, hpGainOf, nextCurrentHp, type LevelUpChoices, type LevelUpPlan } from '../lib/levelup'
 import { prereqMet, prereqSummary } from '../lib/feats'
 import { useBackdropFreeze } from '../lib/backdropFreeze'
-import { renderInline } from '../lib/markdown'
+import { Inline } from '../lib/markdown'
 import { Icon } from './Icon'
 import styles from './LevelUpOverlay.module.css'
 /* The console's chamfered button, reused rather than re-cut — its `.bf`/`.bi`
@@ -438,12 +438,12 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, tone = 'dm', 
                           </span>
                           <span className={styles.rx}>
                             <span className={styles.rn}>{f.data.name}</span>
-                            {blurb(f.data) && <span className={styles.rd}>{renderInline(blurb(f.data))}</span>}
+                            {blurb(f.data) && <span className={styles.rd}><Inline text={blurb(f.data)} /></span>}
                             {f.data.prerequisite && (
                               <span className={cx(styles.rpre, blocked && styles.rpreUnmet)}>
                                 {blocked
                                   ? <>Requires {pr!.unmet.join(', ')} — not met</>
-                                  : <>Requires {renderInline(f.data.prerequisite)}
+                                  : <>Requires <Inline text={f.data.prerequisite} />
                                     {pr?.unparsed.length ? <> · <span className={styles.rpreOpen}>{pr.unparsed.join(', ')} not checked</span></> : null}</>}
                               </span>
                             )}
@@ -499,12 +499,12 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, tone = 'dm', 
                           </span>
                           <span className={styles.rx}>
                             <span className={styles.rn}>{o.data.name}</span>
-                            {blurb(o.data) && <span className={styles.rd}>{renderInline(blurb(o.data))}</span>}
+                            {blurb(o.data) && <span className={styles.rd}><Inline text={blurb(o.data)} /></span>}
                             {o.data.prerequisite && (
                               <span className={cx(styles.rpre, blocked && styles.rpreUnmet)}>
                                 {blocked
                                   ? `Requires ${pr!.unmet.join(', ')}`
-                                  : <>Requires {renderInline(o.data.prerequisite)}
+                                  : <>Requires <Inline text={o.data.prerequisite} />
                                     {pr?.unparsed.length ? <> · <span className={styles.rpreOpen}>{pr.unparsed.join(', ')} not checked</span></> : null}</>}
                               </span>
                             )}

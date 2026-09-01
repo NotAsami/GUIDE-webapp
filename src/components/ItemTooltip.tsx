@@ -14,7 +14,7 @@
 
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { ItemRarity } from '../lib/database.types'
-import { renderInline } from '../lib/markdown'
+import { Inline } from '../lib/markdown'
 import styles from './ItemTooltip.module.css'
 
 export type TooltipData = {
@@ -93,7 +93,7 @@ export function useItemTooltip() {
           {(data.rows ?? []).map(([k, v], i) => (
             <div key={i} className={styles.ttRow}><span className={styles.k}>{k}</span><span className={styles.v}>{v}</span></div>
           ))}
-          {data.flavor && <div className={styles.ttFlavor}>{renderInline(data.flavor)}</div>}
+          {data.flavor && <div className={styles.ttFlavor}><Inline text={data.flavor} /></div>}
           {data.attune && (
             <div className={`${styles.ttAttune}${/^not|^none/i.test(data.attune) ? ' ' + styles.no : ''}`}>Attuned: {data.attune}</div>
           )}

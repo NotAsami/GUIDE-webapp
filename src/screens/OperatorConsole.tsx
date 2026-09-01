@@ -37,7 +37,7 @@ import { useGuideVoice, ALL_PARTY, type VoiceMsg, type VoiceTone } from '../lib/
 import { usePartyPresence } from '../lib/presence'
 import { useFullscreen } from '../lib/fullscreen'
 import { renderInline } from '../lib/markdown'
-import { markdownShortcuts } from '../lib/textareaHooks'
+import { proseField } from '../lib/textareaHooks'
 import { useLocalDraft } from '../lib/draft'
 import { useAutoPublish, useAutoSave } from '../lib/autopublish'
 import type {
@@ -1692,7 +1692,7 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
       </div>
       <textarea className={styles.catProse} value={draft.desc ?? ''}
         placeholder="The prose the player reads when the loot is pushed…"
-        onKeyDown={markdownShortcuts(desc => set({ desc }))}
+        {...proseField(desc => set({ desc }))}
         onChange={e => set({ desc: e.target.value })} />
 
       {/* THE ONE NUMBER THAT SAYS WHETHER THE TABLE IS TUNED. Rows roll
@@ -3168,7 +3168,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
         <ProsePreview text={flavor} />
       </div>
       <textarea className={styles.catProse} value={flavor} onChange={e => setFlavor(e.target.value)}
-        onKeyDown={markdownShortcuts(setFlavor)}
+        {...proseField(setFlavor)}
         placeholder="The prose the player reads when they examine this item…" />
 
       {/* effects granted — reference picker into the effect library. Each
@@ -4163,7 +4163,7 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
         <div className={styles.efBh}><i className="fa-solid fa-feather" /><span className={styles.t}>Description</span><span className={styles.n}><i className="fa-solid fa-eye" /> player-facing · **bold** *italics*</span></div>
         <div className={styles.efRule}>Everything neither numeric nor a flag — often the real rule</div>
         <textarea className={styles.catProse} value={desc} onChange={e => setDesc(e.target.value)}
-          onKeyDown={markdownShortcuts(setDesc)}
+          {...proseField(setDesc)}
           placeholder="e.g. At the start of each of their turns the creature takes 1d6 damage…" />
       </div>
 
@@ -4423,7 +4423,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
         <ProsePreview text={desc} />
       </div>
       <textarea className={cx(styles.catProse, styles.player)} value={desc} onChange={e => setDesc(e.target.value)}
-        onKeyDown={markdownShortcuts(setDesc)}
+        {...proseField(setDesc)}
         placeholder="The prose the player reads in their Spellbook…" />
 
       <div className={styles.catSecLab}><span className={styles.fieldLab}>Saving throw (optional)</span></div>
@@ -5875,7 +5875,7 @@ function ClassForm({ row, creating, lib, featureLib, itemCatalog, members, onSel
         </div>
         <div className={styles.efRule}>What this class is, in the player's language</div>
         <textarea data-audit="field:desc" className={styles.catProse} value={draft.desc} onChange={e => set({ desc: e.target.value })}
-          onKeyDown={markdownShortcuts(desc => set({ desc }))}
+          {...proseField(desc => set({ desc }))}
           placeholder="e.g. Sworn adjudicators of the Lattice, who read a verdict into every strike…" />
       </div>
 
@@ -7115,7 +7115,7 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
         </div>
         <div className={styles.efRule}>What this race is, in the player's language</div>
         <textarea data-audit="field:desc" className={styles.catProse} value={draft.desc} onChange={e => set({ desc: e.target.value })}
-          onKeyDown={markdownShortcuts(desc => set({ desc }))}
+          {...proseField(desc => set({ desc }))}
           placeholder="e.g. Long-lived and watchful, elves measure a human life in seasons…" />
       </div>
 
@@ -7515,7 +7515,7 @@ function BackgroundForm({ row, creating, lib, featureLib, onSelected, onCleared 
       </div>
       <textarea className={styles.catProse} value={draft.desc ?? ''}
         placeholder="What this background is, in the player's words…"
-        onKeyDown={markdownShortcuts(desc => set({ desc }))}
+        {...proseField(desc => set({ desc }))}
         onChange={e => set({ desc: e.target.value })} />
 
       {/* ---- ABILITY INCREASE ----
@@ -7907,7 +7907,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
         className={styles.qPlayerDesc}
         value={backstory}
         onChange={e => setBackstory(e.target.value)}
-        onKeyDown={markdownShortcuts(setBackstory)}
+        {...proseField(setBackstory)}
         placeholder="The prose players read on the Lore screen…"
       />
       <p className={styles.acHint}>**bold**  *italics*  [text](url)  ## heading · blank line = new paragraph</p>
@@ -7915,10 +7915,10 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
       {/* nature — trait/ideal/bond/flaw */}
       <LoreSecHead icon="fa-circle-dot" label="Personality / Nature" />
       <div className={styles.catGrid2}>
-        <div><span className={styles.fieldLab}>Personality Trait</span><textarea className={styles.loreNatArea} value={trait} onChange={e => setTrait(e.target.value)} onKeyDown={markdownShortcuts(setTrait)} /></div>
-        <div><span className={styles.fieldLab}>Ideal</span><textarea className={styles.loreNatArea} value={ideal} onChange={e => setIdeal(e.target.value)} onKeyDown={markdownShortcuts(setIdeal)} /></div>
-        <div><span className={styles.fieldLab}>Bond</span><textarea className={styles.loreNatArea} value={bond} onChange={e => setBond(e.target.value)} onKeyDown={markdownShortcuts(setBond)} /></div>
-        <div><span className={styles.fieldLab}>Flaw</span><textarea className={styles.loreNatArea} value={flaw} onChange={e => setFlaw(e.target.value)} onKeyDown={markdownShortcuts(setFlaw)} /></div>
+        <div><span className={styles.fieldLab}>Personality Trait</span><textarea className={styles.loreNatArea} value={trait} onChange={e => setTrait(e.target.value)} {...proseField(setTrait)} /></div>
+        <div><span className={styles.fieldLab}>Ideal</span><textarea className={styles.loreNatArea} value={ideal} onChange={e => setIdeal(e.target.value)} {...proseField(setIdeal)} /></div>
+        <div><span className={styles.fieldLab}>Bond</span><textarea className={styles.loreNatArea} value={bond} onChange={e => setBond(e.target.value)} {...proseField(setBond)} /></div>
+        <div><span className={styles.fieldLab}>Flaw</span><textarea className={styles.loreNatArea} value={flaw} onChange={e => setFlaw(e.target.value)} {...proseField(setFlaw)} /></div>
       </div>
 
       {/* relations — colored-strip rows, click the dot to cycle attitude */}
@@ -7948,7 +7948,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
             </div>
             <input className={cx(styles.sessIn, styles.loreRelDesc)} value={r.desc}
               onChange={e => patchRelation(i, { desc: e.target.value })}
-              onKeyDown={markdownShortcuts(desc => patchRelation(i, { desc }))}
+              {...proseField(desc => patchRelation(i, { desc }))}
               placeholder="Description…" />
           </div>
         )
@@ -8257,7 +8257,7 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
         <ProsePreview text={description} />
       </div>
       <textarea className={styles.qPlayerDesc} value={description} onChange={e => setDescription(e.target.value)}
-        onKeyDown={markdownShortcuts(setDescription)} placeholder="The prose the players read in their Journal…" />
+        {...proseField(setDescription)} placeholder="The prose the players read in their Journal…" />
 
       <span className={styles.fieldLab}>Objectives</span>
       <div className={styles.qObjList}>
@@ -8415,7 +8415,7 @@ function SessionForm({ session, nextNum, onSubmit, onDelete }: {
       <input className={styles.sessIn} value={title} onChange={e => setTitle(e.target.value)} placeholder="Give the session a title…" />
       <span className={styles.fieldLab}>Recap</span>
       <textarea className={styles.sessRecap} value={recap} onChange={e => setRecap(e.target.value)}
-        onKeyDown={markdownShortcuts(setRecap)} placeholder="Write the session recap — what happened, who did what, where it left off…" />
+        {...proseField(setRecap)} placeholder="Write the session recap — what happened, who did what, where it left off…" />
 
       <span className={styles.fieldLab}>Key Events</span>
       <div className={styles.evList}>

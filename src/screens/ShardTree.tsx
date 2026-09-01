@@ -4,7 +4,7 @@ import type { CharacterRow, CharacterSection, ShardNode, ShardSlot, ShardTree } 
 import { RING_GAP, branchColor, nodeState, nodeXY, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import styles from './ShardTree.module.css'
 import { Icon } from '../components/Icon'
-import { renderInline } from '../lib/markdown'
+import { Inline } from '../lib/markdown'
 
 interface Props {
   character: CharacterRow
@@ -365,7 +365,7 @@ function NodeDetail({
       </div>
       <div className={styles.daEffect}>
         <span className={styles.effLabel}>Effect</span>
-        {renderInline(d.effect)}
+        <Inline text={d.effect} />
       </div>
       {/* Cosmetic flavor only — concealed nodes never carry perks to the
           public catalog, so this naturally stays hidden until revealed. */}

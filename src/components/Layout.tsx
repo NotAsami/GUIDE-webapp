@@ -18,6 +18,7 @@ import { publicVitals, vitalsEqual } from '../lib/vitals'
 import { advanceTurn, turnRecharge } from '../lib/turns'
 import { useRollLog } from '../lib/rolls'
 import { useGraph } from '../lib/useGraph'
+import { ScopeContext } from '../lib/markdown'
 import { turnGraphPatch } from '../lib/graphState'
 import type { ActiveEffect } from '../lib/database.types'
 import type { CharacterRow } from '../lib/database.types'
@@ -222,8 +223,13 @@ export function Layout() {
     )
   }
 
+  /* ONE PROVIDER FOR THE WHOLE PLAYER APP. Everything authored that a player
+     reads - a feature's summary, an item's flavour, a shop blurb, a rider's
+     label - resolves `{...}` against THIS character, because this is the only
+     character in view. Screens no longer each decide whether to interpolate;
+     they render prose and it computes. */
   return (
-    <>
+    <ScopeContext.Provider value={graph.scope}>
       <div className="stage" />
       <div className="scanlines" />
       <div className="vignette" />
@@ -284,7 +290,7 @@ export function Layout() {
           onClose={() => setRollPanelOpen(false)}
         />
       )}
-    </>
+    </ScopeContext.Provider>
   )
 }
 

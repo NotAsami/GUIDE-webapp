@@ -22,7 +22,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ActiveEffect } from '../lib/database.types'
 import { summarizeEffects } from '../lib/effects'
-import { renderInline } from '../lib/markdown'
+import { Inline } from '../lib/markdown'
 import { useItemTooltip } from './ItemTooltip'
 import styles from './EffectsSidebar.module.css'
 import pop from '../screens/InventoryPopup.module.css'
@@ -168,7 +168,7 @@ function EffectDetailPopup({ effect, onRemove, onClose }: {
                 {effect.note && <div className={pop.f}><span className={pop.k}>Duration</span><span className={pop.v}>{effect.note}</span></div>}
               </div>
             )}
-            <div className={pop.imDesc}>{effect.desc ? renderInline(effect.desc) : 'No description recorded.'}</div>
+            <div className={pop.imDesc}>{effect.desc ? <Inline text={effect.desc} /> : 'No description recorded.'}</div>
           </div>
 
           <div className={pop.imActions}>

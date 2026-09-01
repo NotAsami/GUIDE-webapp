@@ -23,7 +23,7 @@ import { PERSON, freeCellFor, preferredDest } from '../lib/placement'
 import { CAT_LABEL, rarityLabel } from '../lib/items'
 import styles from './InventoryPopup.module.css'
 import { Icon } from '../components/Icon'
-import { renderInline } from '../lib/markdown'
+import { Inline } from '../lib/markdown'
 
 /** Every place this item can be moved to: ON PERSON when a footprint-sized space
  *  is free, plus every equipped container that accepts its category and has room.
@@ -181,7 +181,7 @@ export function ItemPopup({
               ))}
             </div>
 
-            {item.flavor && <div className={styles.imDesc}>{renderInline(item.flavor)}</div>}
+            {item.flavor && <div className={styles.imDesc}><Inline text={item.flavor} /></div>}
 
             {locked && (
               <div className={styles.imWarn}>

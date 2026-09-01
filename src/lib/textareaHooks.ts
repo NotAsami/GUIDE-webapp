@@ -86,3 +86,17 @@ export function markdownShortcuts(onChange: (next: string) => void) {
     })
   }
 }
+
+/** Everything a prose field needs, as one spread.
+ *
+ *  `data-prose` is the marker <ProseToolbar> looks for: it follows focus and
+ *  offers its icon-insert button beside whichever marked field is active. That
+ *  is why this exists rather than each field keeping a bare `onKeyDown` — a
+ *  field that opts into markdown should get the whole affordance, and the two
+ *  going out of step is exactly how a control ends up on nineteen fields out of
+ *  twenty with nothing to say which one was missed.
+ *
+ *  Spread it LAST, or a field's own onKeyDown will overwrite the shortcuts. */
+export function proseField(onChange: (next: string) => void) {
+  return { 'data-prose': '', onKeyDown: markdownShortcuts(onChange) }
+}

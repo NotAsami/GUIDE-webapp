@@ -16,6 +16,7 @@ import { ShardLattice } from './screens/ShardLattice'
 import FeatureEditor from './screens/FeatureEditor'
 import { OperatorConsole } from './screens/OperatorConsole'
 import { CatalogSearch } from './components/CatalogSearch'
+import { ProseToolbar } from './components/ProseToolbar'
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -27,10 +28,15 @@ export const router = createBrowserRouter([
      it is a Ctrl/Cmd+K overlay that must be reachable from the console, the
      shard lattice AND the feature editor, and mounting it here keeps all three
      screens unaware of it. Not on the player routes — it reads the DM catalogs,
-     which RLS returns empty for anyone else. */
-  { path: '/dm', element: <><OperatorConsole /><CatalogSearch /></> },
-  { path: '/dm/shards', element: <><ShardLattice /><CatalogSearch /></> },
-  { path: '/dm/features', element: <><FeatureEditor /><CatalogSearch /></> },
+     which RLS returns empty for anyone else.
+
+     ProseToolbar rides along for the same reason and by the same argument: it
+     follows focus into any `data-prose` field and offers the icon-insert
+     button beside it, so the three authoring screens need no toolbar markup of
+     their own. Player screens have no prose field to author. */
+  { path: '/dm', element: <><OperatorConsole /><CatalogSearch /><ProseToolbar /></> },
+  { path: '/dm/shards', element: <><ShardLattice /><CatalogSearch /><ProseToolbar /></> },
+  { path: '/dm/features', element: <><FeatureEditor /><CatalogSearch /><ProseToolbar /></> },
   {
     path: '/',
     element: <Layout />,

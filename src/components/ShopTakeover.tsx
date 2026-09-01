@@ -30,7 +30,7 @@ import { buyItem, type ShopBuyResult } from '../lib/shops'
 import pop from '../screens/InventoryPopup.module.css'
 import styles from './ShopTakeover.module.css'
 import { Icon } from './Icon'
-import { renderInline } from '../lib/markdown'
+import { Inline } from '../lib/markdown'
 
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')
 
@@ -159,7 +159,7 @@ export function ShopTakeover({ character, updateSection, shop, dismissed, onDism
                 <span className={styles.leaveFrame} />
                 <span className={styles.leaveInner}><i className="fa-solid fa-arrow-left-long" /> Leave Shop</span>
               </button>
-              {data.desc && <p className={styles.desc}>{renderInline(data.desc)}</p>}
+              {data.desc && <p className={styles.desc}><Inline text={data.desc} /></p>}
             </header>
 
             {/* ============ PURSE — mirrors Inventory's COIN PURSE ============ */}
@@ -352,7 +352,7 @@ function ShopItemPopup({ line, shopId, coins, onClose, onBought }: {
                 <div key={k} className={pop.f}><span className={pop.k}>{k}</span><span className={pop.v}>{v}</span></div>
               ))}
             </div>
-            {it.flavor && <div className={pop.imDesc}>{renderInline(it.flavor)}</div>}
+            {it.flavor && <div className={pop.imDesc}><Inline text={it.flavor} /></div>}
             {effectRows.length > 0 && (
               <div className={pop.imSec}>
                 <div className={pop.imSecH}>Granted Effects</div>

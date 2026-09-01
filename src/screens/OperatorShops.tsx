@@ -16,7 +16,7 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CatalogItemData, CatalogItemRow, ItemCategory, ItemRarity, Shop, ShopCatalogRow, ShopStockLine, ShopStockMode } from '../lib/database.types'
-import { markdownShortcuts } from '../lib/textareaHooks'
+import { proseField } from '../lib/textareaHooks'
 import { formatPrice, type PriceUnit } from '../lib/coins'
 import type { DmShopsState } from '../lib/dm'
 import { ALL_PARTY } from '../lib/voice'
@@ -285,7 +285,7 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
         <ProsePreview text={desc} label="Preview" />
       </div>
       <textarea className={styles.catProse} value={desc} onChange={e => setDesc(e.target.value)}
-        onKeyDown={markdownShortcuts(setDesc)}
+        {...proseField(setDesc)}
         placeholder="The prose the player reads when the shop opens…" />
 
       <span className={styles.fieldLab}>Stock</span>

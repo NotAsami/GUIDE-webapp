@@ -77,6 +77,7 @@ export const OP_GLYPH: Record<GraphOp, string> = {
   resist: '⊟',
   vuln: '⤒',
   immune: '⊘',    // cancels outright
+  setHp: '♥',      // writes the one stored number on the sheet
   setVar: '⊕',    // writes
   addVar: '⊕',
   addUses: '⊕',   // writes too — a use counter rather than a variable

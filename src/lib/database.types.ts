@@ -699,6 +699,17 @@ export type GraphOp =
    *  `crit` taking the lowest threshold. */
   | 'floor'
   | 'resist' | 'vuln' | 'immune'
+  /** SETS CURRENT HIT POINTS to a computed value. The one resource on the sheet
+   *  that no op could reach: `boost` layers a modifier onto a derived number and
+   *  `addVar` writes an authored variable, but current HP is neither - it is
+   *  stored, and healing is not a modifier.
+   *
+   *  Relentless Rage is the shape, and it is a SET rather than a heal: "your Hit
+   *  Points instead change to a number equal to twice your Barbarian level" is
+   *  the same number whether you were on 0 or on -3, which `+= 2 * level` is
+   *  not. A heal is expressible as a set the author writes as `hp + n`, so one
+   *  op covers both directions; the reverse is not true. */
+  | 'setHp'
   /** SHEET layer. Unlike everything else here, this does not touch a roll at
    *  all — it changes a number ON THE SHEET (an ability score, speed,
    *  darkvision), which is what a race's +2 DEX is. resolve() skips it; it is

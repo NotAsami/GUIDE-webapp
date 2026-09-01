@@ -44,6 +44,32 @@ export const VAR_IDENTS = [
 ] as const
 export const ROLL_IDENTS = ['cast', 'proficient'] as const
 
+/** The prefix of a FEATURE-PRESENCE identifier: `has_improved_brutal_strike`.
+ *
+ *  Rules constantly gate on owning something rather than on being a level -
+ *  "the following effects are now among your Brutal Strike options" - and there
+ *  was no way to say it. Authors reached for `level >= 13` instead, which is
+ *  the same answer only for a single-classed character: a Barbarian 9 /
+ *  Fighter 4 is level 13 and has no Improved Brutal Strike, and a one-off DM
+ *  grant of a feature scaled itself for free.
+ *
+ *  An IDENTIFIER rather than a `has("...")` call, because the expression
+ *  language has no function syntax and did not need one for this. */
+export const HAS_PREFIX = 'has_'
+
+/** "Improved Brutal Strike (Enhanced)" -> `has_improved_brutal_strike_enhanced`.
+ *
+ *  Keyed on the NAME the DM sees, not on tags: the question they are asking is
+ *  "does this character have the feature called X", and a tag list is a
+ *  different vocabulary that happens to overlap. Everything outside [a-z0-9]
+ *  collapses to a single underscore so a name with punctuation still produces a
+ *  legal identifier - the parenthesised Enhanced is exactly that case. */
+export const hasIdent = (featureName: string): string =>
+  HAS_PREFIX + featureName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+
+/** Is this identifier a presence question? */
+export const isHasIdent = (id: string): boolean => /^has_[a-z0-9_]+$/.test(id)
+
 /** What each roll identifier IS, for the author-time probe. A type map rather
  *  than a bare list because `proficient` is a boolean: probing it as 1 would
  *  make `!proficient` a type error in the audit while working perfectly at the
@@ -198,7 +224,16 @@ function lex(src: string): Tok[] {
       i += end + 1
       continue
     }
-    const id = /^[a-z][a-zA-Z0-9]*/.exec(rest) // §30's identifier shape
+    /* §30's identifier shape, WIDENED BY ONE CHARACTER to admit `_`. Every
+       authored variable is camelCase and always was, so nothing existing can
+       contain an underscore - it would not have lexed. The presence
+       identifiers (`has_improved_brutal_strike`) use it deliberately: they are
+       generated from a feature NAME rather than typed as a variable, and the
+       underscore is what keeps them visually distinct from a variable an author
+       declared. That distinction earns its keep, because the two have different
+       failure modes - an unknown `has_*` is false, an unknown variable is an
+       error. */
+    const id = /^[a-z][a-zA-Z0-9_]*/.exec(rest)
     if (id) {
       out.push({ k: 'i', v: id[0] })
       i += id[0].length
@@ -322,7 +357,20 @@ export function evalExpr(src: string, scope: ExprScope): FormulaValue | null {
       if (t.v === 'true' || t.v === 'false') return bool(t.v === 'true')
       // The scope IS the whitelist (§33): one lookup enforces both permitted sets,
       // differing only in what the caller put in the scope.
-      if (!Object.hasOwn(scope, t.v)) reject(`unknown identifier ${t.v}`)
+      /* A PRESENCE IDENTIFIER THE SCOPE DOES NOT CARRY IS `false`, not an error.
+         baseScope can only name the features a character HAS; it cannot
+         enumerate the ones they have not been granted, and the catalog is not
+         in hand at roll time. Rejecting the absent case would turn "does this
+         character have Improved Brutal Strike" into "condition did not resolve"
+         on every roll made by every character who does not - which is most of
+         them, and is precisely the answer the question wanted.
+         Typos are still caught, one layer up: the audit checks a presence name
+         against the real catalog, so `has_imrpoved_...` fails at author time
+         where it can be fixed. */
+      if (!Object.hasOwn(scope, t.v)) {
+        if (isHasIdent(t.v)) return bool(false)
+        reject(`unknown identifier ${t.v}`)
+      }
       const raw = scope[t.v]
       return typeof raw === 'boolean' ? bool(raw) : num(raw)
     }
