@@ -24,7 +24,7 @@
 
 import type { ArmedMod, CharacterRow, Feature, GraphEffect, GraphOp, GraphState, ShardTree, VarDef } from './database.types.ts'
 import type { ExprScope, FormulaValue } from './expr.ts'
-import { ROLL_IDENTS, ROLL_IDENT_PROBE, VAR_IDENTS, evalExpr, freeIdents, hasIdent, interpolate, interpolations } from './expr.ts'
+import { BOOST_IDENTS, ROLL_IDENTS, ROLL_IDENT_PROBE, VAR_IDENTS, evalExpr, freeIdents, hasIdent, interpolate, interpolations } from './expr.ts'
 import { type ActiveSource, activeEffects, activeSources, effectiveSheet } from './effects.ts'
 import { IS_ACTIVATION, IS_SHEET, OPS, OP_TITLE } from './opSchema.ts'
 import { MOD_STAT_SET, isAbility } from './modEditor.ts'
@@ -1692,11 +1692,28 @@ export function auditNode(
           s: `${eff.label || eff.id} boosts "${eff.stat ?? ''}", which is not a sheet stat.`,
         })
       }
+      /* A NUMBER, OR A FORMULA OVER `level` AND `prof` — and nothing wider.
+         The value is computed while the effective sheet is being built, so a
+         boost reading `str` or a declared variable would be asking for the
+         answer it helps produce; sheetEffects has only those two to hand and
+         would silently drop anything else. Checked here so the editor refuses
+         it instead. Dice are out for the same reason: the sheet has no roll to
+         happen at, and a re-rolled Max HP is not a number. */
       if (!Number.isFinite(Number(eff.value))) {
-        out.push({
-          sev: 'err', id: eff.id, t: 'Boost needs a plain number',
-          s: `${eff.label || eff.id} has "${eff.value ?? ''}". The sheet has no roll to compute against, so dice and formulas cannot apply here.`,
-        })
+        const src = String(eff.value ?? '')
+        const stray = freeIdents(src).filter(id => !(BOOST_IDENTS as readonly string[]).includes(id))
+        const probe = src.trim() ? evalExpr(src, { level: 1, prof: 2 }) : null
+        if (stray.length) {
+          out.push({
+            sev: 'err', id: eff.id, t: 'Boost reads more than level',
+            s: `${eff.label || eff.id} has "${src}", which reads ${stray.map(x => `\`${x}\``).join(', ')}. A sheet boost is computed while the sheet is being built, so it can only use ${BOOST_IDENTS.join(' and ')} — anything else would be asking for the number it is helping to produce, and would apply as nothing.`,
+          })
+        } else if (probe === null || probe.t !== 'num' || probe.dice.length) {
+          out.push({
+            sev: 'err', id: eff.id, t: 'Boost needs a number or a level formula',
+            s: `${eff.label || eff.id} has "${src}". A sheet stat has no roll to happen at, so this must be a plain number or a dice-free formula over ${BOOST_IDENTS.join(' and ')} — \`level\`, say, for "+1 again whenever you gain a level".`,
+          })
+        }
       }
       /* A CAP ONLY MEANS SOMETHING ON AN ABILITY SCORE. effectiveSheet clamps
          `abilities`, and nothing else — a ceiling typed onto Speed or AC would

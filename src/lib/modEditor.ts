@@ -7,6 +7,7 @@
  */
 import type { AbilityKey, EffectDef, GraphEffect, ItemEffects, Mod } from './database.types'
 import { SKILLS } from './dnd.ts'
+import { evalExpr, type ExprScope } from './expr.ts'
 
 /* Declared here rather than imported from effects.ts: that module imports THIS
    one (effects.ts:29), and reaching back would make the cycle. Six constants. */
@@ -89,7 +90,13 @@ export const MOD_STAT_SET: ReadonlySet<string> = new Set<string>([...MOD_STATS, 
  * ponytail: walks the graph on every effectiveSheet call. Graphs are a handful
  * of rows; memoize on the character row if a profile ever says otherwise.
  */
-export function sheetEffects(graph?: GraphEffect[]): ItemEffects | undefined {
+export function sheetEffects(
+  graph?: GraphEffect[],
+  /** LEVEL AND PROF ONLY — see expr.ts BOOST_IDENTS for why it cannot be the
+   *  full character scope. Absent means every boost must be a literal, which is
+   *  what callers that only want `attackAbilities` pass. */
+  scope?: ExprScope,
+): ItemEffects | undefined {
   if (!graph?.length) return undefined
   const mods: Mod[] = []
   /* `useability` is the one sheet op that is NOT a number, so it cannot go
@@ -118,8 +125,17 @@ export function sheetEffects(graph?: GraphEffect[]): ItemEffects | undefined {
       continue
     }
     if (g.op !== 'boost' || !g.stat) continue
-    const amt = Number(g.value)
-    if (!Number.isFinite(amt)) continue
+    /* A FORMULA IS ALLOWED HERE, over `level` and `prof`. "Your Hit Point
+       maximum increases by 1, and it increases by 1 again whenever you gain a
+       level" is one boost of `level`, not twenty edits to a stored number.
+       Dice are refused rather than rounded: a sheet stat has no roll to happen
+       at, so `1d4` would have to be re-rolled on every render. */
+    let amt = Number(g.value)
+    if (!Number.isFinite(amt)) {
+      const v = scope ? evalExpr(String(g.value ?? ''), scope) : null
+      if (v === null || v.t !== 'num' || v.dice.length) continue
+      amt = v.flat
+    }
     mods.push({ stat: g.stat, amt })
     const cap = Number(g.cap)
     const ak = g.stat.toLowerCase() as AbilityKey

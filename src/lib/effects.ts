@@ -23,7 +23,7 @@ import type {
   EquippedItem, EquippedWeapon, Feature, GraphEffect, ItemEffects, ItemSlot, ShardNode, ShardTree, Spell,
 } from './database.types.ts'
 /* No cycle: dnd.ts imports only database.types. */
-import { abilityMod } from './dnd.ts'
+import { abilityMod, proficiency } from './dnd.ts'
 import { ITEM_SLOTS, getGear, getWeapons } from './equip.ts'
 import { isPrepared } from './spells.ts'
 import { burdenTier, capacityForStr, currentBurden } from './burden.ts'
@@ -156,14 +156,23 @@ function grantedAbilities(graph?: GraphEffect[]): Pick<ItemEffects, 'attackAbili
 export function activeSources(character: CharacterRow, shardTrees: Record<string, ShardTree> = {}): ActiveSource[] {
   const out: ActiveSource[] = []
 
+  /* THE ONLY SCOPE A BOOST GETS. Both names are read off the row and the stored
+     proficiency bonus rather than off the effective sheet, so building the sheet
+     cannot depend on the sheet — see expr.ts BOOST_IDENTS. graph.ts's audit
+     holds authors to the same two, so what publishes is what applies. */
+  const boostScope = {
+    level: character.identity?.level ?? 1,
+    prof: proficiency(character.sheet ?? {}),
+  }
+
   /* `fx` on a feature is what lets a RACE or CLASS grant a flat number. Both
      reach the sheet as a carrier feature (lib/classes.ts assignClass), and a
      race's +2 DEX has to layer the way a worn item's does — reversibly, and
      visibly sourced. Features used to be pushed with no fx at all, so nothing
      a feature granted could ever change an ability score. */
-  for (const obj of character.sheet?.features ?? []) out.push({ kind: 'feature', obj, fx: sheetEffects(obj.graph) })
-  for (const obj of gearFeatures(character)) out.push({ kind: 'feature', obj, fx: sheetEffects(obj.graph) })
-  for (const obj of shardFeatures(character, shardTrees)) out.push({ kind: 'feature', obj, fx: sheetEffects(obj.graph) })
+  for (const obj of character.sheet?.features ?? []) out.push({ kind: 'feature', obj, fx: sheetEffects(obj.graph, boostScope) })
+  for (const obj of gearFeatures(character)) out.push({ kind: 'feature', obj, fx: sheetEffects(obj.graph, boostScope) })
+  for (const obj of shardFeatures(character, shardTrees)) out.push({ kind: 'feature', obj, fx: sheetEffects(obj.graph, boostScope) })
 
   // Slotted shards: the tree's base grant, then every attuned node.
   //
