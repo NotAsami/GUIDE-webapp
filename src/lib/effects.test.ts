@@ -534,3 +534,62 @@ test('worn gear grants it too, without gaining a second numeric path', () => {
   assert.deepEqual(eff.attackAbilities, ['cha'])
   assert.equal(eff.ac, BASE.ac + 1, 'its compiled effects still apply exactly once')
 })
+
+/* A SHEET BOOST MAY SCALE WITH LEVEL — Dwarven Toughness, "+1 Hit Point, and +1
+   again whenever you gain a level".
+
+   Before this, sheetEffects did `Number(g.value)` and `continue`d on NaN, so a
+   formula did not fail — the whole boost vanished, and the card sat on the
+   Features screen describing a rule that moved nothing. The scope is
+   deliberately two names wide (expr.ts BOOST_IDENTS): the value is computed
+   while the effective sheet is being built, so reading `str` would be asking
+   for the answer it helps produce. */
+
+const toughFeature = (value: string): Feature => ({
+  id: 'f-tough', name: 'Dwarven Toughness',
+  graph: [{ id: 'dt', op: 'boost', stat: 'Max HP', label: 'Dwarven Toughness', value }],
+})
+
+const atLevel = (level: number, value = 'level') => character({
+  identity: { level },
+  sheet: { ...BASE, hp: { current: 20, max: 40 }, features: [toughFeature(value)] },
+})
+
+test('a boost value may be a level formula, and it tracks the level', () => {
+  assert.equal(effectiveSheet(atLevel(1)).hp?.max, 41)
+  assert.equal(effectiveSheet(atLevel(5)).hp?.max, 45)
+  assert.equal(effectiveSheet(atLevel(20)).hp?.max, 60)
+})
+
+test('prof is the other name a boost may read', () => {
+  const c = character({
+    identity: { level: 9 },
+    sheet: { ...BASE, proficiencyBonus: 4, hp: { current: 20, max: 40 }, features: [toughFeature('prof')] },
+  })
+  assert.equal(effectiveSheet(c).hp?.max, 44)
+})
+
+test('a plain number still works, and is not routed through the parser', () => {
+  assert.equal(effectiveSheet(atLevel(7, '3')).hp?.max, 43)
+})
+
+test('a boost the scope cannot answer applies NOTHING rather than a wrong number', () => {
+  // `str` is not in BOOST_IDENTS, so evalExpr rejects it and the boost is
+  // dropped — the same outcome the audit refuses to let anyone publish. The
+  // point of the test is that it drops rather than reading some other 14.
+  assert.equal(effectiveSheet(atLevel(7, 'str')).hp?.max, 40)
+  // Dice have no roll to happen at on a sheet, so they are dropped too.
+  assert.equal(effectiveSheet(atLevel(7, '1d6')).hp?.max, 40)
+})
+
+test('two scaling boosts sum, exactly as two flat ones do', () => {
+  const c = character({
+    identity: { level: 4 },
+    sheet: { ...BASE, hp: { current: 20, max: 40 }, features: [
+      { id: 'a', name: 'Toughness', graph: [{ id: 'x', op: 'boost', stat: 'Max HP', label: 'A', value: 'level' }] },
+      { id: 'b', name: 'Tough feat', graph: [{ id: 'y', op: 'boost', stat: 'Max HP', label: 'B', value: '2 * level' }] },
+    ] },
+  })
+  assert.equal(effectiveSheet(c).hp?.max, 52)
+})
+

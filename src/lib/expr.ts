@@ -44,6 +44,20 @@ export const VAR_IDENTS = [
 ] as const
 export const ROLL_IDENTS = ['cast', 'proficient'] as const
 
+/** WHAT A SHEET BOOST MAY READ, and it is deliberately two names.
+ *
+ *  A boost moves a number ON the effective sheet, so its own value is computed
+ *  while that sheet is being built: anything derived FROM the sheet — `str`,
+ *  `hpMax`, a declared variable — would be asking for the answer it is helping
+ *  to produce. `level` and `prof` are the two that come off the character row
+ *  and the stored proficiency bonus, so they are settled before the first boost
+ *  is read and cannot close the loop.
+ *
+ *  That is the whole of "+1 Hit Point, and +1 again at every level" — which was
+ *  previously unauthorable, because Number('level') is NaN and sheetEffects
+ *  dropped the boost without a word. */
+export const BOOST_IDENTS = ['level', 'prof'] as const
+
 /** The prefix of a FEATURE-PRESENCE identifier: `has_improved_brutal_strike`.
  *
  *  Rules constantly gate on owning something rather than on being a level -

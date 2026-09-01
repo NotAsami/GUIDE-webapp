@@ -563,9 +563,32 @@ test('auditNode holds a boost to its own shape', () => {
   assert.ok(blank.some(a => a.t === 'Missing stat'))
   assert.ok(!blank.some(a => a.t === 'Unknown stat'))
 
-  // No roll to compute against, so dice cannot apply.
+  // No roll to compute against, so dice cannot apply — a Max HP that re-rolled
+  // on every render is not a number.
   assert.ok(auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'DEX', value: '1d6' }] })
-    .some(a => a.t === 'Boost needs a plain number'))
+    .some(a => a.t === 'Boost needs a number or a level formula'))
+
+  /* A LEVEL FORMULA IS THE POINT of widening this. "Your Hit Point maximum
+     increases by 1, and it increases by 1 again whenever you gain a level" is
+     Dwarven Toughness, and before this it was unauthorable: Number('level') is
+     NaN, and sheetEffects dropped the whole boost without a word. */
+  assert.deepEqual(
+    auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'Toughness', stat: 'Max HP', value: 'level' }] })
+      .filter(a => a.sev === 'err'), [])
+  assert.deepEqual(
+    auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'T', stat: 'Max HP', value: 'level + prof * 2' }] })
+      .filter(a => a.sev === 'err'), [])
+
+  /* AND NOWHERE WIDER. The value is computed while the effective sheet is being
+     built, so a boost reading an ability score is asking for the number it helps
+     produce; sheetEffects has only level and prof to hand and would drop it. The
+     audit has to refuse what the engine cannot honour, or this is just the old
+     silent drop with a nicer spelling. */
+  for (const bad of ['str', 'hpMax', 'rages']) {
+    assert.ok(
+      auditNode({ graph: [{ id: 'b1', op: 'boost', label: 'G', stat: 'Max HP', value: bad }] })
+        .some(a => a.t === 'Boost reads more than level'), bad)
+  }
 })
 
 /* ---------- immunity reaches conditions, not just damage ---------- */
@@ -2248,7 +2271,7 @@ test('a boost with no number is still reported', () => {
   // The other half: scoping the rule must not switch it off for the op it
   // belongs to.
   const node = { graph: [{ id: 'b1', op: 'boost' as const, label: 'Elven Grace', stat: 'DEX', value: '1d4' }], vars: [] }
-  assert.ok(auditNode(node, []).some(a => a.sev === 'err' && a.t === 'Boost needs a plain number'))
+  assert.ok(auditNode(node, []).some(a => a.sev === 'err' && a.t === 'Boost needs a number or a level formula'))
 })
 
 test('a useability node naming a non-ability is reported', () => {
