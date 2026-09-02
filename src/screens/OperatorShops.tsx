@@ -282,7 +282,7 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
       <div className={styles.qLabRow}>
         <span className={styles.fieldLab}>Player-Facing Prose</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Shown when the shop opens</span>
-        <ProsePreview text={desc} label="Preview" />
+        <ProsePreview text={desc} label="Preview" register="voice" />
       </div>
       <textarea className={styles.catProse} value={desc} onChange={e => setDesc(e.target.value)}
         {...proseField(setDesc)}

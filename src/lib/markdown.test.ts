@@ -472,3 +472,69 @@ test('a colour span inside bold survives BOTH ways round', () => {
 test('plain bold is untouched', () => {
   assert.equal(html(renderInline('a **b** c')), '<div>a <strong>b</strong> c</div>')
 })
+
+/* ---- `---` IS A DIVIDER, and an em-dash sentence is not ----
+   The risk in this token is entirely the false positive: these descriptions are
+   full of em-dashes and hyphenated words, and a rule that fired mid-sentence
+   would cut a paragraph in half with no error to say why. */
+
+test('a line of three hyphens becomes a divider', () => {
+  const out = renderToStaticMarkup(createElement(Prose, { text: 'before\n---\nafter' }))
+  assert.match(out, /<p>before<\/p><hr\/?><p>after<\/p>/)
+})
+
+test('it splits the paragraph rather than landing inside one', () => {
+  const out = renderToStaticMarkup(createElement(Prose, { text: 'a\nb\n---\nc' }))
+  // a and b are one paragraph joined by a line break; the rule closes it.
+  assert.match(out, /<p>a<br\/?>b<\/p><hr\/?>/)
+})
+
+test('more than three hyphens still rules, and surrounding space is tolerated', () => {
+  assert.match(renderToStaticMarkup(createElement(Prose, { text: 'a\n-----\nb' })), /<hr\/?>/)
+  assert.match(renderToStaticMarkup(createElement(Prose, { text: 'a\n  ---  \nb' })), /<hr\/?>/)
+})
+
+test('A SENTENCE IS NEVER A DIVIDER — the false positives that would matter', () => {
+  for (const text of [
+    'minimum +1 — currently +3',       // the em-dash these descriptions are full of
+    'a --- b',                          // hyphens with words on the line
+    'well---known',                     // no spaces at all
+    '--',                               // two is not three
+    'Str -- Dex',
+  ]) {
+    const out = renderToStaticMarkup(createElement(Prose, { text }))
+    assert.ok(!out.includes('<hr'), `"${text}" must not rule`)
+  }
+})
+
+test('the divider does not exist inline — three hyphens mid-string stay text', () => {
+  assert.equal(html(renderInline('a --- b')), '<div>a --- b</div>')
+})
+
+/* ---- SPACING TOKENS ----
+   HTML collapses runs of spaces, so an author lining up two columns in a
+   textarea had no way to ask for the gap. */
+
+test('&nbsp; and &emsp; become their characters', () => {
+  assert.equal(html(renderInline('Reach&nbsp;10 ft.')), '<div>Reach 10 ft.</div>')
+  assert.equal(html(renderInline('Str&emsp;18')), '<div>Str 18</div>')
+})
+
+test('they survive nesting, like every other token here', () => {
+  assert.match(html(renderInline('**Str&emsp;18**')), /<strong>Str 18<\/strong>/)
+  assert.match(html(renderInline('[Str&nbsp;18]{fire}')), /<span style="color:[^"]+">Str 18<\/span>/)
+})
+
+test('a lone ampersand or a half-written token is left alone', () => {
+  assert.equal(html(renderInline('Tom & Jerry')), '<div>Tom &amp; Jerry</div>')
+  assert.equal(html(renderInline('&nbsp')), '<div>&amp;nbsp</div>')
+  assert.equal(html(renderInline('&emsp')), '<div>&amp;emsp</div>')
+})
+
+test('NO OTHER ENTITY IS DECODED — these are names for characters, not HTML', () => {
+  /* The parser returns React nodes and never interprets markup; that is what
+     makes it injection-safe. Two recognised tokens must not read as "entities
+     work now". */
+  assert.equal(html(renderInline('&lt;script&gt;')), '<div>&amp;lt;script&amp;gt;</div>')
+  assert.equal(html(renderInline('&amp;')), '<div>&amp;amp;</div>')
+})

@@ -159,7 +159,7 @@ export function ShopTakeover({ character, updateSection, shop, dismissed, onDism
                 <span className={styles.leaveFrame} />
                 <span className={styles.leaveInner}><i className="fa-solid fa-arrow-left-long" /> Leave Shop</span>
               </button>
-              {data.desc && <p className={styles.desc}><Inline text={data.desc} /></p>}
+              {data.desc && <p className={`${styles.desc} prose-voice`}><Inline text={data.desc} /></p>}
             </header>
 
             {/* ============ PURSE — mirrors Inventory's COIN PURSE ============ */}

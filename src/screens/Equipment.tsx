@@ -972,7 +972,7 @@ function DetailBody({ item, slot }: { item: EquippedItem; slot: SlotConfig }) {
       {rows.map(([k, v], i) => (
         <div key={i} className={styles.detailRow}><span className={styles.k}>{k}</span><span className={styles.v}>{v}</span></div>
       ))}
-      {item.flavor && <div className={styles.detailFlavor}><Inline text={item.flavor} /></div>}
+      {item.flavor && <div className={`${styles.detailFlavor} prose-voice`}><Inline text={item.flavor} /></div>}
       {item.attune && (
         <div className={`${styles.detailAttune}${/^not|^none/i.test(item.attune) ? ' ' + styles.no : ''}`}>Attuned: {item.attune}</div>
       )}
@@ -1059,7 +1059,7 @@ function WeaponManageModal({ weapon, sheet, onUnequip, onClose }: {
                 <span className={styles.v}>{weapon.properties.join(', ')}</span>
               </div>
             )}
-            {weapon.flavor && <div className={styles.detailFlavor}><Inline text={weapon.flavor} /></div>}
+            {weapon.flavor && <div className={`${styles.detailFlavor} prose-voice`}><Inline text={weapon.flavor} /></div>}
             {weapon.attune && (
               <div className={`${styles.detailAttune}${/^not|^none/i.test(weapon.attune) ? ' ' + styles.no : ''}`}>Attuned: {weapon.attune}</div>
             )}

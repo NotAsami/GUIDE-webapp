@@ -38,7 +38,8 @@ function isSafeUrl(url: string): boolean {
 }
 
 /** Lightweight inline markdown → React nodes: **bold**, *italics*, [text](url),
- *  and `[text]{colour}` (no raw HTML, so it's injection-safe). Unmatched markers
+ *  `[text]{colour}`, and the spacing tokens `&nbsp;` / `&emsp;` (no raw HTML,
+ *  so it's injection-safe). Unmatched markers
  *  render literally. Uses `createElement` instead of JSX so this stays a plain
  *  `.ts` file — that lets `node --test` run markdown.test.ts with no build step.
  *
@@ -68,13 +69,27 @@ export function renderInline(text: string): ReactNode[] {
      textarea knows or should have to: a DM who pressed Enter once expects a new
      line, and got one long paragraph instead. Blank-line paragraph breaks are
      still <Prose>'s job — this is only the break inside a block. */
-  const re = /\n|\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]*)\]\{icon\s+([^}\s]+)(?:\s+([^}\s]+))?\}|\[([^\]]+)\]\(([^)\s]+)\)|\[([^\]]+)\]\{([^}\s]+)\}/g
+  const re = /\n|&nbsp;|&emsp;|\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]*)\]\{icon\s+([^}\s]+)(?:\s+([^}\s]+))?\}|\[([^\]]+)\]\(([^)\s]+)\)|\[([^\]]+)\]\{([^}\s]+)\}/g
   let last = 0
   let m: RegExpExecArray | null
   let i = 0
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index))
     if (m[0] === '\n') out.push(createElement('br', { key: i++ }))
+    /* SPACING TOKENS, and deliberately NOT entity decoding. Nothing in this
+       parser ever interprets markup — returning React nodes is the whole reason
+       it is injection-safe — so these are not `&…;` escapes being resolved.
+       They are five characters recognised as a NAME for one character, exactly
+       the way `[]{icon fa-fire}` is a name for a glyph. Adding them buys no
+       path to `&lt;script&gt;`, because there is no path at all.
+
+       They earn their place because HTML collapses runs of spaces: an author
+       lining up a two-column stat block in a textarea got one long line back,
+       and had no way to ask for the gap. The cost is the one every token here
+       already pays — a DM writing ABOUT the syntax cannot type the word
+       literally any more. */
+    else if (m[0] === '&nbsp;') out.push('\u00a0')
+    else if (m[0] === '&emsp;') out.push('\u2003')
     /* RECURSED, like the colour span beside them. These two were the only
        branches handing their contents straight through as a string, so anything
        nested inside bold or italics printed as source - `**[]{icon fa-fire}
@@ -133,9 +148,28 @@ export function Inline({ text }: { text: string }) {
 
 const HEADING_RE = /^(#{1,3})\s+(.*)$/
 
-/** Render prose with blank-line paragraph breaks, `#`/`##`/`###` headings, and
- *  inline markdown. A heading line inside a block starts its own element even
- *  without a surrounding blank line, so `## Title\nbody` needs no blank line. */
+/** A LINE that is nothing but hyphens is a divider — a beat between two
+ *  thoughts in the same block, drawn in global.css as a rule that breaks around
+ *  a small diamond rather than a border across the card.
+ *
+ *  Three or more, and NOTHING else on the line, which is what keeps it safe:
+ *  the em-dash sentences these descriptions are full of ("minimum +1 — currently
+ *  +3") never sit alone on a line, and a hyphenated word broken across one
+ *  cannot match either. Deliberately not `***` or `___`: `***` collides head-on
+ *  with bold-wrapping-italic, and `---` is the spelling every author already
+ *  knows from every other markdown box they have ever typed into.
+ *
+ *  IT LIVES HERE, not in `renderInline`, because a divider is a claim about a
+ *  whole LINE and renderInline has no concept of one — it walks a string and
+ *  would happily match three hyphens mid-sentence. Same reason the heading
+ *  branch is here, and it sits BEFORE that branch only because both are
+ *  line-shaped and neither can match what the other does. */
+const RULE_RE = /^-{3,}$/
+
+/** Render prose with blank-line paragraph breaks, `#`/`##`/`###` headings, a
+ *  `---` divider, and inline markdown. A heading line inside a block starts its
+ *  own element even without a surrounding blank line, so `## Title\nbody` needs
+ *  no blank line. */
 export function Prose({ text, className }: { text: string; className?: string }) {
   const blocks = useLive(text).split(/\n\s*\n/).filter(Boolean)
   const elements: ReactNode[] = []
@@ -147,6 +181,11 @@ export function Prose({ text, className }: { text: string; className?: string })
   }
   for (const block of blocks) {
     for (const line of block.split('\n')) {
+      if (RULE_RE.test(line.trim())) {
+        flushPara()
+        elements.push(createElement('hr', { key: key++ }))
+        continue
+      }
       const heading = HEADING_RE.exec(line)
       if (heading) {
         flushPara()

@@ -110,7 +110,7 @@
 .desc {
   grid-column: 2 / span 2; grid-row: 2; margin: 2px 0 0;
   font-family: var(--font-prose); font-size: clamp(15px, 1.15vw, 17px); line-height: 1.5;
-  color: var(--muted); font-style: italic; max-width: 92ch;
+  color: var(--muted); max-width: 92ch;
 }
 .leave { grid-column: 3; grid-row: 1; align-self: center; --cut: 8px; position: relative; height: 40px; min-width: 118px; background: transparent; border: 0; padding: 0; cursor: pointer; }
 .leaveFrame { position: absolute; inset: 0; background: var(--cyan); opacity: 0.75; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }

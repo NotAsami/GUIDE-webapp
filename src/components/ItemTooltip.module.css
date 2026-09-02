@@ -88,7 +88,6 @@
   padding-top: 8px;
   border-top: 1px dashed rgba(212, 191, 125, 0.25);
   font-family: var(--font-prose);
-  font-style: italic;
   font-size: 13px;
   line-height: 1.45;
   color: var(--muted);
