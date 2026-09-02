@@ -152,7 +152,7 @@
 
 .imDesc {
   margin-top: 13px;
-  font-family: var(--font-prose); font-style: italic; font-size: 15.5px;
+  font-family: var(--font-prose); font-size: 15.5px;
   line-height: 1.55; color: var(--muted); text-wrap: pretty;
 }
 

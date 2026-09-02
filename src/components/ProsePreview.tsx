@@ -32,8 +32,16 @@ function clipLeftOf(el: HTMLElement): number {
   return 0
 }
 
-export function ProsePreview({ text, label = 'Preview', scope }: {
+export function ProsePreview({ text, label = 'Preview', scope, register = 'rules' }: {
   text: string
+  /** WHICH REGISTER THE PLAYER WILL SEE THIS IN — the whole point of a preview.
+   *
+   *  This claimed to mirror `.desc` on the takeovers and rendered everything
+   *  italic, so a DM writing a feature's `light_description` saw slanted text
+   *  and the player got upright: the preview and the render disagreed about the
+   *  same string. `rules` is the default because most authored prose is rules
+   *  and because being wrong in that direction is the quieter failure. */
+  register?: 'rules' | 'voice'
   /** Overridable for fields where "as the player reads it" is not literally
    *  the framing — a shop greeting, a session recap. */
   label?: string
@@ -112,7 +120,7 @@ export function ProsePreview({ text, label = 'Preview', scope }: {
           <span className={styles.body}>
             {empty
               ? <span className={styles.none}>Nothing written yet.</span>
-              : <Prose text={shown} className={styles.prose} />}
+              : <Prose text={shown} className={register === 'voice' ? `${styles.prose} prose-voice` : styles.prose} />}
           </span>
           {bad.length > 0 && (
             /* Named, not hidden. A span the preview cannot evaluate is either a

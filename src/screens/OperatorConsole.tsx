@@ -1688,7 +1688,7 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
       <div className={styles.qLabRow}>
         <span className={styles.fieldLab}>Description</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing</span>
-        <ProsePreview text={draft.desc ?? ''} />
+        <ProsePreview text={draft.desc ?? ''} register="voice" />
       </div>
       <textarea className={styles.catProse} value={draft.desc ?? ''}
         placeholder="The prose the player reads when the loot is pushed…"
@@ -3165,7 +3165,7 @@ function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete }: {
       <div className={styles.qLabRow}>
         <span className={styles.fieldLab}>Description</span>
         <span className={cx(styles.qFacing, styles.player)}><i className="fa-solid fa-eye" /> Player-facing</span>
-        <ProsePreview text={flavor} />
+        <ProsePreview text={flavor} register="voice" />
       </div>
       <textarea className={styles.catProse} value={flavor} onChange={e => setFlavor(e.target.value)}
         {...proseField(setFlavor)}

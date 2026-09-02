@@ -63,15 +63,17 @@
 .body::-webkit-scrollbar-thumb { background: rgba(0, 166, 214, 0.4); }
 .body::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
 
-/* Matches the player-side prose: EB Garamond, italic, the muted read. The point
-   is fidelity, so this deliberately mirrors .desc on the takeovers. */
+/* Matches the player-side prose. The point is FIDELITY, so the slant is not
+   decided here — the caller names the register and `.prose-voice` (global.css)
+   adds the italic when the player will see one. Mirroring `.desc` on the
+   takeovers unconditionally is what made this lie about every rules field. */
 .prose {
   font-family: var(--font-prose); font-size: 15px; line-height: 1.55;
-  color: var(--muted); font-style: italic;
+  color: var(--muted);
 }
 .prose :global(p) { margin: 0 0 0.7em; }
 .prose :global(p:last-child) { margin-bottom: 0; }
-.prose :global(strong) { color: var(--text); font-style: normal; font-weight: 600; }
+.prose :global(strong) { color: var(--text); font-weight: 600; }
 .prose :global(a) { color: var(--cyan); }
 .prose :global(h1), .prose :global(h2), .prose :global(h3) {
   font-family: var(--font-display); font-style: normal; letter-spacing: 0.08em;

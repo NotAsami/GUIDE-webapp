@@ -117,7 +117,7 @@
 .chip.acc { color: var(--cyan); --bc: rgba(0, 166, 214, 0.5); }
 .chip i { margin-right: 6px; opacity: .85; }
 
-.desc { grid-column: 2 / span 2; grid-row: 2; margin: 2px 0 0; max-width: 92ch; font-family: var(--font-prose); font-style: italic; font-size: clamp(15px, 1.15vw, 17px); line-height: 1.5; color: var(--muted); }
+.desc { grid-column: 2 / span 2; grid-row: 2; margin: 2px 0 0; max-width: 92ch; font-family: var(--font-prose); font-size: clamp(15px, 1.15vw, 17px); line-height: 1.5; color: var(--muted); }
 
 /* close button — mockup's .hd-close: cyan two-layer chamfer, same trick as
    the outer .panel but at button scale. */

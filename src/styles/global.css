@@ -126,6 +126,71 @@ em {
   font-style: italic;
 }
 
+/* ---- TWO PROSE REGISTERS: voice is marked, rules is the default ----
+   The slant used to be a per-stylesheet habit. Eleven blocks each declared
+   `font-style: italic` because the one beside them did, so italic became the
+   body text of the app and stopped being able to MEAN anything - an authored
+   `*Intelligence*` read as ordinary prose in a different colour.
+
+   The register is now a claim about the TEXT, and it follows the FIELD rather
+   than the slot. `light_description` is the worked example: the Features card,
+   the inspector, the Prime Sheet and the level-up overlay all render it
+   upright, and the Roll Context Panel rendered the same sentence italic - the
+   old split surviving under a new name.
+
+   RULES is the default, so it needs no class. Long, mechanical, the app
+   explaining itself: light_description, deep_description, spell text, quest
+   text, effect explanations. VOICE is the deviation and says so: someone
+   speaking in the world, short - an item's flavour, a shop's patter, the DM's
+   note under a roll.
+
+   Guarded by lib/proseRegister.test.ts, which fails on a `.module.css` that
+   declares the slant itself instead of asking for it here. */
+.prose-voice {
+  font-style: italic;
+}
+/* ROMAN INSIDE ITALIC. Emphasis works by contrast with its surroundings, so
+   inside an italic passage the emphatic face is the upright one - the printer's
+   answer, and the only one that leaves `*word*` visible at all here. */
+.prose-voice em {
+  font-style: normal;
+}
+
+/* ---- `---` is a beat, not a border ----
+   Authored as a line of three or more hyphens (see Prose in lib/markdown.ts).
+   The line BREAKS around a small rotated square rather than running behind it:
+   a gradient with a transparent centre, so the gap costs nothing and does not
+   have to guess the colour of whatever surface the prose is sitting on.
+
+   `border: 0` first, because a bare <hr> arrives with the UA's inset border and
+   would otherwise draw a second line under this one. */
+hr {
+  border: 0;
+  height: 1px;
+  margin: 15px 0;
+  position: relative;
+  overflow: visible;
+  background: linear-gradient(
+    90deg,
+    rgba(212, 191, 125, 0.22) 0,
+    rgba(212, 191, 125, 0.22) calc(50% - 10px),
+    transparent calc(50% - 10px),
+    transparent calc(50% + 10px),
+    rgba(212, 191, 125, 0.22) calc(50% + 10px),
+    rgba(212, 191, 125, 0.22) 100%
+  );
+}
+hr::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  width: 5px;
+  height: 5px;
+  background: var(--beige-dim);
+  transform: translateX(-50%) rotate(45deg);
+}
+
 /* ============================================================================
    SCROLLBARS — the default, so a scroll container is never bare.
 

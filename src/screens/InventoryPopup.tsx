@@ -181,7 +181,7 @@ export function ItemPopup({
               ))}
             </div>
 
-            {item.flavor && <div className={styles.imDesc}><Inline text={item.flavor} /></div>}
+            {item.flavor && <div className={`${styles.imDesc} prose-voice`}><Inline text={item.flavor} /></div>}
 
             {locked && (
               <div className={styles.imWarn}>

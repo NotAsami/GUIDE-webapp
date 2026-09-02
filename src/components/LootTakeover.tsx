@@ -128,7 +128,7 @@ export function LootTakeover({ roll, dismissed, onDismiss }: {
               <span className={styles.leaveFrame} />
               <span className={styles.leaveInner}><i className="fa-solid fa-xmark" /> Close</span>
             </button>
-            {c.desc?.trim() && <p className={styles.desc}><Inline text={c.desc} /></p>}
+            {c.desc?.trim() && <p className={`${styles.desc} prose-voice`}><Inline text={c.desc} /></p>}
           </header>
 
           <div className={styles.dist}>
