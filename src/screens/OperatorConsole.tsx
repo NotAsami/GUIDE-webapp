@@ -21,6 +21,8 @@ import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphSt
 import { longRestPatch } from '../lib/rest'
 import { durationTurns } from '../lib/turns'
 import { effectiveSheet } from '../lib/effects'
+import { sendFoundry } from '../lib/foundry'
+import { toFoundryActor } from '../lib/foundryActor'
 import { pactSlotCount, pactSlotLevel } from '../lib/spells'
 import {
   CASTER_LABEL, assignClass, assignSubclass, casterSlots, casterSummary, castingNumbers,
@@ -372,6 +374,27 @@ export function OperatorConsole() {
         <div className={styles.opRight}>
           <div className={styles.opStat}><span className={styles.v}>{members.length}</span><span className={styles.l}>Linked PCs</span></div>
           <div className={styles.opStat}><span className={cx(styles.v, styles.cyan)}>Standby</span><span className={styles.l}>Encounter</span></div>
+          {/* SYNC THE PARTY TO FOUNDRY. The actor is a mirror of the derived
+              sheet (lib/foundryActor.ts) — press it after a level, a new item
+              or anything else that moved a number the token shows. Idempotent:
+              the bridge updates an actor it already made rather than making a
+              second one. */}
+          <button
+            type="button" className={styles.glyphBtn}
+            title="Sync the party to Foundry" aria-label="Sync the party to Foundry"
+            onClick={async () => {
+              const ok = await sendFoundry({
+                kind: 'actors',
+                actors: party.map(c => ({ character: c.id, data: toFoundryActor(c, shardCatalog) })),
+              })
+              log(ok
+                ? <><span className={styles.who}>{party.length} actor{party.length === 1 ? '' : 's'}</span> sent to <span className={styles.obj}>Foundry</span></>
+                : <>Foundry bridge <span className={styles.obj}>offline</span></>,
+              ok ? 'cyan' : 'danger')
+            }}
+          >
+            <i className="fa-solid fa-dice-d20" />
+          </button>
           <button
             type="button" className={styles.glyphBtn} onClick={toggleFullscreen}
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} aria-label="Toggle fullscreen"

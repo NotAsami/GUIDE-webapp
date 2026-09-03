@@ -211,8 +211,20 @@ export type AmmoBonus = { damage: number; label: string }
  *  with nothing authored" — both add zero. */
 export function rollWeaponAttack(
   weapon: EquippedWeapon, sheet: CharacterSheet, ammo?: AmmoBonus | null,
-  graph?: { attack?: Resolution; damage?: Resolution },
-): { attack: AttackRoll; damage: DamageRoll; riders: { attack: Rider[]; damage: Rider[] } } {
+  /* DAMAGE IS RESOLVED LATE, and that is the whole reason it is a function.
+     An on-hit contribution has to know whether the blow landed, and the d20 is
+     thrown in here — so a Resolution built by the caller beforehand could never
+     read `hit`. The caller still owns the graph; this still owns the dice. */
+  graph?: { attack?: Resolution; damage?: (hit: boolean | undefined, crit: boolean) => Resolution },
+  /** The target's AC, when something is targeted. Absent = no target, and
+   *  `hit` stays undefined all the way down rather than becoming a guess. */
+  targetAc?: number,
+): {
+  attack: AttackRoll; damage: DamageRoll
+  riders: { attack: Rider[]; damage: Rider[] }
+  /** Did it land — undefined when there was no target to land on. */
+  hit?: boolean
+} {
   const atkRes = graph?.attack
   // adv/dis from the graph decide the d20 set. Both at once cancel, which is
   // the 5e rule and not something the engine should be opinionated about.
@@ -268,9 +280,19 @@ export function rollWeaponAttack(
   // engine's roll-contribution mechanism (see the refactor doc §17).
   const ammoBonus = ammo?.damage ?? 0
 
+  /* DID IT LAND. A natural 20 always hits and a natural 1 always misses,
+     whatever the arithmetic says — 5e's two absolutes, and the reason this is
+     not simply `total >= ac`. Undefined with no target: the app has nothing to
+     compare against and will not invent an answer. */
+  const hit = targetAc === undefined ? undefined
+    : crit ? true
+    : fumble ? false
+    : attack.total >= targetAc
+
   // Graph damage. Its dice ride WITH the weapon's, so a crit doubles them too —
   // which is why resolve() hands them over unrolled and `crit` is passed here.
-  const dmgGraph = graph?.damage ? rollResolution(graph.damage, crit) : { flat: 0, riders: [] as Rider[] }
+  const dmgRes = graph?.damage?.(hit, crit)
+  const dmgGraph = dmgRes ? rollResolution(dmgRes, crit) : { flat: 0, riders: [] as Rider[] }
 
   const totalDmg = Math.max(0, diceSum + dmgBonus + ammoBonus + dmgGraph.flat)
   const damage: DamageRoll = {
@@ -286,6 +308,6 @@ export function rollWeaponAttack(
       + (ammoBonus ? ` ${formatMod(ammoBonus)} (${ammo!.label})` : '')
       + (dmgGraph.flat ? ` ${formatMod(dmgGraph.flat)}` : ''),
   }
-  return { attack, damage, riders: { attack: atkGraph.riders, damage: dmgGraph.riders } }
+  return { attack, damage, hit, riders: { attack: atkGraph.riders, damage: dmgGraph.riders } }
 }
 

@@ -17,7 +17,7 @@ const VARS: ExprScope = {
   a: 1, b: 2,
 }
 /** A contribution formula's scope: the same, plus roll context. */
-const ROLL: ExprScope = { ...VARS, cast: 3, proficient: true }
+const ROLL: ExprScope = { ...VARS, cast: 3, proficient: true, targetAc: 15, hit: true }
 
 const n = (flat: number, dice: string[] = []) => ({ t: 'num', flat, dice })
 const b = (v: boolean) => ({ t: 'bool', v })

@@ -64,6 +64,10 @@ export type RollEntry = {
    *  catalog sheet can look it up. Not a gid: a gid falls back to the instance id
    *  when `item_id` is absent (§43), and this lookup is local anyway. Absent for
    *  a save or a check, which are about nothing you could open an entry on. */
+  /** WHO THE ROLL WAS AGAINST, when Foundry said so. `hit` is undefined when
+   *  there was a target but no verdict to reach (no AC), which the panel shows
+   *  as a target with no outcome rather than as a miss. */
+  target?: { name: string; hit?: boolean }
   subject?: { kind: 'weapon' | 'feature' | 'spell' | 'item'; id: string }
   /** Generic result lines (heal, buff applied, …) for non-weapon rolls. */
   lines?: RollLine[]

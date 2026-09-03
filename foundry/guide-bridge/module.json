@@ -1,0 +1,14 @@
+{
+  "id": "guide-bridge",
+  "title": "G.U.I.D.E. Bridge",
+  "description": "Bridges the G.U.I.D.E. Codex webapp to this world over Supabase Realtime: Foundry turn changes drive the codex's turn boundary, and a settled roll from the codex posts to chat as its character.",
+  "version": "0.1.0",
+  "authors": [{ "name": "Sam" }],
+  "compatibility": { "minimum": "13", "verified": "14" },
+  "relationships": {
+    "systems": [{ "id": "dnd5e", "type": "system", "compatibility": { "minimum": "3.1.0" } }]
+  },
+  "scripts": ["lib/supabase.umd.js"],
+  "esmodules": ["bridge.js"],
+  "socket": false
+}

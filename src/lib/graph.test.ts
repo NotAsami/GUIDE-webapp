@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.types.ts'
-import { VAR_IDENTS, evalExpr } from './expr.ts'
+import { HIT_ASK, VAR_IDENTS, evalExpr } from './expr.ts'
 import { parseDice, rerollDie, rollDice } from './dice.ts'
 import {
   armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid, reqKeys, rollResolution,
@@ -2609,4 +2609,89 @@ test('A PRESENCE TYPO IS CAUGHT AT AUTHOR TIME, where it can be fixed', () => {
     [], known,
   )
   assert.deepEqual(good.filter(i => i.sev === 'err'), [])
+})
+
+/* ---------- the target, and the one condition the engine may not know --------
+ *
+ * `hit` needs a target and a thrown d20. With Foundry closed there is neither,
+ * and the three ways to handle that are not equally honest: dropping the effect
+ * makes Divine Smite silently not exist, defaulting it to false does the same
+ * with more confidence, and asking is what the player was already doing before
+ * the bridge existed. */
+
+const SMITE = gfeat('Divine Smite', [
+  { id: 's1', op: 'add', when: 'hit', value: '2d8', label: 'Smite', dmgType: 'radiant', target: ['roll:damage'] },
+])
+const DAMAGE: ResolveReq = { kind: 'damage' }
+
+test('a hit-gated contribution applies on a hit, with no question asked', () => {
+  const res = resolve(buildContext(withFeatures([SMITE])), { ...DAMAGE, hit: true })
+  assert.equal(res.riders.length, 1)
+  assert.equal(res.riders[0].when, 'active')
+  assert.equal(res.riders[0].on, true)
+})
+
+test('and does not exist on a miss', () => {
+  const res = resolve(buildContext(withFeatures([SMITE])), { ...DAMAGE, hit: false })
+  assert.equal(res.riders.length, 0)
+})
+
+/* THE CASE THIS RULE EXISTS FOR. No target, no verdict — the contribution
+   arrives as the question rather than disappearing. */
+test('with no verdict it becomes a question, not a silent no-op', () => {
+  const res = resolve(buildContext(withFeatures([SMITE])), DAMAGE)
+  assert.equal(res.riders.length, 1)
+  assert.equal(res.riders[0].when, 'manual')
+  assert.equal(res.riders[0].on, false)
+  assert.equal(res.riders[0].text, HIT_ASK)
+  assert.equal(res.problems.length, 0) // and NOT an engine error
+})
+
+/* The rest of the condition still refuses. Evaluating the clause as if it hit
+   is what makes the question meaningful — it is asked only of effects that
+   would otherwise apply. */
+test('an unknown hit does not switch off the conditions beside it', () => {
+  const gated = gfeat('Conditional Smite', [
+    { id: 's2', op: 'add', when: 'hit && isRaging', value: '2d8', label: 'Smite', target: ['roll:damage'] },
+  ])
+  const vars: VarDef[] = [{ name: 'isRaging', label: 'Raging', type: 'bool', initial: false, reset: 'none' } as VarDef]
+  const off = resolve(buildContext(withFeatures([{ ...gated, vars }])), DAMAGE)
+  assert.equal(off.riders.length, 0, 'not raging — the clause is false whether or not it hit')
+})
+
+/* THE AUTHOR'S OWN QUESTION WINS. They asked something more specific than "did
+   it hit", and two checkboxes for one decision is worse than one wide sentence. */
+test('an authored ask is not replaced by the hit question', () => {
+  const asked = gfeat('Careful Smite', [
+    { id: 's3', op: 'add', when: 'hit', ask: 'Spend a slot?', value: '2d8', label: 'Smite', target: ['roll:damage'] },
+  ])
+  const res = resolve(buildContext(withFeatures([asked])), DAMAGE)
+  assert.equal(res.riders[0].text, 'Spend a slot?')
+})
+
+test('targetAc reads 0 when nothing is targeted, and the AC when something is', () => {
+  const gated = gfeat('Giant Slayer', [
+    { id: 'g1', op: 'add', when: 'targetAc >= 18', value: '1d6', label: 'Slayer', target: ['roll:damage'] },
+  ])
+  assert.equal(resolve(buildContext(withFeatures([gated])), DAMAGE).riders.length, 0)
+  assert.equal(resolve(buildContext(withFeatures([gated])), { ...DAMAGE, targetAc: 18 }).riders.length, 1)
+})
+
+/* A VALUE may read `hit` too, and there the answer is different: a formula has
+   no question to become, so an unbound `hit` must fail LOUDLY. Binding a
+   default of false would quietly compute the miss branch — the "silent wrong
+   number" this engine reports rather than guesses. */
+test('a value formula reading hit with no verdict is an engine problem, not a quiet zero', () => {
+  const scaling = gfeat('Scaling Smite', [
+    { id: 's4', op: 'add', value: 'hit ? 2 : 0', label: 'Smite', target: ['roll:damage'] },
+  ])
+  const res = resolve(buildContext(withFeatures([scaling])), DAMAGE)
+  assert.equal(res.riders.length, 0)
+  assert.equal(res.problems.length, 1)
+  assert.match(res.problems[0].t, /did not resolve/i)
+
+  // With a verdict it is an ordinary contribution.
+  const hit = resolve(buildContext(withFeatures([scaling])), { ...DAMAGE, hit: true })
+  assert.equal(hit.riders[0].flat, 2)
+  assert.equal(hit.problems.length, 0)
 })

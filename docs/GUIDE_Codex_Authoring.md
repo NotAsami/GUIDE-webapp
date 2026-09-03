@@ -320,7 +320,32 @@ State a node carries. Two axes:
 What a formula can read: `level`, `prof`, `str`…`cha` (modifiers),
 `strScore`…`chaScore` (the raw scores — Indomitable Might wants 20, not +5),
 `hp`, `hpMax`, `saveDc`, `attacksThisTurn`, plus every variable in scope.
-Contribution formulas can also read `cast` (the level a spell was cast at).
+Contribution formulas can also read `cast` (the level a spell was cast at),
+plus two that come from the Foundry bridge: `targetAc` (the targeted creature's
+Armour Class, **0 when nothing is targeted** — no creature has AC 0, so the
+absence is readable) and `hit` (did the attack land).
+
+### Writing an on-hit effect
+
+`when: 'hit'` is how "on a hit, deal an extra…" is said. Three states, not two:
+
+| | |
+|---|---|
+| **hit** | The contribution applies, with no question asked. |
+| **miss** | It does not exist. |
+| **no target** | It arrives as the question *"Did the attack hit?"* — exactly what the player answered before the bridge existed. |
+
+That third row is the one that matters. With Foundry closed, or nothing
+targeted, a `hit`-gated effect is never silently dropped; the rest of the
+condition still refuses it (`hit && isRaging` on a character who is not raging
+does not surface at all), and any authored `ask` of your own wins over the
+generated question.
+
+**A `value` is different.** `hit ? 2d8 : 0` in a value has no question to become,
+so with no target it fails loudly as *"Contribution did not resolve"* rather than
+quietly computing the miss branch. Gate on `when` and keep the value plain.
+
+`targetAc` never reaches the player: screens show HIT or MISS, never the number.
 
 A variable declared on a **class, race or background** is in scope too, on any
 character carrying it — that is how a feature reads its own class's progression.

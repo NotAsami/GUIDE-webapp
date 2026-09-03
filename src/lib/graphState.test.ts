@@ -649,6 +649,32 @@ test('one live activation is enough — a partly gated feature still presses', (
   assert.equal(gateWith(mixed), null)
 })
 
+/* WHAT IT IS WAITING ON, not everything its conditions mention. Brutal Strike
+   gates on Reckless Attack AND on owning Improved Brutal Strike; a character who
+   has the second was told "Requires has_improved_brutal_strike" anyway, which
+   reads as a prerequisite they are missing while it sits on their own sheet. */
+test('a gate the character already satisfies is not reported as a requirement', () => {
+  const two: GraphEffect[] = [
+    { id: 'g1', op: 'add', once: true, when: 'isRaging && has_improved_brutal_strike',
+      value: '1d10', label: 'Add 1d10', target: ['roll:damage.melee'] },
+  ]
+  const c = character({
+    sheet: { features: [RAGE(two), { id: 'ibs', name: 'Improved Brutal Strike' }] },
+  } as never, { vars: {} })
+  assert.deepEqual(gateOf(RAGE(two), buildContext(c), c, 'feature:rage'), ['isRaging'])
+})
+
+/* A NUMBER CANNOT ANSWER BY TRUTHINESS. `attacksThisTurn == 0` is satisfied AT
+   zero, so filtering on falsiness would drop the one gate that is real. */
+test('a numeric gate survives the filter even at zero', () => {
+  const timed: GraphEffect[] = [
+    { id: 'g1', op: 'add', once: true, when: 'isRaging && attacksThisTurn == 0',
+      value: '1d10', label: 'Add', target: ['roll:damage.melee'] },
+  ]
+  const c = character({}, { vars: {} })
+  assert.deepEqual(gateOf(RAGE(timed), buildContext(c), c, 'feature:rage'), ['isRaging', 'attacksThisTurn'])
+})
+
 test('a passive with no activations is not "shut", it simply has no press', () => {
   assert.equal(gateWith([{ id: 'p1', op: 'add', value: '2', label: 'Rage Damage', target: ['roll:damage.melee'] }]), null)
 })
