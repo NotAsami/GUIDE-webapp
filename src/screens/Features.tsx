@@ -8,7 +8,7 @@ import { Deco } from '../components/Deco'
 import { gearFeatures } from '../lib/effects'
 import { shardFeatures, shardPerks } from '../lib/shards'
 import { Prose } from '../lib/markdown'
-import { interpolate } from '../lib/expr'
+import { interpolate, HAS_PREFIX, isHasIdent } from '../lib/expr'
 import { colorOf } from '../lib/palette'
 import { affectedBy, gid, type Gid } from '../lib/graph'
 import { featureEffects, isCarrier, isUsable, originChain, runsActivation, toggleVar, usesOf } from '../lib/featureView'
@@ -60,6 +60,24 @@ const ACTS: Record<string, string> = { action: 'Action', bonus: 'Bonus', reactio
  *  ("Requires …") does not fit a condition about timing. */
 const GATE_PHRASE: Record<string, string> = {
   attacksThisTurn: 'Only on your first attack',
+}
+
+/** An unmet gate, said as a player would say it.
+ *
+ *  An authored variable has the DM's own label. A FEATURE-PRESENCE identifier
+ *  (`has_improved_brutal_strike`) has nobody's — it is generated from a name, so
+ *  no VarDef carries it — and the card printed the identifier: "Requires
+ *  has_improved_brutal_strike" is the engine talking to itself in the one place
+ *  that exists to say what the player is missing. The slug reverses cleanly
+ *  enough to name the feature, which is what they need to go and get. */
+const gateLabel = (id: string, vars: VarRow[]): string => {
+  const authored = vars.find(v => v.def.name === id)?.def.label
+  if (authored) return authored
+  if (isHasIdent(id)) {
+    return id.slice(HAS_PREFIX.length).split('_').filter(Boolean)
+      .map(w => w[0].toUpperCase() + w.slice(1)).join(' ')
+  }
+  return id
 }
 /** Usable features cluster by activation so "what can I do as a reaction"
  *  survives the loss of group headers. */
@@ -209,8 +227,7 @@ export function Features() {
   const gateFor = (f: Feature): string | null => {
     const idents = gateOf(f, graph, character, gid('feature', f))
     if (!idents) return null
-    const parts = idents.map(id =>
-      GATE_PHRASE[id] ?? `Requires ${vars.find(v => v.def.name === id)?.def.label ?? id}`)
+    const parts = idents.map(id => GATE_PHRASE[id] ?? `Requires ${gateLabel(id, vars)}`)
     return parts.length ? parts.join(' · ') : 'Not available yet'
   }
 
@@ -460,7 +477,7 @@ function FeatureCard({ row, busy, scope, on, armed, denied, gate, onOpen, onPres
   // Resolved, never raw: `uses.max` is a formula on anything that scales.
   const uses = usesOf(f, scope)
   const spent = !!uses && uses.current <= 0
-  const fx = featureEffects(f)
+  const fx = featureEffects(f, scope)
   const text = cardText(f)
   const tag = f.source ?? f.usage ?? (f.level ? `Lv ${f.level}` : group)
 
@@ -584,7 +601,7 @@ function FeaturePopup({ row, busy, scope, on, vars, gate, back, affected, resolv
   const toggle = toggleVar(f)
   const uses = usesOf(f, scope)
   const spent = !!uses && uses.current <= 0
-  const fx = featureEffects(f)
+  const fx = featureEffects(f, scope)
   const chain = originChain(f)
   const text = cardText(f)
 

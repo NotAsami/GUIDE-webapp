@@ -354,3 +354,34 @@ honest options were weighed and both declined:
 release being gone is what makes taking a level idempotent; a "taken" flag beside
 a still-present plan is a second source of truth about whether the level was
 spent, and the failure mode is a player levelling twice.
+
+## Posting a roll to Foundry while riders are still waiting
+
+`RollContextPanel`'s **Post to Foundry** button is disabled while
+`rollTotals().pending > 0`. The reason is sound — a roll is not final when it
+lands, the panel keeps changing it while the player answers asks and rolls
+manual riders, and a total posted early is a wrong number in someone else's
+window — but it has a consequence nobody wants:
+
+**A roll that missed cannot be posted at all.** Every conditional rider on a
+miss stays switched off, and leaving it off *is* the answer; the panel counts it
+as open anyway, so the button never unlocks. Same for an `ask` the player
+declines. The rolls most worth showing the table — the ones that did nothing —
+are the ones the button refuses.
+
+**Why it is parked rather than fixed.** The Foundry integration is expected to
+answer most asks by itself once it knows what was targeted and whether the
+attack hit: an ask that resolves automatically is never open, and the case
+mostly evaporates. Loosening the gate first would be building a workaround for a
+state that is about to stop existing.
+
+**Trigger:** the first time someone wants a missed attack in Foundry chat before
+targeting lands — or the moment targeting lands and asks still sit open.
+
+**When it is fixed, do NOT just drop the guard.** The distinction that matters
+is *unanswered* versus *answered "no"*, and `pendingOf` deliberately does not
+draw it (`acked` zeroes the whole count; see "SEEING IT SETTLES IT" in
+RollContextPanel.tsx). Either give the panel a real "declined" state on a rider,
+or let the button post with an explicit "riders unanswered" line in the card so
+the table can see what was left open. A silently-posted half-total is the one
+outcome worse than a disabled button.

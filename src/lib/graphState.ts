@@ -22,8 +22,8 @@ import type {
 } from './database.types.ts'
 import { evalExpr, freeIdents, type ExprScope } from './expr.ts'
 import type { GraphContext, ResolveReq, Rider } from './graph.ts'
-import { armedMatches, asKey, gid, levelFormula, reqKeys, staleArmed } from './graph.ts'
-import { IS_ACTIVATION } from './opSchema.ts'
+import { armedMatches, asKey, gid, reqKeys, staleArmed } from './graph.ts'
+import { IS_ACTIVATION, levelFormula } from './opSchema.ts'
 import { usesOf } from './featureView.ts'
 import { pactSlotCount, pactSlotLevel } from './spells.ts'
 
@@ -635,7 +635,16 @@ export function gateOf(
   const acts = (feature.graph ?? []).filter(e => e.once || IS_ACTIVATION(e.op))
   if (!acts.length) return null
   if (planActivation(feature, ctx, character, source).length) return null
-  return [...new Set(acts.flatMap(e => (e.when ? freeIdents(e.when) : [])))]
+  /* WHAT IT IS WAITING ON — not everything its conditions happen to mention.
+     Every identifier in every gated clause used to come back, so a feature shut
+     by Reckless Attack also reported the prerequisite feature the character
+     already owned: "Requires has_improved_brutal_strike" beside a character who
+     has Improved Brutal Strike. A boolean that is already true cannot be what
+     is blocking the press, so it is not a requirement to report. Numbers stay
+     (a `attacksThisTurn == 0` gate is satisfied AT zero, so truthiness cannot
+     answer for them). */
+  const idents = [...new Set(acts.flatMap(e => (e.when ? freeIdents(e.when) : [])))]
+  return idents.filter(id => ctx.scope[id] !== true)
 }
 
 /** Fold the outcomes the player accepted into one `resources` patch.

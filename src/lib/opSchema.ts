@@ -15,7 +15,7 @@
  * inline per-field help and the authoring guide, so a field explains itself
  * wherever it appears.
  */
-import type { GraphOp } from './database.types.ts'
+import type { GraphEffect, GraphOp } from './database.types.ts'
 /* The stat vocabulary is modEditor's, not a second list — one compiler
    serves the item rows, the shard-node rows and the boost op alike.
    No cycle: modEditor imports only database.types and dnd. */
@@ -388,3 +388,40 @@ export const ACT_ORDER: ActivationKind[] = ['none', 'action', 'bonus', 'reaction
 /** The six console swatches. Anything else goes through the native colour input. */
 export const COLORS = ['#d4bf7d', '#e2b021', '#00a6d6', '#a07ad6', '#b93a3a', '#4fae6b']
 export const DEFAULT_COLOR = '#d4bf7d'
+
+/** The formula a level table yields at this character level, or undefined when
+ *  there is no table. Sugar for `[…][level]`, with two rules that make it match
+ *  how 5e progressions are actually written:
+ *
+ *  - SPARSE means STEP. A table filled at 1/5/11 reads "3 from level 11 up", so
+ *    an empty slot walks DOWN to the last filled one rather than contributing
+ *    nothing. Requiring all twenty to be filled would be the same table typed
+ *    out four times.
+ *  - Out of range clamps to the nearest end, matching array indexing — level 21
+ *    is not an error.
+ *
+ *  Index 0 is skipped on purpose: character levels start at 1, and putting that
+ *  off-by-one in one place beats living with it in every authored expression.
+ *
+ *  LIVES HERE, not in graph.ts, because three modules read it and one of
+ *  them (featureView) sits BELOW graph.ts in the import order — graph.ts
+ *  imports featureView for usesOf, so a featureView -> graph.ts import would
+ *  close a cycle. opSchema is what both ends already depend on.
+ *
+ *  EXPORTED because resolve() is not the only reader. An `once` contribution
+ *  never passes through here — it is armed by graphState.ts armedFrom(), which
+ *  snapshots the value onto the ArmedMod — so a level table on an armed effect
+ *  silently produced the level-1 value forever. Brutal Strike's 1d10 stayed 1d10
+ *  at level 17. One table, one reader. */
+export function levelFormula(eff: GraphEffect, level: number | boolean | undefined): string | undefined {
+  const arr = eff.byLevel
+  if (!arr?.some((x, i) => i > 0 && String(x ?? '').trim())) return undefined
+  const lvl = typeof level === 'number' ? level : 1
+  const start = Math.min(Math.max(1, Math.round(lvl)), arr.length - 1)
+  for (let i = start; i >= 1; i--) {
+    const cell = String(arr[i] ?? '').trim()
+    if (cell) return cell
+  }
+  // Below the first filled slot: the feature has not come online yet.
+  return '0'
+}

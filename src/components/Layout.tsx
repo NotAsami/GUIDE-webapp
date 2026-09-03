@@ -17,6 +17,7 @@ import { answerArmed } from '../lib/graphState'
 import { publicVitals, vitalsEqual } from '../lib/vitals'
 import { advanceTurn, turnRecharge } from '../lib/turns'
 import { useRollLog } from '../lib/rolls'
+import { useFoundryTurn } from '../lib/foundry'
 import { useGraph } from '../lib/useGraph'
 import { ScopeContext } from '../lib/markdown'
 import { turnGraphPatch } from '../lib/graphState'
@@ -162,6 +163,14 @@ export function Layout() {
         : undefined,
     })
   }
+
+  /* FOUNDRY DRIVES THE TURN when the bridge is up. The same one write the
+     button makes — a turn that began on the battlemap and a turn the player
+     pressed for are the same turn, so they must not be two code paths. Nothing
+     opens: the roll-log entry and the ROLLS badge do the telling, exactly as
+     they do for the button (§ "UI must not nag"). With Foundry closed this
+     never fires and the button is still the way. */
+  useFoundryTurn(character?.id, () => void doAdvanceTurn())
 
   async function handleSignOut() {
     await signOut()

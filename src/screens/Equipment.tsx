@@ -16,6 +16,7 @@ import {
 } from '../lib/equip'
 import { CarrySidebar } from './EquipmentCarry'
 import { effectiveSheet } from '../lib/effects'
+import { useFoundryTarget } from '../lib/target'
 import {
   handLabel, isRanged, masteryActive, masteryOf, rollWeaponAttack, weaponAbilityKey, weaponAttackBonus, weaponDamageString,
   type AmmoBonus,
@@ -47,6 +48,9 @@ interface RouteContext {
  *  pass: editing HP stays in the Stat Panel; equipping needs Inventory first. */
 export function Equipment() {
   const { character, updateSection, updateSections, shardTrees = {} } = useOutletContext<RouteContext>()
+  /* Who Foundry says this character is aiming at. Null whenever the bridge is
+     down, which is the same as it always was. */
+  const target = useFoundryTarget(character?.id)
   // Built once per character, not per roll — see lib/useGraph.ts.
   const graph = useGraph(character, shardTrees)
   const sheet = effectiveSheet(character, shardTrees)
@@ -227,14 +231,20 @@ export function Equipment() {
        makes (weapons.ts: "every weapon is treated as proficient"), stated here
        so the graph's `proficient` agrees with the PROF term in the breakdown
        rather than quietly contradicting it. */
-    const atkRes = resolve(graph, { kind: 'attack', subject, sub, tags, ability, proficient: true })
-    const dmgRes = resolve(graph, { kind: 'damage', subject, sub, tags })
+    const targetAc = target?.ac
+    const atkRes = resolve(graph, { kind: 'attack', subject, sub, tags, ability, proficient: true, targetAc })
+    /* THE DAMAGE RESOLUTION IS BUILT INSIDE THE ROLL, once the d20 is known:
+       an on-hit contribution reads `hit`, and before the die is thrown there is
+       no such fact. Captured on the way past because the notes and problems it
+       produced are still this screen's to report. */
+    let dmgRes: ReturnType<typeof resolve> | undefined
 
     // `riders` comes back ANNOTATED — each contribution carrying the faces it
     // rolled — so the panel shows "1d6 → +4" rather than a promise.
-    const { attack: atk, damage, riders } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack), {
-      attack: atkRes, damage: dmgRes,
-    })
+    const { attack: atk, damage, riders, hit } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack), {
+      attack: atkRes,
+      damage: h => (dmgRes = resolve(graph, { kind: 'damage', subject, sub, tags, targetAc, hit: h })),
+    }, targetAc)
     const entry = addRoll({
       kind: 'weapon',
       title: weapon.name,
@@ -246,6 +256,9 @@ export function Equipment() {
       subject: weapon.id ? { kind: 'weapon' as const, id: weapon.id } : undefined,
       attack: atk,
       damage,
+      /* WHO IT WAS AGAINST. The verdict, never the AC: the number is the DM's
+         to reveal and the player only needs to know whether it landed. */
+      ...(target ? { target: { name: target.name, hit } } : {}),
       // Grouped, not concatenated: a rider on the attack and one on the damage
       // are different statements, and a flat list cannot tell them apart.
       riderGroups: [
@@ -269,9 +282,9 @@ export function Equipment() {
         ...(masteryActive(weapon, sheet.proficiencies?.masteries)
           ? [`**${masteryOf(weapon)!.name}.** ${masteryOf(weapon)!.rule}`]
           : []),
-        ...atkRes.notes, ...dmgRes.notes,
+        ...atkRes.notes, ...(dmgRes?.notes ?? []),
       ],
-      problems: [...atkRes.problems, ...dmgRes.problems],
+      problems: [...atkRes.problems, ...(dmgRes?.problems ?? [])],
     })
     /* EVERY SWING COUNTS, and every arm it used is spent HERE. See attackRolled:
        a `when` gate is read when the arm is minted and never again, so an arm

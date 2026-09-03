@@ -26,11 +26,14 @@
  * everywhere. Fold state is local: it is how you are reading the list, not part
  * of the roll.
  */
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useContext } from 'react'
 import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useRollLog, type RollEntry } from '../lib/rolls'
+import { sendFoundry } from '../lib/foundry'
+import { cssVar, rollChatHtml } from '../lib/foundryChat'
+import { ScopeContext } from '../lib/markdown'
 import { rolledDiceTerms } from '../lib/dice'
 import { Prose, Inline } from '../lib/markdown'
 import { colorOf } from '../lib/palette'
@@ -215,7 +218,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed
                   showTip={showTip}
                   onOpenCat={() => { if (entry.subject) setCat(entry) }}
                   hasCat={!!entry.subject}
-                  stillArmed={stillArmed} onAnswerArmed={onAnswerArmed}
+                  stillArmed={stillArmed} onAnswerArmed={onAnswerArmed} characterId={character?.id}
                   onLeave={onClose}
                 />
               ))}
@@ -233,9 +236,12 @@ export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed
 
 function Entry({
   entry, latest, fresh, folded, onFold, onPatch, onPatchMany, onReroll, onPatchEntry, showTip, onOpenCat, hasCat,
-  stillArmed, onAnswerArmed, onLeave,
+  stillArmed, onAnswerArmed, onLeave, characterId,
 }: {
   entry: RollEntry; latest: boolean; fresh: boolean; folded: boolean
+  /** Who the Foundry bridge should speak as. Absent = no character bound, and
+   *  the post control does not render. */
+  characterId?: string
   onFold: () => void
   onPatch: (index: number, patch: Partial<RiderView['rider']>) => void
   /** Several at once, atomically — what an exclusive choice needs. */
@@ -281,6 +287,14 @@ function Entry({
   // Which die is mid-flourish, as "<line>:<die>" or "r<rider>:*" for a whole
   // rider. One at a time — you can only click one.
   const [spin, setSpin] = useState<string | null>(null)
+  /* 'idle' | 'sending' | 'sent' | 'gone'. Local to the entry and never stored:
+     whether a roll was posted is a fact about this session's Foundry, not about
+     the roll. */
+  const [posted, setPosted] = useState<'idle' | 'sending' | 'sent' | 'gone'>('idle')
+  /* The chat card renders authored note text, and a note may carry an
+     expression — `{level >= 17 ? 2d10 : 1d10}`. <Prose> reads the scope from
+     context; a plain string builder cannot, so it is handed over explicitly. */
+  const scope = useContext(ScopeContext)
   const spinTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const flash = useCallback((key: string) => {
     setSpin(key)
@@ -321,6 +335,20 @@ function Entry({
               {hasCat && <i className={`fa-solid fa-book-open ${styles.bk}`} />}
             </div>
             {entry.subtitle && !folded && <div className={styles.eFlavor}>{entry.subtitle}</div>}
+            {/* WHO IT WAS AGAINST, and whether it landed. The AC never appears:
+                the number is the DM's to reveal, the verdict is the player's to
+                act on. A target with no verdict (Foundry could not read an AC)
+                names the creature and stops there rather than guessing. */}
+            {entry.target && !folded && (
+              <div className={styles.vs}>
+                vs {entry.target.name}
+                {entry.target.hit !== undefined && (
+                  <span className={entry.target.hit ? styles.vsHit : styles.vsMiss}>
+                    {entry.target.hit ? 'Hit' : 'Miss'}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <span className={styles.eRight}>
             <span className={styles.eStamp}>{stamp(entry.at)}</span>
@@ -543,6 +571,37 @@ function Entry({
                 <i className="fa-solid fa-circle-question" />
                 {totals.pending} rider{totals.pending > 1 ? 's' : ''} still waiting on you
               </div>
+            )}
+
+            {/* POST TO FOUNDRY. An explicit press, never automatic: a roll is
+                not final when it lands — the panel keeps changing it while the
+                player answers asks and rolls manual riders — and `acked` only
+                means they LOOKED. So the one moment the app can be sure of is
+                the one they choose. Disabled while anything is still waiting,
+                because a total posted before its riders is a wrong number in
+                someone else's window. */}
+            {characterId && (
+              <button
+                type="button" className={styles.fvtt} data-state={posted}
+                disabled={posted === 'sending' || totals.pending > 0}
+                title={totals.pending > 0 ? 'Answer the riders first — the total is still moving' : undefined}
+                onClick={async () => {
+                  setPosted('sending')
+                  const ok = await sendFoundry({
+                    kind: 'roll', character: characterId,
+                    title: entry.title, html: rollChatHtml(entry, cssVar, scope),
+                  })
+                  setPosted(ok ? 'sent' : 'gone')
+                }}
+              >
+                <i className="fa-solid fa-dice-d20" />
+                <span className={styles.fvttLab}>
+                  {posted === 'sent' ? 'Posted to Foundry'
+                    : posted === 'gone' ? 'No bridge — is Foundry open?'
+                    : posted === 'sending' ? 'Posting…'
+                    : 'Post to Foundry'}
+                </span>
+              </button>
             )}
 
             {/* The engine reporting a fault. Deliberately not mixed with notes:
