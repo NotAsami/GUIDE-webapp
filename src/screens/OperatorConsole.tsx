@@ -4318,6 +4318,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
   const [desc, setDesc] = useState(d?.desc ?? '')
   const [tags, setTags] = useState<string[]>(d?.tags ?? [])
   const [save, setSave] = useState<AbilityKey | ''>(d?.save ?? '')
+  const [attack, setAttack] = useState<'' | 'melee' | 'ranged'>(d?.attack ?? '')
   const [hasDamage, setHasDamage] = useState(d?.hasDamage ?? false)
   const [dice, setDice] = useState(d?.dice ?? '')
   const [scaling, setScaling] = useState(d?.scaling ?? '')
@@ -4345,6 +4346,9 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       // Absent means "no save", which is what the roll panel reads to decide
       // whether to show a DC at all.
       ...(save ? { save } : {}),
+      // Absent means "no attack roll" — the player's Cast button then rolls
+      // damage alone, exactly as it did before spell attacks existed.
+      ...(attack ? { attack } : {}),
       // Omitted when empty so a spell with no graph never grows the keys — the
       // same discipline withVars() keeps on `resources`.
       ...(graph.length ? { graph } : {}),
@@ -4448,6 +4452,27 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       <textarea className={cx(styles.catProse, styles.player)} value={desc} onChange={e => setDesc(e.target.value)}
         {...proseField(setDesc)}
         placeholder="The prose the player reads in their Spellbook…" />
+
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Attack roll (optional)</span></div>
+      <div>
+        <span className={styles.fieldLab}>Spell attack</span>
+        <select className={styles.selIn} value={attack}
+          onChange={e => setAttack(e.target.value as '' | 'melee' | 'ranged')}>
+          <option value="">— no attack roll —</option>
+          <option value="ranged">Ranged spell attack</option>
+          <option value="melee">Melee spell attack</option>
+        </select>
+        <div className={styles.qHint}>
+          Set this and Cast rolls a d20 first — Fire Bolt → ranged, Shocking Grasp → melee.
+          <br />
+          The <b>bonus</b> is the caster’s, from their profile (prof + their spellcasting ability),
+          so a spell never names it. A crit doubles the damage dice, and with a target selected in
+          Foundry the app decides hit or miss itself.
+          <br />
+          Melee or ranged is what <b>roll:attack.melee</b> matches; every spell attack also matches
+          <b> roll:attack.spell</b>.
+        </div>
+      </div>
 
       <div className={styles.catSecLab}><span className={styles.fieldLab}>Saving throw (optional)</span></div>
       <div>

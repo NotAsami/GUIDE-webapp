@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, CharacterSpellbook, ShardTree, Spell, SpellSchool, SpellSlot } from '../lib/database.types'
 import { gid, resolve, rollResolution } from '../lib/graph'
+import { formatMod } from '../lib/dnd'
+import { rollAttack } from '../lib/weapons'
+import { useFoundryTarget } from '../lib/target'
 import { applyOutcomes, outcomeLine, planActivation } from '../lib/graphState'
 import { useGraph } from '../lib/useGraph'
 import { Nav } from '../components/Nav'
@@ -78,6 +81,9 @@ export function Spellbook() {
   const { character, updateSection, updateSections, shardTrees = {} } = useOutletContext<RouteContext>()
   // Built once per character, not per cast — see lib/useGraph.ts.
   const graph = useGraph(character, shardTrees)
+  /* Who Foundry says this caster is aiming at. Null with the bridge down, which
+     is every case that existed before it. */
+  const target = useFoundryTarget(character?.id)
   const { addRoll } = useRollLog()
   const sb: CharacterSpellbook = character.spellbook ?? {}
   const charLevel = character.identity?.level ?? 1
@@ -211,23 +217,63 @@ export function Spellbook() {
     })
 
     let noteMsg: string
+    const subject = gid('spell', sp)
+    const targetAc = target?.ac
+
+    /* THE ATTACK, when the spell calls for one. Fire Bolt is a d20 before it is
+       damage, and the app rolled only the damage — the player threw the attack
+       die somewhere else and the two halves of one cast lived apart.
+       `sub: 'spell'` is what `roll:attack.spell` matches; the melee/ranged half
+       rides on `ability` for the same reason a greataxe swing is both. Same
+       roller the weapon card uses, so the crit threshold cannot drift. */
+    const atkRes = sp.attack
+      ? resolve(graph, {
+        kind: 'attack', sub: 'spell', ability: sp.attack, subject, tags: sp.tags,
+        cast: castLevel, proficient: true, targetAc,
+      })
+      : null
+    const atkGraph = atkRes ? rollResolution(atkRes) : null
+    const spellAtk = atkRes
+      ? rollAttack(
+        (sb.attackBonus ?? 0) + (atkGraph?.flat ?? 0),
+        [
+          { label: 'SPELL ATK', value: sb.attackBonus ?? 0 },
+          { label: 'FEAT', value: atkGraph?.flat ?? 0 },
+        ],
+        atkRes, targetAc,
+      )
+      : null
+    const crit = spellAtk?.attack.crit ?? false
+
     // The same boundary the weapon roller uses, on the roll kind a spell has:
     // the spell IS the subject, so a feature can target it by gid or by tag.
     // `cast` becomes real here: the level the slot was actually spent at, which
     // is what "1d6 per level above 1st" has always wanted to read.
-    const res = resolve(graph, { kind: 'damage', sub: 'spell', subject: gid('spell', sp), tags: sp.tags, cast: castLevel })
-    const roll = sp.hasDamage ? rollSpellDamage(sp, castLevel, charLevel, rollResolution(res)) : null
+    //
+    // RESOLVED AFTER THE D20 on an attack spell, so an on-hit contribution can
+    // read `hit` — the same ordering rollWeaponAttack keeps.
+    const res = resolve(graph, {
+      kind: 'damage', sub: 'spell', subject, tags: sp.tags, cast: castLevel,
+      targetAc, ...(spellAtk ? { hit: spellAtk.hit } : {}),
+    })
+    const roll = sp.hasDamage ? rollSpellDamage(sp, castLevel, charLevel, rollResolution(res, crit), crit) : null
     if (roll) {
       setLastRollById(prev => ({ ...prev, [sp.id]: roll }))
       setFreshId(sp.id)
       window.setTimeout(() => setFreshId(f => (f === sp.id ? null : f)), 950)
-      noteMsg = `${sp.name} — ${roll.total} ${roll.type} damage (${roll.expr})`
+      noteMsg = spellAtk
+        ? `${sp.name} — ${spellAtk.attack.total} to hit`
+          + (spellAtk.hit === undefined ? '' : spellAtk.hit ? ' · HIT' : ' · MISS')
+          + ` · ${roll.total} ${roll.type} damage`
+        : `${sp.name} — ${roll.total} ${roll.type} damage (${roll.expr})`
       addRoll({
         kind: 'custom',
         title: sp.name,
         subtitle: cantrip ? 'Cantrip' : `Level ${castLevel} slot`,
         icon: spellIcon(sp),
         subject: { kind: 'spell', id: sp.id },
+        ...(spellAtk ? { attack: spellAtk.attack } : {}),
+        ...(target ? { target: { name: target.name, hit: spellAtk?.hit } } : {}),
         // The DC the target rolls against, in the slot an attack roll would
         // fill. Shown only when the SPELL says it calls for a save; the DC is
         // the caster's, because 5e derives it once per caster.
@@ -241,12 +287,20 @@ export function Spellbook() {
           total: roll.total, type: roll.type, crit: false,
           breakdown: `${roll.expr} = ${roll.total}`,
         },
-        riderGroups: roll.riders.length ? [{ label: 'Damage', riders: roll.riders }] : undefined,
-        notes: res.notes.length ? res.notes : undefined,
-        problems: res.problems.length ? res.problems : undefined,
+        riderGroups: [
+          { label: 'Attack', riders: atkGraph?.riders ?? [] },
+          { label: 'Damage', riders: roll.riders },
+        ].filter(g => g.riders.length),
+        notes: [...(atkRes?.notes ?? []), ...res.notes].length
+          ? [...(atkRes?.notes ?? []), ...res.notes] : undefined,
+        problems: [...(atkRes?.problems ?? []), ...res.problems].length
+          ? [...(atkRes?.problems ?? []), ...res.problems] : undefined,
       })
     } else {
-      noteMsg = cantrip ? `${sp.name} cast · at-will` : `${sp.name} cast · L${castLevel} slot expended`
+      noteMsg = spellAtk
+        ? `${sp.name} — ${spellAtk.attack.total} to hit`
+          + (spellAtk.hit === undefined ? '' : spellAtk.hit ? ' · HIT' : ' · MISS')
+        : cantrip ? `${sp.name} cast · at-will` : `${sp.name} cast · L${castLevel} slot expended`
       // EVERY cast gets an entry, not just one that damages or arms. This used
       // to be gated on `applied.length`, so a utility spell — Detect Magic,
       // Shield, most of the list — logged nothing at all: no toast, no roll in
@@ -258,6 +312,12 @@ export function Spellbook() {
         subtitle: cantrip ? 'Cantrip' : `Level ${castLevel} slot`,
         icon: spellIcon(sp),
         subject: { kind: 'spell', id: sp.id },
+        /* AN ATTACK SPELL NEED NOT DEAL DAMAGE. Shocking Grasp's rider is the
+           lost reaction, not the die — so the d20 rides on this entry too,
+           rather than only on the damage branch. */
+        ...(spellAtk ? { attack: spellAtk.attack } : {}),
+        ...(target ? { target: { name: target.name, hit: spellAtk?.hit } } : {}),
+        ...(atkGraph?.riders.length ? { riderGroups: [{ label: 'Attack', riders: atkGraph.riders }] } : {}),
         lines: applied.length
           ? applied.map(outcomeLine)
           // Nothing mechanical to report, so the line states what the cast COST.
@@ -410,6 +470,7 @@ export function Spellbook() {
                       max={max}
                       canCast={canCast}
                       dmgInfo={dmgInfo}
+                      attackBonus={sb.attackBonus}
                       roll={lastRollById[selectedSpell.id] ?? null}
                       fresh={freshId === selectedSpell.id}
                       flashOn={flashOn}
@@ -639,7 +700,7 @@ function SpellRow({ sp, selected, preparing, onSelect }: { sp: Spell; selected: 
 }
 
 function SpellDetail({
-  spell, cantrip, preparing, pact, showStepper, castLevel, min, max, canCast, dmgInfo, roll, fresh, flashOn,
+  spell, cantrip, preparing, pact, showStepper, castLevel, min, max, canCast, dmgInfo, attackBonus, roll, fresh, flashOn,
   noteText, noteFlash, onStep, onCast, onTogglePrepare,
 }: {
   spell: Spell
@@ -652,6 +713,10 @@ function SpellDetail({
   max: number
   canCast: boolean
   dmgInfo: ReturnType<typeof damageAt>
+  /** The caster's spell attack bonus, for a spell that calls for an attack
+   *  roll. Undefined when the profile has none — the row then says so rather
+   *  than showing a confident +0. */
+  attackBonus?: number
   roll: NonNullable<ReturnType<typeof rollSpellDamage>> | null
   fresh: boolean
   flashOn: boolean
@@ -713,6 +778,24 @@ function SpellDetail({
 
         <span className={styles.daDescLabel}>// Effect</span>
         <Prose text={spell.desc || '—'} className={styles.daDesc} />
+
+        {/* THE ATTACK, before the damage, because that is the order it happens
+            in. A spell that calls for one says so here rather than only in the
+            roll it produces — the player needs to know Cast is about to throw a
+            d20. The bonus is the caster's profile number, and a profile without
+            one is stated, never rendered as +0. */}
+        {spell.attack && (
+          <div>
+            <span className={styles.daDescLabel} style={{ marginTop: 18 }}>// Attack</span>
+            <div className={styles.ddControl}>
+              <span className={styles.ddClab}>{spell.attack === 'melee' ? 'Melee' : 'Ranged'} spell attack</span>
+              <span className={styles.ddExpr}>
+                <i className="fa-solid fa-dice-d20" />{' '}
+                {attackBonus === undefined ? 'no spell attack bonus on the profile' : `${formatMod(attackBonus)} to hit`}
+              </span>
+            </div>
+          </div>
+        )}
 
         {spell.hasDamage && (
           <div style={dmgColorStyle}>
