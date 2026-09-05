@@ -12,6 +12,9 @@ webapp uses (`guide-foundry`) and:
   resistances and immunities decide what it actually takes;
 - receives `{kind:'actors'}` → creates or updates the party actors from the
   webapp's derived sheets, and remembers actor-id → character-id;
+- sends `{kind:'downed'}` when an NPC reaches 0 HP, which the party's toast
+  layer says out loud — the one battlemap event every player wants and none of
+  them can see;
 - re-sends the target whenever a creature or token changes, so editing a
   targeted enemy's AC mid-combat cannot leave the app deciding hit or miss
   against a number that has moved.

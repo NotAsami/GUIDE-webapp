@@ -268,3 +268,34 @@ function resendTargets() {
 }
 Hooks.on('updateActor', resendTargets)
 Hooks.on('updateToken', resendTargets)
+
+/* ---------------------------------------------------------------------------
+   A CREATURE DROPPING
+
+   The one Foundry event every player wants and none of them can see: they are
+   looking at a phone, not at the GM's screen.
+
+   `updateActor` rather than `dnd5e.damageActor` on purpose — a creature can
+   reach zero by a sheet edit or a direct update as easily as by a damage roll,
+   and the players do not care which. Only NPCs: a PC's hit points are the
+   codex's own record and Foundry's copy is a mirror (see toFoundryActor).
+
+   REPORTED ONCE PER DROP. A set, not a comparison of before and after: every
+   further hit on a body at zero is still an update reaching zero, and "the
+   goblin drops" three times is the bridge narrating its own plumbing. The name
+   leaves the set the moment it is healed above zero, so a creature brought back
+   up can drop again.
+--------------------------------------------------------------------------- */
+
+const downed = new Set()
+
+Hooks.on('updateActor', (actor) => {
+  if (!game.user.isGM || !ch) return
+  if (actor.type !== 'npc') return
+  const hp = actor.system?.attributes?.hp
+  if (!hp || typeof hp.value !== 'number') return
+  if (hp.value > 0) { downed.delete(actor.id); return }
+  if (downed.has(actor.id)) return
+  downed.add(actor.id)
+  send({ kind: 'downed', name: actor.name })
+})

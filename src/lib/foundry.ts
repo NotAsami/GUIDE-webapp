@@ -41,6 +41,10 @@ export type BridgeMsg =
   | { kind: 'apply'; token: string; damage: DamageAmount[] }
   /** App → Foundry. Create or update the party actors. */
   | { kind: 'actors'; actors: { character: string; data: FoundryActorData }[] }
+  /** Foundry → app. A creature the party is fighting has dropped to 0 HP.
+   *  Party-wide and nameless of a character on purpose: who felled it is a
+   *  question the table answers, not the bridge. */
+  | { kind: 'downed'; name: string }
   /** Foundry → app. The actor-id → character-id map after a sync. */
   | { kind: 'mapped'; map: Record<string, string> }
 

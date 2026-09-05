@@ -12,6 +12,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg } from '../lib/voice'
+import { useFoundryMessages } from '../lib/foundry'
 import styles from './SystemToasts.module.css'
 import { Icon } from './Icon'
 
@@ -36,8 +37,8 @@ export function SystemToasts({ characterId }: { characterId: string }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const timers = useRef<number[]>([])
 
-  useGuideVoice(msg => {
-    if (msg.target !== ALL_PARTY && msg.target !== characterId) return
+  /** One queue, however the message arrived. */
+  function push(msg: VoiceMsg) {
     const id = crypto.randomUUID()
     setToasts(prev => [...prev, { id, msg, out: false }])
     timers.current.push(
@@ -48,6 +49,21 @@ export function SystemToasts({ characterId }: { characterId: string }) {
         )
       }, SHOW_MS),
     )
+  }
+
+  useGuideVoice(msg => {
+    if (msg.target !== ALL_PARTY && msg.target !== characterId) return
+    push(msg)
+  })
+
+  /* THE BATTLEMAP TELLS THE TABLE. A creature dropping is the one Foundry event
+     every player wants and none of them can see — they are looking at a phone,
+     not at the GM's screen. It arrives as an ordinary notice because that is
+     exactly what it is: a moment, not a record, and the toast layer already
+     knows how to say one. */
+  useFoundryMessages(msg => {
+    if (msg.kind !== 'downed') return
+    push({ kind: 'notice', target: ALL_PARTY, message: `${msg.name} drops.`, tone: 'normal' })
   })
 
   // Clear any pending timers when the layer unmounts (sign-out, route change).
