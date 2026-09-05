@@ -1422,3 +1422,29 @@ test('a gate on a roll fact is not reported as something the player is missing',
   ]
   assert.deepEqual(gateOf(RAGE(mixed), buildContext(c), c, 'feature:rage'), ['isRaging'])
 })
+
+/* THE ARM'S SENTENCE IS SNAPSHOTTED, so it has to be computed before it is
+   stored. resolve() runs every authored string through interpolate() as it
+   mints a rider; the armed path minted its own and did not, so the turn report
+   read "Add {has_improved_brutal_strike_enhanced ? 2d10 : 1d10} to Damage Roll"
+   at the player — the same defect the level table had here, a value with a live
+   path and a snapshotted path where only one was upgraded. */
+test('an armed modifier stores the sentence computed, not its source', () => {
+  const eff: GraphEffect = {
+    id: 'e1', op: 'add', once: true, value: '1d10',
+    label: 'Add {level >= 17 ? 2d10 : 1d10} to Damage Roll',
+    ask: 'Spend it on {level >= 17 ? 2 : 1} of them?',
+    target: ['roll:damage'],
+  }
+  const armed = armedFrom(eff, 'feature:f', 'Brutal Strike', { level: 18 })[0]
+  assert.equal(armed.label, 'Add 2d10 to Damage Roll')
+  assert.equal(armed.ask, 'Spend it on 2 of them?')
+  assert.ok(!armed.label.includes('{'))
+
+  // The other side of the level gate, from the same source string.
+  assert.equal(armedFrom(eff, 'feature:f', 'Brutal Strike', { level: 9 })[0].label, 'Add 1d10 to Damage Roll')
+
+  /* WITHOUT A SCOPE the source stands — the authoring preview has no character
+     to resolve against, and blanking it would hide the typo that caused it. */
+  assert.equal(armedFrom(eff, 'feature:f')[0].label, eff.label)
+})

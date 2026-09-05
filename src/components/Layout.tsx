@@ -132,16 +132,36 @@ export function Layout() {
         /* A variable that reset and an arm that lapsed are both things the
            button silently changed. Reporting them is the same rule the
            countdowns follow: a turn that alters state and says nothing reads as
-           a button that did not work. */
+           a button that did not work.
+           WHAT ENDED IS NAMED; WHAT FOLLOWED FROM IT IS COUNTED. One Reckless
+           Attack lapsing takes six modifiers with it, and six lines all reading
+           "armed under something that ended" bury the one line that explains
+           them — the report of a single press ran to eight rows and read as an
+           error log. The names ride in the breakdown, where a player who wants
+           them can still find them. */
         ...(turn?.ended ?? []).map(label => ({
           label, total: 'ended', breakdown: 'lasted until the start of your turn', tone: 'buff' as const,
         })),
-        ...(turn?.disarmed ?? []).map(label => ({
-          label, total: 'lapsed', breakdown: 'armed under something that ended', tone: 'buff' as const,
-        })),
-        ...(recharged?.names ?? []).map(label => ({
-          label, total: 'recharged', breakdown: 'once per turn', tone: 'buff' as const,
-        })),
+        ...(turn?.disarmed?.length
+          ? [{
+            label: turn.disarmed.length === 1 ? turn.disarmed[0] : `${turn.disarmed.length} modifiers`,
+            total: 'lapsed',
+            breakdown: turn.disarmed.length === 1
+              ? 'armed under something that ended'
+              : `armed under something that ended — ${turn.disarmed.join(', ')}`,
+            tone: 'buff' as const,
+          }]
+          : []),
+        ...(recharged?.names.length
+          ? [{
+            label: recharged.names.length === 1 ? recharged.names[0] : `${recharged.names.length} features`,
+            total: 'recharged',
+            breakdown: recharged.names.length === 1
+              ? 'once per turn'
+              : `once per turn — ${recharged.names.join(', ')}`,
+            tone: 'buff' as const,
+          }]
+          : []),
         ...(counted.length === 0 && expired.length === 0 && ticks.length === 0
           && !turn?.ended.length && !turn?.disarmed.length && !recharged
           ? [{ label: 'No change', total: '—', breakdown: 'nothing on a timer' }]

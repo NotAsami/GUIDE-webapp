@@ -63,7 +63,7 @@ export function SystemToasts({ characterId }: { characterId: string }) {
      knows how to say one. */
   useFoundryMessages(msg => {
     if (msg.kind !== 'downed') return
-    push({ kind: 'notice', target: ALL_PARTY, message: `${msg.name} drops.`, tone: 'normal' })
+    push({ kind: 'notice', target: ALL_PARTY, message: `${msg.name} slain.`, tone: 'normal' })
   })
 
   // Clear any pending timers when the layer unmounts (sign-out, route change).

@@ -623,8 +623,13 @@ function Entry({
             {/* POSTING ALONE is for everything the merged control is not: a
                 miss, a check, a save, a roll with nobody targeted. Where damage
                 CAN be applied the two are one press, so a creature never loses
-                hit points without the table seeing why. */}
-            {characterId && !(entry.target && totals.damage !== undefined && entry.target.hit !== false) && (
+                hit points without the table seeing why.
+                AND ONLY WHERE THERE IS A ROLL TO POST. Advance Turn logs an
+                entry with lines and no dice — a report of what the button
+                changed on this sheet, which is nobody else's business and
+                renders in Foundry as an empty card with a title. `lines` is
+                exactly "did any dice reach a number here". */}
+            {characterId && lines.length > 0 && !(entry.target && totals.damage !== undefined && entry.target.hit !== false) && (
               <button
                 type="button" className={styles.fvtt} data-state={posted}
                 disabled={posted === 'sending' || totals.pending > 0}

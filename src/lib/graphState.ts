@@ -20,7 +20,7 @@ import { activeSources } from './effects.ts'
 import type {
   ArmedMod, CharacterRow, CharacterSpellbook, Feature, GraphEffect, GraphState, Json, ShardTree, VarDef,
 } from './database.types.ts'
-import { ROLL_IDENTS, evalExpr, freeIdents, type ExprScope } from './expr.ts'
+import { ROLL_IDENTS, evalExpr, freeIdents, interpolate, type ExprScope } from './expr.ts'
 import type { GraphContext, ResolveReq, Rider } from './graph.ts'
 import { armedMatches, asKey, gid, reqKeys, staleArmed } from './graph.ts'
 import { IS_ACTIVATION, levelFormula } from './opSchema.ts'
@@ -313,14 +313,24 @@ export function slotPatch(
  *  contribution — which never reaches resolve(), it is snapshotted here —
  *  armed slot 1 of its table forever. Optional so a caller with no scope
  *  degrades to the authored `value` rather than guessing at level 1. */
-export function armedFrom(eff: GraphEffect, source: string, sourceName?: string, level?: number, at = Date.now()): ArmedMod[] {
+export function armedFrom(eff: GraphEffect, source: string, sourceName?: string, scope?: ExprScope, at = Date.now()): ArmedMod[] {
+  const level = typeof scope?.level === 'number' ? scope.level : undefined
+  /* THE SENTENCE IS SNAPSHOTTED, so it must be computed FIRST. resolve() runs
+     every authored string through interpolate() as it mints a rider (§25's
+     `say`); the armed path minted its own and did not, so "Add {level >= 17 ?
+     2d10 : 1d10} to Damage Roll" was stored with its braces intact and printed
+     that way on every surface that later read the arm — the panel's armed chip
+     and the turn report among them. Same defect the level table had here: a
+     value with a live path and a snapshotted path, and only one of them
+     upgraded. */
+  const say = (t: string | undefined) => (t && scope ? interpolate(t, scope).text : t)
   const base = {
-    source, sourceName, label: eff.label, op: eff.op,
+    source, sourceName, label: say(eff.label) ?? eff.label, op: eff.op,
     value: (level === undefined ? undefined : levelFormula(eff, level)) ?? eff.value,
     dmgType: eff.dmgType, at,
     // An asked arm is OFFERED, not taken — the question rides along and the roll
     // panel is what asks it. See ArmedMod.ask.
-    ...(eff.ask ? { ask: eff.ask, text: eff.text || eff.label } : {}),
+    ...(eff.ask ? { ask: say(eff.ask)!, text: say(eff.text || eff.label)! } : {}),
   }
   const targets = eff.target?.length ? eff.target : []
   if (!targets.length) {
@@ -385,7 +395,7 @@ export function planActivation(
         const cond = evalExpr(eff.when, ctx.scope)
         if (cond === null || cond.t !== 'bool' || !cond.v) continue
       }
-      for (const raw of armedFrom(eff, source, feature.name, typeof ctx.scope.level === 'number' ? ctx.scope.level : undefined)) {
+      for (const raw of armedFrom(eff, source, feature.name, ctx.scope)) {
         // Only worth carrying when it changes anything — one is what a pick has
         // always been, and an explicit 1 on every mod is noise in the store.
         const mod = picks > 1 ? { ...raw, picks } : raw
@@ -418,7 +428,7 @@ export function planActivation(
       /* AGAINST THE GRANTER'S SCOPE AND THEN FROZEN. The recipient's session
          never re-evaluates it, and must not: `1d6` off a bard's own table means
          nothing on the fighter's sheet, where `bardicDie` is not declared. */
-      for (const raw of armedFrom(eff, source ?? '', feature.name, typeof ctx.scope.level === 'number' ? ctx.scope.level : undefined)) {
+      for (const raw of armedFrom(eff, source ?? '', feature.name, ctx.scope)) {
         /* IT ARRIVES AS AN `add`, not as a `grant`. `grant` names how the mod
            TRAVELLED; on the recipient's sheet it is an ordinary armed bonus, and
            resolve() evaluates a mod's formula only when `op === 'add'` — left as
