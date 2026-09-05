@@ -2695,3 +2695,30 @@ test('a value formula reading hit with no verdict is an engine problem, not a qu
   assert.equal(hit.riders[0].flat, 2)
   assert.equal(hit.problems.length, 0)
 })
+
+/* An arm is decided when you PRESS it, so its condition cannot ask about a roll
+   that has not happened. The combination reads perfectly and cannot work:
+   planActivation evaluates the condition against the character's scope, where
+   `hit` is unbound, so nothing plans and the feature reads as locked — with the
+   identifier itself shown to the player as a requirement. */
+test('an armed effect gated on a roll fact is refused at authoring time', () => {
+  const armed = auditNode({
+    graph: [{ id: 'a1', op: 'add', once: true, when: 'hit', value: '2d6', label: 'Smite', target: ['roll:damage'] }],
+  })
+  assert.ok(armed.some(a => a.t === 'An arm cannot ask about the roll'))
+  // It names the fix, because the same condition works with `once` off.
+  assert.match(armed.find(a => a.t === 'An arm cannot ask about the roll')!.s, /Untick Arms once/)
+
+  // …and that shape passes.
+  const passive = auditNode({
+    graph: [{ id: 'a2', op: 'add', when: 'hit', value: '2d6', label: 'Smite', target: ['roll:damage'] }],
+  })
+  assert.equal(passive.filter(a => a.t === 'An arm cannot ask about the roll').length, 0)
+
+  // An arm gated on CHARACTER state is the ordinary case and stays legal.
+  const stance = auditNode({
+    vars: [{ name: 'isRaging', label: 'Raging', type: 'bool', initial: false, reset: 'none' } as VarDef],
+    graph: [{ id: 'a3', op: 'add', once: true, when: 'isRaging', value: '1d10', label: 'Brutal', target: ['roll:damage'] }],
+  })
+  assert.equal(stance.filter(a => a.t === 'An arm cannot ask about the roll').length, 0)
+})

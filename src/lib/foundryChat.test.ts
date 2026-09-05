@@ -120,3 +120,22 @@ test('a note computes against the scope, as the panel does', () => {
   }), resolve, { level: 18 } as never)
   assert.match(html, /Adds 2d10 damage/)
 })
+
+/* THE CARD SAID +0 for a rolled 2d6 while its own total counted it — the
+   contribution formatted here instead of through the panel's own sentence. */
+test('a resolved dice contribution reaches the card as what it rolled', () => {
+  const html = rollChatHtml(entry({
+    attack: ATTACK, damage: DAMAGE,
+    riderGroups: [{
+      label: 'Damage',
+      riders: [rider({
+        label: 'Smite', source: 'Divine Smite', when: 'always', on: true,
+        flat: 0, dice: ['2d6'], formula: '2d6',
+        rolledDice: [{ v: 2, sides: 6 }, { v: 3, sides: 6 }],
+      })],
+    }],
+  }), resolve)
+  assert.match(html, /Divine Smite · Smite/)
+  assert.match(html, /\+5/)
+  assert.ok(!html.includes('+0'))
+})

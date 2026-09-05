@@ -15,7 +15,7 @@
 import { Fragment, createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { RollEntry } from './rolls.tsx'
-import { lineViews, riderViews, rollTotals } from './rollView.ts'
+import { lineViews, riderAmount, riderViews, rollTotals } from './rollView.ts'
 import { colorOf } from './palette.ts'
 import { renderInline } from './markdown.ts'
 import { interpolate, type ExprScope } from './expr.ts'
@@ -93,9 +93,12 @@ export function rollChatHtml(
      had. The totals above are already the panel's arithmetic — this is the
      working, not a second sum. */
   const live = views.filter(v => v.live)
+  /* riderAmount IS THE PANEL'S OWN SENTENCE. Formatting the number here again
+     is how the card came to print "+0" for a rolled 2d6 while the total counted
+     it — one contribution, two renderers, only one of them reading the faces. */
   const contributions = live.filter(v => v.kind !== 'note').map(v =>
     `<div style="display:flex;gap:.5em;${muted}"><span style="flex:1">${esc(v.rider.source)} · ${esc(v.rider.label)}</span>`
-    + `<span>${v.kind === 'flag' ? esc(v.grants ?? '') : (v.value >= 0 ? '+' : '−') + Math.abs(v.value)}</span></div>`)
+    + `<span>${esc(v.kind === 'flag' ? (v.grants ?? '') : riderAmount(v.rider))}</span></div>`)
 
   /* A CHOSEN NOTE IS THE POINT OF THE ROLL, not a footnote to it. Brutal
      Strike's Forceful Blow adds no number — it pushes the target 15 feet — and

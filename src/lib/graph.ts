@@ -1848,6 +1848,24 @@ export function auditNode(
       }
     }
 
+    /* AN ARM IS DECIDED WHEN YOU PRESS IT, so its condition cannot ask about a
+       roll that has not happened. `once` + `when: 'hit'` reads perfectly and
+       cannot work: planActivation evaluates the condition against the
+       character's scope, where a roll identifier is not bound, so the effect
+       plans nothing — and the feature then reads as LOCKED, with the roll
+       identifier itself shown to the player as a requirement they cannot meet.
+       Without `once` the same condition works exactly as intended, which is why
+       this names the fix rather than the fault. */
+    if (eff.once && eff.when) {
+      const rollOnly = freeIdents(eff.when).filter(id => (ROLL_IDENTS as readonly string[]).includes(id))
+      if (rollOnly.length) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'An arm cannot ask about the roll',
+          s: `${eff.label || eff.id} arms on a press, but its condition reads "${rollOnly[0]}" — a fact about a roll that has not happened yet, so it can never be true here. Untick Arms once: the condition already limits it to the rolls that qualify.`,
+        })
+      }
+    }
+
     // §25's inline compute is a formula in a sentence, and gets the same two
     // checks as one in a field. Without this the author discovers a typo when a
     // player sees raw braces in their rule text.
