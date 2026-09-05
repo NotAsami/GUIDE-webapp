@@ -39,6 +39,9 @@ export type BridgeMsg =
    *  Typed, so dnd5e's own resistance and immunity maths runs on the way in —
    *  the app never second-guesses what the creature is made of. */
   | { kind: 'apply'; token: string; damage: DamageAmount[] }
+  /** App → Foundry. Toggle a condition on a targeted creature. `on: false`
+   *  clears it. Foundry's own status ids — see FOUNDRY_CONDITIONS. */
+  | { kind: 'condition'; token: string; status: string; on: boolean }
   /** App → Foundry. Create or update the party actors. */
   | { kind: 'actors'; actors: { character: string; data: FoundryActorData }[] }
   /** Foundry → app. A creature the party is fighting has dropped to 0 HP.

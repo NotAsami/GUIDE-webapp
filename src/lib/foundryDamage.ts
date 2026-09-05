@@ -1,5 +1,6 @@
 /**
- * The damage a codex roll hands to dnd5e.
+ * The dnd5e vocabulary the bridge speaks: damage amounts, and the conditions a
+ * status can be.
  *
  * Its own module, and deliberately free of the Supabase client: this is the one
  * piece of the bridge that is pure arithmetic about someone else's schema, and
@@ -28,3 +29,28 @@ export function damageAmounts(byType: Record<string, number>): DamageAmount[] {
       return t && t !== 'damage' ? { value, type: t } : { value }
     })
 }
+
+/**
+ * The conditions a DM can drop on a targeted creature.
+ *
+ * These are Foundry's own status ids, not this app's effect names — the two
+ * vocabularies overlap for the SRD conditions and diverge everywhere else, and
+ * this list is deliberately the SYSTEM's half. Nothing here touches a character
+ * row: a condition applied to an enemy lives in Foundry, which is the only
+ * place that knows what an enemy is.
+ *
+ * Exhaustion is absent on purpose. It is a counter in 2024, not a switch, and
+ * a toggle that sets it to 1 would silently overwrite whatever level the
+ * creature was already on.
+ */
+export const FOUNDRY_CONDITIONS = [
+  'blinded', 'charmed', 'deafened', 'frightened', 'grappled', 'incapacitated',
+  'invisible', 'paralyzed', 'petrified', 'poisoned', 'prone', 'restrained',
+  'stunned', 'unconscious',
+] as const
+
+export type FoundryCondition = (typeof FOUNDRY_CONDITIONS)[number]
+
+/** Title case for a status id — "frightened" reads as Frightened in a menu. */
+export const conditionLabel = (id: string) => id.charAt(0).toUpperCase() + id.slice(1)
+
