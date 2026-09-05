@@ -19,6 +19,7 @@
 
 import { useEffect, useRef } from 'react'
 import { supabase } from './supabase'
+import type { DamageAmount } from './foundryDamage.ts'
 
 /** The dnd5e actor document the exporter builds. Deliberately loose: the shape
  *  is dnd5e's, not ours, and typing it here would be a second claim about a
@@ -34,6 +35,10 @@ export type BridgeMsg =
    *  `token: null` is an untarget — the message always states the whole
    *  selection, so a dropped message cannot leave a stale target behind. */
   | { kind: 'target'; character: string; token: { token: string; name: string; ac?: number } | null }
+  /** App → Foundry. Apply this roll's damage to the token it was against.
+   *  Typed, so dnd5e's own resistance and immunity maths runs on the way in —
+   *  the app never second-guesses what the creature is made of. */
+  | { kind: 'apply'; token: string; damage: DamageAmount[] }
   /** App → Foundry. Create or update the party actors. */
   | { kind: 'actors'; actors: { character: string; data: FoundryActorData }[] }
   /** Foundry → app. The actor-id → character-id map after a sync. */

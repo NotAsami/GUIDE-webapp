@@ -32,6 +32,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useRollLog, type RollEntry } from '../lib/rolls'
 import { sendFoundry } from '../lib/foundry'
+import { damageAmounts } from '../lib/foundryDamage'
 import { cssVar, rollChatHtml } from '../lib/foundryChat'
 import { ScopeContext } from '../lib/markdown'
 import { rolledDiceTerms } from '../lib/dice'
@@ -291,6 +292,11 @@ function Entry({
      whether a roll was posted is a fact about this session's Foundry, not about
      the roll. */
   const [posted, setPosted] = useState<'idle' | 'sending' | 'sent' | 'gone'>('idle')
+  /* Applying damage WRITES to someone else's creature, so it says whether it
+     landed and refuses to say it twice. Local like `posted`, and for the same
+     reason: whether this roll has been applied is a fact about this session's
+     Foundry, not about the roll. */
+  const [dealt, setDealt] = useState<'idle' | 'sending' | 'done' | 'gone'>('idle')
   /* The chat card renders authored note text, and a note may carry an
      expression — `{level >= 17 ? 2d10 : 1d10}`. <Prose> reads the scope from
      context; a plain string builder cannot, so it is handed over explicitly. */
@@ -580,6 +586,36 @@ function Entry({
                 the one they choose. Disabled while anything is still waiting,
                 because a total posted before its riders is a wrong number in
                 someone else's window. */}
+            {/* APPLY IT TO THE CREATURE. The one write in this app that lands
+                on something the player does not own, so it is a deliberate
+                press, once, and never on a miss — a roll that missed has no
+                damage to give, whatever number the dice showed. dnd5e does the
+                resistance maths on the way in; the app sends what it rolled and
+                does not second-guess what the creature is made of. */}
+            {entry.target && totals.damage !== undefined && entry.target.hit !== false && (
+              <button
+                type="button" className={styles.fvtt} data-state={dealt === 'done' ? 'sent' : dealt === 'gone' ? 'gone' : 'idle'}
+                disabled={dealt === 'sending' || dealt === 'done' || totals.pending > 0}
+                title={totals.pending > 0 ? 'Answer the riders first — the total is still moving' : undefined}
+                onClick={async () => {
+                  setDealt('sending')
+                  const ok = await sendFoundry({
+                    kind: 'apply', token: entry.target!.token,
+                    damage: damageAmounts(totals.byType),
+                  })
+                  setDealt(ok ? 'done' : 'gone')
+                }}
+              >
+                <i className="fa-solid fa-burst" />
+                <span className={styles.fvttLab}>
+                  {dealt === 'done' ? `${totals.damage} dealt to ${entry.target.name}`
+                    : dealt === 'gone' ? 'No bridge — is Foundry open?'
+                    : dealt === 'sending' ? 'Applying…'
+                    : `Apply ${totals.damage} to ${entry.target.name}`}
+                </span>
+              </button>
+            )}
+
             {characterId && (
               <button
                 type="button" className={styles.fvtt} data-state={posted}

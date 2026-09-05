@@ -258,7 +258,7 @@ export function Equipment() {
       damage,
       /* WHO IT WAS AGAINST. The verdict, never the AC: the number is the DM's
          to reveal and the player only needs to know whether it landed. */
-      ...(target ? { target: { name: target.name, hit } } : {}),
+      ...(target ? { target: { token: target.token, name: target.name, hit } } : {}),
       // Grouped, not concatenated: a rider on the attack and one on the damage
       // are different statements, and a flat list cannot tell them apart.
       riderGroups: [

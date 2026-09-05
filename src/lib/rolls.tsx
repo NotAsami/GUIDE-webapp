@@ -67,7 +67,14 @@ export type RollEntry = {
   /** WHO THE ROLL WAS AGAINST, when Foundry said so. `hit` is undefined when
    *  there was a target but no verdict to reach (no AC), which the panel shows
    *  as a target with no outcome rather than as a miss. */
-  target?: { name: string; hit?: boolean }
+  target?: {
+    /** The Foundry token id — WHICH creature, not just its name. Carried so a
+     *  roll can still be applied to the right one after the player has moved
+     *  on and targeted something else. */
+    token: string
+    name: string
+    hit?: boolean
+  }
   subject?: { kind: 'weapon' | 'feature' | 'spell' | 'item'; id: string }
   /** Generic result lines (heal, buff applied, …) for non-weapon rolls. */
   lines?: RollLine[]
