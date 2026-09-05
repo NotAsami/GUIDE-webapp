@@ -8,6 +8,7 @@ import { parseDice, rerollDie, rollDice } from './dice.ts'
 import {
   armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid, reqKeys, rollResolution,
   damageFlags, immuneTo, matchCount, nodeGid, normalizeTag, probeScope, resolve, suppressedEffects, total, varCollisions, type ResolveReq,
+  staleArmed,
 } from './graph.ts'
 import { activeSources } from './effects.ts'
 import { composeCheck } from './dnd.ts'
@@ -2717,8 +2718,52 @@ test('an armed effect gated on a roll fact is refused at authoring time', () => 
 
   // An arm gated on CHARACTER state is the ordinary case and stays legal.
   const stance = auditNode({
-    vars: [{ name: 'isRaging', label: 'Raging', type: 'bool', initial: false, reset: 'none' } as VarDef],
+    vars: [{ name: 'isRaging', kind: 'stored', type: 'bool', initial: false } as VarDef],
     graph: [{ id: 'a3', op: 'add', once: true, when: 'isRaging', value: '1d10', label: 'Brutal', target: ['roll:damage'] }],
   })
   assert.equal(stance.filter(a => a.t === 'An arm cannot ask about the roll').length, 0)
+})
+
+/* ---------- an arm is addressed by its effect, not by its sentence ----------
+ *
+ * staleArmed matched a stored arm back to the rule that minted it on op +
+ * label. A label is a RENDERED sentence — arming computes `{level >= 17 ? 2d10
+ * : 1d10}` before storing it — so the stored "Add 2d10 to Damage Roll" stopped
+ * equalling its source, nothing matched, every arm read as un-stale forever,
+ * and the turn boundary quietly stopped clearing the queue. Brutal Strike was
+ * then offered once per REST instead of once per turn. */
+
+test('an arm whose label was computed is still matched to its effect', () => {
+  const smite = gfeat('Brutal Strike', [{
+    id: 'bs1', op: 'add', once: true, when: 'isRaging', value: '1d10',
+    label: 'Add {level >= 17 ? 2d10 : 1d10} to Damage Roll', target: ['roll:damage'],
+  }], {
+    vars: [{ name: 'isRaging', kind: 'stored', type: 'bool', initial: false } as VarDef],
+  })
+  // Minted the way planActivation mints it: the sentence computed, the id kept.
+  const armed = [{
+    id: 'a1', source: gid('feature', smite), eff: 'bs1', op: 'add' as const,
+    label: 'Add 2d10 to Damage Roll', kind: 'damage', value: '1d10', at: 0,
+  }]
+
+  const raging = withFeatures([smite], { vars: { isRaging: true }, armed })
+  assert.deepEqual(staleArmed(buildContext(raging)), [], 'its condition holds — it stays')
+
+  const calm = withFeatures([smite], { vars: { isRaging: false }, armed })
+  assert.deepEqual(staleArmed(buildContext(calm)), ['a1'], 'the rage ended — it lapses')
+})
+
+/* Arms minted before the id was recorded still work, which is what makes this
+   safe to ship against a live queue. */
+test('an older arm with no effect id falls back to op and label', () => {
+  const feat = gfeat('Rage', [{
+    id: 'r1', op: 'add', once: true, when: 'isRaging', value: '2', label: 'Rage Damage', target: ['roll:damage'],
+  }], {
+    vars: [{ name: 'isRaging', kind: 'stored', type: 'bool', initial: false } as VarDef],
+  })
+  const armed = [{
+    id: 'a2', source: gid('feature', feat), op: 'add' as const,
+    label: 'Rage Damage', kind: 'damage', value: '2', at: 0,
+  }]
+  assert.deepEqual(staleArmed(buildContext(withFeatures([feat], { vars: { isRaging: false }, armed }))), ['a2'])
 })

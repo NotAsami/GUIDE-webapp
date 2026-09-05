@@ -667,11 +667,16 @@ export type GraphContext = {
 export function staleArmed(ctx: GraphContext, scope: ExprScope = ctx.scope): string[] {
   const out: string[] = []
   for (const m of ctx.armed) {
-    /* op + label is the address. `ArmedMod` records the owner gid, not the
-       effect id, so this is what narrows a node's several ops down to the one
-       that minted this mod — the same pair the breakdown shows the player. */
+    /* THE EFFECT ID IS THE ADDRESS. It used to be op + label, and a label is a
+       RENDERED SENTENCE: once arming began computing `{level >= 17 ? 2d10 :
+       1d10}` before storing it, the stored "Add 2d10 to Damage Roll" no longer
+       equalled the source it came from, no effect matched, and every arm looked
+       un-stale forever — so the turn boundary stopped clearing them and Brutal
+       Strike was offered once per REST instead of once per turn.
+       op + label survives as the fallback for arms minted before the id was
+       recorded, which is right for as long as those last. */
     const effs = (ctx.byOwner.get(m.source as Gid) ?? [])
-      .filter(e => e.eff.op === m.op && e.eff.label === m.label)
+      .filter(e => (m.eff ? e.eff.id === m.eff : e.eff.op === m.op && e.eff.label === m.label))
     if (!effs.length) continue
     const live = effs.some(e => {
       /* AN UNGATED HOLD IS NOT A LEFTOVER. Held says every held thing has a

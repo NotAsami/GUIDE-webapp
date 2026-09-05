@@ -325,7 +325,7 @@ export function armedFrom(eff: GraphEffect, source: string, sourceName?: string,
      upgraded. */
   const say = (t: string | undefined) => (t && scope ? interpolate(t, scope).text : t)
   const base = {
-    source, sourceName, label: say(eff.label) ?? eff.label, op: eff.op,
+    source, sourceName, eff: eff.id, label: say(eff.label) ?? eff.label, op: eff.op,
     value: (level === undefined ? undefined : levelFormula(eff, level)) ?? eff.value,
     dmgType: eff.dmgType, at,
     // An asked arm is OFFERED, not taken — the question rides along and the roll
