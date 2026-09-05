@@ -7,7 +7,12 @@
   top: 50%;
   transform: translateY(-50%);
   right: 26px;
-  z-index: 120;
+  /* ABOVE THE ROLL PANEL (350) and everything else that scrims the screen.
+     A toast reports something happening ELSEWHERE — a creature dropping on the
+     battlemap, an item arriving — so the one player who happens to have a modal
+     open is the last person who should be the one who misses it. It cannot
+     steal a click: the layer is pointer-events: none. */
+  z-index: 400;
   display: flex;
   flex-direction: column;
   gap: 10px;
