@@ -185,9 +185,14 @@ async function setCondition({ token, status, on }) {
  * player may well have moved on, and the damage belongs to the creature the
  * roll was made against.
  */
-async function applyDamage({ token, damage }) {
+async function applyDamage({ token, damage, ...msg }) {
   const actor = tokenOf(token)?.actor
   if (!actor) return ui.notifications.warn('G.U.I.D.E. Bridge: that token is not on the active scene any more.')
+  /* THE CHAT ENTRY FIRST, and in the same handler as the damage: nobody takes
+     hit points off a creature without the table seeing the roll that did it.
+     Posted before applying so that a failure to write leaves the roll visible
+     rather than the damage unexplained. */
+  await postRoll(msg)
   await actor.applyDamage(damage ?? [])
   const total = (damage ?? []).reduce((n, d) => n + (d.value ?? 0), 0)
   ui.notifications.info(`G.U.I.D.E. Bridge: ${total} to ${actor.name}.`)

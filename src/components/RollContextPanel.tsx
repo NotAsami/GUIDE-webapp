@@ -592,7 +592,7 @@ function Entry({
                 damage to give, whatever number the dice showed. dnd5e does the
                 resistance maths on the way in; the app sends what it rolled and
                 does not second-guess what the creature is made of. */}
-            {entry.target && totals.damage !== undefined && entry.target.hit !== false && (
+            {characterId && entry.target && totals.damage !== undefined && entry.target.hit !== false && (
               <button
                 type="button" className={styles.fvtt} data-state={dealt === 'done' ? 'sent' : dealt === 'gone' ? 'gone' : 'idle'}
                 disabled={dealt === 'sending' || dealt === 'done' || totals.pending > 0}
@@ -600,7 +600,11 @@ function Entry({
                 onClick={async () => {
                   setDealt('sending')
                   const ok = await sendFoundry({
-                    kind: 'apply', token: entry.target!.token,
+                    kind: 'apply',
+                    character: characterId!,
+                    title: entry.title,
+                    html: rollChatHtml(entry, cssVar, scope),
+                    token: entry.target!.token,
                     damage: damageAmounts(totals.byType),
                   })
                   setDealt(ok ? 'done' : 'gone')
@@ -608,15 +612,19 @@ function Entry({
               >
                 <i className="fa-solid fa-burst" />
                 <span className={styles.fvttLab}>
-                  {dealt === 'done' ? `${totals.damage} dealt to ${entry.target.name}`
+                  {dealt === 'done' ? `Posted · ${totals.damage} dealt to ${entry.target.name}`
                     : dealt === 'gone' ? 'No bridge — is Foundry open?'
                     : dealt === 'sending' ? 'Applying…'
-                    : `Apply ${totals.damage} to ${entry.target.name}`}
+                    : `Post & apply ${totals.damage} to ${entry.target.name}`}
                 </span>
               </button>
             )}
 
-            {characterId && (
+            {/* POSTING ALONE is for everything the merged control is not: a
+                miss, a check, a save, a roll with nobody targeted. Where damage
+                CAN be applied the two are one press, so a creature never loses
+                hit points without the table seeing why. */}
+            {characterId && !(entry.target && totals.damage !== undefined && entry.target.hit !== false) && (
               <button
                 type="button" className={styles.fvtt} data-state={posted}
                 disabled={posted === 'sending' || totals.pending > 0}
