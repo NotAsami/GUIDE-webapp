@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import type { CharacterRow, CharacterSheet, EquippedWeapon } from './database.types.ts'
 import type { Resolution } from './graph.ts'
 import { buildContext, gid, resolve, total } from './graph.ts'
-import { MASTERIES, masteryActive, masteryOf, rollWeaponAttack, isRanged, weaponAbilityKey, weaponAttackBonus, weaponDamageBonus } from './weapons.ts'
+import { MASTERIES, isRanged, masteryActive, masteryOf, rollAttack, rollWeaponAttack, weaponAbilityKey, weaponAttackBonus, weaponDamageBonus } from './weapons.ts'
 
 const SHEET = {
   abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 },
@@ -373,4 +373,29 @@ test('the damage resolution is asked for the verdict and the crit', () => {
     damage: (hit, crit) => { seen.push({ hit, crit }); return RES() },
   }, 15))
   assert.deepEqual(seen, [{ hit: true, crit: true }])
+})
+
+/* ---------- one attack roller, two callers ----------
+ *
+ * rollAttack is what the weapon card and the Spellbook both throw. A second
+ * copy would be a second place for the crit threshold to be forgotten. */
+
+test('rollAttack honours a graph-lowered crit threshold', () => {
+  const champion = { ...RES(), critFrom: 19 }
+  const r = pin([[19, 20], [2, 20]], () => rollAttack(5, [], champion))
+  assert.equal(r.attack.crit, true)
+  // …and the same die is not a crit at the printed 20.
+  const plain = pin([[19, 20], [2, 20]], () => rollAttack(5, [], RES()))
+  assert.equal(plain.attack.crit, false)
+})
+
+test('rollAttack keeps the second die only when it was contested', () => {
+  const normal = pin([[12, 20], [3, 20]], () => rollAttack(0, [], RES()))
+  assert.equal(normal.attack.rolls.length, 1)
+  const adv = pin([[12, 20], [3, 20]], () => rollAttack(0, [], { ...RES(), adv: true }))
+  assert.deepEqual(adv.attack.rolls.map(d => d.v), [12, 3])
+  assert.equal(adv.attack.d20, 12)
+  // Both at once cancel — 5e's rule, not the engine's opinion.
+  const both = pin([[12, 20], [3, 20]], () => rollAttack(0, [], { ...RES(), adv: true, dis: true }))
+  assert.equal(both.attack.mode, 'normal')
 })

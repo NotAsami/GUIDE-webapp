@@ -604,6 +604,38 @@ Use `ask` instead when the condition is judged **per roll** rather than held —
 
 ---
 
+## Spell attacks
+
+A spell resolves one of two ways, and the editor asks separately:
+
+- **Saving throw** — the target rolls, against the caster's DC.
+- **Attack roll** — *Spell attack: ranged / melee*. Cast then throws a d20
+  before the damage, at the caster's spell attack bonus from their profile
+  (prof + their spellcasting ability). Fire Bolt is ranged, Shocking Grasp
+  melee.
+
+The spell never names the bonus for the same reason it never names the save
+ability: the class decides it, so the same spell is a better attack from a
+caster with a better score.
+
+Nothing stops you setting both — 5e has a handful that do both, and refusing
+them would be the app inventing a rule.
+
+What an attack spell gains:
+
+- **A crit doubles the damage dice**, never the modifier — the spell's own and
+  any contribution alike. A cantrip doubles what it has *grown* to, so Fire Bolt
+  at level 11 crits for 6d10.
+- **`roll:attack.spell`** matches every spell attack, and `roll:attack.melee` /
+  `roll:attack.ranged` match by which kind it is — the same vocabulary a weapon
+  swing uses.
+- **Hit and miss**, when a token is targeted in Foundry. Damage resolves after
+  the d20, so `when: 'hit'` works on a spell exactly as it does on a weapon
+  (see *Writing an on-hit effect*).
+
+A spell with an attack and no damage is fine — the d20 still rolls, and the
+entry carries it.
+
 ## Weapon mastery
 
 A weapon has ONE mastery property; a character may use it only while that kind of
