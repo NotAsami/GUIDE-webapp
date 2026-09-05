@@ -399,3 +399,44 @@ test('rollAttack keeps the second die only when it was contested', () => {
   const both = pin([[12, 20], [3, 20]], () => rollAttack(0, [], { ...RES(), adv: true, dis: true }))
   assert.equal(both.attack.mode, 'normal')
 })
+
+/* ---------- the fold names its sources ----------
+ *
+ * The line shows one number for every graph contribution, and it used to be
+ * called "FEAT" — which part of the ENGINE produced it, rather than which
+ * feature. A rolled 2d6 sitting inside a lump called FEAT reads as a
+ * contribution nobody counted, and that is exactly how it was read. */
+
+test('a graph contribution appears in the damage terms under its own source', () => {
+  const out = pin([[10, 20], [2, 20], [4, 8], [5, 6]], () => rollWeaponAttack(SWORD, SHEET, null, {
+    damage: () => ({
+      ...RES(),
+      riders: [{
+        label: 'Smite', source: 'Divine Smite', op: 'add' as const, formula: '2d6',
+        flat: 0, dice: ['1d6'], when: 'always' as const, on: true,
+      }],
+    }),
+  }))
+  const smite = out.damage.terms!.find(t => t.label === 'Divine Smite')
+  assert.equal(smite?.value, 5)
+  assert.ok(!out.damage.terms!.some(t => t.label === 'FEAT'))
+})
+
+/* THE ITEMISATION MUST ADD UP TO THE NUMBER IT EXPLAINS. A breakdown that
+   disagrees with its own total is worse than no breakdown. */
+test('the terms sum to exactly what the roller folded in', () => {
+  const two = () => ({
+    ...RES(),
+    riders: [
+      { label: 'A', source: 'Rage', op: 'add' as const, formula: '2', flat: 2, dice: [], when: 'always' as const, on: true },
+      { label: 'B', source: 'Hex', op: 'add' as const, formula: '1d6', flat: 0, dice: ['1d6'], when: 'always' as const, on: true },
+      { label: 'C', source: 'Rage', op: 'add' as const, formula: '1', flat: 1, dice: [], when: 'always' as const, on: true },
+    ],
+  })
+  const out = pin([[10, 20], [2, 20], [4, 8], [3, 6]], () => rollWeaponAttack(SWORD, SHEET, null, { damage: two }))
+  const terms = out.damage.terms!.filter(t => t.label === 'Rage' || t.label === 'Hex')
+  // One line per source: Rage's 2 and 1 are one entry, not two.
+  assert.deepEqual(terms, [{ label: 'Rage', value: 3 }, { label: 'Hex', value: 3 }])
+  const graphPart = terms.reduce((n, t) => n + t.value, 0)
+  assert.equal(out.damage.bonus, 3 /* STR */ + graphPart)
+})

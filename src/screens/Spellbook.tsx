@@ -238,7 +238,7 @@ export function Spellbook() {
         (sb.attackBonus ?? 0) + (atkGraph?.flat ?? 0),
         [
           { label: 'SPELL ATK', value: sb.attackBonus ?? 0 },
-          { label: 'FEAT', value: atkGraph?.flat ?? 0 },
+          ...(atkGraph?.terms ?? []),
         ],
         atkRes, targetAc,
       )

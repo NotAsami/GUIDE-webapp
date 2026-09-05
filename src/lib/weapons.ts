@@ -273,14 +273,16 @@ export function rollWeaponAttack(
   const atkRes = graph?.attack
   // Graph dice on an ATTACK (Bless's 1d4) are rolled now: the d20 total is one
   // number and there is nowhere for an unrolled term to live.
-  const atkGraph = atkRes ? rollResolution(atkRes) : { flat: 0, riders: [] as Rider[] }
+  const atkGraph = atkRes ? rollResolution(atkRes) : { flat: 0, riders: [] as Rider[], terms: [] }
   const atkBonus = weaponAttackBonus(weapon, sheet) + atkGraph.flat
 
   const { attack, hit } = rollAttack(atkBonus, [
     { label: weaponAbilityKey(weapon, sheet).toUpperCase(), value: abMod(weapon, sheet) },
     { label: 'PROF', value: proficiency(sheet) },
     { label: 'MAGIC', value: weapon.effects?.attack ?? 0 },
-    { label: 'FEAT', value: atkGraph.flat },
+    /* NAMED, not lumped: "Bless +3" rather than "FEAT +3". See
+       rollResolution's `terms` — the itemisation comes from the fold itself. */
+    ...atkGraph.terms,
   ], atkRes, targetAc)
   const { crit } = attack
 
@@ -308,7 +310,7 @@ export function rollWeaponAttack(
   // Graph damage. Its dice ride WITH the weapon's, so a crit doubles them too —
   // which is why resolve() hands them over unrolled and `crit` is passed here.
   const dmgRes = graph?.damage?.(hit, crit)
-  const dmgGraph = dmgRes ? rollResolution(dmgRes, crit) : { flat: 0, riders: [] as Rider[] }
+  const dmgGraph = dmgRes ? rollResolution(dmgRes, crit) : { flat: 0, riders: [] as Rider[], terms: [] }
 
   const totalDmg = Math.max(0, diceSum + dmgBonus + ammoBonus + dmgGraph.flat)
   const damage: DamageRoll = {
@@ -317,7 +319,7 @@ export function rollWeaponAttack(
       { label: weaponAbilityKey(weapon, sheet).toUpperCase(), value: abMod(weapon, sheet) },
       { label: 'MAGIC', value: weapon.effects?.damage ?? 0 },
       { label: (ammo?.label ?? 'AMMO').toUpperCase(), value: ammoBonus },
-      { label: 'FEAT', value: dmgGraph.flat },
+      ...dmgGraph.terms,
     ],
     total: totalDmg, type: weapon.type, crit,
     breakdown: `${diceExpr}(${dice.map(d => d.v).join(' + ') || 0}) ${formatMod(dmgBonus)}`
