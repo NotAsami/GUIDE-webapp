@@ -234,6 +234,12 @@ Hooks.on('combatTurnChange', (combat, _prior, current) => {
     round: current.round,
     turn: current.turn,
   })
+  /* AND WHAT THEY ARE AIMING AT. A target is only announced when it CHANGES, so
+     a player who targeted on their last turn and touched nothing since had a
+     codex that no longer knew — the turn came back round and the app had
+     forgotten a reticle that was still on screen. The turn boundary is exactly
+     the moment to restate it. */
+  resendTargets()
 })
 
 /* ---------------------------------------------------------------------------

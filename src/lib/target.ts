@@ -27,18 +27,28 @@ export type FoundryTarget = {
   ac?: number
 }
 
-let latest: FoundryTarget | null = null
+/** WHOSE target it is, latched with it. Keyed rather than cleared on unmount:
+ *  the latch exists so a screen mounted after the message still knows, and
+ *  Equipment unmounts every time the player looks at their Spellbook. Clearing
+ *  it there threw away the only copy — a target that survives being looked away
+ *  from is the whole point. */
+let latest: { characterId: string; target: FoundryTarget | null } | null = null
 
 /** The current target, or null. Re-renders when Foundry's selection changes. */
 export function useFoundryTarget(characterId: string | undefined): FoundryTarget | null {
-  const [target, setTarget] = useState<FoundryTarget | null>(latest)
+  const [target, setTarget] = useState<FoundryTarget | null>(
+    () => (latest && latest.characterId === characterId ? latest.target : null),
+  )
   useFoundryMessages(msg => {
     if (msg.kind !== 'target' || !characterId || msg.character !== characterId) return
-    latest = msg.token
+    latest = { characterId, target: msg.token }
     setTarget(msg.token)
   })
-  /* A character the app stops showing (sign-out, a DM switching rows) must not
-     leave the previous target latched onto the next one. */
-  useEffect(() => () => { latest = null }, [characterId])
+  /* A DIFFERENT CHARACTER IS A DIFFERENT TABLE. Nothing carries across, and the
+     latch is keyed rather than wiped so leaving a screen is not the same event
+     as changing who you are. */
+  useEffect(() => {
+    if (latest && latest.characterId !== characterId) { latest = null; setTarget(null) }
+  }, [characterId])
   return target
 }
