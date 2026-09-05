@@ -93,6 +93,7 @@ Hooks.once('ready', async () => {
 async function onMessage(msg) {
   try {
     if (msg?.kind === 'roll') await postRoll(msg)
+    else if (msg?.kind === 'apply') await applyDamage(msg)
     else if (msg?.kind === 'actors') await syncActors(msg)
   } catch (err) {
     console.error(`${MOD}:`, err)
@@ -133,6 +134,27 @@ async function updateActor(actor, data) {
     if (match) await match.update({ name: item.name, system: item.system })
     else await actor.createEmbeddedDocuments('Item', [item])
   }
+}
+
+/**
+ * Damage from a codex roll, onto the creature it was rolled against.
+ *
+ * THE SYSTEM DOES THE MATHS. `Actor5e#applyDamage` takes typed amounts and runs
+ * the target's own resistances, vulnerabilities and immunities over them — so
+ * the app sends what it rolled and never second-guesses what the creature is
+ * made of. A bare number would tell dnd5e to ignore all of that.
+ *
+ * The token id is the one from the roll, not whatever is targeted now: the
+ * player may well have moved on, and the damage belongs to the creature the
+ * roll was made against.
+ */
+async function applyDamage({ token, damage }) {
+  const t = canvas.tokens?.get(token) ?? game.scenes.active?.tokens?.get(token)?.object
+  const actor = t?.actor
+  if (!actor) return ui.notifications.warn('G.U.I.D.E. Bridge: that token is not on the active scene any more.')
+  await actor.applyDamage(damage ?? [])
+  const total = (damage ?? []).reduce((n, d) => n + (d.value ?? 0), 0)
+  ui.notifications.info(`G.U.I.D.E. Bridge: ${total} to ${actor.name}.`)
 }
 
 /** Create or update one actor per character row. The payload is built app-side

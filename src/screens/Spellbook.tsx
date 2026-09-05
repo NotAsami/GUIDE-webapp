@@ -273,7 +273,7 @@ export function Spellbook() {
         icon: spellIcon(sp),
         subject: { kind: 'spell', id: sp.id },
         ...(spellAtk ? { attack: spellAtk.attack } : {}),
-        ...(target ? { target: { name: target.name, hit: spellAtk?.hit } } : {}),
+        ...(target ? { target: { token: target.token, name: target.name, hit: spellAtk?.hit } } : {}),
         // The DC the target rolls against, in the slot an attack roll would
         // fill. Shown only when the SPELL says it calls for a save; the DC is
         // the caster's, because 5e derives it once per caster.
@@ -316,7 +316,7 @@ export function Spellbook() {
            lost reaction, not the die — so the d20 rides on this entry too,
            rather than only on the damage branch. */
         ...(spellAtk ? { attack: spellAtk.attack } : {}),
-        ...(target ? { target: { name: target.name, hit: spellAtk?.hit } } : {}),
+        ...(target ? { target: { token: target.token, name: target.name, hit: spellAtk?.hit } } : {}),
         ...(atkGraph?.riders.length ? { riderGroups: [{ label: 'Attack', riders: atkGraph.riders }] } : {}),
         lines: applied.length
           ? applied.map(outcomeLine)

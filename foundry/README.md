@@ -7,6 +7,9 @@ webapp uses (`guide-foundry`) and:
   codex runs its turn boundary (effects tick, per-turn vars reset, uses recharge);
 - receives `{kind:'roll'}` → posts the codex's roll breakdown to chat, spoken by
   that character;
+- receives `{kind:'apply'}` → applies that roll's damage to the creature it was
+  rolled against, through `Actor5e#applyDamage`, so the target's own
+  resistances and immunities decide what it actually takes;
 - receives `{kind:'actors'}` → creates or updates the party actors from the
   webapp's derived sheets, and remembers actor-id → character-id;
 - re-sends the target whenever a creature or token changes, so editing a

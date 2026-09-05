@@ -7,6 +7,7 @@ import assert from 'node:assert/strict'
 import type { Rider } from './graph.ts'
 import type { RollEntry } from './rolls.tsx'
 import { rollChatHtml } from './foundryChat.ts'
+import { damageAmounts } from './foundryDamage.ts'
 
 const rider = (over: Partial<Rider>): Rider => ({
   label: 'R', source: 'Src', op: 'add', formula: '2', flat: 2, dice: [],
@@ -139,3 +140,27 @@ test('a resolved dice contribution reaches the card as what it rolled', () => {
   assert.match(html, /\+5/)
   assert.ok(!html.includes('+0'))
 })
+
+/* ---------- what reaches dnd5e ----------
+ *
+ * `applyDamage` runs the target's resistances over TYPED amounts; handed a bare
+ * number it is told to ignore all of them. So the split has to survive the trip
+ * intact, and an untyped lump must travel with no type at all rather than as
+ * the word "damage" — a type the system does not know is a resistance check
+ * nobody asked for. */
+
+test('the damage split travels as dnd5e wants it', () => {
+  assert.deepEqual(damageAmounts({ slashing: 8, fire: 5 }), [
+    { value: 8, type: 'slashing' },
+    { value: 5, type: 'fire' },
+  ])
+  // Untyped: no `type` key at all.
+  assert.deepEqual(damageAmounts({ damage: 7 }), [{ value: 7 }])
+  assert.deepEqual(damageAmounts({ '': 7 }), [{ value: 7 }])
+  // Case is the system's, not the author's.
+  assert.deepEqual(damageAmounts({ Radiant: 4 }), [{ value: 4, type: 'radiant' }])
+  // Nothing to apply is nothing sent — never a zero the log would report.
+  assert.deepEqual(damageAmounts({ slashing: 0 }), [])
+  assert.deepEqual(damageAmounts({}), [])
+})
+
