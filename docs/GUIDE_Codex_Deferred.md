@@ -385,3 +385,33 @@ RollContextPanel.tsx). Either give the panel a real "declined" state on a rider,
 or let the button post with an explicit "riders unanswered" line in the card so
 the table can see what was left open. A silently-posted half-total is the one
 outcome worse than a disabled button.
+
+## "The creature you marked took damage"
+
+Event #4 of the Foundry seven — the one event of the seven that is still not built,
+and the reason is the app end, not Foundry's.
+
+The bridge already sees every NPC hit: `updateActor` fires on the GM client for
+each one, and reporting a DROP to the party toast layer is exactly that hook
+with a threshold on it (`foundry/guide-bridge/bridge.js`). Reporting damage is
+one more line.
+
+**What is missing is the mark.** Nothing in this app can say "that one" about a
+creature. `useFoundryTarget` holds the CURRENT target and forgets it the moment
+the player targets something else; there is no list of creatures a character is
+watching, no UI to add one, and no place on the row to keep one — and a mark
+that dies with the tab is not a mark, it is a target with a longer name.
+
+**Trigger:** a player asking to be told when a specific enemy is hurt — Hunter's
+Mark, Hex, a warlock's quarry, or a DM wanting "tell them when the boss bloods".
+
+**When it is built**, the mark is a list of token ids on `resources`, not on
+`sheet` — it is session state like the armed queue, it expires with the combat,
+and a token id means nothing after the scene changes. The toast then filters on
+that list, and the same `updateActor` hook serves both.
+
+**Do NOT** solve it by broadcasting every creature's damage and filtering in the
+app. The bridge would be shouting the whole battlemap at four phones so that one
+of them can care about one line of it, and every player's codex would know the
+HP of everything on the scene.
+
