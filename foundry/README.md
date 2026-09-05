@@ -8,7 +8,10 @@ webapp uses (`guide-foundry`) and:
 - receives `{kind:'roll'}` → posts the codex's roll breakdown to chat, spoken by
   that character;
 - receives `{kind:'actors'}` → creates or updates the party actors from the
-  webapp's derived sheets, and remembers actor-id → character-id.
+  webapp's derived sheets, and remembers actor-id → character-id;
+- re-sends the target whenever a creature or token changes, so editing a
+  targeted enemy's AC mid-combat cannot leave the app deciding hit or miss
+  against a number that has moved.
 
 **GM client only.** Foundry hooks are local to a client and only a GM may write
 actors. Nothing works when no Foundry client is connected — that is Foundry's
