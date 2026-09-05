@@ -1366,17 +1366,35 @@ export function total(res: Resolution): { flat: number; dice: string[] } {
 export function rollResolution(res: Resolution, double = false): {
   flat: number
   riders: Rider[]
+  /** The same fold, ITEMISED BY SOURCE — "Divine Smite +8", not "FEAT +8".
+   *
+   *  The roller adds every non-manual contribution into one number and the line
+   *  shows that number; naming it "FEAT" told the player which part of the
+   *  ENGINE produced it, and a rolled 2d6 sitting inside a lump reads as a
+   *  contribution that has not been counted. Built here because this is where
+   *  the fold happens: an itemisation computed anywhere else is free to
+   *  disagree with the total it claims to explain.
+   *
+   *  Summed per source, so two contributions from one feature are one line.
+   *  A zero contributes nothing and is left out. */
+  terms: { label: string; value: number }[]
 } {
   let flat = 0
+  const bySource = new Map<string, number>()
   const riders = res.riders.map(r => {
     if (r.op !== 'add' || r.when === 'manual') return r
-    flat += r.flat
-    if (!r.dice.length) return r
-    const rolledDice = rolledDiceTerms(r.dice, double)
-    flat += rolledDice.reduce((n, d) => n + d.v, 0)
-    return { ...r, rolledDice }
+    let value = r.flat
+    let out = r
+    if (r.dice.length) {
+      const rolledDice = rolledDiceTerms(r.dice, double)
+      value += rolledDice.reduce((n, d) => n + d.v, 0)
+      out = { ...r, rolledDice }
+    }
+    flat += value
+    if (value) bySource.set(r.source, (bySource.get(r.source) ?? 0) + value)
+    return out
   })
-  return { flat, riders }
+  return { flat, riders, terms: [...bySource].map(([label, value]) => ({ label, value })) }
 }
 
 /* ---------- author-time (§17) ---------- */
