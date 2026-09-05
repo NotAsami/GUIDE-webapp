@@ -729,3 +729,39 @@ test('a damage reroll rider says WHICH dice it re-runs', () => {
   assert.equal(v.rider.rerolls, 'damage')
   assert.equal(v.rider.faces, 2)
 })
+
+/* A RESOLVED DICE CONTRIBUTION IS WORTH ITS FACES, not zero.
+   Divine Smite's 2d6 on a hit is rolled by the ROLLER and folded into the
+   line's modifier, so the rider carries an unrolled formula, a flat of 0 and
+   the faces it produced. riderValue returned `flat` — so the roll's own working
+   said "+0" for a contribution its total had already counted. */
+test('an applied dice rider reports the faces it rolled', () => {
+  const applied = rider({
+    when: 'always', on: true, flat: 0, dice: ['2d6'], formula: '2d6',
+    rolledDice: faces(6, 2, 3),
+  })
+  assert.equal(riderValue(applied), 5)
+  assert.equal(riderAmount(applied), '+5')
+
+  // A flat part still adds on top of the faces.
+  assert.equal(riderValue({ ...applied, flat: 2 }), 7)
+
+  // Before the roller has annotated it there are no faces, only the flat.
+  assert.equal(riderValue({ ...applied, rolledDice: undefined }), 0)
+})
+
+/* AND THE TOTAL MUST NOT MOVE. rollTotals folds only `manual` riders precisely
+   because the roller already folded this one — counting the faces twice is the
+   failure this whole split exists to prevent. */
+test('reporting the faces does not add them to the total a second time', () => {
+  const e = entry({
+    attack: ATTACK, damage: DAMAGE,
+    riderGroups: [{
+      label: 'Damage',
+      riders: [rider({ when: 'always', on: true, flat: 0, dice: ['2d6'], rolledDice: faces(6, 2, 3) })],
+    }],
+  })
+  const views = riderViews(e)
+  assert.equal(views[0].value, 5)                 // the working says 5…
+  assert.equal(rollTotals(e, views).damage, 8)    // …and the total is still the line's 8
+})

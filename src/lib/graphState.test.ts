@@ -1404,3 +1404,21 @@ test('but its formula is still checked like any other', () => {
   })
   assert.ok(items.some(i => i.t === 'Unknown identifier'), 'a typo in the amount must not pass')
 })
+
+/* A ROLL FACT IS NOT A REQUIREMENT. `hit` describes a roll that has not
+   happened, so at press time it is not false — it is not yet knowable, and
+   reporting it told the player "Requires Hit": engine-talk about a condition
+   they cannot go and satisfy. */
+test('a gate on a roll fact is not reported as something the player is missing', () => {
+  const rollGated: GraphEffect[] = [
+    { id: 'r1', op: 'add', once: true, when: 'hit', value: '2d6', label: 'Smite', target: ['roll:damage'] },
+  ]
+  const c = character({}, { vars: {} })
+  assert.deepEqual(gateOf(RAGE(rollGated), buildContext(c), c, 'feature:rage'), [])
+
+  // The character-state half of a mixed condition still reports.
+  const mixed: GraphEffect[] = [
+    { id: 'r2', op: 'add', once: true, when: 'hit && isRaging', value: '2d6', label: 'Smite', target: ['roll:damage'] },
+  ]
+  assert.deepEqual(gateOf(RAGE(mixed), buildContext(c), c, 'feature:rage'), ['isRaging'])
+})

@@ -20,7 +20,7 @@ import { activeSources } from './effects.ts'
 import type {
   ArmedMod, CharacterRow, CharacterSpellbook, Feature, GraphEffect, GraphState, Json, ShardTree, VarDef,
 } from './database.types.ts'
-import { evalExpr, freeIdents, type ExprScope } from './expr.ts'
+import { ROLL_IDENTS, evalExpr, freeIdents, type ExprScope } from './expr.ts'
 import type { GraphContext, ResolveReq, Rider } from './graph.ts'
 import { armedMatches, asKey, gid, reqKeys, staleArmed } from './graph.ts'
 import { IS_ACTIVATION, levelFormula } from './opSchema.ts'
@@ -644,7 +644,13 @@ export function gateOf(
      (a `attacksThisTurn == 0` gate is satisfied AT zero, so truthiness cannot
      answer for them). */
   const idents = [...new Set(acts.flatMap(e => (e.when ? freeIdents(e.when) : [])))]
-  return idents.filter(id => ctx.scope[id] !== true)
+  /* A ROLL FACT IS NOT A REQUIREMENT. `hit` and `targetAc` describe a roll that
+     has not happened, so at press time they are not false — they are not yet
+     knowable, and reporting one told a player "Requires Hit", which is the
+     engine talking to itself about a condition they cannot go and satisfy. The
+     authoring audit refuses the combination that produces it (see auditNode);
+     this keeps the sentence honest for anything already authored that way. */
+  return idents.filter(id => ctx.scope[id] !== true && !(ROLL_IDENTS as readonly string[]).includes(id))
 }
 
 /** Fold the outcomes the player accepted into one `resources` patch.
