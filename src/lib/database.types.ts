@@ -594,6 +594,16 @@ export type ArmedMod = {
    *  something to show a player, and by the time this is read the source may be
    *  unequipped or unprepared, so looking it up again could come back empty. */
   sourceName?: string
+  /** THE EFFECT THIS CAME FROM — identity, so an arm can be matched back to the
+   *  rule that minted it. `label` cannot do that job: it is a rendered
+   *  sentence, computed against the scope at arm time (§25), so an authored
+   *  `{level >= 17 ? 2d10 : 1d10}` is stored as "2d10" and no longer equals the
+   *  source it came from.
+   *
+   *  Absent on arms minted before this existed — staleArmed falls back to the
+   *  old op+label match for those, which is right for exactly as long as they
+   *  survive the next rest. */
+  eff?: string
   label: string
   kind: string
   sub?: string
