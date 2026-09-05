@@ -94,6 +94,7 @@ async function onMessage(msg) {
   try {
     if (msg?.kind === 'roll') await postRoll(msg)
     else if (msg?.kind === 'apply') await applyDamage(msg)
+    else if (msg?.kind === 'condition') await setCondition(msg)
     else if (msg?.kind === 'actors') await syncActors(msg)
   } catch (err) {
     console.error(`${MOD}:`, err)
@@ -136,6 +137,42 @@ async function updateActor(actor, data) {
   }
 }
 
+/** The token a command names, or null once it has left the scene. */
+function tokenOf(id) {
+  return canvas.tokens?.get(id) ?? game.scenes.active?.tokens?.get(id)?.object ?? null
+}
+
+/**
+ * A condition on a targeted creature.
+ *
+ * TWO ROUTES, because this one call has moved. `Actor#toggleStatusEffect` is
+ * the modern one; where it is missing the effect is created from
+ * CONFIG.statusEffects by hand, which is what it does underneath anyway. A
+ * bridge that assumed the newer API would fail silently at the table on the one
+ * client it cannot be tested from.
+ */
+async function setCondition({ token, status, on }) {
+  const actor = tokenOf(token)?.actor
+  if (!actor) return ui.notifications.warn('G.U.I.D.E. Bridge: that token is not on the active scene any more.')
+
+  if (typeof actor.toggleStatusEffect === 'function') {
+    await actor.toggleStatusEffect(status, { active: on })
+  } else {
+    const existing = actor.effects.find((e) => e.statuses?.has?.(status))
+    if (on && !existing) {
+      const cfg = CONFIG.statusEffects.find((e) => e.id === status)
+      if (!cfg) return ui.notifications.warn(`G.U.I.D.E. Bridge: this world has no "${status}" condition.`)
+      await actor.createEmbeddedDocuments('ActiveEffect', [{
+        name: game.i18n.localize(cfg.name ?? cfg.label ?? status),
+        img: cfg.img ?? cfg.icon, statuses: [status],
+      }])
+    } else if (!on && existing) {
+      await existing.delete()
+    }
+  }
+  ui.notifications.info(`G.U.I.D.E. Bridge: ${status} ${on ? 'applied to' : 'cleared from'} ${actor.name}.`)
+}
+
 /**
  * Damage from a codex roll, onto the creature it was rolled against.
  *
@@ -149,8 +186,7 @@ async function updateActor(actor, data) {
  * roll was made against.
  */
 async function applyDamage({ token, damage }) {
-  const t = canvas.tokens?.get(token) ?? game.scenes.active?.tokens?.get(token)?.object
-  const actor = t?.actor
+  const actor = tokenOf(token)?.actor
   if (!actor) return ui.notifications.warn('G.U.I.D.E. Bridge: that token is not on the active scene any more.')
   await actor.applyDamage(damage ?? [])
   const total = (damage ?? []).reduce((n, d) => n + (d.value ?? 0), 0)

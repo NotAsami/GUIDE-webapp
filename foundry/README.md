@@ -12,6 +12,8 @@ webapp uses (`guide-foundry`) and:
   resistances and immunities decide what it actually takes;
 - receives `{kind:'actors'}` → creates or updates the party actors from the
   webapp's derived sheets, and remembers actor-id → character-id;
+- receives `{kind:'condition'}` → toggles a Foundry status on the targeted
+  creature, from the Operator Console;
 - sends `{kind:'downed'}` when an NPC reaches 0 HP, which the party's toast
   layer says out loud — the one battlemap event every player wants and none of
   them can see;
@@ -60,10 +62,17 @@ A working boot logs `guide-bridge: joined` to the Foundry console (F12).
 
 ## What it deliberately does not do
 
-Target selection, applying damage or conditions to enemy tokens, reading HP back
-out of Foundry. The codex has no notion of a target creature (a documented
-boundary — `docs/GUIDE_Codex_Deferred.md`), and `sheet.hp.current` stays the one
-source of truth for hit points. The Foundry actor is a mirror.
+Reading HP back out of Foundry: `sheet.hp.current` stays the one source of truth
+for a PC's hit points and the Foundry actor is a mirror. Nothing here writes to
+a character row.
+
+"Tell me when the creature I MARKED is hurt" is the one event of the seven still
+unbuilt — the hook is one line, but nothing in the app can say "that one" about
+a creature yet. See `docs/GUIDE_Codex_Deferred.md`.
+
+No `socketlib`, and none is needed: it exists so a PLAYER's Foundry client can
+ask a GM client to touch something it does not own, and this module already runs
+on the GM client.
 
 `lib/supabase.umd.js` is a verbatim copy of
 `node_modules/@supabase/supabase-js/dist/umd/supabase.js` — re-copy it when the
