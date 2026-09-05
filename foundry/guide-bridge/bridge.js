@@ -330,13 +330,30 @@ Hooks.on('updateToken', resendTargets)
 
 const downed = new Set()
 
-Hooks.on('updateActor', (actor) => {
-  if (!game.user.isGM || !ch) return
-  if (actor.type !== 'npc') return
+/**
+ * Has this creature just gone down.
+ *
+ * HIT POINTS, not the Dead status: dnd5e does not mark an NPC dead at 0 (the
+ * only place it adds that status is exhaustion 6), so waiting for it would mean
+ * waiting for the GM to right-click a corpse. Zero is the event.
+ *
+ * KEYED BY UUID, not by actor id. A monster dragged twice out of a compendium
+ * gives two UNLINKED tokens sharing one base actor id, so an id-keyed set would
+ * announce the first goblin's death and silently swallow the second's.
+ */
+function checkDowned(actor, name) {
+  if (!game.user.isGM || !ch || !actor || actor.type !== 'npc') return
   const hp = actor.system?.attributes?.hp
   if (!hp || typeof hp.value !== 'number') return
-  if (hp.value > 0) { downed.delete(actor.id); return }
-  if (downed.has(actor.id)) return
-  downed.add(actor.id)
-  send({ kind: 'downed', name: actor.name })
-})
+  const key = actor.uuid ?? actor.id
+  if (hp.value > 0) { downed.delete(key); return }
+  if (downed.has(key)) return
+  downed.add(key)
+  send({ kind: 'downed', name: name ?? actor.name })
+}
+
+/* BOTH HOOKS, for the same reason the target re-send watches both: a monster
+   from a compendium is an UNLINKED token whose hit points live on the token's
+   own delta, and that is every enemy the party will ever fight. */
+Hooks.on('updateActor', (actor) => checkDowned(actor))
+Hooks.on('updateToken', (tokenDoc) => checkDowned(tokenDoc.actor, tokenDoc.name))
