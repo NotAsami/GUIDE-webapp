@@ -7,9 +7,11 @@ webapp uses (`guide-foundry`) and:
   codex runs its turn boundary (effects tick, per-turn vars reset, uses recharge);
 - receives `{kind:'roll'}` → posts the codex's roll breakdown to chat, spoken by
   that character;
-- receives `{kind:'apply'}` → applies that roll's damage to the creature it was
-  rolled against, through `Actor5e#applyDamage`, so the target's own
-  resistances and immunities decide what it actually takes;
+- receives `{kind:'apply'}` → posts the roll to chat AND applies its damage to
+  the creature it was rolled against, through `Actor5e#applyDamage`, so the
+  target's own resistances and immunities decide what it actually takes. One
+  message, one handler, on purpose: nobody takes hit points off a creature
+  without the table seeing the roll that did it;
 - receives `{kind:'actors'}` → creates or updates the party actors from the
   webapp's derived sheets, and remembers actor-id → character-id;
 - receives `{kind:'condition'}` → toggles a Foundry status on the targeted
@@ -56,9 +58,11 @@ A working boot logs `guide-bridge: joined` to the Foundry console (F12).
    it updates rather than duplicating.
 2. Drag the actors onto a scene and start a combat. Advancing to a mapped
    combatant's turn runs that player's turn boundary in the codex.
-3. **Roll Context Panel → "Post to Foundry"** on any settled roll posts its
-   breakdown to chat. Disabled while riders are still waiting, because the total
-   is still moving.
+3. **Roll Context Panel** → **"Post & apply N to <creature>"** on a settled roll
+   that hit something: the breakdown lands in chat and the damage lands on the
+   creature, in one press. With nothing targeted — or on a miss, a check, a save
+   — the control is **"Post to Foundry"** and only posts. Both are disabled
+   while riders are still waiting, because the total is still moving.
 
 ## What it deliberately does not do
 

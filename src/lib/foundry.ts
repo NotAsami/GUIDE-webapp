@@ -35,10 +35,14 @@ export type BridgeMsg =
    *  `token: null` is an untarget — the message always states the whole
    *  selection, so a dropped message cannot leave a stale target behind. */
   | { kind: 'target'; character: string; token: { token: string; name: string; ac?: number } | null }
-  /** App → Foundry. Apply this roll's damage to the token it was against.
-   *  Typed, so dnd5e's own resistance and immunity maths runs on the way in —
-   *  the app never second-guesses what the creature is made of. */
-  | { kind: 'apply'; token: string; damage: DamageAmount[] }
+  /** App → Foundry. Post this roll to chat AND apply its damage to the token it
+   *  was rolled against — deliberately ONE message rather than two.
+   *
+   *  The rule it enforces is a table rule: nobody takes hit points off a
+   *  creature without the table seeing the roll that did it. Two messages could
+   *  half-arrive, and the half that survives would be the silent one; one
+   *  handler cannot. */
+  | { kind: 'apply'; character: string; title: string; html: string; token: string; damage: DamageAmount[] }
   /** App → Foundry. Toggle a condition on a targeted creature. `on: false`
    *  clears it. Foundry's own status ids — see FOUNDRY_CONDITIONS. */
   | { kind: 'condition'; token: string; status: string; on: boolean }
