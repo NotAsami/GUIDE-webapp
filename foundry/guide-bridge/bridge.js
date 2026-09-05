@@ -225,3 +225,24 @@ Hooks.on('targetToken', (user, _token, _targeted) => {
   clearTimeout(targetTimer)
   targetTimer = setTimeout(() => sendTarget(user), 80)
 })
+
+/* AND AGAIN WHEN THE CREATURE CHANGES. The app decides hit or miss against the
+   AC it was last told, so editing a targeted creature's AC mid-combat did not
+   merely leave the app stale — it made the VERDICT wrong, silently, with
+   nothing on either screen to say the two disagreed.
+
+   BOTH HOOKS, and no filtering by which document changed. A monster dragged
+   from a compendium is an UNLINKED token: its sheet edits live on the token's
+   own delta, so watching `updateActor` alone would have missed the exact case
+   this fixes. Re-sending every live target is a handful of messages the app
+   already treats as idempotent, and it needs no memory of what was targeted
+   before — one less thing that can go stale in the way this exists to fix. */
+function resendTargets() {
+  if (!game.user.isGM || !ch) return
+  clearTimeout(targetTimer)
+  targetTimer = setTimeout(() => {
+    for (const user of game.users) if (user.targets.size) sendTarget(user)
+  }, 80)
+}
+Hooks.on('updateActor', resendTargets)
+Hooks.on('updateToken', resendTargets)
