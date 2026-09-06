@@ -118,3 +118,32 @@ on the GM client.
 `lib/supabase.umd.js` is a verbatim copy of
 `node_modules/@supabase/supabase-js/dist/umd/supabase.js` — re-copy it when the
 app bumps supabase-js. There is no build step for this module on purpose.
+
+## Dressing Foundry's own screens (optional)
+
+`login.css` and `setup.css` in this folder restyle Foundry's join and setup
+screens in the codex's language — cyan for the player's side, amber for the
+operator's, the same tokens `src/styles/tokens.css` holds.
+
+They need **Plutonium's server-side addons**, which are not a module: they patch
+Foundry itself.
+
+1. Install the Plutonium backend (`plutonium-backend.mjs` beside Foundry's
+   `main.mjs`, plus the import line — see Plutonium's own README).
+2. Copy `plutonium-backend-addon-custom-login.mjs` and
+   `plutonium-backend-addon-custom-setup.mjs` next to it.
+3. `login.css` → `Data/worlds/elyndor/login.css`
+   `setup.css` → `Data/setup.css` (beside `modules`, `systems`, `worlds`).
+
+**Two things to know before you do.** The patch is to Foundry's own files, so it
+must be re-applied after every Foundry update — the styling itself survives,
+being plain CSS in the data folder. And Plutonium's own README warns that
+enabling these addons lets anyone with upload permission run scripts and styles
+on those pages; for a private table with no untrusted uploaders that is a
+shrug, but it is worth knowing you accepted it.
+
+The CSS is written conservatively — colour and type, no layout surgery, no
+clip-path chamfers — because Foundry moves this markup between versions and a
+missed selector should leave a plain control on a styled page rather than an
+invisible one. If something reads wrong, say which control and I will target it.
+
