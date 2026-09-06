@@ -93,3 +93,67 @@ test('the token is linked and friendly, and named for the character', () => {
   assert.equal(a.prototypeToken.actorLink, true)
   assert.equal(a.prototypeToken.disposition, 1)
 })
+
+/* ---------- the weapons on the token ----------
+ *
+ * Display only: the sheet says what the character is holding, and the codex
+ * stays the only thing that knows what a swing is worth. */
+
+const SANCTITY = {
+  id: 'w1', name: 'Sanctity', damageDice: '1d8', ability: 'str', type: 'Slashing',
+  tags: ['arbiter', 'martial', 'relic'],
+} as never
+const SHORTBOW = {
+  id: 'w2', name: 'Shortbow', damageDice: '1d6', ability: 'dex', type: 'Piercing', ranged: true,
+} as never
+
+const armed = () => character({
+  sheet: SHEET,
+  identity: { class: 'Fighter', level: 7 },
+  equipped: { weapons: [SANCTITY, SHORTBOW] },
+})
+
+test('an equipped weapon crosses as a dnd5e weapon item', () => {
+  const weapons = (toFoundryActor(armed()) as any).items.filter((i: any) => i.type === 'weapon')
+  assert.equal(weapons.length, 2)
+
+  const sanctity = weapons[0]
+  assert.equal(sanctity.name, 'Sanctity')
+  // Martial from the tag, melee because it is not ranged.
+  assert.equal(sanctity.system.type.value, 'martialM')
+  // `denomination` is the number of SIDES, not the count.
+  assert.deepEqual(sanctity.system.damage.base, { number: 1, denomination: 8, types: ['slashing'] })
+  assert.equal(sanctity.system.equipped, true)
+
+  // Untagged and ranged: simple, and the R kind.
+  assert.equal(weapons[1].system.type.value, 'simpleR')
+})
+
+test('a magic weapon carries its bonus, a plain one carries no key at all', () => {
+  const magic = character({
+    sheet: SHEET,
+    equipped: { weapons: [{ ...SANCTITY, effects: { attack: 2, damage: 2 } }] },
+  })
+  assert.equal((toFoundryActor(magic) as any).items[1].system.magicalBonus, '2')
+  assert.equal((toFoundryActor(armed()) as any).items[1].system.magicalBonus, undefined)
+})
+
+test('a weapon with no parseable dice still crosses, without inventing damage', () => {
+  const odd = character({ sheet: SHEET, equipped: { weapons: [{ ...SANCTITY, damageDice: 'special' }] } })
+  const item = (toFoundryActor(odd) as any).items[1]
+  assert.equal(item.name, 'Sanctity')
+  assert.equal(item.system.damage, undefined)
+})
+
+/* THE FLAG IS WHAT MAKES THE SYNC SAFE. The bridge updates and deletes only
+   what it made; a potion the DM dropped on the actor by hand is not its
+   business. */
+test('everything the exporter creates is flagged as the bridge’s own', () => {
+  const items = (toFoundryActor(armed()) as any).items
+  for (const item of items) assert.equal(item.flags['guide-bridge'].managed, true, item.name)
+})
+
+test('the description says not to roll it here', () => {
+  const item = (toFoundryActor(armed()) as any).items[1]
+  assert.match(item.system.description.value, /Roll it there/)
+})
