@@ -13,7 +13,11 @@ webapp uses (`guide-foundry`) and:
   message, one handler, on purpose: nobody takes hit points off a creature
   without the table seeing the roll that did it;
 - receives `{kind:'actors'}` → creates or updates the party actors from the
-  webapp's derived sheets, and remembers actor-id → character-id;
+  webapp's derived sheets — including the equipped weapons, **to be looked at
+  and not rolled** (the codex knows about shards, features and armed modifiers;
+  the Foundry sheet does not) — and remembers actor-id → character-id. It
+  updates and deletes only items it made, so anything you add to an actor by
+  hand is left alone;
 - receives `{kind:'condition'}` → toggles a Foundry status on the targeted
   creature, from the Operator Console;
 - sends `{kind:'downed'}` when an NPC reaches 0 HP, which the party's toast

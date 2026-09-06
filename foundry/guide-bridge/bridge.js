@@ -130,11 +130,28 @@ async function postRoll({ character, title, html }) {
 async function updateActor(actor, data) {
   const { items = [], ...doc } = data
   await actor.update(doc)
+
+  /* MANAGED ITEMS ONLY. Everything the exporter makes carries a flag, so the
+     bridge can own its own rows and never touch a potion the DM dropped on the
+     sheet by hand. The class is matched by TYPE (renaming a class must update
+     it, not add a second) and everything else by NAME, which is what a weapon's
+     identity is once it has crossed over. */
+  const mine = actor.items.filter((i) => i.getFlag?.(MOD, 'managed'))
+  const sent = new Set(items.map((i) => i.name))
+
   for (const item of items) {
-    const match = actor.items.find((i) => i.type === item.type)
-    if (match) await match.update({ name: item.name, system: item.system })
+    const match = item.type === 'class'
+      ? actor.items.find((i) => i.type === 'class')
+      : mine.find((i) => i.type === item.type && i.name === item.name)
+    if (match) await match.update({ name: item.name, system: item.system, flags: item.flags })
     else await actor.createEmbeddedDocuments('Item', [item])
   }
+
+  /* A WEAPON PUT AWAY SHOULD LEAVE THE SHEET. Only ours, and only the ones this
+     sync did not mention — an unequipped sword that stayed behind is a token
+     claiming to hold something it is not. */
+  const gone = mine.filter((i) => i.type !== 'class' && !sent.has(i.name)).map((i) => i.id)
+  if (gone.length) await actor.deleteEmbeddedDocuments('Item', gone)
 }
 
 /** The token a command names, or null once it has left the scene. */
