@@ -29,8 +29,13 @@ export type FoundryActorData = Record<string, unknown>
 export type BridgeMsg =
   /** Foundry → app. A combat turn began for the mapped character. */
   | { kind: 'turn'; character: string; combat: string; round: number; turn: number }
-  /** App → Foundry. Post a settled roll to chat, spoken by the character. */
-  | { kind: 'roll'; character: string; title: string; html: string }
+  /** App → Foundry. Post a settled roll to chat, spoken by the character.
+   *  `roll` is the log entry's id: the bridge posts each one ONCE, so a swing
+   *  that posted itself from the hotbar cannot be published again by hand. The
+   *  guarantee lives there rather than in a disabled button, because a button
+   *  is a claim about what the app believes and the log is what the table
+   *  actually sees. */
+  | { kind: 'roll'; character: string; roll?: string; title: string; html: string }
   /** Foundry → app. The GM targeted (or cleared) a token for this character.
    *  `token: null` is an untarget — the message always states the whole
    *  selection, so a dropped message cannot leave a stale target behind. */
@@ -43,7 +48,7 @@ export type BridgeMsg =
    *  half-arrive, and the half that survives would be the silent one; one
    *  handler cannot. */
   | {
-    kind: 'apply'; character: string; title: string; token: string; damage: DamageAmount[]
+    kind: 'apply'; character: string; roll?: string; title: string; token: string; damage: DamageAmount[]
     /** The card to post with it. ABSENT when the roll is already in the log —
      *  a hotbar swing posts itself — so applying it later adds the damage
      *  without a second copy of the same swing. */
