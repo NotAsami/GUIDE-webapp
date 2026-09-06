@@ -17,7 +17,9 @@ import { answerArmed } from '../lib/graphState'
 import { publicVitals, vitalsEqual } from '../lib/vitals'
 import { advanceTurn, turnRecharge } from '../lib/turns'
 import { useRollLog } from '../lib/rolls'
-import { useFoundryMessages, useFoundryTurn } from '../lib/foundry'
+import { sendFoundry, useFoundryMessages, useFoundryTurn } from '../lib/foundry'
+import { cssVar, rollChatHtml } from '../lib/foundryChat'
+import { pendingOf } from '../lib/rollView'
 import { useFoundryTarget } from '../lib/target'
 import { ammoStacksFor, rollWeapon } from '../lib/weaponRoll'
 import { attackRolled } from '../lib/graphState'
@@ -226,6 +228,21 @@ export function Layout() {
       resources: attackRolled(character, out.arms, entry.id) as CharacterRow['resources'],
       ...(out.inventory ? { inventory: out.inventory as unknown as CharacterRow['inventory'] } : {}),
     })
+    /* AND STRAIGHT BACK TO THE CHAT LOG. A swing asked for from the map that
+       said nothing on the map read as a macro that had not worked — the player
+       is looking at Foundry, which is the entire reason they pressed a macro
+       rather than the button.
+       ONLY WHEN THERE IS NOTHING LEFT TO ANSWER. A roll with an offered arm on
+       it is still moving, and posting the total before the player has taken or
+       declined it publishes a number that is about to change. Those stay for
+       the panel's own control, which is the one place the decision can be
+       made. */
+    if (pendingOf(entry).asks === 0) {
+      void sendFoundry({
+        kind: 'roll', character: character.id,
+        title: entry.title, html: rollChatHtml(entry, cssVar, graph.scope),
+      })
+    }
   })
 
   async function handleSignOut() {
