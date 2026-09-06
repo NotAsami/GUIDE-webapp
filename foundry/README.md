@@ -66,6 +66,12 @@ slot survives. Clicking it asks that player's codex to roll: the result lands in
 their roll log, the toast, and — where the roll hit a targeted creature — the
 chat card and the creature's hit points.
 
+The result posts itself to chat, because a swing asked for from the map that
+says nothing on the map reads as a macro that did not work. The exception is a
+roll with an offered modifier still on it (Brutal Strike and its like): that
+total is still moving, so it waits for the panel's own Post control, where the
+decision can actually be made.
+
 The codex has to be OPEN on that character for a request to be answered; it is
 the thing doing the rolling. It does not have to be on any particular screen.
 
