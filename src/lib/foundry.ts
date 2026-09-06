@@ -42,7 +42,13 @@ export type BridgeMsg =
    *  creature without the table seeing the roll that did it. Two messages could
    *  half-arrive, and the half that survives would be the silent one; one
    *  handler cannot. */
-  | { kind: 'apply'; character: string; title: string; html: string; token: string; damage: DamageAmount[] }
+  | {
+    kind: 'apply'; character: string; title: string; token: string; damage: DamageAmount[]
+    /** The card to post with it. ABSENT when the roll is already in the log —
+     *  a hotbar swing posts itself — so applying it later adds the damage
+     *  without a second copy of the same swing. */
+    html?: string
+  }
   /** App → Foundry. Toggle a condition on a targeted creature. `on: false`
    *  clears it. Foundry's own status ids — see FOUNDRY_CONDITIONS. */
   | { kind: 'condition'; token: string; status: string; on: boolean }

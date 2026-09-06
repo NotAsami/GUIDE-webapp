@@ -216,8 +216,12 @@ async function applyDamage({ token, damage, ...msg }) {
   /* THE CHAT ENTRY FIRST, and in the same handler as the damage: nobody takes
      hit points off a creature without the table seeing the roll that did it.
      Posted before applying so that a failure to write leaves the roll visible
-     rather than the damage unexplained. */
-  await postRoll(msg)
+     rather than the damage unexplained.
+     Unless it is already there — a swing asked for from the hotbar posts itself
+     as it happens, and a second card is a second swing as far as the table can
+     tell. The rule holds either way: the roll is in the log before the hit
+     points move. */
+  if (msg.html) await postRoll(msg)
   await actor.applyDamage(damage ?? [])
   const total = (damage ?? []).reduce((n, d) => n + (d.value ?? 0), 0)
   ui.notifications.info(`G.U.I.D.E. Bridge: ${total} to ${actor.name}.`)
