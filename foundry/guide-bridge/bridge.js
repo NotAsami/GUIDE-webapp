@@ -103,6 +103,7 @@ async function onMessage(msg) {
     else if (msg?.kind === 'apply') await applyDamage(msg)
     else if (msg?.kind === 'condition') await setCondition(msg)
     else if (msg?.kind === 'macros') await syncMacros(msg)
+    else if (msg?.kind === 'effects') await syncEffects(msg)
     else if (msg?.kind === 'actors') await syncActors(msg)
   } catch (err) {
     console.error(`${MOD}:`, err)
@@ -437,6 +438,52 @@ function checkDowned(actor, name) {
 Hooks.on('updateActor', (actor) => checkDowned(actor))
 Hooks.on('updateToken', (tokenDoc) => checkDowned(tokenDoc.actor, tokenDoc.name))
 
+/**
+ * The character's own effects, projected onto their token.
+ *
+ * OWNERSHIP BY FLAG, which is what stops the two sides fighting. Everything
+ * created here is marked; the mirror going the other way ignores marked
+ * effects, so an effect the app applied does not come back as a second copy of
+ * itself, and a condition the DM applied here is never deleted by an app sync
+ * that has never heard of it.
+ *
+ * RECONCILED, not appended: the message is the whole of what the character has,
+ * so an effect that ended in the codex ends here too. If a DM clears one of
+ * these in Foundry it will come back — the app's list still says it is on, and
+ * that list is the record. Ending it in the codex is what ends it.
+ */
+async function syncEffects({ character, effects }) {
+  const actor = game.actors.get(actorOf(character))
+  if (!actor) return
+
+  const mine = actor.effects.filter((e) => e.getFlag?.(MOD, 'managed'))
+  const wanted = new Map((effects ?? []).map((e) => [e.id, e]))
+
+  const stale = mine.filter((e) => !wanted.has(e.getFlag(MOD, 'effect'))).map((e) => e.id)
+  if (stale.length) await actor.deleteEmbeddedDocuments('ActiveEffect', stale)
+
+  const have = new Set(mine.map((e) => e.getFlag(MOD, 'effect')))
+  const add = [...wanted.values()].filter((e) => !have.has(e.id)).map((e) => ({
+    name: e.name,
+    /* The real condition when the name is one — so Poisoned lights Foundry's
+       own icon and behaves like a condition to everything else that reads
+       statuses. Anything else is still worth showing: a DM watching the map
+       wants to see that somebody is Blessed even if dnd5e has no such id. */
+    ...(e.status ? { statuses: [e.status] } : {}),
+    img: iconFor(e),
+    flags: { [MOD]: { managed: true, effect: e.id } },
+  }))
+  if (add.length) await actor.createEmbeddedDocuments('ActiveEffect', add)
+}
+
+/** Foundry's own artwork where there is a matching condition; a neutral glyph
+ *  otherwise. The codex's icons are its own vocabulary (Font Awesome classes
+ *  and game-icons paths) and mean nothing to a Foundry image field. */
+function iconFor(e) {
+  const cfg = e.status ? CONFIG.statusEffects.find((s) => s.id === e.status) : null
+  return cfg?.img ?? cfg?.icon ?? 'icons/svg/aura.svg'
+}
+
 /* ---------------------------------------------------------------------------
    CONDITIONS ON A PLAYER CHARACTER
 
@@ -456,7 +503,16 @@ function sendConditions(actor) {
   if (!game.user.isGM || !ch || !actor) return
   const character = charOf(actor.id)
   if (!character) return
-  send({ kind: 'conditions', character, statuses: [...(actor.statuses ?? [])] })
+  /* NOT THE ONES THE APP PUT HERE. Its own effects are already in its own
+     panel; echoing them back would show every potion twice — once as the record
+     and once as a mirror of the projection of that record. Only what Foundry
+     itself owns travels. */
+  const statuses = new Set()
+  for (const fx of actor.effects) {
+    if (fx.getFlag?.(MOD, 'managed')) continue
+    for (const st of fx.statuses ?? []) statuses.add(st)
+  }
+  send({ kind: 'conditions', character, statuses: [...statuses] })
 }
 
 Hooks.on('updateActor', (actor) => sendConditions(actor))
