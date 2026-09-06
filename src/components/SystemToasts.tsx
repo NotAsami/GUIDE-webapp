@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useGuideVoice, ALL_PARTY, type VoiceMsg } from '../lib/voice'
 import { useFoundryMessages } from '../lib/foundry'
+import { chime } from '../lib/chime'
 import styles from './SystemToasts.module.css'
 import { Icon } from './Icon'
 
@@ -39,6 +40,9 @@ export function SystemToasts({ characterId }: { characterId: string }) {
 
   /** One queue, however the message arrived. */
   function push(msg: VoiceMsg) {
+    // Quieter than a roll's: an item arriving or a creature dropping is news,
+    // not something waiting on an answer.
+    chime('notice')
     const id = crypto.randomUUID()
     setToasts(prev => [...prev, { id, msg, out: false }])
     timers.current.push(

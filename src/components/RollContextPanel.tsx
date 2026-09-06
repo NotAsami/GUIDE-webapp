@@ -34,6 +34,7 @@ import { useRollLog, type RollEntry } from '../lib/rolls'
 import { sendFoundry } from '../lib/foundry'
 import { damageAmounts } from '../lib/foundryDamage'
 import { cssVar, rollChatHtml } from '../lib/foundryChat'
+import { chimeEnabled, setChimeEnabled } from '../lib/chime'
 import { ScopeContext } from '../lib/markdown'
 import { rolledDiceTerms } from '../lib/dice'
 import { Prose, Inline } from '../lib/markdown'
@@ -94,6 +95,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed
 }) {
   const { rolls, updateRoll, clear } = useRollLog()
   const [folded, setFolded] = useState<Set<string>>(new Set())
+  const [chimeOn, setChime] = useState(chimeEnabled)
   const { showTip, layer: tipLayer } = useTip()
   // The whole entry, not just its subject: the sheet's "Interacts With" block is
   // this roll's riders — the app's honest answer to the mockup's authored list.
@@ -179,6 +181,16 @@ export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed
             {allFolded ? 'Expand all' : 'Collapse all'}
           </button>
           <button type="button" disabled={!rolls.length} onClick={clear}>Clear</button>
+          {/* THE SOUND, AND THE WAY OUT OF IT. It exists because a roll can now
+              be asked for from Foundry with this tab behind it; a player at the
+              table with the app in front of them may want none of it, and a
+              notification you cannot switch off is a worse feature than no
+              notification. Per device, not per character. */}
+          <button type="button" onClick={() => { setChime(!chimeOn); setChimeEnabled(!chimeOn) }}
+            title={chimeOn ? 'Sound on — click to mute' : 'Muted — click for sound'}
+            aria-label={chimeOn ? 'Mute notifications' : 'Unmute notifications'}>
+            <i className={`fa-solid ${chimeOn ? 'fa-volume-high' : 'fa-volume-xmark'}`} />
+          </button>
         </div>
 
         {/* ADVANCE TURN lives here because this is where its RESULT lands — a

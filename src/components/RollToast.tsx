@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRollLog } from '../lib/rolls'
 import { lineViews, pendingOf } from '../lib/rollView'
+import { chime } from '../lib/chime'
 import styles from './RollToast.module.css'
 import { Icon } from './Icon'
 
@@ -41,6 +42,12 @@ export function RollToast({ onOpen }: { onOpen: () => void }) {
 
   useEffect(() => {
     if (!show) return
+    /* A SOUND, because the roll may have been asked for from somewhere else.
+       Since the bridge, a swing can be pressed on the Foundry hotbar while this
+       tab sits behind it — and a roll that is WAITING on an answer is the one
+       thing the player must not miss, so it gets its own, more insistent
+       phrase. */
+    chime(pendingOf(show).asks > 0 ? 'ask' : 'roll')
     const t = setTimeout(() => setDismissed(show.id), VISIBLE_MS)
     return () => clearTimeout(t)
   }, [show?.id]) // eslint-disable-line react-hooks/exhaustive-deps
