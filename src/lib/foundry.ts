@@ -71,6 +71,11 @@ export type BridgeMsg =
    *  Party-wide and nameless of a character on purpose: who felled it is a
    *  question the table answers, not the bridge. */
   | { kind: 'downed'; name: string }
+  /** Foundry → app. Every status currently on this character's actor.
+   *  THE WHOLE SET, never a change: a message that said "Blinded was added"
+   *  would leave the app guessing after any it missed, and this way a dropped
+   *  one costs nothing — the next update states the truth again. */
+  | { kind: 'conditions'; character: string; statuses: string[] }
   /** Foundry → app. The actor-id → character-id map after a sync. */
   | { kind: 'mapped'; map: Record<string, string> }
 

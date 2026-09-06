@@ -436,3 +436,34 @@ function checkDowned(actor, name) {
    own delta, and that is every enemy the party will ever fight. */
 Hooks.on('updateActor', (actor) => checkDowned(actor))
 Hooks.on('updateToken', (tokenDoc) => checkDowned(tokenDoc.actor, tokenDoc.name))
+
+/* ---------------------------------------------------------------------------
+   CONDITIONS ON A PLAYER CHARACTER
+
+   The DM drops Blinded on a token; the player is looking at their codex, not at
+   the map, and has no idea. This tells them.
+
+   THE WHOLE SET, every time. A message saying "Blinded was added" leaves the app
+   guessing after any it missed; stating what is on the actor now costs the same
+   and cannot drift.
+
+   Only mapped characters — an NPC's statuses are nobody's business but the GM's
+   — and the same two hooks the rest of this file watches, because a PC's token
+   can be unlinked too.
+--------------------------------------------------------------------------- */
+
+function sendConditions(actor) {
+  if (!game.user.isGM || !ch || !actor) return
+  const character = charOf(actor.id)
+  if (!character) return
+  send({ kind: 'conditions', character, statuses: [...(actor.statuses ?? [])] })
+}
+
+Hooks.on('updateActor', (actor) => sendConditions(actor))
+Hooks.on('updateToken', (tokenDoc) => sendConditions(tokenDoc.actor))
+/* An effect is its own document, so applying one is a create/delete rather than
+   an actor update — without these three the panel only caught up when something
+   else about the actor happened to change. */
+Hooks.on('createActiveEffect', (fx) => sendConditions(fx.parent))
+Hooks.on('deleteActiveEffect', (fx) => sendConditions(fx.parent))
+Hooks.on('updateActiveEffect', (fx) => sendConditions(fx.parent))
