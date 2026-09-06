@@ -246,7 +246,7 @@ export function Layout() {
        made. */
     if (pendingOf(entry).asks === 0) {
       void sendFoundry({
-        kind: 'roll', character: character.id,
+        kind: 'roll', character: character.id, roll: entry.id,
         title: entry.title, html: rollChatHtml(entry, cssVar, graph.scope),
       }).then(ok => { if (ok) updateRoll(entry.id, { posted: true }) })
     }

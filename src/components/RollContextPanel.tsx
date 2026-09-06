@@ -614,6 +614,7 @@ function Entry({
                   const ok = await sendFoundry({
                     kind: 'apply',
                     character: characterId!,
+                    roll: entry.id,
                     title: entry.title,
                     /* Only when it is not already in the log. A hotbar swing
                        posts itself; a second card reads as a second swing. */
@@ -630,7 +631,9 @@ function Entry({
                   {dealt === 'done' ? `Posted · ${totals.damage} dealt to ${entry.target.name}`
                     : dealt === 'gone' ? 'No bridge — is Foundry open?'
                     : dealt === 'sending' ? 'Applying…'
-                    : `Post & apply ${totals.damage} to ${entry.target.name}`}
+                    : entry.posted
+                      ? `Apply ${totals.damage} to ${entry.target.name}`
+                      : `Post & apply ${totals.damage} to ${entry.target.name}`}
                 </span>
               </button>
             )}
@@ -653,7 +656,7 @@ function Entry({
                 onClick={async () => {
                   setPosted('sending')
                   const ok = await sendFoundry({
-                    kind: 'roll', character: characterId,
+                    kind: 'roll', character: characterId, roll: entry.id,
                     title: entry.title, html: rollChatHtml(entry, cssVar, scope),
                   })
                   setPosted(ok ? 'sent' : 'gone')

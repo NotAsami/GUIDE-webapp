@@ -110,9 +110,19 @@ async function onMessage(msg) {
   }
 }
 
+/* WHAT HAS ALREADY BEEN SAID. A roll asked for from the hotbar posts itself as
+   it happens, and the panel can still be told to post it — two cards for one
+   swing, and the table cannot tell that apart from a character who attacked
+   twice. Keyed by the log entry's id, so the guarantee is about the ROLL rather
+   than about which button was pressed. Session-lived: the chat log is the
+   record, this is only a memory of what this client put there. */
+const postedRolls = new Set()
+
 /** The codex sends finished HTML. It renders its own breakdown; Foundry only
  *  has to say WHO rolled, which is what keeps it from reading as a GM message. */
-async function postRoll({ character, title, html }) {
+async function postRoll({ character, roll, title, html }) {
+  if (roll && postedRolls.has(roll)) return
+  if (roll) postedRolls.add(roll)
   const actorId = actorOf(character)
   const actor = actorId ? game.actors.get(actorId) : null
   await ChatMessage.create({
