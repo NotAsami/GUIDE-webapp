@@ -67,6 +67,11 @@ export type RollEntry = {
   /** WHO THE ROLL WAS AGAINST, when Foundry said so. `hit` is undefined when
    *  there was a target but no verdict to reach (no AC), which the panel shows
    *  as a target with no outcome rather than as a miss. */
+  /** Already in Foundry's chat log. Set when the roll posts itself (a swing
+   *  asked for from the hotbar) or when the player posts it by hand, so the
+   *  same roll cannot be published twice — the second copy reads as a second
+   *  swing. */
+  posted?: boolean
   target?: {
     /** The Foundry token id — WHICH creature, not just its name. Carried so a
      *  roll can still be applied to the right one after the player has moved

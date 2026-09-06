@@ -93,7 +93,7 @@ export function Layout() {
      damage on someone's behalf while they are not looking, which is the same rule
      §7 applies to every other conditional contribution. Expiries are results, so
      they read as lines. */
-  const { addRoll } = useRollLog()
+  const { addRoll, updateRoll } = useRollLog()
   const activeNow = ((character?.resources ?? {}) as { activeEffects?: ActiveEffect[] }).activeEffects ?? []
   /* The same memo every roll uses. Advance Turn needs it to ask which armed
      modifiers were authorised by a variable that is about to reset. */
@@ -248,7 +248,7 @@ export function Layout() {
       void sendFoundry({
         kind: 'roll', character: character.id,
         title: entry.title, html: rollChatHtml(entry, cssVar, graph.scope),
-      })
+      }).then(ok => { if (ok) updateRoll(entry.id, { posted: true }) })
     }
   })
 

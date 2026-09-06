@@ -615,11 +615,14 @@ function Entry({
                     kind: 'apply',
                     character: characterId!,
                     title: entry.title,
-                    html: rollChatHtml(entry, cssVar, scope),
+                    /* Only when it is not already in the log. A hotbar swing
+                       posts itself; a second card reads as a second swing. */
+                    ...(entry.posted ? {} : { html: rollChatHtml(entry, cssVar, scope) }),
                     token: entry.target!.token,
                     damage: damageAmounts(totals.byType),
                   })
                   setDealt(ok ? 'done' : 'gone')
+                  if (ok) onPatchEntry({ posted: true })
                 }}
               >
                 <i className="fa-solid fa-burst" />
@@ -643,8 +646,9 @@ function Entry({
                 exactly "did any dice reach a number here". */}
             {characterId && lines.length > 0 && !(entry.target && totals.damage !== undefined && entry.target.hit !== false) && (
               <button
-                type="button" className={styles.fvtt} data-state={posted}
-                disabled={posted === 'sending' || totals.pending > 0}
+                type="button" className={styles.fvtt}
+                data-state={entry.posted ? 'sent' : posted}
+                disabled={posted === 'sending' || entry.posted || totals.pending > 0}
                 title={totals.pending > 0 ? 'Answer the riders first — the total is still moving' : undefined}
                 onClick={async () => {
                   setPosted('sending')
@@ -653,11 +657,12 @@ function Entry({
                     title: entry.title, html: rollChatHtml(entry, cssVar, scope),
                   })
                   setPosted(ok ? 'sent' : 'gone')
+                  if (ok) onPatchEntry({ posted: true })
                 }}
               >
                 <i className="fa-solid fa-dice-d20" />
                 <span className={styles.fvttLab}>
-                  {posted === 'sent' ? 'Posted to Foundry'
+                  {posted === 'sent' || entry.posted ? 'Posted to Foundry'
                     : posted === 'gone' ? 'No bridge — is Foundry open?'
                     : posted === 'sending' ? 'Posting…'
                     : 'Post to Foundry'}
