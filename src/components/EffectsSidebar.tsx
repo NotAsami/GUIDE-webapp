@@ -27,7 +27,7 @@ import { useItemTooltip } from './ItemTooltip'
 import styles from './EffectsSidebar.module.css'
 import pop from '../screens/InventoryPopup.module.css'
 import { turnsLabel } from '../lib/turns'
-import { isMirrored } from '../lib/foundryConditions'
+import { isMirrored } from '../lib/foundryDamage'
 import { Icon } from './Icon'
 
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')

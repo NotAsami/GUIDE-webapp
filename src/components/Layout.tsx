@@ -21,6 +21,7 @@ import { sendFoundry, useFoundryMessages, useFoundryTurn } from '../lib/foundry'
 import { cssVar, rollChatHtml } from '../lib/foundryChat'
 import { pendingOf } from '../lib/rollView'
 import { unlockChime } from '../lib/chime'
+import { pushableEffects } from '../lib/foundryDamage'
 import { useFoundryTarget } from '../lib/target'
 import { ammoStacksFor, rollWeapon } from '../lib/weaponRoll'
 import { attackRolled } from '../lib/graphState'
@@ -210,6 +211,19 @@ export function Layout() {
      NO PRIMING SHEET. Pressing Attack in the app offers armable modifiers
      first when there are any; there is nobody looking at that screen here, so
      it rolls with whatever is already armed. */
+  /* AND THE OTHER DIRECTION: what the codex says is on this character, onto
+     their token. Keyed on the effects themselves, so it fires when one is
+     applied or ends and not on every unrelated write to the row — and on mount,
+     so a reload restates it rather than leaving the map holding whatever it
+     had. The bridge reconciles; this only ever says what is true now. */
+  const ownEffects = ((character?.resources ?? {}) as { activeEffects?: ActiveEffect[] }).activeEffects ?? []
+  const effectsKey = ownEffects.map(e => `${e.id}:${e.name}`).join('|')
+  useEffect(() => {
+    if (!character) return
+    void sendFoundry({ kind: 'effects', character: character.id, effects: pushableEffects(ownEffects) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [character?.id, effectsKey])
+
   /* THE FIRST GESTURE BUYS THE SOUND. A browser will not let a page make noise
      until someone has touched it, and the case that matters most is the one
      where they never will — the player is in Foundry and this tab is behind

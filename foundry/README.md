@@ -23,6 +23,11 @@ webapp uses (`guide-foundry`) and:
 - receives `{kind:'macros'}` → keeps a hotbar macro per equipped weapon. The
   macro ASKS the codex to roll (`{kind:'request'}`); it never rolls here, since
   this side knows nothing about shards, features or armed modifiers;
+- receives `{kind:'effects'}` → projects the character's OWN effects onto their
+  token, reconciled to the codex's list. A name that matches a real condition
+  lights Foundry's own icon; anything else appears as a named effect. Clearing
+  one of these in Foundry brings it back — the codex's list is the record, so
+  ending it there is what ends it;
 - sends `{kind:'conditions'}` whenever a mapped character's statuses change, so
   a Blinded dropped on a token shows up in that player's Effects panel — a
   mirror, not a record: the app never writes them to the character row, and they

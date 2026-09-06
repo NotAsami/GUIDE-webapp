@@ -65,6 +65,16 @@ export type BridgeMsg =
    *  A REQUEST, not a roll. The dice stay on the side that knows about shards,
    *  features and armed modifiers; Foundry only ever asks. */
   | { kind: 'request'; character: string; weapon: string }
+  /** App → Foundry. The character's OWN effects, projected onto their token.
+   *
+   *  Reconciled, not appended: the list is the whole truth and the bridge makes
+   *  the actor match it. `status` is set when the name is one of Foundry's own
+   *  conditions, so Poisoned lights the real icon; anything else arrives as a
+   *  named effect, which is still worth a DM seeing on the map. */
+  | {
+    kind: 'effects'; character: string
+    effects: { id: string; name: string; status?: string; icon?: string }[]
+  }
   /** App → Foundry. Create or update the party actors. */
   | { kind: 'actors'; actors: { character: string; data: FoundryActorData }[] }
   /** Foundry → app. A creature the party is fighting has dropped to 0 HP.

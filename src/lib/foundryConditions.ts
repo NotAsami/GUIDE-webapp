@@ -17,37 +17,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import type { ActiveEffect } from './database.types.ts'
 import { useFoundryMessages } from './foundry.ts'
-
-/** Marks an effect as Foundry's rather than the row's. A prefix rather than a
- *  new field on ActiveEffect: these never reach the database, so a column for
- *  them would be a schema change in service of something that is not stored. */
-export const MIRROR_PREFIX = 'fvtt:'
-
-export const isMirrored = (id: string): boolean => id.startsWith(MIRROR_PREFIX)
-
-/** "blinded" → "Blinded". Foundry's status ids are lowercase words; the SRD
- *  conditions are the same words the app's own effects use, which is why they
- *  can sit in one list without reading as two vocabularies. */
-const label = (id: string) => id.charAt(0).toUpperCase() + id.slice(1)
-
-/** Foundry statuses as effect-shaped rows the panel can render.
- *
- *  `cond` always: these are conditions by construction. No `effects` payload —
- *  the app is not applying anything, it is REPORTING. A mirrored Blinded that
- *  quietly subtracted from a roll would be a number nobody could trace to a
- *  source the player can see. */
-export function mirroredEffects(statuses: readonly string[]): ActiveEffect[] {
-  return statuses.map(id => ({
-    id: `${MIRROR_PREFIX}${id}`,
-    name: label(id),
-    kind: 'cond' as const,
-    effects: {},
-    source: 'Foundry',
-    note: 'Applied on the battlemap',
-  }))
-}
 
 let latest: { characterId: string; statuses: string[] } | null = null
 
@@ -70,3 +40,4 @@ export function useFoundryConditions(characterId: string | undefined): string[] 
   }, [characterId])
   return statuses
 }
+
