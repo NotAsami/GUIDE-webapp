@@ -17,7 +17,8 @@ import { EffectsSidebar } from '../components/EffectsSidebar'
 import { buildCheck, useRollLog } from '../lib/rolls'
 import { armsSpent, armsSpentBy } from '../lib/graphState'
 import { useGraph } from '../lib/useGraph'
-import { suppressedEffects } from '../lib/graph'
+import { mirroredEffects, useFoundryConditions } from '../lib/foundryConditions'
+import { immuneTo, suppressedEffects } from '../lib/graph'
 import styles from './Stats.module.css'
 import { Icon } from '../components/Icon'
 
@@ -65,7 +66,7 @@ export function Stats() {
   // Active Effects panel — moved here from Equipment (docs/notes.md:68) as a
   // button on the Senses widget rather than its own permanent panel slot.
   const [effectsOpen, setEffectsOpen] = useState(false)
-  const effects = activeEffects(character)
+  const rowEffects = activeEffects(character)
 
   // Initiative, and the immunity check below. Built once per character, not per
   // roll — see lib/useGraph.ts.
@@ -74,7 +75,21 @@ export function Stats() {
      Frightened suppressed by Mindless Rage is still on you — but they stop
      counting, because a badge that keeps saying "2" for something that is not
      applying is the badge lying. */
-  const suppressed = suppressedEffects(graph, character)
+  const rowSuppressed = suppressedEffects(graph, character)
+
+  /* WHAT THE BATTLEMAP SAYS YOU HAVE. Shown beside the app's own effects rather
+     than written into them: `resources.activeEffects` is a record with
+     mechanics and a DM who can lift them, and Foundry's statuses are ids on a
+     token. One list, two sources, and the id says which.
+     Immunity still answers for them — Mindless Rage suppresses a Frightened
+     whichever side put it there, because immuneTo matches on the NAME and a
+     mirrored condition has a real one. */
+  const mirrored = mirroredEffects(useFoundryConditions(character.id))
+  const effects = [...rowEffects, ...mirrored]
+  const suppressed = new Set([
+    ...rowSuppressed,
+    ...mirrored.filter(e => immuneTo(graph, e.name)).map(e => e.id),
+  ])
   const { addRoll } = useRollLog()
   const [initFlash, setInitFlash] = useState<FlashState | null>(null)
   const initTimer = useRef<number | undefined>(undefined)

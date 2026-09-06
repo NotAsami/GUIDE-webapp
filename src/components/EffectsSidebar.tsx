@@ -27,6 +27,7 @@ import { useItemTooltip } from './ItemTooltip'
 import styles from './EffectsSidebar.module.css'
 import pop from '../screens/InventoryPopup.module.css'
 import { turnsLabel } from '../lib/turns'
+import { isMirrored } from '../lib/foundryConditions'
 import { Icon } from './Icon'
 
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')
@@ -98,23 +99,32 @@ export function EffectsSidebar({ open, effects, suppressed, onRemove, onClose }:
                       <span className={styles.scMeta}>{summarizeEffects(e.effects)}{e.note ? ` · ${e.note}` : ''}</span>
                       {e.source && <span className={styles.scSource}>From: {e.source}</span>}
                     </span>
-                    <button className={styles.scRemove} onClick={ev => { ev.stopPropagation(); hide(); onRemove(e.id) }} aria-label={`End ${e.name}`}>
-                      <i className="fa-solid fa-xmark" />
-                    </button>
+                    {/* A CONDITION FOUNDRY PUT THERE IS FOUNDRY'S TO LIFT. The
+                        app is mirroring a token's status, not holding a record
+                        it can end — an ✕ here would clear the chip and change
+                        nothing on the battlemap, which is the worst of both. */}
+                    {!isMirrored(e.id) && (
+                      <button className={styles.scRemove} onClick={ev => { ev.stopPropagation(); hide(); onRemove(e.id) }} aria-label={`End ${e.name}`}>
+                        <i className="fa-solid fa-xmark" />
+                      </button>
+                    )}
                   </div>
                 )
               })
             )}
           </div>
 
-          <footer className={styles.sidebarFoot}>Effects clear on a rest, or end one early with ✕.</footer>
+          <footer className={styles.sidebarFoot}>
+            Effects clear on a rest, or end one early with ✕. Conditions from the
+            battlemap are lifted in Foundry.
+          </footer>
         </div>
       </aside>
       {tooltip}
       {detail && (
         <EffectDetailPopup
           effect={detail}
-          onRemove={() => { hide(); onRemove(detail.id); setDetailId(null) }}
+          onRemove={isMirrored(detail.id) ? undefined : () => { hide(); onRemove(detail.id); setDetailId(null) }}
           onClose={() => setDetailId(null)}
         />
       )}
@@ -128,7 +138,10 @@ export function EffectsSidebar({ open, effects, suppressed, onRemove, onClose }:
  *  action that applies here. */
 function EffectDetailPopup({ effect, onRemove, onClose }: {
   effect: ActiveEffect
-  onRemove: () => void
+  /** Absent for a condition Foundry owns: there is nothing here that could end
+   *  it, and an End button that clears the chip without touching the token
+   *  would be the worst of both. */
+  onRemove?: () => void
   onClose: () => void
 }) {
   const grants = effect.effects && Object.keys(effect.effects).length > 0 ? summarizeEffects(effect.effects) : undefined
@@ -176,10 +189,10 @@ function EffectDetailPopup({ effect, onRemove, onClose }: {
                 beside Equip/Use/Stow — here it's the only action, so it needs
                 to fill the row instead (inline: wins over the class's fixed
                 flex-basis without touching the shared rule other popups use). */}
-            <button type="button" className={`${pop.ia} ${pop.drop}`} style={{ flex: 1 }} onClick={onRemove}>
+            {onRemove && <button type="button" className={`${pop.ia} ${pop.drop}`} style={{ flex: 1 }} onClick={onRemove}>
               <span className={pop.af} />
               <span className={pop.ai}><i className="fa-solid fa-xmark" />Clear Effect</span>
-            </button>
+            </button>}
           </div>
         </div>
       </div>
