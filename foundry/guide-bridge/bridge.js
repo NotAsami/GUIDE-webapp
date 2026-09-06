@@ -82,6 +82,13 @@ Hooks.once('ready', async () => {
     if (error) return ui.notifications.error(`G.U.I.D.E. Bridge: sign-in failed — ${error.message}`)
   }
 
+  /* WHAT A MACRO CALLS. Deliberately the only thing this module exposes: a
+     request, by character and weapon id, with no way to ask it to compute
+     anything. */
+  game.modules.get(MOD).api = {
+    roll: (character, weapon) => send({ kind: 'request', character, weapon }),
+  }
+
   ch = client.channel(CHANNEL)
   ch.on('broadcast', { event: EVENT }, ({ payload }) => onMessage(payload))
   ch.subscribe((status) => {
@@ -95,6 +102,7 @@ async function onMessage(msg) {
     if (msg?.kind === 'roll') await postRoll(msg)
     else if (msg?.kind === 'apply') await applyDamage(msg)
     else if (msg?.kind === 'condition') await setCondition(msg)
+    else if (msg?.kind === 'macros') await syncMacros(msg)
     else if (msg?.kind === 'actors') await syncActors(msg)
   } catch (err) {
     console.error(`${MOD}:`, err)
@@ -213,6 +221,40 @@ async function applyDamage({ token, damage, ...msg }) {
   await actor.applyDamage(damage ?? [])
   const total = (damage ?? []).reduce((n, d) => n + (d.value ?? 0), 0)
   ui.notifications.info(`G.U.I.D.E. Bridge: ${total} to ${actor.name}.`)
+}
+
+/**
+ * A hotbar macro per weapon.
+ *
+ * THE MACRO ASKS; IT DOES NOT ROLL. Its whole body is one call back into this
+ * module, which sends a request to the codex — the side that knows about
+ * shards, features and armed modifiers. A macro that rolled here would produce
+ * a plausible, wrong number, which is worse than no macro.
+ *
+ * Drag one onto the hotbar once and it stays there: the macro is updated in
+ * place on later syncs rather than replaced, so the slot survives.
+ */
+async function syncMacros({ character, name, weapons }) {
+  const wanted = new Map((weapons ?? []).map((w) => [`${name} · ${w.name}`, w]))
+
+  for (const [label, w] of wanted) {
+    const command = `game.modules.get('${MOD}').api.roll('${character}', '${w.id}')`
+    const existing = game.macros.find((m) => m.name === label && m.getFlag(MOD, 'managed'))
+    if (existing) await existing.update({ command })
+    else {
+      await Macro.create({
+        name: label, type: 'script', command, scope: 'global',
+        img: 'icons/svg/sword.svg',
+        flags: { [MOD]: { managed: true, character } },
+      })
+    }
+  }
+
+  /* A WEAPON PUT AWAY LEAVES THE BAR. Only this character's macros, and only
+     ours: a macro the DM wrote is not the bridge's to tidy. */
+  const stale = game.macros.filter((m) =>
+    m.getFlag(MOD, 'managed') && m.getFlag(MOD, 'character') === character && !wanted.has(m.name))
+  for (const m of stale) await m.delete()
 }
 
 /** Create or update one actor per character row. The payload is built app-side

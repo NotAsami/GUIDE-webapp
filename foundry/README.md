@@ -20,6 +20,9 @@ webapp uses (`guide-foundry`) and:
   hand is left alone;
 - receives `{kind:'condition'}` → toggles a Foundry status on the targeted
   creature, from the Operator Console;
+- receives `{kind:'macros'}` → keeps a hotbar macro per equipped weapon. The
+  macro ASKS the codex to roll (`{kind:'request'}`); it never rolls here, since
+  this side knows nothing about shards, features or armed modifiers;
 - sends `{kind:'downed'}` when an NPC reaches 0 HP, which the party's toast
   layer says out loud — the one battlemap event every player wants and none of
   them can see;
@@ -54,6 +57,21 @@ The bridge account needs **no** table access: the module never touches Postgres,
 it only signs in so the socket has an identity. Do not add it to `dm_users`.
 
 A working boot logs `guide-bridge: joined` to the Foundry console (F12).
+
+## Swinging from the map
+
+After a sync each character's weapons exist as macros named `<Character> ·
+<Weapon>`. Drag one to the hotbar once — later syncs update it in place, so the
+slot survives. Clicking it asks that player's codex to roll: the result lands in
+their roll log, the toast, and — where the roll hit a targeted creature — the
+chat card and the creature's hit points.
+
+The codex has to be OPEN on that character for a request to be answered; it is
+the thing doing the rolling. It does not have to be on any particular screen.
+
+One difference from pressing Attack in the app: no priming sheet. The button
+offers armable modifiers first when there are any, and a macro has nobody
+looking at that screen, so it rolls with whatever is already armed.
 
 ## Using it
 

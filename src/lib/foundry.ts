@@ -46,6 +46,14 @@ export type BridgeMsg =
   /** App → Foundry. Toggle a condition on a targeted creature. `on: false`
    *  clears it. Foundry's own status ids — see FOUNDRY_CONDITIONS. */
   | { kind: 'condition'; token: string; status: string; on: boolean }
+  /** App → Foundry. The character's weapons, for the macros that ask for them.
+   *  Names and ids only: Foundry needs a menu, not a sheet. */
+  | { kind: 'macros'; character: string; name: string; weapons: { id: string; name: string; icon?: string }[] }
+  /** Foundry → app. Somebody pressed that macro: roll this weapon.
+   *
+   *  A REQUEST, not a roll. The dice stay on the side that knows about shards,
+   *  features and armed modifiers; Foundry only ever asks. */
+  | { kind: 'request'; character: string; weapon: string }
   /** App → Foundry. Create or update the party actors. */
   | { kind: 'actors'; actors: { character: string; data: FoundryActorData }[] }
   /** Foundry → app. A creature the party is fighting has dropped to 0 HP.

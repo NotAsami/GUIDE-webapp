@@ -16,18 +16,17 @@ import {
 } from '../lib/equip'
 import { CarrySidebar } from './EquipmentCarry'
 import { effectiveSheet } from '../lib/effects'
+import { rollWeapon } from '../lib/weaponRoll'
+import { ammoBonusOf } from '../lib/ammo'
 import { useFoundryTarget } from '../lib/target'
-import {
-  handLabel, isRanged, masteryActive, masteryOf, rollWeaponAttack, weaponAbilityKey, weaponAttackBonus, weaponDamageString,
-  type AmmoBonus,
-} from '../lib/weapons'
+import { handLabel, isRanged, masteryActive, masteryOf, weaponAbilityKey, weaponAttackBonus, weaponDamageString } from '../lib/weapons'
 import { PERSON } from '../lib/placement'
 import { useRollLog } from '../lib/rolls'
 import { useItemTooltip, type Bind, type TooltipData } from '../components/ItemTooltip'
 import { SHARD_SLOT_KEYS, shardSlots } from '../lib/shards'
 import { useGraph } from '../lib/useGraph'
-import { armedMatches, gid, resolve } from '../lib/graph'
-import { armableFor, armsSpentBy, attackRolled } from '../lib/graphState'
+import { armedMatches, gid } from '../lib/graph'
+import { armableFor, attackRolled } from '../lib/graphState'
 import { PrimeSheet, type Offer } from '../components/PrimeSheet'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Equipment.module.css'
@@ -193,99 +192,22 @@ export function Equipment() {
    *  to the shared roll log → the toast surfaces it (bottom-right, above .main so
    *  it stays visible — which is exactly why Attack lives on the card, not in a
    *  modal whose overlay would bury the toast). */
+  /** Roll a weapon's attack AND damage as one action, pushing the combined result
+   *  to the shared roll log → the toast surfaces it (bottom-right, above .main so
+   *  it stays visible — which is exactly why Attack lives on the card, not in a
+   *  modal whose overlay would bury the toast).
+   *
+   *  The dice live in lib/weaponRoll.ts, shared with the Foundry hotbar: a swing
+   *  asked for from the map must be the same swing as this one, and two copies
+   *  of a hundred lines is how they stop being. */
   function attack(weapon: EquippedWeapon) {
-    // A bow with an empty quiver and empty pockets has nothing to loose. Refuse
-    // rather than roll — the alternative silently produces a damage number the
-    // player has no way to deliver.
-    if (isRanged(weapon) && !activeAmmo) {
-      addRoll({
-        kind: 'custom', title: weapon.name, subtitle: 'No ammunition',
-        icon: weapon.icon ?? 'fa-bullseye',
-        lines: [{ label: 'Cannot fire', total: '—', breakdown: 'Nothing in the quiver or on person' }],
-      })
-      return
-    }
-    const stack = isRanged(weapon) ? activeAmmo : null
-
-    // Two resolutions, because a feature can target one without the other:
-    // "advantage on attacks with fire weapons" is not "+2 fire damage". The
-    // subject and its tags are the same for both; only the roll kind differs.
-    const subject = gid('weapon', weapon)
-    const tags = weapon.tags
-    // The sub NARROWS the kind: `roll:damage` still matches this, and
-    // `roll:damage.melee` matches only a melee weapon — which is how "damage
-    // dealt by a weapon, not a spell" gets said, with no new vocabulary beyond
-    // the sub mechanism `roll:save.dex` already uses.
-    //
-    // Both rolls take it, and they are separate statements: "advantage on melee
-    // attacks" is `roll:attack.melee`, "+2 melee damage" is `roll:damage.melee`.
-    // The attack subs had sat in the editor's dropdown since slice 3 with
-    // nothing passing one, so authoring `roll:attack.melee` matched nothing.
-    const sub = isRanged(weapon) ? 'ranged' : 'melee'
-    /* Which ability this swing actually used — the SAME answer weaponAbilityKey
-       gives the attack bonus, so `roll:attack.str` and the +STR on the sheet can
-       never disagree about what a finesse weapon is being swung with. Attack
-       only: a damage roll has no ability of its own, it inherits this one. */
-    const ability = weaponAbilityKey(weapon, sheet)
-    /* PROFICIENT, ALWAYS — the same assumption the whole weapon model already
-       makes (weapons.ts: "every weapon is treated as proficient"), stated here
-       so the graph's `proficient` agrees with the PROF term in the breakdown
-       rather than quietly contradicting it. */
-    const targetAc = target?.ac
-    const atkRes = resolve(graph, { kind: 'attack', subject, sub, tags, ability, proficient: true, targetAc })
-    /* THE DAMAGE RESOLUTION IS BUILT INSIDE THE ROLL, once the d20 is known:
-       an on-hit contribution reads `hit`, and before the die is thrown there is
-       no such fact. Captured on the way past because the notes and problems it
-       produced are still this screen's to report. */
-    let dmgRes: ReturnType<typeof resolve> | undefined
-
-    // `riders` comes back ANNOTATED — each contribution carrying the faces it
-    // rolled — so the panel shows "1d6 → +4" rather than a promise.
-    const { attack: atk, damage, riders, hit } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack), {
-      attack: atkRes,
-      damage: h => (dmgRes = resolve(graph, { kind: 'damage', subject, sub, tags, targetAc, hit: h })),
-    }, targetAc)
-    const entry = addRoll({
-      kind: 'weapon',
-      title: weapon.name,
-      subtitle: stack
-        ? `${handLabel(weapon.hand)} · ${stack.name}`
-        : `${handLabel(weapon.hand)} · Attack`,
-      icon: weapon.icon ?? 'fa-khanda',
-      // What the roll was ABOUT, so the panel can open its catalog entry.
-      subject: weapon.id ? { kind: 'weapon' as const, id: weapon.id } : undefined,
-      attack: atk,
-      damage,
-      /* WHO IT WAS AGAINST. The verdict, never the AC: the number is the DM's
-         to reveal and the player only needs to know whether it landed. */
-      ...(target ? { target: { token: target.token, name: target.name, hit } } : {}),
-      // Grouped, not concatenated: a rider on the attack and one on the damage
-      // are different statements, and a flat list cannot tell them apart.
-      riderGroups: [
-        { label: 'Attack', riders: riders.attack },
-        { label: 'Damage', riders: riders.damage },
-      ].filter(g => g.riders.length),
-      /* THE MASTERY RULE, AT THE MOMENT IT APPLIES. Seven of the eight are
-         things only the player can resolve — Graze wants to know you missed,
-         Cleave wants a second creature — so the app's job is to put the sentence
-         in front of them on the swing rather than to pretend it can adjudicate
-         it. Only while the mastery is one of theirs; a Greataxe's Cleave is not
-         a rule for someone who never trained it.
-
-         Vex is deliberately NOT armed automatically, though the engine could:
-         "advantage on your next attack against THAT SAME creature" needs a target
-         identity nothing here has, so arming it would hand out advantage against
-         whoever you swung at next. A wrong number is worse than a sentence. */
-      // Notes and problems stay flat — a note is prose about the action and a
-      // problem is an engine failure; neither needs attributing to a sub-roll.
-      notes: [
-        ...(masteryActive(weapon, sheet.proficiencies?.masteries)
-          ? [`**${masteryOf(weapon)!.name}.** ${masteryOf(weapon)!.rule}`]
-          : []),
-        ...atkRes.notes, ...(dmgRes?.notes ?? []),
-      ],
-      problems: [...atkRes.problems, ...(dmgRes?.problems ?? [])],
+    const out = rollWeapon({
+      character, weapon, sheet, graph,
+      ammo: isRanged(weapon) ? activeAmmo : null,
+      target,
     })
+    const entry = addRoll(out.entry)
+    if (!out.rolled) return
     /* EVERY SWING COUNTS, and every arm it used is spent HERE. See attackRolled:
        a `when` gate is read when the arm is minted and never again, so an arm
        that survives its roll fires next time under a condition nobody
@@ -293,20 +215,9 @@ export function Equipment() {
        trips can land apart and the shot that counted but did not spend is the
        worse half to lose. */
     void updateSections({
-      resources: attackRolled(
-        character, armsSpentBy(riders.attack, riders.damage), entry.id,
-      ) as CharacterRow['resources'],
-      ...(stack ? { inventory: spentAmmo(stack) as unknown as CharacterRow['inventory'] } : {}),
+      resources: attackRolled(character, out.arms, entry.id) as CharacterRow['resources'],
+      ...(out.inventory ? { inventory: out.inventory as unknown as CharacterRow['inventory'] } : {}),
     })
-  }
-
-  /** The quiver after a shot: decremented, or gone at zero. Derived from
-   *  contents, so there is no separate ammo counter to drift. */
-  function spentAmmo(stack: InventoryItem) {
-    const left = (stack.qty ?? 1) - 1
-    return left > 0
-      ? inventory.map(i => (i.id === stack.id ? { ...i, qty: left } : i))
-      : inventory.filter(i => i.id !== stack.id)
   }
 
   /** Equip a carried container into its kind's slot. Its CONTENTS don't move —
@@ -720,13 +631,6 @@ function WeaponCard({ weapon, sheet, bind, dry, ammo, active, armed, armable, on
   )
 }
 
-/** An ammunition stack's flat damage contribution, or null when it grants none.
- *  Reuses `effects.damage` — the same field a magic weapon uses — so authoring an
- *  arrow that hits harder needs no new concept in the catalog. */
-export function ammoBonusOf(stack: InventoryItem | null): AmmoBonus | null {
-  const d = stack?.effects?.damage
-  return d ? { damage: d, label: stack!.name } : null
-}
 
 /** A weapon draws from the quiver if it takes ammunition. Read off the SRD
  *  `properties` the DM already authors, so no new field is needed. */
