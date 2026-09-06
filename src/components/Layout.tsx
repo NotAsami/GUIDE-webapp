@@ -20,6 +20,7 @@ import { useRollLog } from '../lib/rolls'
 import { sendFoundry, useFoundryMessages, useFoundryTurn } from '../lib/foundry'
 import { cssVar, rollChatHtml } from '../lib/foundryChat'
 import { pendingOf } from '../lib/rollView'
+import { unlockChime } from '../lib/chime'
 import { useFoundryTarget } from '../lib/target'
 import { ammoStacksFor, rollWeapon } from '../lib/weaponRoll'
 import { attackRolled } from '../lib/graphState'
@@ -209,6 +210,12 @@ export function Layout() {
      NO PRIMING SHEET. Pressing Attack in the app offers armable modifiers
      first when there are any; there is nobody looking at that screen here, so
      it rolls with whatever is already armed. */
+  /* THE FIRST GESTURE BUYS THE SOUND. A browser will not let a page make noise
+     until someone has touched it, and the case that matters most is the one
+     where they never will — the player is in Foundry and this tab is behind
+     it. Spent once, on mount. */
+  useEffect(() => { unlockChime() }, [])
+
   const foundryTarget = useFoundryTarget(character?.id)
   useFoundryMessages(msg => {
     if (msg.kind !== 'request' || !character || msg.character !== character.id) return
