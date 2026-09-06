@@ -433,6 +433,19 @@ export function OperatorConsole() {
                 kind: 'actors',
                 actors: party.map(c => ({ character: c.id, data: toFoundryActor(c, shardCatalog) })),
               })
+              /* AND THE MENU. Names and ids, not a sheet: the bridge turns each
+                 into a hotbar macro that asks the codex to roll it, so the
+                 player can swing from the map. Sent with the sync because it is
+                 the same question — "what does this character have right now". */
+              for (const c of party) {
+                await sendFoundry({
+                  kind: 'macros',
+                  character: c.id,
+                  name: c.name,
+                  weapons: (((c.equipped ?? {}) as { weapons?: { id: string; name: string; icon?: string }[] }).weapons ?? [])
+                    .map(w => ({ id: w.id, name: w.name, ...(w.icon ? { icon: w.icon } : {}) })),
+                })
+              }
               log(ok
                 ? <><span className={styles.who}>{party.length} actor{party.length === 1 ? '' : 's'}</span> sent to <span className={styles.obj}>Foundry</span></>
                 : <>Foundry bridge <span className={styles.obj}>offline</span></>,

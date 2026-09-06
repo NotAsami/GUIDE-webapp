@@ -17,11 +17,15 @@ import { answerArmed } from '../lib/graphState'
 import { publicVitals, vitalsEqual } from '../lib/vitals'
 import { advanceTurn, turnRecharge } from '../lib/turns'
 import { useRollLog } from '../lib/rolls'
-import { useFoundryTurn } from '../lib/foundry'
+import { useFoundryMessages, useFoundryTurn } from '../lib/foundry'
+import { useFoundryTarget } from '../lib/target'
+import { ammoStacksFor, rollWeapon } from '../lib/weaponRoll'
+import { attackRolled } from '../lib/graphState'
+import { effectiveSheet } from '../lib/effects'
 import { useGraph } from '../lib/useGraph'
 import { ScopeContext } from '../lib/markdown'
 import { turnGraphPatch } from '../lib/graphState'
-import type { ActiveEffect } from '../lib/database.types'
+import type { ActiveEffect, EquippedWeapon } from '../lib/database.types'
 import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -191,6 +195,38 @@ export function Layout() {
      they do for the button (§ "UI must not nag"). With Foundry closed this
      never fires and the button is still the way. */
   useFoundryTurn(character?.id, () => void doAdvanceTurn())
+
+  /* THE HOTBAR ASKS, THE CODEX ROLLS.
+     A macro in Foundry sends a request and the swing happens here — the same
+     lib/weaponRoll the Equipment button uses, because a swing asked for from
+     the map must be the same swing as one pressed on the card.
+     Mounted in the Layout rather than on Equipment, which is the whole point:
+     the request arrives whatever screen the player is looking at, and a roll
+     that only worked while you had the right tab open would not save anybody
+     a screen swap.
+     NO PRIMING SHEET. Pressing Attack in the app offers armable modifiers
+     first when there are any; there is nobody looking at that screen here, so
+     it rolls with whatever is already armed. */
+  const foundryTarget = useFoundryTarget(character?.id)
+  useFoundryMessages(msg => {
+    if (msg.kind !== 'request' || !character || msg.character !== character.id) return
+    const weapon = ((character.equipped ?? {}) as { weapons?: EquippedWeapon[] }).weapons
+      ?.find(w => w.id === msg.weapon)
+    if (!weapon) return
+    const out = rollWeapon({
+      character, weapon, sheet: effectiveSheet(character, shardTrees), graph,
+      // The screen has a nocked stack; a request has nobody to ask, so it draws
+      // the first thing within reach — the same order the screen defaults to.
+      ammo: ammoStacksFor(character)[0] ?? null,
+      target: foundryTarget,
+    })
+    const entry = addRoll(out.entry)
+    if (!out.rolled) return
+    void updateSections({
+      resources: attackRolled(character, out.arms, entry.id) as CharacterRow['resources'],
+      ...(out.inventory ? { inventory: out.inventory as unknown as CharacterRow['inventory'] } : {}),
+    })
+  })
 
   async function handleSignOut() {
     await signOut()
