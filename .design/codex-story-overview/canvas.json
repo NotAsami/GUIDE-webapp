@@ -1,0 +1,190 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Panel direction"
+    },
+    {
+      "id": "page-2",
+      "name": "Alternates"
+    },
+    {
+      "id": "page-3",
+      "name": "Merge"
+    },
+    {
+      "id": "page-4",
+      "name": "Motion"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Main Story \u2014 opened",
+      "page": "page-1",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "CharacterStory.dc.html",
+      "title": "Character Story \u2014 opened",
+      "page": "page-1",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "RegionProgress.dc.html",
+      "title": "Region Progress \u2014 opened (thin)",
+      "page": "page-1",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "CardAffordance.dc.html",
+      "title": "Card \u2014 open affordance",
+      "page": "page-1",
+      "x": 0,
+      "y": 1080,
+      "w": 1000,
+      "h": 540
+    },
+    {
+      "file": "AltUnfold.dc.html",
+      "title": "A \u00b7 Unfolds in place",
+      "page": "page-2",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "AltLattice.dc.html",
+      "title": "B \u00b7 Lattice",
+      "page": "page-2",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "AltSpread.dc.html",
+      "title": "C \u00b7 Dossier spread",
+      "page": "page-2",
+      "x": 3120,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "LatticeDossier.dc.html",
+      "title": "D \u00b7 Lattice dossier",
+      "page": "page-3",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "LatticeZoom.dc.html",
+      "title": "E \u00b7 Click to descend (live)",
+      "page": "page-4",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "is_interactive": true
+    }
+  ],
+  "annotations": [
+    {
+      "id": "sources",
+      "page": "page-1",
+      "x": 0,
+      "y": -260,
+      "w": 620,
+      "text": "No new schema.\n\nThreads = quests where type='main' (title, location, objectives \u2192 the pip row).\nLast Logged = the newest sessions row (recap + events[]).\nHeader = progress.stories[] exactly as seeded: percent, label, telemetry, chapter.\n\nBoth tables already reach the player through useCampaign() (migration 0007, read-only). One overlay, one fetch, nothing authored twice. Every direction on the Alternates page reads the same data \u2014 only the shape varies."
+    },
+    {
+      "id": "lore-placeholder",
+      "page": "page-1",
+      "x": 1560,
+      "y": -260,
+      "w": 620,
+      "text": "Bonds = lore.relations (exact Lore-screen anatomy: 3 attitude segments, the dashed-amber 'unknown', the one sanctioned amber 'System \u00b7 Bonded' row).\nArc = lore.backstory + lore.personality.\n\nCAUTION: lore is '{}' in seed.sql, so every relation and nature string here is PLACEHOLDER, not canon. The NPC names come from the repo's own Journal dev fixture. The Flaw card shows the real unauthored state \u2014 an em dash."
+    },
+    {
+      "id": "region-gap",
+      "page": "page-1",
+      "x": 3120,
+      "y": -260,
+      "w": 620,
+      "text": "The weak card, drawn honestly rather than padded.\n\n'34 of 51 locations' is PROSE inside progress.stories[].tooltip. There is no locations table, so the only real list available is the distinct quests.location values \u2014 three of them.\n\nDecision for you: ship this thin version, or author a locations table and derive the percent. The panel is deliberately shorter (840\u00d7520) so the thin version doesn't look broken."
+    },
+    {
+      "id": "impl",
+      "page": "page-1",
+      "x": 1120,
+      "y": 1080,
+      "w": 600,
+      "text": "Build notes\n\n\u2022 Panel shell is LevelUpOverlay's layered frame with the player (cyan) accent, not the amber operator one.\n\u2022 Scrimmed, so lib/backdropFreeze + the html[data-modal] rule already in Codex.module.css pause the sigil for free.\n\u2022 Every 45\u00b0 chamfer here needs the painted-diagonal recipe and a registration in chamferBorders.test.ts \u2014 the hexagon sigil needs the two-layer fix instead.\n\u2022 KNOWN ISSUE: this shell is also ShopTakeover, LootTakeover, LevelUpOverlay, LootRollOverlay, ActivationSheet and PrimeSheet. It reads as 'the DM opened something for you', which a story you chose to read is not. Hence page 2."
+    },
+    {
+      "id": "why-alternates",
+      "page": "page-2",
+      "x": 0,
+      "y": -560,
+      "w": 1000,
+      "text": "Why these exist: the centred chamfered panel on page 1 is the app's most reused shell \u2014 six components already wear it, the shop loudest among them. Three directions that are not that, each varying a different axis. Same data in all three."
+    },
+    {
+      "id": "alt-a",
+      "page": "page-2",
+      "x": 0,
+      "y": -300,
+      "w": 620,
+      "text": "A \u00b7 UNFOLDS IN PLACE \u2014 axis: space. No overlay at all.\n\nThe three cards stay on screen: the open one keeps its geometry and takes a cyan edge, the other two shrink to 0.6 and stay clickable, so switching stories never closes anything. The overview is hairlines and type on the screen's own background.\n\nBacked by repo precedent \u2014 StartingKit's own header says route / resists modals: 'a modal that seizes it is the nagging the codex is built to avoid.'\n\nTradeoff: no scrim means the 640px sigil keeps turning behind the text (no backdrop-filter over moving pixels \u2014 a win), so legibility rests on the feathered dark plate under the reading column. That plate is the one thing to judge here."
+    },
+    {
+      "id": "alt-b",
+      "page": "page-2",
+      "x": 1560,
+      "y": -300,
+      "w": 620,
+      "text": "B \u00b7 LATTICE \u2014 axis: metaphor. The sigil stops being wallpaper.\n\nProgress is an arc swept on the ring, threads are nodes pinned at their own angles with leaders breaking to a common gutter, the percent and chapter sit where the decorative centre used to be (the inner circles, triangles and pulse are dropped \u2014 the data lives there now).\n\nTradeoff, stated plainly: this is an INDEX, not a reader. One session beat fits in the lower hexagon band and 'Open Journal' carries the rest. If the overview has to hold real reading, B is the wrong direction \u2014 don't rescue it by bolting a prose panel to the side, because that panel turns back into page 1."
+    },
+    {
+      "id": "alt-c",
+      "page": "page-2",
+      "x": 3120,
+      "y": -300,
+      "w": 620,
+      "text": "C \u00b7 DOSSIER SPREAD \u2014 axis: typography. No frame, no scrim, no panel: three editorial columns on hairlines, and one oversized ghosted numeral (the only element of its kind in the app \u2014 keep it to one).\n\nNote the affordance: '\u25c0 Codex', not '\u2715'. This is a place you navigated to, which means it wants its own ROUTE (/codex/story/main-story) rather than overlay state on Codex.tsx. That is the real cost difference from A and B \u2014 both of those are local state \u2014 and it is also what makes C linkable and back-button-correct.\n\nThe Log column is the sessions table in full, reverse-chronological."
+    },
+    {
+      "id": "merge-note",
+      "page": "page-3",
+      "x": 0,
+      "y": -420,
+      "w": 900,
+      "text": "D \u00b7 LATTICE DOSSIER \u2014 B's instrument, C's reading, joined rather than parked side by side.\n\nThe join is the leaders. Each thread's node sits on the r=220 ring at its own angle, and its leader breaks radially then runs horizontally to dock on that thread's row in the dossier column. The ring is wired into the text; move a row and its leader moves with it. That is the one thing that stops this being a radial graphic beside a prose panel \u2014 which is what the earlier advice warned would collapse back into the page-1 shell.\n\nWhat each parent contributed:\n\u2022 From B \u2014 the sigil promoted to instrument (progress swept as an arc, threads as nodes), and the percent + chapter sitting where the decorative centre used to be. The inner circles, triangles and pulse are dropped; the data lives there now.\n\u2022 From C \u2014 hairlines instead of frames, the editorial Last Session / Log columns, and '\u25c0 Codex' rather than '\u2715', so this is a route (/codex/story/main-story) and not overlay state.\n\nTwo deliberate cuts:\n\u2022 The sigil is bled off the left edge at 800px. It is now the outsized element, so C's ghost numeral is GONE \u2014 one oversized thing per screen, not two.\n\u2022 C's full-width footer rail is gone too: the percent is already the arc and the centre numeral, and a third readout was just noise.\n\nThe story switcher moved into the dossier's tab row \u2014 the lattice re-aims, it never closes.\n\nStill the same data as every other direction: quests + sessions + progress.stories[]. No new schema."
+    },
+    {
+      "id": "motion-note",
+      "page": "page-4",
+      "x": 0,
+      "y": -560,
+      "w": 1000,
+      "text": "E \u00b7 LIVE. Click a card, click a thread \u2014 then click another node to hop straight across without surfacing.\n\nThree depths, one continuous transform of a single body:\n  Codex  -> three cards on the glyph, sigil at 0.66\n  Story  -> the lattice dossier at 1.0, arc and leaders drawing on\n  Thread -> 2.4x onto the node you picked, the quest record replacing the dossier\n\nHOPPING. The other threads do not leave when you zoom \u2014 they are still pinned to the lattice, they just moved. Their positions come from the same mapping the zoom uses (P -> O + 2.4(P - O) + t), so a hop chip always sits exactly on its node. Hopping only changes which node is centred: the lattice pans, the record swaps, you never surface. Chip labels grow away from the record column so they can never land under the text.\n\nTIMING \u2014 two clocks, not one. The entrance (arc sweep, six staggered leaders, ~2.1s) plays ONCE on mount and is allowed to be cinematic; it is a scan completing. The zoom, layer fades and focus ring fire on EVERY click and stay quick \u2014 460 / 220 / 380ms. Hover and focus feedback (160-220ms) is fixed and scales with nothing: that is response, not choreography.\nThe Motion > pace tweak above the artboard scales both clocks at once, 0.5x to 2x. 1x is the tuned default. (An earlier build had these halved on a report of sluggishness that turned out to be Zen, not the timings \u2014 Chromium was always fine.)\n\nCLIPPING. Real bug, worst exactly where it was reported. At 2.4x on the TOP node the lattice reaches 242px into the record column (46px on the middle node, 6px on the bottom). Fixed with a feathered dark ground under the record \u2014 no border, no frame, the same device direction A uses \u2014 plus text-wrap: balance on the title.\n\nHONEST SCOPE: Main Story's three threads are wired. Character and Region open the same lattice."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-4"
+  }
+}
