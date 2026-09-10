@@ -75,6 +75,21 @@
     0 var(--cut)
   );
   background: transparent;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+/* The card had no focus style at all while it was a <button>. It is the way
+   into the story screen now, so a keyboard user has to be able to see it. */
+.card:focus-visible { outline: none; }
+.card:focus-visible .frame {
+  background: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(0, 166, 214, 0.25), 0 0 18px rgba(0, 166, 214, 0.5);
+}
+.card:focus-visible .inner {
+  box-shadow:
+    inset 0 0 36px rgba(0, 166, 214, 0.22),
+    0 0 1px rgba(255, 255, 255, 0.05);
 }
 .frame {
   position: absolute;
@@ -149,6 +164,20 @@
   justify-content: space-between;
 }
 .title .dot { color: var(--cyan); }
+
+/* One slot, two states — the dot at rest, "Open ▸" once the card is the thing
+   you are pointing at. Absolute so the swap costs no reflow. */
+.cue { position: relative; display: inline-flex; align-items: center; }
+.cueOpen {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 8.5px; letter-spacing: 0.22em;
+  color: var(--cyan-hot); text-shadow: 0 0 10px rgba(0, 166, 214, 0.6);
+  opacity: 0; transition: opacity 180ms ease;
+}
+.cue .dot { transition: opacity 180ms ease; }
+.card:hover .cueOpen, .card:focus-visible .cueOpen { opacity: 1; }
+.card:hover .cue .dot, .card:focus-visible .cue .dot { opacity: 0; }
 
 .pct {
   font-family: var(--font-display);

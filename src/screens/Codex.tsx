@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterUpdate, ProgressStory, ShardTree } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
@@ -20,8 +20,12 @@ const FALLBACK_STORIES: ProgressStory[] = []
  *
  *  This is the Phase 0 wired-end-to-end screen: the three story cards render
  *  entirely from `character.progress.stories[]`. Nothing in this file
- *  hardcodes a percentage or chapter name. Edit the row in Supabase → reload →
- *  cards reflect the new values. That's the contract. */
+ *  hardcodes a percentage or chapter name. The DM authors those cards in the
+ *  Operator Console's "Standing & Story" card (OperatorConsole.tsx
+ *  StandingCard) — emblem, title, label, percent, chapter, telemetry and hover
+ *  text, plus add/remove/reorder. Save there → reload here → the cards reflect
+ *  it. That's the contract. (It used to say "edit the row in Supabase by
+ *  hand"; the console replaced that.) */
 export function Codex() {
   const { character, updateSections, shardTrees } = useOutletContext<RouteContext>()
   const stories = character.progress?.stories ?? FALLBACK_STORIES
@@ -147,20 +151,27 @@ function Glyph() {
   )
 }
 
+/** The card is the way INTO the story screen, so it is a link, not a button:
+ *  `/story/:id` is a real route, which buys middle-click, copy-link and the
+ *  back button for nothing. The cue in the title row swaps the standing dot for
+ *  "Open" on hover and focus — no extra layout, just the same slot. */
 function StoryCard({ story }: { story: ProgressStory }) {
   return (
     <div className={styles.cardWrap}>
-      <button className={styles.card} type="button">
+      <Link className={styles.card} to={`/story/${story.id}`} aria-label={`Open ${story.title}`}>
         <span className={styles.frame} />
         <span className={styles.inner}>
           {story.telemetry && <span className={styles.telemetry}>{story.telemetry}</span>}
           <Emblem kind={story.emblem} />
           <span className={styles.title}>
             <span>{story.title}</span>
-            <span className="dot">●</span>
+            <span className={styles.cue}>
+              <span className="dot">●</span>
+              <span className={styles.cueOpen}>Open ▸</span>
+            </span>
           </span>
         </span>
-      </button>
+      </Link>
       <div className={styles.pct}>
         {story.percent}<span className={styles.pctSign}>%</span>
         <div className={styles.pctLabel}>{story.label}</div>
