@@ -42,6 +42,21 @@ test('the actor mirrors the DERIVED sheet, not the authored one', () => {
   assert.equal(a.system.attributes.movement.walk, 30)
 })
 
+/* THE CODEX'S INITIATIVE, NOT DEX. dnd5e adds DEX to `init.bonus` on its own,
+   so the bonus is the codex modifier with DEX taken back out. Without it the
+   token rolled bare DEX: Cornelius +3 in Foundry against +1 in the codex. */
+test('initiative crosses as the codex modifier, less the DEX dnd5e adds itself', () => {
+  const init = (sheet: object, equipped = {}) =>
+    (toFoundryActor(character({ sheet: { ...SHEET, ...sheet }, equipped })) as any).system.attributes.init.bonus
+
+  // Cornelius: +1 authored against DEX 16 (+3).
+  assert.equal(init({ abilities: { ...SHEET.abilities, dex: 16 }, initiative: 1 }), '-2')
+  // Agrees with DEX 12 (+1): nothing to add.
+  assert.equal(init({ initiative: 1 }), '0')
+  // DERIVED: a worn +2 lands on the token too.
+  assert.equal(init({ initiative: 1 }, { cloak: { ...cloak, effects: { initiative: 2 } } }), '2')
+})
+
 /* THE CLASS ITEM IS WHAT MAKES THE ACTOR A LEVEL. dnd5e derives character level
    and proficiency bonus from class items; export none and the token is level 0
    with PB +2 and every Foundry-side roll is quietly wrong. */

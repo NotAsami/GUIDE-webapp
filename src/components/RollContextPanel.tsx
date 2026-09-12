@@ -655,10 +655,16 @@ function Entry({
                 title={totals.pending > 0 ? 'Answer the riders first — the total is still moving' : undefined}
                 onClick={async () => {
                   setPosted('sending')
-                  const ok = await sendFoundry({
-                    kind: 'roll', character: characterId, roll: entry.id,
+                  const card = {
+                    character: characterId, roll: entry.id,
                     title: entry.title, html: rollChatHtml(entry, cssVar, scope),
-                  })
+                  }
+                  /* AN INITIATIVE ROLL ALSO SETS THE TRACKER. This is where one
+                     held back by an open rider finally lands, so it has to carry
+                     the settled total, riders included. */
+                  const ok = await sendFoundry(entry.sub === 'initiative'
+                    ? { kind: 'initiative', ...card, total: totals.attack }
+                    : { kind: 'roll', ...card })
                   setPosted(ok ? 'sent' : 'gone')
                   if (ok) onPatchEntry({ posted: true })
                 }}
@@ -668,6 +674,7 @@ function Entry({
                   {posted === 'sent' || entry.posted ? 'Posted to Foundry'
                     : posted === 'gone' ? 'No bridge — is Foundry open?'
                     : posted === 'sending' ? 'Posting…'
+                    : entry.sub === 'initiative' ? 'Post & set initiative'
                     : 'Post to Foundry'}
                 </span>
               </button>
