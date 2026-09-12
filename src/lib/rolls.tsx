@@ -42,6 +42,10 @@ export type RollEntry = {
   id: string
   at: number
   kind: 'weapon' | 'check' | 'save' | 'custom'
+  /** The `roll:<kind>.<sub>` a check or save was made on — `initiative`, a skill
+   *  key, an ability. Carried so the panel can tell an initiative roll, which
+   *  also sets Foundry's combat tracker, from every other check. */
+  sub?: string
   /** Headline, e.g. the weapon name. */
   title: string
   /** Secondary line, e.g. "Main Hand · Attack". */
@@ -185,7 +189,7 @@ export function buildCheck(graph: GraphContext, req: CheckRequest): Omit<RollEnt
   const { total, breakdown, crit, fumble } = composeCheck(pick, terms, res.critFrom, res.floor)
 
   return {
-    kind: req.kind, title: req.title, subtitle: req.subtitle, icon: req.icon ?? 'fa-dice-d20',
+    kind: req.kind, sub: req.sub, title: req.title, subtitle: req.subtitle, icon: req.icon ?? 'fa-dice-d20',
     check: { mode: eff, rolls, pick, breakdown, terms, total, crit, fumble },
     riderGroups: contrib.riders.length
       ? [{ label: req.kind === 'save' ? 'Save' : 'Check', riders: contrib.riders }]

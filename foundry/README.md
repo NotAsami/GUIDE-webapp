@@ -23,6 +23,10 @@ webapp uses (`guide-foundry`) and:
 - receives `{kind:'macros'}` → keeps a hotbar macro per equipped weapon. The
   macro ASKS the codex to roll (`{kind:'request'}`); it never rolls here, since
   this side knows nothing about shards, features or armed modifiers;
+- sends `{kind:'initRequest'}` whenever Foundry is asked to roll a mapped
+  character's initiative — the tracker's d20, **Roll All**, the actor sheet's
+  Initiative button — and rolls nothing itself; receives `{kind:'initiative'}` →
+  posts the codex's card and sets the tracker. See *Initiative* below;
 - receives `{kind:'effects'}` → projects the character's OWN effects onto their
   token, reconciled to the codex's list. A name that matches a real condition
   lights Foundry's own icon; anything else appears as a named effect. Clearing
@@ -87,6 +91,29 @@ the thing doing the rolling. It does not have to be on any particular screen.
 One difference from pressing Attack in the app: no priming sheet. The button
 offers armable modifiers first when there are any, and a macro has nobody
 looking at that screen, so it rolls with whatever is already armed.
+
+## Initiative
+
+For the party, Foundry never rolls initiative itself. Every way of asking for
+it — the tracker's d20, **Roll All**, the actor sheet's Initiative button —
+sends a request, and the codex rolls it with everything it knows (Feral
+Instinct's advantage, armed modifiers) and answers with the card and the total.
+Press **Roll All** as usual: enemies roll here, the party rolls in the codex.
+Pressing **INIT** on the codex's Stats screen does the same thing unprompted.
+
+- **The codex has to be open** on that character, as with the weapon macros. If
+  it has not answered after 10 seconds, Foundry rolls it after all — with the
+  codex's flat modifier but none of its features — and the GM gets a
+  notification saying so.
+- **A roll with a rider still open** waits for the Roll Context Panel's **Post &
+  set initiative**, because its total is still moving. The GM is told who is
+  holding it, and the fallback is called off.
+- **Keep one codex tab per character.** The bridge takes the first answer to
+  each request and drops the rest, but every tab that answers has rolled and
+  spent its arms.
+- **A player pressing the d20 in their own Foundry client is not intercepted**:
+  the bridge runs on the GM client only. They get Foundry's roll, with the
+  codex's flat modifier and no features.
 
 ## Using it
 

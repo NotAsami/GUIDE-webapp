@@ -17,6 +17,7 @@
 import type { CharacterRow, EquippedGear, EquippedWeapon, ShardTree } from './database.types.ts'
 import { effectiveSheet } from './effects.ts'
 import { parseDice } from './dice.ts'
+import { abilityMod } from './dnd.ts'
 import type { FoundryActorData } from './foundry.ts'
 
 const ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const
@@ -105,6 +106,12 @@ export function toFoundryActor(character: CharacterRow, shardTrees: Record<strin
         ac: { calc: 'flat', flat: sheet.ac ?? 10 },
         movement: { walk: sheet.speed ?? 30 },
         senses: { darkvision: sheet.senses?.darkvision ?? 0 },
+        /* THE CODEX'S NUMBER, as the part dnd5e does not add itself. dnd5e rolls
+           initiative as DEX + `init.bonus`, and `sheet.initiative` is the whole
+           modifier with DEX already in it — sent as the bonus, DEX would count
+           twice. Absent, the token rolls bare DEX. This is also what the bridge's
+           fallback rolls with when the codex does not answer. */
+        init: { bonus: String((sheet.initiative ?? 0) - abilityMod(sheet.abilities?.dex ?? 10)) },
       },
     },
     /* ONE CLASS ITEM, and it is not optional: dnd5e derives character level and
