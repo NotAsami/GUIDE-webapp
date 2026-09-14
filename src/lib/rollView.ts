@@ -392,6 +392,18 @@ export function lineViews(entry: RollEntry): RollLineView[] {
     })
   }
 
+  /* AND ANY TYPE THE RIDERS BROUGHT WITH THEM. One line each, which is all it
+     takes: `rollTotals` sums damage lines into `byType`, so this is also what
+     carries the split into the panel's footer, the Foundry card and the damage
+     dnd5e actually applies. */
+  for (const x of entry.extraDamage ?? []) {
+    out.push({
+      kind: 'damage', label: 'Damage', formula: x.diceExpr,
+      dice: x.dice, mods: x.bonus, modParts: (x.terms ?? []).filter(t => t.value !== 0), type: x.type,
+      crit: x.crit, total: damageTotal(x.dice, x.bonus),
+    })
+  }
+
   const c = entry.check
   if (c) {
     const mods = c.total - c.pick
@@ -435,9 +447,17 @@ export function rerollAt(entry: RollEntry, addr: DieAddr): Partial<RollEntry> | 
   if (!die || die.dropped) return null
   const roll = (list: RolledDie[]) => list.map((d, k) => (k === addr.die ? rerollDie(d) : d))
 
-  if (line.kind === 'damage' && entry.damage) {
-    const dice = roll(entry.damage.dice)
-    return { damage: { ...entry.damage, dice, total: damageTotal(dice, entry.damage.bonus) } }
+  if (line.kind === 'damage') {
+    /* WHICH damage block. A rider that brought its own type has its own line,
+       so there can be several — and patching `entry.damage` for all of them
+       rerolled a slashing die when the player clicked a radiant one. */
+    const nth = lineViews(entry).slice(0, addr.line).filter(l => l.kind === 'damage').length
+    const block = nth === 0 ? entry.damage : entry.extraDamage?.[nth - 1]
+    if (!block) return null
+    const dice = roll(block.dice)
+    const patched = { ...block, dice, total: damageTotal(dice, block.bonus) }
+    if (nth === 0) return { damage: patched }
+    return { extraDamage: (entry.extraDamage ?? []).map((x, i) => (i === nth - 1 ? patched : x)) }
   }
   if (line.kind === 'attack' && entry.attack) {
     const rolls = roll(entry.attack.rolls ?? [])

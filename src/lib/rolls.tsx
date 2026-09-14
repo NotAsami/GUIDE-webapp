@@ -54,6 +54,14 @@ export type RollEntry = {
   /** Weapon rolls carry both. */
   attack?: AttackRoll
   damage?: DamageRoll
+  /** Damage in a type this roll is NOT — a rider that brought its own, like
+   *  Divine Smite's radiant on a slashing sword.
+   *
+   *  Its own block rather than more of `damage`, because a total is per type:
+   *  folded in, that radiant is resisted as slashing by the panel's split, by
+   *  the chat card, and by dnd5e when the damage is applied. See
+   *  `rollResolution`'s `extra`. */
+  extraDamage?: DamageRoll[]
   /** Ability check / saving throw / skill check rolls (Character screen). */
   check?: CheckRoll
   /** The DC the TARGET rolls against — a spell's save. Not a roll: it is a

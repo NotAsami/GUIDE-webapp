@@ -98,6 +98,20 @@ test('a verdict is filled and inked, and says which way it went', () => {
   assert.ok(!rollChatHtml(entry({ attack: ATTACK }), green).includes('gr-verdict'))
 })
 
+/* THE TYPE TRAVELS WITH THE AMOUNT. The panel appends it to the contribution
+   itself, so a card printing a bare "+4" for a rider that reads "+4 radiant" is
+   the same value rendered two ways — and the reader cannot tell what the 4 is. */
+test('a rider carries its damage type into the card', () => {
+  const html = rollChatHtml(entry({
+    damage: DAMAGE,
+    riderGroups: [{ label: 'Damage', riders: [
+      rider({ label: 'Divine Smite', source: 'Paladin', flat: 4, dmgType: 'radiant' }),
+    ] }],
+  }), resolve)
+  assert.match(html, /Paladin · Divine Smite/)
+  assert.match(html, /\+4 <span class="gr-or">radiant<\/span>/)
+})
+
 test('an unresolvable colour outlines the type rather than filling it', () => {
   const html = rollChatHtml(entry({ damage: { ...DAMAGE, type: 'fire' } }), () => null)
   assert.ok(!html.includes('var(--'))

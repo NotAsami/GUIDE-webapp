@@ -145,15 +145,24 @@ the item, which is the useful half.
 **Trigger.** A spell dealing two damage types at once — Sacred Flame's radiant +
 fire is the canonical one, and it is in the mockup's own catalog example.
 
-**State.** `RollTotals.byType` has been plural and waiting since 5b, and riders
-already fan out into it by `dmgType`. What is singular is the base roll:
-`RollEntry.damage?: DamageRoll` is one block, and `Spell` models one
-`dice`/`dmgType` pair — so the type cannot express it before the panel can.
+**State — half of this shipped.** A rider that brings its own type now gets its
+own damage block: `rollResolution` takes the roll's own type and returns the
+contributions that differ as `extra`, the rollers turn those into
+`RollEntry.extraDamage`, and `lineViews` loops. So `byType`, the panel footer,
+the chat card and the damage dnd5e applies are all correct for a RIDER's second
+type — Divine Smite's radiant on a slashing sword.
 
-**So it is a spell-model change first**, not a panel change: `Spell` needs a
-damage *list*, with its `SpellForm` controls in the same change. `lineViews`
-then loops instead of `if (d)`, and `rerollAt` already indexes by line so a
-second damage line costs it nothing.
+Two corrections to what this entry used to say. Riders fanned out by `dmgType`
+only when `manual`; every other one was folded into `flat` before anything could
+see a type, which is exactly how a +4 radiant came to be resisted as slashing.
+And `rerollAt` did NOT come free — it patched `entry.damage` for every damage
+line, so a click on a radiant die rerolled a slashing one; it now resolves which
+block the line belongs to.
+
+**What is left is the BASE roll**, and it is still a spell-model change first:
+`Spell` models one `dice`/`dmgType` pair, so Sacred Flame's radiant + fire
+cannot be authored. `Spell` needs a damage *list* with its `SpellForm` controls
+in the same change; the view layer is already waiting for it.
 
 ---
 

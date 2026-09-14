@@ -150,9 +150,16 @@ export function rollChatHtml(
   /* riderAmount IS THE PANEL'S OWN SENTENCE. Formatting the number here again
      is how the card came to print "+0" for a rolled 2d6 while the total counted
      it — one contribution, two renderers, only one of them reading the faces. */
-  const contributions = live.filter(v => v.kind !== 'note').map(v =>
-    `<div class="gr-c"><span>${esc(v.rider.source)} · ${esc(v.rider.label)}</span>`
-    + `<span>${esc(v.kind === 'flag' ? (v.grants ?? '') : riderAmount(v.rider))}</span></div>`)
+  /* THE TYPE TRAVELS WITH THE AMOUNT. `riderAmount` is the number alone and the
+     panel appends the type itself (RollContextPanel), so the card printed "+4"
+     for a rider that reads "+4 radiant" in the app — the same value rendered
+     two ways, which is the defect this codebase keeps meeting. */
+  const contributions = live.filter(v => v.kind !== 'note').map(v => {
+    const amount = v.kind === 'flag' ? (v.grants ?? '') : riderAmount(v.rider)
+    const type = v.kind === 'flag' ? '' : v.rider.dmgType ?? ''
+    return `<div class="gr-c"><span>${esc(v.rider.source)} · ${esc(v.rider.label)}</span>`
+      + `<span>${esc(amount)}${type ? ` <span class="gr-or">${esc(type)}</span>` : ''}</span></div>`
+  })
 
   /* A CHOSEN NOTE IS THE POINT OF THE ROLL, not a footnote to it. Brutal
      Strike's Forceful Blow adds no number — it pushes the target 15 feet — and
