@@ -29,6 +29,9 @@ test('the totals in the card are the panel’s totals', () => {
   const html = rollChatHtml(entry({ attack: ATTACK, damage: DAMAGE }), resolve)
   assert.match(html, /<b>20<\/b> to hit/)
   assert.match(html, /<b>8<\/b> slashing/)
+  /* Foundry's own break line, not a border of ours: `hr` is styled app-wide
+     with the gradient the rest of the interface uses. */
+  assert.match(html, /<hr /)
 })
 
 /* THE SAME SPLIT §49 GUARDS. The roller already folded a non-manual rider into
@@ -49,6 +52,23 @@ test('a manual rider the player left off contributes nothing and is not listed',
   }), resolve)
   assert.ok(!html.includes('Sneak'))
   assert.match(html, /<b>8<\/b> slashing/)
+})
+
+/* THE DC IS A BUTTON, NOT A NUMBER TO COPY OUT. Foundry enriches a chat
+   message's content when it renders, so dnd5e's own save enricher reaches the
+   log as a control that rolls the save for whatever is selected. Raw: escaped,
+   it would sit in the card as the literal text `[[/save dex 15]]`. */
+test('a save DC crosses as dnd5e’s own save enricher', () => {
+  const html = rollChatHtml(entry({ kind: 'custom', title: 'Fireball', saveDC: 15, saveAbility: 'dex' }), resolve)
+  assert.match(html, /\[\[\/save dex 15\]\]\{DC 15\}/)
+  // The DC is the number the TARGET rolls against, so it is never also a "+15".
+  assert.ok(!html.includes('+15'))
+})
+
+test('a DC with no ability named stays a plain number — the enricher needs one', () => {
+  const html = rollChatHtml(entry({ kind: 'custom', title: 'Trap', saveDC: 15 }), resolve)
+  assert.ok(!html.includes('[[/save'))
+  assert.match(html, />15</)
 })
 
 test('a damage type carries its palette colour, resolved to a literal', () => {
