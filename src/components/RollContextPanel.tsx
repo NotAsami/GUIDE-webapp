@@ -43,7 +43,7 @@ import type { CharacterRow, ShardTree } from '../lib/database.types'
 import {
   armedIdsOf, askSections, catalogView, lineViews, openAsks, patchRiders, pickedOf,
   picksAllowed, picksTaken, rerollAt, rerollD20, rerollDamage, rerollsOf,
-  releaseIdsOf, resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
+  headlineLine, releaseIdsOf, resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
   type CatalogView, type Die, type DieAddr, type RiderView, type RollLineView,
 } from '../lib/rollView'
 import styles from './RollContextPanel.module.css'
@@ -533,7 +533,7 @@ function Entry({
                   {/* The line's OWN label — "Total Save DC" vs "Total Check" is a
                       difference the footer must not guess at. */}
                   <span className={styles.k}>{(() => {
-                    const l = lines.find(x => x.kind === 'attack' || x.kind === 'check')
+                    const l = headlineLine(lines)
                     return l?.totalLabel ?? `Total ${l?.label ?? 'Attack'}`
                   })()}</span>
                   <span className={styles.v}>{totals.attack}</span>

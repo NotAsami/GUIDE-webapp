@@ -643,9 +643,32 @@ export type RollTotals = {
   pending: number
 }
 
+/**
+ * The line the headline total is ABOUT.
+ *
+ * A ROLL FIRST, the save DC only when nothing was rolled. The DC line is a
+ * `check` with no dice — nobody rolls a DC, it is the number somebody else
+ * rolls against — and `lineViews` puts it first, so a plain
+ * `find(kind === 'attack' || kind === 'check')` picked the DC on any roll that
+ * had both. Fire Bolt with a save authored on it read "21 to hit" where 21 was
+ * the DC and the attack was 15 — silently, and it is the same number the
+ * hit/miss verdict and every manual attack rider hang off.
+ *
+ * THE FALLBACK IS NOT A LEFTOVER. A spell that only imposes a save has no
+ * rolled d20 at all, and its DC belongs in that slot; `totalLabel` exists to
+ * caption exactly that case, because "Total Save DC" is not a total.
+ *
+ * Shared because both the panel's footer and `rollTotals` ask this question,
+ * and they answered it separately until one of them was wrong.
+ */
+export function headlineLine(lines: RollLineView[]): RollLineView | undefined {
+  return lines.find(l => (l.kind === 'attack' || l.kind === 'check') && l.dice.length > 0)
+    ?? lines.find(l => l.kind === 'attack' || l.kind === 'check')
+}
+
 export function rollTotals(entry: RollEntry, views: RiderView[]): RollTotals {
   const lines = lineViews(entry)
-  const attackLine = lines.find(l => l.kind === 'attack' || l.kind === 'check')
+  const attackLine = headlineLine(lines)
   const byType: Record<string, number> = {}
   for (const l of lines.filter(x => x.kind === 'damage')) {
     byType[l.type ?? 'damage'] = (byType[l.type ?? 'damage'] ?? 0) + l.total

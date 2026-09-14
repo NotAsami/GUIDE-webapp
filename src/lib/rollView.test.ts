@@ -9,7 +9,7 @@ import type { Rider } from './graph.ts'
 import type { CheckRoll, RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
 import {
-  askSections, catalogView, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf,
+  askSections, catalogView, headlineLine, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf,
   picksAllowed, picksTaken, rerollAt, rerollD20, rerollDamage, rerollsOf,
   releaseIdsOf, resolvedOf, riderAmount, riderValue, riderViews, rollTotals, sourceGroups, unresolvedOf,
 } from './rollView.ts'
@@ -29,6 +29,35 @@ const d20s = (...vs: number[]) => faces(20, ...vs)
 
 const ATTACK = { d20: 14, rolls: d20s(14), mode: 'normal' as const, bonus: 6, total: 20, crit: false, fumble: false, breakdown: '' }
 const DAMAGE = { diceExpr: '1d8', dice: faces(8, 5), bonus: 3, total: 8, type: 'slashing', crit: false, breakdown: '' }
+
+/* A SAVE DC IS NOT A ROLL. `lineViews` leads with it, and the headline total
+   used to be whichever of attack/check came first — so a spell carrying both
+   reported its DC as the attack. Fire Bolt with a save authored on it read
+   "21 to hit" where 21 was the DC, and the hit/miss verdict against a target
+   reads the very same number. */
+test('a roll carrying BOTH a save DC and an attack reports the attack', () => {
+  const e = entry({ kind: 'custom', saveDC: 21, saveAbility: 'wis', attack: ATTACK, damage: DAMAGE })
+  assert.equal(rollTotals(e, riderViews(e)).attack, 20)   // the attack's 20, never the DC's 21
+})
+
+/* …AND THE DC STILL LEADS WHEN NOTHING WAS ROLLED, which is why the fix is a
+   preference and not a filter: a spell that only imposes a save has no d20 of
+   its own, and the DC belongs in that slot. */
+test('a save-only roll still reports the DC, captioned as one', () => {
+  const e = entry({ kind: 'custom', saveDC: 15, saveAbility: 'dex', damage: DAMAGE })
+  assert.equal(rollTotals(e, riderViews(e)).attack, 15)
+  assert.equal(headlineLine(lineViews(e))?.totalLabel, 'DEX Save DC')
+})
+
+test('a manual attack rider moves the attack, not the DC beside it', () => {
+  const e = entry({
+    kind: 'custom', saveDC: 21, saveAbility: 'wis', attack: ATTACK,
+    riderGroups: [{ label: 'Attack', riders: [
+      rider({ when: 'manual', on: true, rolled: true, rolledDice: [], label: 'Bless', flat: 4, dice: [] }),
+    ] }],
+  })
+  assert.equal(rollTotals(e, riderViews(e)).attack, 24)   // 20 + 4
+})
 
 test('an `always` rider is named but NOT added again', () => {
   // The roller already folded it into the line's bonus. Counting it here would
