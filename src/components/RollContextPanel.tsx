@@ -376,7 +376,16 @@ function Entry({
 
         {!folded && (
           <div className={styles.eBody}>
-            {lines.map((l, i) => (
+            {/* A TYPE A RIDER BROUGHT IS STATED ONCE, in the footer's split.
+                Its own line here would be the third place this panel says
+                "4 radiant" — after the contribution row that names where it
+                came from. The line still exists; the panel just does not draw
+                it, and everything that counts still reads it.
+
+                INDEXED FROM THE UNFILTERED LIST: `reroll` addresses a die by
+                its line index in `lineViews`, so filtering before mapping would
+                send a click on one line's die to another line. */}
+            {lines.map((l, i) => [l, i] as const).filter(([l]) => !l.extra).map(([l, i]) => (
               <Line key={i} line={l} index={i} showTip={showTip} spin={spin}
                 onReroll={die => reroll({ line: i, die }, `${i}:${die}`)} />
             ))}

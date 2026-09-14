@@ -46,6 +46,14 @@ export type RollLineView = {
   /** What the FOOTER calls this line's total. Absent = "Total <label>", which is
    *  right for a roll and wrong for a DC — "Total Save DC" is not a total. */
   totalLabel?: string
+  /** Damage a RIDER brought in its own type, rather than the roll's own.
+   *
+   *  Marked so a surface can choose: the roll panel draws only the roll's own
+   *  line and lets its footer state the split — its own line there would be the
+   *  third place one panel says "4 radiant", after the contribution row that
+   *  names where it came from. The toast and the Foundry card have no such row,
+   *  so they show it. Everything that COUNTS reads every line either way. */
+  extra?: true
 }
 
 export type FlagName = 'ADVANTAGE' | 'DISADVANTAGE' | 'CRIT'
@@ -400,7 +408,7 @@ export function lineViews(entry: RollEntry): RollLineView[] {
     out.push({
       kind: 'damage', label: 'Damage', formula: x.diceExpr,
       dice: x.dice, mods: x.bonus, modParts: (x.terms ?? []).filter(t => t.value !== 0), type: x.type,
-      crit: x.crit, total: damageTotal(x.dice, x.bonus),
+      crit: x.crit, total: damageTotal(x.dice, x.bonus), extra: true,
     })
   }
 
