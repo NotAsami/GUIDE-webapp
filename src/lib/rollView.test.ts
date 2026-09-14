@@ -49,6 +49,29 @@ test('a save-only roll still reports the DC, captioned as one', () => {
   assert.equal(headlineLine(lineViews(e))?.totalLabel, 'DEX Save DC')
 })
 
+/* A RIDER THAT BROUGHT ITS OWN DAMAGE TYPE IS ITS OWN LINE. One line each is
+   all it takes: `rollTotals` sums damage lines by type, so this is what carries
+   the split to the panel footer, the chat card and dnd5e's resistances. */
+const RADIANT = { diceExpr: '2d8', dice: faces(8, 3, 4), bonus: 0, total: 7, type: 'radiant', crit: false, breakdown: '' }
+
+test('an extra damage block is its own line, and each type counts once', () => {
+  const e = entry({ damage: DAMAGE, extraDamage: [RADIANT] })
+  assert.equal(lineViews(e).filter(l => l.kind === 'damage').length, 2)
+
+  const t = rollTotals(e, riderViews(e))
+  assert.deepEqual(t.byType, { slashing: 8, radiant: 7 })
+  assert.equal(t.damage, 15)
+})
+
+test('rerolling a die patches the block that die belongs to', () => {
+  const e = entry({ damage: DAMAGE, extraDamage: [RADIANT] })
+  // Line 0 is the weapon's own damage, line 1 the radiant a rider brought.
+  const patch = rerollAt(e, { line: 1, die: 0 })
+  assert.ok(patch?.extraDamage, 'the radiant block should be the one rerolled')
+  assert.equal(patch!.damage, undefined, 'the slashing block must not move')
+  assert.equal(patch!.extraDamage![0].dice.length, 2)
+})
+
 test('a manual attack rider moves the attack, not the DC beside it', () => {
   const e = entry({
     kind: 'custom', saveDC: 21, saveAbility: 'wis', attack: ATTACK,
