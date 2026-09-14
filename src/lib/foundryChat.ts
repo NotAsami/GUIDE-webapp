@@ -17,6 +17,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { RollEntry } from './rolls.tsx'
 import { lineViews, riderAmount, riderViews, rollTotals } from './rollView.ts'
 import { colorOf } from './palette.ts'
+import { FOUNDRY_CONDITIONS } from './foundryDamage.ts'
 import { renderInline } from './markdown.ts'
 import { interpolate, type ExprScope } from './expr.ts'
 
@@ -54,7 +55,34 @@ const tint = (name: string | undefined, resolve: (s: string | null) => string | 
 function prose(text: string, resolve: (s: string | null) => string | null, scope?: ExprScope | null): string {
   const live = scope ? interpolate(text, scope).text : text
   const html = renderToStaticMarkup(createElement(Fragment, null, ...renderInline(live)))
-  return html.replace(/var\((--[a-z0-9-]+)\)/g, m => resolve(m) ?? 'inherit')
+  return linkConditions(html.replace(/var\((--[a-z0-9-]+)\)/g, m => resolve(m) ?? 'inherit'))
+}
+
+/** The vocabulary is FOUNDRY_CONDITIONS — the same list `statusOf` matches, so
+ *  a word that lights an icon on the token is a word that links here. */
+const CONDITIONS_RE = new RegExp(`\\b(?:${FOUNDRY_CONDITIONS.join('|')})\\b`, 'gi')
+
+/**
+ * SRD condition names in authored prose become dnd5e's own reference enricher.
+ *
+ * Foundry expands it into a link to the rule AND, for a condition specifically,
+ * the apply-to-selected control it hangs off it — so "the target is knocked
+ * Prone" becomes something the DM acts on instead of a word they retype into
+ * the token's effects.
+ *
+ * TEXT ONLY, NEVER INSIDE A TAG. What arrives here is markup, style attributes
+ * and all, and a blind replace would rewrite the inside of a tag as readily as
+ * a sentence. Splitting on tags is the whole guard — cheap, and the damage it
+ * prevents is the silent kind: a note that renders as broken markup in someone
+ * else's window.
+ */
+function linkConditions(html: string): string {
+  return html
+    .split(/(<[^>]*>)/)
+    .map(part => (part.startsWith('<')
+      ? part
+      : part.replace(CONDITIONS_RE, m => `&Reference[${m.toLowerCase()}]{${m}}`)))
+    .join('')
 }
 
 export function rollChatHtml(
