@@ -76,15 +76,29 @@ export function rollChatHtml(
     return `<span style="${style.join(';')}">${d.v}</span>`
   }
 
-  const lineRow = (l: (typeof lines)[number]) => {
+  /**
+   * `save` marks the leading save-DC row — the one line here that is not a roll
+   * but a number somebody ELSE rolls against.
+   *
+   * It crosses as dnd5e's own `[[/save]]` enricher, which Foundry expands when
+   * the message renders into a button that rolls the save for whatever is
+   * selected. The DM stops copying a DC out of the card and into their own
+   * roll. Raw on purpose: an escaped enricher is literal text in the log.
+   *
+   * ONLY THE DICE-LESS NUMBER TRAVELS THIS WAY. `[[/damage]]` is the obvious
+   * next thought and it is wrong — it rolls FRESH dice for a hit this card has
+   * already rolled, which is two different numbers for one swing.
+   */
+  const lineRow = (l: (typeof lines)[number], save = false) => {
     const colour = tint(l.type, resolve)
-    const dice = l.dice.map(dieChip).join(l.mode ? ' <span style="' + muted + '">vs</span> ' : ' ')
-    const mods = l.mods ? ` <span style="${muted}">${l.mods > 0 ? '+' : '−'}${Math.abs(l.mods)}</span>` : ''
+    const dice = save ? '' : l.dice.map(dieChip).join(l.mode ? ' <span style="' + muted + '">vs</span> ' : ' ')
+    const mods = save || !l.mods ? '' : ` <span style="${muted}">${l.mods > 0 ? '+' : '−'}${Math.abs(l.mods)}</span>`
     const label = esc(l.label) + (l.type ? ` <span style="${muted}">${esc(l.type)}</span>` : '')
+    const total = save ? `[[/save ${entry.saveAbility} ${entry.saveDC}]]{DC ${entry.saveDC}}` : String(l.total)
     return `<div style="display:flex;gap:.5em;align-items:baseline;padding:.15em 0">`
       + `<span style="flex:1${colour ? `;color:${colour}` : ''}">${label}</span>`
       + `<span>${dice}${mods}</span>`
-      + `<b style="min-width:2.2em;text-align:right${colour ? `;color:${colour}` : ''}">${l.total}</b>`
+      + `<b style="min-width:2.2em;text-align:right${colour ? `;color:${colour}` : ''}">${total}</b>`
       + `</div>`
   }
 
@@ -133,9 +147,18 @@ export function rollChatHtml(
         + (entry.target.hit === undefined ? '' : ` · <b>${entry.target.hit ? 'HIT' : 'MISS'}</b>`)
         + `</div>`
       : '')
-    + `<div style="margin:.35em 0">${lines.map(lineRow).join('')}</div>`
+    /* `lineViews` puts the save DC first, and it is the only row that is not a
+       roll — see lineRow. Without an ability there is nothing to enrich with,
+       so it stays the plain number it is today. */
+    + `<div style="margin:.35em 0">${lines
+      .map((l, i) => lineRow(l, i === 0 && entry.saveDC !== undefined && entry.saveAbility !== undefined))
+      .join('')}</div>`
     + (contributions.length ? `<div style="font-size:.9em;margin-bottom:.35em">${contributions.join('')}</div>` : '')
     + (notes.length ? `<div style="font-size:.95em;margin-bottom:.35em">${notes.join('')}</div>` : '')
-    + (footer ? `<div style="border-top:1px solid currentColor;padding-top:.25em">${footer}</div>` : '')
+    /* Foundry's own rule, not a border of ours: `hr` is styled app-wide with the
+       gradient every other break line in the interface uses, so the card's
+       footer is divided the way Foundry divides things. Only the margin is
+       ours — 1rem inside a chat card is a gap, not a rule. */
+    + (footer ? `<hr style="margin:.4em 0"><div>${footer}</div>` : '')
     + `</div>`
 }
