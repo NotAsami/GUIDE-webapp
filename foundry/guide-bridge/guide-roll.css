@@ -89,7 +89,11 @@
    in the reader's own ink instead. */
 .guide-roll .gr-type.gr-plain { background: none; border: 1px solid currentColor; opacity: 0.6; }
 
-.guide-roll .gr-d { display: inline-block; min-width: 1.5em; text-align: center; }
+/* NO MIN-WIDTH. A fixed-width die box aligns a COLUMN of dice, which is what
+   the panel has; here they sit in a line of prose between parentheses, where a
+   1.5em box around a single digit renders as "( 4 )" — a gap the markup does
+   not contain and nobody can delete. */
+.guide-roll .gr-d { display: inline-block; }
 .guide-roll .gr-out { text-decoration: line-through; opacity: 0.5; }
 .guide-roll .gr-re { font-style: italic; }
 .guide-roll .gr-or { opacity: 0.5; }
