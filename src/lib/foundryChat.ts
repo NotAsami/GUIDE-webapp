@@ -165,7 +165,12 @@ export function rollChatHtml(
     flags,
   ].filter(Boolean).join(' <span style="' + muted + '">·</span> ')
 
-  return `<div class="guide-roll" style="font-family:inherit">`
+  /* `guide-roll` is the whole hook the module's stylesheet hangs on
+     (foundry/guide-bridge/guide-roll.css) — the card brings its own ground
+     because Foundry's chat log is hard-coded light in its template. No inline
+     font here on purpose: an inline `font-family: inherit` said nothing and
+     outranked the stylesheet that has something to say. */
+  return `<div class="guide-roll">`
     + `<div style="font-weight:600">${esc(entry.title)}</div>`
     + (entry.subtitle ? `<div style="${muted};font-size:.9em">${esc(entry.subtitle)}</div>` : '')
     /* The verdict travels, the AC does not — the DM already knows the number and

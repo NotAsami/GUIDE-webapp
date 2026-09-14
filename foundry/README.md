@@ -146,6 +146,28 @@ on the GM client.
 `node_modules/@supabase/supabase-js/dist/umd/supabase.js` — re-copy it when the
 app bumps supabase-js. There is no build step for this module on purpose.
 
+## The roll card brings its own ground
+
+`guide-roll.css` ships with this module and needs no patch — it loads with the
+module like any other stylesheet. It styles ONE class, `.guide-roll`, which is
+the wrapper `rollChatHtml` puts around every roll the codex posts. A dnd5e card
+is untouched.
+
+It exists because **Foundry v14 hard-codes the chat log to light**:
+`templates/sidebar/tabs/chat/log.hbs` ships
+`<ol class="chat-log plain themed theme-light">`, and `Game#configureUI` skips
+any element whose classes already say `themed`. The Interface and Applications
+colour-scheme settings therefore theme everything except the chat log, and no
+setting reaches it. The codex's damage colours are built for a near-black
+ground — force is `#a594ba`, about 2.4:1 on white — so the card carries its own
+ground rather than asking each player to fix a setting that would not have
+worked.
+
+Module styles load in the `modules` cascade layer, which comes after `system`,
+so these rules beat dnd5e's without `!important`. The card's inline styles still
+win over both, and those are exactly the damage-type tints — the one thing that
+must not be overridden.
+
 ## Dressing Foundry's own screens (optional)
 
 `login.css` and `setup.css` in this folder restyle Foundry's join and setup

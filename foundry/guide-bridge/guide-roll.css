@@ -1,0 +1,85 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   The codex's roll card, inside Foundry's chat log
+   ═══════════════════════════════════════════════════════════════════════════
+
+   `rollChatHtml` (src/lib/foundryChat.ts) wraps every posted roll in
+   `.guide-roll`. This is the only thing that styles it, and it styles NOTHING
+   else — a dnd5e card renders exactly as the system renders it.
+
+   WHY IT EXISTS. Foundry v14 hard-codes the chat log to light:
+   `templates/sidebar/tabs/chat/log.hbs` ships
+   `<ol class="chat-log plain themed theme-light">`, and `Game#configureUI`
+   deliberately skips any element whose classes already say `themed`. So the
+   Interface and Applications colour-scheme settings theme the whole interface
+   EXCEPT the chat log, and no setting reaches it. The damage-type colours the
+   codex uses are built for its near-black ground — force is `--violet-hot`,
+   #a594ba, which on white is about 2.4:1 — so on Foundry's light log they were
+   legible only just. The card brings its own ground instead of asking the
+   reader to change a setting that would not have worked anyway.
+
+   SPECIFICITY, AND WHY THERE IS NO `!important` HERE. Module styles are
+   imported into the `modules` cascade layer, which comes after `system`, so
+   these rules beat dnd5e's own without needing to out-specify them. What still
+   wins is the card's INLINE style — which is exactly the damage-type tints and
+   nothing else, and those are the one thing that must not be overridden.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+.guide-roll {
+  /* The codex's own ground, under the scanline the whole app wears. */
+  background-color: #0d0d0d;
+  background-image: repeating-linear-gradient(
+    0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px
+  );
+  color: #c8c8c8;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* 12px, because the card's own sizes are em-relative off this one. */
+  font-size: 12px;
+  line-height: 1.45;
+
+  /* THE PLAYER'S SIDE IS CYAN. A roll card is a player's roll, whoever is
+     reading it — the operator's amber belongs to the setup screen. */
+  border: 1px solid #0d6e8c;
+  border-left: 2px solid #00a6d6;
+  border-radius: 0;
+  padding: 0.5em 0.6em;
+  margin: 0.25em 0;
+}
+
+/* Totals that carry no damage type. A tinted one sets its colour inline and
+   keeps it — that is the palette talking, and it stays the brightest thing in
+   the row. */
+.guide-roll b {
+  color: #f2f2f2;
+}
+
+/* The break line, in the card's own colour rather than Foundry's parchment
+   gradient — which was built for a light ground and reads as a beige smear on
+   this one. Only the margin comes from the element's inline style. */
+.guide-roll hr {
+  height: 0;
+  border: 0;
+  border-top: 1px solid rgba(0, 166, 214, 0.35);
+  background-image: none;
+}
+
+/* dnd5e's enrichers — the save button and a condition's reference link — are
+   coloured for the light card they normally land on. */
+.guide-roll a,
+.guide-roll .reference-link a,
+.guide-roll .roll-link a {
+  color: #4dd6ff;
+  text-decoration: none;
+}
+
+.guide-roll a:hover {
+  color: #d4bf7d;
+  text-shadow: 0 0 6px rgba(77, 214, 255, 0.4);
+}
+
+/* The apply-a-condition control dnd5e hangs off a reference link. It is an
+   action, so it stays legible rather than borrowing the link colour. */
+.guide-roll .enricher-action {
+  color: #d4bf7d;
+}
