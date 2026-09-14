@@ -6,7 +6,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { DAMAGE, colorOf, inkOn } from './palette.ts'
+import { DAMAGE, chipOn, colorOf } from './palette.ts'
 
 test('every damage type resolves to a design token, never a literal', () => {
   // The whole argument for preferring a name over a hex. A literal here would be
@@ -39,28 +39,48 @@ test('an unknown colour is null, so callers can fail closed', () => {
   }
 })
 
-/* THE PALETTE INVERTS ON A FILL. These colours are built to glow on the codex's
-   near-black ground; painted as a swatch they are light, and light wants dark
-   ink. The Foundry chat card fills a chip per damage type precisely so the
-   colour stops depending on what ground the reader's chat log happens to be. */
-test('a filled swatch gets ink that can be read on it', () => {
-  assert.equal(inkOn('#ff5454'), '#111111')   // --danger-hot, fire
-  assert.equal(inkOn('#4dd6ff'), '#111111')   // --cyan-hot, lightning
-  assert.equal(inkOn('#e2b021'), '#111111')   // --gold-rare, radiant
-  // …and the one that does not: --danger is dark enough to carry white.
-  assert.equal(inkOn('#b93a3a'), '#ffffff')
-  assert.equal(inkOn('#000000'), '#ffffff')
+/* THE CHIP IS THE PALETTE PAINTED RATHER THAN GLOWING. These colours are built
+   for the codex's near-black ground; the Foundry chat log is hard-coded light,
+   so the card fills a chip per damage type and the fill carries its own
+   contrast. The fill is shaded until WHITE clears AA, rather than the ink being
+   picked to suit the colour — near-black on a saturated red measured 5.98:1 and
+   still read badly, which is where ratios and eyes stop agreeing. */
+const contrast = (a: string, b: string) => {
+  const lum = (h: string) => {
+    const n = parseInt(h.slice(1), 16)
+    const chan = (c: number) => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4 }
+    return 0.2126 * chan((n >> 16) & 255) + 0.7152 * chan((n >> 8) & 255) + 0.0722 * chan(n & 255)
+  }
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p)
+  return (x + 0.05) / (y + 0.05)
+}
+
+test('every chip fill carries its white ink at AA', () => {
+  // The property, not a table of answers: whatever the colour, the pair is legible.
+  for (const c of ['#ff5454', '#e2b021', '#4dd6ff', '#3fc7b4', '#a07ad6', '#a594ba', '#4fae6b', '#00a6d6', '#aaaaaa', '#ffffff']) {
+    const chip = chipOn(c)!
+    assert.ok(chip, `${c} should yield a chip`)
+    assert.equal(chip.ink, '#ffffff')
+    assert.ok(contrast(chip.fill, chip.ink) >= 4.5, `${c} → ${chip.fill} is only ${contrast(chip.fill, chip.ink).toFixed(2)}:1`)
+  }
+})
+
+test('the shade keeps the hue — fire is still red', () => {
+  const { fill } = chipOn('#ff5454')!
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(fill.slice(i, i + 2), 16))
+  assert.ok(r > g && r > b, `${fill} stopped being red`)
+  // Already dark enough to carry white: left alone rather than shaded further.
+  assert.equal(chipOn('#000000')!.fill, '#000000')
 })
 
 test('short hex is the same colour as its long form', () => {
-  assert.equal(inkOn('#fff'), inkOn('#ffffff'))
-  assert.equal(inkOn('#F00'), inkOn('#ff0000'))
+  assert.deepEqual(chipOn('#f55'), chipOn('#ff5555'))
 })
 
-test('a colour that is not a hex gets no ink, so the caller fills nothing', () => {
+test('a colour that is not a hex gets no chip, so the caller fills nothing', () => {
   // `cssVar` hands back whatever the stylesheet held; anything but a hex means
-  // the chip cannot be proven legible, and a tinted label is the safe render.
+  // the chip cannot be proven legible, and an outlined label is the safe render.
   for (const bad of ['var(--fire)', 'rebeccapurple', 'oklch(70% .1 20)', '', '#zz']) {
-    assert.equal(inkOn(bad), null, `${bad} must not yield an ink`)
+    assert.equal(chipOn(bad), null, `${bad} must not yield a chip`)
   }
 })

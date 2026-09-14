@@ -74,10 +74,13 @@ test('a DC with no ability named stays a plain number — the enricher needs one
 /* A FILLED CHIP, NOT TINTED TEXT. The palette is built to glow on the codex's
    near-black ground and Foundry's chat log is hard-coded light, so a tint could
    never be legible on both. The ink is computed from the fill — see inkOn. */
-test('a damage type is a filled chip, inked so it can be read on the fill', () => {
+test('a damage type is a filled chip, shaded so white text survives on it', () => {
   const html = rollChatHtml(entry({ damage: DAMAGE }), resolve)
-  assert.ok(html.includes('background:#8a8a8a'))
-  assert.ok(html.includes('color:#111111'))
+  // The fill is a SHADE of the palette colour, never the colour itself — see
+  // chipOn. What the card guarantees is the pairing; palette.test.ts proves the
+  // ratio.
+  assert.match(html, /class="gr-type" style="background:#[0-9a-f]{6};color:#ffffff"/)
+  assert.ok(!html.includes('background:#8a8a8a'), 'the raw palette colour must not be the fill')
   // A `var()` reaching Foundry would render as inherited text — it has no tokens.
   assert.ok(!html.includes('var(--'))
 })
@@ -89,8 +92,8 @@ test('a verdict is filled and inked, and says which way it went', () => {
   const green = (s: string | null) => (s === 'var(--good)' ? '#4fae6b' : s === 'var(--danger-hot)' ? '#ff5454' : null)
   const card = (hit: boolean) =>
     rollChatHtml(entry({ attack: ATTACK, target: { token: 't1', name: 'Goblin', hit } }), green)
-  assert.match(card(true), /class="gr-verdict" style="background:#4fae6b;color:#111111">HIT</)
-  assert.match(card(false), /class="gr-verdict" style="background:#ff5454;color:#111111">MISS</)
+  assert.match(card(true), /class="gr-verdict" style="background:#[0-9a-f]{6};color:#ffffff">HIT</)
+  assert.match(card(false), /class="gr-verdict" style="background:#[0-9a-f]{6};color:#ffffff">MISS</)
   // No target verdict at all: no chip to colour.
   assert.ok(!rollChatHtml(entry({ attack: ATTACK }), green).includes('gr-verdict'))
 })

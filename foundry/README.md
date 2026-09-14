@@ -164,10 +164,18 @@ It answers that by **bringing no ground at all**: it borrows the log's paper and
 its ink and spends everything on one cyan rail. What carries colour instead is
 the damage type, as a FILLED CHIP. The codex's palette is built to glow on a
 near-black ground — force is `#a594ba`, about 2.4:1 on white — so tinted text
-could not be legible on both; a fill carries its own contrast, and `inkOn`
-(`src/lib/palette.ts`) picks the ink that survives on it. Eleven of the twelve
-palette colours take dark ink, which is the palette inverting when it stops
-glowing and starts being painted.
+could not be legible on both; a fill carries its own contrast.
+
+`chipOn` (`src/lib/palette.ts`) makes the pair: it SHADES the colour until white
+text clears 4.5:1 on it, rather than picking an ink to suit the colour. Picking
+the ink was the first attempt and it put near-black on `--danger-hot` — 5.98:1
+by the numbers and hard to read at 8px, which is where contrast ratios and eyes
+stop agreeing. Shading keeps the hue (fire `#ff5454` → `#d14545`) and gives
+every chip the same treatment.
+
+The footer totals stay the log's own ink. They cannot be damage-coloured: small
+text needs luminance ≤ 0.183 to clear AA on the light log and ≥ 0.214 to clear
+it on a dark one, and no colour is both.
 
 Small text takes no fixed accent for the same reason — `--cyan` is 2.83:1 on
 white — so labels are the log's own ink, quietened. The rail keeps the cyan:

@@ -16,7 +16,7 @@ import { Fragment, createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { RollEntry } from './rolls.tsx'
 import { lineViews, riderAmount, riderViews, rollTotals } from './rollView.ts'
-import { colorOf, inkOn } from './palette.ts'
+import { chipOn, colorOf } from './palette.ts'
 import { FOUNDRY_CONDITIONS } from './foundryDamage.ts'
 import { renderInline } from './markdown.ts'
 import { interpolate, type ExprScope } from './expr.ts'
@@ -124,14 +124,13 @@ export function rollChatHtml(
        hard-coded light — force is `--violet-hot`, about 2.4:1 on white, which
        is how it came to read as grey. A fill carries its own contrast whatever
        ground it lands on, so the colour stops depending on the reader's theme.
-       `inkOn` says which ink survives on it; without one (a colour that is not
-       a hex, or a stylesheet that resolved nothing) there is no chip to prove
-       legible, and the type stays plain text. */
-    const fill = tint(l.type, resolve)
-    const ink = fill ? inkOn(fill) : null
+       `chipOn` shades the fill until white text clears AA on it; without a
+       resolvable colour there is no chip to prove legible, and the type falls
+       back to an outline in the reader's own ink. */
+    const chip = chipOn(tint(l.type, resolve) ?? '')
     const type = !l.type ? ''
-      : fill && ink
-        ? `<span class="gr-type" style="background:${fill};color:${ink}">${esc(l.type)}</span>`
+      : chip
+        ? `<span class="gr-type" style="background:${chip.fill};color:${chip.ink}">${esc(l.type)}</span>`
         : `<span class="gr-type gr-plain">${esc(l.type)}</span>`
     const dice = save ? '' : l.dice.map(dieChip).join(l.mode ? ' <span class="gr-or">vs</span> ' : ' ')
     const mods = save || !l.mods ? '' : ` ${l.mods > 0 ? '+' : '−'}${Math.abs(l.mods)}`
@@ -175,13 +174,12 @@ export function rollChatHtml(
   /* The verdict sits at the end of the footer rather than beside the target's
      name: it is the answer, and the answer belongs where the totals are. */
   /* A CHIP FOR THE SAME REASON THE DAMAGE TYPE IS ONE. Green text is 2.76:1 on
-     the log's white; a fill of that same green, inked by `inkOn`, is 6.8:1 on
+     the log's white; the same green shaded into a fill carries white at AA on
      any ground at all. No resolvable colour, no fill — the word still says it. */
   const hit = entry.target?.hit
-  const vFill = hit === undefined ? null : tint(hit ? 'green' : 'red', resolve)
-  const vInk = vFill ? inkOn(vFill) : null
+  const v = hit === undefined ? null : chipOn(tint(hit ? 'green' : 'red', resolve) ?? '')
   const verdict = hit === undefined ? ''
-    : `<span class="gr-verdict"${vFill && vInk ? ` style="background:${vFill};color:${vInk}"` : ''}>`
+    : `<span class="gr-verdict"${v ? ` style="background:${v.fill};color:${v.ink}"` : ''}>`
       + `${hit ? 'HIT' : 'MISS'}</span>`
   const sums = [
     totals.attack !== undefined ? `<span><b>${totals.attack}</b> to hit</span>` : '',
