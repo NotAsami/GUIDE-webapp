@@ -146,27 +146,36 @@ on the GM client.
 `node_modules/@supabase/supabase-js/dist/umd/supabase.js` — re-copy it when the
 app bumps supabase-js. There is no build step for this module on purpose.
 
-## The roll card brings its own ground
+## The roll card's own styling
 
 `guide-roll.css` ships with this module and needs no patch — it loads with the
 module like any other stylesheet. It styles ONE class, `.guide-roll`, which is
 the wrapper `rollChatHtml` puts around every roll the codex posts. A dnd5e card
 is untouched.
 
-It exists because **Foundry v14 hard-codes the chat log to light**:
+**Foundry v14 hard-codes the chat log to light.**
 `templates/sidebar/tabs/chat/log.hbs` ships
 `<ol class="chat-log plain themed theme-light">`, and `Game#configureUI` skips
 any element whose classes already say `themed`. The Interface and Applications
 colour-scheme settings therefore theme everything except the chat log, and no
-setting reaches it. The codex's damage colours are built for a near-black
-ground — force is `#a594ba`, about 2.4:1 on white — so the card carries its own
-ground rather than asking each player to fix a setting that would not have
-worked.
+setting reaches it — so the card cannot assume it knows what it is sitting on.
+
+It answers that by **bringing no ground at all**: it borrows the log's paper and
+its ink and spends everything on one cyan rail. What carries colour instead is
+the damage type, as a FILLED CHIP. The codex's palette is built to glow on a
+near-black ground — force is `#a594ba`, about 2.4:1 on white — so tinted text
+could not be legible on both; a fill carries its own contrast, and `inkOn`
+(`src/lib/palette.ts`) picks the ink that survives on it. Eleven of the twelve
+palette colours take dark ink, which is the palette inverting when it stops
+glowing and starts being painted.
+
+Small text takes no fixed accent for the same reason — `--cyan` is 2.83:1 on
+white — so labels are the log's own ink, quietened. The rail keeps the cyan:
+it is a 2px block, not something anyone has to read.
 
 Module styles load in the `modules` cascade layer, which comes after `system`,
-so these rules beat dnd5e's without `!important`. The card's inline styles still
-win over both, and those are exactly the damage-type tints — the one thing that
-must not be overridden.
+so these rules beat dnd5e's without `!important`. Inline still wins over both,
+and inline is exactly the chip's two colours — the roll's own data.
 
 ## Dressing Foundry's own screens (optional)
 

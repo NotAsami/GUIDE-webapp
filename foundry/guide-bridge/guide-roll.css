@@ -6,80 +6,100 @@
    `.guide-roll`. This is the only thing that styles it, and it styles NOTHING
    else — a dnd5e card renders exactly as the system renders it.
 
-   WHY IT EXISTS. Foundry v14 hard-codes the chat log to light:
+   IT BRINGS NO GROUND. The card borrows the log's paper and its ink and spends
+   everything on one cyan rail, so it never fights whatever theme the reader is
+   running — which matters because Foundry v14 hard-codes the chat log to light:
    `templates/sidebar/tabs/chat/log.hbs` ships
    `<ol class="chat-log plain themed theme-light">`, and `Game#configureUI`
-   deliberately skips any element whose classes already say `themed`. So the
-   Interface and Applications colour-scheme settings theme the whole interface
-   EXCEPT the chat log, and no setting reaches it. The damage-type colours the
-   codex uses are built for its near-black ground — force is `--violet-hot`,
-   #a594ba, which on white is about 2.4:1 — so on Foundry's light log they were
-   legible only just. The card brings its own ground instead of asking the
-   reader to change a setting that would not have worked anyway.
+   skips any element whose classes already say `themed`. The Interface and
+   Applications colour-scheme settings therefore theme the whole interface
+   EXCEPT the chat log, and no setting reaches it.
 
-   SPECIFICITY, AND WHY THERE IS NO `!important` HERE. Module styles are
-   imported into the `modules` cascade layer, which comes after `system`, so
-   these rules beat dnd5e's own without needing to out-specify them. What still
-   wins is the card's INLINE style — which is exactly the damage-type tints and
-   nothing else, and those are the one thing that must not be overridden.
+   COLOUR IS CARRIED BY FILLS, NOT BY TEXT. The codex's damage palette is built
+   to glow on a near-black ground — force is #a594ba, about 2.4:1 on white — so
+   tinted text could never be legible on both. A filled chip carries its own
+   contrast, and `inkOn` (src/lib/palette.ts) picks the ink that survives on it.
+   Those colours arrive inline, because they are the roll's data; everything
+   else is here.
+
+   SPECIFICITY, AND WHY THERE IS NO `!important`. Module styles are imported
+   into the `modules` cascade layer, which comes after `system`, so these rules
+   beat dnd5e's own without out-specifying them. Inline still wins over both —
+   which is exactly the chip's colour, and nothing else.
    ═════════════════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=EB+Garamond:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap');
 
 .guide-roll {
-  /* The codex's own ground, under the scanline the whole app wears. */
-  background-color: #0d0d0d;
-  background-image: repeating-linear-gradient(
-    0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px
-  );
-  color: #c8c8c8;
+  /* The one thing that is ours. Everything else is the log's. */
+  border-left: 2px solid #00a6d6;
+  padding: 2px 0 2px 11px;
+  margin: 0.25em 0;
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* 12px, because the card's own sizes are em-relative off this one. */
+  /* 12px, because the card's own sizes are relative to this one. */
   font-size: 12px;
   line-height: 1.45;
-
-  /* THE PLAYER'S SIDE IS CYAN. A roll card is a player's roll, whoever is
-     reading it — the operator's amber belongs to the setup screen. */
-  border: 1px solid #0d6e8c;
-  border-left: 2px solid #00a6d6;
-  border-radius: 0;
-  padding: 0.5em 0.6em;
-  margin: 0.25em 0;
 }
 
-/* Totals that carry no damage type. A tinted one sets its colour inline and
-   keeps it — that is the palette talking, and it stays the brightest thing in
-   the row. */
-.guide-roll b {
-  color: #f2f2f2;
+/* ── the head ───────────────────────────────────────────────────────────── */
+
+.guide-roll .gr-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.guide-roll .gr-n { font-family: 'Cinzel', serif; font-weight: 600; font-size: 14px; letter-spacing: 0.06em; }
+.guide-roll .gr-s,
+.guide-roll .gr-tgt { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.65; }
+.guide-roll .gr-tgt { margin-top: 3px; }
+
+/* ── a line of maths ────────────────────────────────────────────────────── */
+
+/* NO FIXED ACCENT ON SMALL TEXT. A label in `--cyan` is 2.83:1 on white, and
+   the whole point of this card is not caring which ground it lands on — so the
+   labels are the log's own ink, quietened. The rail keeps the cyan: it is a
+   2px block, not something anybody has to read. */
+.guide-roll .gr-r { display: flex; align-items: baseline; gap: 9px; margin-top: 7px; }
+.guide-roll .gr-k { font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.6; }
+.guide-roll .gr-w { font-size: 9.5px; opacity: 0.6; }
+.guide-roll .gr-v {
+  margin-left: auto;
+  font-family: 'Cinzel', serif; font-weight: 600; font-size: 17px;
+  font-variant-numeric: tabular-nums;
 }
 
-/* The break line, in the card's own colour rather than Foundry's parchment
-   gradient — which was built for a light ground and reads as a beige smear on
-   this one. Only the margin comes from the element's inline style. */
-.guide-roll hr {
-  height: 0;
-  border: 0;
-  border-top: 1px solid rgba(0, 166, 214, 0.35);
-  background-image: none;
-}
+/* The damage chip. Its two colours come from the markup — see the header. */
+.guide-roll .gr-type { font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; padding: 1px 6px; }
+/* No colour could be resolved, so there is no fill to prove legible: an outline
+   in the reader's own ink instead. */
+.guide-roll .gr-type.gr-plain { background: none; border: 1px solid currentColor; opacity: 0.6; }
 
-/* dnd5e's enrichers — the save button and a condition's reference link — are
-   coloured for the light card they normally land on. */
+.guide-roll .gr-d { display: inline-block; min-width: 1.4em; text-align: center; }
+.guide-roll .gr-out { text-decoration: line-through; opacity: 0.5; }
+.guide-roll .gr-re { font-style: italic; }
+.guide-roll .gr-or { opacity: 0.5; }
+
+/* ── what the engine added, and what it said ────────────────────────────── */
+
+.guide-roll .gr-c { display: flex; gap: 8px; justify-content: space-between; font-size: 9.5px; opacity: 0.75; margin-top: 7px; }
+.guide-roll .gr-note { font-family: 'EB Garamond', serif; font-size: 13px; line-height: 1.35; margin-top: 4px; }
+
+/* ── the footer ─────────────────────────────────────────────────────────── */
+
+/* Foundry's own rule, left as Foundry draws it — borrowing the log's furniture
+   is the whole idea, and a rule is furniture. Only the margin is ours: 1rem
+   inside a card this size is a gap, not a rule. */
+.guide-roll hr { margin: 0.5em 0; }
+
+.guide-roll .gr-f { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; font-size: 10px; opacity: 0.85; }
+.guide-roll .gr-f b { font-variant-numeric: tabular-nums; }
+.guide-roll .gr-flag { border: 1px solid currentColor; padding: 0 0.3em; font-size: 0.85em; letter-spacing: 0.1em; }
+.guide-roll .gr-verdict { margin-left: auto; font-size: 8.5px; letter-spacing: 0.22em; padding: 1px 6px; }
+
+/* ── dnd5e's own enrichers ──────────────────────────────────────────────── */
+
+/* The save button and a condition's reference link. dnd5e colours them for the
+   light card they normally land on; on a borrowed ground either can be the one
+   underneath, so these take a mid cyan that holds up on both (4.6:1 on the
+   log's white, 3.9:1 on a dark one) rather than the codex's own hot cyan. */
 .guide-roll a,
 .guide-roll .reference-link a,
-.guide-roll .roll-link a {
-  color: #4dd6ff;
-  text-decoration: none;
-}
-
-.guide-roll a:hover {
-  color: #d4bf7d;
-  text-shadow: 0 0 6px rgba(77, 214, 255, 0.4);
-}
-
-/* The apply-a-condition control dnd5e hangs off a reference link. It is an
-   action, so it stays legible rather than borrowing the link colour. */
-.guide-roll .enricher-action {
-  color: #d4bf7d;
-}
+.guide-roll .roll-link a { color: #0a7ea4; text-decoration: none; border-bottom: 1px dotted currentColor; }
+.guide-roll a:hover { color: #00a6d6; }
+.guide-roll .enricher-action { color: inherit; opacity: 0.7; }

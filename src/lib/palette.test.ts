@@ -6,7 +6,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { DAMAGE, colorOf } from './palette.ts'
+import { DAMAGE, colorOf, inkOn } from './palette.ts'
 
 test('every damage type resolves to a design token, never a literal', () => {
   // The whole argument for preferring a name over a hex. A literal here would be
@@ -36,5 +36,31 @@ test('the stylesheet names no damage types', () => {
 test('an unknown colour is null, so callers can fail closed', () => {
   for (const bad of ['plaid', 'javascript:alert(1)', '#zz', '--Bad_Token', '']) {
     assert.equal(colorOf(bad), null, `${bad} must not resolve`)
+  }
+})
+
+/* THE PALETTE INVERTS ON A FILL. These colours are built to glow on the codex's
+   near-black ground; painted as a swatch they are light, and light wants dark
+   ink. The Foundry chat card fills a chip per damage type precisely so the
+   colour stops depending on what ground the reader's chat log happens to be. */
+test('a filled swatch gets ink that can be read on it', () => {
+  assert.equal(inkOn('#ff5454'), '#111111')   // --danger-hot, fire
+  assert.equal(inkOn('#4dd6ff'), '#111111')   // --cyan-hot, lightning
+  assert.equal(inkOn('#e2b021'), '#111111')   // --gold-rare, radiant
+  // …and the one that does not: --danger is dark enough to carry white.
+  assert.equal(inkOn('#b93a3a'), '#ffffff')
+  assert.equal(inkOn('#000000'), '#ffffff')
+})
+
+test('short hex is the same colour as its long form', () => {
+  assert.equal(inkOn('#fff'), inkOn('#ffffff'))
+  assert.equal(inkOn('#F00'), inkOn('#ff0000'))
+})
+
+test('a colour that is not a hex gets no ink, so the caller fills nothing', () => {
+  // `cssVar` hands back whatever the stylesheet held; anything but a hex means
+  // the chip cannot be proven legible, and a tinted label is the safe render.
+  for (const bad of ['var(--fire)', 'rebeccapurple', 'oklch(70% .1 20)', '', '#zz']) {
+    assert.equal(inkOn(bad), null, `${bad} must not yield an ink`)
   }
 })
