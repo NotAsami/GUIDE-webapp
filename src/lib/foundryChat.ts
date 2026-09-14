@@ -132,14 +132,19 @@ export function rollChatHtml(
       : chip
         ? `<span class="gr-type" style="background:${chip.fill};color:${chip.ink}">${esc(l.type)}</span>`
         : `<span class="gr-type gr-plain">${esc(l.type)}</span>`
-    const dice = save ? '' : l.dice.map(dieChip).join(l.mode ? ' <span class="gr-or">vs</span> ' : ' ')
-    const mods = save || !l.mods ? '' : ` ${l.mods > 0 ? '+' : '−'}${Math.abs(l.mods)}`
+    /* THE FORMULA IS WHAT SAYS THEY ARE DICE. Without it the faces arrive as a
+       bare "4 5" — two numbers with nothing to say where they came from, which
+       is how this read at the table. The panel always put `2d6` in front of
+       them; this is the card catching up. */
+    const faces = l.dice.map(dieChip).join(l.mode ? ' <span class="gr-or">vs</span> ' : ' <span class="gr-or">+</span> ')
+    const dice = save || !l.dice.length ? '' : `<span class="gr-fx">${esc(l.formula)}</span> (${faces})`
+    const mods = save || !l.mods ? '' : ` <span class="gr-or">${l.mods > 0 ? '+' : '−'}</span> ${Math.abs(l.mods)}`
     const total = save ? `[[/save ${entry.saveAbility} ${entry.saveDC}]]{DC ${entry.saveDC}}` : String(l.total)
-    return `<div class="gr-r">`
-      + `<span class="gr-k">${esc(l.label)}</span>${type}`
-      + `<span class="gr-w">${dice}${mods}</span>`
-      + `<b class="gr-v">${total}</b>`
-      + `</div>`
+    return `<tr class="gr-r">`
+      + `<td class="gr-k">${esc(l.label)}${type}</td>`
+      + `<td class="gr-w">${dice}${mods}</td>`
+      + `<td class="gr-v">${total}</td>`
+      + `</tr>`
   }
 
   /* ONLY THE LIVE ONES. A rider the player left switched off contributed
@@ -210,9 +215,16 @@ export function rollChatHtml(
     /* `lineViews` puts the save DC first, and it is the only row that is not a
        roll — see lineRow. Without an ability there is nothing to enrich with,
        so it stays the plain number it is today. */
+    /* A REAL TABLE, so the three columns line up down the card however long a
+       formula gets — and Foundry renders tables in chat. Its own chrome is
+       turned off in guide-roll.css: the system's `--table-background-color` is
+       a DARK wash defined on `body`, which on the hard-coded-light chat log
+       would put the log's dark ink on a dark ground. */
+    + `<table class="gr-rows"><tbody>`
     + lines
       .map((l, i) => lineRow(l, i === 0 && entry.saveDC !== undefined && entry.saveAbility !== undefined))
       .join('')
+    + `</tbody></table>`
     + contributions.join('')
     + notes.join('')
     /* Foundry's own rule, not a border of ours — the same break line the rest of

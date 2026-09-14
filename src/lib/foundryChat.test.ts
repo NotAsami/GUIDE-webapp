@@ -54,6 +54,16 @@ test('a manual rider the player left off contributes nothing and is not listed',
   assert.match(html, /<b>8<\/b> slashing/)
 })
 
+/* "4 5" WAS TWO NUMBERS WITH NOTHING TO SAY THEY WERE DICE. The formula in
+   front of the faces is what makes the row readable, and the rows are a real
+   table so the columns line up however long a formula runs. */
+test('a rolled line shows its formula in front of its faces', () => {
+  const html = rollChatHtml(entry({ attack: ATTACK, damage: DAMAGE }), resolve)
+  assert.match(html, /<table class="gr-rows">/)
+  assert.match(html, /<span class="gr-fx">1d8<\/span> \(/)
+  assert.match(html, /<span class="gr-d">5<\/span>\)/)
+})
+
 /* THE DC IS A BUTTON, NOT A NUMBER TO COPY OUT. Foundry enriches a chat
    message's content when it renders, so dnd5e's own save enricher reaches the
    log as a control that rolls the save for whatever is selected. Raw: escaped,
