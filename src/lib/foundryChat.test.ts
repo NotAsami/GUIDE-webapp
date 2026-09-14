@@ -31,7 +31,7 @@ test('the totals in the card are the panel’s totals', () => {
   assert.match(html, /<b>8<\/b> slashing/)
   /* Foundry's own break line, not a border of ours: `hr` is styled app-wide
      with the gradient the rest of the interface uses. */
-  assert.match(html, /<hr /)
+  assert.match(html, /<hr>/)
 })
 
 /* THE SAME SPLIT §49 GUARDS. The roller already folded a non-manual rider into
@@ -71,16 +71,37 @@ test('a DC with no ability named stays a plain number — the enricher needs one
   assert.match(html, />15</)
 })
 
-test('a damage type carries its palette colour, resolved to a literal', () => {
+/* A FILLED CHIP, NOT TINTED TEXT. The palette is built to glow on the codex's
+   near-black ground and Foundry's chat log is hard-coded light, so a tint could
+   never be legible on both. The ink is computed from the fill — see inkOn. */
+test('a damage type is a filled chip, inked so it can be read on the fill', () => {
   const html = rollChatHtml(entry({ damage: DAMAGE }), resolve)
-  assert.ok(html.includes('color:#8a8a8a'))
+  assert.ok(html.includes('background:#8a8a8a'))
+  assert.ok(html.includes('color:#111111'))
   // A `var()` reaching Foundry would render as inherited text — it has no tokens.
   assert.ok(!html.includes('var(--'))
 })
 
-test('an unresolvable colour is omitted rather than emitted as var()', () => {
+/* THE VERDICT IS A CHIP FOR THE PALETTE'S OWN REASON: green text is 2.76:1 on
+   the log's white, and the log is hard-coded light. Filled and inked, it is
+   legible on whatever ground it lands on. */
+test('a verdict is filled and inked, and says which way it went', () => {
+  const green = (s: string | null) => (s === 'var(--good)' ? '#4fae6b' : s === 'var(--danger-hot)' ? '#ff5454' : null)
+  const card = (hit: boolean) =>
+    rollChatHtml(entry({ attack: ATTACK, target: { token: 't1', name: 'Goblin', hit } }), green)
+  assert.match(card(true), /class="gr-verdict" style="background:#4fae6b;color:#111111">HIT</)
+  assert.match(card(false), /class="gr-verdict" style="background:#ff5454;color:#111111">MISS</)
+  // No target verdict at all: no chip to colour.
+  assert.ok(!rollChatHtml(entry({ attack: ATTACK }), green).includes('gr-verdict'))
+})
+
+test('an unresolvable colour outlines the type rather than filling it', () => {
   const html = rollChatHtml(entry({ damage: { ...DAMAGE, type: 'fire' } }), () => null)
   assert.ok(!html.includes('var(--'))
+  /* No fill means no ink that can be proven legible on it, so the type is drawn
+     in the reader's own ink instead — the same fail-closed rule colorOf has. */
+  assert.ok(!html.includes('background:'))
+  assert.match(html, /gr-plain/)
   assert.match(html, /<b>8<\/b> fire/)
 })
 
@@ -96,7 +117,10 @@ test('a dropped die is struck through, not dropped from the card', () => {
   const html = rollChatHtml(entry({
     attack: { ...ATTACK, rolls: faces(20, 14, 3), mode: 'adv' },
   }), resolve)
-  assert.match(html, /line-through/)
+  /* The strike itself is the stylesheet's now (`gr-out` in guide-roll.css) —
+     what this guards is that the losing die is still MARKED and still there.
+     Seeing what you beat is most of the point of advantage. */
+  assert.match(html, /class="gr-d gr-out"/)
   assert.ok(html.includes('>3<'))
 })
 

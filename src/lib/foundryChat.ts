@@ -16,7 +16,7 @@ import { Fragment, createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { RollEntry } from './rolls.tsx'
 import { lineViews, riderAmount, riderViews, rollTotals } from './rollView.ts'
-import { colorOf } from './palette.ts'
+import { colorOf, inkOn } from './palette.ts'
 import { FOUNDRY_CONDITIONS } from './foundryDamage.ts'
 import { renderInline } from './markdown.ts'
 import { interpolate, type ExprScope } from './expr.ts'
@@ -95,13 +95,14 @@ export function rollChatHtml(
   const lines = lineViews(entry)
   const views = riderViews(entry)
   const totals = rollTotals(entry, views)
-  const muted = 'opacity:.6'
-
+  /* PRESENTATION LIVES IN THE STYLESHEET (foundry/guide-bridge/guide-roll.css),
+     which is why these are classes and not inline styles: an inline style
+     outranks the module's CSS, so anything stated here could never be restyled
+     there. What stays inline is the one thing that is per-roll DATA — a damage
+     type's colour. */
   const dieChip = (d: { v: number; dropped?: boolean; rerolled?: boolean }) => {
-    const style = ['display:inline-block', 'min-width:1.4em', 'text-align:center', 'padding:0 .2em']
-    if (d.dropped) style.push('text-decoration:line-through', 'opacity:.45')
-    if (d.rerolled) style.push('font-style:italic')
-    return `<span style="${style.join(';')}">${d.v}</span>`
+    const cls = ['gr-d', d.dropped ? 'gr-out' : '', d.rerolled ? 'gr-re' : ''].filter(Boolean).join(' ')
+    return `<span class="${cls}">${d.v}</span>`
   }
 
   /**
@@ -118,15 +119,27 @@ export function rollChatHtml(
    * already rolled, which is two different numbers for one swing.
    */
   const lineRow = (l: (typeof lines)[number], save = false) => {
-    const colour = tint(l.type, resolve)
-    const dice = save ? '' : l.dice.map(dieChip).join(l.mode ? ' <span style="' + muted + '">vs</span> ' : ' ')
-    const mods = save || !l.mods ? '' : ` <span style="${muted}">${l.mods > 0 ? '+' : '−'}${Math.abs(l.mods)}</span>`
-    const label = esc(l.label) + (l.type ? ` <span style="${muted}">${esc(l.type)}</span>` : '')
+    /* A DAMAGE TYPE IS A FILLED CHIP, not tinted text. The palette is built to
+       glow on the codex's near-black ground, and Foundry's chat log is
+       hard-coded light — force is `--violet-hot`, about 2.4:1 on white, which
+       is how it came to read as grey. A fill carries its own contrast whatever
+       ground it lands on, so the colour stops depending on the reader's theme.
+       `inkOn` says which ink survives on it; without one (a colour that is not
+       a hex, or a stylesheet that resolved nothing) there is no chip to prove
+       legible, and the type stays plain text. */
+    const fill = tint(l.type, resolve)
+    const ink = fill ? inkOn(fill) : null
+    const type = !l.type ? ''
+      : fill && ink
+        ? `<span class="gr-type" style="background:${fill};color:${ink}">${esc(l.type)}</span>`
+        : `<span class="gr-type gr-plain">${esc(l.type)}</span>`
+    const dice = save ? '' : l.dice.map(dieChip).join(l.mode ? ' <span class="gr-or">vs</span> ' : ' ')
+    const mods = save || !l.mods ? '' : ` ${l.mods > 0 ? '+' : '−'}${Math.abs(l.mods)}`
     const total = save ? `[[/save ${entry.saveAbility} ${entry.saveDC}]]{DC ${entry.saveDC}}` : String(l.total)
-    return `<div style="display:flex;gap:.5em;align-items:baseline;padding:.15em 0">`
-      + `<span style="flex:1${colour ? `;color:${colour}` : ''}">${label}</span>`
-      + `<span>${dice}${mods}</span>`
-      + `<b style="min-width:2.2em;text-align:right${colour ? `;color:${colour}` : ''}">${total}</b>`
+    return `<div class="gr-r">`
+      + `<span class="gr-k">${esc(l.label)}</span>${type}`
+      + `<span class="gr-w">${dice}${mods}</span>`
+      + `<b class="gr-v">${total}</b>`
       + `</div>`
   }
 
@@ -139,7 +152,7 @@ export function rollChatHtml(
      is how the card came to print "+0" for a rolled 2d6 while the total counted
      it — one contribution, two renderers, only one of them reading the faces. */
   const contributions = live.filter(v => v.kind !== 'note').map(v =>
-    `<div style="display:flex;gap:.5em;${muted}"><span style="flex:1">${esc(v.rider.source)} · ${esc(v.rider.label)}</span>`
+    `<div class="gr-c"><span>${esc(v.rider.source)} · ${esc(v.rider.label)}</span>`
     + `<span>${esc(v.kind === 'flag' ? (v.grants ?? '') : riderAmount(v.rider))}</span></div>`)
 
   /* A CHOSEN NOTE IS THE POINT OF THE ROLL, not a footnote to it. Brutal
@@ -148,50 +161,58 @@ export function rollChatHtml(
      with the actual consequence of the hit missing. Answered notes only: an
      option the player did not take is not what happened. */
   const notes = live.filter(v => v.kind === 'note').map(v =>
-    `<div style="border-left:2px solid currentColor;padding-left:.5em;margin:.2em 0">`
-    + prose(v.rider.text ?? v.rider.label, resolve, scope) + `</div>`)
+    `<div class="gr-note">${prose(v.rider.text ?? v.rider.label, resolve, scope)}</div>`)
 
-  const flags = totals.flags.map(f =>
-    `<span style="border:1px solid currentColor;border-radius:2px;padding:0 .3em;font-size:.85em">${f}</span>`).join(' ')
+  const flags = totals.flags.map(f => `<span class="gr-flag">${f}</span>`).join(' ')
 
-  const byType = Object.entries(totals.byType).map(([t, n]) => {
-    const colour = tint(t, resolve)
-    return `<span${colour ? ` style="color:${colour}"` : ''}><b>${n}</b> ${esc(t)}</span>`
-  }).join(' <span style="' + muted + '">+</span> ')
+  /* NO TINT DOWN HERE. The chip above already says what colour the damage is,
+     and a tinted total was the half of it that could not be made legible on
+     both grounds. */
+  const byType = Object.entries(totals.byType)
+    .map(([t, n]) => `<span><b>${n}</b> ${esc(t)}</span>`)
+    .join(' <span class="gr-or">+</span> ')
 
-  const footer = [
+  /* The verdict sits at the end of the footer rather than beside the target's
+     name: it is the answer, and the answer belongs where the totals are. */
+  /* A CHIP FOR THE SAME REASON THE DAMAGE TYPE IS ONE. Green text is 2.76:1 on
+     the log's white; a fill of that same green, inked by `inkOn`, is 6.8:1 on
+     any ground at all. No resolvable colour, no fill — the word still says it. */
+  const hit = entry.target?.hit
+  const vFill = hit === undefined ? null : tint(hit ? 'green' : 'red', resolve)
+  const vInk = vFill ? inkOn(vFill) : null
+  const verdict = hit === undefined ? ''
+    : `<span class="gr-verdict"${vFill && vInk ? ` style="background:${vFill};color:${vInk}"` : ''}>`
+      + `${hit ? 'HIT' : 'MISS'}</span>`
+  const sums = [
     totals.attack !== undefined ? `<span><b>${totals.attack}</b> to hit</span>` : '',
     byType,
     flags,
-  ].filter(Boolean).join(' <span style="' + muted + '">·</span> ')
+  ].filter(Boolean).join(' <span class="gr-or">·</span> ')
+  const footer = sums || verdict ? sums + verdict : ''
 
   /* `guide-roll` is the whole hook the module's stylesheet hangs on
-     (foundry/guide-bridge/guide-roll.css) — the card brings its own ground
-     because Foundry's chat log is hard-coded light in its template. No inline
-     font here on purpose: an inline `font-family: inherit` said nothing and
-     outranked the stylesheet that has something to say. */
+     (foundry/guide-bridge/guide-roll.css). The card brings NO ground of its
+     own: it borrows the log's paper and its ink and spends everything on one
+     cyan rail, so it never fights whatever theme the reader is running. What
+     carries colour instead is the damage chip, which carries its own. */
   return `<div class="guide-roll">`
-    + `<div style="font-weight:600">${esc(entry.title)}</div>`
-    + (entry.subtitle ? `<div style="${muted};font-size:.9em">${esc(entry.subtitle)}</div>` : '')
-    /* The verdict travels, the AC does not — the DM already knows the number and
-       the table does not need it in the log. */
-    + (entry.target
-      ? `<div style="${muted};font-size:.9em">vs ${esc(entry.target.name)}`
-        + (entry.target.hit === undefined ? '' : ` · <b>${entry.target.hit ? 'HIT' : 'MISS'}</b>`)
-        + `</div>`
-      : '')
+    + `<div class="gr-h"><span class="gr-n">${esc(entry.title)}</span>`
+    + (entry.subtitle ? `<span class="gr-s">${esc(entry.subtitle)}</span>` : '')
+    + `</div>`
+    /* The target travels, the AC does not — the DM already knows the number and
+       the table does not need it in the log. The verdict is in the footer. */
+    + (entry.target ? `<div class="gr-tgt">vs ${esc(entry.target.name)}</div>` : '')
     /* `lineViews` puts the save DC first, and it is the only row that is not a
        roll — see lineRow. Without an ability there is nothing to enrich with,
        so it stays the plain number it is today. */
-    + `<div style="margin:.35em 0">${lines
+    + lines
       .map((l, i) => lineRow(l, i === 0 && entry.saveDC !== undefined && entry.saveAbility !== undefined))
-      .join('')}</div>`
-    + (contributions.length ? `<div style="font-size:.9em;margin-bottom:.35em">${contributions.join('')}</div>` : '')
-    + (notes.length ? `<div style="font-size:.95em;margin-bottom:.35em">${notes.join('')}</div>` : '')
-    /* Foundry's own rule, not a border of ours: `hr` is styled app-wide with the
-       gradient every other break line in the interface uses, so the card's
-       footer is divided the way Foundry divides things. Only the margin is
-       ours — 1rem inside a chat card is a gap, not a rule. */
-    + (footer ? `<hr style="margin:.4em 0"><div>${footer}</div>` : '')
+      .join('')
+    + contributions.join('')
+    + notes.join('')
+    /* Foundry's own rule, not a border of ours — the same break line the rest of
+       the interface uses. Borrowing the log's furniture is the whole idea here,
+       and a rule is furniture. */
+    + (footer ? `<hr><div class="gr-f">${footer}</div>` : '')
     + `</div>`
 }
