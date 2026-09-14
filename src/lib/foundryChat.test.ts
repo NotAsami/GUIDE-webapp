@@ -118,6 +118,24 @@ test('an answered note reaches the card, rendered as prose', () => {
   assert.ok(!html.includes('**'))
 })
 
+/* A CONDITION IN A NOTE IS A RULE THE DM CAN ACT ON. dnd5e's reference
+   enricher links the SRD entry and hangs its apply-to-selected control off it,
+   so "knocked Prone" stops being a word somebody retypes into the token. */
+test('a condition named in a note crosses as dnd5e’s reference enricher', () => {
+  const html = rollChatHtml(entry({
+    damage: DAMAGE,
+    riderGroups: [{ label: 'Damage', riders: [rider({
+      op: 'note', label: 'Topple', source: 'Mastery',
+      text: 'the target is knocked **Prone** until it stands.',
+      when: 'manual', on: true,
+    })] }],
+  }), resolve)
+  // Lowercased for the lookup, but the sentence keeps the author's own casing.
+  assert.match(html, /&Reference\[prone\]\{Prone\}/)
+  // Markup is not prose: the enricher must never land inside a tag.
+  assert.ok(!/<[^>]*&Reference/.test(html))
+})
+
 test('an option the player did not choose stays out of the card', () => {
   const html = rollChatHtml(entry({
     damage: DAMAGE,
