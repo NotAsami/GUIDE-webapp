@@ -61,6 +61,11 @@ test('an extra damage block is its own line, and each type counts once', () => {
   const t = rollTotals(e, riderViews(e))
   assert.deepEqual(t.byType, { slashing: 8, radiant: 7 })
   assert.equal(t.damage, 15)
+
+  /* MARKED, so a surface can choose. The panel draws only the roll's own line
+     and lets its footer state the split; the toast and the Foundry card, which
+     have no contribution row, show both. */
+  assert.deepEqual(lineViews(e).map(l => !!l.extra), [false, true])
 })
 
 test('rerolling a die patches the block that die belongs to', () => {

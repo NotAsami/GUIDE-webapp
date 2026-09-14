@@ -444,7 +444,10 @@
 .entry.crit .tot.atk .v { color: var(--gold-rare); text-shadow: 0 0 14px rgba(226, 176, 33, 0.45); }
 .entry.fumble .tot.atk .v { color: var(--danger-hot); }
 .tot .split { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
-.tot .split span { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+/* THE TYPE IS COLOURED, NOT JUST ITS NUMBER. With the split now the only place
+   a rider's own damage type is stated, a muted "RADIANT" beside a tinted 4 said
+   the colour belonged to the number rather than to the type. */
+.tot .split span { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dt, var(--muted)); }
 .tot .split span b { font-weight: 500; color: var(--dt, var(--beige)); }
 .grantedRow { margin-top: 9px; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .grantedRow .k { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--beige-dim); }
