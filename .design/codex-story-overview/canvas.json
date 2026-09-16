@@ -15,6 +15,10 @@
     {
       "id": "page-4",
       "name": "Motion"
+    },
+    {
+      "id": "page-5",
+      "name": "Side quests"
     }
   ],
   "artboards": [
@@ -99,6 +103,33 @@
       "w": 1440,
       "h": 900,
       "is_interactive": true
+    },
+    {
+      "file": "Orbit.dc.html",
+      "title": "A \u00b7 Outer orbit",
+      "page": "page-5",
+      "x": 0,
+      "y": 0,
+      "w": 1470,
+      "h": 830
+    },
+    {
+      "file": "Ticks.dc.html",
+      "title": "B \u00b7 Ticks on the ring",
+      "page": "page-5",
+      "x": 1590,
+      "y": 0,
+      "w": 1470,
+      "h": 830
+    },
+    {
+      "file": "Belt.dc.html",
+      "title": "C \u00b7 Off-lattice belt",
+      "page": "page-5",
+      "x": 3180,
+      "y": 0,
+      "w": 1470,
+      "h": 830
     }
   ],
   "annotations": [
@@ -181,10 +212,42 @@
       "y": -560,
       "w": 1000,
       "text": "E \u00b7 LIVE. Click a card, click a thread \u2014 then click another node to hop straight across without surfacing.\n\nThree depths, one continuous transform of a single body:\n  Codex  -> three cards on the glyph, sigil at 0.66\n  Story  -> the lattice dossier at 1.0, arc and leaders drawing on\n  Thread -> 2.4x onto the node you picked, the quest record replacing the dossier\n\nHOPPING. The other threads do not leave when you zoom \u2014 they are still pinned to the lattice, they just moved. Their positions come from the same mapping the zoom uses (P -> O + 2.4(P - O) + t), so a hop chip always sits exactly on its node. Hopping only changes which node is centred: the lattice pans, the record swaps, you never surface. Chip labels grow away from the record column so they can never land under the text.\n\nTIMING \u2014 two clocks, not one. The entrance (arc sweep, six staggered leaders, ~2.1s) plays ONCE on mount and is allowed to be cinematic; it is a scan completing. The zoom, layer fades and focus ring fire on EVERY click and stay quick \u2014 460 / 220 / 380ms. Hover and focus feedback (160-220ms) is fixed and scales with nothing: that is response, not choreography.\nThe Motion > pace tweak above the artboard scales both clocks at once, 0.5x to 2x. 1x is the tuned default. (An earlier build had these halved on a report of sluggishness that turned out to be Zen, not the timings \u2014 Chromium was always fine.)\n\nCLIPPING. Real bug, worst exactly where it was reported. At 2.4x on the TOP node the lattice reaches 242px into the record column (46px on the middle node, 6px on the bottom). Fixed with a feathered dark ground under the record \u2014 no border, no frame, the same device direction A uses \u2014 plus text-wrap: balance on the title.\n\nHONEST SCOPE: Main Story's three threads are wired. Character and Region open the same lattice."
+    },
+    {
+      "id": "sq-brief",
+      "page": "page-5",
+      "x": 0,
+      "y": -420,
+      "w": 1100,
+      "text": "SIDE QUESTS have no home. Drawn on the REAL shipped geometry this time \u2014 1470x830, the body where the app actually puts it (y 206-762), the 640px sigil at centre (170,330), nodes on r=220, the dossier at x=520, rows 108/92. What is on these boards is buildable as drawn.\n\nYour data, unchanged: 3 main quests have nodes; The Thicket Path, Whispers in Castella and The Mayor's Welcome have none anywhere. They only feed the Region card's location tallies.\n\nWorth deciding first: is a side quest part of the STORY, or beside it? A and C answer that opposite ways, and B declines to answer."
+    },
+    {
+      "id": "sq-a",
+      "page": "page-5",
+      "x": 0,
+      "y": -190,
+      "w": 700,
+      "text": "A \u00b7 OUTER ORBIT \u2014 your instinct, built properly. Axis: same system, lower rank.\n\nSide nodes sit on the sigil's own outer circle (r=300) with dashed grey leaders breaking at r=315, and they get their own compact rows under a SIDE rule \u2014 44px each, no meta line, against the main threads' 92px. Same grammar as a main thread, visibly demoted.\n\nTradeoff, and it is the real one: it spends the height. Three main rows plus three side rows ends at y=546 in a 556px body \u2014 it fits with 10px to spare, and a fourth of either overflows. It is also the only option where a quest gains a node without gaining importance, which is the thing you were reaching for."
+    },
+    {
+      "id": "sq-b",
+      "page": "page-5",
+      "x": 740,
+      "y": -190,
+      "w": 700,
+      "text": "B \u00b7 TICKS ON THE RING \u2014 axis: presence without a claim.\n\nA side quest is a tick across the progress ring, not a node: no leader, no row, no name until you hover one (shown hovered). They are on the instrument but not in the story \u2014 the ring says how many exist and where to click, and nothing more.\n\nTradeoff: unscannable. You cannot read your side quests, only discover them, and three ticks look identical until touched. Costs zero height, which is why it survives a fourth and fifth quest where A does not.\n\nHonest wrinkle: a tick's ANGLE means nothing. The main nodes' angles are solved from their rows; these are just spaced. If that bothers you, it should \u2014 it is decoration pretending to be data."
+    },
+    {
+      "id": "sq-c",
+      "page": "page-5",
+      "x": 1480,
+      "y": -190,
+      "w": 700,
+      "text": "C \u00b7 OFF-LATTICE BELT \u2014 axis: honest separation.\n\nSide quests leave the instrument entirely and sit as a labelled strip under it, in space the lattice was wasting. No ring, no wire, no rank. The centre readout moves up 56px to make room.\n\nTradeoff: it says out loud that these are not the story, which is either exactly right or reads as exile. It also breaks the screen's one rule \u2014 that everything on the left is the instrument \u2014 so the left half now holds two unrelated things.\n\nCheapest to build by a distance: no geometry at all, and it grows to 6+ quests by wrapping."
     }
   ],
   "launch": {
     "view": "canvas",
-    "page": "page-4"
+    "page": "page-5"
   }
 }

@@ -157,6 +157,40 @@
 /* The open one already wears the halo; a hover ring on top would double it. */
 .nodeOpen { cursor: default; }
 .nodeOpen:hover::after { border-color: transparent; box-shadow: none; }
+/* ---------- the outer orbit: side quests, one rank down ----------
+   Dashed and grey against the main spine's solid cyan, and hollow rather than
+   filled, so the rank reads before the glyph does. */
+.wireSide { stroke: var(--muted); stroke-opacity: 0.34; stroke-dasharray: 3 4; }
+.sideNode { fill: none; stroke: var(--muted); stroke-opacity: 0.7; stroke-width: 1.4; }
+.wireSide .sideNode { stroke-opacity: 0.7; }
+
+/* The rule between the two ranks. EXACTLY SIDE_GAP tall (30px) — the side rows'
+   y positions are solved from that number, so a taller rule walks every side
+   leader off its own title. */
+.sideRule {
+  display: flex; align-items: center; gap: 11px;
+  height: 30px; box-sizing: border-box; padding-top: 12px;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.3em;
+  color: var(--beige-dim); text-transform: uppercase;
+}
+.sideRule::after {
+  content: ""; flex: 1; height: 1px; background: rgba(212, 191, 125, 0.14);
+  order: 1;
+}
+.sideCount { order: 2; color: var(--beige-dim); }
+
+/* 44px against a main thread's 92, and no meta line. */
+.sideRow { border-top: 0; }
+.sideRow .rowTop {
+  /* SIDE_TITLE_OFF is 11, so this band is 22 and the title centres on it. */
+  height: 22px;
+}
+.sideRow .rowGlyph { font-size: 11px; color: var(--beige-dim); }
+.sideRow .rowTitle { font-size: 16px; color: var(--muted); }
+.sideRow .rowTone { font-size: 7px; color: var(--beige-dim); }
+.sideRow.closed .rowTitle { color: var(--beige-dim); }
+.sideRow:hover .rowTitle, .sideRow.open .rowTitle { color: var(--text); }
+
 /* Every wire but the open one, at the thread depth. */
 .wireDim { opacity: 0.22; transition: opacity 260ms ease; }
 
@@ -179,6 +213,10 @@
   font-variant-numeric: tabular-nums; margin-top: 9px;
 }
 .pctSign { font-size: 36px; color: var(--muted); text-shadow: none; }
+.centreDone {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em;
+  color: var(--muted); text-transform: uppercase; margin-top: 10px;
+}
 .centreRule { width: 54px; height: 1px; background: rgba(212, 191, 125, 0.5); margin: 12px auto; }
 .chapter {
   font-family: var(--font-display); font-weight: 600; font-size: 24px;

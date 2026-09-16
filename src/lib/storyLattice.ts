@@ -54,16 +54,46 @@ export interface Wire { nx: number; ny: number; ex: number; ey: number }
  *  threads instead of exactly the three the design was drawn with. Past the
  *  ring's vertical reach asin has no answer: return null and let the row list
  *  without a node, which is honest degradation rather than a NaN in the markup. */
-export function solve(y: number): Wire | null {
-  const sin = (y - CY) / R_EXIT
+export function solve(y: number, rNode = R_NODE, rExit = R_EXIT): Wire | null {
+  const sin = (y - CY) / rExit
   if (sin < -1 || sin > 1) return null
   const theta = Math.asin(sin)
   return {
-    nx: CX + R_NODE * Math.cos(theta),
-    ny: CY + R_NODE * Math.sin(theta),
-    ex: CX + R_EXIT * Math.cos(theta),
+    nx: CX + rNode * Math.cos(theta),
+    ny: CY + rNode * Math.sin(theta),
+    ex: CX + rExit * Math.cos(theta),
     ey: y,
   }
+}
+
+/* ---- THE OUTER ORBIT: where side quests live ----
+   Same grammar as a main thread — a node, a leader, a row — one rank down in
+   every dimension: further out (the sigil's own outer circle rather than the
+   inner ring), grey rather than cyan, dashed rather than solid, and a 44px row
+   with no meta line against a main thread's 92px.
+   The compact row is not only taste. Three main plus three side at 92px would
+   end at y=660 in a ~556px body; at 44px they end at 546 and fit. */
+export const R_SIDE_NODE = 300
+export const R_SIDE_EXIT = 315
+/** The "SIDE" rule that separates the two groups. */
+export const SIDE_GAP = 30
+export const SIDE_ROW_H = 44
+export const SIDE_TITLE_OFF = 11
+
+/** A side row's title line — it starts below however many main rows there are. */
+export const sideRowY = (i: number, mainCount: number) =>
+  ROWS_TOP + mainCount * ROW_H + SIDE_GAP + i * SIDE_ROW_H + SIDE_TITLE_OFF
+
+/** One wire per thread, each solved on the ring its KIND belongs to. Parallel to
+ *  the threads array, so everything downstream — leaders, focus, the zoom — can
+ *  read `wires[i]` without caring which group a thread came from. */
+export function wiresFor(threads: Thread[]): (Wire | null)[] {
+  const mainCount = threads.filter(t => t.kind === 'main').length
+  let m = 0
+  let s = 0
+  return threads.map(t => (t.kind === 'main'
+    ? solve(rowY(m++))
+    : solve(sideRowY(s++, mainCount), R_SIDE_NODE, R_SIDE_EXIT)))
 }
 
 /** The progress ring, swept clockwise from the top. */
@@ -82,7 +112,11 @@ export function arcPath(percent: number): string | null {
 }
 
 export type Tone = 'current' | 'active' | 'closed'
-export interface Thread { id: string; title: string; meta: string; tone: Tone }
+/** `kind` is RANK, not status: which ring the thread sits on and how big its row
+ *  is. Only the main story card has both — a region or a relation is always
+ *  'main' here, because those cards have no second tier. */
+export type Kind = 'main' | 'side'
+export interface Thread { id: string; title: string; meta: string; tone: Tone; kind: Kind }
 
 const slug = (s: string) => s.toLowerCase().replace(/\s+/g, '-')
 
@@ -106,21 +140,25 @@ export function threadsFor(story: ProgressStory, quests: QuestRow[], character: 
     // useCampaign's created_at order inside each group, so a DM edit never
     // reshuffles the list under the player.
     const rank = (q: QuestRow) => (q.status === 'active' ? 0 : q.status === 'failed' ? 1 : 2)
-    return quests
-      .filter(q => q.type === 'main')
+    const group = (kind: Kind): Thread[] => quests
+      .filter(q => (kind === 'main' ? q.type === 'main' : q.type === 'side'))
       .slice()
       .sort((a, b) => rank(a) - rank(b))
       .map((q, i) => {
         const done = q.objectives.filter(o => o.done).length
-        const bits = [q.location, q.given_by].filter(Boolean)
-        if (q.objectives.length > 0) bits.push(`Obj ${done} / ${q.objectives.length}`)
+        const bits = kind === 'main' ? [q.location, q.given_by].filter(Boolean) : [q.location]
+        if (kind === 'main' && q.objectives.length > 0) bits.push(`Obj ${done} / ${q.objectives.length}`)
         return {
           id: q.id,
           title: q.title,
-          meta: bits.join(' · '),
-          tone: q.status !== 'active' ? 'closed' : i === 0 ? 'current' : 'active',
+          meta: bits.filter(Boolean).join(' · '),
+          tone: (q.status !== 'active' ? 'closed' : i === 0 && kind === 'main' ? 'current' : 'active') as Tone,
+          kind,
         }
       })
+    // Side quests used to appear on no card at all — they only fed the region
+    // card's location tallies. They are the same campaign, one rank down.
+    return [...group('main'), ...group('side')]
   }
 
   if (story.emblem === 'region') {
@@ -136,6 +174,7 @@ export function threadsFor(story: ProgressStory, quests: QuestRow[], character: 
         title: loc,
         meta: `${n} ${n === 1 ? 'quest' : 'quests'} logged`,
         tone: i === 0 ? 'current' : 'active',
+        kind: 'main',
       }))
   }
 
@@ -145,6 +184,7 @@ export function threadsFor(story: ProgressStory, quests: QuestRow[], character: 
     title: r.name,
     meta: [r.type, r.attitude ?? 'unknown'].join(' · '),
     tone: i === 0 ? 'current' : 'active',
+    kind: 'main',
   }))
 }
 
@@ -187,12 +227,14 @@ export function recordFor(
   const blank = { status: null, meta: [], body: '', objectives: [], related: [], links: [] }
 
   if (story.emblem === 'main') {
-    const q = quests.find(x => x.id === threadId && x.type === 'main')
+    // Any quest on this card, main or side — the filter used to be `type ===
+    // 'main'`, which would now list a side thread and refuse to open it.
+    const q = quests.find(x => x.id === threadId)
     if (!q) return null
     return {
       ...blank,
       title: q.title,
-      kicker: 'Main Quest',
+      kicker: q.type === 'main' ? 'Main Quest' : 'Side Quest',
       status: STATUS[q.status],
       meta: [
         ...(q.given_by ? [{ k: 'Given by', v: q.given_by }] : []),
@@ -276,4 +318,38 @@ export function zoomTo(node: Wire, y: number): Zoom {
       + `${(focal.y - ZOOM * node.ny).toFixed(2)}px) scale(${ZOOM})`,
     focal,
   }
+}
+
+/* ============================================================
+   COMPLETION — what the percent MEANS.
+
+   A card is a completionist measure, not a narrative one: it answers "how much
+   of this have I finished", and side quests count toward it. So the number is
+   DERIVED wherever there is something to count, and falls back to the DM's
+   authored `percent` where there is not.
+
+   One quest is one unit. A one-line side quest therefore counts as much as a
+   three-objective main quest — chosen over counting objectives because it is
+   how a player talks about it, and because a quest with no objectives would
+   otherwise be worth nothing.
+
+   A FAILED quest stays in the denominator. It is a thing you did not finish,
+   and quietly dropping it would let a botched quest raise your percentage.
+   ============================================================ */
+
+export interface Completion { done: number; total: number; percent: number }
+
+/** Null means "nothing countable here" and the caller must fall back to the
+ *  authored number — which is the honest state for two of the three emblems
+ *  today: region has no locations table, and a relation never completes. Both
+ *  become countable when their deferred schema lands (a `locations` table, and
+ *  `quests.character_id` for personal quests). */
+export function completionFor(
+  story: ProgressStory, quests: QuestRow[], _character: CharacterRow,
+): Completion | null {
+  if (story.emblem !== 'main') return null
+  // Every quest on this card, both ranks — that is the whole point.
+  if (quests.length === 0) return null
+  const done = quests.filter(q => q.status === 'completed').length
+  return { done, total: quests.length, percent: Math.round((done / quests.length) * 100) }
 }
