@@ -320,7 +320,32 @@ State a node carries. Two axes:
 What a formula can read: `level`, `prof`, `str`…`cha` (modifiers),
 `strScore`…`chaScore` (the raw scores — Indomitable Might wants 20, not +5),
 `hp`, `hpMax`, `saveDc`, `attacksThisTurn`, plus every variable in scope.
-Contribution formulas can also read `cast` (the level a spell was cast at).
+Contribution formulas can also read `cast` (the level a spell was cast at),
+plus two that come from the Foundry bridge: `targetAc` (the targeted creature's
+Armour Class, **0 when nothing is targeted** — no creature has AC 0, so the
+absence is readable) and `hit` (did the attack land).
+
+### Writing an on-hit effect
+
+`when: 'hit'` is how "on a hit, deal an extra…" is said. Three states, not two:
+
+| | |
+|---|---|
+| **hit** | The contribution applies, with no question asked. |
+| **miss** | It does not exist. |
+| **no target** | It arrives as the question *"Did the attack hit?"* — exactly what the player answered before the bridge existed. |
+
+That third row is the one that matters. With Foundry closed, or nothing
+targeted, a `hit`-gated effect is never silently dropped; the rest of the
+condition still refuses it (`hit && isRaging` on a character who is not raging
+does not surface at all), and any authored `ask` of your own wins over the
+generated question.
+
+**A `value` is different.** `hit ? 2d8 : 0` in a value has no question to become,
+so with no target it fails loudly as *"Contribution did not resolve"* rather than
+quietly computing the miss branch. Gate on `when` and keep the value plain.
+
+`targetAc` never reaches the player: screens show HIT or MISS, never the number.
 
 A variable declared on a **class, race or background** is in scope too, on any
 character carrying it — that is how a feature reads its own class's progression.
@@ -578,6 +603,38 @@ Use `ask` instead when the condition is judged **per roll** rather than held —
 "did at least one of them fail the save?" is not a stance you leave switched on.
 
 ---
+
+## Spell attacks
+
+A spell resolves one of two ways, and the editor asks separately:
+
+- **Saving throw** — the target rolls, against the caster's DC.
+- **Attack roll** — *Spell attack: ranged / melee*. Cast then throws a d20
+  before the damage, at the caster's spell attack bonus from their profile
+  (prof + their spellcasting ability). Fire Bolt is ranged, Shocking Grasp
+  melee.
+
+The spell never names the bonus for the same reason it never names the save
+ability: the class decides it, so the same spell is a better attack from a
+caster with a better score.
+
+Nothing stops you setting both — 5e has a handful that do both, and refusing
+them would be the app inventing a rule.
+
+What an attack spell gains:
+
+- **A crit doubles the damage dice**, never the modifier — the spell's own and
+  any contribution alike. A cantrip doubles what it has *grown* to, so Fire Bolt
+  at level 11 crits for 6d10.
+- **`roll:attack.spell`** matches every spell attack, and `roll:attack.melee` /
+  `roll:attack.ranged` match by which kind it is — the same vocabulary a weapon
+  swing uses.
+- **Hit and miss**, when a token is targeted in Foundry. Damage resolves after
+  the d20, so `when: 'hit'` works on a spell exactly as it does on a weapon
+  (see *Writing an on-hit effect*).
+
+A spell with an attack and no damage is fine — the d20 still rolls, and the
+entry carries it.
 
 ## Weapon mastery
 

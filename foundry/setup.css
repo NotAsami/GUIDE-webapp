@@ -1,0 +1,119 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   G.U.I.D.E. — the setup screen (/setup)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Loaded by Plutonium's Custom Setup Screen addon: copy this file to the
+   Foundry DATA folder (beside `modules`, `systems` and `worlds`) as
+   `setup.css`. See foundry/README.md for the backend patch it needs first.
+
+   THE OPERATOR'S SIDE IS AMBER. Nobody but the DM ever sees this screen, and
+   the codex paints the operator layer amber for exactly that reason — the
+   colour says whose screen you are on before you have read a word of it. The
+   join screen (login.css) is the player's and stays cyan.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --guide-bg: #1d1d1d;
+  --guide-bg-2: #161616;
+  --guide-text: #dedede;
+  --guide-muted: #aaaaaa;
+  --guide-amber: #e2b021;
+  --guide-amber-hot: #ffce4d;
+  --guide-amber-dim: #8a6d1a;
+  --guide-amber-deep: #2a2110;
+}
+
+body {
+  background: var(--guide-bg);
+  background-image:
+    repeating-linear-gradient(
+      0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px
+    ),
+    radial-gradient(ellipse at 50% 0%, #232323 0%, var(--guide-bg-2) 70%);
+  background-attachment: fixed;
+  color: var(--guide-text);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ── panels ─────────────────────────────────────────────────────────────── */
+
+.app,
+#setup-packages,
+#setup-configuration,
+section.window-content,
+.package-list .package {
+  background: rgba(22, 22, 22, 0.92);
+  border: 1px solid var(--guide-amber-dim);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+h1, h2, h3,
+.app h1, .app h2 {
+  font-family: 'Cinzel', serif;
+  color: var(--guide-amber);
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid rgba(226, 176, 33, 0.35);
+}
+
+/* The tab strip reads as a rail rather than as browser chrome. */
+nav.tabs .item,
+.tabs .item {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--guide-muted);
+}
+
+nav.tabs .item.active,
+.tabs .item.active {
+  color: var(--guide-amber-hot);
+  border-bottom: 2px solid var(--guide-amber);
+}
+
+label { color: var(--guide-muted); letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; }
+
+/* ── controls ───────────────────────────────────────────────────────────── */
+
+input[type='text'],
+input[type='password'],
+input[type='search'],
+select,
+textarea {
+  background: #101010;
+  border: 1px solid rgba(226, 176, 33, 0.35);
+  border-radius: 0;
+  color: var(--guide-text);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--guide-amber-hot);
+  box-shadow: 0 0 0 1px var(--guide-amber-hot), 0 0 14px rgba(255, 206, 77, 0.22);
+}
+
+button {
+  background: var(--guide-amber-deep);
+  border: 1px solid var(--guide-amber-dim);
+  border-left: 2px solid var(--guide-amber);
+  border-radius: 0;
+  color: var(--guide-text);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: background 120ms, color 120ms;
+}
+
+button:hover {
+  background: rgba(226, 176, 33, 0.18);
+  color: var(--guide-amber-hot);
+}
+
+a { color: var(--guide-amber-hot); }
+a:hover { color: var(--guide-text); }
+
+.watermark { color: var(--guide-muted); opacity: 0.45; }

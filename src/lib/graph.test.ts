@@ -3,11 +3,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.types.ts'
-import { VAR_IDENTS, evalExpr } from './expr.ts'
+import { HIT_ASK, VAR_IDENTS, evalExpr } from './expr.ts'
 import { parseDice, rerollDie, rollDice } from './dice.ts'
 import {
   armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid, reqKeys, rollResolution,
   damageFlags, immuneTo, matchCount, nodeGid, normalizeTag, probeScope, resolve, suppressedEffects, total, varCollisions, type ResolveReq,
+  staleArmed,
 } from './graph.ts'
 import { activeSources } from './effects.ts'
 import { composeCheck } from './dnd.ts'
@@ -2609,4 +2610,160 @@ test('A PRESENCE TYPO IS CAUGHT AT AUTHOR TIME, where it can be fixed', () => {
     [], known,
   )
   assert.deepEqual(good.filter(i => i.sev === 'err'), [])
+})
+
+/* ---------- the target, and the one condition the engine may not know --------
+ *
+ * `hit` needs a target and a thrown d20. With Foundry closed there is neither,
+ * and the three ways to handle that are not equally honest: dropping the effect
+ * makes Divine Smite silently not exist, defaulting it to false does the same
+ * with more confidence, and asking is what the player was already doing before
+ * the bridge existed. */
+
+const SMITE = gfeat('Divine Smite', [
+  { id: 's1', op: 'add', when: 'hit', value: '2d8', label: 'Smite', dmgType: 'radiant', target: ['roll:damage'] },
+])
+const DAMAGE: ResolveReq = { kind: 'damage' }
+
+test('a hit-gated contribution applies on a hit, with no question asked', () => {
+  const res = resolve(buildContext(withFeatures([SMITE])), { ...DAMAGE, hit: true })
+  assert.equal(res.riders.length, 1)
+  assert.equal(res.riders[0].when, 'active')
+  assert.equal(res.riders[0].on, true)
+})
+
+test('and does not exist on a miss', () => {
+  const res = resolve(buildContext(withFeatures([SMITE])), { ...DAMAGE, hit: false })
+  assert.equal(res.riders.length, 0)
+})
+
+/* THE CASE THIS RULE EXISTS FOR. No target, no verdict — the contribution
+   arrives as the question rather than disappearing. */
+test('with no verdict it becomes a question, not a silent no-op', () => {
+  const res = resolve(buildContext(withFeatures([SMITE])), DAMAGE)
+  assert.equal(res.riders.length, 1)
+  assert.equal(res.riders[0].when, 'manual')
+  assert.equal(res.riders[0].on, false)
+  assert.equal(res.riders[0].text, HIT_ASK)
+  assert.equal(res.problems.length, 0) // and NOT an engine error
+})
+
+/* The rest of the condition still refuses. Evaluating the clause as if it hit
+   is what makes the question meaningful — it is asked only of effects that
+   would otherwise apply. */
+test('an unknown hit does not switch off the conditions beside it', () => {
+  const gated = gfeat('Conditional Smite', [
+    { id: 's2', op: 'add', when: 'hit && isRaging', value: '2d8', label: 'Smite', target: ['roll:damage'] },
+  ])
+  const vars: VarDef[] = [{ name: 'isRaging', label: 'Raging', type: 'bool', initial: false, reset: 'none' } as VarDef]
+  const off = resolve(buildContext(withFeatures([{ ...gated, vars }])), DAMAGE)
+  assert.equal(off.riders.length, 0, 'not raging — the clause is false whether or not it hit')
+})
+
+/* THE AUTHOR'S OWN QUESTION WINS. They asked something more specific than "did
+   it hit", and two checkboxes for one decision is worse than one wide sentence. */
+test('an authored ask is not replaced by the hit question', () => {
+  const asked = gfeat('Careful Smite', [
+    { id: 's3', op: 'add', when: 'hit', ask: 'Spend a slot?', value: '2d8', label: 'Smite', target: ['roll:damage'] },
+  ])
+  const res = resolve(buildContext(withFeatures([asked])), DAMAGE)
+  assert.equal(res.riders[0].text, 'Spend a slot?')
+})
+
+test('targetAc reads 0 when nothing is targeted, and the AC when something is', () => {
+  const gated = gfeat('Giant Slayer', [
+    { id: 'g1', op: 'add', when: 'targetAc >= 18', value: '1d6', label: 'Slayer', target: ['roll:damage'] },
+  ])
+  assert.equal(resolve(buildContext(withFeatures([gated])), DAMAGE).riders.length, 0)
+  assert.equal(resolve(buildContext(withFeatures([gated])), { ...DAMAGE, targetAc: 18 }).riders.length, 1)
+})
+
+/* A VALUE may read `hit` too, and there the answer is different: a formula has
+   no question to become, so an unbound `hit` must fail LOUDLY. Binding a
+   default of false would quietly compute the miss branch — the "silent wrong
+   number" this engine reports rather than guesses. */
+test('a value formula reading hit with no verdict is an engine problem, not a quiet zero', () => {
+  const scaling = gfeat('Scaling Smite', [
+    { id: 's4', op: 'add', value: 'hit ? 2 : 0', label: 'Smite', target: ['roll:damage'] },
+  ])
+  const res = resolve(buildContext(withFeatures([scaling])), DAMAGE)
+  assert.equal(res.riders.length, 0)
+  assert.equal(res.problems.length, 1)
+  assert.match(res.problems[0].t, /did not resolve/i)
+
+  // With a verdict it is an ordinary contribution.
+  const hit = resolve(buildContext(withFeatures([scaling])), { ...DAMAGE, hit: true })
+  assert.equal(hit.riders[0].flat, 2)
+  assert.equal(hit.problems.length, 0)
+})
+
+/* An arm is decided when you PRESS it, so its condition cannot ask about a roll
+   that has not happened. The combination reads perfectly and cannot work:
+   planActivation evaluates the condition against the character's scope, where
+   `hit` is unbound, so nothing plans and the feature reads as locked — with the
+   identifier itself shown to the player as a requirement. */
+test('an armed effect gated on a roll fact is refused at authoring time', () => {
+  const armed = auditNode({
+    graph: [{ id: 'a1', op: 'add', once: true, when: 'hit', value: '2d6', label: 'Smite', target: ['roll:damage'] }],
+  })
+  assert.ok(armed.some(a => a.t === 'An arm cannot ask about the roll'))
+  // It names the fix, because the same condition works with `once` off.
+  assert.match(armed.find(a => a.t === 'An arm cannot ask about the roll')!.s, /Untick Arms once/)
+
+  // …and that shape passes.
+  const passive = auditNode({
+    graph: [{ id: 'a2', op: 'add', when: 'hit', value: '2d6', label: 'Smite', target: ['roll:damage'] }],
+  })
+  assert.equal(passive.filter(a => a.t === 'An arm cannot ask about the roll').length, 0)
+
+  // An arm gated on CHARACTER state is the ordinary case and stays legal.
+  const stance = auditNode({
+    vars: [{ name: 'isRaging', kind: 'stored', type: 'bool', initial: false } as VarDef],
+    graph: [{ id: 'a3', op: 'add', once: true, when: 'isRaging', value: '1d10', label: 'Brutal', target: ['roll:damage'] }],
+  })
+  assert.equal(stance.filter(a => a.t === 'An arm cannot ask about the roll').length, 0)
+})
+
+/* ---------- an arm is addressed by its effect, not by its sentence ----------
+ *
+ * staleArmed matched a stored arm back to the rule that minted it on op +
+ * label. A label is a RENDERED sentence — arming computes `{level >= 17 ? 2d10
+ * : 1d10}` before storing it — so the stored "Add 2d10 to Damage Roll" stopped
+ * equalling its source, nothing matched, every arm read as un-stale forever,
+ * and the turn boundary quietly stopped clearing the queue. Brutal Strike was
+ * then offered once per REST instead of once per turn. */
+
+test('an arm whose label was computed is still matched to its effect', () => {
+  const smite = gfeat('Brutal Strike', [{
+    id: 'bs1', op: 'add', once: true, when: 'isRaging', value: '1d10',
+    label: 'Add {level >= 17 ? 2d10 : 1d10} to Damage Roll', target: ['roll:damage'],
+  }], {
+    vars: [{ name: 'isRaging', kind: 'stored', type: 'bool', initial: false } as VarDef],
+  })
+  // Minted the way planActivation mints it: the sentence computed, the id kept.
+  const armed = [{
+    id: 'a1', source: gid('feature', smite), eff: 'bs1', op: 'add' as const,
+    label: 'Add 2d10 to Damage Roll', kind: 'damage', value: '1d10', at: 0,
+  }]
+
+  const raging = withFeatures([smite], { vars: { isRaging: true }, armed })
+  assert.deepEqual(staleArmed(buildContext(raging)), [], 'its condition holds — it stays')
+
+  const calm = withFeatures([smite], { vars: { isRaging: false }, armed })
+  assert.deepEqual(staleArmed(buildContext(calm)), ['a1'], 'the rage ended — it lapses')
+})
+
+/* Arms minted before the id was recorded still work, which is what makes this
+   safe to ship against a live queue. */
+test('an older arm with no effect id falls back to op and label', () => {
+  const feat = gfeat('Rage', [{
+    id: 'r1', op: 'add', once: true, when: 'isRaging', value: '2', label: 'Rage Damage', target: ['roll:damage'],
+  }], {
+    vars: [{ name: 'isRaging', kind: 'stored', type: 'bool', initial: false } as VarDef],
+  })
+  const armed = [{
+    id: 'a2', source: gid('feature', feat), op: 'add' as const,
+    label: 'Rage Damage', kind: 'damage', value: '2', at: 0,
+  }]
+  assert.deepEqual(staleArmed(buildContext(withFeatures([feat], { vars: { isRaging: false }, armed }))), ['a2'])
 })

@@ -42,7 +42,14 @@ export const VAR_IDENTS = [
      Attack and its family are worded around — is `attacksThisTurn == 0`. */
   'attacksThisTurn',
 ] as const
-export const ROLL_IDENTS = ['cast', 'proficient'] as const
+export const ROLL_IDENTS = ['cast', 'proficient', 'targetAc', 'hit'] as const
+
+/** The sentence a player answers when the engine cannot see the target.
+ *
+ *  ONE sentence, deliberately: effects sharing an `ask` are one checkbox, so
+ *  every `hit`-gated contribution on a roll collapses into a single question
+ *  rather than one per feature. */
+export const HIT_ASK = 'Did the attack hit?'
 
 /** WHAT A SHEET BOOST MAY READ, and it is deliberately two names.
  *
@@ -91,6 +98,15 @@ export const isHasIdent = (id: string): boolean => /^has_[a-z0-9_]+$/.test(id)
 export const ROLL_IDENT_PROBE: Record<string, number | boolean> = {
   cast: 1,
   proficient: false,
+  /* The target's Armour Class, 0 when nothing is targeted — no creature has
+     AC 0, so the absence is readable rather than a lie. Fed by the Foundry
+     bridge; without it every roll is untargeted and every author-time probe
+     still type-checks. */
+  targetAc: 1,
+  /* Did the attack land. KNOWN ONLY AFTER THE D20, and only when there is a
+     target to compare against — resolve() turns a `hit`-gated effect into a
+     question when it cannot answer, rather than dropping it. */
+  hit: false,
 }
 
 // ---------------------------------------------------------------------------

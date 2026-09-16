@@ -354,3 +354,64 @@ honest options were weighed and both declined:
 release being gone is what makes taking a level idempotent; a "taken" flag beside
 a still-present plan is a second source of truth about whether the level was
 spent, and the failure mode is a player levelling twice.
+
+## Posting a roll to Foundry while riders are still waiting
+
+`RollContextPanel`'s **Post to Foundry** button is disabled while
+`rollTotals().pending > 0`. The reason is sound — a roll is not final when it
+lands, the panel keeps changing it while the player answers asks and rolls
+manual riders, and a total posted early is a wrong number in someone else's
+window — but it has a consequence nobody wants:
+
+**A roll that missed cannot be posted at all.** Every conditional rider on a
+miss stays switched off, and leaving it off *is* the answer; the panel counts it
+as open anyway, so the button never unlocks. Same for an `ask` the player
+declines. The rolls most worth showing the table — the ones that did nothing —
+are the ones the button refuses.
+
+**Why it is parked rather than fixed.** The Foundry integration is expected to
+answer most asks by itself once it knows what was targeted and whether the
+attack hit: an ask that resolves automatically is never open, and the case
+mostly evaporates. Loosening the gate first would be building a workaround for a
+state that is about to stop existing.
+
+**Trigger:** the first time someone wants a missed attack in Foundry chat before
+targeting lands — or the moment targeting lands and asks still sit open.
+
+**When it is fixed, do NOT just drop the guard.** The distinction that matters
+is *unanswered* versus *answered "no"*, and `pendingOf` deliberately does not
+draw it (`acked` zeroes the whole count; see "SEEING IT SETTLES IT" in
+RollContextPanel.tsx). Either give the panel a real "declined" state on a rider,
+or let the button post with an explicit "riders unanswered" line in the card so
+the table can see what was left open. A silently-posted half-total is the one
+outcome worse than a disabled button.
+
+## "The creature you marked took damage"
+
+Event #4 of the Foundry seven — the one event of the seven that is still not built,
+and the reason is the app end, not Foundry's.
+
+The bridge already sees every NPC hit: `updateActor` fires on the GM client for
+each one, and reporting a DROP to the party toast layer is exactly that hook
+with a threshold on it (`foundry/guide-bridge/bridge.js`). Reporting damage is
+one more line.
+
+**What is missing is the mark.** Nothing in this app can say "that one" about a
+creature. `useFoundryTarget` holds the CURRENT target and forgets it the moment
+the player targets something else; there is no list of creatures a character is
+watching, no UI to add one, and no place on the row to keep one — and a mark
+that dies with the tab is not a mark, it is a target with a longer name.
+
+**Trigger:** a player asking to be told when a specific enemy is hurt — Hunter's
+Mark, Hex, a warlock's quarry, or a DM wanting "tell them when the boss bloods".
+
+**When it is built**, the mark is a list of token ids on `resources`, not on
+`sheet` — it is session state like the armed queue, it expires with the combat,
+and a token id means nothing after the scene changes. The toast then filters on
+that list, and the same `updateActor` hook serves both.
+
+**Do NOT** solve it by broadcasting every creature's damage and filtering in the
+app. The bridge would be shouting the whole battlemap at four phones so that one
+of them can care about one line of it, and every player's codex would know the
+HP of everything on the scene.
+

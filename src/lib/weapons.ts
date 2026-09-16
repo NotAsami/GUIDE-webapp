@@ -193,6 +193,51 @@ export type DamageRoll = {
  *  design — see the note in rollWeaponAttack. */
 export type AmmoBonus = { damage: number; label: string }
 
+/**
+ * ONE ANSWER TO "HOW DOES AN ATTACK ROLL WORK", for weapons and for spells.
+ *
+ * The d20 pair, adv/dis cancelling, the crit threshold the graph may have
+ * moved, the natural 1, and the verdict against a target's AC. Extracted when
+ * spell attacks arrived: a second copy would be a second place for `critFrom`
+ * to be forgotten, and the two would disagree only on the rolls nobody checks.
+ *
+ * The CALLER owns the bonus and its itemised terms — a longsword's STR/PROF/
+ * MAGIC and a spell's SPELL ATK are different working for the same number.
+ */
+export function rollAttack(
+  bonus: number, terms: CheckTerm[], res?: Resolution, targetAc?: number,
+): { attack: AttackRoll; hit?: boolean } {
+  const advantage = !!res?.adv && !res?.dis
+  const disadvantage = !!res?.dis && !res?.adv
+  const pair = rolledDice(2, 20)
+  const faces = pair.map(d => d.v)
+  const d20 = advantage ? Math.max(...faces) : disadvantage ? Math.min(...faces) : faces[0]
+  // Threshold from the graph, else the printed 20. Fumble stays a natural 1.
+  const crit = d20 >= (res?.critFrom ?? 20)
+  const fumble = d20 === 1
+  const mode = advantage ? 'adv' as const : disadvantage ? 'dis' as const : 'normal' as const
+  const attack: AttackRoll = {
+    d20,
+    terms,
+    // Only keep the second die when it was actually contested — otherwise the
+    // panel would render a phantom "dropped" chip for a die nobody rolled against.
+    rolls: mode === 'normal' ? [pair[0]] : pair,
+    mode,
+    bonus, total: d20 + bonus, crit, fumble,
+    breakdown: `d20(${d20}) ${formatMod(bonus)}`
+      + (advantage ? ' adv' : disadvantage ? ' dis' : ''),
+  }
+  /* DID IT LAND. A natural 20 always hits and a natural 1 always misses,
+     whatever the arithmetic says — 5e's two absolutes, and the reason this is
+     not simply `total >= ac`. Undefined with no target: nothing to compare
+     against, and the app will not invent an answer. */
+  const hit = targetAc === undefined ? undefined
+    : crit ? true
+    : fumble ? false
+    : attack.total >= targetAc
+  return { attack, hit }
+}
+
 /** Roll a weapon's attack AND damage together. A natural 20 doubles the damage
  *  DICE (not the modifier); a natural 1 flags a fumble. Damage is floored at 0.
  *  Nocked ammunition adds a flat, named bonus to the damage.
@@ -211,41 +256,35 @@ export type AmmoBonus = { damage: number; label: string }
  *  with nothing authored" — both add zero. */
 export function rollWeaponAttack(
   weapon: EquippedWeapon, sheet: CharacterSheet, ammo?: AmmoBonus | null,
-  graph?: { attack?: Resolution; damage?: Resolution },
-): { attack: AttackRoll; damage: DamageRoll; riders: { attack: Rider[]; damage: Rider[] } } {
+  /* DAMAGE IS RESOLVED LATE, and that is the whole reason it is a function.
+     An on-hit contribution has to know whether the blow landed, and the d20 is
+     thrown in here — so a Resolution built by the caller beforehand could never
+     read `hit`. The caller still owns the graph; this still owns the dice. */
+  graph?: { attack?: Resolution; damage?: (hit: boolean | undefined, crit: boolean) => Resolution },
+  /** The target's AC, when something is targeted. Absent = no target, and
+   *  `hit` stays undefined all the way down rather than becoming a guess. */
+  targetAc?: number,
+): {
+  attack: AttackRoll; damage: DamageRoll
+  riders: { attack: Rider[]; damage: Rider[] }
+  /** Did it land — undefined when there was no target to land on. */
+  hit?: boolean
+} {
   const atkRes = graph?.attack
-  // adv/dis from the graph decide the d20 set. Both at once cancel, which is
-  // the 5e rule and not something the engine should be opinionated about.
-  const advantage = !!atkRes?.adv && !atkRes?.dis
-  const disadvantage = !!atkRes?.dis && !atkRes?.adv
   // Graph dice on an ATTACK (Bless's 1d4) are rolled now: the d20 total is one
   // number and there is nowhere for an unrolled term to live.
-  const atkGraph = atkRes ? rollResolution(atkRes) : { flat: 0, riders: [] as Rider[] }
+  const atkGraph = atkRes ? rollResolution(atkRes) : { flat: 0, riders: [] as Rider[], terms: [] }
   const atkBonus = weaponAttackBonus(weapon, sheet) + atkGraph.flat
 
-  const pair = rolledDice(2, 20)
-  const faces = pair.map(d => d.v)
-  const d20 = advantage ? Math.max(...faces) : disadvantage ? Math.min(...faces) : faces[0]
-  // Threshold from the graph, else the printed 20. Fumble stays a natural 1.
-  const crit = d20 >= (atkRes?.critFrom ?? 20)
-  const fumble = d20 === 1
-  const mode = advantage ? 'adv' as const : disadvantage ? 'dis' as const : 'normal' as const
-  const attack: AttackRoll = {
-    d20,
-    terms: [
-      { label: weaponAbilityKey(weapon, sheet).toUpperCase(), value: abMod(weapon, sheet) },
-      { label: 'PROF', value: proficiency(sheet) },
-      { label: 'MAGIC', value: weapon.effects?.attack ?? 0 },
-      { label: 'FEAT', value: atkGraph.flat },
-    ],
-    // Only keep the second die when it was actually contested — otherwise the
-    // panel would render a phantom "dropped" chip for a die nobody rolled against.
-    rolls: mode === 'normal' ? [pair[0]] : pair,
-    mode,
-    bonus: atkBonus, total: d20 + atkBonus, crit, fumble,
-    breakdown: `d20(${d20}) ${formatMod(atkBonus)}`
-      + (advantage ? ' adv' : disadvantage ? ' dis' : ''),
-  }
+  const { attack, hit } = rollAttack(atkBonus, [
+    { label: weaponAbilityKey(weapon, sheet).toUpperCase(), value: abMod(weapon, sheet) },
+    { label: 'PROF', value: proficiency(sheet) },
+    { label: 'MAGIC', value: weapon.effects?.attack ?? 0 },
+    /* NAMED, not lumped: "Bless +3" rather than "FEAT +3". See
+       rollResolution's `terms` — the itemisation comes from the fold itself. */
+    ...atkGraph.terms,
+  ], atkRes, targetAc)
+  const { crit } = attack
 
   const dmgBonus = weaponDamageBonus(weapon, sheet)
   const parsed = parseDice(weapon.damageDice ?? '')
@@ -270,7 +309,8 @@ export function rollWeaponAttack(
 
   // Graph damage. Its dice ride WITH the weapon's, so a crit doubles them too —
   // which is why resolve() hands them over unrolled and `crit` is passed here.
-  const dmgGraph = graph?.damage ? rollResolution(graph.damage, crit) : { flat: 0, riders: [] as Rider[] }
+  const dmgRes = graph?.damage?.(hit, crit)
+  const dmgGraph = dmgRes ? rollResolution(dmgRes, crit) : { flat: 0, riders: [] as Rider[], terms: [] }
 
   const totalDmg = Math.max(0, diceSum + dmgBonus + ammoBonus + dmgGraph.flat)
   const damage: DamageRoll = {
@@ -279,13 +319,13 @@ export function rollWeaponAttack(
       { label: weaponAbilityKey(weapon, sheet).toUpperCase(), value: abMod(weapon, sheet) },
       { label: 'MAGIC', value: weapon.effects?.damage ?? 0 },
       { label: (ammo?.label ?? 'AMMO').toUpperCase(), value: ammoBonus },
-      { label: 'FEAT', value: dmgGraph.flat },
+      ...dmgGraph.terms,
     ],
     total: totalDmg, type: weapon.type, crit,
     breakdown: `${diceExpr}(${dice.map(d => d.v).join(' + ') || 0}) ${formatMod(dmgBonus)}`
       + (ammoBonus ? ` ${formatMod(ammoBonus)} (${ammo!.label})` : '')
       + (dmgGraph.flat ? ` ${formatMod(dmgGraph.flat)}` : ''),
   }
-  return { attack, damage, riders: { attack: atkGraph.riders, damage: dmgGraph.riders } }
+  return { attack, damage, hit, riders: { attack: atkGraph.riders, damage: dmgGraph.riders } }
 }
 
