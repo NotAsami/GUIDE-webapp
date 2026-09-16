@@ -187,13 +187,22 @@ function nowStamp(): string {
 export function rollSpellDamage(
   sp: Spell, castLevel: number, charLevel: number,
   contrib: { flat: number; riders: Rider[] } = { flat: 0, riders: [] },
+  /** A critical hit on a spell ATTACK doubles the dice, exactly as a weapon
+   *  crit does — and only the dice, never the modifier. Meaningless on a spell
+   *  that calls for a save, which is why it is the caller's answer and not
+   *  something derived here. */
+  crit = false,
 ): SpellRoll | null {
   const info = damageAt(sp, castLevel, charLevel)
   if (!info) return null
-  const rolls = rolledDice(info.count, info.sides)
+  // The doubled half is MARKED, not just counted: "16d6" on an 8d6 Fireball is
+  // only explicable if the panel can point at which dice the crit added.
+  const rolls = rolledDice(crit ? info.count * 2 : info.count, info.sides)
+    .map((d, i) => (crit && i >= info.count ? { ...d, crit: true } : d))
   const total = Math.max(0, rolls.reduce((a, b) => a + b.v, 0) + info.mod + contrib.flat)
   return {
-    rolls, sides: info.sides, mod: info.mod + contrib.flat, total, expr: info.expr, type: info.type,
+    rolls, sides: info.sides, mod: info.mod + contrib.flat, total,
+    expr: crit ? `${info.count * 2}d${info.sides}` : info.expr, type: info.type,
     level: castLevel, cantrip: sp.level === 0, stamp: nowStamp(), riders: contrib.riders,
   }
 }

@@ -24,9 +24,9 @@
 
 import type { ArmedMod, CharacterRow, Feature, GraphEffect, GraphOp, GraphState, ShardTree, VarDef } from './database.types.ts'
 import type { ExprScope, FormulaValue } from './expr.ts'
-import { BOOST_IDENTS, ROLL_IDENTS, ROLL_IDENT_PROBE, VAR_IDENTS, evalExpr, freeIdents, hasIdent, interpolate, interpolations } from './expr.ts'
+import { BOOST_IDENTS, HIT_ASK, ROLL_IDENTS, ROLL_IDENT_PROBE, VAR_IDENTS, evalExpr, freeIdents, hasIdent, interpolate, interpolations } from './expr.ts'
 import { type ActiveSource, activeEffects, activeSources, effectiveSheet } from './effects.ts'
-import { IS_ACTIVATION, IS_SHEET, OPS, OP_TITLE } from './opSchema.ts'
+import { IS_ACTIVATION, IS_SHEET, OPS, OP_TITLE, levelFormula } from './opSchema.ts'
 import { MOD_STAT_SET, isAbility } from './modEditor.ts'
 import { abilities, abilityMod, proficiency } from './dnd.ts'
 /* No cycle: featureView imports only database.types, opSchema and expr. */
@@ -454,37 +454,6 @@ export const askKey = (raw: string): string => raw.trim().toLowerCase().replace(
  *  a Resolution — see damageFlags(). */
 const DAMAGE_FLAGS: GraphOp[] = ['resist', 'vuln', 'immune']
 
-/** The formula a level table yields at this character level, or undefined when
- *  there is no table. Sugar for `[…][level]`, with two rules that make it match
- *  how 5e progressions are actually written:
- *
- *  - SPARSE means STEP. A table filled at 1/5/11 reads "3 from level 11 up", so
- *    an empty slot walks DOWN to the last filled one rather than contributing
- *    nothing. Requiring all twenty to be filled would be the same table typed
- *    out four times.
- *  - Out of range clamps to the nearest end, matching array indexing — level 21
- *    is not an error.
- *
- *  Index 0 is skipped on purpose: character levels start at 1, and putting that
- *  off-by-one in one place beats living with it in every authored expression.
- *
- *  EXPORTED because resolve() is not the only reader. An `once` contribution
- *  never passes through here — it is armed by graphState.ts armedFrom(), which
- *  snapshots the value onto the ArmedMod — so a level table on an armed effect
- *  silently produced the level-1 value forever. Brutal Strike's 1d10 stayed 1d10
- *  at level 17. One table, one reader. */
-export function levelFormula(eff: GraphEffect, level: number | boolean | undefined): string | undefined {
-  const arr = eff.byLevel
-  if (!arr?.some((x, i) => i > 0 && String(x ?? '').trim())) return undefined
-  const lvl = typeof level === 'number' ? level : 1
-  const start = Math.min(Math.max(1, Math.round(lvl)), arr.length - 1)
-  for (let i = start; i >= 1; i--) {
-    const cell = String(arr[i] ?? '').trim()
-    if (cell) return cell
-  }
-  // Below the first filled slot: the feature has not come online yet.
-  return '0'
-}
 
 export type RollKind = 'attack' | 'damage' | 'save' | 'check' | 'feature'
 
@@ -500,6 +469,15 @@ export type ResolveReq = {
    *  otherwise use your Proficiency Bonus" — was unauthorable without it. The
    *  surface that built the terms is the one that knows; see buildCheck. */
   proficient?: boolean
+  /** THE TARGET'S ARMOUR CLASS, 0 when nothing is targeted. No creature has AC
+   *  0, so the absence is readable in an expression rather than a lie.
+   *  Supplied by the Foundry bridge (lib/target.ts). */
+  targetAc?: number
+  /** DID THE ATTACK LAND — and `undefined` is the third answer, not a missing
+   *  one. It is known only after the d20, and only against a target: with no
+   *  target the app cannot decide, so a `hit`-gated effect becomes a QUESTION
+   *  instead of quietly not existing. See the `hit` branch in resolve(). */
+  hit?: boolean
   /** Sub-key: 'dex' for a save, 'investigation' for a check. */
   sub?: string
   /** The gid of the thing being rolled — a weapon, spell, or feature. */
@@ -689,11 +667,16 @@ export type GraphContext = {
 export function staleArmed(ctx: GraphContext, scope: ExprScope = ctx.scope): string[] {
   const out: string[] = []
   for (const m of ctx.armed) {
-    /* op + label is the address. `ArmedMod` records the owner gid, not the
-       effect id, so this is what narrows a node's several ops down to the one
-       that minted this mod — the same pair the breakdown shows the player. */
+    /* THE EFFECT ID IS THE ADDRESS. It used to be op + label, and a label is a
+       RENDERED SENTENCE: once arming began computing `{level >= 17 ? 2d10 :
+       1d10}` before storing it, the stored "Add 2d10 to Damage Roll" no longer
+       equalled the source it came from, no effect matched, and every arm looked
+       un-stale forever — so the turn boundary stopped clearing them and Brutal
+       Strike was offered once per REST instead of once per turn.
+       op + label survives as the fallback for arms minted before the id was
+       recorded, which is right for as long as those last. */
     const effs = (ctx.byOwner.get(m.source as Gid) ?? [])
-      .filter(e => e.eff.op === m.op && e.eff.label === m.label)
+      .filter(e => (m.eff ? e.eff.id === m.eff : e.eff.op === m.op && e.eff.label === m.label))
     if (!effs.length) continue
     const live = effs.some(e => {
       /* AN UNGATED HOLD IS NOT A LEFTOVER. Held says every held thing has a
@@ -909,6 +892,13 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
        one no expression could reach because it is a fact about the roll's own
        parts. False on a damage roll, which has no proficiency to include. */
     proficient: req.proficient ?? false,
+    /* The target's AC, 0 for "nothing targeted" — see ResolveReq.targetAc. */
+    targetAc: req.targetAc ?? 0,
+    /* BOUND ONLY WHEN KNOWN. An absent `hit` is what the branch below detects;
+       binding a default here would make "no target" indistinguishable from
+       "missed", which turns every on-hit rider into a silent no-op the moment
+       Foundry is closed. */
+    ...(req.hit === undefined ? {} : { hit: req.hit }),
   }
 
   /* AUTHORED TEXT COMPUTES WHEREVER IT IS SHOWN, not only where someone
@@ -1026,14 +1016,28 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
   for (const e of matched) {
     const { eff, from } = e
 
+    /* THE ONE CONDITION THE ENGINE IS ALLOWED NOT TO KNOW.
+       `hit` needs a target and a thrown d20; with Foundry closed there is
+       neither. Dropping the effect would be the worst of the three options —
+       Divine Smite silently not existing, reading exactly like a feature that
+       does nothing — and defaulting it to false is the same thing with extra
+       confidence. So the clause is evaluated as if it HIT (any other condition
+       in it can still refuse) and what survives arrives as the question the
+       player was already answering before the bridge existed. */
+    let unknownHit = false
     if (eff.when !== undefined) {
-      const cond = evalExpr(eff.when, scope)
+      unknownHit = req.hit === undefined && freeIdents(eff.when).includes('hit')
+      const cond = evalExpr(eff.when, unknownHit ? { ...scope, hit: true } : scope)
       if (cond === null || cond.t !== 'bool') {
         out.problems.push({ sev: 'err', id: eff.id, t: 'Condition did not resolve', s: `${eff.label}'s condition "${eff.when}" is not a yes/no answer at these values.` })
         continue
       }
       if (!cond.v) continue // false → does not surface, with or without `ask`
     }
+    /* The author's own question wins: they asked something more specific than
+       "did it hit", and two checkboxes for one decision is worse than one
+       slightly wide sentence. */
+    const ask = eff.ask ?? (unknownHit ? HIT_ASK : undefined)
 
     // A note is prose, and §25's inline compute is what keeps that prose from
     // quietly lying: `{level * 2}` renders as the number, never as the source.
@@ -1158,9 +1162,9 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
       formula: eff.value ?? '',
       flat: v.flat,
       dice: v.dice,
-      when: eff.ask ? 'manual' : 'active',
-      on: !eff.ask,
-      text: say(eff.ask),
+      when: ask ? 'manual' : 'active',
+      on: !ask,
+      text: say(ask),
       reveal,
       dmgType: eff.dmgType,
       sourceText: summaryOf(from.obj),
@@ -1168,8 +1172,8 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     }
 
     // One fact, one checkbox: effects sharing an `ask` label are one decision.
-    if (eff.ask) {
-      const existing = askGroups.get(askKey(eff.ask))
+    if (ask) {
+      const existing = askGroups.get(askKey(ask))
       if (existing) {
         existing.flat += rider.flat
         existing.dice.push(...rider.dice)
@@ -1191,7 +1195,7 @@ ${rider.reveal}` : rider.reveal
         }
         continue
       }
-      askGroups.set(askKey(eff.ask), rider)
+      askGroups.set(askKey(ask), rider)
       // The rider keeps the FIRST contributor's label as its name and carries the
       // ask sentence as its question. Effects sharing an ask are one decision, so
       // one of them has to speak for the group; the sentence is what they all
@@ -1200,7 +1204,7 @@ ${rider.reveal}` : rider.reveal
 
     // An `active` rider is already resolved, so its value applies now — the
     // player has no decision to make, only a source to be able to see.
-    if (!eff.ask) {
+    if (!ask) {
       if (eff.op === 'adv') out.adv = true
       if (eff.op === 'dis') out.dis = true
       if (eff.op === 'crit') applyCrit(eff)
@@ -1367,17 +1371,35 @@ export function total(res: Resolution): { flat: number; dice: string[] } {
 export function rollResolution(res: Resolution, double = false): {
   flat: number
   riders: Rider[]
+  /** The same fold, ITEMISED BY SOURCE — "Divine Smite +8", not "FEAT +8".
+   *
+   *  The roller adds every non-manual contribution into one number and the line
+   *  shows that number; naming it "FEAT" told the player which part of the
+   *  ENGINE produced it, and a rolled 2d6 sitting inside a lump reads as a
+   *  contribution that has not been counted. Built here because this is where
+   *  the fold happens: an itemisation computed anywhere else is free to
+   *  disagree with the total it claims to explain.
+   *
+   *  Summed per source, so two contributions from one feature are one line.
+   *  A zero contributes nothing and is left out. */
+  terms: { label: string; value: number }[]
 } {
   let flat = 0
+  const bySource = new Map<string, number>()
   const riders = res.riders.map(r => {
     if (r.op !== 'add' || r.when === 'manual') return r
-    flat += r.flat
-    if (!r.dice.length) return r
-    const rolledDice = rolledDiceTerms(r.dice, double)
-    flat += rolledDice.reduce((n, d) => n + d.v, 0)
-    return { ...r, rolledDice }
+    let value = r.flat
+    let out = r
+    if (r.dice.length) {
+      const rolledDice = rolledDiceTerms(r.dice, double)
+      value += rolledDice.reduce((n, d) => n + d.v, 0)
+      out = { ...r, rolledDice }
+    }
+    flat += value
+    if (value) bySource.set(r.source, (bySource.get(r.source) ?? 0) + value)
+    return out
   })
-  return { flat, riders }
+  return { flat, riders, terms: [...bySource].map(([label, value]) => ({ label, value })) }
 }
 
 /* ---------- author-time (§17) ---------- */
@@ -1846,6 +1868,24 @@ export function auditNode(
       }
       if (evalExpr(src, scope) === null && !freeIdents(src).some(i => !allowed.has(i))) {
         out.push({ sev: 'err', id: eff.id, t: `Bad ${what}`, s: `${eff.label || eff.id}'s ${what} "${src}" does not evaluate.` })
+      }
+    }
+
+    /* AN ARM IS DECIDED WHEN YOU PRESS IT, so its condition cannot ask about a
+       roll that has not happened. `once` + `when: 'hit'` reads perfectly and
+       cannot work: planActivation evaluates the condition against the
+       character's scope, where a roll identifier is not bound, so the effect
+       plans nothing — and the feature then reads as LOCKED, with the roll
+       identifier itself shown to the player as a requirement they cannot meet.
+       Without `once` the same condition works exactly as intended, which is why
+       this names the fix rather than the fault. */
+    if (eff.once && eff.when) {
+      const rollOnly = freeIdents(eff.when).filter(id => (ROLL_IDENTS as readonly string[]).includes(id))
+      if (rollOnly.length) {
+        out.push({
+          sev: 'err', id: eff.id, t: 'An arm cannot ask about the roll',
+          s: `${eff.label || eff.id} arms on a press, but its condition reads "${rollOnly[0]}" — a fact about a roll that has not happened yet, so it can never be true here. Untick Arms once: the condition already limits it to the rolls that qualify.`,
+        })
       }
     }
 

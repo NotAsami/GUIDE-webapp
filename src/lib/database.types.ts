@@ -594,6 +594,16 @@ export type ArmedMod = {
    *  something to show a player, and by the time this is read the source may be
    *  unequipped or unprepared, so looking it up again could come back empty. */
   sourceName?: string
+  /** THE EFFECT THIS CAME FROM — identity, so an arm can be matched back to the
+   *  rule that minted it. `label` cannot do that job: it is a rendered
+   *  sentence, computed against the scope at arm time (§25), so an authored
+   *  `{level >= 17 ? 2d10 : 1d10}` is stored as "2d10" and no longer equals the
+   *  source it came from.
+   *
+   *  Absent on arms minted before this existed — staleArmed falls back to the
+   *  old op+label match for those, which is right for exactly as long as they
+   *  survive the next rest. */
+  eff?: string
   label: string
   kind: string
   sub?: string
@@ -1665,6 +1675,16 @@ export type Spell = {
    *  is a different DC from a Warlock than from a Wizard. A per-spell copy would
    *  be a second record free to disagree. */
   save?: AbilityKey
+  /** THE OTHER WAY A SPELL RESOLVES. Presence means "this spell calls for a
+   *  spell attack roll" — Fire Bolt is `ranged`, Shocking Grasp `melee` — and
+   *  the value is which, so `roll:attack.melee` can mean what it says. The
+   *  BONUS is the caster's, from `spellbook.attackBonus` (prof + their
+   *  spellcasting ability), for the same reason `save` names no ability: the
+   *  class decides it, not the spell.
+   *
+   *  A spell has one or the other. Nothing enforces it — 5e has a handful that
+   *  do both, and refusing them would be the app inventing a rule. */
+  attack?: 'melee' | 'ranged'
   hasDamage: boolean
   dice?: string      // e.g. "8d6", "3d4+3"
   scaling?: string   // added per upcast level (levelled) or per tier (cantrip)

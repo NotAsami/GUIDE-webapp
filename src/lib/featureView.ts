@@ -13,8 +13,9 @@
  * from here would widen the engine's surface for one caller.
  */
 import type { Feature, GraphEffect, GraphOp, VarDef } from './database.types.ts'
-import { IS_ACTIVATION } from './opSchema.ts'
+import { IS_ACTIVATION, levelFormula } from './opSchema.ts'
 import { evalExpr, type ExprScope } from './expr.ts'
+
 
 /**
  * A feature's use counter, resolved — or null when it has none.
@@ -122,12 +123,12 @@ function targetLabel(t: string): string {
  *  presses Use, so listing them beside the passive contributions would have the
  *  card claim a feature does something it only does on a press — and the press
  *  already shows them, in the activation confirm sheet. */
-export function featureEffects(f: Feature): FeatureEffectRow[] {
+export function featureEffects(f: Feature, scope?: ExprScope): FeatureEffectRow[] {
   return (f.graph ?? [])
     .filter(e => !IS_ACTIVATION(e.op))
     .map(e => ({
       glyph: OP_GLYPH[e.op] ?? '◇',
-      text: effectText(e),
+      text: effectText(e, scope),
       tag: (e.target ?? []).map(targetLabel).filter(Boolean).join(' · '),
       dmgType: e.dmgType?.trim() || undefined,
     }))
@@ -137,15 +138,37 @@ export function featureEffects(f: Feature): FeatureEffectRow[] {
  *
  *  The VALUE leads when there is one, because that is what the player scans for.
  *  A flag op has no value, so its label carries the row alone. */
-function effectText(e: GraphEffect): string {
+function effectText(e: GraphEffect, scope?: ExprScope): string {
   const label = e.label?.trim()
-  const value = e.value?.trim()
+  const value = amountOf(e, scope)
   if (e.op === 'note') return label || value || ''
   if (!value) return label || ''
   // The damage type rides on the ROW, not in here — the renderer needs it apart
   // from the prose to colour it.
   const amount = `**${value}**`
   return label ? `${amount} · ${label}` : amount
+}
+
+/** What the value is WORTH to this character, not how it was written.
+ *
+ *  A value is a formula, and the card printed the source: a player reading
+ *  Brutal Strike saw `has_improved_brutal_strike_enhanced ? 2d10 : 1d10` — the
+ *  engine talking to itself in the one place that is supposed to say what the
+ *  feature does. The same evaluation the roller performs (level table first,
+ *  then the expression) answers it here, so the card and the roll cannot
+ *  disagree.
+ *
+ *  Without a scope — the DM's authoring preview, before there is a character to
+ *  resolve against — the source is still the honest answer, and so is a formula
+ *  that fails to resolve: blanking it would hide the typo that caused it. */
+function amountOf(e: GraphEffect, scope?: ExprScope): string {
+  const src = (scope ? levelFormula(e, scope.level) : undefined) ?? e.value?.trim() ?? ''
+  if (!src || !scope) return src
+  const v = evalExpr(src, scope)
+  if (v === null || v.t !== 'num') return src
+  const parts = [...v.dice]
+  if (v.flat || !parts.length) parts.push(String(v.flat))
+  return parts.join(' + ')
 }
 
 /** The popup's origin breadcrumb.

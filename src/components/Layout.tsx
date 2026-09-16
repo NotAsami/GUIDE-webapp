@@ -17,10 +17,19 @@ import { answerArmed } from '../lib/graphState'
 import { publicVitals, vitalsEqual } from '../lib/vitals'
 import { advanceTurn, turnRecharge } from '../lib/turns'
 import { useRollLog } from '../lib/rolls'
+import { sendFoundry, useFoundryMessages, useFoundryTurn } from '../lib/foundry'
+import { cssVar, rollChatHtml } from '../lib/foundryChat'
+import { pendingOf } from '../lib/rollView'
+import { unlockChime } from '../lib/chime'
+import { pushableEffects } from '../lib/foundryDamage'
+import { useFoundryTarget } from '../lib/target'
+import { ammoStacksFor, rollWeapon } from '../lib/weaponRoll'
+import { attackRolled } from '../lib/graphState'
+import { effectiveSheet } from '../lib/effects'
 import { useGraph } from '../lib/useGraph'
 import { ScopeContext } from '../lib/markdown'
 import { turnGraphPatch } from '../lib/graphState'
-import type { ActiveEffect } from '../lib/database.types'
+import type { ActiveEffect, EquippedWeapon } from '../lib/database.types'
 import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -85,7 +94,7 @@ export function Layout() {
      damage on someone's behalf while they are not looking, which is the same rule
      §7 applies to every other conditional contribution. Expiries are results, so
      they read as lines. */
-  const { addRoll } = useRollLog()
+  const { addRoll, updateRoll } = useRollLog()
   const activeNow = ((character?.resources ?? {}) as { activeEffects?: ActiveEffect[] }).activeEffects ?? []
   /* The same memo every roll uses. Advance Turn needs it to ask which armed
      modifiers were authorised by a variable that is about to reset. */
@@ -131,16 +140,36 @@ export function Layout() {
         /* A variable that reset and an arm that lapsed are both things the
            button silently changed. Reporting them is the same rule the
            countdowns follow: a turn that alters state and says nothing reads as
-           a button that did not work. */
+           a button that did not work.
+           WHAT ENDED IS NAMED; WHAT FOLLOWED FROM IT IS COUNTED. One Reckless
+           Attack lapsing takes six modifiers with it, and six lines all reading
+           "armed under something that ended" bury the one line that explains
+           them — the report of a single press ran to eight rows and read as an
+           error log. The names ride in the breakdown, where a player who wants
+           them can still find them. */
         ...(turn?.ended ?? []).map(label => ({
           label, total: 'ended', breakdown: 'lasted until the start of your turn', tone: 'buff' as const,
         })),
-        ...(turn?.disarmed ?? []).map(label => ({
-          label, total: 'lapsed', breakdown: 'armed under something that ended', tone: 'buff' as const,
-        })),
-        ...(recharged?.names ?? []).map(label => ({
-          label, total: 'recharged', breakdown: 'once per turn', tone: 'buff' as const,
-        })),
+        ...(turn?.disarmed?.length
+          ? [{
+            label: turn.disarmed.length === 1 ? turn.disarmed[0] : `${turn.disarmed.length} modifiers`,
+            total: 'lapsed',
+            breakdown: turn.disarmed.length === 1
+              ? 'armed under something that ended'
+              : `armed under something that ended — ${turn.disarmed.join(', ')}`,
+            tone: 'buff' as const,
+          }]
+          : []),
+        ...(recharged?.names.length
+          ? [{
+            label: recharged.names.length === 1 ? recharged.names[0] : `${recharged.names.length} features`,
+            total: 'recharged',
+            breakdown: recharged.names.length === 1
+              ? 'once per turn'
+              : `once per turn — ${recharged.names.join(', ')}`,
+            tone: 'buff' as const,
+          }]
+          : []),
         ...(counted.length === 0 && expired.length === 0 && ticks.length === 0
           && !turn?.ended.length && !turn?.disarmed.length && !recharged
           ? [{ label: 'No change', total: '—', breakdown: 'nothing on a timer' }]
@@ -162,6 +191,80 @@ export function Layout() {
         : undefined,
     })
   }
+
+  /* FOUNDRY DRIVES THE TURN when the bridge is up. The same one write the
+     button makes — a turn that began on the battlemap and a turn the player
+     pressed for are the same turn, so they must not be two code paths. Nothing
+     opens: the roll-log entry and the ROLLS badge do the telling, exactly as
+     they do for the button (§ "UI must not nag"). With Foundry closed this
+     never fires and the button is still the way. */
+  useFoundryTurn(character?.id, () => void doAdvanceTurn())
+
+  /* THE HOTBAR ASKS, THE CODEX ROLLS.
+     A macro in Foundry sends a request and the swing happens here — the same
+     lib/weaponRoll the Equipment button uses, because a swing asked for from
+     the map must be the same swing as one pressed on the card.
+     Mounted in the Layout rather than on Equipment, which is the whole point:
+     the request arrives whatever screen the player is looking at, and a roll
+     that only worked while you had the right tab open would not save anybody
+     a screen swap.
+     NO PRIMING SHEET. Pressing Attack in the app offers armable modifiers
+     first when there are any; there is nobody looking at that screen here, so
+     it rolls with whatever is already armed. */
+  /* AND THE OTHER DIRECTION: what the codex says is on this character, onto
+     their token. Keyed on the effects themselves, so it fires when one is
+     applied or ends and not on every unrelated write to the row — and on mount,
+     so a reload restates it rather than leaving the map holding whatever it
+     had. The bridge reconciles; this only ever says what is true now. */
+  const ownEffects = ((character?.resources ?? {}) as { activeEffects?: ActiveEffect[] }).activeEffects ?? []
+  const effectsKey = ownEffects.map(e => `${e.id}:${e.name}`).join('|')
+  useEffect(() => {
+    if (!character) return
+    void sendFoundry({ kind: 'effects', character: character.id, effects: pushableEffects(ownEffects) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [character?.id, effectsKey])
+
+  /* THE FIRST GESTURE BUYS THE SOUND. A browser will not let a page make noise
+     until someone has touched it, and the case that matters most is the one
+     where they never will — the player is in Foundry and this tab is behind
+     it. Spent once, on mount. */
+  useEffect(() => { unlockChime() }, [])
+
+  const foundryTarget = useFoundryTarget(character?.id)
+  useFoundryMessages(msg => {
+    if (msg.kind !== 'request' || !character || msg.character !== character.id) return
+    const weapon = ((character.equipped ?? {}) as { weapons?: EquippedWeapon[] }).weapons
+      ?.find(w => w.id === msg.weapon)
+    if (!weapon) return
+    const out = rollWeapon({
+      character, weapon, sheet: effectiveSheet(character, shardTrees), graph,
+      // The screen has a nocked stack; a request has nobody to ask, so it draws
+      // the first thing within reach — the same order the screen defaults to.
+      ammo: ammoStacksFor(character)[0] ?? null,
+      target: foundryTarget,
+    })
+    const entry = addRoll(out.entry)
+    if (!out.rolled) return
+    void updateSections({
+      resources: attackRolled(character, out.arms, entry.id) as CharacterRow['resources'],
+      ...(out.inventory ? { inventory: out.inventory as unknown as CharacterRow['inventory'] } : {}),
+    })
+    /* AND STRAIGHT BACK TO THE CHAT LOG. A swing asked for from the map that
+       said nothing on the map read as a macro that had not worked — the player
+       is looking at Foundry, which is the entire reason they pressed a macro
+       rather than the button.
+       ONLY WHEN THERE IS NOTHING LEFT TO ANSWER. A roll with an offered arm on
+       it is still moving, and posting the total before the player has taken or
+       declined it publishes a number that is about to change. Those stay for
+       the panel's own control, which is the one place the decision can be
+       made. */
+    if (pendingOf(entry).asks === 0) {
+      void sendFoundry({
+        kind: 'roll', character: character.id, roll: entry.id,
+        title: entry.title, html: rollChatHtml(entry, cssVar, graph.scope),
+      }).then(ok => { if (ok) updateRoll(entry.id, { posted: true }) })
+    }
+  })
 
   async function handleSignOut() {
     await signOut()

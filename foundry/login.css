@@ -1,0 +1,141 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   G.U.I.D.E. — the world login screen (/join)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Loaded by Plutonium's Custom World Login Screen addon: copy this file to
+   `Data/worlds/elyndor/login.css`. See foundry/README.md for the backend patch
+   it needs first.
+
+   THE PLAYER'S SIDE IS CYAN. The codex is two layers — cyan for the player,
+   amber for the operator — and the join screen is the first thing a player
+   sees, so it speaks in the player's colour. The setup screen (setup.css) is
+   the DM's and speaks in amber.
+
+   Written conservatively: broad element selectors and colour, no layout
+   surgery and no clip-path chamfers. A missed selector then leaves a plain
+   control on a styled page rather than an invisible one — and Foundry moves
+   this markup between versions.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --guide-bg: #1d1d1d;
+  --guide-bg-2: #161616;
+  --guide-text: #dedede;
+  --guide-muted: #aaaaaa;
+  --guide-cyan: #00a6d6;
+  --guide-cyan-hot: #4dd6ff;
+  --guide-cyan-dim: #0d6e8c;
+  --guide-beige: #d4bf7d;
+}
+
+/* ── the ground ─────────────────────────────────────────────────────────── */
+
+body {
+  background: var(--guide-bg);
+  /* The codex's stage: a slow vertical gradient over the flat ground, with the
+     faint scanline the whole app wears. Fixed, so it does not scroll away. */
+  background-image:
+    repeating-linear-gradient(
+      0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px
+    ),
+    radial-gradient(ellipse at 50% 0%, #232323 0%, var(--guide-bg-2) 70%);
+  background-attachment: fixed;
+  color: var(--guide-text);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+#join-game,
+#setup,
+.app,
+.window-app {
+  color: var(--guide-text);
+}
+
+/* ── panels ─────────────────────────────────────────────────────────────── */
+
+.app,
+#join-game .form-group,
+#world-description,
+section.window-content {
+  background: rgba(22, 22, 22, 0.92);
+  border: 1px solid var(--guide-cyan-dim);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* Headings carry the display face, and the letter-spaced kicker treatment the
+   codex uses on every panel title. */
+h1, h2, h3,
+.app h1, .app h2 {
+  font-family: 'Cinzel', serif;
+  color: var(--guide-beige);
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid rgba(0, 166, 214, 0.35);
+}
+
+label,
+.form-group > label {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--guide-muted);
+}
+
+/* ── controls ───────────────────────────────────────────────────────────── */
+
+input[type='text'],
+input[type='password'],
+select,
+textarea {
+  background: #101010;
+  border: 1px solid rgba(0, 166, 214, 0.35);
+  border-radius: 0;
+  color: var(--guide-text);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+input[type='text']:focus,
+input[type='password']:focus,
+select:focus {
+  outline: none;
+  border-color: var(--guide-cyan-hot);
+  box-shadow: 0 0 0 1px var(--guide-cyan-hot), 0 0 14px rgba(77, 214, 255, 0.25);
+}
+
+button,
+button[type='submit'] {
+  background: rgba(0, 166, 214, 0.08);
+  border: 1px solid var(--guide-cyan);
+  border-left: 2px solid var(--guide-cyan-hot);
+  border-radius: 0;
+  color: var(--guide-text);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: background 120ms, color 120ms;
+}
+
+button:hover,
+button[type='submit']:hover {
+  background: rgba(0, 166, 214, 0.2);
+  color: var(--guide-cyan-hot);
+}
+
+/* ── the players list ───────────────────────────────────────────────────── */
+
+#join-game-form .player-list li,
+#players li {
+  border-bottom: 1px solid rgba(0, 166, 214, 0.15);
+}
+
+a { color: var(--guide-cyan-hot); }
+a:hover { color: var(--guide-beige); }
+
+/* Foundry's own footer stays, but quietly: this is a skin, not a disguise. */
+.watermark {
+  color: var(--guide-muted);
+  opacity: 0.45;
+}

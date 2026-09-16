@@ -10,7 +10,7 @@ import assert from 'node:assert/strict'
 import type { CharacterRow, CharacterSheet, EquippedWeapon } from './database.types.ts'
 import type { Resolution } from './graph.ts'
 import { buildContext, gid, resolve, total } from './graph.ts'
-import { MASTERIES, masteryActive, masteryOf, rollWeaponAttack, isRanged, weaponAbilityKey, weaponAttackBonus, weaponDamageBonus } from './weapons.ts'
+import { MASTERIES, isRanged, masteryActive, masteryOf, rollAttack, rollWeaponAttack, weaponAbilityKey, weaponAttackBonus, weaponDamageBonus } from './weapons.ts'
 
 const SHEET = {
   abilities: { str: 16, dex: 10, con: 12, int: 10, wis: 10, cha: 10 },
@@ -61,7 +61,7 @@ test('with no graph argument the roller behaves exactly as it did before', () =>
 
 test('a flat graph contribution folds into the damage total and is visible in the breakdown', () => {
   const { damage } = pin([[11, 20], [1, 20], [5, 8]], () =>
-    rollWeaponAttack(SWORD, SHEET, null, { damage: RES({ flat: 2 }) }))
+    rollWeaponAttack(SWORD, SHEET, null, { damage: () => RES({ flat: 2 }) }))
   assert.equal(damage.total, 10)          // 5 + 3 + 2
   assert.ok(damage.breakdown.includes('+2'), damage.breakdown)
 })
@@ -71,7 +71,7 @@ test('graph damage dice ride WITH the weapon dice, so a crit doubles them too', 
   // the reason resolve() hands back dice unrolled instead of a number.
   const { attack, damage } = pin(
     [[20, 20], [1, 20], [8, 8], [7, 8], [4, 4], [3, 4]],
-    () => rollWeaponAttack(SWORD, SHEET, null, { damage: RES({ dice: ['1d4'] }) }),
+    () => rollWeaponAttack(SWORD, SHEET, null, { damage: () => RES({ dice: ['1d4'] }) }),
   )
   assert.equal(attack.crit, true)
   assert.equal(damage.dice.length, 2)     // weapon dice doubled
@@ -332,4 +332,111 @@ test('every mastery carries its rule, and only Vex claims the engine does it', (
   assert.equal(MASTERIES.length, 8)
   for (const m of MASTERIES) assert.ok(m.rule.length > 20, `${m.name} needs its rule text`)
   assert.deepEqual(MASTERIES.filter(m => m.engine).map(m => m.name), ['Vex'])
+})
+
+/* ---------- did it land ----------
+ *
+ * The verdict is the one number in this file the player never sees the working
+ * for — the AC stays with the DM — so it has to be right without being
+ * checkable at the table. */
+
+test('the attack total is compared against the target AC', () => {
+  // d20(10) + 6 = 16 against AC 15.
+  const hitOne = pin([[10, 20], [2, 20], [5, 8]], () => rollWeaponAttack(SWORD, SHEET, null, undefined, 15))
+  assert.equal(hitOne.hit, true)
+  // d20(4) + 6 = 10 against AC 15.
+  const missOne = pin([[4, 20], [2, 20], [5, 8]], () => rollWeaponAttack(SWORD, SHEET, null, undefined, 15))
+  assert.equal(missOne.hit, false)
+})
+
+/* 5e'S TWO ABSOLUTES, and the reason this is not `total >= ac`. A natural 20
+   hits a creature it could not otherwise reach; a natural 1 misses one it could
+   not otherwise fail against. */
+test('a natural 20 always hits and a natural 1 always misses', () => {
+  const nat20 = pin([[20, 20], [2, 20], [5, 8], [5, 8]], () => rollWeaponAttack(SWORD, SHEET, null, undefined, 99))
+  assert.equal(nat20.hit, true)
+  const nat1 = pin([[1, 20], [2, 20], [5, 8]], () => rollWeaponAttack(SWORD, SHEET, null, undefined, 1))
+  assert.equal(nat1.hit, false)
+})
+
+test('with no target there is no verdict — not a miss', () => {
+  const none = pin([[10, 20], [2, 20], [5, 8]], () => rollWeaponAttack(SWORD, SHEET, null))
+  assert.equal(none.hit, undefined)
+})
+
+/* THE DAMAGE GRAPH IS BUILT AFTER THE D20. Before this the caller handed over a
+   finished Resolution, so an on-hit contribution could not exist: `hit` was not
+   a fact yet. */
+test('the damage resolution is asked for the verdict and the crit', () => {
+  const seen: { hit?: boolean; crit?: boolean }[] = []
+  pin([[20, 20], [2, 20], [5, 8], [5, 8]], () => rollWeaponAttack(SWORD, SHEET, null, {
+    damage: (hit, crit) => { seen.push({ hit, crit }); return RES() },
+  }, 15))
+  assert.deepEqual(seen, [{ hit: true, crit: true }])
+})
+
+/* ---------- one attack roller, two callers ----------
+ *
+ * rollAttack is what the weapon card and the Spellbook both throw. A second
+ * copy would be a second place for the crit threshold to be forgotten. */
+
+test('rollAttack honours a graph-lowered crit threshold', () => {
+  const champion = { ...RES(), critFrom: 19 }
+  const r = pin([[19, 20], [2, 20]], () => rollAttack(5, [], champion))
+  assert.equal(r.attack.crit, true)
+  // …and the same die is not a crit at the printed 20.
+  const plain = pin([[19, 20], [2, 20]], () => rollAttack(5, [], RES()))
+  assert.equal(plain.attack.crit, false)
+})
+
+test('rollAttack keeps the second die only when it was contested', () => {
+  const normal = pin([[12, 20], [3, 20]], () => rollAttack(0, [], RES()))
+  assert.equal(normal.attack.rolls.length, 1)
+  const adv = pin([[12, 20], [3, 20]], () => rollAttack(0, [], { ...RES(), adv: true }))
+  assert.deepEqual(adv.attack.rolls.map(d => d.v), [12, 3])
+  assert.equal(adv.attack.d20, 12)
+  // Both at once cancel — 5e's rule, not the engine's opinion.
+  const both = pin([[12, 20], [3, 20]], () => rollAttack(0, [], { ...RES(), adv: true, dis: true }))
+  assert.equal(both.attack.mode, 'normal')
+})
+
+/* ---------- the fold names its sources ----------
+ *
+ * The line shows one number for every graph contribution, and it used to be
+ * called "FEAT" — which part of the ENGINE produced it, rather than which
+ * feature. A rolled 2d6 sitting inside a lump called FEAT reads as a
+ * contribution nobody counted, and that is exactly how it was read. */
+
+test('a graph contribution appears in the damage terms under its own source', () => {
+  const out = pin([[10, 20], [2, 20], [4, 8], [5, 6]], () => rollWeaponAttack(SWORD, SHEET, null, {
+    damage: () => ({
+      ...RES(),
+      riders: [{
+        label: 'Smite', source: 'Divine Smite', op: 'add' as const, formula: '2d6',
+        flat: 0, dice: ['1d6'], when: 'always' as const, on: true,
+      }],
+    }),
+  }))
+  const smite = out.damage.terms!.find(t => t.label === 'Divine Smite')
+  assert.equal(smite?.value, 5)
+  assert.ok(!out.damage.terms!.some(t => t.label === 'FEAT'))
+})
+
+/* THE ITEMISATION MUST ADD UP TO THE NUMBER IT EXPLAINS. A breakdown that
+   disagrees with its own total is worse than no breakdown. */
+test('the terms sum to exactly what the roller folded in', () => {
+  const two = () => ({
+    ...RES(),
+    riders: [
+      { label: 'A', source: 'Rage', op: 'add' as const, formula: '2', flat: 2, dice: [], when: 'always' as const, on: true },
+      { label: 'B', source: 'Hex', op: 'add' as const, formula: '1d6', flat: 0, dice: ['1d6'], when: 'always' as const, on: true },
+      { label: 'C', source: 'Rage', op: 'add' as const, formula: '1', flat: 1, dice: [], when: 'always' as const, on: true },
+    ],
+  })
+  const out = pin([[10, 20], [2, 20], [4, 8], [3, 6]], () => rollWeaponAttack(SWORD, SHEET, null, { damage: two }))
+  const terms = out.damage.terms!.filter(t => t.label === 'Rage' || t.label === 'Hex')
+  // One line per source: Rage's 2 and 1 are one entry, not two.
+  assert.deepEqual(terms, [{ label: 'Rage', value: 3 }, { label: 'Hex', value: 3 }])
+  const graphPart = terms.reduce((n, t) => n + t.value, 0)
+  assert.equal(out.damage.bonus, 3 /* STR */ + graphPart)
 })

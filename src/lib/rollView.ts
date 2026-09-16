@@ -76,7 +76,16 @@ const FLAG: Partial<Record<Rider['op'], FlagName>> = {
 export function riderValue(r: Rider): number {
   if (r.op !== 'add') return 0
   if (r.when === 'manual') return r.rolled ? faceSum(r) + r.flat : 0
-  return r.flat
+  /* THE FACES COUNT HERE TOO. A resolved dice contribution — Divine Smite's 2d6
+     on a hit — is rolled by the roller and folded into the line's modifier, and
+     this returned only `flat`, which is 0 for anything with no flat part. The
+     rider then reported "+0" for a contribution the total had already counted:
+     the roll's own working contradicting its answer. riderAmount() has always
+     read the faces (§49); this is the same question and it must not have a
+     second answer.
+     Totals are unaffected — rollTotals folds only `manual` riders, precisely
+     because the roller already folded these. */
+  return (r.rolledDice?.length ? faceSum(r) : 0) + r.flat
 }
 
 const faceSum = (r: Rider) => (r.rolledDice ?? []).reduce((a, b) => a + b.v, 0)

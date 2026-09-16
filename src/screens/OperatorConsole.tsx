@@ -21,6 +21,9 @@ import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphSt
 import { longRestPatch } from '../lib/rest'
 import { durationTurns } from '../lib/turns'
 import { effectiveSheet } from '../lib/effects'
+import { sendFoundry, useFoundryMessages } from '../lib/foundry'
+import { FOUNDRY_CONDITIONS, conditionLabel } from '../lib/foundryDamage'
+import { toFoundryActor } from '../lib/foundryActor'
 import { pactSlotCount, pactSlotLevel } from '../lib/spells'
 import {
   CASTER_LABEL, assignClass, assignSubclass, casterSlots, casterSummary, castingNumbers,
@@ -207,6 +210,13 @@ export function OperatorConsole() {
      minimize and close are different verbs here. */
   const [lootMin, setLootMin] = useState(false)
 
+  /* WHATEVER IS TARGETED IN FOUNDRY, for whoever. The player-side hook narrows
+     to one character because a roll belongs to one; the console adjudicates for
+     the whole table, so it takes the last target anybody set. */
+  const [fvttTarget, setFvttTarget] = useState<{ token: string; name: string } | null>(null)
+  const [condition, setCondition] = useState<string>(FOUNDRY_CONDITIONS[0])
+  useFoundryMessages(msg => { if (msg.kind === 'target') setFvttTarget(msg.token) })
+
   /* Level Up is a portal too, and for the same reason as the loot roll: it
      belongs to the console rather than to a tab. Unlike the loot roll it has NO
      minimize — an abandoned advancement has written nothing, so there is no
@@ -372,6 +382,78 @@ export function OperatorConsole() {
         <div className={styles.opRight}>
           <div className={styles.opStat}><span className={styles.v}>{members.length}</span><span className={styles.l}>Linked PCs</span></div>
           <div className={styles.opStat}><span className={cx(styles.v, styles.cyan)}>Standby</span><span className={styles.l}>Encounter</span></div>
+          {/* CONDITIONS ON THE TARGETED CREATURE. The DM's call, so it lives on
+              the DM's screen — and it names what it will hit, because a control
+              that acts on "whatever is targeted" and does not say what that is
+              is a control you press once and then check the battlemap. Absent
+              until something is targeted rather than disabled: there is nothing
+              to explain, and a dead select is furniture. */}
+          {fvttTarget && (
+            <div className={styles.opStat} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <select className={styles.selIn} style={{ width: 130 }} value={condition}
+                onChange={e => setCondition(e.target.value)} aria-label="Condition">
+                {FOUNDRY_CONDITIONS.map(c => <option key={c} value={c}>{conditionLabel(c)}</option>)}
+              </select>
+              <button type="button" className={styles.glyphBtn}
+                title={`Apply ${conditionLabel(condition)} to ${fvttTarget.name}`}
+                aria-label={`Apply ${conditionLabel(condition)} to ${fvttTarget.name}`}
+                onClick={async () => {
+                  const ok = await sendFoundry({ kind: 'condition', token: fvttTarget.token, status: condition, on: true })
+                  log(ok
+                    ? <><span className={styles.obj}>{conditionLabel(condition)}</span> applied to <span className={styles.who}>{fvttTarget.name}</span></>
+                    : <>Foundry bridge <span className={styles.obj}>offline</span></>, ok ? 'cyan' : 'danger')
+                }}>
+                <i className="fa-solid fa-hand-sparkles" />
+              </button>
+              <button type="button" className={styles.glyphBtn}
+                title={`Clear ${conditionLabel(condition)} from ${fvttTarget.name}`}
+                aria-label={`Clear ${conditionLabel(condition)} from ${fvttTarget.name}`}
+                onClick={async () => {
+                  const ok = await sendFoundry({ kind: 'condition', token: fvttTarget.token, status: condition, on: false })
+                  log(ok
+                    ? <><span className={styles.obj}>{conditionLabel(condition)}</span> cleared from <span className={styles.who}>{fvttTarget.name}</span></>
+                    : <>Foundry bridge <span className={styles.obj}>offline</span></>, ok ? 'cyan' : 'danger')
+                }}>
+                <i className="fa-solid fa-eraser" />
+              </button>
+              <span className={styles.l} style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{fvttTarget.name}</span>
+            </div>
+          )}
+
+          {/* SYNC THE PARTY TO FOUNDRY. The actor is a mirror of the derived
+              sheet (lib/foundryActor.ts) — press it after a level, a new item
+              or anything else that moved a number the token shows. Idempotent:
+              the bridge updates an actor it already made rather than making a
+              second one. */}
+          <button
+            type="button" className={styles.glyphBtn}
+            title="Sync the party to Foundry" aria-label="Sync the party to Foundry"
+            onClick={async () => {
+              const ok = await sendFoundry({
+                kind: 'actors',
+                actors: party.map(c => ({ character: c.id, data: toFoundryActor(c, shardCatalog) })),
+              })
+              /* AND THE MENU. Names and ids, not a sheet: the bridge turns each
+                 into a hotbar macro that asks the codex to roll it, so the
+                 player can swing from the map. Sent with the sync because it is
+                 the same question — "what does this character have right now". */
+              for (const c of party) {
+                await sendFoundry({
+                  kind: 'macros',
+                  character: c.id,
+                  name: c.name,
+                  weapons: (((c.equipped ?? {}) as { weapons?: { id: string; name: string; icon?: string }[] }).weapons ?? [])
+                    .map(w => ({ id: w.id, name: w.name, ...(w.icon ? { icon: w.icon } : {}) })),
+                })
+              }
+              log(ok
+                ? <><span className={styles.who}>{party.length} actor{party.length === 1 ? '' : 's'}</span> sent to <span className={styles.obj}>Foundry</span></>
+                : <>Foundry bridge <span className={styles.obj}>offline</span></>,
+              ok ? 'cyan' : 'danger')
+            }}
+          >
+            <i className="fa-solid fa-dice-d20" />
+          </button>
           <button
             type="button" className={styles.glyphBtn} onClick={toggleFullscreen}
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} aria-label="Toggle fullscreen"
@@ -4308,6 +4390,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
   const [desc, setDesc] = useState(d?.desc ?? '')
   const [tags, setTags] = useState<string[]>(d?.tags ?? [])
   const [save, setSave] = useState<AbilityKey | ''>(d?.save ?? '')
+  const [attack, setAttack] = useState<'' | 'melee' | 'ranged'>(d?.attack ?? '')
   const [hasDamage, setHasDamage] = useState(d?.hasDamage ?? false)
   const [dice, setDice] = useState(d?.dice ?? '')
   const [scaling, setScaling] = useState(d?.scaling ?? '')
@@ -4335,6 +4418,9 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       // Absent means "no save", which is what the roll panel reads to decide
       // whether to show a DC at all.
       ...(save ? { save } : {}),
+      // Absent means "no attack roll" — the player's Cast button then rolls
+      // damage alone, exactly as it did before spell attacks existed.
+      ...(attack ? { attack } : {}),
       // Omitted when empty so a spell with no graph never grows the keys — the
       // same discipline withVars() keeps on `resources`.
       ...(graph.length ? { graph } : {}),
@@ -4438,6 +4524,27 @@ function SpellForm({ spell, onSubmit, onDelete }: {
       <textarea className={cx(styles.catProse, styles.player)} value={desc} onChange={e => setDesc(e.target.value)}
         {...proseField(setDesc)}
         placeholder="The prose the player reads in their Spellbook…" />
+
+      <div className={styles.catSecLab}><span className={styles.fieldLab}>Attack roll (optional)</span></div>
+      <div>
+        <span className={styles.fieldLab}>Spell attack</span>
+        <select className={styles.selIn} value={attack}
+          onChange={e => setAttack(e.target.value as '' | 'melee' | 'ranged')}>
+          <option value="">— no attack roll —</option>
+          <option value="ranged">Ranged spell attack</option>
+          <option value="melee">Melee spell attack</option>
+        </select>
+        <div className={styles.qHint}>
+          Set this and Cast rolls a d20 first — Fire Bolt → ranged, Shocking Grasp → melee.
+          <br />
+          The <b>bonus</b> is the caster’s, from their profile (prof + their spellcasting ability),
+          so a spell never names it. A crit doubles the damage dice, and with a target selected in
+          Foundry the app decides hit or miss itself.
+          <br />
+          Melee or ranged is what <b>roll:attack.melee</b> matches; every spell attack also matches
+          <b> roll:attack.spell</b>.
+        </div>
+      </div>
 
       <div className={styles.catSecLab}><span className={styles.fieldLab}>Saving throw (optional)</span></div>
       <div>

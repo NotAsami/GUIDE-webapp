@@ -238,3 +238,51 @@ test('an unanswered `manual` rider does NOT apply to the cast', () => {
   assert.equal(r.mod, 0)
   assert.equal(r.riders[0].rolledDice, undefined)
 })
+
+/* ---------- a spell attack crits like a weapon does ----------
+ *
+ * Doubling the DICE and not the modifier is the rule; doubling the modifier
+ * too is the classic quiet overpay, and nothing at the table would catch it. */
+
+const FIRE_BOLT = spell({ name: 'Fire Bolt', level: 0, attack: 'ranged', hasDamage: true, dice: '1d10', dmgType: 'fire' })
+
+/** Pin every die: [face, sides] in the order asked for. */
+function pin<T>(faces: [number, number][], fn: () => T): T {
+  const real = Math.random
+  const q = [...faces]
+  Math.random = () => {
+    const next = q.shift()
+    if (!next) throw new Error('pin(): ran out of dice')
+    return (next[0] - 1) / next[1] + 1e-9
+  }
+  try { return fn() } finally { Math.random = real }
+}
+
+test('a crit doubles the damage dice, marks the added half, and leaves the modifier alone', () => {
+  /* The +2 is the SPELL's own modifier and the +3 a graph contribution — a crit
+     doubles neither. Both are here because doubling the modifier too is the
+     classic quiet overpay, and only one of the two would catch it. */
+  const withMod = spell({ ...FIRE_BOLT, dice: '1d10 + 2' })
+  const contrib = { flat: 3, riders: [] as Rider[] }
+
+  const normal = pin([[6, 10]], () => rollSpellDamage(withMod, 0, 5, contrib))!
+  assert.equal(normal.rolls.length, 1)
+  assert.equal(normal.total, 11)              // 6 + 2 + 3
+
+  const crit = pin([[6, 10], [4, 10]], () => rollSpellDamage(withMod, 0, 5, contrib, true))!
+  assert.equal(crit.rolls.length, 2)
+  assert.equal(crit.rolls[0].crit, undefined) // the printed die
+  assert.equal(crit.rolls[1].crit, true)      // the one the crit added
+  assert.equal(crit.total, 15)                // 6 + 4 + 2 + 3 — neither modifier doubles
+  assert.equal(crit.expr, '2d10')
+})
+
+test('a cantrip that has scaled by level doubles what it actually rolls', () => {
+  // 1d10 + 1d10 per tier: 3d10 printed at level 11, 6d10 on a crit — the crit
+  // doubles what the cantrip GREW to, not what it was printed at.
+  const scaled = spell({ ...FIRE_BOLT, scaling: '1d10' })
+  const crit = pin([[1, 10], [1, 10], [1, 10], [1, 10], [1, 10], [1, 10]],
+    () => rollSpellDamage(scaled, 0, 11, undefined, true))!
+  assert.equal(crit.rolls.length, 6)
+  assert.equal(crit.expr, '6d10')
+})

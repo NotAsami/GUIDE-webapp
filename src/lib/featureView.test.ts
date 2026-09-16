@@ -299,3 +299,47 @@ test('an unresolvable max is 0 rather than a guess', () => {
   // Dice in a use count is not a thing — refused, not truncated to its flat part.
   assert.equal(usesOf(feat({ uses: { current: 2, max: '1d4 + 2' } }), {})!.max, 0)
 })
+
+/* ---------- the value is what it is WORTH, not how it was written ----------
+ *
+ * Brutal Strike's damage is authored as
+ * `has_improved_brutal_strike_enhanced ? 2d10 : 1d10`, and the card printed
+ * that string at the player — the engine talking to itself in the one place
+ * that exists to say what the feature does. */
+
+test('a value formula resolves against the character', () => {
+  const rows = featureEffects(
+    feat({ graph: [eff({ value: 'has_greater_smite ? 2d10 : 1d10', label: 'Add to Damage Roll' })] }),
+    { has_greater_smite: true },
+  )
+  assert.equal(rows[0].text, '**2d10** · Add to Damage Roll')
+})
+
+test('the same formula reads the other way for a character without it', () => {
+  const rows = featureEffects(
+    feat({ graph: [eff({ value: 'has_greater_smite ? 2d10 : 1d10', label: 'Add to Damage Roll' })] }),
+    {},
+  )
+  assert.equal(rows[0].text, '**1d10** · Add to Damage Roll')
+})
+
+test('a level table wins over the bare value, exactly as the roller reads it', () => {
+  const byLevel = ['', '', '', '', '', '', '', '', '', '1d10', '', '', '', '', '', '', '', '2d10']
+  const rows = featureEffects(feat({ graph: [eff({ value: '1d10', byLevel, label: 'Add' })] }), { level: 18 })
+  assert.equal(rows[0].text, '**2d10** · Add')
+})
+
+test('dice and a flat bonus read as one amount', () => {
+  const rows = featureEffects(feat({ graph: [eff({ value: '1d6 + prof', label: 'Add' })] }), { prof: 3, level: 5 })
+  assert.equal(rows[0].text, '**1d6 + 3** · Add')
+})
+
+/* WITHOUT A CHARACTER the source is the honest answer — the DM's authoring
+   preview has nothing to resolve against, and so is a formula that fails to
+   resolve: blanking it would hide the typo that caused it. */
+test('with no scope, and for a formula that will not resolve, the source stands', () => {
+  const g = [eff({ value: 'has_greater_smite ? 2d10 : 1d10', label: 'Add' })]
+  assert.equal(featureEffects(feat({ graph: g }))[0].text, '**has_greater_smite ? 2d10 : 1d10** · Add')
+  const broken = [eff({ value: 'nonsense +', label: 'Add' })]
+  assert.equal(featureEffects(feat({ graph: broken }), { level: 5 })[0].text, '**nonsense +** · Add')
+})
