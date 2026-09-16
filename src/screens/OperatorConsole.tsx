@@ -1310,6 +1310,19 @@ function StandingCard({ member, row, onUpdate, log }: {
         <span className={styles.stdCount}>{stories.length} {stories.length === 1 ? 'card' : 'cards'} on the Codex</span>
       </div>
 
+      {/* The Percent field stopped being the whole truth when the Codex cards
+          became a completionist measure. Saying so here beats a DM typing 60 and
+          watching the card show 33. */}
+      <div className={styles.subNote}>
+        <i className="fa-solid fa-circle-info" aria-hidden="true" />
+        <span>
+          <b>Percent is a fallback.</b> A <b>Main Story</b> card counts itself — completed quests
+          over all of them, side quests included — so the number below only shows where there is
+          nothing to count, which today is <b>Region</b> and <b>Character</b>. Those start counting
+          when locations and per-character quests exist.
+        </span>
+      </div>
+
       {stories.length === 0 && (
         <div className={styles.efNone}>No cards — the player&apos;s Codex home shows its empty state.</div>
       )}

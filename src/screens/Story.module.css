@@ -1,0 +1,459 @@
+/* Story screen — a Codex card, opened.
+ *
+ * THE ONLY FRAMELESS SCREEN IN THE APP, and that is the point: the centred
+ * chamfered panel is already worn by six components and reads as "the DM opened
+ * something for you". Here there are hairlines, type and one instrument. No
+ * clip-path anywhere, so nothing in this file needs the chamfer recipe or a
+ * registration in chamferBorders.test.ts.
+ *
+ * SLACK ROUTING (the standing convention — name who absorbs it):
+ *   · HORIZONTAL — `.dossier` absorbs all of it. It is pinned `left: 520px;
+ *     right: 0`, so the lattice, the nodes and the length of every leader run
+ *     are fixed px and never need measuring. `.spread` caps its reading columns
+ *     so a 2560px window does not produce 1200px-wide paragraphs.
+ *   · VERTICAL — `.reading` absorbs it, and it is the ONLY thing here that may
+ *     scroll. `.rows` never can: those rows ARE the y's the leaders were solved
+ *     against, so a scrolled row is a leader pointing at nothing.
+ *
+ * The chrome is expensive on this screen — topbar, dock nav and bottombar take
+ * 274px, leaving 472px of height on a 746px viewport against the 788px the
+ * design was drawn at. That is why the dossier is two COLUMNS: there is width
+ * to spare (882px) and no height at all, so the reading half sits beside the
+ * threads instead of under them, where it fell below the fold.
+ *
+ * Numbers here and in lib/storyLattice.ts are the SAME numbers. LAT / COL /
+ * HEADS_TOP / HEAD_H / ROW_H / TITLE_OFF live there because the node angles are
+ * solved from them; if you change one, change it in both.
+ */
+
+.story {
+  position: fixed;
+  top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
+  bottom: calc(var(--bar-bottom-h) + 18px);
+  left: 0; right: 0;
+  z-index: 10;
+  padding: 0 34px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cyan-dim) transparent;
+}
+.story::-webkit-scrollbar { width: 8px; }
+.story::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); }
+.story::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  border: 2px solid #111;
+}
+
+/* The canvas the geometry is measured against. It sizes to whatever the chrome
+   leaves, with the house floor below which the screen scrolls instead of
+   crushing — nothing in the geometry depends on this height, because the lattice
+   is anchored to the top and the rows to ROWS_TOP. */
+.body {
+  position: relative;
+  height: 100%;
+  min-height: var(--screen-min-h);
+  min-width: 0;
+}
+
+/* ---------- the instrument ----------
+   Sigil, ring, arc and nodes ride together so the thread depth can zoom them as
+   one body. transform-origin MUST stay 0 0: zoomTo() solves P -> s·P + t in the
+   body's own coordinate space, not the element's box, and an origin anywhere
+   else silently shifts every node off its focal point. */
+.instrument {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  transition: transform 460ms cubic-bezier(.2, .7, .2, 1);
+  pointer-events: none;
+}
+
+.lattice {
+  position: absolute;
+  left: -150px;
+  top: 10px;
+  width: 640px;
+  height: 640px;
+  color: var(--beige);
+  pointer-events: none;
+  /* Entered from the Codex, so it arrives the way it would have zoomed. */
+  animation: lattice-in 520ms cubic-bezier(.2, .7, .2, 1) both;
+}
+.lattice svg { width: 100%; height: 100%; }
+@keyframes lattice-in {
+  from { opacity: 0; transform: scale(0.72); }
+  to   { opacity: 1; transform: none; }
+}
+/* The sigil's own rotation, at the app's own speeds (Codex.module.css). */
+.rotSlow { transform-origin: 320px 320px; animation: story-rot 60s linear infinite; }
+.rotRev  { transform-origin: 320px 320px; animation: story-rot 90s linear infinite reverse; }
+@keyframes story-rot { to { transform: rotate(360deg); } }
+
+/* ---------- arc + nodes (inside the zoom) and leaders (outside it) ----------
+   Same box and the same plain-px space; they are two elements only because one
+   zooms and the other must not. */
+.marks, .leaders {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  animation: marks-in 520ms ease both;
+}
+@keyframes marks-in { from { opacity: 0; } to { opacity: 1; } }
+/* The leader redraws itself when the depth changes — it is a different line at
+   the thread depth, not the same one moved. */
+.leaders line { transition: opacity 260ms ease; }
+
+.ring { stroke: var(--beige); stroke-opacity: 0.13; }
+.arc {
+  stroke: var(--cyan);
+  filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.85));
+  /* Long enough for a full ring at r=250 (2πr ≈ 1571): the dash is trimmed to
+     the real path length by the browser, so one number covers every percent. */
+  stroke-dasharray: 1600;
+  stroke-dashoffset: 1600;
+  animation: draw 1700ms cubic-bezier(.2, .7, .2, 1) 250ms forwards;
+}
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+.wire    { stroke: var(--cyan); stroke-opacity: 0.62; }
+.wireOff { stroke: var(--muted); stroke-opacity: 0.24; }
+.wire line, .wireOff line {
+  stroke-dasharray: 420;
+  stroke-dashoffset: 420;
+  animation: draw 700ms cubic-bezier(.2, .7, .2, 1) 900ms forwards;
+}
+.node { fill: var(--cyan); stroke: none; filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.85)); }
+.wireOff .node { fill: var(--muted); fill-opacity: 0.55; filter: none; }
+.halo { fill: none; stroke: var(--cyan); stroke-opacity: 0.5; }
+
+/* The node as a target. Sits inside .instrument so the zoom carries it, and
+   re-enables pointer events that the instrument turns off wholesale — the sigil
+   behind it must stay unclickable or the whole left half becomes a link. */
+.nodeHit {
+  position: absolute;
+  /* 44px, the standard minimum. The drawn node is 9-11px across — a target that
+     small is a dexterity test, and the nodes sit ~90px apart so there is room. */
+  width: 44px; height: 44px; margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.nodeHit::after {
+  /* Inset well INSIDE the 44px target: drawn at full size the hover ring came
+     out bigger than the focused node's halo, which reads as backwards. At 9px it
+     matches the halo (26px, both scaling with the zoom). The target stays 44. */
+  content: ""; position: absolute; inset: 9px; border-radius: 50%;
+  border: 1px solid transparent;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+.nodeHit:hover::after {
+  border-color: var(--cyan-hot);
+  box-shadow: 0 0 14px rgba(0, 166, 214, 0.5);
+}
+/* The open one already wears the halo; a hover ring on top would double it. */
+.nodeOpen { cursor: default; }
+.nodeOpen:hover::after { border-color: transparent; box-shadow: none; }
+/* ---------- the outer orbit: side quests, one rank down ----------
+   Dashed and grey against the main spine's solid cyan, and hollow rather than
+   filled, so the rank reads before the glyph does. */
+.wireSide { stroke: var(--muted); stroke-opacity: 0.34; stroke-dasharray: 3 4; }
+.sideNode { fill: none; stroke: var(--muted); stroke-opacity: 0.7; stroke-width: 1.4; }
+.wireSide .sideNode { stroke-opacity: 0.7; }
+
+/* The rule between the two ranks. EXACTLY SIDE_GAP tall (30px) — the side rows'
+   y positions are solved from that number, so a taller rule walks every side
+   leader off its own title. */
+.sideRule {
+  display: flex; align-items: center; gap: 11px;
+  height: 30px; box-sizing: border-box; padding-top: 12px;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.3em;
+  color: var(--beige-dim); text-transform: uppercase;
+}
+.sideRule::after {
+  content: ""; flex: 1; height: 1px; background: rgba(212, 191, 125, 0.14);
+  order: 1;
+}
+.sideCount { order: 2; color: var(--beige-dim); }
+
+/* 44px against a main thread's 92, and no meta line. */
+.sideRow { border-top: 0; }
+.sideRow .rowTop {
+  /* SIDE_TITLE_OFF is 11, so this band is 22 and the title centres on it. */
+  height: 22px;
+}
+.sideRow .rowGlyph { font-size: 11px; color: var(--beige-dim); }
+.sideRow .rowTitle { font-size: 16px; color: var(--muted); }
+.sideRow .rowTone { font-size: 7px; color: var(--beige-dim); }
+.sideRow.closed .rowTitle { color: var(--beige-dim); }
+.sideRow:hover .rowTitle, .sideRow.open .rowTitle { color: var(--text); }
+
+/* Every wire but the open one, at the thread depth. */
+.wireDim { opacity: 0.22; transition: opacity 260ms ease; }
+
+/* ---------- the payoff, on the sigil's own centre ---------- */
+.centre {
+  position: absolute;
+  left: 0;           /* CX 170 − 170 */
+  top: 246px;        /* CY 330 − half of this block */
+  width: 340px;
+  text-align: center;
+  z-index: 2;
+}
+.centreLabel {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.32em;
+  color: var(--beige-dim); text-transform: uppercase;
+}
+.pct {
+  font-family: var(--font-display); font-weight: 700; font-size: 74px; line-height: 1;
+  color: var(--cyan-hot); text-shadow: 0 0 32px rgba(0, 166, 214, 0.5);
+  font-variant-numeric: tabular-nums; margin-top: 9px;
+}
+.pctSign { font-size: 36px; color: var(--muted); text-shadow: none; }
+.centreDone {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em;
+  color: var(--muted); text-transform: uppercase; margin-top: 10px;
+}
+.centreRule { width: 54px; height: 1px; background: rgba(212, 191, 125, 0.5); margin: 12px auto; }
+.chapter {
+  font-family: var(--font-display); font-weight: 600; font-size: 24px;
+  letter-spacing: 0.04em; color: var(--beige); line-height: 1.2;
+  text-wrap: balance;
+}
+/* The percent and chapter belong to the STORY. At the thread depth the
+   instrument has zoomed away from them, so they go rather than float detached. */
+.centre.gone { opacity: 0; pointer-events: none; }
+.centre { transition: opacity 300ms ease; }
+
+.centreMeta {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.28em;
+  color: var(--beige-dim); text-transform: uppercase; margin-top: 11px;
+}
+
+/* ---------- the dossier ---------- */
+.dossier {
+  position: absolute;
+  left: 520px;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  min-width: 0;
+}
+
+.back {
+  position: absolute; top: 0; left: 0;
+  display: flex; align-items: center; gap: 9px;
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.28em;
+  color: var(--beige-dim); text-transform: uppercase; text-decoration: none;
+  transition: color 160ms ease;
+}
+.back:hover { color: var(--cyan-hot); }
+.backGlyph { font-size: 9px; }
+
+.tabs {
+  position: absolute; top: 30px; left: 0; right: 0;
+  display: flex; gap: 30px; align-items: baseline; flex-wrap: wrap;
+  border-bottom: 1px solid rgba(212, 191, 125, 0.3);
+}
+.tab {
+  position: relative; padding-bottom: 11px; text-decoration: none;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.3em;
+  color: var(--muted); text-transform: uppercase;
+  transition: color 160ms ease;
+}
+.tab:hover { color: var(--text); }
+.tab.on { color: var(--cyan-hot); }
+.tab.on::after {
+  content: ""; position: absolute; bottom: -1px; left: 0; right: 12%; height: 2px;
+  background: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan), 0 0 18px rgba(0, 166, 214, 0.5);
+}
+.tabPct {
+  font-family: var(--font-display); font-weight: 700; font-size: 13px;
+  letter-spacing: 0; color: var(--beige-dim); margin-left: 9px;
+}
+.tab.on .tabPct { color: var(--cyan-hot); }
+
+.head {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.34em;
+  color: var(--beige); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.head :global(.acc) { color: var(--cyan); }
+.headCount { color: var(--muted); letter-spacing: 0.2em; }
+
+/* HEADS_TOP, and the grid that makes ROWS_TOP fall out of it: row 1 is the
+   heading band (HEAD_H), row 2 the content, so a row's title line lands on
+   exactly the y its leader was solved for without that y being typed twice. */
+.stack {
+  position: absolute;
+  top: 86px; left: 0; right: 0; bottom: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1.15fr);
+  grid-template-rows: 22px minmax(0, 1fr);
+  column-gap: 38px;
+  min-height: 0;
+}
+/* grid-COLUMN as well as grid-row, and that is not optional: an item with a
+   definite row but an auto column is placed BEFORE the auto-flow items, which
+   sent this 1px divider into column 1 and squeezed the whole threads column
+   into the 1px slot meant for the divider. Pin both axes. */
+.vrule { grid-column: 2; grid-row: 1 / -1; background: rgba(212, 191, 125, 0.14); }
+
+.rows { position: relative; min-width: 0; }
+.row {
+  display: flex; flex-direction: column; justify-content: flex-start;
+  border-top: 1px solid rgba(212, 191, 125, 0.14);
+  border-left: 2px solid transparent;
+  padding-left: 0;
+  min-width: 0;
+  text-decoration: none;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+/* A row is the way into a thread, so it has to advertise itself — same treatment
+   as the Journal's own index rows. */
+.row:hover, .row:focus-visible {
+  background: linear-gradient(90deg, rgba(0, 166, 214, 0.07), transparent 78%);
+  outline: none;
+}
+.row:focus-visible { border-left-color: var(--cyan); }
+/* The open thread. Not a hover state — this one persists while you read it. */
+.row.open {
+  background: linear-gradient(90deg, rgba(0, 166, 214, 0.13), transparent 82%);
+  border-left-color: var(--cyan);
+}
+.row.open .rowTitle { color: var(--cyan-hot); }
+/* :first-of-type, NOT :first-child — on the error/empty path a state <p> is the
+   first child, which would leave the first real row with a top border doubling
+   the hairline under .head. */
+.rows .row:first-of-type { border-top: 0; }
+/* TITLE_OFF: 30px tall, centred → the title's middle sits 15px into the row. */
+.rowTop { display: flex; align-items: center; gap: 10px; height: 30px; min-width: 0; }
+.rowGlyph { flex: 0 0 auto; font-family: var(--font-mono); font-size: 12px; color: var(--cyan); }
+.rowTitle {
+  font-family: var(--font-prose); font-size: 20px; color: var(--text); line-height: 1.2;
+  /* ONE LINE, ALWAYS. A wrapping title pushes every leader below it off its
+     own node — the whole geometry assumes a fixed row height. */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.rowTone {
+  flex: 0 0 auto; margin-left: auto;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--cyan);
+}
+.rowMeta {
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em;
+  color: var(--muted); text-transform: uppercase; margin: 8px 0 0 22px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.row.current .rowTone { color: var(--cyan-hot); }
+.row.closed { opacity: 0.62; }
+.row.closed .rowGlyph, .row.closed .rowTitle { color: var(--muted); }
+.row.closed .rowTone { color: var(--muted); }
+
+/* ---------- the thread record ---------- */
+.recMeta {
+  display: flex; flex-wrap: wrap; gap: 4px 18px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em;
+  color: var(--text); text-transform: uppercase; margin-bottom: 4px;
+}
+.recK { color: var(--beige); }
+
+.objRow { display: flex; align-items: baseline; gap: 12px; padding: 6px 2px; }
+.objBox { flex: 0 0 auto; width: 13px; color: var(--cyan); font-size: 10px; }
+.objText {
+  font-family: var(--font-prose); font-size: 15.5px; line-height: 1.5; color: var(--text);
+}
+.objRow.done .objBox { color: var(--beige-dim); }
+.objRow.done .objText { color: var(--muted); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; }
+.chip {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+  color: var(--cyan); padding: 1px 0 2px;
+  border-bottom: 1px solid rgba(0, 166, 214, 0.4);
+}
+
+/* The one scroller. Capped so a wide window cannot produce unreadable line
+   lengths (Journal's .readInner does the same at 680). */
+.reading {
+  min-width: 0; min-height: 0;
+  max-width: 620px;
+  padding-right: 10px;
+}
+.subHead {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+  color: var(--beige); text-transform: uppercase; margin: 26px 0 4px;
+}
+.subHead::after {
+  content: ""; flex: 1; height: 1px; background: rgba(212, 191, 125, 0.18);
+}
+
+.sessTitle {
+  font-family: var(--font-display); font-weight: 600; font-size: 22px;
+  letter-spacing: 0.03em; color: var(--text); margin: 0 0 7px;
+  text-wrap: balance;
+}
+.sessDate {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em;
+  color: var(--beige-dim); text-transform: uppercase;
+}
+.prose p {
+  font-family: var(--font-prose); font-size: 16px; line-height: 1.72;
+  color: var(--text); margin: 17px 0 0; text-wrap: pretty;
+}
+.prose p + p { margin-top: 14px; }
+
+.events { display: flex; flex-direction: column; gap: 10px; margin-top: 19px; }
+.event {
+  display: flex; align-items: baseline; gap: 12px;
+  font-family: var(--font-prose); font-size: 15px; line-height: 1.5; color: var(--muted);
+}
+.evMark { flex: 0 0 auto; color: var(--cyan); font-size: 9px; }
+
+.logRow {
+  display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 0 13px;
+  padding: 12px 0; border-top: 1px solid rgba(212, 191, 125, 0.14);
+}
+.logNow .logNum { color: var(--cyan-hot); }
+.logNum {
+  font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--beige-dim);
+}
+.logNow .logNum { color: var(--cyan-hot); }
+.logTitle {
+  font-family: var(--font-prose); font-size: 16px; color: var(--muted); line-height: 1.25;
+}
+.logNow .logTitle { color: var(--text); }
+.logDate {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
+  color: var(--beige-dim); text-transform: uppercase; margin-top: 5px;
+}
+
+.state {
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.7;
+  color: var(--muted); letter-spacing: 0.04em; margin: 14px 0 0;
+}
+
+.scrollY {
+  overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent;
+}
+.scrollY::-webkit-scrollbar { width: 7px; }
+.scrollY::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
+.scrollY::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.45));
+  border: 2px solid #111;
+}
+
+/* The entrance is choreography and the rotation is ambient — both go. */
+@media (prefers-reduced-motion: reduce) {
+  .lattice, .marks, .leaders { animation: none; opacity: 1; }
+  .instrument { transition: none; }
+  .rotSlow, .rotRev { animation: none; }
+  .arc, .wire line, .wireOff line { animation: none; stroke-dashoffset: 0; }
+}
