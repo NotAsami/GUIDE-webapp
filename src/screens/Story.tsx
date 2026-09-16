@@ -8,13 +8,41 @@ import { Prose } from '../lib/markdown'
 /* Geometry and thread sources live in lib/ with storyLattice.test.ts beside
    them: a leader that misses its node by four pixels reads as a rendering
    quirk, so the invariants are asserted rather than eyeballed. */
+import type { Thread } from '../lib/storyLattice'
 import {
-  COL, CX, CY, FOCAL_BREAK, R_ARC, ROW_H, arcPath, recordFor, rowY, solve, threadsFor, zoomTo,
+  COL, CX, CY, FOCAL_BREAK, R_ARC, ROW_H, SIDE_GAP, SIDE_ROW_H,
+  arcPath, completionFor, recordFor, threadsFor, wiresFor, zoomTo,
 } from '../lib/storyLattice'
 import styles from './Story.module.css'
 
 interface RouteContext {
   character: CharacterRow
+}
+
+/** One thread. A LINK, which is what makes both descending and hopping free —
+ *  and 44px tall for a side quest against 92 for a main one, because the rank
+ *  difference has to be visible without reading the glyph. */
+function Row({ t, story, open }: { t: Thread; story: string; open: boolean }) {
+  const side = t.kind === 'side'
+  return (
+    <Link
+      to={`/story/${story}/${t.id}`}
+      className={`${styles.row} ${side ? styles.sideRow : ''}`
+        + ` ${t.tone === 'closed' ? styles.closed : t.tone === 'current' ? styles.current : ''}`
+        + ` ${open ? styles.open : ''}`}
+      style={{ height: side ? SIDE_ROW_H : ROW_H }}
+      aria-current={open ? 'page' : undefined}
+    >
+      <div className={styles.rowTop}>
+        <span className={styles.rowGlyph} aria-hidden="true">{side ? '◇' : '◈'}</span>
+        <span className={styles.rowTitle}>{t.title}</span>
+        <span className={styles.rowTone}>
+          {t.tone === 'closed' ? 'Closed' : t.tone === 'current' ? 'Current' : 'Active'}
+        </span>
+      </div>
+      {!side && <div className={styles.rowMeta}>{t.meta}</div>}
+    </Link>
+  )
 }
 
 /** The story screen: a Codex card, opened.
@@ -41,13 +69,9 @@ export function Story() {
     () => (story ? threadsFor(story, quests, character) : []),
     [story, quests, character],
   )
-  // Keyed on the COUNT, not on `threads`: threadsFor builds fresh objects, so
-  // `threads` changes identity on every campaign refetch even when the content is
-  // identical — and the row index is the only thing solve() actually reads.
-  const wires = useMemo(
-    () => Array.from({ length: threads.length }, (_, i) => solve(rowY(i))),
-    [threads.length],
-  )
+  // wiresFor reads each thread's KIND, so this can no longer key on the count
+  // alone — three main and three side do not solve the same as six main.
+  const wires = useMemo(() => wiresFor(threads), [threads])
 
   // A card the DM deleted, or a hand-typed id. The route table's `*` cannot
   // catch this one — it matched a real route with an id that finds nothing.
@@ -64,15 +88,29 @@ export function Story() {
   // At the thread depth the instrument zooms so the open node comes to rest
   // beside its own row. The leaders stay OUT of this transform — they have to
   // reach rows that never move, which is the whole point of them.
-  const zoom = focus >= 0 && wires[focus] ? zoomTo(wires[focus]!, rowY(focus)) : null
-  const arc = arcPath(story.percent)
+  // With nothing open the halo marks the CURRENT thread, which is the first main
+  // one — never a side quest, even when it happens to sort first.
+  const lit = focus >= 0 ? focus : threads.findIndex(t => t.kind === 'main')
+  const zoom = focus >= 0 && wires[focus] ? zoomTo(wires[focus]!, wires[focus]!.ey) : null
+  const mainThreads = threads.filter(t => t.kind === 'main')
+  const sideThreads = threads.filter(t => t.kind === 'side')
+  // Must match sideRowY's arithmetic exactly — it is the same stack.
+  const listH = mainThreads.length * ROW_H
+    + (sideThreads.length ? SIDE_GAP + sideThreads.length * SIDE_ROW_H : 0)
+  // THE PERCENT IS COMPLETION, not narrative progress — closed quests over all
+  // of them, side quests included. Null where there is nothing countable (region
+  // has no locations table, a relation never completes), and there the DM's
+  // authored number still stands.
+  const done = completionFor(story, quests, character)
+  const pct = done ? done.percent : story.percent
+  const arc = arcPath(pct)
   const latest: SessionRow | undefined = sessions[0]
 
   return (
     <>
       <Deco
         left={<><span className="acc">CODEX</span> &nbsp;//&nbsp; {story.title.toUpperCase()} &nbsp;//&nbsp; SYNC OK</>}
-        right={<>{story.telemetry ?? 'Story Lattice'} &nbsp;//&nbsp; <span className="acc">{story.percent}%</span></>}
+        right={<>{story.telemetry ?? 'Story Lattice'} &nbsp;//&nbsp; <span className="acc">{pct}%</span></>}
       />
       <Nav
         variant="dock"
@@ -118,11 +156,13 @@ export function Story() {
               {wires.map((w, i) => w && (
                 <g
                   key={threads[i].id}
-                  className={`${threads[i].tone === 'closed' ? styles.wireOff : styles.wire}`
+                  className={`${threads[i].kind === 'side' ? styles.wireSide : threads[i].tone === 'closed' ? styles.wireOff : styles.wire}`
                     + `${focus >= 0 && i !== focus ? ' ' + styles.wireDim : ''}`}
                 >
-                  <circle cx={w.nx} cy={w.ny} r={i === (focus >= 0 ? focus : 0) ? 5.5 : 4.5} className={styles.node} />
-                  {i === (focus >= 0 ? focus : 0) && <circle cx={w.nx} cy={w.ny} r="13" className={styles.halo} />}
+                  {threads[i].kind === 'side'
+                    ? <circle cx={w.nx} cy={w.ny} r="4" className={styles.sideNode} />
+                    : <circle cx={w.nx} cy={w.ny} r={i === lit ? 5.5 : 4.5} className={styles.node} />}
+                  {i === lit && <circle cx={w.nx} cy={w.ny} r="13" className={styles.halo} />}
                 </g>
               ))}
             </svg>
@@ -150,12 +190,12 @@ export function Story() {
               /* Zoomed in, one thread is open and only its wire is drawn — from
                  where the node actually came to rest, so it still reads as the
                  same circuit rather than a line to nowhere. */
-              <g className={threads[focus].tone === 'closed' ? styles.wireOff : styles.wire}>
-                <line x1={zoom.focal.x} y1={zoom.focal.y} x2={zoom.focal.x + FOCAL_BREAK} y2={rowY(focus)} />
-                <line x1={zoom.focal.x + FOCAL_BREAK} y1={rowY(focus)} x2={COL - 4} y2={rowY(focus)} />
+              <g className={threads[focus].kind === 'side' ? styles.wireSide : threads[focus].tone === 'closed' ? styles.wireOff : styles.wire}>
+                <line x1={zoom.focal.x} y1={zoom.focal.y} x2={zoom.focal.x + FOCAL_BREAK} y2={wires[focus]!.ey} />
+                <line x1={zoom.focal.x + FOCAL_BREAK} y1={wires[focus]!.ey} x2={COL - 4} y2={wires[focus]!.ey} />
               </g>
             ) : wires.map((w, i) => w && (
-              <g key={threads[i].id} className={threads[i].tone === 'closed' ? styles.wireOff : styles.wire}>
+              <g key={threads[i].id} className={threads[i].kind === 'side' ? styles.wireSide : threads[i].tone === 'closed' ? styles.wireOff : styles.wire}>
                 <line x1={w.nx} y1={w.ny} x2={w.ex} y2={w.ey} />
                 <line x1={w.ex} y1={w.ey} x2={COL - 4} y2={w.ey} />
               </g>
@@ -166,8 +206,9 @@ export function Story() {
           <div className={`${styles.centre} ${zoom ? styles.gone : ''}`}>
             <div className={styles.centreLabel}>{story.label}</div>
             <div className={styles.pct}>
-              {story.percent}<span className={styles.pctSign}>%</span>
+              {pct}<span className={styles.pctSign}>%</span>
             </div>
+            {done && <div className={styles.centreDone}>{done.done} / {done.total} closed</div>}
             <div className={styles.centreRule} />
             {story.chapter && <div className={styles.chapter}>{story.chapter}</div>}
             {story.telemetry && <div className={styles.centreMeta}>{story.telemetry}</div>}
@@ -212,38 +253,24 @@ export function Story() {
                   : <>Last Session{latest && <span className={styles.headCount}> :: {String(latest.num).padStart(2, '0')}</span>}</>}
               </div>
 
-              <div className={styles.rows} style={{ height: threads.length ? threads.length * ROW_H : undefined }}>
+              <div className={styles.rows} style={{ height: listH || undefined }}>
                 {error && <p className={styles.state}>{error}</p>}
                 {!loading && !error && threads.length === 0 && (
                   <p className={styles.state}>
                     Nothing wired to this card yet. The DM authors these in the Operator Console.
                   </p>
                 )}
-                {/* The tone class is spelled out rather than `styles[t.tone]`: there is
-                    no `.active` rule (active IS the base look), so the computed form
-                    emitted the literal string "undefined" as a class — and
-                    cssClasses.test.ts only scans `styles.foo`, so bracket access walks
-                    straight past the guard that exists for exactly this. */}
-                {/* A row is a LINK, which is what makes hopping free: at the story
-                    depth it descends, at the thread depth it swaps which thread is
-                    open. Either way the rows never move — they ARE the y's the
-                    leaders were solved against — so nothing has to be re-solved. */}
-                {threads.map(t => (
-                  <Link
-                    key={t.id}
-                    to={`/story/${story.id}/${t.id}`}
-                    className={`${styles.row} ${t.tone === 'closed' ? styles.closed : t.tone === 'current' ? styles.current : ''} ${t.id === threadId ? styles.open : ''}`}
-                    style={{ height: ROW_H }}
-                    aria-current={t.id === threadId ? 'page' : undefined}
-                  >
-                    <div className={styles.rowTop}>
-                      <span className={styles.rowGlyph} aria-hidden="true">◈</span>
-                      <span className={styles.rowTitle}>{t.title}</span>
-                      <span className={styles.rowTone}>{t.tone === 'closed' ? 'Closed' : t.tone === 'current' ? 'Current' : 'Active'}</span>
-                    </div>
-                    <div className={styles.rowMeta}>{t.meta}</div>
-                  </Link>
-                ))}
+                {mainThreads.map(t => <Row key={t.id} t={t} story={story.id} open={t.id === threadId} />)}
+
+                {/* The outer orbit. Side quests are the same campaign one rank
+                    down — their own rule, their own 44px row, and out on the
+                    sigil's outer circle rather than the inner ring. */}
+                {sideThreads.length > 0 && (
+                  <div className={styles.sideRule}>
+                    Side<span className={styles.sideCount}>{sideThreads.length}</span>
+                  </div>
+                )}
+                {sideThreads.map(t => <Row key={t.id} t={t} story={story.id} open={t.id === threadId} />)}
               </div>
 
               {/* Only this column scrolls. The threads never can — their rows ARE the

@@ -12,7 +12,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   CX, CY, R_NODE, R_EXIT, COL, HEAD_H, HEADS_TOP, ROW_H, ROWS_TOP, TITLE_OFF,
-  FOCAL_BREAK, arcPath, recordFor, rowY, solve, threadsFor, zoomTo,
+  FOCAL_BREAK, R_SIDE_NODE, SIDE_GAP, SIDE_ROW_H, SIDE_TITLE_OFF,
+  arcPath, completionFor, recordFor, rowY, sideRowY, solve, threadsFor, wiresFor, zoomTo,
 } from './storyLattice.ts'
 import type { CharacterRow, ProgressStory, QuestRow } from './database.types.ts'
 
@@ -133,16 +134,20 @@ test('percent is clamped, not trusted', () => {
 
 /* ---------------- where threads come from ---------------- */
 
-test('MAIN reads main quests only, active first, side quests never', () => {
+test('MAIN lists main quests, then side quests one rank down', () => {
+  // Side quests used to appear on no card anywhere. They are the same campaign,
+  // so they belong here — below the spine, not on it.
   const qs = [
     quest({ id: 'done', title: 'Arrival', status: 'completed' }),
     quest({ id: 'side', title: 'Whispers', type: 'side' }),
     quest({ id: 'live', title: 'Clear Your Name' }),
   ]
   const t = threadsFor(story('main'), qs, {} as CharacterRow)
-  assert.deepEqual(t.map(x => x.id), ['live', 'done'])
+  assert.deepEqual(t.map(x => x.id), ['live', 'done', 'side'])
+  assert.deepEqual(t.map(x => x.kind), ['main', 'main', 'side'])
   assert.equal(t[0].tone, 'current')
   assert.equal(t[1].tone, 'closed')
+  assert.equal(t[2].tone, 'active', 'a side quest is never the CURRENT thread')
 })
 
 test('MAIN counts objectives into the meta line', () => {
@@ -192,9 +197,14 @@ test('MAIN opens the quest behind the thread, with its prose and objectives inta
   assert.deepEqual(r.meta, [{ k: 'Given by', v: 'Voss' }, { k: 'Location', v: 'Brettany' }])
 })
 
-test('a side quest is not reachable through a main story card', () => {
-  const qs = [quest({ id: 'a', type: 'side' })]
-  assert.equal(recordFor(story('main'), 'a', qs, {} as CharacterRow), null)
+test('A SIDE QUEST OPENS like any other thread, and says which rank it is', () => {
+  // The old filter was `type === 'main'`, which would list a side thread on the
+  // card and then refuse to open it — a row that is a link to a redirect.
+  const qs = [quest({ id: 'a', type: 'side', title: 'Whispers in Castella' })]
+  const r = recordFor(story('main'), 'a', qs, {} as CharacterRow)
+  assert.ok(r)
+  assert.equal(r.title, 'Whispers in Castella')
+  assert.equal(r.kicker, 'Side Quest')
 })
 
 test('legacy string Related tags still normalise to objects', () => {
@@ -285,4 +295,92 @@ test('ZOOMING IN DOES NOT THROW THE OTHER NODES OFF THE CANVAS', () => {
       assert.ok(p.y > 0 && p.y < CANVAS.h, `focus ${i}: node ${j} at y=${p.y.toFixed(0)} left the canvas`)
     }
   }
+})
+
+/* ---------------- the outer orbit ---------------- */
+
+test('side rows start below the last main row', () => {
+  assert.equal(sideRowY(0, 3), ROWS_TOP + 3 * ROW_H + SIDE_GAP + SIDE_TITLE_OFF)
+  assert.ok(sideRowY(0, 3) > rowY(2))
+})
+
+test('THE COMPACT SIDE ROW IS LOAD-BEARING, not taste', () => {
+  // Three main plus three side has to fit the body a laptop actually gives this
+  // screen. At 44px it ends at 546; at a main row's 92px it would end at 660.
+  const BODY = 556
+  const compact = ROWS_TOP + 3 * ROW_H + SIDE_GAP + 3 * SIDE_ROW_H
+  assert.ok(compact <= BODY, `side list ends at ${compact}px, body is ${BODY}px`)
+  assert.ok(ROWS_TOP + 3 * ROW_H + SIDE_GAP + 3 * ROW_H > BODY,
+    'if a full-height side row also fitted, the compact one would be arbitrary')
+})
+
+test('wiresFor puts every thread on the ring its RANK belongs to', () => {
+  const qs = [
+    quest({ id: 'm1' }), quest({ id: 'm2' }),
+    quest({ id: 's1', type: 'side' }), quest({ id: 's2', type: 'side' }),
+  ]
+  const th = threadsFor(story('main'), qs, {} as CharacterRow)
+  const ws = wiresFor(th)
+  assert.equal(ws.length, th.length, 'wires must stay parallel to threads')
+  const radius = (w) => Math.hypot(w.nx - CX, w.ny - CY)
+  th.forEach((t, i) => near(radius(ws[i]), t.kind === 'main' ? R_NODE : R_SIDE_NODE))
+  const mains = ws.filter((_, i) => th[i].kind === 'main').map(radius)
+  const sides = ws.filter((_, i) => th[i].kind === 'side').map(radius)
+  assert.ok(Math.min(...sides) > Math.max(...mains), 'every side node sits outside every main one')
+})
+
+test('a side leader reaches its own row and still runs left-to-right', () => {
+  const qs = [0, 1, 2].map(i => quest({ id: 'm' + i }))
+    .concat([0, 1, 2].map(i => quest({ id: 's' + i, type: 'side' })))
+  const th = threadsFor(story('main'), qs, {} as CharacterRow)
+  const ws = wiresFor(th)
+  let m = 0
+  let sIdx = 0
+  th.forEach((t, i) => {
+    const w = ws[i]
+    assert.ok(w, `thread ${i} should solve`)
+    assert.equal(w.ey, t.kind === 'main' ? rowY(m++) : sideRowY(sIdx++, 3))
+    const run = COL - 4 - w.ex
+    assert.ok(run >= 30, `${t.kind} thread ${i} run is ${run.toFixed(1)}px`)
+  })
+})
+
+/* ---------------- completion ---------------- */
+
+test('COMPLETION COUNTS SIDE QUESTS — that is the whole point of the reframe', () => {
+  const qs = [
+    quest({ id: 'a' }), quest({ id: 'b' }), quest({ id: 'c', status: 'completed' }),
+    quest({ id: 'd', type: 'side' }), quest({ id: 'e', type: 'side' }),
+    quest({ id: 'f', type: 'side', status: 'completed' }),
+  ]
+  const c = completionFor(story('main'), qs, {} as CharacterRow)
+  assert.deepEqual(c, { done: 2, total: 6, percent: 33 })
+})
+
+test('a failed quest stays in the denominator', () => {
+  // Dropping it would let botching a quest RAISE your completion.
+  const qs = [quest({ id: 'a', status: 'completed' }), quest({ id: 'b', status: 'failed' })]
+  assert.equal(completionFor(story('main'), qs, {} as CharacterRow).percent, 50)
+})
+
+test('one quest is one unit, whatever its objectives', () => {
+  const heavy = quest({ id: 'a', status: 'completed', objectives: [
+    { text: 'x', done: true }, { text: 'y', done: true }, { text: 'z', done: true }] })
+  const light = quest({ id: 'b', type: 'side' })
+  assert.equal(completionFor(story('main'), [heavy, light], {} as CharacterRow).percent, 50)
+})
+
+test('NULL where there is nothing to count, so the caller falls back to the authored number', () => {
+  // The honest state for two emblems today — not zero, which would read as
+  // "you have done none of it".
+  assert.equal(completionFor(story('region'), [quest({})], {} as CharacterRow), null)
+  assert.equal(completionFor(story('character'), [quest({})], {} as CharacterRow), null)
+  assert.equal(completionFor(story('main'), [], {} as CharacterRow), null, 'no quests yet')
+})
+
+test('a finished campaign reads 100, and the arc closes into a ring', () => {
+  const qs = [quest({ id: 'a', status: 'completed' }), quest({ id: 'b', status: 'completed' })]
+  const c = completionFor(story('main'), qs, {} as CharacterRow)
+  assert.equal(c.percent, 100)
+  assert.match(arcPath(c.percent), /Z$/)
 })

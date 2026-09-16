@@ -4,6 +4,8 @@ import type { CharacterRow, CharacterUpdate, ProgressStory, ShardTree } from '..
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { StartingKit } from '../components/StartingKit'
+import { useCampaign } from '../lib/campaign'
+import { completionFor } from '../lib/storyLattice'
 import styles from './Codex.module.css'
 
 interface RouteContext {
@@ -18,17 +20,24 @@ const FALLBACK_STORIES: ProgressStory[] = []
 
 /** Home / Codex screen.
  *
- *  This is the Phase 0 wired-end-to-end screen: the three story cards render
- *  entirely from `character.progress.stories[]`. Nothing in this file
- *  hardcodes a percentage or chapter name. The DM authors those cards in the
- *  Operator Console's "Standing & Story" card (OperatorConsole.tsx
- *  StandingCard) — emblem, title, label, percent, chapter, telemetry and hover
- *  text, plus add/remove/reorder. Save there → reload here → the cards reflect
- *  it. That's the contract. (It used to say "edit the row in Supabase by
- *  hand"; the console replaced that.) */
+ *  The story cards render from `character.progress.stories[]`, which the DM
+ *  authors in the Operator Console's "Standing & Story" card
+ *  (OperatorConsole.tsx StandingCard) — emblem, title, label, chapter,
+ *  telemetry, hover text, plus add/remove/reorder. Save there, reload here.
+ *
+ *  The PERCENT is the exception, and the only reason this screen reads `quests`
+ *  at all. A card is a COMPLETIONIST measure — how much of this have I finished,
+ *  side quests included — so the number is derived wherever there is something
+ *  to count, and falls back to the DM's authored one where there is not (region
+ *  has no locations table; a relation never completes). Nothing in this file
+ *  hardcodes a percentage or a chapter name. */
 export function Codex() {
   const { character, updateSections, shardTrees } = useOutletContext<RouteContext>()
   const stories = character.progress?.stories ?? FALLBACK_STORIES
+  // Two extra selects on the home screen, and the price of the cards meaning
+  // completion. While it loads `quests` is empty, completionFor returns null and
+  // the authored number shows — so the card never flashes a wrong 0%.
+  const { quests } = useCampaign()
 
   return (
     <>
@@ -52,7 +61,11 @@ export function Codex() {
           </div>
         )}
         {stories.map(story => (
-          <StoryCard key={story.id} story={story} />
+          <StoryCard
+            key={story.id}
+            story={story}
+            percent={completionFor(story, quests, character)?.percent ?? story.percent}
+          />
         ))}
       </section>
       <Nav />
@@ -155,7 +168,7 @@ function Glyph() {
  *  `/story/:id` is a real route, which buys middle-click, copy-link and the
  *  back button for nothing. The cue in the title row swaps the standing dot for
  *  "Open" on hover and focus — no extra layout, just the same slot. */
-function StoryCard({ story }: { story: ProgressStory }) {
+function StoryCard({ story, percent }: { story: ProgressStory; percent: number }) {
   return (
     <div className={styles.cardWrap}>
       <Link className={styles.card} to={`/story/${story.id}`} aria-label={`Open ${story.title}`}>
@@ -173,7 +186,7 @@ function StoryCard({ story }: { story: ProgressStory }) {
         </span>
       </Link>
       <div className={styles.pct}>
-        {story.percent}<span className={styles.pctSign}>%</span>
+        {percent}<span className={styles.pctSign}>%</span>
         <div className={styles.pctLabel}>{story.label}</div>
       </div>
       {(story.chapter || story.tooltip) && (
