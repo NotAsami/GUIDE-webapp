@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap">
+  <style>
+    body { margin: 0; background: #1d1d1d; }
+    a { color: #00a6d6; } a:hover { color: #4dd6ff; }
+    .ch { clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c)); }
+  </style>
+</helmet>
+
+<div style="position: relative; width: 1000px; height: 540px; overflow: hidden; background: #1d1d1d; font-family: 'JetBrains Mono', ui-monospace, monospace;">
+
+  <!-- header -->
+  <div style="display: flex; align-items: baseline; gap: 14px; padding: 20px 30px 9px; margin: 0 14px; border-bottom: 1px solid rgba(212,191,125,0.35);">
+    <span style="font-size: 10px; letter-spacing: 0.28em; color: #00a6d6; opacity: 0.85;">04</span>
+    <span style="font-size: 12px; letter-spacing: 0.4em; color: #d4bf7d; text-transform: uppercase;">Story Card &mdash; Open Affordance</span>
+    <span style="margin-left: auto; font-size: 9px; letter-spacing: 0.2em; color: #aaaaaa; text-transform: uppercase;">220 &times; 168<span style="color: #8a7a4a; margin: 0 6px;">&middot;</span>18px chamfer<span style="color: #8a7a4a; margin: 0 6px;">&middot;</span>already a <span style="color: #00a6d6;">&lt;button&gt;</span></span>
+  </div>
+
+  <!-- three cards, app geometry: 220x168, 56px gaps -->
+  <div style="display: flex; gap: 56px; justify-content: center; padding-top: 34px;">
+
+    <!-- ========== REST ========== -->
+    <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; width: 220px;">
+      <div style="position: absolute; top: -22px; left: 0; right: 0; text-align: center; font-size: 8px; letter-spacing: 0.26em; color: #8a7a4a; text-transform: uppercase;">Rest</div>
+      <div style="position: relative; width: 220px; height: 168px;">
+        <div class="ch" style="--c: 18px; position: absolute; inset: 0; background: #d4bf7d;"></div>
+        <div class="ch" style="--c: 17px; position: absolute; inset: 2px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 14px 18px 18px;
+          background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%), linear-gradient(180deg, #1b1b1b, #131313);
+          box-shadow: inset 0 0 24px rgba(0,166,214,0.10), inset 0 0 1px rgba(255,255,255,0.05);">
+          <div style="align-self: flex-start; font-size: 8.5px; letter-spacing: 0.22em; color: #00a6d6; text-transform: uppercase; opacity: 0.85;">Connection 003.001.42</div>
+          <svg width="78" height="78" viewBox="0 0 100 100" fill="none" stroke="#d4bf7d" stroke-width="1.6" style="filter: drop-shadow(0 0 6px rgba(212,191,125,0.25));">
+            <polygon points="50,8 92,82 8,82"></polygon>
+            <polygon points="50,24 80,76 20,76"></polygon>
+            <line x1="50" y1="40" x2="50" y2="76"></line>
+            <circle cx="50" cy="56" r="6" stroke-width="1.4"></circle>
+            <line x1="20" y1="92" x2="80" y2="92" stroke-dasharray="2 3" opacity="0.6"></line>
+          </svg>
+          <div style="align-self: stretch; display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.28em; color: #dedede; text-transform: uppercase;">
+            <span>Character Story</span><span style="color: #00a6d6;">&#9679;</span>
+          </div>
+        </div>
+      </div>
+      <div style="text-align: center; font-family: 'Cinzel', serif; font-weight: 700; font-size: 36px; color: #d4bf7d; letter-spacing: 0.08em; line-height: 1;">
+        <div style="width: 28px; height: 1px; background: #d4bf7d; margin: 0 auto 10px; opacity: 0.6;"></div>
+        45<span style="color: #8a7a4a; font-size: 24px;">%</span>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.32em; color: #aaaaaa; text-transform: uppercase; margin-top: 6px; font-weight: 400;">Personal Arc</div>
+      </div>
+    </div>
+
+    <!-- ========== HOVER: the dot becomes the affordance ========== -->
+    <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; width: 220px;">
+      <div style="position: absolute; top: -22px; left: 0; right: 0; text-align: center; font-size: 8px; letter-spacing: 0.26em; color: #00a6d6; text-transform: uppercase;">Hover</div>
+      <div style="position: relative; width: 220px; height: 168px; transform: translateY(-3px) scale(1.04);">
+        <div class="ch" style="--c: 18px; position: absolute; inset: 0; background: #d4bf7d;"></div>
+        <div class="ch" style="--c: 17px; position: absolute; inset: 2px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 14px 18px 18px;
+          background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%), linear-gradient(180deg, #1b1b1b, #131313);
+          box-shadow: inset 0 0 36px rgba(0,166,214,0.22), 0 0 1px rgba(255,255,255,0.05);">
+          <div style="align-self: flex-start; font-size: 8.5px; letter-spacing: 0.22em; color: #00a6d6; text-transform: uppercase; opacity: 0.85;">Connection 002.007.11</div>
+          <svg width="78" height="78" viewBox="0 0 100 100" fill="none" stroke="#d4bf7d" stroke-width="1.6" style="filter: drop-shadow(0 0 10px rgba(212,191,125,0.55));">
+            <polyline points="14,72 50,40 86,72"></polyline>
+            <polyline points="14,58 50,26 86,58"></polyline>
+            <polyline points="14,86 50,54 86,86" opacity="0.5"></polyline>
+            <circle cx="50" cy="32" r="3" fill="#d4bf7d" stroke="none"></circle>
+          </svg>
+          <!-- the whole affordance: the title row's right slot swaps the dot for OPEN. No new layout. -->
+          <div style="align-self: stretch; display: flex; justify-content: space-between; align-items: center; font-size: 10px; letter-spacing: 0.28em; color: #dedede; text-transform: uppercase;">
+            <span>Main Story</span>
+            <span style="display: flex; align-items: center; gap: 5px; font-size: 8.5px; letter-spacing: 0.22em; color: #4dd6ff; text-shadow: 0 0 10px rgba(0,166,214,0.6);">
+              Open
+              <svg width="7" height="9" viewBox="0 0 7 9" fill="#4dd6ff"><path d="M0 0 L7 4.5 L0 9 Z"></path></svg>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div style="text-align: center; font-family: 'Cinzel', serif; font-weight: 700; font-size: 36px; color: #d4bf7d; letter-spacing: 0.08em; line-height: 1;">
+        <div style="width: 28px; height: 1px; background: #d4bf7d; margin: 0 auto 10px; opacity: 0.6;"></div>
+        23<span style="color: #8a7a4a; font-size: 24px;">%</span>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.32em; color: #aaaaaa; text-transform: uppercase; margin-top: 6px; font-weight: 400;">Campaign Plot</div>
+      </div>
+
+      <!-- the existing tooltip, unchanged, with one line added -->
+      <div class="ch" style="--c: 8px; position: absolute; top: 264px; left: 50%; transform: translateX(-50%); width: 280px; padding: 10px 14px; background-color: rgba(10,10,10,0.96); border: 1px solid #d4bf7d; font-size: 11px; line-height: 1.5; color: #dedede; letter-spacing: 0.04em; text-align: center;
+        box-shadow: 0 0 0 1px rgba(212,191,125,0.2), 0 12px 24px rgba(0,0,0,0.6), 0 0 18px rgba(0,166,214,0.2);">
+        <strong style="color: #00a6d6; font-weight: 500; display: block; margin-bottom: 3px; letter-spacing: 0.16em; text-transform: uppercase; font-size: 9.5px;">Campaign Plot</strong>
+        Current chapter: Ashes of Brettany
+        <div style="margin-top: 7px; padding-top: 7px; border-top: 1px dashed rgba(212,191,125,0.25); font-size: 8.5px; letter-spacing: 0.22em; color: #8a7a4a; text-transform: uppercase;">Click for the overview</div>
+      </div>
+    </div>
+
+    <!-- ========== KEYBOARD FOCUS ========== -->
+    <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; width: 220px;">
+      <div style="position: absolute; top: -22px; left: 0; right: 0; text-align: center; font-size: 8px; letter-spacing: 0.26em; color: #00a6d6; text-transform: uppercase;">Keyboard focus</div>
+      <div style="position: relative; width: 220px; height: 168px;">
+        <!-- focus ring: the chamfer silhouette again, 3px out, cyan. The app has no focus style today. -->
+        <div class="ch" style="--c: 21px; position: absolute; inset: -4px; background: #00a6d6; opacity: 0.55; filter: drop-shadow(0 0 10px rgba(0,166,214,0.5));"></div>
+        <div class="ch" style="--c: 18px; position: absolute; inset: 0; background: #d4bf7d;"></div>
+        <div class="ch" style="--c: 17px; position: absolute; inset: 2px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 14px 18px 18px;
+          background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%), linear-gradient(180deg, #1b1b1b, #131313);
+          box-shadow: inset 0 0 36px rgba(0,166,214,0.22), inset 0 0 1px rgba(255,255,255,0.05);">
+          <div style="align-self: flex-start; font-size: 8.5px; letter-spacing: 0.22em; color: #00a6d6; text-transform: uppercase; opacity: 0.85;">Connection 004.012.51</div>
+          <svg width="78" height="78" viewBox="0 0 100 100" fill="none" stroke="#d4bf7d" stroke-width="1.6" style="filter: drop-shadow(0 0 10px rgba(212,191,125,0.55));">
+            <circle cx="50" cy="50" r="34"></circle>
+            <circle cx="50" cy="50" r="22" stroke-dasharray="2 3"></circle>
+            <line x1="50" y1="6" x2="50" y2="94"></line>
+            <line x1="6" y1="50" x2="94" y2="50"></line>
+            <polygon points="50,38 60,50 50,62 40,50" fill="#d4bf7d" stroke="none" opacity="0.85"></polygon>
+          </svg>
+          <div style="align-self: stretch; display: flex; justify-content: space-between; align-items: center; font-size: 10px; letter-spacing: 0.28em; color: #dedede; text-transform: uppercase;">
+            <span>Region</span>
+            <span style="display: flex; align-items: center; gap: 5px; font-size: 8.5px; letter-spacing: 0.22em; color: #4dd6ff; text-shadow: 0 0 10px rgba(0,166,214,0.6);">
+              Open
+              <svg width="7" height="9" viewBox="0 0 7 9" fill="#4dd6ff"><path d="M0 0 L7 4.5 L0 9 Z"></path></svg>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div style="text-align: center; font-family: 'Cinzel', serif; font-weight: 700; font-size: 36px; color: #d4bf7d; letter-spacing: 0.08em; line-height: 1;">
+        <div style="width: 28px; height: 1px; background: #d4bf7d; margin: 0 auto 10px; opacity: 0.6;"></div>
+        67<span style="color: #8a7a4a; font-size: 24px;">%</span>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.32em; color: #aaaaaa; text-transform: uppercase; margin-top: 6px; font-weight: 400;">Brettany Mapped</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- the one-line spec -->
+  <div style="position: absolute; left: 44px; right: 44px; bottom: 22px; display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1.5px solid rgba(212,191,125,0.22); border-left: 2px solid rgba(0,166,214,0.4); background: rgba(0,0,0,0.28);">
+    <span style="font-size: 8.5px; letter-spacing: 0.26em; color: #00a6d6; text-transform: uppercase;">Diff</span>
+    <span style="font-family: 'EB Garamond', serif; font-size: 14.5px; line-height: 1.5; color: #aaaaaa;">The card is already a <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #dedede;">&lt;button&gt;</span> &mdash; it gains an <span style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #dedede;">onClick</span>, the title row's <span style="color: #00a6d6;">&#9679;</span> swaps to <span style="color: #4dd6ff;">Open &#9656;</span> on hover and focus, and the focus ring is new.</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

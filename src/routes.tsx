@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { Codex } from './screens/Codex'
+import { Story } from './screens/Story'
 import { Login } from './screens/Login'
 import { AuthCallback } from './screens/AuthCallback'
 import { Character } from './screens/Character'
@@ -42,6 +43,15 @@ export const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { index: true, element: <Codex /> },
+      /* A Codex story card, opened. DEPTH IS THE URL — the screen derives
+         everything from :storyId and keeps no level state, so the back button
+         and a shared link both work without plumbing. Ranks above the '*'
+         fallback, which only catches paths that match nothing. */
+      { path: 'story/:storyId', element: <Story /> },
+      /* The thread depth. Same screen — it reads :threadId and swaps the reading
+         column for that thread's record, so a thread is linkable and the back
+         button already works. */
+      { path: 'story/:storyId/:threadId', element: <Story /> },
       { path: 'equipment', element: <Equipment /> },
       { path: 'inventory', element: <Inventory /> },
       { path: 'stat-panel', element: <Stats /> },

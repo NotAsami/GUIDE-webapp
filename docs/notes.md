@@ -35,6 +35,10 @@
 - Relentless Rage should roll the DC check then offer to restore the hp?
 - Labels are strange with {}, like I want to express that on level 17 it is 2d10, but if I do {level >= 17 ? 2d10 : 1d10} it kinda resolves on the feature screen, like it displays 1d10 - Add 2d10 to your damage roll, but on other screens it remains the non-computed format.
 
+## NEW THING
+- Lines from node to quest name take a second to show up
+- The line which displayed how your progress was, like the blue line in the glyph used to be animated, that it would fill up when you switched from like 23% to 40% no?
+
 ## GRAND UNIFICATION
 - A centralized editor for everything (except shards). Effects, features, spells, items, shopkeepers, loot tables. Exactly like in Dicecloud, where you first set what each node is supposed to be and then edit from there, like you set an item node, and you get stuff regarding items in the editor. Exactly like in Dicecloud (last, post launch, just QOL)
 

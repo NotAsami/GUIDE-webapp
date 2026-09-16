@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap">
+  <style>
+    body { margin: 0; background: #1d1d1d; }
+    a { color: #00a6d6; } a:hover { color: #4dd6ff; }
+  </style>
+</helmet>
+
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: #1d1d1d; font-family: 'JetBrains Mono', ui-monospace, monospace;">
+
+  <!-- chrome -->
+  <div style="position: absolute; top: 0; left: 0; right: 0; height: 62px; border-bottom: 1px solid rgba(212,191,125,0.35); display: flex; align-items: center; justify-content: space-between; padding: 0 34px; font-size: 9px; letter-spacing: 0.22em; color: #8a7a4a; text-transform: uppercase; z-index: 50;">
+    <span><span style="color: #00a6d6;">G.U.I.D.E.</span> &nbsp;//&nbsp; v 2.4.7 &nbsp;//&nbsp; Castella Mainframe</span>
+    <span>Session 04F1A &nbsp;//&nbsp; <span style="color: #00a6d6;">Brettany Theater</span> &nbsp;//&nbsp; DM Online</span>
+  </div>
+  <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 50px; border-top: 1px solid rgba(212,191,125,0.35); display: flex; align-items: center; gap: 10px; padding: 0 34px; font-size: 9px; letter-spacing: 0.22em; color: #8a7a4a; text-transform: uppercase; z-index: 50;">
+    <span style="color: #00a6d6;">&#9670;</span><span>Codex</span><span>::</span><span>Main Story</span>
+    <span style="margin-left: auto;">/ codex / story / main-story</span>
+  </div>
+
+  <!-- the one oversized element on the screen: the percent as a watermark -->
+  <div aria-hidden="true" style="position: absolute; left: -46px; top: 186px; z-index: 1; font-family: 'Cinzel', serif; font-weight: 700; font-size: 400px; line-height: 0.8; letter-spacing: -0.02em; color: rgba(212,191,125,0.055); user-select: none;">23</div>
+
+  <!-- back, not close: this is a place you navigated to -->
+  <div style="position: absolute; left: 44px; top: 86px; z-index: 10; display: flex; align-items: center; gap: 9px; font-size: 8.5px; letter-spacing: 0.28em; color: #8a7a4a; text-transform: uppercase;">
+    <svg width="9" height="9" viewBox="0 0 9 9" fill="#8a7a4a"><path d="M9 0 L9 9 L0 4.5 Z"></path></svg>
+    Codex
+  </div>
+
+  <div style="position: absolute; left: 44px; right: 44px; top: 126px; z-index: 10;">
+    <div style="display: flex; align-items: baseline; gap: 12px;">
+      <span style="font-size: 9px; letter-spacing: 0.36em; color: #00a6d6; text-transform: uppercase;">Main Story</span>
+      <span style="font-size: 8.5px; letter-spacing: 0.22em; color: #8a7a4a; text-transform: uppercase;">Campaign Plot<span style="margin: 0 8px;">&middot;</span>Connection 002.007.11</span>
+    </div>
+
+    <div style="display: flex; align-items: flex-end; gap: 40px; margin-top: 16px;">
+      <div style="font-family: 'Cinzel', serif; font-weight: 600; font-size: 60px; letter-spacing: 0.02em; line-height: 1; color: #d4bf7d; text-wrap: balance;">Ashes of Brettany</div>
+      <div style="margin-left: auto; flex: 0 0 auto; text-align: right; font-size: 8.5px; letter-spacing: 0.22em; color: #8a7a4a; text-transform: uppercase; line-height: 1.9;">
+        <div>Chapter 1F-&Delta;<span style="margin: 0 8px;">&middot;</span>Sector.12</div>
+        <div><span style="color: #aaaaaa;">2 threads active</span><span style="margin: 0 8px;">&middot;</span>1 closed</div>
+      </div>
+    </div>
+
+    <div style="height: 1px; margin-top: 28px; background: rgba(212,191,125,0.3);"></div>
+  </div>
+
+  <!-- three editorial columns, hairlines for chrome and nothing else -->
+  <div style="position: absolute; left: 44px; right: 44px; top: 318px; bottom: 150px; z-index: 10; display: grid; grid-template-columns: 1fr 1px 1fr 1px 1fr; gap: 0 38px;">
+
+    <!-- THREADS -->
+    <div>
+      <div style="font-size: 9px; letter-spacing: 0.34em; color: #d4bf7d; text-transform: uppercase; padding-bottom: 13px;">Threads</div>
+
+      <div style="padding: 14px 0; border-top: 1px solid rgba(212,191,125,0.16);">
+        <div style="display: flex; align-items: baseline; gap: 10px;">
+          <span style="font-size: 11px; color: #00a6d6;">&#9672;</span>
+          <span style="font-family: 'EB Garamond', serif; font-size: 19px; color: #dedede; line-height: 1.2;">Clear Your Name</span>
+        </div>
+        <div style="font-size: 8.5px; letter-spacing: 0.18em; color: #aaaaaa; text-transform: uppercase; margin: 8px 0 0 21px;">Brettany<span style="color: #8a7a4a; margin: 0 6px;">&middot;</span>Magistrate Voss</div>
+        <div style="margin: 13px 0 0 21px; display: flex; flex-direction: column; gap: 7px;">
+          <div style="display: flex; align-items: baseline; gap: 11px; font-family: 'EB Garamond', serif; font-size: 14.5px; color: #8a7a4a;">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="#00a6d6" stroke-width="1.8" style="flex: 0 0 auto;"><path d="M2 7.5 L5.5 11 L12 3.5"></path></svg>
+            Speak with Magistrate Voss
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 11px; font-family: 'EB Garamond', serif; font-size: 14.5px; color: #dedede;">
+            <span style="flex: 0 0 auto; width: 11px; height: 11px; border: 1px solid rgba(212,191,125,0.4);"></span>
+            Find a witness who can place you off the road
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 11px; font-family: 'EB Garamond', serif; font-size: 14.5px; color: #dedede;">
+            <span style="flex: 0 0 auto; width: 11px; height: 11px; border: 1px solid rgba(212,191,125,0.4);"></span>
+            Recover the courier's missing satchel
+          </div>
+        </div>
+      </div>
+
+      <div style="padding: 14px 0; border-top: 1px solid rgba(212,191,125,0.16);">
+        <div style="display: flex; align-items: baseline; gap: 10px;">
+          <span style="font-size: 11px; color: #00a6d6;">&#9672;</span>
+          <span style="font-family: 'EB Garamond', serif; font-size: 19px; color: #dedede; line-height: 1.2;">The Stolen Tome</span>
+          <span style="margin-left: auto; font-size: 8px; letter-spacing: 0.16em; color: #8a7a4a;">1 / 2</span>
+        </div>
+        <div style="font-size: 8.5px; letter-spacing: 0.18em; color: #aaaaaa; text-transform: uppercase; margin: 8px 0 0 21px;">Davelguay<span style="color: #8a7a4a; margin: 0 6px;">&middot;</span>The Lady</div>
+      </div>
+
+      <div style="padding: 14px 0; border-top: 1px solid rgba(212,191,125,0.16); opacity: 0.6;">
+        <div style="display: flex; align-items: baseline; gap: 10px;">
+          <span style="font-size: 11px; color: #aaaaaa;">&#9672;</span>
+          <span style="font-family: 'EB Garamond', serif; font-size: 19px; color: #aaaaaa; line-height: 1.2;">Arrival in Brettany</span>
+          <span style="margin-left: auto; color: #aaaaaa;">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 7.5 L5.5 11 L12 3.5"></path></svg>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: rgba(212,191,125,0.14);"></div>
+
+    <!-- LAST SESSION -->
+    <div>
+      <div style="font-size: 9px; letter-spacing: 0.34em; color: #d4bf7d; text-transform: uppercase; padding-bottom: 13px;">Last Session</div>
+      <div style="border-top: 1px solid rgba(212,191,125,0.16); padding-top: 16px;">
+        <div style="font-size: 8.5px; letter-spacing: 0.22em; color: #00a6d6; text-transform: uppercase;">Session 04</div>
+        <div style="font-family: 'Cinzel', serif; font-weight: 600; font-size: 24px; letter-spacing: 0.03em; color: #dedede; margin: 9px 0 7px;">Clear Your Name</div>
+        <div style="font-size: 9px; letter-spacing: 0.2em; color: #8a7a4a; text-transform: uppercase;">21st of Hammerfall &middot; 1247 PR</div>
+        <p style="font-family: 'EB Garamond', serif; font-size: 17px; line-height: 1.76; color: #dedede; margin: 20px 0 0; text-wrap: pretty;">A Crown courier turned up dead on the Brettany road, and suspicion fell on the party.</p>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 24px;">
+          <div style="display: flex; align-items: baseline; gap: 12px; font-family: 'EB Garamond', serif; font-size: 15.5px; color: #aaaaaa;">
+            <span style="color: #00a6d6; font-size: 9px;">&#9656;</span>Accused before Magistrate Voss
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-family: 'EB Garamond', serif; font-size: 15.5px; color: #aaaaaa;">
+            <span style="color: #00a6d6; font-size: 9px;">&#9656;</span>Granted freedom of the lower wards
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: rgba(212,191,125,0.14);"></div>
+
+    <!-- LOG -->
+    <div>
+      <div style="font-size: 9px; letter-spacing: 0.34em; color: #d4bf7d; text-transform: uppercase; padding-bottom: 13px;">Log</div>
+      <div style="display: flex; flex-direction: column;">
+        <div style="display: grid; grid-template-columns: 30px 1fr; gap: 0 14px; padding: 13px 0; border-top: 1px solid rgba(212,191,125,0.16);">
+          <span style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 16px; color: #4dd6ff;">04</span>
+          <div>
+            <div style="font-family: 'EB Garamond', serif; font-size: 16.5px; color: #dedede; line-height: 1.25;">Clear Your Name</div>
+            <div style="font-size: 8px; letter-spacing: 0.18em; color: #8a7a4a; text-transform: uppercase; margin-top: 5px;">21st of Hammerfall</div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 30px 1fr; gap: 0 14px; padding: 13px 0; border-top: 1px solid rgba(212,191,125,0.16);">
+          <span style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 16px; color: #8a7a4a;">03</span>
+          <div>
+            <div style="font-family: 'EB Garamond', serif; font-size: 16.5px; color: #aaaaaa; line-height: 1.25;">The Stolen Tome</div>
+            <div style="font-size: 8px; letter-spacing: 0.18em; color: #8a7a4a; text-transform: uppercase; margin-top: 5px;">16th of Hammerfall</div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 30px 1fr; gap: 0 14px; padding: 13px 0; border-top: 1px solid rgba(212,191,125,0.16);">
+          <span style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 16px; color: #8a7a4a;">02</span>
+          <div>
+            <div style="font-family: 'EB Garamond', serif; font-size: 16.5px; color: #aaaaaa; line-height: 1.25;">Into the Thicket</div>
+            <div style="font-size: 8px; letter-spacing: 0.18em; color: #8a7a4a; text-transform: uppercase; margin-top: 5px;">11th of Hammerfall</div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 30px 1fr; gap: 0 14px; padding: 13px 0; border-top: 1px solid rgba(212,191,125,0.16);">
+          <span style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 16px; color: #8a7a4a;">01</span>
+          <div>
+            <div style="font-family: 'EB Garamond', serif; font-size: 16.5px; color: #aaaaaa; line-height: 1.25;">The Mayor's Welcome</div>
+            <div style="font-size: 8px; letter-spacing: 0.18em; color: #8a7a4a; text-transform: uppercase; margin-top: 5px;">3rd of Hammerfall</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- the rail, as a footer rule across the whole spread -->
+  <div style="position: absolute; left: 44px; right: 44px; bottom: 86px; z-index: 10;">
+    <div style="position: relative; height: 3px; background: rgba(212,191,125,0.16);">
+      <div style="position: absolute; inset: 0 77% 0 0; background: #00a6d6; box-shadow: 0 0 12px rgba(0,166,214,0.7);"></div>
+      <div style="position: absolute; left: 23%; top: -6px; bottom: -6px; width: 1px; background: #4dd6ff;"></div>
+    </div>
+    <div style="display: flex; align-items: baseline; margin-top: 11px; font-size: 8.5px; letter-spacing: 0.22em; color: #8a7a4a; text-transform: uppercase;">
+      <span><span style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 14px; color: #4dd6ff; letter-spacing: 0;">23%</span><span style="margin: 0 10px;">&middot;</span>Campaign plot mapped</span>
+      <span style="margin-left: auto; color: #00a6d6; font-size: 9.5px; letter-spacing: 0.18em; border-bottom: 1px solid rgba(0,166,214,0.4); padding-bottom: 2px;">Open Journal &rarr;</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

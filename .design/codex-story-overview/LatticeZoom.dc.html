@@ -1,0 +1,485 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap">
+  <style>
+    body { margin: 0; background: #1d1d1d; overflow: hidden; }
+    a { color: #00a6d6; } a:hover { color: #4dd6ff; }
+    .ch { clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c)); }
+
+    /* The app's own sigil rotation — 60s forward, 90s reverse (Codex.module.css). */
+    .rotSlow { transform-origin: 320px 320px; animation: sig-rot calc(var(--pace) * 60s) linear infinite; }
+    .rotRev  { transform-origin: 320px 320px; animation: sig-rot calc(var(--pace) * 90s) linear infinite reverse; }
+    @keyframes sig-rot { to { transform: rotate(360deg); } }
+
+    /* The arc writes itself on, once, like a scan completing. */
+    .arc { stroke-dasharray: 452; stroke-dashoffset: 452; animation: draw calc(var(--pace) * 1700ms) cubic-bezier(.2,.7,.2,1) calc(var(--pace) * 250ms) forwards; }
+    .leader { stroke-dashoffset: var(--len); animation: draw calc(var(--pace) * 700ms) cubic-bezier(.2,.7,.2,1) forwards; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+
+    /* The current node breathes — same shape as the sigil's own centre pulse. */
+    .nodePulse { animation: node-pulse calc(var(--pace) * 3s) ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    @keyframes node-pulse { 0%, 100% { opacity: 0.45; transform: scale(1); } 50% { opacity: 1; transform: scale(1.9); } }
+
+    .zoomable { transition: transform calc(var(--pace) * 460ms) cubic-bezier(.2,.7,.2,1); transform-origin: 290px 492px; }
+    .layer { transition: opacity calc(var(--pace) * 220ms) ease, transform calc(var(--pace) * 380ms) cubic-bezier(.2,.7,.2,1); }
+
+    /* Click is the only gesture, so the targets have to advertise themselves. */
+    .row { cursor: pointer; border-left: 2px solid transparent; transition: background 160ms ease, border-color 160ms ease; }
+    .row:hover, .row:focus-visible { background: linear-gradient(90deg, rgba(0,166,214,0.10), transparent 78%); border-left-color: #00a6d6; outline: none; }
+    .row .go { opacity: 0; transform: translateX(-3px); transition: opacity 160ms ease, transform 160ms ease; }
+    .row:hover .go, .row:focus-visible .go { opacity: 1; transform: none; }
+    .node { cursor: pointer; }
+    .node::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(0,166,214,0); transition: border-color 200ms ease, box-shadow 200ms ease; }
+    .node:hover::after { border-color: rgba(0,166,214,0.75); box-shadow: 0 0 16px rgba(0,166,214,0.45); }
+    .card { cursor: pointer; transition: transform 220ms cubic-bezier(.2,.7,.2,1); }
+    .card:hover { transform: translateY(-3px) scale(1.03); }
+    /* Hop targets: the other threads stay on the zoomed lattice and stay clickable. */
+    .hop { position: absolute; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+    .hopRing { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(0,166,214,0.5);
+      box-shadow: 0 0 12px rgba(0,166,214,0.16); transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+    .hop:hover .hopRing { border-color: #4dd6ff; box-shadow: 0 0 20px rgba(0,166,214,0.6); transform: scale(1.12); }
+    .hopLabel { font-family: 'EB Garamond', serif; font-size: 15px; color: #aaaaaa; white-space: nowrap; transition: color 180ms ease; }
+    .hop:hover .hopLabel { color: #dedede; }
+    .back { cursor: pointer; transition: color 160ms ease; }
+    .back:hover { color: #4dd6ff; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .rotSlow, .rotRev, .nodePulse, .arc, .leader { animation: none; }
+      .card:hover { transform: none; }
+      .arc, .leader { stroke-dashoffset: 0; }
+      .zoomable, .layer { transition-duration: 1ms; }
+    }
+  </style>
+</helmet>
+
+<div style="{{ rootStyle }}">
+
+  <!-- ================= the instrument: everything here zooms as one body ================= -->
+  <div class="zoomable" style="{{ latticeTf }}">
+
+    <div style="position: absolute; left: -110px; top: 92px; width: 800px; height: 800px;">
+      <svg width="800" height="800" viewBox="0 0 640 640" fill="none" stroke="#d4bf7d" stroke-width="1.2">
+        <g class="rotSlow" stroke-opacity="0.26">
+          <circle cx="320" cy="320" r="300"></circle>
+          <circle cx="320" cy="320" r="292" stroke-opacity="0.5"></circle>
+          <polygon points="320,80 528,200 528,440 320,560 112,440 112,200"></polygon>
+          <polygon points="320,108 504,214 504,426 320,532 136,426 136,214" stroke-opacity="0.5"></polygon>
+        </g>
+        <g class="rotRev" stroke-opacity="0.26">
+          <line x1="320" y1="40" x2="320" y2="600"></line>
+          <line x1="40" y1="320" x2="600" y2="320"></line>
+          <line x1="120" y1="120" x2="520" y2="520"></line>
+          <line x1="520" y1="120" x2="120" y2="520"></line>
+          <polygon points="320,140 447,193 500,320 447,447 320,500 193,447 140,320 193,193"></polygon>
+          <polygon points="320,210 430,320 320,430 210,320" stroke-opacity="0.5"></polygon>
+          <circle cx="320" cy="320" r="220" stroke-opacity="0.3" stroke-dasharray="3 6"></circle>
+        </g>
+        <g fill="#d4bf7d" stroke="none" font-family="JetBrains Mono, monospace" font-size="9" opacity="0.4" letter-spacing="2">
+          <text x="320" y="32" text-anchor="middle">0x4F1A &middot; 22:08:47</text>
+          <text x="608" y="324" text-anchor="end">SECTOR.12</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- data marks, in screen coordinates -->
+    <svg style="position: absolute; inset: 0; pointer-events: none;" width="1440" height="900" viewBox="0 0 1440 900" fill="none">
+      <g style="{{ arcStyle }}">
+        <circle cx="290" cy="492" r="312.5" stroke="#d4bf7d" stroke-opacity="0.13" stroke-width="3"></circle>
+        <path class="arc" d="M 290 179.5 A 312.5 312.5 0 0 1 600.04 452.83" stroke="#00a6d6" stroke-width="3.5"
+          style="filter: drop-shadow(0 0 8px rgba(0,166,214,0.85));"></path>
+        <line x1="281" y1="179.5" x2="299" y2="179.5" stroke="#4dd6ff" stroke-width="2" stroke-opacity="0.7"></line>
+        <line x1="585.65" y1="454.65" x2="614.42" y2="451.02" stroke="#4dd6ff" stroke-width="2.2"></line>
+      </g>
+
+      <g style="{{ leadersStyle }}">
+        <g stroke="#00a6d6" stroke-opacity="0.7">
+          <line class="leader" style="--len: 112; stroke-dasharray: 112; animation-delay: calc(var(--pace) * 900ms);" x1="458.4" y1="274.5" x2="526.9" y2="186"></line>
+          <line class="leader" style="--len: 214; stroke-dasharray: 214; animation-delay: calc(var(--pace) * 1150ms);" x1="526.9" y1="186" x2="740" y2="186"></line>
+        </g>
+        <g stroke="#00a6d6" stroke-opacity="0.45">
+          <line class="leader" style="--len: 112; stroke-dasharray: 112; animation-delay: calc(var(--pace) * 1050ms);" x1="539.8" y1="376.9" x2="641.5" y2="330"></line>
+          <line class="leader" style="--len: 99; stroke-dasharray: 99; animation-delay: calc(var(--pace) * 1300ms);" x1="641.5" y1="330" x2="740" y2="330"></line>
+        </g>
+        <g stroke="#aaaaaa" stroke-opacity="0.26">
+          <line class="leader" style="--len: 112; stroke-dasharray: 112; animation-delay: calc(var(--pace) * 1200ms);" x1="556.8" y1="425.2" x2="665.4" y2="398"></line>
+          <line class="leader" style="--len: 75; stroke-dasharray: 75; animation-delay: calc(var(--pace) * 1450ms);" x1="665.4" y1="398" x2="740" y2="398"></line>
+        </g>
+      </g>
+
+      <!-- the three nodes; the focused one carries the halo and the pulse -->
+      <circle cx="458.4" cy="274.5" r="5.5" fill="#00a6d6" style="filter: drop-shadow(0 0 9px rgba(0,166,214,0.95));"></circle>
+      <circle cx="539.8" cy="376.9" r="4.5" fill="#00a6d6" style="filter: drop-shadow(0 0 6px rgba(0,166,214,0.7));"></circle>
+      <circle cx="556.8" cy="425.2" r="4.5" fill="#aaaaaa" fill-opacity="0.55"></circle>
+      <circle cx="{{ f.x }}" cy="{{ f.y }}" r="13" stroke="#00a6d6" stroke-opacity="0.5" style="transition: cx calc(var(--pace) * 460ms) cubic-bezier(.2,.7,.2,1), cy calc(var(--pace) * 460ms) cubic-bezier(.2,.7,.2,1);"></circle>
+      <circle class="nodePulse" cx="{{ f.x }}" cy="{{ f.y }}" r="7" fill="none" stroke="#4dd6ff" stroke-width="1.2"></circle>
+    </svg>
+  </div>
+
+  <!-- hit targets for the nodes: outside the zoom body so they stay a comfortable size -->
+  <div style="{{ hitsStyle }}">
+    <div class="node" onClick="{{ pick0 }}" style="position: absolute; left: 434px; top: 250px; width: 49px; height: 49px; border-radius: 50%; cursor: pointer;"></div>
+    <div class="node" onClick="{{ pick1 }}" style="position: absolute; left: 516px; top: 353px; width: 47px; height: 47px; border-radius: 50%; cursor: pointer;"></div>
+    <div class="node" onClick="{{ pick2 }}" style="position: absolute; left: 533px; top: 401px; width: 47px; height: 47px; border-radius: 50%; cursor: pointer;"></div>
+  </div>
+
+  <!-- ================= L0 · the Codex, cards still on the glyph ================= -->
+  <div class="layer" style="{{ l0Style }}">
+    <div style="position: absolute; left: 334px; top: 372px; display: flex; gap: 56px;">
+      <div class="card" onClick="{{ enter }}" style="width: 220px;">
+        <div style="position: relative; width: 220px; height: 168px;">
+          <div class="ch" style="--c: 18px; position: absolute; inset: 0; background: #d4bf7d;"></div>
+          <div class="ch" style="--c: 17px; position: absolute; inset: 2px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 14px 18px 18px; background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%), linear-gradient(180deg, #1b1b1b, #131313); box-shadow: inset 0 0 24px rgba(0,166,214,0.10);">
+            <div style="align-self: flex-start; font-size: 8.5px; letter-spacing: 0.22em; color: #00a6d6; text-transform: uppercase; opacity: 0.85;">Connection 003.001.42</div>
+            <svg width="78" height="78" viewBox="0 0 100 100" fill="none" stroke="#d4bf7d" stroke-width="1.6">
+              <polygon points="50,8 92,82 8,82"></polygon><polygon points="50,24 80,76 20,76"></polygon>
+              <line x1="50" y1="40" x2="50" y2="76"></line><circle cx="50" cy="56" r="6" stroke-width="1.4"></circle>
+            </svg>
+            <div style="align-self: stretch; display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.28em; color: #dedede; text-transform: uppercase;"><span>Character</span><span style="color: #00a6d6;">&#9679;</span></div>
+          </div>
+        </div>
+        <div style="text-align: center; font-family: 'Cinzel', serif; font-weight: 700; font-size: 32px; color: #d4bf7d; margin-top: 18px; line-height: 1;">45<span style="font-size: 21px; color: #8a7a4a;">%</span>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.3em; color: #aaaaaa; text-transform: uppercase; margin-top: 7px; font-weight: 400;">Personal Arc</div>
+        </div>
+      </div>
+
+      <div class="card" onClick="{{ enter }}" style="width: 220px;">
+        <div style="position: relative; width: 220px; height: 168px;">
+          <div class="ch" style="--c: 18px; position: absolute; inset: 0; background: #00a6d6;"></div>
+          <div class="ch" style="--c: 17px; position: absolute; inset: 2px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 14px 18px 18px; background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.18), transparent 60%), linear-gradient(180deg, #1b1b1b, #131313); box-shadow: inset 0 0 34px rgba(0,166,214,0.24);">
+            <div style="align-self: flex-start; font-size: 8.5px; letter-spacing: 0.22em; color: #00a6d6; text-transform: uppercase; opacity: 0.85;">Connection 002.007.11</div>
+            <svg width="78" height="78" viewBox="0 0 100 100" fill="none" stroke="#d4bf7d" stroke-width="1.6" style="filter: drop-shadow(0 0 10px rgba(212,191,125,0.55));">
+              <polyline points="14,72 50,40 86,72"></polyline><polyline points="14,58 50,26 86,58"></polyline>
+              <polyline points="14,86 50,54 86,86" opacity="0.5"></polyline><circle cx="50" cy="32" r="3" fill="#d4bf7d" stroke="none"></circle>
+            </svg>
+            <div style="align-self: stretch; display: flex; justify-content: space-between; align-items: center; font-size: 10px; letter-spacing: 0.28em; color: #dedede; text-transform: uppercase;">
+              <span>Main Story</span>
+              <span style="display: flex; align-items: center; gap: 5px; font-size: 8.5px; letter-spacing: 0.22em; color: #4dd6ff;">Open
+                <svg width="7" height="9" viewBox="0 0 7 9" fill="#4dd6ff"><path d="M0 0 L7 4.5 L0 9 Z"></path></svg></span>
+            </div>
+          </div>
+        </div>
+        <div style="text-align: center; font-family: 'Cinzel', serif; font-weight: 700; font-size: 32px; color: #d4bf7d; margin-top: 18px; line-height: 1;">23<span style="font-size: 21px; color: #8a7a4a;">%</span>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.3em; color: #aaaaaa; text-transform: uppercase; margin-top: 7px; font-weight: 400;">Campaign Plot</div>
+        </div>
+      </div>
+
+      <div class="card" onClick="{{ enter }}" style="width: 220px;">
+        <div style="position: relative; width: 220px; height: 168px;">
+          <div class="ch" style="--c: 18px; position: absolute; inset: 0; background: #d4bf7d;"></div>
+          <div class="ch" style="--c: 17px; position: absolute; inset: 2px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 14px 18px 18px; background: radial-gradient(120% 90% at 50% 60%, rgba(0,166,214,0.10), transparent 60%), linear-gradient(180deg, #1b1b1b, #131313); box-shadow: inset 0 0 24px rgba(0,166,214,0.10);">
+            <div style="align-self: flex-start; font-size: 8.5px; letter-spacing: 0.22em; color: #00a6d6; text-transform: uppercase; opacity: 0.85;">Connection 004.012.51</div>
+            <svg width="78" height="78" viewBox="0 0 100 100" fill="none" stroke="#d4bf7d" stroke-width="1.6">
+              <circle cx="50" cy="50" r="34"></circle><circle cx="50" cy="50" r="22" stroke-dasharray="2 3"></circle>
+              <line x1="50" y1="6" x2="50" y2="94"></line><line x1="6" y1="50" x2="94" y2="50"></line>
+              <polygon points="50,38 60,50 50,62 40,50" fill="#d4bf7d" stroke="none" opacity="0.85"></polygon>
+            </svg>
+            <div style="align-self: stretch; display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.28em; color: #dedede; text-transform: uppercase;"><span>Region</span><span style="color: #00a6d6;">&#9679;</span></div>
+          </div>
+        </div>
+        <div style="text-align: center; font-family: 'Cinzel', serif; font-weight: 700; font-size: 32px; color: #d4bf7d; margin-top: 18px; line-height: 1;">67<span style="font-size: 21px; color: #8a7a4a;">%</span>
+          <div style="font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.3em; color: #aaaaaa; text-transform: uppercase; margin-top: 7px; font-weight: 400;">Brettany Mapped</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= L1 · the story: centre readout + dossier ================= -->
+  <div class="layer" style="{{ l1CentreStyle }}">
+    <div style="position: absolute; left: 120px; top: 423px; width: 340px; text-align: center;">
+      <div style="font-size: 8px; letter-spacing: 0.32em; color: #8a7a4a; text-transform: uppercase;">Campaign Plot</div>
+      <div style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 74px; line-height: 1; color: #4dd6ff; text-shadow: 0 0 32px rgba(0,166,214,0.5); font-variant-numeric: tabular-nums; margin: 9px 0 0;">23<span style="font-size: 36px; color: #aaaaaa; text-shadow: none;">%</span></div>
+      <div style="width: 54px; height: 1px; background: rgba(212,191,125,0.5); margin: 12px auto;"></div>
+      <div style="font-family: 'Cinzel', serif; font-weight: 600; font-size: 24px; letter-spacing: 0.04em; color: #d4bf7d; line-height: 1.2;">Ashes of Brettany</div>
+      <div style="font-size: 8px; letter-spacing: 0.28em; color: #8a7a4a; text-transform: uppercase; margin-top: 11px;">Chapter 1F-&Delta;<span style="margin: 0 8px;">&middot;</span>Connection 002.007.11</div>
+    </div>
+  </div>
+
+  <div class="layer" style="{{ l1DossierStyle }}">
+    <div style="position: absolute; left: 744px; top: 0; width: 652px; height: 900px;">
+      <div style="position: absolute; top: 88px; left: 0; right: 0; display: flex; gap: 34px; align-items: baseline;">
+        <div style="position: relative; padding-bottom: 11px;">
+          <span style="font-size: 9.5px; letter-spacing: 0.3em; color: #4dd6ff; text-transform: uppercase;">Main Story</span>
+          <span style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 13px; color: #4dd6ff; margin-left: 9px;">23%</span>
+          <span style="position: absolute; bottom: -1px; left: 0; right: 12%; height: 2px; background: #00a6d6; box-shadow: 0 0 10px #00a6d6, 0 0 18px rgba(0,166,214,0.5);"></span>
+        </div>
+        <div style="padding-bottom: 11px;"><span style="font-size: 9.5px; letter-spacing: 0.3em; color: #aaaaaa; text-transform: uppercase;">Character</span><span style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 13px; color: #8a7a4a; margin-left: 9px;">45%</span></div>
+        <div style="padding-bottom: 11px;"><span style="font-size: 9.5px; letter-spacing: 0.3em; color: #aaaaaa; text-transform: uppercase;">Region</span><span style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 13px; color: #8a7a4a; margin-left: 9px;">67%</span></div>
+      </div>
+      <div style="position: absolute; top: 129px; left: 0; right: 0; height: 1px; background: rgba(212,191,125,0.3);"></div>
+      <div style="position: absolute; top: 145px; left: 0; font-size: 9px; letter-spacing: 0.34em; color: #d4bf7d; text-transform: uppercase;">Threads <span style="color: #00a6d6;">::</span> <span style="color: #aaaaaa;">2 active &middot; 1 closed</span></div>
+
+      <div class="row" tabindex="0" onClick="{{ pick0 }}" style="position: absolute; top: 174px; left: 0; right: 0;">
+        <div style="display: flex; align-items: center; gap: 10px; height: 24px;">
+          <span style="font-size: 12px; color: #00a6d6;">&#9672;</span>
+          <span style="font-family: 'EB Garamond', serif; font-size: 20px; color: #dedede;">Clear Your Name</span>
+          <span style="margin-left: auto; font-size: 7.5px; letter-spacing: 0.22em; color: #4dd6ff; text-transform: uppercase;">Current</span><span class="go" style="flex: 0 0 auto; margin-left: 11px; color: #4dd6ff;"><svg width="7" height="9" viewBox="0 0 7 9" fill="#4dd6ff"><path d="M0 0 L7 4.5 L0 9 Z"></path></svg></span>
+        </div>
+        <div style="font-size: 8.5px; letter-spacing: 0.18em; color: #aaaaaa; text-transform: uppercase; margin: 8px 0 0 22px;">Brettany<span style="color: #8a7a4a; margin: 0 6px;">&middot;</span>Magistrate Voss<span style="color: #8a7a4a; margin: 0 6px;">&middot;</span>Obj 1 / 3</div>
+        <div style="margin: 13px 0 0 22px; display: flex; flex-direction: column; gap: 7px;">
+          <div style="display: flex; align-items: baseline; gap: 11px; font-family: 'EB Garamond', serif; font-size: 14.5px; color: #8a7a4a;">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="#00a6d6" stroke-width="1.8" style="flex: 0 0 auto;"><path d="M2 7.5 L5.5 11 L12 3.5"></path></svg>Speak with Magistrate Voss in the Brettany court</div>
+          <div style="display: flex; align-items: baseline; gap: 11px; font-family: 'EB Garamond', serif; font-size: 14.5px; color: #dedede;">
+            <span style="flex: 0 0 auto; width: 11px; height: 11px; border: 1px solid rgba(212,191,125,0.4);"></span>Find a witness who can place you off the road</div>
+          <div style="display: flex; align-items: baseline; gap: 11px; font-family: 'EB Garamond', serif; font-size: 14.5px; color: #dedede;">
+            <span style="flex: 0 0 auto; width: 11px; height: 11px; border: 1px solid rgba(212,191,125,0.4);"></span>Recover the courier's missing satchel</div>
+        </div>
+      </div>
+
+      <div class="row" tabindex="0" onClick="{{ pick1 }}" style="position: absolute; top: 318px; left: 0; right: 0; border-top: 1px solid rgba(212,191,125,0.14);">
+        <div style="display: flex; align-items: center; gap: 10px; height: 24px; margin-top: 12px;">
+          <span style="font-size: 12px; color: #00a6d6;">&#9672;</span>
+          <span style="font-family: 'EB Garamond', serif; font-size: 20px; color: #dedede;">The Stolen Tome</span>
+          <span style="margin-left: auto; font-size: 7.5px; letter-spacing: 0.22em; color: #00a6d6; text-transform: uppercase;">Active</span><span class="go" style="flex: 0 0 auto; margin-left: 11px; color: #4dd6ff;"><svg width="7" height="9" viewBox="0 0 7 9" fill="#4dd6ff"><path d="M0 0 L7 4.5 L0 9 Z"></path></svg></span>
+        </div>
+        <div style="font-size: 8.5px; letter-spacing: 0.18em; color: #aaaaaa; text-transform: uppercase; margin: 8px 0 0 22px;">Davelguay<span style="color: #8a7a4a; margin: 0 6px;">&middot;</span>The Lady<span style="color: #8a7a4a; margin: 0 6px;">&middot;</span>Obj 1 / 2</div>
+      </div>
+
+      <div class="row" tabindex="0" onClick="{{ pick2 }}" style="position: absolute; top: 386px; left: 0; right: 0; opacity: 0.62;">
+        <div style="display: flex; align-items: center; gap: 10px; height: 24px;">
+          <span style="font-size: 12px; color: #aaaaaa;">&#9672;</span>
+          <span style="font-family: 'EB Garamond', serif; font-size: 20px; color: #aaaaaa;">Arrival in Brettany</span>
+          <span style="margin-left: auto; color: #aaaaaa;"><svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 7.5 L5.5 11 L12 3.5"></path></svg></span><span class="go" style="flex: 0 0 auto; margin-left: 11px; color: #4dd6ff;"><svg width="7" height="9" viewBox="0 0 7 9" fill="#4dd6ff"><path d="M0 0 L7 4.5 L0 9 Z"></path></svg></span>
+        </div>
+        <div style="font-size: 8.5px; letter-spacing: 0.18em; color: #8a7a4a; text-transform: uppercase; margin: 8px 0 0 22px;">Brettany<span style="margin: 0 6px;">&middot;</span>Closed</div>
+      </div>
+
+      <div style="position: absolute; top: 456px; left: 0; right: 0; height: 1px; background: rgba(212,191,125,0.3);"></div>
+
+      <div style="position: absolute; top: 474px; left: 0; right: 0; display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0 38px;">
+        <div>
+          <div style="font-size: 9px; letter-spacing: 0.34em; color: #d4bf7d; text-transform: uppercase;">Last Session</div>
+          <div style="font-size: 8.5px; letter-spacing: 0.22em; color: #00a6d6; text-transform: uppercase; margin-top: 17px;">Session 04</div>
+          <div style="font-family: 'Cinzel', serif; font-weight: 600; font-size: 22px; color: #dedede; margin: 8px 0 7px;">Clear Your Name</div>
+          <div style="font-size: 9px; letter-spacing: 0.2em; color: #8a7a4a; text-transform: uppercase;">21st of Hammerfall &middot; 1247 PR</div>
+          <p style="font-family: 'EB Garamond', serif; font-size: 16px; line-height: 1.72; color: #dedede; margin: 17px 0 0; text-wrap: pretty;">A Crown courier turned up dead on the Brettany road, and suspicion fell on the party.</p>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 19px;">
+            <div style="display: flex; align-items: baseline; gap: 12px; font-family: 'EB Garamond', serif; font-size: 15px; color: #aaaaaa;"><span style="color: #00a6d6; font-size: 9px;">&#9656;</span>Accused before Magistrate Voss</div>
+            <div style="display: flex; align-items: baseline; gap: 12px; font-family: 'EB Garamond', serif; font-size: 15px; color: #aaaaaa;"><span style="color: #00a6d6; font-size: 9px;">&#9656;</span>Granted freedom of the lower wards</div>
+          </div>
+        </div>
+        <div style="background: rgba(212,191,125,0.14);"></div>
+        <div>
+          <div style="font-size: 9px; letter-spacing: 0.34em; color: #d4bf7d; text-transform: uppercase;">Log</div>
+          <div style="margin-top: 9px;">
+            <sc-for list="{{ log }}" as="s" hint-placeholder-count="4">
+              <div style="display: grid; grid-template-columns: 28px 1fr; gap: 0 13px; padding: 12px 0; border-top: 1px solid rgba(212,191,125,0.14);">
+                <span style="font-family: 'Cinzel', serif; font-weight: 700; font-size: 15px; color: {{ s.color }};">{{ s.num }}</span>
+                <div>
+                  <div style="font-family: 'EB Garamond', serif; font-size: 16px; color: {{ s.tint }}; line-height: 1.25;">{{ s.title }}</div>
+                  <div style="font-size: 8px; letter-spacing: 0.18em; color: #8a7a4a; text-transform: uppercase; margin-top: 5px;">{{ s.date }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= L2 · the node, opened ================= -->
+  <div class="layer" style="{{ l2Style }}">
+    <div style="position: absolute; left: 640px; top: 62px; right: 0; bottom: 50px; background: linear-gradient(90deg, rgba(16,16,16,0) 0%, rgba(16,16,16,0.80) 12%, rgba(16,16,16,0.93) 34%, rgba(16,16,16,0.96) 100%);"></div>
+    <div style="position: absolute; left: 744px; top: 96px; width: 652px;">
+      <div style="display: flex; gap: 9px; margin-bottom: 20px;">
+        <span class="ch" style="--c: 5px; font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; padding: 5px 12px; color: {{ f.statusColor }}; border: 1px solid {{ f.statusColor }};">{{ f.status }}</span>
+        <span class="ch" style="--c: 5px; font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; padding: 5px 12px; color: #d4bf7d; border: 1px solid rgba(212,191,125,0.55);">{{ f.kind }}</span>
+      </div>
+      <div style="font-family: 'Cinzel', serif; font-weight: 600; font-size: 34px; letter-spacing: 0.03em; line-height: 1.15; color: #4dd6ff; text-shadow: 0 0 18px rgba(0,166,214,0.3); max-width: 560px; text-wrap: balance;">{{ f.title }}</div>
+      <div style="font-size: 10px; letter-spacing: 0.16em; color: #aaaaaa; text-transform: uppercase; line-height: 1.8; margin-top: 14px;">
+        <span style="color: #d4bf7d;">Given by:</span> <span style="color: #dedede;">{{ f.givenBy }}</span>
+        <span style="color: #8a7a4a; margin: 0 9px;">&middot;</span>
+        <span style="color: #d4bf7d;">Location:</span> <span style="color: #dedede;">{{ f.location }}</span>
+      </div>
+      <div style="height: 1px; margin: 20px 0 22px; background: repeating-linear-gradient(to right, rgba(212,191,125,0.3) 0 6px, transparent 6px 12px);"></div>
+      <p style="font-family: 'EB Garamond', serif; font-size: 16.5px; line-height: 1.76; color: #dedede; margin: 0; text-wrap: pretty;">{{ f.body }}</p>
+
+      <div style="display: flex; align-items: center; gap: 12px; font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; color: #d4bf7d; margin: 28px 0 15px;">
+        Objectives <span style="color: #00a6d6;">::</span> {{ f.objCount }}
+        <span style="flex: 1; height: 1px; background: rgba(212,191,125,0.18);"></span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <sc-for list="{{ f.objectives }}" as="o" hint-placeholder-count="3">
+          <div style="display: flex; align-items: baseline; gap: 13px; font-family: 'EB Garamond', serif; font-size: 16px; line-height: 1.5; color: {{ o.tint }};">
+            <sc-if value="{{ o.done }}" hint-placeholder-val="{{ true }}">
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="#00a6d6" stroke-width="1.8" style="flex: 0 0 auto;"><path d="M2 7.5 L5.5 11 L12 3.5"></path></svg>
+            </sc-if>
+            <sc-if value="{{ o.todo }}" hint-placeholder-val="{{ true }}">
+              <span style="flex: 0 0 auto; width: 12px; height: 12px; border: 1px solid rgba(212,191,125,0.4);"></span>
+            </sc-if>
+            <span>{{ o.text }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; color: #d4bf7d; margin: 28px 0 14px;">
+        Related
+        <span style="flex: 1; height: 1px; background: rgba(212,191,125,0.18);"></span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px 18px;">
+        <sc-for list="{{ f.related }}" as="r" hint-placeholder-count="3">
+          <span style="font-size: 11px; letter-spacing: 0.08em; color: #00a6d6; border-bottom: 1px solid rgba(0,166,214,0.4); padding-bottom: 2px;">{{ r.name }}</span>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div class="layer" style="{{ hopsStyle }}">
+    <sc-for list="{{ hops }}" as="h" hint-placeholder-count="2">
+      <div class="hop" onClick="{{ h.go }}" style="{{ h.style }}">
+        <span class="hopRing"></span>
+        <span class="hopLabel">{{ h.title }}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ================= chrome + the zoom control ================= -->
+  <div style="position: absolute; top: 0; left: 0; right: 0; height: 62px; border-bottom: 1px solid rgba(212,191,125,0.35); display: flex; align-items: center; justify-content: space-between; padding: 0 34px; font-size: 9px; letter-spacing: 0.22em; color: #8a7a4a; text-transform: uppercase; z-index: 60; background: rgba(26,26,26,0.9);">
+    <span><span style="color: #00a6d6;">G.U.I.D.E.</span> &nbsp;//&nbsp; v 2.4.7 &nbsp;//&nbsp; Castella Mainframe</span>
+    <span>Session 04F1A &nbsp;//&nbsp; <span style="color: #00a6d6;">Brettany Theater</span> &nbsp;//&nbsp; DM Online</span>
+  </div>
+  <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 50px; border-top: 1px solid rgba(212,191,125,0.35); display: flex; align-items: center; gap: 10px; padding: 0 34px; font-size: 9px; letter-spacing: 0.22em; color: #8a7a4a; text-transform: uppercase; z-index: 60; background: #1a1a1a;">
+    <span style="color: #00a6d6;">&#9670;</span><span>Codex</span><span>::</span><span>{{ crumb }}</span>
+    <span style="margin-left: auto;">{{ route }}</span>
+  </div>
+
+  <div class="back" onClick="{{ out }}" style="{{ backStyle }}">
+    <svg width="9" height="9" viewBox="0 0 9 9" fill="#8a7a4a"><path d="M9 0 L9 9 L0 4.5 Z"></path></svg>
+    {{ backLabel }}
+  </div>
+
+  <div style="{{ hintStyle }}">{{ hint }}</div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1440,"height":900},"pace":{"editor":"range","default":1,"min":0.5,"max":2,"step":0.05,"unit":"x","section":"Motion"}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { level: 0, node: 0 };
+  }
+
+  step(dir) {
+    const next = Math.max(0, Math.min(2, this.state.level + dir));
+    if (next !== this.state.level) this.setState({ level: next });
+  }
+
+  threads() {
+    return [
+      { x: 458.4, y: 274.5, tx: -264.2, ty: 480,
+        title: 'Clear Your Name', status: 'Active', statusColor: '#00a6d6', kind: 'Main Quest',
+        givenBy: 'Magistrate Voss', location: 'Brettany',
+        body: 'The party stands accused. A Crown courier was found dead on the Brettany road, and the magistrate’s writ names you among the suspects — wrong place, wrong hour, and no one yet willing to speak for you.',
+        objectives: [
+          { text: 'Speak with Magistrate Voss in the Brettany court', done: true },
+          { text: 'Find a witness who can place you off the road', done: false },
+          { text: 'Recover the courier’s missing satchel', done: false }
+        ],
+        related: [{ name: 'Magistrate Voss' }, { name: 'Brettany' }, { name: 'The Crown' }] },
+      { x: 539.8, y: 376.9, tx: -459.5, ty: 234.2,
+        title: 'The Stolen Tome', status: 'Active', statusColor: '#00a6d6', kind: 'Main Quest',
+        givenBy: 'The Lady', location: 'Davelguay',
+        body: 'A tome of significant value has gone missing from the Davelguay archive. The Lady wants it back, quietly.',
+        objectives: [
+          { text: 'Recover the stolen tome', done: true },
+          { text: 'Learn who took it and why', done: false }
+        ],
+        related: [{ name: 'The Lady' }, { name: 'Davelguay' }] },
+      { x: 556.8, y: 425.2, tx: -500.3, ty: 118.3,
+        title: 'Arrival in Brettany', status: 'Completed', statusColor: '#aaaaaa', kind: 'Main Quest',
+        givenBy: '—', location: 'Brettany',
+        body: 'The party first set foot in Brettany, seeking work and shelter.',
+        objectives: [],
+        related: [{ name: 'Brettany' }] }
+    ];
+  }
+
+  renderVals() {
+    const pace = this.props.pace == null ? 1 : this.props.pace;
+    const level = this.state.level;
+    const idx = this.state.node;
+    const all = this.threads();
+    const t = all[idx];
+
+    const tf = level === 0
+      ? 'translate(430px, -62px) scale(0.66)'
+      : level === 1 ? 'translate(0px, 0px) scale(1)'
+      : 'translate(' + t.tx + 'px, ' + t.ty + 'px) scale(2.4)';
+
+    // Where every OTHER node lands once the lattice has zoomed onto this one. Same
+    // mapping the transform uses: P -> O + 2.4(P - O) + t. Labels grow away from the
+    // record column so a hop chip can never sit under the text.
+    const hops = all.map((n, i) => ({ n: n, i: i })).filter(h => h.i !== idx).map(h => {
+      const X = 290 + 2.4 * (h.n.x - 290) + t.tx;
+      const Y = 492 + 2.4 * (h.n.y - 492) + t.ty;
+      const left = X > 520;
+      return {
+        title: h.n.title,
+        style: (left ? 'right: ' + (1440 - X - 17) + 'px; flex-direction: row-reverse;'
+                     : 'left: ' + (X - 17) + 'px;') + ' top: ' + (Y - 17) + 'px;',
+        go: () => this.setState({ node: h.i })
+      };
+    });
+
+    const hidden = 'position: absolute; inset: 0; opacity: 0; transform: translateY(10px); pointer-events: none;';
+    const shown  = 'position: absolute; inset: 0; opacity: 1; transform: none;';
+
+    const done = t.objectives.filter(o => o.done).length;
+    const f = Object.assign({}, t, {
+      objCount: done + ' / ' + t.objectives.length,
+      objectives: t.objectives.map(o => ({
+        text: o.text, done: o.done, todo: !o.done, tint: o.done ? '#aaaaaa' : '#dedede'
+      }))
+    });
+
+    const names = ['Codex', 'Main Story', t.title];
+    const hints = ['Click a story to open it', 'Click a thread to open it', 'Click another node to hop'];
+
+    const pick = (i) => () => this.setState({ node: i, level: 2 });
+
+    return {
+      rootStyle: '--pace: ' + pace + '; position: relative; width: 1440px; height: 900px; overflow: hidden;'
+        + ' background: radial-gradient(80% 90% at 22% 55%, #212121, #141414);'
+        + " font-family: 'JetBrains Mono', ui-monospace, monospace;",
+      latticeTf: 'transform: ' + tf + ';',
+      arcStyle: 'opacity: ' + (level === 0 ? 0.35 : 1) + '; transition: opacity 300ms ease;',
+      leadersStyle: 'opacity: ' + (level === 1 ? 1 : level === 2 ? 0.2 : 0) + '; transition: opacity 300ms ease;',
+      hops: hops,
+      hopsStyle: level === 2
+        ? 'position: absolute; inset: 0; z-index: 46; opacity: 1;'
+        : 'position: absolute; inset: 0; z-index: 46; opacity: 0; pointer-events: none;',
+      hitsStyle: 'position: absolute; inset: 0; z-index: 45; ' + (level === 1 ? '' : 'pointer-events: none; opacity: 0;'),
+      l0Style: level === 0 ? shown : hidden,
+      l1CentreStyle: level === 1 ? shown : hidden,
+      l1DossierStyle: level === 1 ? shown : hidden,
+      l2Style: level === 2 ? shown : hidden,
+      f: f,
+      hint: hints[level],
+      hintStyle: 'position: absolute; left: 44px; bottom: 92px; z-index: 60; font-size: 8px; letter-spacing: 0.26em; color: #8a7a4a; text-transform: uppercase; transition: opacity 300ms ease; opacity: ' + 1 + ';',
+      crumb: names[level],
+      route: ['/ codex', '/ codex / story / main-story', '/ codex / story / main-story / ' + (idx + 1)][level],
+      backStyle: 'position: absolute; left: 44px; top: 86px; z-index: 60; display: flex; align-items: center; gap: 9px; font-size: 8.5px; letter-spacing: 0.28em; color: #8a7a4a; text-transform: uppercase; cursor: pointer; transition: opacity 300ms ease; opacity: ' + (level === 0 ? 0 : 1) + ';',
+      backLabel: level === 2 ? 'Main Story' : 'Codex',
+      log: [
+        { num: '04', title: 'Clear Your Name', date: '21st of Hammerfall', color: '#4dd6ff', tint: '#dedede' },
+        { num: '03', title: 'The Stolen Tome', date: '16th of Hammerfall', color: '#8a7a4a', tint: '#aaaaaa' },
+        { num: '02', title: 'Into the Thicket', date: '11th of Hammerfall', color: '#8a7a4a', tint: '#aaaaaa' },
+        { num: '01', title: 'The Mayor’s Welcome', date: '3rd of Hammerfall', color: '#8a7a4a', tint: '#aaaaaa' }
+      ],
+      enter: () => this.setState({ level: 1 }),
+      out: () => this.step(-1),
+      pick0: pick(0),
+      pick1: pick(1),
+      pick2: pick(2)
+    };
+  }
+}
+</script>
+</body>
+</html>
