@@ -69,6 +69,7 @@ import { chanceOfNothing, expectedYield, poolItems, rollLoot } from '../lib/loot
 import { renderInline } from '../lib/markdown'
 import { MOD_STATS, SKILL_STATS, compileEffects, isAbility, type Mod } from '../lib/modEditor'
 import { useDmNpcs } from '../lib/npcs'
+import { useDmPlans } from '../lib/plans'
 import { ATTITUDE_CYCLE, ATTITUDE_LABEL, REL_TYPES } from '../lib/npcWeb'
 import { grantMany, isStackable } from '../lib/placement'
 import { usePartyPresence } from '../lib/presence'
@@ -87,6 +88,7 @@ import { OperatorHandouts } from './OperatorHandouts'
 import { OperatorInventory } from './OperatorInventory'
 import { CatalogForm } from './OperatorItemForm'
 import { OperatorNpcWeb } from './OperatorNpcWeb'
+import { OperatorPrepBoard } from './OperatorPrepBoard'
 import { OperatorShops } from './OperatorShops'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -168,7 +170,7 @@ const hpClassOf = (p: PartyMember): '' | 'warn' | 'crit' => {
 }
 const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hpMax) * 100)) : 0)
 
-type View = 'overview' | 'character' | 'quests' | 'sessions' | 'handouts' | 'npcs' | 'catalog'
+type View = 'overview' | 'character' | 'quests' | 'sessions' | 'handouts' | 'npcs' | 'prep' | 'catalog'
 type CharTab = 'actions' | 'inventory' | 'lore' | 'shards' | 'advance'
 type CatTab = 'items' | 'features' | 'spells' | 'effects' | 'shops' | 'classes' | 'races' | 'backgrounds' | 'loot'
 
@@ -184,6 +186,7 @@ export function OperatorConsole() {
   const campaign = useDmCampaign()
   const handoutLib = useDmHandouts()
   const npcLib = useDmNpcs()
+  const planLib = useDmPlans()
   const catalog = useDmCatalog()
   const featureLib = useDmFeatures()
   const effectLib = useDmEffects()
@@ -273,6 +276,17 @@ export function OperatorConsole() {
     log(<>Rolled <span className={styles.obj}>{table.name || 'Untitled'}</span> · {lines.length
       ? `${lines.length} item${lines.length === 1 ? '' : 's'}` : 'nothing of value'}</>, lines.length ? 'cyan' : 'danger')
   }, [catalog.items, lootOpen, log])
+
+  /** One press on the prep board: roll the table and put it in front of the
+   *  party. The catalog does these as two deliberate steps; a staged card is
+   *  the DM having already decided. */
+  const fireLootTable = useCallback(async (tableId: string) => {
+    const row = lootLib.tables.find(r => r.id === tableId)
+    if (!row) return false
+    await rollLootTable(tableId, lootContent(row))
+    await lootOpen.push(null)
+    return true
+  }, [lootLib.tables, rollLootTable, lootOpen])
 
   /** Assigning is a REAL GRANT — the item lands on that character's sheet
    *  through the same grantMany path Grant Item uses, so it arrives
@@ -384,6 +398,10 @@ export function OperatorConsole() {
   }
   function openHandouts() {
     setView('handouts')
+    setSelectedId(null)
+  }
+  function openPrep() {
+    setView('prep')
     setSelectedId(null)
   }
   function openNpcs() {
@@ -544,6 +562,18 @@ export function OperatorConsole() {
                     <span className={styles.ovS}>{handoutLib.handouts.filter(h => stateOf(h) === 'live').length} live · {handoutLib.handouts.length} authored</span>
                   </span>
                 </button>
+                <button className={cx(styles.ovEntry, view === 'prep' && styles.active)} onClick={openPrep}>
+                  <span className={styles.ovIc}><i className="fa-solid fa-clipboard-list" /></span>
+                  <span className={styles.ovTx}>
+                    <span className={styles.ovT}>Prep Board</span>
+                    <span className={styles.ovS}>{(() => {
+                      const board = planLib.plans.find(p => !p.session_id)
+                      if (!board) return 'Stage tonight'
+                      const cards = planLib.cards.filter(c => c.plan_id === board.id)
+                      return `${cards.filter(c => !c.fired_at).length} staged · ${cards.filter(c => c.fired_at).length} played`
+                    })()}</span>
+                  </span>
+                </button>
                 <button className={cx(styles.ovEntry, view === 'npcs' && styles.active)} onClick={openNpcs}>
                   <span className={styles.ovIc}><i className="fa-solid fa-circle-nodes" /></span>
                   <span className={styles.ovTx}>
@@ -690,6 +720,12 @@ export function OperatorConsole() {
                 <QuestsSurface campaign={campaign} />
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
+              ) : view === 'prep' ? (
+                <OperatorPrepBoard
+                  lib={planLib} campaign={campaign} shopLib={shopLib} lootLib={lootLib}
+                  handoutLib={handoutLib} npcLib={npcLib} party={party}
+                  onRollLoot={fireLootTable} log={log}
+                />
               ) : view === 'npcs' ? (
                 <OperatorNpcWeb lib={npcLib} party={party} quests={campaign.quests} log={log} />
               ) : view === 'handouts' ? (
@@ -7645,6 +7681,11 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
   const [objectives, setObjectives] = useState<QuestObjective[]>(quest?.objectives ?? [])
   const [related, setRelated] = useState<RelatedTag[]>((quest?.related ?? []).map(toRelatedTag))
   const [gm, setGm] = useState(gmNotes)
+  /* 0026: a quest can exist before the party may see it. Existing quests are
+     visible; a new one starts visible too, because writing one in the Quest Log
+     is still the normal way to hand the party a quest — the prep board is what
+     creates hidden ones. */
+  const [visible, setVisible] = useState(quest?.visible ?? true)
   const [objInput, setObjInput] = useState('')
   const [tagInput, setTagInput] = useState('')
   const [tagUrlInput, setTagUrlInput] = useState('')
@@ -7666,7 +7707,7 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
   }
   async function submit() {
     setBusy(true)
-    await onSubmit({ title, type, status, location, given_by: givenBy, description, objectives, related }, gm)
+    await onSubmit({ title, type, status, location, given_by: givenBy, description, objectives, related, visible }, gm)
     setBusy(false)
   }
 
@@ -7694,6 +7735,16 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
             {Q_STATUS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
         </div>
+      </div>
+
+      <span className={styles.fieldLab}>Players</span>
+      <div className={styles.qSeg}>
+        <button className={cx(styles.qSegOpt, visible && styles.sel)} onClick={() => setVisible(true)}>
+          <i className="fa-solid fa-eye" /> In their Journal
+        </button>
+        <button className={cx(styles.qSegOpt, !visible && styles.sel)} onClick={() => setVisible(false)}>
+          <i className="fa-solid fa-eye-slash" /> Hidden until revealed
+        </button>
       </div>
 
       <div className={styles.qGrid2}>
