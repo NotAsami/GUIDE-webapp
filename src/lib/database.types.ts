@@ -1496,6 +1496,10 @@ export type QuestRow = {
   /** Rows written before this field existed are plain strings — every reader
    *  must accept `RelatedTag | string`, never assume the object shape. */
   related: RelatedTag[]
+  /** 0026: false keeps the quest off every player screen — the Journal, the
+   *  story lattice and the completion percent all read through one policy that
+   *  requires it, so a hidden quest is absent rather than filtered. */
+  visible: boolean
   created_at: string         // stable list order
   updated_at: string
 }
@@ -2042,6 +2046,34 @@ export type HandoutRow = {
 export type HandoutInsert = Partial<Omit<HandoutRow, 'id' | 'created_at' | 'updated_at'>>
 export type HandoutUpdate = Partial<Omit<HandoutRow, 'id' | 'created_at' | 'updated_at'>>
 
+/** A night's plan (0027). `session_id` is null until the DM wraps the plan into
+ *  a session log entry — which is also what marks the night as played out. */
+export type SessionPlanRow = {
+  id: string
+  title: string
+  session_id: string | null
+  closed_at: string | null
+  created_at: string
+  updated_at: string
+}
+export type PlanCardKind = 'shop' | 'loot' | 'handout' | 'npc' | 'quest' | 'note'
+/** One staged thing (0027). `ref` names the row it fires in its own table; the
+ *  card keeps no copy of it, only a title to print if that row goes away. */
+export type PlanCardRow = {
+  id: string
+  plan_id: string
+  kind: PlanCardKind
+  ref: string | null
+  title: string
+  note: string
+  target: string[]
+  sort: number
+  fired_at: string | null
+  created_at: string
+}
+export type PlanCardInsert = Pick<PlanCardRow, 'plan_id' | 'kind'> & Partial<Pick<PlanCardRow, 'ref' | 'title' | 'note' | 'target' | 'sort'>>
+export type PlanCardUpdate = Partial<Pick<PlanCardRow, 'title' | 'note' | 'target' | 'sort' | 'fired_at'>>
+
 /** An NPC record (0024). Everything else in the app still names NPCs by free
  *  text; the NPC web matches those names to these rows. A player can read a
  *  row only once `known_to` holds one of their characters — which is why the
@@ -2283,6 +2315,18 @@ export type Database = {
         Row: HandoutRow
         Insert: HandoutInsert
         Update: HandoutUpdate
+        Relationships: []
+      }
+      session_plans: {
+        Row: SessionPlanRow
+        Insert: Partial<Omit<SessionPlanRow, 'id' | 'created_at' | 'updated_at'>>
+        Update: Partial<Omit<SessionPlanRow, 'id' | 'created_at' | 'updated_at'>>
+        Relationships: []
+      }
+      plan_cards: {
+        Row: PlanCardRow
+        Insert: PlanCardInsert
+        Update: PlanCardUpdate
         Relationships: []
       }
       npcs: {
