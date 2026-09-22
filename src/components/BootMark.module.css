@@ -1,0 +1,78 @@
+/* The boot mark, in React. The SAME figure index.html paints before the bundle
+   lands (its .boot-* rules) — a wait that starts before React and ends after it
+   must not change shape halfway through. */
+.wrap {
+  --edge: rgba(212, 191, 125, 0.55);
+  --glow: #4dd6ff;
+  --rail: rgba(138, 122, 74, 0.25);
+  --lab: var(--cyan-dim);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.amber {
+  --edge: rgba(226, 176, 33, 0.55);
+  --glow: var(--amber-hot);
+  --rail: rgba(138, 109, 26, 0.3);
+  --lab: var(--amber-dim);
+}
+/* Two layers, not a border — a hexagon's obliques are not 45°, so the chamfer
+   gradient recipe cannot draw them (docs/Chamfered_clip-path_corners_fix.md). */
+.mark {
+  width: 84px;
+  height: 96px;
+  padding: 2px;
+  background: var(--edge);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.mark > span {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  background: #121110;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--edge);
+}
+.name {
+  margin-top: 44px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.44em;
+  text-indent: 0.44em;
+  color: var(--beige);
+}
+.rail {
+  margin-top: 34px;
+  width: 260px;
+  height: 2px;
+  background: var(--rail);
+  overflow: hidden;
+}
+.rail > i {
+  display: block;
+  width: 76px;
+  height: 2px;
+  background: linear-gradient(to right, transparent, var(--glow), transparent);
+  animation: rail-run 1.8s ease-in-out infinite;
+}
+@keyframes rail-run {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(340%); }
+}
+.line {
+  margin-top: 20px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: var(--lab);
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail > i { animation: none; }
+}

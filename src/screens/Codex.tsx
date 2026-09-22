@@ -5,7 +5,7 @@ import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { StartingKit } from '../components/StartingKit'
 import { useCampaign } from '../lib/campaign'
-import { completionFor } from '../lib/storyLattice'
+import { displayPercent } from '../lib/storyLattice'
 import styles from './Codex.module.css'
 
 interface RouteContext {
@@ -64,7 +64,7 @@ export function Codex() {
           <StoryCard
             key={story.id}
             story={story}
-            percent={completionFor(story, quests, character)?.percent ?? story.percent}
+            percent={displayPercent(story, quests, character)}
           />
         ))}
       </section>

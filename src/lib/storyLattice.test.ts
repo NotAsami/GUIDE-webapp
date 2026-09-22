@@ -10,10 +10,13 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   CX, CY, R_NODE, R_EXIT, COL, HEAD_H, HEADS_TOP, ROW_H, ROWS_TOP, TITLE_OFF,
-  FOCAL_BREAK, R_SIDE_NODE, SIDE_GAP, SIDE_ROW_H, SIDE_TITLE_OFF,
-  arcPath, completionFor, recordFor, rowY, sideRowY, solve, threadsFor, wiresFor, zoomTo,
+  FOCAL_BREAK, R_SIDE_NODE, SIDE_GAP, SIDE_LEADER_GAP, SIDE_ROW_H, SIDE_TITLE_OFF, ZOOM,
+  ARC_LEN, RING_PATH, arcOffset, completionFor, recordFor, rowY, sideRowY, solve, threadsFor, wiresFor, zoomTo,
 } from './storyLattice.ts'
 import type { CharacterRow, ProgressStory, QuestRow } from './database.types.ts'
 
@@ -102,34 +105,39 @@ test('the rows start exactly below the heading band', () => {
 
 /* ---------------- the progress arc ---------------- */
 
-test('the arc sweeps clockwise from the top', () => {
-  assert.equal(arcPath(0), null, '0% draws nothing at all')
-
-  // 25% ends at 3 o'clock, 50% at 6, 75% at 9 — and it always starts at 12.
-  for (const [pct, x, y] of [[25, CX + 250, CY], [50, CX, CY + 250], [75, CX - 250, CY]] as const) {
-    const d = arcPath(pct)!
-    assert.ok(d.startsWith(`M ${CX} ${CY - 250}`), `${pct}% must start at the top`)
-    const [ex, ey] = d.trim().split(' ').slice(-2).map(Number)
-    near(ex, x, 0.02)
-    near(ey, y, 0.02)
-  }
+test('THE RING IS A CONSTANT CIRCLE — the shape never changes, so the offset can tween', () => {
+  // The old arc was a different path per percent. Swapping it made the ring
+  // SNAP between values, and a one-shot reveal can never go down. A constant
+  // shape leaves the offset as the only thing that changes, and a CSS
+  // transition interpolates that in both directions.
+  assert.ok(RING_PATH.startsWith(`M ${CX} ${CY - 250} `), 'must start at 12 o\'clock')
+  // First half lands at 6 o'clock with sweep-flag 1 — clockwise on a y-down
+  // screen, so it grows through the RIGHT, as the old arc did.
+  assert.ok(RING_PATH.includes(`A 250 250 0 1 1 ${CX} ${CY + 250}`), 'first half must sweep clockwise to 6 o\'clock')
+  assert.ok(RING_PATH.trim().endsWith(`${CX} ${CY - 250}`), 'and close back at the top')
+  assert.ok(!/Z/.test(RING_PATH), 'no Z — a closing segment would add length the dash does not account for')
 })
 
-test('the large-arc flag flips once past halfway', () => {
-  assert.match(arcPath(50)!, / 0 1 /, 'a semicircle is not a large arc')
-  assert.match(arcPath(51)!, / 1 1 /, 'past 180° it is')
+test('the dash length is the exact circumference, not a "long enough" guess', () => {
+  // It used to be 1600. As a reveal that was harmless; as the denominator of an
+  // offset it would put every percent ~1.9% of the ring in the wrong place.
+  near(ARC_LEN, 2 * Math.PI * 250, 1e-9)
 })
 
-test('a finished story is a closed ring, not a collapsed arc', () => {
-  // Start and end coincide at 100%, which an `A` command renders as nothing.
-  const d = arcPath(100)!
-  assert.match(d, /Z$/)
-  assert.notEqual(arcPath(100), arcPath(99))
+test('the offset hides exactly the un-done part', () => {
+  near(arcOffset(0), ARC_LEN)          // nothing drawn
+  near(arcOffset(100), 0)              // the whole ring
+  near(arcOffset(25), ARC_LEN * 0.75)
+  near(arcOffset(33), ARC_LEN * 0.67)
 })
 
 test('percent is clamped, not trusted', () => {
-  assert.equal(arcPath(-10), null)
-  assert.equal(arcPath(250), arcPath(100))
+  near(arcOffset(-10), ARC_LEN)
+  near(arcOffset(250), 0)
+})
+
+test('the offset falls as the percent rises — so a DROP rewinds instead of refilling', () => {
+  for (let p = 0; p < 100; p += 5) assert.ok(arcOffset(p + 5) < arcOffset(p), `${p} -> ${p + 5}`)
 })
 
 /* ---------------- where threads come from ---------------- */
@@ -382,5 +390,91 @@ test('a finished campaign reads 100, and the arc closes into a ring', () => {
   const qs = [quest({ id: 'a', status: 'completed' }), quest({ id: 'b', status: 'completed' })]
   const c = completionFor(story('main'), qs, {} as CharacterRow)
   assert.equal(c.percent, 100)
-  assert.match(arcPath(c.percent), /Z$/)
+  near(arcOffset(c.percent), 0, 1e-9)
+})
+
+/* ------------------------------------------------------------------
+   ONE AUTHORED VALUE, ONE RENDER PATH — scanned, because the defect IS the
+   call site.
+
+   A story's `percent` is the DM's number, and every card now shows a DERIVED one
+   instead where there is something to count. The rule for that lived inline at
+   each render site, and the third site missed it: the story tabs printed the
+   authored 23% right beside the centre's derived 33%. Nothing threw. It only
+   showed up by looking at the screen. So a render has to go through
+   displayPercent, and this fails on any that reads `.percent` directly.
+   ------------------------------------------------------------------ */
+
+const SRC = fileURLToPath(new URL('..', import.meta.url))
+const tsxFiles = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+  const p = join(dir, e.name)
+  return e.isDirectory() ? tsxFiles(p) : e.name.endsWith('.tsx') ? [p] : []
+})
+
+/** Reads of a story percent that are raw on purpose, and why. */
+const RAW_PERCENT_ON_PURPOSE: { match: string; why: string }[] = [
+  { match: 'value={st.percent}',
+    why: 'the DM editing the AUTHORED number in the console — it has to show what is being typed, not what the card derives' },
+]
+
+test('EVERY RENDER OF A CARD PERCENT GOES THROUGH displayPercent', () => {
+  const raw: string[] = []
+  for (const f of tsxFiles(SRC)) {
+    readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      if (!/\.percent\b/.test(line)) return
+      if (RAW_PERCENT_ON_PURPOSE.some(p => line.includes(p.match))) return
+      raw.push(`${f.slice(SRC.length)}:${i + 1}  ${line.trim()}`)
+    })
+  }
+  assert.deepEqual(raw, [],
+    'These read a story percent directly, so they will disagree with every card that derives it.\n'
+    + 'Use displayPercent(story, quests, character), or add to RAW_PERCENT_ON_PURPOSE with the reason:\n  '
+    + raw.join('\n  '))
+})
+
+test('every excuse in RAW_PERCENT_ON_PURPOSE still matches something', () => {
+  const all = tsxFiles(SRC).map(f => readFileSync(f, 'utf8')).join('\n')
+  for (const p of RAW_PERCENT_ON_PURPOSE) assert.ok(all.includes(p.match), `stale exemption: "${p.match}"`)
+})
+
+/* ---------------- a leader leaves its node from the EDGE ---------------- */
+
+const sixThreads = () => threadsFor(story('main'),
+  [0, 1, 2].map(i => quest({ id: 'm' + i })).concat([0, 1, 2].map(i => quest({ id: 's' + i, type: 'side' }))),
+  {} as CharacterRow)
+
+test('A SIDE LEADER STARTS AT ITS NODE EDGE, not through its hollow middle', () => {
+  // The leader layer paints above the nodes, and a side node is hollow — so a
+  // leader starting at the centre drew a line straight through it, which read
+  // as a stray digit. Measured in the browser before this existed.
+  const th = sixThreads()
+  wiresFor(th).forEach((w, i) => {
+    if (th[i].kind !== 'side') return
+    near(Math.hypot(w.sx - w.nx, w.sy - w.ny), SIDE_LEADER_GAP)
+    // ...and it is still the same radial line, just shortened at the node end.
+    const cross = (w.sx - w.nx) * (w.ey - w.ny) - (w.sy - w.ny) * (w.ex - w.nx)
+    near(cross, 0, 0.01)
+  })
+})
+
+test('a main leader still starts at its node centre — filled nodes hide it, so nothing moved', () => {
+  const th = sixThreads()
+  wiresFor(th).forEach((w, i) => {
+    if (th[i].kind !== 'main') return
+    assert.equal(w.sx, w.nx)
+    assert.equal(w.sy, w.ny)
+  })
+})
+
+test('zoomed in, a side leader still leaves from the scaled edge, toward its break', () => {
+  const th = sixThreads()
+  const ws = wiresFor(th)
+  const side = ws[th.findIndex(t => t.kind === 'side')]
+  const z = zoomTo(side, side.ey)
+  near(Math.hypot(z.leaderStart.x - z.focal.x, z.leaderStart.y - z.focal.y), SIDE_LEADER_GAP * ZOOM)
+  assert.ok(z.leaderStart.x > z.focal.x && z.leaderStart.y > z.focal.y, 'it must head toward the break, not away')
+
+  const main = ws[0]
+  const zm = zoomTo(main, main.ey)
+  assert.deepEqual(zm.leaderStart, zm.focal, 'a filled main node keeps a centre start when zoomed too')
 })

@@ -275,13 +275,66 @@ export function Layout() {
     if (!authLoading && !session) nav('/login', { replace: true })
   }, [authLoading, session, nav])
 
+  /* THE SHAPE OF THE SCREEN, not the word "loading". Everything about the
+     chrome is known before the character row lands — the bar heights, the
+     labels, where each column sits — so it paints, and only the values the row
+     feeds are skeletons. The body gets ONE neutral band rather than a guessed
+     number of cards: which screen is underneath decides what goes there, and a
+     row count guessed wrong flickers worse than no ghosts at all. */
   if (authLoading || loading) {
     return (
       <>
         <div className="stage" />
         <div className="scanlines" />
         <div className="vignette" />
-        <CenterMessage>Loading…</CenterMessage>
+        <div className={styles.shell}>
+          <header className={styles.topbar} role="banner" aria-busy="true">
+            <div className={styles.topLeft}>
+              {['Level', 'Reputation'].map(lab => (
+                <div key={lab} className={styles.statBlock}>
+                  <div className={styles.statRow}>
+                    <span className="sk" style={{ display: 'inline-block', width: 26, height: 16 }} />
+                    <span className={styles.statLabel}>{lab}</span>
+                  </div>
+                  <div className="sk" style={{ width: 96, height: 3 }} />
+                </div>
+              ))}
+              <div className={styles.hpBlock}>
+                <span className="ic">♥</span>
+                <span className="sk" style={{ display: 'inline-block', width: 58, height: 14 }} />
+                <span className="lab">HP</span>
+              </div>
+            </div>
+            <div className={styles.topCenter}>
+              <span className="sk" style={{ display: 'block', width: 196, height: 17, margin: '0 auto' }} />
+              <span className="sk" style={{ display: 'block', width: 128, height: 8, margin: '7px auto 0' }} />
+            </div>
+            <div className={styles.topRight}>
+              <div className={styles.burdenBlock}>
+                <span className="ic">⚖</span>
+                <span className="sk" style={{ display: 'inline-block', width: 48, height: 14 }} />
+                <span className="lab">Burden</span>
+              </div>
+              <div className={styles.coinBlock}>
+                <span className="ic">⊙</span>
+                <span className="sk" style={{ display: 'inline-block', width: 44, height: 14 }} />
+                <span className="lab">Gold</span>
+              </div>
+            </div>
+          </header>
+          <main className={styles.main}>
+            <div style={{ display: 'grid', placeItems: 'center', height: '100%', padding: 24 }} aria-busy="true">
+              <div
+                className="sk"
+                style={{
+                  width: 'min(900px, 80%)', height: 168,
+                  border: '1px solid rgba(138, 122, 74, 0.35)',
+                }}
+              />
+            </div>
+          </main>
+          <footer className={styles.bottombar} />
+        </div>
       </>
     )
   }

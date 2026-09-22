@@ -1,7 +1,8 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { Codex } from './screens/Codex'
 import { Story } from './screens/Story'
+import { NotFound } from './screens/NotFound'
 import { Login } from './screens/Login'
 import { AuthCallback } from './screens/AuthCallback'
 import { Character } from './screens/Character'
@@ -61,7 +62,9 @@ export const router = createBrowserRouter([
       { path: 'lore', element: <Lore /> },
       { path: 'journal', element: <Journal /> },
       { path: 'spellbook', element: <Spellbook /> },
-      { path: '*', element: <Navigate to="/" replace /> },
+      /* Inside the player Layout on purpose: the chrome stays live around the
+         boundary, so the fiction never traps anyone. */
+      { path: '*', element: <NotFound /> },
     ],
   },
 ])

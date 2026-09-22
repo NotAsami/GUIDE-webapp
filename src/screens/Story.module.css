@@ -111,11 +111,14 @@
 .arc {
   stroke: var(--cyan);
   filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.85));
-  /* Long enough for a full ring at r=250 (2πr ≈ 1571): the dash is trimmed to
-     the real path length by the browser, so one number covers every percent. */
-  stroke-dasharray: 1600;
-  stroke-dashoffset: 1600;
-  animation: draw 1700ms cubic-bezier(.2, .7, .2, 1) 250ms forwards;
+  /* A TRANSITION, deliberately not a keyframe. The dash length and offset are
+     set inline from lib/storyLattice (ARC_LEN, arcOffset), and this tweens the
+     offset between any two values — the first open from empty, every story
+     switch from the previous percent, up or down. A keyframe on the same
+     property would override the transition and it would never fire. One
+     duration for both, because the ask was that a switch "fills again like when
+     you open it the first time". */
+  transition: stroke-dashoffset 1400ms cubic-bezier(.2, .7, .2, 1);
 }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 
@@ -124,8 +127,28 @@
 .wire line, .wireOff line {
   stroke-dasharray: 420;
   stroke-dashoffset: 420;
-  animation: draw 700ms cubic-bezier(.2, .7, .2, 1) 900ms forwards;
+  /* 150ms, not the 900ms it was. That delay was tuned for a first open — the arc
+     sweeps, THEN the wires follow — but leaders are new elements on every story
+     switch, so it replayed each time: a full second of a lattice with no wires. */
+  animation: draw 450ms cubic-bezier(.2, .7, .2, 1) 150ms forwards;
 }
+/* Side leaders are DASHED, so they cannot use the dasharray draw-on above — it
+   would overwrite their dash pattern. They fade in on the same clock instead.
+   They used to have no entrance at all, and popped in a second before the main
+   wires did. */
+.wireSide line { animation: fade-in 450ms ease 150ms backwards; }
+@keyframes fade-in { from { opacity: 0; } }
+
+/* Nodes are new elements on a story switch (the threads are different ids), so
+   this plays on every switch as well as on the first open. Within one story
+   nothing remounts, so a hop does not replay it — except the halo, which moves
+   to the newly opened node and pops in there. */
+.node, .sideNode, .halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: node-in 380ms cubic-bezier(.2, .7, .2, 1) 80ms backwards;
+}
+@keyframes node-in { from { opacity: 0; transform: scale(0.3); } }
 .node { fill: var(--cyan); stroke: none; filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.85)); }
 .wireOff .node { fill: var(--muted); fill-opacity: 0.55; filter: none; }
 .halo { fill: none; stroke: var(--cyan); stroke-opacity: 0.5; }
@@ -161,7 +184,18 @@
    Dashed and grey against the main spine's solid cyan, and hollow rather than
    filled, so the rank reads before the glyph does. */
 .wireSide { stroke: var(--muted); stroke-opacity: 0.34; stroke-dasharray: 3 4; }
-.sideNode { fill: none; stroke: var(--muted); stroke-opacity: 0.7; stroke-width: 1.4; }
+/* Only the horizontal run is dashed. The radial stub from node to break is 15px
+   (R_SIDE_EXIT - R_SIDE_NODE), and a 3-4 dash on 15px renders as two stray ticks
+   hugging the node instead of a line. */
+.wireSide line:first-child { stroke-dasharray: none; }
+.sideNode {
+  /* Filled with the page colour, not `none`. The node sits exactly on the sigil's
+     outer circle, and a truly hollow node let that circle's line run straight
+     through it — at this size the pair read as a stray digit. A --bg fill knocks
+     the line out and still LOOKS hollow. Measured: the page behind is solid
+     #1d1d1d with no image, so the disc is invisible. */
+  fill: var(--bg); stroke: var(--muted); stroke-opacity: 0.7; stroke-width: 1.4;
+}
 .wireSide .sideNode { stroke-opacity: 0.7; }
 
 /* The rule between the two ranks. EXACTLY SIDE_GAP tall (30px) — the side rows'
@@ -455,5 +489,11 @@
   .lattice, .marks, .leaders { animation: none; opacity: 1; }
   .instrument { transition: none; }
   .rotSlow, .rotRev { animation: none; }
-  .arc, .wire line, .wireOff line { animation: none; stroke-dashoffset: 0; }
+  /* The ring is left OUT of the old `stroke-dashoffset: 0` rule on purpose. Its
+     offset is now the percent itself — 0 means a full ring — so keeping it there
+     would state that every story is finished. (Inline style wins, so it was
+     latent, not live; it goes because it asserts the opposite of the truth.) */
+  .arc { transition: none; }
+  .wire line, .wireOff line { animation: none; stroke-dashoffset: 0; }
+  .wireSide line, .node, .sideNode, .halo { animation: none; }
 }

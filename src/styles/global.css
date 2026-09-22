@@ -257,3 +257,39 @@ hr::after {
    conditions can wrap between the glyph and the name it belongs to, and the
    orphaned glyph at the end of a line reads as a bullet point. */
 .gicon-wrap { white-space: nowrap; }
+
+/* ---- Skeletons ----
+   ONE fill and ONE sweep for the whole app, so a wait looks the same wherever
+   it happens. Rules that come with it:
+   - A skeleton stands where the layout is ALREADY KNOWN — the topbar's numbers,
+     a party row, a catalog row. Chrome is not data: it paints.
+   - Where the row COUNT is not known, draw one neutral shape for the region,
+     never N ghosts. Three card ghosts resolving into two cards flickers worse
+     than no ghosts at all.
+   - Put `aria-busy="true"` on the region that is waiting, not on the page.
+   Amber twin for the operator layer, which keeps its own colour while it waits. */
+.sk {
+  background-color: rgba(212, 191, 125, 0.07);
+  background-image: linear-gradient(100deg,
+    rgba(212, 191, 125, 0) 20%,
+    rgba(212, 191, 125, 0.14) 50%,
+    rgba(212, 191, 125, 0) 80%);
+  background-size: 260px 100%;
+  background-repeat: no-repeat;
+  animation: sk-sweep 1.6s linear infinite;
+}
+.sk.amber {
+  background-color: rgba(226, 176, 33, 0.07);
+  background-image: linear-gradient(100deg,
+    rgba(226, 176, 33, 0) 20%,
+    rgba(226, 176, 33, 0.16) 50%,
+    rgba(226, 176, 33, 0) 80%);
+}
+@keyframes sk-sweep {
+  from { background-position: -260px 0; }
+  to   { background-position: calc(100% + 260px) 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk { animation: none; background-image: none; background-color: rgba(212, 191, 125, 0.1); }
+  .sk.amber { background-image: none; background-color: rgba(226, 176, 33, 0.1); }
+}
