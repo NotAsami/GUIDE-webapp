@@ -122,7 +122,7 @@ export type RollLine = {
 interface RollLogValue {
   rolls: RollEntry[]
   /** Append a roll (id + timestamp filled in). Call from event handlers only. */
-  addRoll: (entry: Omit<RollEntry, 'id' | 'at'>) => RollEntry
+  addRoll: (entry: Omit<RollEntry, 'id' | 'at'>, confirmedId?: string) => RollEntry
   /** Patch one entry in place.
    *
    *  Answering an `ask` and rolling its dice both mutate a roll that has ALREADY
@@ -201,8 +201,8 @@ const RollLogContext = createContext<RollLogValue | null>(null)
 export function RollLogProvider({ children }: { children: ReactNode }) {
   const [rolls, setRolls] = useState<RollEntry[]>([])
 
-  const addRoll = useCallback((entry: Omit<RollEntry, 'id' | 'at'>) => {
-    const full: RollEntry = { ...entry, id: crypto.randomUUID(), at: Date.now() }
+  const addRoll = useCallback((entry: Omit<RollEntry, 'id' | 'at'>, confirmedId?: string) => {
+    const full: RollEntry = { ...entry, id: confirmedId ?? crypto.randomUUID(), at: Date.now() }
     setRolls(prev => [full, ...prev].slice(0, MAX_ROLLS))
     return full
   }, [])

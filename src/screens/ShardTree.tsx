@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CharacterRow, CharacterSection, ShardNode, ShardSlot, ShardTree } from '../lib/database.types'
@@ -8,7 +9,7 @@ import { Inline } from '../lib/markdown'
 
 interface Props {
   character: CharacterRow
-  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<SaveResult>
   slotKey: ShardSlotKey
   slot: ShardSlot
   tree: ShardTree

@@ -99,6 +99,8 @@
   border: 2px solid #111;
 }
 .region { position: relative; min-height: 0; min-width: 0; }
+/* The work area over regions 02 AND 03 — only the NPC web asks for it. */
+.region.regionWide { grid-column: 2 / 4; }
 .rFrame {
   position: absolute; inset: 0; background: var(--beige); opacity: 0.85;
   clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
@@ -271,6 +273,8 @@
    scrollbar styled by the ::-webkit-scrollbar-thumb rule below — a stray amber/gold bar
    along the bottom of the panel that has nothing to do with an intentional design element. */
 .workBody { position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 13px; }
+/* The NPC web draws edge to edge and never scrolls: it scales itself to fit. */
+.workBody.webBody { padding: 0; overflow: hidden; }
 /* The catalog view, which needs two things this panel does not do by default.
    Only this view; every other surface keeps the plain scrolling body.
 
@@ -956,12 +960,20 @@
 
 /* right — edit form */
 .qForm { display: flex; flex-direction: column; min-width: 0; }
-/* Title + New Quest share a row, same box model as .sessPick: label sits
-   above the input, so align-items: flex-end lines the button up with the
-   input's baseline rather than the label's. No margin-bottom here — .sessIn
-   already carries its own 10px, same rhythm as every other field. */
-.qTitleRow { display: flex; gap: 10px; align-items: flex-end; }
-.qTitleField { flex: 1; min-width: 0; }
+/* Title + New Quest (and New Handout) share a row. A GRID, with the field
+   wrapper dissolved into it, so the button sits in the INPUT's own row and
+   stretches to exactly its height. The flex-end version this replaced lined the
+   button up with the bottom of .sessIn's 10px margin instead, 10px low, and
+   nobody saw it until a second form used the row. The 10px moves to the row.
+   Two equal columns keeps the old flex:1 / flex:1 split; the button's content
+   is absolutely positioned, so an `auto` track would collapse it to 0 wide. */
+.qTitleRow {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 10px; row-gap: 3px; margin-bottom: 10px;
+}
+.qTitleField { display: contents; }
+.qTitleRow .sessIn { grid-column: 1; margin-bottom: 0; }
+.qTitleRow .btn { grid-column: 2; grid-row: 2; height: auto; }
 .qGrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .qSeg { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
 .qSegOpt {

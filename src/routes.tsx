@@ -1,70 +1,45 @@
 import { createBrowserRouter } from 'react-router-dom'
-import { Layout } from './components/Layout'
-import { Codex } from './screens/Codex'
-import { Story } from './screens/Story'
-import { NotFound } from './screens/NotFound'
-import { Login } from './screens/Login'
-import { AuthCallback } from './screens/AuthCallback'
-import { Character } from './screens/Character'
-import { Stats } from './screens/Stats'
-import { Equipment } from './screens/Equipment'
-import { Features } from './screens/Features'
-import { Inventory } from './screens/Inventory'
-import { Journal } from './screens/Journal'
-import { Lore } from './screens/Lore'
-import { Spellbook } from './screens/Spellbook'
-import { Shard } from './screens/Shard'
-import { ShardLattice } from './screens/ShardLattice'
-import FeatureEditor from './screens/FeatureEditor'
-import { OperatorConsole } from './screens/OperatorConsole'
-import { CatalogSearch } from './components/CatalogSearch'
-import { ProseToolbar } from './components/ProseToolbar'
+import { RouteError } from './components/RouteError'
 
+/** Literal dynamic imports give each screen its own production chunk. Player
+ * sessions never need to download the authoring console or its editor tools. */
 export const router = createBrowserRouter([
-  { path: '/login', element: <Login /> },
-  { path: '/auth/callback', element: <AuthCallback /> },
-  // DM-only Operator Console (Phase 2). Standalone full-screen surface with its
-  // own amber chrome — NOT a child of the player Layout. The screen self-gates on
-  // dm_users membership and redirects non-DM users back to '/'.
-  /* CatalogSearch rides alongside each authoring surface rather than inside it:
-     it is a Ctrl/Cmd+K overlay that must be reachable from the console, the
-     shard lattice AND the feature editor, and mounting it here keeps all three
-     screens unaware of it. Not on the player routes — it reads the DM catalogs,
-     which RLS returns empty for anyone else.
-
-     ProseToolbar rides along for the same reason and by the same argument: it
-     follows focus into any `data-prose` field and offers the icon-insert
-     button beside it, so the three authoring screens need no toolbar markup of
-     their own. Player screens have no prose field to author. */
-  { path: '/dm', element: <><OperatorConsole /><CatalogSearch /><ProseToolbar /></> },
-  { path: '/dm/shards', element: <><ShardLattice /><CatalogSearch /><ProseToolbar /></> },
-  { path: '/dm/features', element: <><FeatureEditor /><CatalogSearch /><ProseToolbar /></> },
   {
-    path: '/',
-    element: <Layout />,
+    errorElement: <RouteError />,
     children: [
-      { index: true, element: <Codex /> },
-      /* A Codex story card, opened. DEPTH IS THE URL — the screen derives
-         everything from :storyId and keeps no level state, so the back button
-         and a shared link both work without plumbing. Ranks above the '*'
-         fallback, which only catches paths that match nothing. */
-      { path: 'story/:storyId', element: <Story /> },
-      /* The thread depth. Same screen — it reads :threadId and swaps the reading
-         column for that thread's record, so a thread is linkable and the back
-         button already works. */
-      { path: 'story/:storyId/:threadId', element: <Story /> },
-      { path: 'equipment', element: <Equipment /> },
-      { path: 'inventory', element: <Inventory /> },
-      { path: 'stat-panel', element: <Stats /> },
-      { path: 'features', element: <Features /> },
-      { path: 'character', element: <Character /> },
-      { path: 'shard', element: <Shard /> },
-      { path: 'lore', element: <Lore /> },
-      { path: 'journal', element: <Journal /> },
-      { path: 'spellbook', element: <Spellbook /> },
-      /* Inside the player Layout on purpose: the chrome stays live around the
-         boundary, so the fiction never traps anyone. */
-      { path: '*', element: <NotFound /> },
+      { path: '/login', lazy: async () => ({ Component: (await import('./screens/Login')).Login }) },
+      { path: '/auth/callback', lazy: async () => ({ Component: (await import('./screens/AuthCallback')).AuthCallback }) },
+      {
+        path: '/dm',
+        lazy: async () => ({ Component: (await import('./components/AuthoringLayout')).AuthoringLayout }),
+        children: [
+          { index: true, lazy: async () => ({ Component: (await import('./screens/OperatorConsole')).OperatorConsole }) },
+          { path: 'shards', lazy: async () => ({ Component: (await import('./screens/ShardLattice')).ShardLattice }) },
+          { path: 'features', lazy: async () => ({ Component: (await import('./screens/FeatureEditor')).default }) },
+        ],
+      },
+      {
+        path: '/',
+        lazy: async () => ({ Component: (await import('./components/Layout')).Layout }),
+        children: [
+          { index: true, lazy: async () => ({ Component: (await import('./screens/Codex')).Codex }) },
+          { path: 'story/:storyId', lazy: async () => ({ Component: (await import('./screens/Story')).Story }) },
+          { path: 'story/:storyId/:threadId', lazy: async () => ({ Component: (await import('./screens/Story')).Story }) },
+          { path: 'equipment', lazy: async () => ({ Component: (await import('./screens/Equipment')).Equipment }) },
+          { path: 'inventory', lazy: async () => ({ Component: (await import('./screens/Inventory')).Inventory }) },
+          { path: 'stat-panel', lazy: async () => ({ Component: (await import('./screens/Stats')).Stats }) },
+          { path: 'features', lazy: async () => ({ Component: (await import('./screens/Features')).Features }) },
+          { path: 'character', lazy: async () => ({ Component: (await import('./screens/Character')).Character }) },
+          { path: 'shard', lazy: async () => ({ Component: (await import('./screens/Shard')).Shard }) },
+          { path: 'lore', lazy: async () => ({ Component: (await import('./screens/Lore')).Lore }) },
+          /* The Relations section drawn as a web — a place you navigate to, like
+             a story card, because a graph needs the room. */
+          { path: 'lore/relations', lazy: async () => ({ Component: (await import('./screens/RelationsWeb')).RelationsWeb }) },
+          { path: 'journal', lazy: async () => ({ Component: (await import('./screens/Journal')).Journal }) },
+          { path: 'spellbook', lazy: async () => ({ Component: (await import('./screens/Spellbook')).Spellbook }) },
+          { path: '*', lazy: async () => ({ Component: (await import('./screens/NotFound')).NotFound }) },
+        ],
+      },
     ],
   },
 ])

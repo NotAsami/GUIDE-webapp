@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, ShardsField, ShardSlot, ShardTree } from '../lib/database.types'
@@ -11,7 +12,7 @@ import { Icon } from '../components/Icon'
 
 interface RouteContext {
   character: CharacterRow
-  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<SaveResult>
   shardTrees?: Record<string, ShardTree>
 }
 

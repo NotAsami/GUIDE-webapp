@@ -144,48 +144,14 @@ test('a condition changing NAME is a change, even at the same count', () => {
  * Scanned rather than unit-tested because the thing being checked IS the
  * coupling: that no update statement exists without the recompute beside it.
  */
-test('EVERY writer of a character row recomputes the cache', () => {
+test('character writes use the single versioned transport', () => {
   const files = readdirSync(join(ROOT, 'src', 'lib'))
     .filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'))
-
-  /** The exact expression handed to `.update(` — balanced to its closing paren,
-   *  so `{ ...patch, ...withVitals }` is not confused with the `withVitals`
-   *  DEFINITION that happens to sit a few lines above the call. */
-  const argAt = (src: string, open: number): string => {
-    let depth = 0
-    for (let i = open; i < src.length; i++) {
-      const ch = src[i]
-      if (ch === '(' || ch === '{' || ch === '[') depth++
-      else if (ch === ')' || ch === '}' || ch === ']') {
-        depth--
-        if (depth === 0) return src.slice(open + 1, i)
-      }
-    }
-    return src.slice(open + 1)
+  const writers = files.filter(f => /from\(\s*'characters'\s*\)[\s\S]{0,240}?\.update\(/.test(
+    readFileSync(join(ROOT, 'src', 'lib', f), 'utf8')))
+  assert.deepEqual(writers, ['characterStore.ts'], 'new writes must go through the versioned store')
+  for (const caller of ['character.ts', 'dm.ts']) {
+    assert.match(readFileSync(join(ROOT, 'src', 'lib', caller), 'utf8'), /writeCharacter\(characterStore,/)
   }
-
-  const writers: string[] = []
-  for (const f of files) {
-    const src = readFileSync(join(ROOT, 'src', 'lib', f), 'utf8')
-    const re = /from\(\s*'characters'\s*\)[\s\S]{0,240}?\.update\(/g
-    for (let m = re.exec(src); m; m = re.exec(src)) {
-      writers.push(f)
-      const arg = argAt(src, m.index + m[0].length - 1)
-
-      // Folded straight into the call, or into a patch built just above it.
-      let folded = arg.includes('withVitals')
-      const ident = folded ? null : arg.trim().match(/^([A-Za-z_$][\w$]*)\s*$/)?.[1]
-      if (ident) {
-        const decl = src.slice(0, m.index).lastIndexOf(`const ${ident} =`)
-        if (decl >= 0) folded = src.slice(decl, m.index).includes('withVitals')
-      }
-
-      assert.ok(folded,
-        `${f}: .update(${arg.trim().slice(0, 60)}) writes a character row without `
-        + `the vitals recompute. Fold \`...withVitals(<the merged row>)\` into the `
-        + `patch — see lib/vitals.ts for why the cache cannot have a second producer.`)
-    }
-  }
-  assert.deepEqual(writers, ['character.ts', 'character.ts', 'dm.ts'],
-    'the set of character writers changed — a new one must fold in the cache too')
+  // The merge+cache behavior itself is exercised in characterWrite.test.ts.
 })

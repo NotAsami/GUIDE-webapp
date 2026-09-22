@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
@@ -25,9 +26,9 @@ import styles from './Spellbook.module.css'
 
 interface RouteContext {
   character: CharacterRow
-  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<SaveResult>
   /** Casting spends a slot AND may arm a modifier — two sections, one write. */
-  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<SaveResult>
   /** Slotted shards are active sources, so their nodes can target a spell. */
   shardTrees?: Record<string, ShardTree>
 }
@@ -169,7 +170,7 @@ export function Spellbook() {
     setCastLevelById(prev => ({ ...prev, [selectedSpell.id]: next }))
   }
 
-  function castSpell() {
+  async function castSpell() {
     if (!selectedSpell) return
     const sp = selectedSpell
     let nextSb: CharacterSpellbook | null = null
@@ -210,11 +211,12 @@ export function Spellbook() {
 
     // ONE round trip. The slot spend and the armed modifier are the same press,
     // and two writes could land apart — leaving a slot spent with nothing armed.
-    void updateSections({
+    const saved = await updateSections({
       ...(nextSb ? { spellbook: nextSb } : {}),
       ...(applied.length ? { resources: resources as CharacterRow['resources'] } : {}),
       ...(nextFeatures ? { sheet: { ...(character.sheet ?? {}), features: nextFeatures } } : {}),
     })
+    if (!saved.ok) return
 
     let noteMsg: string
     const subject = gid('spell', sp)

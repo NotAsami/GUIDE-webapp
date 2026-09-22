@@ -50,7 +50,9 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - All ten mockup screens are wired end-to-end (`Codex.tsx`, `Stats.tsx`, `Equipment.tsx`, `Inventory.tsx`, `Features.tsx`, `Journal.tsx`, `Character.tsx`, `Shard.tsx`, `Lore.tsx`, `Spellbook.tsx`). `Stub.tsx` is unused by any route now — kept only in case a future screen needs a placeholder.
 - The DM side has since grown past the mockups: `OperatorConsole.tsx` (the console and
   every catalog tab), `FeatureEditor.tsx`, `ShardLattice.tsx`, `OperatorShops.tsx`,
-  `OperatorInventory.tsx`, `OperatorHandouts.tsx`. Player-side splits: `EquipmentCarry.tsx`,
+  `OperatorInventory.tsx`, `OperatorHandouts.tsx`, `OperatorNpcWeb.tsx` (the NPC web: layout and
+  merge are pure in `lib/npcWeb.ts`, with its own overlap guard), `OperatorBtn.tsx` (the console
+  button for surfaces in their own files). Player-side splits: `EquipmentCarry.tsx`,
   `InventoryPopup.tsx`, `ShardTree.tsx`, `components/Handout.tsx` (handout dock + parchment
   page, mounted in Layout; handout list reaches screens through the Outlet context).
 - `src/styles/tokens.css` + `global.css` — design tokens (CSS vars) shared by all screens.

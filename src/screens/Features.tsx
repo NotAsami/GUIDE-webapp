@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
@@ -21,10 +22,10 @@ import { Icon } from '../components/Icon'
 
 interface RouteContext {
   character: CharacterRow
-  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<SaveResult>
   /** Needed when a use writes `sheet` AND `resources` — one round trip, not two
    *  that could land apart. Provided by Layout. */
-  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<SaveResult>
   shardTrees?: Record<string, ShardTree>
 }
 

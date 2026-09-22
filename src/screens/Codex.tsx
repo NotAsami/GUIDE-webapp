@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useMemo } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterUpdate, ProgressStory, ShardTree } from '../lib/database.types'
@@ -10,7 +11,7 @@ import styles from './Codex.module.css'
 
 interface RouteContext {
   character: CharacterRow
-  updateSections: (patch: CharacterUpdate) => Promise<void>
+  updateSections: (patch: CharacterUpdate) => Promise<SaveResult>
   /** Passed straight through to StartingKit: a released level-up clamps current
    *  HP against the EFFECTIVE ceiling, which a shard can move. */
   shardTrees: Record<string, ShardTree>

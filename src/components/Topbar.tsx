@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus } from '../lib/dm'
@@ -13,7 +14,7 @@ const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ')
 interface Props {
   character: CharacterRow
   /** Atomic multi-section write — the Rest button resets sheet + resources together. */
-  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<SaveResult>
   shardTrees?: Record<string, ShardTree>
 }
 

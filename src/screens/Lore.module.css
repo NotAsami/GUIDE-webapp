@@ -443,3 +443,10 @@
   text-transform: uppercase;
   color: var(--beige);
 }
+
+/* Section 05's way through to the relations web (RelationsWeb.tsx). */
+.webLink {
+  margin-left: auto; text-decoration: none;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan);
+}
+.webLink:hover { color: var(--cyan-hot); }

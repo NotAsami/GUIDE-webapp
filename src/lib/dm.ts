@@ -17,7 +17,8 @@ import type {
   ShopCatalogRow, Shop, ShardTree,
 } from './database.types'
 import { useAuth } from './auth'
-import { publicVitals, vitalsEqual } from './vitals.ts'
+import { characterStore } from './characterStore'
+import { writeCharacter } from './characterWrite'
 
 /** Is the current user the DM? Checked against the `dm_users` table — the same
  *  membership the `dm_all` RLS policy uses to grant cross-character access
@@ -73,7 +74,8 @@ interface DmPartyState {
    *  caller pre-spreads the JSONB section (e.g. `{ sheet: { ...row.sheet, hp } }`)
    *  so the merge here is a shallow row-level replace and never clobbers sibling
    *  sections. Goes through the `dm_all` RLS policy (write only succeeds for a DM,
-   *  or for a row you own). Optimistic, with reconcile from the returned row.
+   *  or for a row you own). Version-checked, with disjoint-field merge and
+   *  confirmed server state returned to the caller.
    *  Resolves true on success so callers can gate follow-ups (toast, log) on a
    *  write that actually landed. */
   updateCharacter: (id: string, patch: CharacterUpdate) => Promise<boolean>
@@ -152,7 +154,7 @@ export function useDmParty(shardTrees: Record<string, ShardTree> = {}): DmPartyS
             .eq('id', id)
             .maybeSingle<CharacterRow>()
             .then(({ data }) => {
-              if (data) setParty(prev => prev.map(c => (c.id === id ? data : c)))
+              if (data) setParty(prev => prev.map(c => (c.id === id && data.updated_at >= c.updated_at ? data : c)))
             })
         },
       )
@@ -163,41 +165,13 @@ export function useDmParty(shardTrees: Record<string, ShardTree> = {}): DmPartyS
   }, [session])
 
   const updateCharacter = useCallback<DmPartyState['updateCharacter']>(async (id, patch) => {
-    /* THE PARTY HUD'S CACHE — recomputed here for exactly the same reason
-       lib/character.ts does it on the player side. The DM writes characters
-       through THIS path (granting a +1 AC ring, a level-up, a long rest), and
-       every one of those can move a number other players see. Skip it and the
-       cache only heals the next time the PLAYER happens to touch their sheet.
-
-       Same pure compiler, two write paths — not two implementations. */
-    const merged = party.find(c => c.id === id)
-    const withVitals = (() => {
-      if (!merged) return {}
-      const next = { ...merged, ...patch } as CharacterRow
-      const v = publicVitals(next, shardTrees)
-      return vitalsEqual(next.public_vitals, v) ? {} : { public_vitals: v }
-    })()
-
-    // Optimistic: row-level shallow merge (caller already spread the section).
-    let previous: CharacterRow | undefined
-    setParty(prev => prev.map(c => {
-      if (c.id !== id) return c
-      previous = c
-      return { ...c, ...patch, ...withVitals } as CharacterRow
-    }))
-    const { data, error: err } = await supabase
-      .from('characters')
-      .update({ ...patch, ...withVitals })
-      .eq('id', id)
-      .select()
-      .single<CharacterRow>()
-    if (err) {
-      setError(err.message)
-      if (previous) setParty(prev => prev.map(c => (c.id === id ? previous! : c))) // roll back
-      return false
-    }
-    if (data) setParty(prev => prev.map(c => (c.id === id ? data : c)))
-    return true
+    const base = party.find(c => c.id === id)
+    if (!base) { setError('Character is no longer loaded. Refresh and try again.'); return false }
+    const result = await writeCharacter(characterStore, base, patch, shardTrees)
+    if (result.row) setParty(prev => prev.map(c =>
+      c.id === id && result.row!.updated_at >= c.updated_at ? result.row! : c))
+    setError(result.ok ? null : result.message)
+    return result.ok
   }, [party, shardTrees])
 
   const updateSecret = useCallback<DmPartyState['updateSecret']>(async (characterId, patch) => {
@@ -385,7 +359,7 @@ export function useDmCatalog(): DmCatalogState {
 
   const createItem = useCallback<DmCatalogState['createItem']>(async (item) => {
     const { data, error: err } = await supabase.from('item_catalog').insert(item).select().single<CatalogItemRow>()
-    if (err) { setError(err.message); return null }
+    if (err) throw new Error(err.message)
     setItems(prev => [...prev, data].sort(byName))
     return data
   }, [])
@@ -394,7 +368,7 @@ export function useDmCatalog(): DmCatalogState {
     let previous: CatalogItemRow | undefined
     setItems(prev => prev.map(it => { if (it.id !== id) return it; previous = it; return { ...it, ...patch } as CatalogItemRow }))
     const { data, error: err } = await supabase.from('item_catalog').update(patch).eq('id', id).select().single<CatalogItemRow>()
-    if (err) { setError(err.message); if (previous) setItems(prev => prev.map(it => (it.id === id ? previous! : it))) }
+    if (err) { if (previous) setItems(prev => prev.map(it => (it.id === id ? previous! : it))); throw new Error(err.message) }
     else if (data) setItems(prev => prev.map(it => (it.id === id ? data : it)).sort(byName))
   }, [])
 

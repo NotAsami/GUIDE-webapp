@@ -10,7 +10,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
       <RollLogProvider>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} fallbackElement={<p role="status" style={{ padding: 32 }}>Loading Codex…</p>} />
       </RollLogProvider>
     </AuthProvider>
   </StrictMode>,

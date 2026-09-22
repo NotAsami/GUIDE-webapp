@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useEffect, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import type {
@@ -25,7 +26,7 @@ import { Icon } from '../components/Icon'
 
 interface RouteContext {
   character: CharacterRow
-  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<SaveResult>
   shardTrees?: Record<string, ShardTree>
 }
 
@@ -96,22 +97,20 @@ export function Stats() {
   const initTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => { if (initTimer.current) window.clearTimeout(initTimer.current) }, [])
 
-  function rollInitiative() {
+  async function rollInitiative() {
     const entry = buildCheck(graph, {
       kind: 'check', sub: 'initiative', title: 'INITIATIVE', subtitle: 'Dexterity Check',
       terms: [{ label: 'INIT', value: view.initiative ?? 0 }],
     })
+    const rollId = crypto.randomUUID()
+    const ids = armsSpentBy(...(entry.riderGroups ?? []).map(g => g.riders))
+    if (ids.length && !(await updateSection('resources', armsSpent(character, ids, rollId) as CharacterRow['resources'])).ok) return
     if (initTimer.current) window.clearTimeout(initTimer.current)
     setInitFlash({ value: entry.check.total, crit: entry.check.crit, fumble: entry.check.fumble })
     initTimer.current = window.setTimeout(() => setInitFlash(null), FLASH_MS)
-    const logged = addRoll(entry)
-    // And whatever it consumed is spent — see armsSpent. Initiative is a check
-    // like any other, and Superior Inspiration hands out arms right before one.
-    const ids = armsSpentBy(...(logged.riderGroups ?? []).map(g => g.riders))
-    if (ids.length) {
-      void updateSection('resources', armsSpent(character, ids, logged.id) as CharacterRow['resources'])
-    }
+    addRoll(entry, rollId)
   }
+
   async function removeEffect(id: string) {
     await updateSection('resources', {
       ...character.resources, activeEffects: effects.filter(e => e.id !== id),
