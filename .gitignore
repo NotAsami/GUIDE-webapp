@@ -33,6 +33,11 @@ dist-ssr
 # Local MCP server config (project ref, machine-specific) — not shared.
 .mcp.json
 
+# Launch video (brag-output/): a generated 12MB render — the mp4, its frames and
+# a third-party music track. Re-makeable from the project, and not something a
+# git history should carry forever.
+brag-output
+
 # Design canvases (.design/): the .dc.html artboards are the SOURCE and are kept.
 # The page they seed into is a ~2.6MB build artifact — re-seedable from the
 # artboards any time, and the live canvas lives at its artifact URL.
