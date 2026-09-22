@@ -1,0 +1,72 @@
+/* The resolve — a number decrypting onto its result. Timing lives in
+   lib/resolve.ts; this is only what each phase looks like.
+
+   Every keyframe below leaves its END state unstated on purpose: an animation
+   with no 100% frame eases into whatever the element already is, so a nat 20
+   settles into the surface's own crit colour (the toast's total, the panel's
+   gold chip) instead of this file guessing it. */
+
+.val { position: relative; display: inline-block; }
+.real { display: inline-block; }
+.noisy .real { opacity: 0; }
+
+/* Noise is a different REGISTER, not a dimmer number: mono, cyan-dim, never a
+   crit or fumble colour, and cipher glyphs only (see lib/resolve.ts). */
+.noise {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-family: var(--font-mono); font-weight: 400; font-size: 0.85em; letter-spacing: 0;
+  color: var(--cyan-dim); text-shadow: none; white-space: nowrap; pointer-events: none;
+}
+
+/* The lock: the reroll flash this replaced (dieSpin), shortened to 180ms. */
+.lock .real { animation: rsLock 180ms cubic-bezier(.2, .7, .2, 1); }
+@keyframes rsLock {
+  0% { transform: translateY(-2px) scale(1.12); filter: brightness(2.2); }
+}
+
+/* Natural 20: cyan is the motion, the surface's crit colour is the rest. */
+.lock.nat20 .real { animation: rsFlare 520ms cubic-bezier(.2, .7, .2, 1); }
+@keyframes rsFlare {
+  0% {
+    transform: translateY(-2px) scale(1.16); filter: brightness(2.2); color: #eafaff;
+    text-shadow: 0 0 4px #fff, 0 0 18px rgba(77, 214, 255, 0.95), 0 0 34px rgba(0, 166, 214, 0.65);
+  }
+  35% { transform: none; filter: none; color: var(--cyan-hot); text-shadow: 0 0 16px rgba(77, 214, 255, 0.75); }
+}
+/* …and one scan line through it, the app's sweep in miniature. */
+.lock.nat20::after {
+  content: ""; position: absolute; left: -8px; right: -8px; top: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(77, 214, 255, 0.95), transparent);
+  box-shadow: 0 0 10px rgba(0, 166, 214, 0.7);
+  opacity: 0; pointer-events: none;
+  animation: rsScan 300ms cubic-bezier(.32, .06, .18, 1);
+}
+@keyframes rsScan {
+  0% { opacity: 0; transform: translateY(-4px); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(1.1em); }
+}
+
+/* Natural 1: red, and a stutter as it lands. The GLYPH never changes — only its
+   position and a channel split — so no frame shows a different number. */
+.lock.nat1 .real { animation: rsGlitch 280ms steps(1, end); }
+@keyframes rsGlitch {
+  0% {
+    color: #fff; filter: brightness(1.6); transform: translateX(-3px);
+    text-shadow: 3px 0 rgba(0, 166, 214, 0.75), -3px 0 rgba(255, 84, 84, 0.85);
+  }
+  18% {
+    color: var(--danger-hot); filter: none; transform: translateX(2px);
+    text-shadow: -2px 0 rgba(0, 166, 214, 0.6), 2px 0 rgba(255, 84, 84, 0.75);
+  }
+  36% { opacity: 0.35; transform: none; text-shadow: none; }
+  50% { opacity: 1; transform: translateX(-1px); text-shadow: 1px 0 rgba(255, 84, 84, 0.6); }
+  68% { transform: none; }
+}
+
+/* useResolveClock already paints everything settled under reduced motion, but it
+   reads the setting once; this catches it being switched on mid-session. The
+   selectors repeat the ones above because anything less specific loses. */
+@media (prefers-reduced-motion: reduce) {
+  .lock .real, .lock.nat20 .real, .lock.nat1 .real, .lock.nat20::after { animation: none; }
+}

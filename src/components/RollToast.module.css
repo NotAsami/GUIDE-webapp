@@ -45,7 +45,15 @@
   from { opacity: 0; transform: translateY(10px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+/* A natural 20 flashes the frame (the beige fill IS the border) cyan as its d20
+   locks. Both animations from mount, the flash delayed to the d20's lock (FIRST
+   in lib/resolve.ts): adding it at the lock instead would swap the animation
+   list mid-slide. No 100% frame, so it eases back into the beige. */
+.toast.flare {
+  animation: toastIn 220ms cubic-bezier(.2, .7, .2, 1), toastFlare 520ms cubic-bezier(.2, .7, .2, 1) 180ms;
+}
+@keyframes toastFlare { from { background-color: var(--cyan-hot); } }
+@media (prefers-reduced-motion: reduce) { .toast, .toast.flare { animation: none; } }
 
 /* Only the HEAD dismisses. The card used to be one big dismiss target, which
    cannot coexist with a button inside it — every tap on the call-to-action would
@@ -94,9 +102,14 @@
   white-space: nowrap;
 }
 
-/* crit accent */
-.res.crit .total { color: #6fdc8c; text-shadow: 0 0 14px rgba(111, 220, 140, 0.55); }
-.res.crit .lab { color: #6fdc8c; }
+/* Crit is GOLD, the panel's colour for it. It was green here and gold there — one
+   event, two colours — and green now means one thing: hit points coming back.
+   The resolve's nat-20 flare is cyan and settles into this. */
+.res.crit .total { color: var(--gold-rare); text-shadow: 0 0 14px rgba(226, 176, 33, 0.45); }
+.res.crit .lab { color: var(--gold-rare); }
+/* A natural 1 lands red, after its stutter (Resolve.module.css). */
+.res.fumble .total { color: var(--danger-hot); text-shadow: 0 0 12px rgba(185, 58, 58, 0.5); }
+.res.fumble .lab { color: var(--danger-hot); }
 
 /* heal / buff accents (consumables, rests, activations) */
 .res.heal .total { color: #6fdc8c; text-shadow: 0 0 14px rgba(111, 220, 140, 0.55); }
