@@ -2024,6 +2024,24 @@ export type LootOpenUpdate = {
   open_for?: string | null
 }
 
+/** A document or image the DM hands to players (0023). `recipients` is who
+ *  holds it (their Journal files it); `on_screen` is who has it open right now,
+ *  always a subset — the table's check constraint holds that. */
+export type HandoutRow = {
+  id: string
+  title: string
+  body: string
+  image_url: string
+  quest_id: string | null
+  recipients: string[]
+  on_screen: string[]
+  pushed_at: string | null
+  created_at: string
+  updated_at: string
+}
+export type HandoutInsert = Partial<Omit<HandoutRow, 'id' | 'created_at' | 'updated_at'>>
+export type HandoutUpdate = Partial<Omit<HandoutRow, 'id' | 'created_at' | 'updated_at'>>
+
 export type CatalogLootRow = { id: string; data: LootTable; draft: LootTable | null; updated_at: string }
 export type CatalogLootInsert = { id?: string; data?: LootTable; draft?: LootTable | null }
 export type CatalogLootUpdate = { data?: LootTable; draft?: LootTable | null }
@@ -2225,6 +2243,12 @@ export type Database = {
         Row: LootOpenRow
         Insert: LootOpenInsert
         Update: LootOpenUpdate
+        Relationships: []
+      }
+      handouts: {
+        Row: HandoutRow
+        Insert: HandoutInsert
+        Update: HandoutUpdate
         Relationships: []
       }
       characters: {

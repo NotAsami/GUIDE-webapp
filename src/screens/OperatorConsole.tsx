@@ -8,6 +8,8 @@ import {
 import { BootMark } from '../components/BootMark'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
+import { OperatorHandouts } from './OperatorHandouts'
+import { stateOf, useDmHandouts } from '../lib/handouts'
 import { parseCatalogQuery, matchesCatalogQuery, hasPositiveTerm } from '../lib/catalogSearch'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, type Mod } from '../lib/modEditor'
@@ -141,7 +143,7 @@ const hpClassOf = (p: PartyMember): '' | 'warn' | 'crit' => {
 }
 const pctOf = (p: PartyMember) => (p.hpMax ? Math.max(0, Math.round((p.hp / p.hpMax) * 100)) : 0)
 
-type View = 'overview' | 'character' | 'quests' | 'sessions' | 'catalog'
+type View = 'overview' | 'character' | 'quests' | 'sessions' | 'handouts' | 'catalog'
 type CharTab = 'actions' | 'inventory' | 'lore' | 'shards' | 'advance'
 type CatTab = 'items' | 'features' | 'spells' | 'effects' | 'shops' | 'classes' | 'races' | 'backgrounds' | 'loot'
 
@@ -155,6 +157,7 @@ export function OperatorConsole() {
     () => Object.fromEntries(shardLib.trees.map(t => [t.id, t])), [shardLib.trees])
   const { party, secrets, loading: partyLoading, error, updateCharacter, updateSecret } = useDmParty(shardCatalog)
   const campaign = useDmCampaign()
+  const handoutLib = useDmHandouts()
   const catalog = useDmCatalog()
   const featureLib = useDmFeatures()
   const effectLib = useDmEffects()
@@ -353,6 +356,10 @@ export function OperatorConsole() {
     setView('sessions')
     setSelectedId(null)
   }
+  function openHandouts() {
+    setView('handouts')
+    setSelectedId(null)
+  }
   function openCatalog() {
     setView('catalog')
     setSelectedId(null)
@@ -500,6 +507,13 @@ export function OperatorConsole() {
                     <span className={styles.ovS}>Recaps · {campaign.sessions.length} logged</span>
                   </span>
                 </button>
+                <button className={cx(styles.ovEntry, view === 'handouts' && styles.active)} onClick={openHandouts}>
+                  <span className={styles.ovIc}><i className="fa-solid fa-envelope-open-text" /></span>
+                  <span className={styles.ovTx}>
+                    <span className={styles.ovT}>Handouts</span>
+                    <span className={styles.ovS}>{handoutLib.handouts.filter(h => stateOf(h) === 'live').length} live · {handoutLib.handouts.length} authored</span>
+                  </span>
+                </button>
                 <button className={cx(styles.ovEntry, view === 'catalog' && styles.active)} onClick={openCatalog}>
                   <span className={styles.ovIc}><i className="fa-solid fa-box-archive" /></span>
                   <span className={styles.ovTx}>
@@ -638,6 +652,8 @@ export function OperatorConsole() {
                 <QuestsSurface campaign={campaign} />
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
+              ) : view === 'handouts' ? (
+                <OperatorHandouts lib={handoutLib} quests={campaign.quests} members={members.map(m => ({ id: m.id, name: m.name }))} onVoice={sendVoice} log={log} />
               ) : view === 'catalog' ? (
                 <CatalogSurface tab={catTab} catalog={catalog} featureLib={featureLib} effectLib={effectLib} spellLib={spellLib} shopLib={shopLib} classLib={classLib} raceLib={raceLib} lootLib={lootLib} backgroundLib={backgroundLib} members={members}
                   onRollLoot={(id, t) => { void rollLootTable(id, t) }}

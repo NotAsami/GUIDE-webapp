@@ -113,6 +113,22 @@ function ToastCard({ msg, out }: { msg: VoiceMsg; out: boolean }) {
     )
   }
 
+  if (msg.kind === 'handout') {
+    return (
+      <div className={cls}>
+        <div className={styles.tgTag}>Realtime → You</div>
+        <div className={styles.tgHead}>
+          <span className={styles.tgIc}><Icon name={msg.image ? 'fa-image' : 'fa-file-lines'} /></span>
+          <div className={styles.tgTx}>
+            <div className={styles.tgT}>Handout Filed ::</div>
+            <div className={styles.tgN}>{msg.name}</div>
+          </div>
+        </div>
+        <div className={styles.tgFoot}><span className={styles.led} /> Journal :: Handouts</div>
+      </div>
+    )
+  }
+
   if (msg.kind === 'feature') {
     return (
       <div className={cls}>

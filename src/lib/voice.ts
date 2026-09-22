@@ -32,6 +32,9 @@ export type VoiceMsg =
   | { kind: 'feature'; target: string; name: string; icon?: string }
   /** Grant Spell ping — a spell landed in the grimoire. */
   | { kind: 'spell'; target: string; name: string; level: number }
+  /** A handout FILED quietly — nothing opens, so this is the only sign it came.
+   *  (A push needs no ping: the dock opening is the notice.) */
+  | { kind: 'handout'; target: string; name: string; image?: boolean }
 
 /** `target` is a character id, or 'all' for the whole party. */
 export const ALL_PARTY = 'all'
