@@ -6,7 +6,7 @@ import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { useCampaign } from '../lib/campaign'
 import type { HandoutOutlet } from '../lib/handouts'
-import { Prose } from '../lib/markdown'
+import { Prose, isSafeUrl } from '../lib/markdown'
 /* Geometry and thread sources live in lib/ with storyLattice.test.ts beside
    them: a leader that misses its node by four pixels reads as a rendering
    quirk, so the invariants are asserted rather than eyeballed. */
@@ -364,11 +364,15 @@ export function Story() {
                     {record.related.length > 0 && (
                       <>
                         <div className={styles.subHead}>Related</div>
-                        {/* Inert text, not links. A tag's `url` is DM-authored free
-                            text, and rendering it as an href would need the Journal's
-                            scheme check; there is nowhere to navigate to from here. */}
+                        {/* A tag with a url links out, the same as in the Journal;
+                            the url is DM-authored free text, so it goes through the
+                            one scheme check and anything else stays inert text. */}
                         <div className={styles.chips}>
-                          {record.related.map((r, i) => <span key={i} className={styles.chip}>{r.name}</span>)}
+                          {record.related.map((r, i) => r.url && isSafeUrl(r.url) ? (
+                            <a key={i} className={styles.chip} href={r.url} target="_blank" rel="noopener noreferrer">
+                              {r.name}<i className={`fa-solid fa-arrow-up-right-from-square ${styles.chipLink}`} aria-hidden="true" />
+                            </a>
+                          ) : <span key={i} className={styles.chip}>{r.name}</span>)}
                         </div>
                       </>
                     )}

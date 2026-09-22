@@ -7,7 +7,7 @@ import { Deco } from '../components/Deco'
 import { useCampaign } from '../lib/campaign'
 import type { CharacterRow, HandoutRow, QuestRow, QuestStatus, QuestType, RelatedTag, SessionRow } from '../lib/database.types'
 import styles from './Journal.module.css'
-import { Prose } from '../lib/markdown'
+import { Prose, isSafeUrl } from '../lib/markdown'
 
 const TYPE_LABEL: Record<QuestType, string> = { main: 'Main Quest', side: 'Side Quest' }
 const STATUS_LABEL: Record<QuestStatus, string> = { active: 'Active', completed: 'Completed', failed: 'Failed' }
@@ -21,13 +21,11 @@ function toRelatedTag(r: RelatedTag | string): RelatedTag {
   return typeof r === 'string' ? { name: r } : r
 }
 
-/** Only ever render an http(s) URL as a real link. The DM form nudges toward
- *  a URL but writes free text, and this is the actual security boundary — a
- *  `javascript:` or other scheme in a related tag renders as inert text, not
- *  a clickable href, however the value got into the row. */
+/** The DM form nudges toward a URL but writes free text, and this is the
+ *  actual security boundary — a `javascript:` or other scheme in a related tag
+ *  renders as inert text, not a clickable href, however it got into the row. */
 function safeHref(url: string | undefined): string | null {
-  if (!url) return null
-  return /^https?:\/\//i.test(url) ? url : null
+  return url && isSafeUrl(url) ? url : null
 }
 
 type Tab = 'quests' | 'sessions' | 'handouts'
