@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useRollLog } from '../lib/rolls'
 import { lineViews, pendingOf } from '../lib/rollView'
 import { chime } from '../lib/chime'
+import { entryClock, natOf } from '../lib/resolve'
 import styles from './RollToast.module.css'
 import { Icon } from './Icon'
+import { Val, useResolveClock } from './Resolve'
 
 const VISIBLE_MS = 5200
 
@@ -40,6 +42,14 @@ export function RollToast({ onOpen }: { onOpen: () => void }) {
   // guard) so StrictMode's double-invoke can't strand the auto-dismiss timer.
   const show = latest && latest.at >= mountRef.current && latest.id !== dismissed ? latest : null
 
+  /* The SAME totals the panel will show, from the same function. Re-reading
+     `entry.attack`/`.damage` here would be a second arithmetic that agrees until
+     it doesn't. And the same clock, from the roll's own `at`, so if the panel is
+     open too the two lock on the same frames. */
+  const lines = show ? lineViews(show) : []
+  const clock = entryClock(show?.at ?? 0, lines)
+  const now = useResolveClock(clock.done)
+
   useEffect(() => {
     if (!show) return
     /* A SOUND, because the roll may have been asked for from somewhere else.
@@ -54,16 +64,17 @@ export function RollToast({ onOpen }: { onOpen: () => void }) {
 
   if (!show) return null
 
-  /* The SAME totals the panel will show, from the same function. Re-reading
-     `entry.attack`/`.damage` here would be a second arithmetic that agrees until
-     it doesn't. `entry.lines` carries the non-dice rows (healed, armed, effects
-     cleared) and already holds display strings. */
-  const lines = lineViews(show)
+  /* `entry.lines` carries the non-dice rows (healed, armed, effects cleared) and
+     already holds display strings. Nothing was rolled here, so they just paint. */
   const extra = show.lines ?? []
   const pending = pendingOf(show)
 
   return (
-    <div className={styles.toast} key={show.id} role="status">
+    /* A natural 20 flares the frame too. Declared from mount with a delay rather
+       than added at the lock: swapping the animation list mid-entrance risks
+       restarting the slide-in. The d20 always locks first, so the delay is
+       FIRST (see the stylesheet). */
+    <div className={cx(styles.toast, lines.some(l => natOf(l) === 'nat20') && styles.flare)} key={show.id} role="status">
       <div className={styles.head} onClick={() => setDismissed(show.id)} title="Dismiss">
         <span className={styles.icon}><Icon name={show.icon ?? 'fa-dice-d20'} /></span>
         <div className={styles.titles}>
@@ -73,12 +84,19 @@ export function RollToast({ onOpen }: { onOpen: () => void }) {
         <span className={styles.dismiss}><i className="fa-solid fa-xmark" /></span>
       </div>
 
-      {lines.map((l, i) => (
-        <div key={i} className={`${styles.res}${l.crit ? ' ' + styles.crit : ''}`}>
-          <span className={styles.lab}>{l.totalLabel ?? l.label}{l.type ? ` · ${l.type}` : ''}</span>
-          <span className={styles.total}>{l.total}</span>
-        </div>
-      ))}
+      {lines.map((l, i) => {
+        // What the total MEANS waits for the total — a gold 27 before its die
+        // has landed is the outcome arriving ahead of the roll.
+        const lc = clock.lines[i]
+        const nat = natOf(l)
+        const landed = now >= lc.total
+        return (
+          <div key={i} className={cx(styles.res, landed && l.crit && styles.crit, landed && nat === 'nat1' && styles.fumble)}>
+            <span className={styles.lab}>{l.totalLabel ?? l.label}{l.type ? ` · ${l.type}` : ''}</span>
+            <span className={styles.total}><Val v={l.total} lockAt={lc.total} now={now} seed={i + 1} tone={nat} /></span>
+          </div>
+        )
+      })}
       {extra.map((l, i) => (
         <div key={i} className={`${styles.res}${l.tone === 'heal' ? ' ' + styles.heal : l.tone === 'buff' ? ' ' + styles.buff : ''}`}>
           <span className={styles.lab}>{l.label}</span>
