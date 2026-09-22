@@ -5,6 +5,7 @@ import type { CharacterRow, SessionRow } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { useCampaign } from '../lib/campaign'
+import type { HandoutOutlet } from '../lib/handouts'
 import { Prose } from '../lib/markdown'
 /* Geometry and thread sources live in lib/ with storyLattice.test.ts beside
    them: a leader that misses its node by four pixels reads as a rendering
@@ -16,7 +17,7 @@ import {
 } from '../lib/storyLattice'
 import styles from './Story.module.css'
 
-interface RouteContext {
+interface RouteContext extends HandoutOutlet {
   character: CharacterRow
 }
 
@@ -59,7 +60,7 @@ function Row({ t, story, open }: { t: Thread; story: string; open: boolean }) {
  *  you", which a story you chose to read is not. There is no scrim here at all,
  *  so the sigil keeps turning and no backdrop-filter ever runs over it. */
 export function Story() {
-  const { character } = useOutletContext<RouteContext>()
+  const { character, handouts, openHandout } = useOutletContext<RouteContext>()
   const { storyId, threadId } = useParams()
   const { quests, sessions, loading, error } = useCampaign()
 
@@ -320,6 +321,30 @@ export function Story() {
                         ))}
                       </>
                     )}
+
+                    {/* A quest thread's handouts — only the ones this player holds
+                        (RLS), so the section is absent rather than empty for
+                        anyone the DM never handed them to. Opens beside the
+                        story, the same dock a push arrives in. */}
+                    {(() => {
+                      const held = handouts.filter(h => h.quest_id === threadId)
+                      return held.length > 0 && (
+                        <>
+                          <div className={styles.subHead}>Handouts</div>
+                          {held.map(h => (
+                            <button key={h.id} type="button" className={`${styles.logRow} ${styles.logNow} ${styles.hoRow}`} onClick={() => openHandout(h.id)}>
+                              <span className={styles.logNum} aria-hidden="true">
+                                <i className={`fa-solid ${h.image_url ? 'fa-image' : 'fa-file-lines'}`} />
+                              </span>
+                              <div>
+                                <div className={styles.logTitle}>{h.title || 'Untitled'}</div>
+                                <div className={styles.logDate}>{h.image_url ? 'Image' : 'Document'} · open beside</div>
+                              </div>
+                            </button>
+                          ))}
+                        </>
+                      )
+                    })()}
 
                     {record.links.length > 0 && (
                       <>

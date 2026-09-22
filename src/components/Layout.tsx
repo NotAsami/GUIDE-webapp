@@ -10,6 +10,8 @@ import { RollToast } from './RollToast'
 import { SystemToasts } from './SystemToasts'
 import { ShopTakeover } from './ShopTakeover'
 import { LootTakeover } from './LootTakeover'
+import { HandoutDock } from './Handout'
+import { liveFor, pushKey, useHandouts } from '../lib/handouts'
 import { RollContextPanel } from './RollContextPanel'
 import { PartyHud } from './PartyHud'
 import { usePartyPresence } from '../lib/presence'
@@ -80,6 +82,28 @@ export function Layout() {
     if (lootRoll && !wasLootVisibleRef.current) setLootDismissed(false)
     wasLootVisibleRef.current = !!lootRoll
   }, [lootRoll])
+
+  /* HANDOUTS open beside the game. A push opens the dock on its own — that is
+     the DM handing you something — and Recall closes it again; opened from the
+     Journal it is reading, and stays until the player closes it. Closing a push
+     is remembered per push (localStorage), so a reload does not reopen it but
+     the next push does. */
+  const { handouts, seen: seenHandouts, markSeen, dismissed, dismiss } = useHandouts(character?.id)
+  const [dock, setDock] = useState<{ id: string; arrive: boolean } | null>(null)
+  const live = character ? liveFor(handouts, character.id, dismissed) : null
+  const liveKey = live ? pushKey(live) : null
+  useEffect(() => { if (live) setDock({ id: live.id, arrive: true }) }, [liveKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const docked = dock ? handouts.find(h => h.id === dock.id) ?? null : null
+  const onMyScreen = !!(docked && character && docked.on_screen.includes(character.id))
+  useEffect(() => {
+    // Taken back entirely, or a push the DM recalled.
+    if (dock && (!docked || (dock.arrive && !onMyScreen))) setDock(null)
+  }, [dock, docked, onMyScreen])
+  useEffect(() => { if (docked) markSeen(docked.id) }, [docked, markSeen])
+  const closeDock = () => {
+    if (docked && onMyScreen) dismiss(docked)
+    setDock(null)
+  }
 
   /* Plain open/closed state, and ONLY THE PLAYER CHANGES IT.
      No auto-open on a roll and no restore across a reload: this panel is a modal
@@ -411,7 +435,10 @@ export function Layout() {
       <div className={styles.shell}>
         <Topbar character={character} updateSections={updateSections} shardTrees={shardTrees} />
         <main className={styles.main}>
-          <Outlet context={{ character, updateSection, updateSections, shardTrees }} />
+          <Outlet context={{
+            character, updateSection, updateSections, shardTrees,
+            handouts, seenHandouts, markHandoutSeen: markSeen, openHandout: (id: string) => setDock({ id, arrive: false }),
+          }} />
         </main>
         <Bottombar
           shopOpen={!!shop} shopDismissed={shopDismissed} onReopenShop={() => setShopDismissed(false)}
@@ -431,6 +458,13 @@ export function Layout() {
           no route, no nav entry, exists only while a shop is live. */}
       <ShopTakeover character={character} updateSection={updateSection} shop={shop} dismissed={shopDismissed} onDismiss={() => setShopDismissed(true)} />
       <LootTakeover roll={lootRoll} dismissed={lootDismissed} onDismiss={() => setLootDismissed(true)} />
+      {docked && dock && (
+        <HandoutDock
+          key={`${pushKey(docked)}:${dock.arrive}`} h={docked} arrive={dock.arrive}
+          onClose={closeDock}
+          onJournal={() => { setDock(null); if (onMyScreen) dismiss(docked); nav('/journal', { state: { handout: docked.id } }) }}
+        />
+      )}
       {/* The character rides along so the panel's catalog sheet can resolve a
           roll's subject: every catalog table is DM-only, so the player's copy of
           the facts is the snapshot on their own row. */}

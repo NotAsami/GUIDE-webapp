@@ -1,0 +1,201 @@
+/* Handouts — the player's page (HandoutPage) and the dock it arrives in
+   (HandoutDock). Design canvas: "Codex Handouts", Merge page — C's dock, B's
+   parchment page, A's glyph decryption. */
+
+/* ============================================================
+   THE PAGE
+   ============================================================ */
+.frame { position: relative; }
+
+/* Scan brackets, square to the dock while the page sits crooked under them. */
+.corner {
+  position: absolute; z-index: 2; width: 22px; height: 22px; pointer-events: none;
+  border-color: var(--cyan); opacity: 0.8;
+}
+.tl { top: -9px; left: -9px; border-top: 1px solid; border-left: 1px solid; }
+.tr { top: -9px; right: -9px; border-top: 1px solid; border-right: 1px solid; }
+.bl { bottom: -9px; left: -9px; border-bottom: 1px solid; border-left: 1px solid; }
+.br { bottom: -9px; right: -9px; border-bottom: 1px solid; border-right: 1px solid; }
+
+/* The shadow lives on the wrapper: a filter on the clipped element itself
+   would be clipped away with the edge. */
+.tilt { transform: rotate(-0.6deg); filter: drop-shadow(0 22px 34px rgba(0, 0, 0, 0.8)); }
+
+.paper {
+  /* INK TWINS. Prose colours all resolve through var(--token) (lib/palette.ts
+     colorOf), so redefining the tokens on the page re-inks every
+     `[text]{colour}` with no renderer change. A literal-hex colour is the one
+     thing that does not follow — it was an escape hatch on purpose. Values:
+     the canvas's Ink twins board. */
+  --text: #2e271b;
+  --amber: #76560a;
+  --gold-rare: #76560a;
+  --danger: #8e1f1f;
+  --danger-hot: #8e1f1f;
+  --cyan: #0e6a88;
+  --cyan-hot: #0b5d78;
+  --teal: #185a51;
+  --violet: #5b3a8c;
+  --violet-hot: #5a4677;
+  --good: #2c6a3c;
+  --beige: #6b5a2c;
+  --beige-dim: #6b5a2c;
+  --muted: #5e5648;
+  --cipher: #0a7fa6;
+
+  display: flex; flex-direction: column; gap: 15px;
+  padding: 46px 46px 42px;
+  color: var(--text);
+  background: radial-gradient(120% 90% at 40% 26%, #ece2c9, #dccda8 62%, #c8b487);
+  clip-path: polygon(0.6% 0.9%, 17% 0, 39% 0.7%, 62% 0.1%, 84% 0.8%, 99.4% 0, 100% 21%, 99.5% 46%, 100% 72%,
+    99.3% 99.3%, 78% 100%, 53% 99.3%, 29% 100%, 4% 99.4%, 0 77%, 0.5% 50%, 0 25%);
+  /* The decryption lays a per-character clone over the text; with kerning and
+     ligatures on, the clone and the original would break lines differently and
+     the page would jump when the sweep hands back. */
+  font-kerning: none;
+  font-variant-ligatures: none;
+}
+
+.title {
+  margin: 0; text-align: center;
+  font-family: var(--font-display); font-weight: 600; font-size: 24px; line-height: 1.25;
+  letter-spacing: 0.08em; color: #2b2418;
+}
+.title::after {
+  content: ""; display: block; width: 70px; height: 1px; margin: 16px auto 0;
+  background: rgba(43, 36, 24, 0.45);
+}
+
+.prose p {
+  margin: 0; font-family: var(--font-prose); font-size: 17.5px; line-height: 1.6; color: var(--text);
+}
+.prose p + p { margin-top: 14px; }
+.prose strong { font-weight: 600; color: #1a150d; }
+.prose h1, .prose h2, .prose h3 {
+  margin: 18px 0 8px; font-family: var(--font-display); font-weight: 600; color: #2b2418; letter-spacing: 0.04em;
+}
+.prose h1 { font-size: 20px; }
+.prose h2 { font-size: 17px; }
+.prose h3 { font-size: 15px; }
+.prose a { color: var(--cyan); }
+.prose hr {
+  background: linear-gradient(90deg,
+    rgba(43, 36, 24, 0.3) 0, rgba(43, 36, 24, 0.3) calc(50% - 10px),
+    transparent calc(50% - 10px), transparent calc(50% + 10px),
+    rgba(43, 36, 24, 0.3) calc(50% + 10px), rgba(43, 36, 24, 0.3) 100%);
+}
+.caption p { text-align: center; }
+
+/* ---- the sweep (useDecrypt in Handout.tsx) ---- */
+.dc { position: relative; }
+.dcOn > :not(.dcLayer) { visibility: hidden; }
+.dcLayer { position: absolute; inset: 0; pointer-events: none; }
+.dcAhead { color: transparent; }
+.dcGlyph { position: relative; color: transparent; }
+.dcGlyph::after {
+  content: attr(data-g);
+  position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+  color: var(--cipher); text-shadow: 0 0 6px rgba(0, 166, 214, 0.55);
+  font-family: var(--font-mono); font-weight: 400; font-style: normal;
+}
+
+/* ---- the print: an image develops under the beam, top-down ---- */
+.print {
+  position: relative; margin: 0; padding: 6px; overflow: hidden;
+  border: 1px solid rgba(43, 36, 24, 0.55); background: #efe6d0;
+}
+.print img { display: block; width: 100%; max-height: 440px; object-fit: contain; background: #d9caa5; }
+.broken {
+  height: 160px; display: grid; place-items: center; background: #d9caa5;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--muted);
+}
+.veil, .beam { display: none; }
+.develop .veil {
+  display: block; position: absolute; inset: 6px;
+  background: repeating-linear-gradient(to bottom, rgba(12, 10, 8, 0.92) 0 3px, rgba(12, 10, 8, 0.8) 3px 4px);
+  animation: develop 1400ms linear forwards;
+}
+.develop .beam {
+  display: block; position: absolute; left: 0; right: 0; height: 3px;
+  background: #4dd6ff; box-shadow: 0 0 12px #00a6d6, 0 0 26px rgba(0, 166, 214, 0.7);
+  animation: beam 1400ms linear forwards;
+}
+@keyframes develop { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(100% 0 0 0); } }
+@keyframes beam {
+  from { top: 6px; opacity: 1; }
+  92% { opacity: 1; }
+  to { top: calc(100% - 6px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .develop .veil, .develop .beam { display: none; }
+}
+.enlarge {
+  position: absolute; top: 12px; right: 12px; width: 44px; height: 44px; cursor: pointer;
+  border: 1px solid rgba(43, 36, 24, 0.5); background: rgba(236, 226, 201, 0.85); color: #2b2418;
+}
+.enlarge:hover { background: #ece2c9; }
+
+/* ============================================================
+   THE DOCK — beside the game, never over it: no scrim.
+   ============================================================ */
+.dock {
+  /* Under RollToast (120) on purpose: a roll made while reading must still show,
+     over the dock's footer for a few seconds. Over the app shell (50). */
+  position: fixed; z-index: 110; right: 0;
+  top: var(--bar-top-h); bottom: var(--bar-bottom-h); width: min(612px, 100vw);
+  display: flex; flex-direction: column;
+  background: linear-gradient(90deg, #101112, #0b0c0d);
+  border-left: 1px solid var(--beige);
+  box-shadow: -34px 0 70px rgba(0, 0, 0, 0.65);
+  animation: dockIn 380ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.dock::before {
+  content: ""; position: absolute; left: 3px; top: 0; bottom: 0; width: 1px; pointer-events: none;
+  background: rgba(0, 166, 214, 0.45); box-shadow: 0 0 10px rgba(0, 166, 214, 0.45);
+}
+@keyframes dockIn { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .dock { animation: none; } }
+
+.head {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 16px;
+  padding: 18px 20px 14px 32px; border-bottom: 1px solid rgba(212, 191, 125, 0.3);
+}
+.headTx { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.eyebrow {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.34em; color: var(--cyan); text-transform: uppercase;
+}
+.tick { width: 5px; height: 5px; background: var(--cyan); box-shadow: 0 0 8px rgba(0, 166, 214, 0.85); }
+.dim { color: var(--beige-dim); }
+.meta {
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sep { color: var(--beige-dim); margin: 0 8px; }
+.acc { color: var(--cyan-hot); }
+.x {
+  margin-left: auto; flex: 0 0 auto; width: 44px; height: 44px; cursor: pointer;
+  border: none; background: transparent; color: var(--muted); font-size: 14px;
+}
+.x:hover { color: var(--text); }
+
+.body { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 26px 30px 30px 34px; scrollbar-width: thin; }
+.foot { flex: 0 0 auto; display: flex; gap: 10px; padding: 14px 30px 18px 34px; border-top: 1px solid rgba(212, 191, 125, 0.28); }
+
+.ghost, .primary {
+  flex: 1 1 0; height: 44px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.26em; text-transform: uppercase;
+}
+.ghost { border: 1px solid rgba(212, 191, 125, 0.45); background: transparent; color: var(--beige); }
+.ghost:hover { border-color: var(--beige); }
+.primary { border: 1px solid var(--cyan); background: rgba(0, 166, 214, 0.14); color: var(--cyan-hot); }
+.primary:hover { background: rgba(0, 166, 214, 0.24); }
+
+/* ---- enlarged image: the one view that covers the app, and only on request ---- */
+.lightbox {
+  position: fixed; inset: 0; z-index: 450; padding: 32px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: rgba(4, 6, 8, 0.94);
+}
+.lightbox img { max-width: 100%; max-height: calc(100% - 80px); object-fit: contain; }
+.lightbox .primary { flex: 0 0 auto; padding: 0 30px; }
