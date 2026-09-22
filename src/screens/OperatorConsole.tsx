@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth'
 import {
   useDmStatus, useDmParty, useDmCampaign, useDmCatalog, useDmConfiscated, useDmFeatures, useDmEffects, useDmSpells, useDmShops, useDmClasses, useDmRaces, classContent, raceContent, featureContent, type DmCampaignState, type DmCatalogState, type DmFeaturesState, type DmEffectsState, type DmSpellsState, type DmShopsState, type DmClassesState, type DmRacesState, useDmLoot, useDmLootOpen, lootContent, useDmBackgrounds, backgroundContent, type DmBackgroundsState,
 } from '../lib/dm'
+import { BootMark } from '../components/BootMark'
 import { useDmShards, type DmShardsState } from '../lib/dmShards'
 import { OperatorShops } from './OperatorShops'
 import { parseCatalogQuery, matchesCatalogQuery, hasPositiveTerm } from '../lib/catalogSearch'
@@ -628,7 +629,11 @@ export function OperatorConsole() {
               {error ? (
                 <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
               ) : partyLoading ? (
-                <div className={styles.soonPanel}><i className="fa-solid fa-spinner" /><span>Loading party…</span></div>
+                <div className={styles.soonPanel} aria-busy="true">
+                  {[0, 1, 2].map(i => (
+                    <span key={i} className="sk amber" style={{ display: 'block', width: 'min(420px, 70%)', height: 22 }} />
+                  ))}
+                </div>
               ) : view === 'quests' ? (
                 <QuestsSurface campaign={campaign} />
               ) : view === 'sessions' ? (
@@ -8612,9 +8617,10 @@ function Boot({ children }: { children: React.ReactNode }) {
       <div className="vignette" />
       <div style={{
         position: 'fixed', inset: 0, display: 'grid', placeItems: 'center',
-        fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.22em',
-        color: 'var(--amber)', textTransform: 'uppercase', zIndex: 100,
-      }}>{children}</div>
+        zIndex: 100, padding: 24,
+      }}>
+        <BootMark tone="amber">{children}</BootMark>
+      </div>
     </>
   )
 }

@@ -6,9 +6,17 @@
     <link rel="icon" type="image/svg+xml" href="/guide-codex-favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- NON-BLOCKING, both of them. A plain <link rel="stylesheet"> in the head
+         blocks the FIRST PAINT until the far end answers, so a cold cache meant
+         a white page for as long as cdnjs took — the boot shell below would have
+         been invisible behind it. Loaded as `print` (which never blocks) and
+         promoted to `all` on load; <noscript> keeps them for a scriptless
+         browser. The shell is styled inline and needs neither. -->
     <link
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
     <link
       rel="stylesheet"
@@ -16,11 +24,82 @@
       integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
       crossorigin="anonymous"
       referrerpolicy="no-referrer"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet"
+      />
+      <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+      />
+    </noscript>
     <title>G.U.I.D.E. Codex</title>
+    <style>
+      /* THE FIRST FRAME. Every other style in this app ships inside the JS
+         bundle, so until that parses the page has no background and no mark —
+         which is the white screen. This is the only CSS that paints before it:
+         inline, no fonts required, no script. React's first commit clears
+         #root and takes the shell with it, so nothing here needs tearing down.
+         Keep it small and keep it honest — it is a frame, not a progress bar. */
+      html, body { margin: 0; height: 100%; background: #1d1d1d; }
+      #root { height: 100%; }
+      .boot {
+        position: fixed; inset: 0;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: radial-gradient(120% 90% at 50% 45%, #232220 0%, #1a1a1a 58%, #0c0c0c 100%);
+      }
+      /* Two layers, not a border: a hexagon's obliques are not 45°, so a plain
+         border leaves them bare (docs/Chamfered_clip-path_corners_fix.md). */
+      .boot-mark {
+        width: 84px; height: 96px; padding: 2px; box-sizing: border-box;
+        background: rgba(212, 191, 125, 0.55);
+        clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+      }
+      .boot-mark span {
+        display: flex; width: 100%; height: 100%; align-items: center; justify-content: center;
+        background: #121110;
+        clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+        font: 700 30px/1 "Cinzel", Georgia, serif; color: #d4bf7d;
+      }
+      .boot-name {
+        margin-top: 44px;
+        font: 600 26px/1 "Cinzel", Georgia, serif;
+        letter-spacing: 0.44em; text-indent: 0.44em; color: #d4bf7d;
+      }
+      .boot-rail {
+        margin-top: 34px; width: 260px; height: 2px;
+        background: rgba(138, 122, 74, 0.25); overflow: hidden;
+      }
+      .boot-rail i {
+        display: block; width: 76px; height: 2px;
+        background: linear-gradient(to right, rgba(0, 166, 214, 0), #4dd6ff, rgba(0, 166, 214, 0));
+        animation: boot-run 1.8s ease-in-out infinite;
+      }
+      .boot-line {
+        margin-top: 20px;
+        font: 10px/1 "JetBrains Mono", ui-monospace, monospace;
+        letter-spacing: 0.36em; text-transform: uppercase; color: #0d6e8c;
+      }
+      @keyframes boot-run { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+      @media (prefers-reduced-motion: reduce) { .boot-rail i { animation: none; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot">
+        <div class="boot-mark"><span>G</span></div>
+        <div class="boot-name">G.U.I.D.E.</div>
+        <div class="boot-rail"><i></i></div>
+        <div class="boot-line">Establishing link</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

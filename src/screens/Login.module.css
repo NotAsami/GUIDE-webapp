@@ -41,3 +41,347 @@
   transition: background-color 9999s ease-in-out 0s;
   box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.85) inset;
 }
+
+/* ---- The gate (canvas board "Login — the gate") ----
+   The card is the codex's own language: chamfered frame, Cinzel wordmark over
+   a mono sub-line, cyan for anything the player acts on. Chamfered+bordered
+   rules use the CLAUDE.md corner recipe (`--cut`/`--bc` + the two diagonals);
+   a plain border leaves the 45° corners bare. */
+
+.wrap {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.sigil {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--beige);
+  opacity: 0.16;
+}
+
+/* Deco corner brackets + the two telemetry lines, same furniture the Codex
+   screen wears so the gate reads as part of the same machine. */
+.corner {
+  position: fixed;
+  width: 44px;
+  height: 44px;
+  z-index: 20;
+  border: 0 solid var(--beige-dim);
+}
+.tl { top: 26px; left: 26px; border-left-width: 1px; border-top-width: 1px; }
+.tr { top: 26px; right: 26px; border-right-width: 1px; border-top-width: 1px; }
+.bl { bottom: 26px; left: 26px; border-left-width: 1px; border-bottom-width: 1px; }
+.br { bottom: 26px; right: 26px; border-right-width: 1px; border-bottom-width: 1px; }
+
+.telemetry {
+  position: fixed;
+  left: 90px;
+  right: 90px;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--beige-dim);
+}
+.telTop { top: 40px; }
+.telBottom { bottom: 40px; }
+.telemetry b { color: var(--beige); font-weight: 400; }
+.telemetry i { color: var(--cyan); font-style: normal; }
+
+.card {
+  --cut: 20px;
+  --bc: var(--beige-dim);
+  width: 460px;
+  padding: 40px 40px 30px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--bc);
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut));
+  background-color: rgba(10, 10, 10, 0.9);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.75);
+}
+/* The link went out: the frame answers in cyan. */
+.card.dispatched {
+  --bc: var(--cyan-dim);
+  background-color: rgba(6, 14, 18, 0.92);
+}
+
+.kicker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+}
+.kicker span {
+  width: 6px;
+  height: 6px;
+  background: var(--cyan);
+  transform: rotate(45deg);
+}
+
+.brand {
+  margin: 16px 0 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: var(--beige);
+}
+.brandSub {
+  margin-top: 4px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.52em;
+  text-indent: 0.52em;
+  color: var(--text);
+}
+
+.divider {
+  margin: 26px 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.divider i {
+  flex-grow: 1;
+  height: 1px;
+  background-image: linear-gradient(to right, rgba(138, 122, 74, 0), var(--beige-dim));
+}
+.divider i + i { background-image: linear-gradient(to left, rgba(138, 122, 74, 0), var(--beige-dim)); }
+.divider span {
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--beige-dim);
+  transform: rotate(45deg);
+}
+
+.label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 8px;
+}
+.label.bad { color: var(--danger-hot); }
+
+.input.bad {
+  border-color: var(--danger);
+  background: rgba(28, 8, 8, 0.55);
+}
+
+.help {
+  margin: 10px 0 0;
+  font-family: var(--font-prose);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.submit {
+  --cut: 12px;
+  --bc: var(--cyan-dim);
+  margin-top: 22px;
+  width: 100%;
+  padding: 15px 0;
+  border: 1px solid var(--bc);
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut));
+  background-color: rgba(0, 166, 214, 0.1);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+  color: var(--cyan-hot);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-transform: uppercase;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.submit:hover:not(:disabled) { background-color: rgba(0, 166, 214, 0.2); }
+.submit:disabled { color: var(--cyan-dim); cursor: not-allowed; }
+
+/* Busy: the button owns the wait, the address stays readable. */
+.dots {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 12px;
+  vertical-align: middle;
+}
+.dots i {
+  width: 4px;
+  height: 4px;
+  background: var(--cyan-hot);
+  animation: dot-fade 1.2s ease-in-out infinite;
+}
+.dots i:nth-child(2) { animation-delay: 0.2s; }
+.dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dot-fade {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+.foot {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(138, 122, 74, 0.35);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--beige-dim);
+}
+
+/* ---- Dispatched ---- */
+.sent { display: flex; flex-direction: column; align-items: center; }
+/* A hexagon's obliques are not 45°, so the corner recipe cannot draw them:
+   two layers, the fill IS the border (docs/Chamfered_clip-path_corners_fix.md). */
+.hex {
+  margin-top: 10px;
+  width: 64px;
+  height: 72px;
+  padding: 2px;
+  background: var(--cyan);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.hex > span {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  background: #0a1418;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  font-size: 26px;
+  color: var(--cyan-hot);
+}
+.sentTitle {
+  margin-top: 26px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-transform: uppercase;
+  color: var(--cyan-hot);
+}
+.chip {
+  margin-top: 16px;
+  padding: 9px 14px;
+  border: 1px solid rgba(13, 110, 140, 0.55);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--beige);
+}
+.sentBody {
+  margin: 20px 0 0;
+  text-align: center;
+  font-family: var(--font-prose);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.sentBody b { color: var(--text); font-weight: 600; }
+.sentFoot {
+  width: 100%;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(13, 110, 140, 0.4);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--beige-dim);
+}
+.linkBtn {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cyan-hot);
+  border-bottom: 1px solid rgba(77, 214, 255, 0.5);
+  padding: 12px 0;
+}
+.linkBtn:disabled { color: var(--beige-dim); border-bottom-color: transparent; cursor: default; }
+
+/* ---- Refused ---- */
+.err {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(185, 58, 58, 0.5);
+  background: rgba(40, 10, 10, 0.4);
+}
+.errTitle {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--danger-hot);
+}
+.errBody {
+  margin: 8px 0 0;
+  font-family: var(--font-prose);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.errRaw {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+}

@@ -932,7 +932,9 @@ function PartyCastButton({ spell }: { spell: Spell }) {
             </div>
             <div className={styles.pcBody}>
               {loading ? (
-                <div className={styles.pcEmpty}>Loading party…</div>
+                <div className={styles.pcEmpty} aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[0, 1, 2].map(i => <span key={i} className="sk" style={{ display: 'block', height: 38 }} />)}
+                </div>
               ) : roster.length === 0 ? (
                 <div className={styles.pcEmpty}>No other party members bound</div>
               ) : roster.map(m => (

@@ -1,0 +1,213 @@
+/* THE BOUNDARY. A route, story or thread that resolves to nothing lands here
+   instead of being quietly redirected somewhere it did not ask for. In-world it
+   is an edge: the world's grid, scanlines and vignette stop dead on one line,
+   and past it the plane is flat, evenly lit and a shade paler — nothing is
+   drawn there at all, not even darkness. The paleness is the only hint and it
+   is deliberate; the players are not meant to know what it is. Don't "fix" it
+   into matching the world. */
+
+/* One number for where the world ends, visible to the plane, the grid, the
+   notice AND the global overlays below — they all have to agree to the pixel. */
+:global(body):has(.world) { --edge: 64%; }
+
+/* Past the edge, not even the screen's own texture. The scanlines, vignette and
+   sweep are fixed layers above <main>, so they are cut out of the region beyond
+   the line rather than painted over (anything above them would also bury the
+   party HUD's right flank, which is z 60). The bars keep their texture. */
+:global(body):has(.world) :global(.scanlines),
+:global(body):has(.world) :global(.vignette),
+:global(body):has(.world) :global(.sweep) {
+  clip-path: polygon(
+    0 0, 100% 0,
+    100% var(--bar-top-h), var(--edge) var(--bar-top-h),
+    var(--edge) calc(100% - var(--bar-bottom-h)), 100% calc(100% - var(--bar-bottom-h)),
+    100% 100%, 0 100%);
+}
+
+.world {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--edge);
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(212, 191, 125, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(212, 191, 125, 0.07) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: -1px -1px;
+}
+
+.beyond {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--edge);
+  right: 0;
+  background-color: #262522;
+}
+/* The line itself: hard, no glow. */
+.beyond::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  width: 1px;
+  background-color: #d9d3c1;
+  opacity: 0.7;
+}
+
+.notice {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--edge);
+  padding: 24px 0 24px 10%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+}
+
+.title {
+  margin: 18px 0 0;
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.sub {
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.coords {
+  margin-top: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lab {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--beige-dim);
+}
+.coordRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: var(--beige);
+}
+/* The coordinates run out to the edge and stop on it. The leader's right end
+   IS the boundary — .notice ends exactly where .beyond begins. */
+.leader {
+  flex: 1 0 24px;
+  height: 0;
+  border-top: 1px dashed rgba(138, 122, 74, 0.6);
+  position: relative;
+}
+.leader::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: -8px;
+  width: 1px;
+  height: 14px;
+  background-color: #d9d3c1;
+  opacity: 0.7;
+}
+
+.note {
+  margin: 40px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.actions {
+  margin-top: 26px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 28px;
+}
+
+/* The way out. The fiction must never trap the player, so this is the loudest
+   thing on the screen. */
+.home {
+  --cut: 12px;
+  --bc: var(--cyan-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 28px;
+  text-decoration: none;
+  border: 1px solid var(--bc);
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut));
+  background-color: rgba(0, 166, 214, 0.1);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+  color: var(--cyan-hot);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  transition: background-color 140ms ease;
+}
+.home:hover { background-color: rgba(0, 166, 214, 0.2); }
+
+.up {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 0;
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--beige-dim);
+  transition: color 160ms ease;
+}
+.up:hover { color: var(--cyan-hot); }
+
+.glyph { font-size: 9px; }
