@@ -265,7 +265,7 @@ test('NO PLAYER SCREEN CALLS THE BARE renderInline — that is how site 42 goes 
      its three call sites clip the text first, which could cut a computed span
      in half). Everything a PLAYER reads must go through <Inline>, or it is one
      more surface that silently shows source. */
-  const AUTHORING_ONLY = ['src/screens/OperatorConsole.tsx', 'src/screens/FeatureEditor.tsx']
+  const AUTHORING_ONLY = ['src/screens/OperatorConsole.tsx', 'src/screens/OperatorItemForm.tsx', 'src/screens/FeatureEditor.tsx']
   const bad: string[] = []
   const walk = (dir: string) => {
     for (const e of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
@@ -413,11 +413,11 @@ test('EVERY PROSE FIELD SITS UNDER A MOUNTED TOOLBAR', () => {
 
   // Routes that mount the toolbar, and everything they pull in.
   const routes = read('src/routes.tsx')
-  const roots = routes.split('\n')
-    .filter(l => l.includes('<ProseToolbar />'))
-    .flatMap(l => [...l.matchAll(/<([A-Z]\w+) \/>/g)].map(m => m[1]))
-    .filter(n => n !== 'ProseToolbar' && byName.has(n))
-  assert.ok(roots.length >= 3, `only ${roots.length} routes mount the toolbar`)
+  const dmRoutes = routes.slice(routes.indexOf("path: '/dm'"), routes.indexOf("path: '/'"))
+  assert.ok(dmRoutes.includes("import('./components/AuthoringLayout')"), 'DM routes must mount the authoring layout')
+  assert.ok(read('src/components/AuthoringLayout.tsx').includes('<ProseToolbar />'), 'authoring layout must mount the toolbar')
+  const roots = [...dmRoutes.matchAll(/import\('\.\/screens\/(\w+)'\)/g)].map(m => m[1])
+  assert.equal(roots.length, 3, 'all three DM routes must live under the shared toolbar')
 
   const covered = new Set<string>()
   const visit = (name: string) => {

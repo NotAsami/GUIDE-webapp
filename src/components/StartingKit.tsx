@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useEffect, useState } from 'react'
 import type {
   CharacterRow, CharacterUpdate, EquippedGear, InventoryItem, Json, PendingPathOption, ShardTree,
@@ -43,7 +44,7 @@ export function StartingKit({ character, shardTrees, onUpdate }: {
   /** Needed only by the level-up: `levelUpPatch` clamps current HP against the
    *  EFFECTIVE ceiling, and a shard can move that. */
   shardTrees: Record<string, ShardTree>
-  onUpdate: (patch: CharacterUpdate) => Promise<void>
+  onUpdate: (patch: CharacterUpdate) => Promise<SaveResult>
 }) {
   const sheet = character.sheet ?? {}
   const kit = sheet.pendingKit
@@ -174,9 +175,9 @@ export function StartingKit({ character, shardTrees, onUpdate }: {
   async function takeLevel(choices: LevelUpChoices): Promise<boolean> {
     if (!release || busy) return false
     setBusy(true)
-    await onUpdate(takeLevelPatch(character, release, choices, shardTrees))
+    const result = await onUpdate(takeLevelPatch(character, release, choices, shardTrees))
     setBusy(false)
-    return true
+    return result.ok
   }
 
   const className = release?.plan.className ?? kit?.className ?? skills?.className ?? path?.className

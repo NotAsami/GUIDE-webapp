@@ -7,12 +7,16 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import type { CatalogItemData, ShopCatalogRow } from './database.types'
+import type { CatalogItemData, CharacterRow, ShopCatalogRow, ShopStockLine, InventoryItem, Json } from './database.types'
 import type { Coins } from './coins'
+import { routeItem, PERSON } from './placement'
+import { getGear, getInventory } from './equip'
+import { purchaseKey, purchaseRequest } from './purchaseRequest'
 
 export interface OpenShopState {
   shop: ShopCatalogRow | null
   loading: boolean
+  refetch: () => Promise<void>
 }
 
 /** The shop currently open for this character, or null. `characterId` isn't
@@ -41,17 +45,33 @@ export function useOpenShop(characterId: string | undefined): OpenShopState {
     return () => { void supabase.removeChannel(ch) }
   }, [characterId, fetchOpen])
 
-  return { shop, loading }
+  return { shop, loading, refetch: fetchOpen }
 }
 
 export type ShopBuyResult =
   | { ok: true; item: CatalogItemData; item_id: string; coins: Coins }
-  | { ok: false; reason: 'gone' | 'no_character' | 'closed' | 'blocked' | 'sold_out' | 'insufficient'; short_cp?: number }
+  | { ok: false; reason: 'gone' | 'no_character' | 'closed' | 'blocked' | 'sold_out' | 'insufficient' | 'conflict' | 'invalid_request' | 'network' | 'storage'; short_cp?: number }
 
-/** Calls the `shop_buy` RPC (migration 0009) — the only path that can spend
- *  coin or decrement stock; there is no player UPDATE policy on the table. */
-export async function buyItem(shopId: string, itemId: string): Promise<ShopBuyResult> {
-  const { data, error } = await supabase.rpc('shop_buy', { p_shop_id: shopId, p_item_id: itemId })
-  if (error) return { ok: false, reason: 'gone' }
-  return data as ShopBuyResult
+/** Payment, stock and delivery commit together. The browser supplies only a
+ * routing decision; the server checks both row versions and owns item facts. */
+export async function buyItem(character: CharacterRow, shop: ShopCatalogRow, line: ShopStockLine): Promise<ShopBuyResult> {
+  const destination = routeItem({ ...line.item, containerId: PERSON } as InventoryItem, getGear(character), getInventory(character))
+  return purchaseRequest({
+    getItem: key => localStorage.getItem(key),
+    setItem: (key, value) => localStorage.setItem(key, value),
+    removeItem: key => localStorage.removeItem(key),
+  }, purchaseKey(character.id, shop.id, line.item_id), () => crypto.randomUUID(), async requestId => {
+    const { data, error } = await supabase.rpc('shop_purchase', {
+      p_shop_id: shop.id, p_item_id: line.item_id, p_request_id: requestId,
+      p_character_id: character.id, p_character_updated_at: character.updated_at,
+      p_shop_updated_at: shop.updated_at, p_destination: destination as unknown as Json,
+    })
+    if (error) throw new Error(error.message)
+    if (!data || typeof data !== 'object' || !('ok' in data)) throw new Error('Missing purchase receipt')
+    return data as ShopBuyResult
+  })
+}
+
+export function hasPendingPurchase(character: string, shop: string, item: string): boolean {
+  try { return !!localStorage.getItem(purchaseKey(character, shop, item)) } catch { return false }
 }

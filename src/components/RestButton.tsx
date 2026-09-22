@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CharacterRow, CharacterSection, ShardTree } from '../lib/database.types'
@@ -12,7 +13,7 @@ import styles from './RestButton.module.css'
 interface Props {
   character: CharacterRow
   /** Atomic multi-section write (sheet + resources) from the shared hook. */
-  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<SaveResult>
   shardTrees?: Record<string, ShardTree>
 }
 
@@ -63,8 +64,9 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
   async function confirmLong() {
     setBusy(true)
     setOpen(false) // close before the toast — a portaled modal would bury it (z120)
-    await updateSections(longPatch)
+    const result = await updateSections(longPatch)
     setBusy(false)
+    if (!result.ok) { setOpen(true); return }
     addRoll({ kind: 'custom', title: 'Long Rest', subtitle: 'Daily resources restored', icon: 'fa-moon', lines: longLines })
   }
 
@@ -79,8 +81,9 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
       shardTrees,
     )
     setOpen(false)
-    await updateSections(patch)
+    const result = await updateSections(patch)
     setBusy(false)
+    if (!result.ok) { setOpen(true); return }
     addRoll({ kind: 'custom', title: 'Short Rest', subtitle: 'One hour · hit dice spent', icon: 'fa-campground', lines })
   }
 

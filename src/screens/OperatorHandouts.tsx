@@ -12,24 +12,10 @@ import { RECALL, filePatch, pushPatch, stateOf, takeBackPatch, type DmHandoutsSt
 import type { VoiceMsg } from '../lib/voice'
 import { proseField } from '../lib/textareaHooks'
 import { ProsePreview } from '../components/ProsePreview'
-import { Icon } from '../components/Icon'
+import { Btn } from './OperatorBtn'
 import styles from './OperatorConsole.module.css'
 
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')
-
-/** Same button chrome as OperatorConsole's `Btn` — local for the same reason
- *  OperatorShops keeps its own: no screen<->screen circular import. */
-function Btn({ tone, lg, icon, label, onClick, disabled }: {
-  tone: 'amber' | 'cyan' | 'danger' | 'ghost'; lg?: boolean; icon: string; label: string
-  onClick?: () => void; disabled?: boolean
-}) {
-  return (
-    <button className={cx(styles.btn, styles[tone], lg && styles.lg)} onClick={onClick} disabled={disabled}>
-      <span className={styles.bf} />
-      <span className={styles.bi}><Icon name={icon} /> {label}</span>
-    </button>
-  )
-}
 
 const GROUPS: { key: HandoutState; label: string; cls?: string }[] = [
   { key: 'live', label: 'Live', cls: styles.active },

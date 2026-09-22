@@ -2042,6 +2042,40 @@ export type HandoutRow = {
 export type HandoutInsert = Partial<Omit<HandoutRow, 'id' | 'created_at' | 'updated_at'>>
 export type HandoutUpdate = Partial<Omit<HandoutRow, 'id' | 'created_at' | 'updated_at'>>
 
+/** An NPC record (0024). Everything else in the app still names NPCs by free
+ *  text; the NPC web matches those names to these rows. A player can read a
+ *  row only once `known_to` holds one of their characters — which is why the
+ *  DM's notes are NOT here but in NpcSecret. */
+export type NpcRow = {
+  id: string
+  name: string
+  role: string
+  location: string
+  portrait: string
+  blurb: string
+  known_to: string[]
+  created_at: string
+  updated_at: string
+}
+/** DM-only notes on an NPC (0024), split off `npcs` because players can read that. */
+export type NpcSecret = { npc_id: string; gm_notes: string; updated_at: string }
+export type NpcInsert = Partial<Omit<NpcRow, 'id' | 'created_at' | 'updated_at'>> & { name: string }
+export type NpcUpdate = Partial<Omit<NpcRow, 'id' | 'created_at' | 'updated_at'>>
+export type NpcAttitude = 'friendly' | 'neutral' | 'wary' | 'hostile'
+/** An undirected NPC ↔ NPC tie (0024). `known_to`: who has learned it. */
+export type NpcLinkRow = {
+  id: string
+  a: string
+  b: string
+  kind: string
+  attitude: NpcAttitude | null
+  label: string
+  known_to: string[]
+  created_at: string
+}
+export type NpcLinkInsert = Pick<NpcLinkRow, 'a' | 'b'> & Partial<Pick<NpcLinkRow, 'kind' | 'attitude' | 'label' | 'known_to'>>
+export type NpcLinkUpdate = Partial<Pick<NpcLinkRow, 'kind' | 'attitude' | 'label' | 'known_to'>>
+
 export type CatalogLootRow = { id: string; data: LootTable; draft: LootTable | null; updated_at: string }
 export type CatalogLootInsert = { id?: string; data?: LootTable; draft?: LootTable | null }
 export type CatalogLootUpdate = { data?: LootTable; draft?: LootTable | null }
@@ -2251,6 +2285,24 @@ export type Database = {
         Update: HandoutUpdate
         Relationships: []
       }
+      npcs: {
+        Row: NpcRow
+        Insert: NpcInsert
+        Update: NpcUpdate
+        Relationships: []
+      }
+      npc_secrets: {
+        Row: NpcSecret
+        Insert: { npc_id: string; gm_notes?: string }
+        Update: { gm_notes?: string }
+        Relationships: []
+      }
+      npc_links: {
+        Row: NpcLinkRow
+        Insert: NpcLinkInsert
+        Update: NpcLinkUpdate
+        Relationships: []
+      }
       characters: {
         Row: CharacterRow
         Insert: CharacterInsert
@@ -2316,6 +2368,11 @@ export type Database = {
     Functions: {
       /** Migration 0009's server-side purchase check — see the migration's
        *  header comment for why this can't be a plain client UPDATE. */
+      shop_purchase: { Args: {
+        p_shop_id: string; p_item_id: string; p_request_id: string
+        p_character_id: string; p_character_updated_at: string
+        p_shop_updated_at: string; p_destination: Json
+      }; Returns: Json }
       shop_buy: { Args: { p_shop_id: string; p_item_id: string }; Returns: Json }
       /** Migration 0009's atomic "close every shop, open this one" — see its
        *  header comment for why two separate client UPDATEs can't guarantee

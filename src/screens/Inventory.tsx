@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import type {
@@ -26,8 +27,8 @@ import { Icon } from '../components/Icon'
 
 interface RouteContext {
   character: CharacterRow
-  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
-  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<SaveResult>
+  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<SaveResult>
   shardTrees?: Record<string, ShardTree>
 }
 
@@ -303,8 +304,9 @@ export function Inventory() {
     patch.inventory = (nextQty > 0
       ? inventory.map(i => (i.id === item.id ? { ...i, qty: nextQty } : i))
       : inventory.filter(i => i.id !== item.id)) as unknown as Json[]
-    await updateSections(patch)
+    const result = await updateSections(patch)
     setBusy(false)
+    if (!result.ok) { setPopupId(item.id ?? null); return }
     addRoll({ kind: 'custom', title: item.name, subtitle: outcome.subtitle, icon: item.icon ?? 'fa-flask', ...rollExtras(item, outcome) })
   }
 

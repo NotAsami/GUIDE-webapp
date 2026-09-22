@@ -131,16 +131,11 @@ export function useLocalDraft<T>(key: string, base: T | null, baseAt?: string | 
       const next = fn(prev)
       const k = owner.current
       window.clearTimeout(timer.current)
-      timer.current = window.setTimeout(() => {
-        const at = Date.now()
-        try {
-          localStorage.setItem(PREFIX + k, JSON.stringify({ at, value: next } satisfies Stored<T>))
-          setSavedAt(new Date(at))
-        } catch {
-          // Out of quota. The edit is still in React state and Save Draft still
-          // works; only the crash-recovery tier is gone.
-        }
-      }, DEBOUNCE_MS)
+      const at = Date.now()
+      try {
+        localStorage.setItem(PREFIX + k, JSON.stringify({ at, value: next } satisfies Stored<T>))
+        timer.current = window.setTimeout(() => setSavedAt(new Date(at)), DEBOUNCE_MS)
+      } catch { /* Retain the in-memory draft and dirty indicator. */ }
       return next
     })
   }, [])
@@ -156,7 +151,10 @@ export function useLocalDraft<T>(key: string, base: T | null, baseAt?: string | 
     setDraft(to)
   }, [clear])
 
-  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(base)
+  // On the selection-change render, never expose the previous record's draft
+  // to autosave before the hydration effect runs.
+  const visibleDraft = owner.current === key ? draft : base
+  const dirty = visibleDraft !== null && JSON.stringify(visibleDraft) !== JSON.stringify(base)
 
-  return { draft, dirty, savedAt, update, reset, clear }
+  return { draft: visibleDraft, dirty, savedAt, update, reset, clear }
 }

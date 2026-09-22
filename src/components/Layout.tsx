@@ -39,7 +39,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
   const { catalog: shardTrees } = useShardCatalog()
-  const { character, loading, error, updateSection, updateSections } = useCharacter(shardTrees)
+  const { character, loading, error, saveError, dismissSaveError, updateSection, updateSections, refetch } = useCharacter(shardTrees)
   const nav = useNavigate()
 
   /* Announce this character on the party-presence channel while the app is
@@ -63,7 +63,7 @@ export function Layout() {
   // dismissal only (players can't close a shop server-side) — a fresh
   // opening (tracked via wasVisibleRef, same "was it visible last render"
   // trick ShopTakeover used to own) always clears a stale dismissal.
-  const { shop } = useOpenShop(character?.id)
+  const { shop, refetch: refreshShop } = useOpenShop(character?.id)
   const [shopDismissed, setShopDismissed] = useState(false)
   const wasShopVisibleRef = useRef(false)
   useEffect(() => {
@@ -142,7 +142,7 @@ export function Layout() {
       resources: { ...(turn?.resources ?? res), activeEffects: next } as CharacterRow['resources'],
     }
     if (recharged) patch.sheet = { ...(character.sheet ?? {}), features: recharged.features }
-    await updateSections(patch)
+    if (!(await updateSections(patch)).ok) return
 
     addRoll({
       kind: 'custom', title: 'Turn Advanced', icon: 'fa-forward-step',
@@ -255,7 +255,7 @@ export function Layout() {
   useEffect(() => { unlockChime() }, [])
 
   const foundryTarget = useFoundryTarget(character?.id)
-  useFoundryMessages(msg => {
+  useFoundryMessages(async msg => {
     if (msg.kind !== 'request' || !character || msg.character !== character.id) return
     const weapon = ((character.equipped ?? {}) as { weapons?: EquippedWeapon[] }).weapons
       ?.find(w => w.id === msg.weapon)
@@ -267,12 +267,14 @@ export function Layout() {
       ammo: ammoStacksFor(character)[0] ?? null,
       target: foundryTarget,
     })
-    const entry = addRoll(out.entry)
-    if (!out.rolled) return
-    void updateSections({
-      resources: attackRolled(character, out.arms, entry.id) as CharacterRow['resources'],
+    if (!out.rolled) { addRoll(out.entry); return }
+    const rollId = crypto.randomUUID()
+    const saved = await updateSections({
+      resources: attackRolled(character, out.arms, rollId) as CharacterRow['resources'],
       ...(out.inventory ? { inventory: out.inventory as unknown as CharacterRow['inventory'] } : {}),
     })
+    if (!saved.ok) return
+    const entry = addRoll(out.entry, rollId)
     /* AND STRAIGHT BACK TO THE CHAT LOG. A swing asked for from the map that
        said nothing on the map read as a macro that had not worked — the player
        is looking at Foundry, which is the entire reason they pressed a macro
@@ -363,7 +365,7 @@ export function Layout() {
     )
   }
 
-  if (error) {
+  if (error && !character) {
     return (
       <>
         <div className="stage" />
@@ -433,6 +435,10 @@ export function Layout() {
           each screen renders its own <Deco> so the rail text is screen-specific. */}
 
       <div className={styles.shell}>
+        {saveError && <div role="alert" style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 1000, maxWidth: 600, padding: 16, background: 'var(--bg)', border: '1px solid var(--danger)', color: 'var(--beige)' }}>
+          <span>{saveError}</span>{' '}
+          <button type="button" onClick={dismissSaveError}>Dismiss</button>
+        </div>}
         <Topbar character={character} updateSections={updateSections} shardTrees={shardTrees} />
         <main className={styles.main}>
           <Outlet context={{
@@ -456,7 +462,7 @@ export function Layout() {
       {/* Shop feature part 1: appears the instant the DM fires a shop open
           (shop_catalog RLS scopes it to this character or the whole party) —
           no route, no nav entry, exists only while a shop is live. */}
-      <ShopTakeover character={character} updateSection={updateSection} shop={shop} dismissed={shopDismissed} onDismiss={() => setShopDismissed(true)} />
+      <ShopTakeover character={character} refreshCharacter={async () => { await Promise.all([refetch(), refreshShop()]) }} shop={shop} dismissed={shopDismissed} onDismiss={() => setShopDismissed(true)} />
       <LootTakeover roll={lootRoll} dismissed={lootDismissed} onDismiss={() => setLootDismissed(true)} />
       {docked && dock && (
         <HandoutDock

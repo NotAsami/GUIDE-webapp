@@ -5,13 +5,8 @@
  * "guide-hud/project/G.U.I.D.E. Shop.html" — docs/notes.md: "Replicate the
  * design of the shop exactly like in the design").
  *
- * BUY is never an instant client-side assumption — the click goes PENDING
- * while `shop_buy` (migration 0009/0012) does the real check, and only the
- * reply moves it to success or "Ledger Refused". On success the coin change
- * already landed server-side; this component just places the returned item
- * snapshot into inventory via the same routing chain every other pickup uses
- * (lib/placement.ts) and lets character.ts's own realtime refetch reconcile
- * the purse.
+ * Payment, stock and delivery are a single server transaction. Repeating an
+ * uncertain request uses its original receipt id and cannot charge twice.
  *
  * Mounted once in Layout next to SystemToasts — no route, no nav entry. It
  * exists only while the DM has a shop open, and "Leave Shop" is a purely
@@ -20,13 +15,11 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { CharacterRow, CharacterSection, InventoryItem, ShopCatalogRow, ShopStockLine } from '../lib/database.types'
-import { getGear, getInventory } from '../lib/equip'
-import { PERSON, isStackable, placeNew, routeItem } from '../lib/placement'
+import type { CharacterRow, ShopCatalogRow, ShopStockLine } from '../lib/database.types'
 import { CAT_CORNER, CAT_LABEL, rarityLabel } from '../lib/items'
 import { summarizeEffects } from '../lib/effects'
 import { formatPrice, priceCp, toCopper, type Coins } from '../lib/coins'
-import { buyItem, type ShopBuyResult } from '../lib/shops'
+import { buyItem, hasPendingPurchase } from '../lib/shops'
 import pop from '../screens/InventoryPopup.module.css'
 import styles from './ShopTakeover.module.css'
 import { Icon } from './Icon'
@@ -45,6 +38,10 @@ const RAR_CLASS: Record<string, string> = {
 }
 
 const DENY_LABEL: Record<string, string> = {
+  conflict: 'Values changed — review and retry',
+  network: 'Reply lost — retry safely',
+  storage: 'Enable browser storage to purchase',
+  invalid_request: 'Refresh the shop and try again',
   sold_out: 'Sold Out',
   insufficient: 'Ledger Refused',
   closed: 'Shop Closed',
@@ -63,7 +60,7 @@ function slotLabel(s: string): string {
 
 interface Props {
   character: CharacterRow | null
-  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  refreshCharacter: () => Promise<void>
   /** Open/dismiss state lives in Layout now — the Bottombar's "Reopen Shop"
    *  button needs to see it too, so it can't be local to this component. */
   shop: ShopCatalogRow | null
@@ -73,7 +70,7 @@ interface Props {
 
 type Toast = { name: string; cost: string } | null
 
-export function ShopTakeover({ character, updateSection, shop, dismissed, onDismiss }: Props) {
+export function ShopTakeover({ character, refreshCharacter, shop, dismissed, onDismiss }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [boughtId, setBoughtId] = useState<string | null>(null)
   const [toast, setToast] = useState<Toast>(null)
@@ -107,19 +104,7 @@ export function ShopTakeover({ character, updateSection, shop, dismissed, onDism
   if (!visible || !character || !shop) return null
 
   const data = shop.data
-  const gear = getGear(character)
-  const inventory = getInventory(character)
   const coins = character.sheet?.coins
-
-  async function place1(res: Extract<ShopBuyResult, { ok: true }>) {
-    const inst = `inst-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`
-    const fresh = {
-      ...res.item, id: inst, item_id: res.item_id, containerId: PERSON,
-      ...(isStackable(res.item.category) ? { qty: 1 } : {}),
-    } as InventoryItem
-    const next = placeNew(inventory, fresh, routeItem(fresh, gear, inventory))
-    await updateSection('inventory', next as unknown as CharacterRow['inventory'])
-  }
 
   function celebrate(line: ShopStockLine) {
     setBoughtId(line.item_id)
@@ -220,7 +205,7 @@ export function ShopTakeover({ character, updateSection, shop, dismissed, onDism
                       <button
                         key={line.item_id}
                         className={cx(styles.sc, out && styles.sold, poor && styles.poor, boughtId === line.item_id && styles.bought)}
-                        disabled={out}
+                        disabled={out && !hasPendingPurchase(character.id, shop.id, line.item_id)}
                         aria-label={`${line.item.name}, ${formatPrice(line.price, line.unit)}${out ? ', sold out' : poor ? ', cannot afford' : ''}`}
                         onClick={() => setSelectedId(line.item_id)}
                       >
@@ -260,9 +245,10 @@ export function ShopTakeover({ character, updateSection, shop, dismissed, onDism
 
       {selectedLine && (
         <ShopItemPopup
-          line={selectedLine} shopId={shop.id} coins={coins}
+          key={selectedLine.item_id} line={selectedLine} shop={shop} character={character} coins={coins}
           onClose={() => setSelectedId(null)}
-          onBought={async res => { await place1(res); celebrate(selectedLine) }}
+          onBought={async () => { celebrate(selectedLine); await refreshCharacter() }}
+          onRefresh={refreshCharacter}
         />
       )}
 
@@ -280,12 +266,14 @@ export function ShopTakeover({ character, updateSection, shop, dismissed, onDism
 
 type BuyState = 'idle' | 'pending' | 'ok' | 'deny'
 
-function ShopItemPopup({ line, shopId, coins, onClose, onBought }: {
+function ShopItemPopup({ line, shop, character, coins, onClose, onBought, onRefresh }: {
   line: ShopStockLine
-  shopId: string
+  shop: ShopCatalogRow
+  character: CharacterRow
+  onRefresh: () => Promise<void>
   coins: Coins | undefined
   onClose: () => void
-  onBought: (res: Extract<ShopBuyResult, { ok: true }>) => Promise<void>
+  onBought: () => Promise<void>
 }) {
   const [state, setState] = useState<BuyState>('idle')
   const [reason, setReason] = useState('')
@@ -296,15 +284,16 @@ function ShopItemPopup({ line, shopId, coins, onClose, onBought }: {
 
   async function buy() {
     setState('pending')
-    const res = await buyItem(shopId, line.item_id)
+    const res = await buyItem(character, shop, line)
     if (!res.ok) {
       setState('deny')
       setReason(DENY_LABEL[res.reason] ?? 'Ledger Refused')
+      if (res.reason === 'conflict') await onRefresh()
       window.setTimeout(() => setState('idle'), 2400)
       return
     }
     setState('ok')
-    await onBought(res)
+    await onBought()
     window.setTimeout(onClose, 1000)
   }
 
@@ -373,7 +362,7 @@ function ShopItemPopup({ line, shopId, coins, onClose, onBought }: {
               type="button"
               className={cx(pop.ia, state === 'deny' && pop.drop)}
               onClick={() => void buy()}
-              disabled={soldOut || state === 'pending' || state === 'ok'}
+              disabled={(soldOut && !hasPendingPurchase(character.id, shop.id, line.item_id)) || state === 'pending' || state === 'ok'}
             >
               <span className={pop.af} />
               <span className={pop.ai}>
