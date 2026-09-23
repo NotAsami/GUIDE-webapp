@@ -41,6 +41,9 @@ export interface WebNode {
   record: NpcRow | null
   ring: 1 | 2
   sector: string
+  /** Where they are, when `sector` has been regrouped to mean something else
+   *  (groupByTie). Absent means `sector` IS the place. */
+  place?: string
   system: boolean
 }
 export interface WebEdge {
@@ -137,12 +140,37 @@ export function derive(npcs: NpcRow[], links: NpcLinkRow[], party: PartyRow[], q
   return { nodes: list, edges, pcs: party.map(p => ({ id: p.id, name: p.name })) }
 }
 
+/** The player's Lore web groups people by HOW they know them, not where they
+ *  are: a ring of places reads like compass bearings, and a player thinks in
+ *  "who gave me work" before "who lives where". The console keeps places.
+ *  Strongest tie wins: a bond, then a quest given, then a quest that names them. */
+export const TIE_SECTORS = ['Bonds', 'Gave you a quest', 'Named in a quest', 'Through others'] as const
+
+export function groupByTie(web: Web): Web {
+  const pcIds = new Set(web.pcs.map(p => p.id))
+  const best = new Map<string, number>()
+  const tie = (id: string, rank: number) => best.set(id, Math.min(best.get(id) ?? 3, rank))
+  for (const e of web.edges) {
+    if (e.kind === 'relation' && pcIds.has(e.from)) tie(e.to, 0)
+    else if (e.kind === 'quest') tie(e.to, 1)
+    else if (e.kind === 'mention') tie(e.to, 2)
+  }
+  const nodes = web.nodes.map(n => ({
+    ...n,
+    place: n.place ?? n.sector,
+    sector: TIE_SECTORS[n.system ? 0 : best.get(n.id) ?? 3],
+  }))
+  return { ...web, nodes }
+}
+
 /** System first, the places alphabetically, Unplaced last — stable, so a new
- *  NPC slots in rather than reshuffling the ring. */
+ *  NPC slots in rather than reshuffling the ring. Tie groups keep their own
+ *  order (TIE_SECTORS), closest first. */
 export function sectorOrder(nodes: WebNode[]): string[] {
   const names = [...new Set(nodes.map(n => n.sector))]
+  const tieRank = (s: string) => (TIE_SECTORS as readonly string[]).indexOf(s)
   const rank = (s: string) => (s === 'System' ? 0 : s === 'Unplaced' ? 2 : 1)
-  return names.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+  return names.sort((a, b) => tieRank(a) - tieRank(b) || rank(a) - rank(b) || a.localeCompare(b))
 }
 
 /* ---- geometry: the SAME numbers the screen renders with ---- */

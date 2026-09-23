@@ -43,7 +43,9 @@ export function useCampaign(): CampaignState {
     ])
     const err = qs.error ?? ss.error
     setError(err ? err.message : null)
-    setQuests((qs.data as QuestRow[]) ?? [])
+    // A hidden quest is already absent for a player (RLS); the DM's own account
+    // reads it anyway, so the player's view drops it here too.
+    setQuests(((qs.data as QuestRow[]) ?? []).filter(q => q.visible !== false))
     setSessions((ss.data as SessionRow[]) ?? [])
     setLoading(false)
   }, [session])

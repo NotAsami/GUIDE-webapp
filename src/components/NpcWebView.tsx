@@ -194,7 +194,7 @@ export function KnownCard({ n, web, onSelect, onClose }: {
         <span className={styles.dDisc}>{n.system ? <span className={styles.diamond} /> : initials(n.name)}</span>
         <div className={styles.dTx}>
           <div className={styles.dName}>{n.name}</div>
-          <div className={styles.dMeta}>{[r?.role, r?.location || (n.sector !== 'Unplaced' && n.sector !== 'System' ? n.sector : '')].filter(Boolean).join(' · ') || 'Little is known'}</div>
+          <div className={styles.dMeta}>{[r?.role, r?.location || (() => { const at = n.place ?? n.sector; return at !== 'Unplaced' && at !== 'System' ? at : '' })()].filter(Boolean).join(' · ') || 'Little is known'}</div>
         </div>
         <button type="button" className={styles.x} onClick={onClose} aria-label="Close"><i className="fa-solid fa-xmark" /></button>
       </div>

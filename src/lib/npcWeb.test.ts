@@ -6,7 +6,7 @@
 // the same geometry the screen renders, not a box somebody guessed.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PARTY, asSeenBy, derive, endpoint, focusView, layout, neighbourhood, nodeBox, pcBox, revealNpc, revealTie, sectorBox, type Box, type Web } from './npcWeb.ts'
+import { PARTY, TIE_SECTORS, asSeenBy, derive, groupByTie, sectorOrder, endpoint, focusView, layout, neighbourhood, nodeBox, pcBox, revealNpc, revealTie, sectorBox, type Box, type Web } from './npcWeb.ts'
 import type { NpcLinkRow, NpcRow } from './database.types.ts'
 
 const npc = (name: string, over: Partial<NpcRow> = {}): NpcRow => ({
@@ -187,4 +187,22 @@ test('a player sees their own relations, the quest givers, and only what was rev
   const wc = derive(forCor.npcs, forCor.links, [{ id: 'cor', name: 'Cornelius', lore: {} } as never], QUESTS as never)
   assert.equal(byName(wc, 'Magistrate Voss')!.record, null)
   assert.equal(wc.edges.filter(e => e.kind === 'link').length, 0)
+})
+
+test('groupByTie: bonds, quest givers, the named, and the rest — strongest tie wins', () => {
+  const sera = npc('Sera Quill'), holt = npc('Captain Holt'), voss = npc('Magistrate Voss', { location: 'Brettany' })
+  const w = groupByTie(derive([sera, holt, voss], [link(voss, holt)], [ROS as never],
+    [...QUESTS, quest('The Fence', 'Maren of the Waterfront', 'Castella', ['Sera Quill', 'Maren of the Waterfront'])] as never))
+  const at = (name: string) => byName(w, name)?.sector
+  assert.equal(at('G.U.I.D.E.'), 'Bonds')
+  assert.equal(at('Maren of the Waterfront'), 'Bonds')           // a relation outranks the quest she gave
+  assert.equal(at('Magistrate Voss'), 'Gave you a quest')
+  assert.equal(at('Sera Quill'), 'Named in a quest')
+  assert.equal(at('Captain Holt'), 'Through others')
+  assert.equal(byName(w, 'Magistrate Voss')?.place, 'Brettany')  // the drawer still knows where they are
+  assert.deepEqual(sectorOrder(w.nodes), [...TIE_SECTORS])        // closest group first, not alphabetical by chance
+})
+
+test('groupByTie leaves the layout sound: nothing overlaps', () => {
+  assert.deepEqual(overlaps(groupByTie(derive([], [], [ROS as never], QUESTS as never))), [])
 })
