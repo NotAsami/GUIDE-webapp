@@ -58,6 +58,12 @@ const NOT_PROSE: Record<string, string> = {
     'the spell row rather than a prose field of its own.',
   'components/authoring.module.css:.originAuto':
     'An operator-side "derived automatically" hint. DM chrome, never player prose.',
+  'screens/Spellbook.module.css:.spellRow .school':
+    'The spell school in a grimoire row: an enum label (Evocation, Illusion), ' +
+    'set in the prose face to sit under the bold name. Never authored text.',
+  'screens/Spellbook.module.css:.daSub':
+    'The detail header\'s flag line, built in Spellbook.tsx from booleans ' +
+    '("Concentration · Ritual"). Chrome, not a voice.',
   'screens/Shard.module.css:.scBuffs.italic':
     'The empty-slot placeholder line on a shard card — a literal in Shard.tsx, ' +
     'swapped in for the mono buff list when there is nothing slotted.',

@@ -206,3 +206,33 @@ export function rollSpellDamage(
     level: castLevel, cantrip: sp.level === 0, stamp: nowStamp(), riders: contrib.riders,
   }
 }
+
+const UNIT: Record<string, [string, string]> = {
+  minute: ['min', 'min'], min: ['min', 'min'], hour: ['hr', 'hr'], hr: ['hr', 'hr'],
+  round: ['rnd', 'rnd'], day: ['day', 'days'],
+}
+/** "1 hour", "1hour", "up to 10 minutes" → "1 hr" / "10 min"; null if it isn't a count. */
+function shortSpan(s: string): string | null {
+  const m = /^(?:up to\s+)?(\d+)\s*(minute|min|hour|hr|round|day)s?$/.exec(s)
+  return m ? `${m[1]} ${UNIT[m[2]][m[1] === '1' ? 0 : 1]}` : null
+}
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/** Table-width casting time. Authored text is free-form ("action", "1 Action",
+ *  "bonus-action", "1minute"), so the grimoire shows ONE spelling of each. */
+export function shortTime(raw: string | undefined): string {
+  const s = (raw ?? '').trim().toLowerCase()
+  if (!s) return '—'
+  if (s.includes('reaction')) return 'Reaction'
+  if (s.includes('bonus')) return 'Bonus'
+  if (/^(1\s*)?action$/.test(s)) return 'Action'
+  return shortSpan(s) ?? cap(raw!.trim())
+}
+
+/** Table-width duration: "Instantaneous" → "Inst.", "8 hours" → "8 hr". */
+export function shortDuration(raw: string | undefined): string {
+  const s = (raw ?? '').trim().toLowerCase()
+  if (!s) return '—'
+  if (s.startsWith('instant')) return 'Inst.'
+  return shortSpan(s) ?? cap(raw!.trim())
+}
