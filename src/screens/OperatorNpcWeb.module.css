@@ -1,0 +1,46 @@
+/* The console-only half of the NPC web: tie editing, reveals, the NPC form.
+   The drawing, drawer and card are components/NpcWebView.module.css. */
+
+.lc { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.lcKind, .lcLabel {
+  height: 28px; border: 1px solid rgba(212, 191, 125, 0.3); background: rgba(0, 0, 0, 0.4); color: var(--text);
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em;
+}
+.lcKind { padding: 0 6px; }
+.lcLabel { flex: 1 1 auto; min-width: 0; padding: 0 8px; }
+.lcLabel::placeholder { color: var(--beige-dim); }
+.lcAtt { flex: 0 0 auto; width: 28px; height: 28px; border: 1px solid rgba(212, 191, 125, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.lcAtt i { width: 10px; height: 10px; border-radius: 50%; border: 1px dashed var(--beige-dim); }
+.lcX { flex: 0 0 auto; width: 26px; height: 28px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.lcX:hover { color: var(--danger-hot); }
+
+.addTie { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.addTie select { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+.addTie > button { flex: 0 0 auto; min-width: 84px; }
+.err { margin-top: 10px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; color: var(--danger-hot); }
+
+.gm { margin-top: 18px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px dashed rgba(160, 122, 214, 0.45); background: rgba(160, 122, 214, 0.05); }
+.gmT { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--violet); }
+.gmB { font-family: var(--font-mono); font-size: 10px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; }
+
+.dActions, .fActions { margin-top: auto; padding-top: 18px; display: flex; gap: 8px; }
+.dActions > button, .fActions > button { flex: 1 1 0; }
+
+.fHead { display: flex; align-items: center; margin-bottom: 12px; }
+.fT { font-family: var(--font-display); font-weight: 600; font-size: 17px; letter-spacing: 0.08em; color: var(--beige); margin-right: auto; }
+.form label { display: block; margin-bottom: 6px; }
+.form .ta { min-height: 90px; margin-bottom: 12px; }
+
+.reveal { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.revealT { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige-dim); margin-right: 2px; }
+.chip {
+  height: 26px; padding: 0 9px; cursor: pointer;
+  border: 1px solid rgba(212, 191, 125, 0.3); background: transparent; color: var(--muted);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.chip:hover { border-color: var(--cyan); }
+.chip.on { border-color: var(--cyan); background: rgba(0, 166, 214, 0.12); color: var(--cyan-hot); }
+.hint { margin-top: 6px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.06em; line-height: 1.6; color: var(--beige-dim); }
+.linkBox { display: flex; flex-direction: column; min-width: 0; }
+.viewAs { height: 30px; padding: 0 8px; border: 1px solid rgba(212, 191, 125, 0.3); background: rgba(14, 13, 11, 0.92); color: var(--beige); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+.viewAs.on { border-color: var(--cyan); color: var(--cyan-hot); }

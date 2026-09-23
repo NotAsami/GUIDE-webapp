@@ -27,6 +27,7 @@ import {
   useDmStatus, useDmFeatures, featureContent,
   useDmClasses, useDmRaces, useDmBackgrounds, classContent, raceContent, backgroundContent,
 } from '../lib/dm'
+import { BootMark } from '../components/BootMark'
 import { useLocalDraft } from '../lib/draft'
 /* Features keep their manual publish, so they do not pass through the
  * autosave hooks that stamp this — the 44 imported SRD features would
@@ -503,7 +504,7 @@ export default function FeatureEditor() {
     fireToast(sameFolder ? `${content.name} reordered` : `${content.name} → ${folder}`)
   }
 
-  if (authLoading || dmLoading) return <div className={styles.boot}>Authorizing operator link…</div>
+  if (authLoading || dmLoading) return <div className={styles.boot}><BootMark tone="amber">Authorizing operator link…</BootMark></div>
   if (!session) return <Navigate to="/login" replace />
   if (!isDm) return <Navigate to="/" replace />
 

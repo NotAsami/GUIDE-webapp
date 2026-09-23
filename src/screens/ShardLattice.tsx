@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmFeatures, type DmFeaturesState } from '../lib/dm'
+import { BootMark } from '../components/BootMark'
 import { useDmShards, type EditorNode, type EditorTree } from '../lib/dmShards'
 import { useLocalDraft } from '../lib/draft'
 import { RING_GAP, branchColor, nodeXY } from '../lib/shards'
@@ -426,7 +427,11 @@ export function ShardLattice() {
         <section className={styles.region}>
           <div className={styles.frame} /><div className={`${styles.inner} ${styles.canvasInner}`}>
             <span className={`${styles.rCorner} ${styles.tl}`} /><span className={`${styles.rCorner} ${styles.br}`} />
-            {!draft ? <div className={styles.inspEmpty}>{loading ? 'Loading…' : 'No shard trees yet.'}</div> : (
+            {!draft ? (
+              loading
+                ? <div className={styles.inspEmpty} aria-busy="true"><span className="sk amber" style={{ display: 'block', width: 180, height: 14, margin: '0 auto' }} /></div>
+                : <div className={styles.inspEmpty}>No shard trees yet.</div>
+            ) : (
               <>
                 <div className={styles.tools}>
                   <div className={styles.toolGroup}>
@@ -606,7 +611,11 @@ export function ShardLattice() {
 }
 
 function Boot({ children }: { children: React.ReactNode }) {
-  return <div className={styles.page} style={{ display: 'grid', placeItems: 'center', color: 'var(--amber)', fontFamily: 'var(--font-mono)', letterSpacing: '0.2em', textTransform: 'uppercase', fontSize: 12 }}>{children}</div>
+  return (
+    <div className={styles.page} style={{ display: 'grid', placeItems: 'center' }}>
+      <BootMark tone="amber">{children}</BootMark>
+    </div>
+  )
 }
 
 /* ================= Shard tab ================= */

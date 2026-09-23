@@ -10,6 +10,8 @@ import { RollToast } from './RollToast'
 import { SystemToasts } from './SystemToasts'
 import { ShopTakeover } from './ShopTakeover'
 import { LootTakeover } from './LootTakeover'
+import { HandoutDock } from './Handout'
+import { liveFor, pushKey, useHandouts } from '../lib/handouts'
 import { RollContextPanel } from './RollContextPanel'
 import { PartyHud } from './PartyHud'
 import { usePartyPresence } from '../lib/presence'
@@ -37,7 +39,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
   const { catalog: shardTrees } = useShardCatalog()
-  const { character, loading, error, updateSection, updateSections } = useCharacter(shardTrees)
+  const { character, loading, error, saveError, dismissSaveError, updateSection, updateSections, refetch } = useCharacter(shardTrees)
   const nav = useNavigate()
 
   /* Announce this character on the party-presence channel while the app is
@@ -61,7 +63,7 @@ export function Layout() {
   // dismissal only (players can't close a shop server-side) — a fresh
   // opening (tracked via wasVisibleRef, same "was it visible last render"
   // trick ShopTakeover used to own) always clears a stale dismissal.
-  const { shop } = useOpenShop(character?.id)
+  const { shop, refetch: refreshShop } = useOpenShop(character?.id)
   const [shopDismissed, setShopDismissed] = useState(false)
   const wasShopVisibleRef = useRef(false)
   useEffect(() => {
@@ -80,6 +82,28 @@ export function Layout() {
     if (lootRoll && !wasLootVisibleRef.current) setLootDismissed(false)
     wasLootVisibleRef.current = !!lootRoll
   }, [lootRoll])
+
+  /* HANDOUTS open beside the game. A push opens the dock on its own — that is
+     the DM handing you something — and Recall closes it again; opened from the
+     Journal it is reading, and stays until the player closes it. Closing a push
+     is remembered per push (localStorage), so a reload does not reopen it but
+     the next push does. */
+  const { handouts, seen: seenHandouts, markSeen, dismissed, dismiss } = useHandouts(character?.id)
+  const [dock, setDock] = useState<{ id: string; arrive: boolean } | null>(null)
+  const live = character ? liveFor(handouts, character.id, dismissed) : null
+  const liveKey = live ? pushKey(live) : null
+  useEffect(() => { if (live) setDock({ id: live.id, arrive: true }) }, [liveKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const docked = dock ? handouts.find(h => h.id === dock.id) ?? null : null
+  const onMyScreen = !!(docked && character && docked.on_screen.includes(character.id))
+  useEffect(() => {
+    // Taken back entirely, or a push the DM recalled.
+    if (dock && (!docked || (dock.arrive && !onMyScreen))) setDock(null)
+  }, [dock, docked, onMyScreen])
+  useEffect(() => { if (docked) markSeen(docked.id) }, [docked, markSeen])
+  const closeDock = () => {
+    if (docked && onMyScreen) dismiss(docked)
+    setDock(null)
+  }
 
   /* Plain open/closed state, and ONLY THE PLAYER CHANGES IT.
      No auto-open on a roll and no restore across a reload: this panel is a modal
@@ -118,7 +142,7 @@ export function Layout() {
       resources: { ...(turn?.resources ?? res), activeEffects: next } as CharacterRow['resources'],
     }
     if (recharged) patch.sheet = { ...(character.sheet ?? {}), features: recharged.features }
-    await updateSections(patch)
+    if (!(await updateSections(patch)).ok) return
 
     addRoll({
       kind: 'custom', title: 'Turn Advanced', icon: 'fa-forward-step',
@@ -231,7 +255,7 @@ export function Layout() {
   useEffect(() => { unlockChime() }, [])
 
   const foundryTarget = useFoundryTarget(character?.id)
-  useFoundryMessages(msg => {
+  useFoundryMessages(async msg => {
     if (msg.kind !== 'request' || !character || msg.character !== character.id) return
     const weapon = ((character.equipped ?? {}) as { weapons?: EquippedWeapon[] }).weapons
       ?.find(w => w.id === msg.weapon)
@@ -243,12 +267,14 @@ export function Layout() {
       ammo: ammoStacksFor(character)[0] ?? null,
       target: foundryTarget,
     })
-    const entry = addRoll(out.entry)
-    if (!out.rolled) return
-    void updateSections({
-      resources: attackRolled(character, out.arms, entry.id) as CharacterRow['resources'],
+    if (!out.rolled) { addRoll(out.entry); return }
+    const rollId = crypto.randomUUID()
+    const saved = await updateSections({
+      resources: attackRolled(character, out.arms, rollId) as CharacterRow['resources'],
       ...(out.inventory ? { inventory: out.inventory as unknown as CharacterRow['inventory'] } : {}),
     })
+    if (!saved.ok) return
+    const entry = addRoll(out.entry, rollId)
     /* AND STRAIGHT BACK TO THE CHAT LOG. A swing asked for from the map that
        said nothing on the map read as a macro that had not worked — the player
        is looking at Foundry, which is the entire reason they pressed a macro
@@ -275,18 +301,71 @@ export function Layout() {
     if (!authLoading && !session) nav('/login', { replace: true })
   }, [authLoading, session, nav])
 
+  /* THE SHAPE OF THE SCREEN, not the word "loading". Everything about the
+     chrome is known before the character row lands — the bar heights, the
+     labels, where each column sits — so it paints, and only the values the row
+     feeds are skeletons. The body gets ONE neutral band rather than a guessed
+     number of cards: which screen is underneath decides what goes there, and a
+     row count guessed wrong flickers worse than no ghosts at all. */
   if (authLoading || loading) {
     return (
       <>
         <div className="stage" />
         <div className="scanlines" />
         <div className="vignette" />
-        <CenterMessage>Loading…</CenterMessage>
+        <div className={styles.shell}>
+          <header className={styles.topbar} role="banner" aria-busy="true">
+            <div className={styles.topLeft}>
+              {['Level', 'Reputation'].map(lab => (
+                <div key={lab} className={styles.statBlock}>
+                  <div className={styles.statRow}>
+                    <span className="sk" style={{ display: 'inline-block', width: 26, height: 16 }} />
+                    <span className={styles.statLabel}>{lab}</span>
+                  </div>
+                  <div className="sk" style={{ width: 96, height: 3 }} />
+                </div>
+              ))}
+              <div className={styles.hpBlock}>
+                <span className="ic">♥</span>
+                <span className="sk" style={{ display: 'inline-block', width: 58, height: 14 }} />
+                <span className="lab">HP</span>
+              </div>
+            </div>
+            <div className={styles.topCenter}>
+              <span className="sk" style={{ display: 'block', width: 196, height: 17, margin: '0 auto' }} />
+              <span className="sk" style={{ display: 'block', width: 128, height: 8, margin: '7px auto 0' }} />
+            </div>
+            <div className={styles.topRight}>
+              <div className={styles.burdenBlock}>
+                <span className="ic">⚖</span>
+                <span className="sk" style={{ display: 'inline-block', width: 48, height: 14 }} />
+                <span className="lab">Burden</span>
+              </div>
+              <div className={styles.coinBlock}>
+                <span className="ic">⊙</span>
+                <span className="sk" style={{ display: 'inline-block', width: 44, height: 14 }} />
+                <span className="lab">Gold</span>
+              </div>
+            </div>
+          </header>
+          <main className={styles.main}>
+            <div style={{ display: 'grid', placeItems: 'center', height: '100%', padding: 24 }} aria-busy="true">
+              <div
+                className="sk"
+                style={{
+                  width: 'min(900px, 80%)', height: 168,
+                  border: '1px solid rgba(138, 122, 74, 0.35)',
+                }}
+              />
+            </div>
+          </main>
+          <footer className={styles.bottombar} />
+        </div>
       </>
     )
   }
 
-  if (error) {
+  if (error && !character) {
     return (
       <>
         <div className="stage" />
@@ -356,9 +435,16 @@ export function Layout() {
           each screen renders its own <Deco> so the rail text is screen-specific. */}
 
       <div className={styles.shell}>
+        {saveError && <div role="alert" style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 1000, maxWidth: 600, padding: 16, background: 'var(--bg)', border: '1px solid var(--danger)', color: 'var(--beige)' }}>
+          <span>{saveError}</span>{' '}
+          <button type="button" onClick={dismissSaveError}>Dismiss</button>
+        </div>}
         <Topbar character={character} updateSections={updateSections} shardTrees={shardTrees} />
         <main className={styles.main}>
-          <Outlet context={{ character, updateSection, updateSections, shardTrees }} />
+          <Outlet context={{
+            character, updateSection, updateSections, shardTrees,
+            handouts, seenHandouts, markHandoutSeen: markSeen, openHandout: (id: string) => setDock({ id, arrive: false }),
+          }} />
         </main>
         <Bottombar
           shopOpen={!!shop} shopDismissed={shopDismissed} onReopenShop={() => setShopDismissed(false)}
@@ -376,8 +462,15 @@ export function Layout() {
       {/* Shop feature part 1: appears the instant the DM fires a shop open
           (shop_catalog RLS scopes it to this character or the whole party) —
           no route, no nav entry, exists only while a shop is live. */}
-      <ShopTakeover character={character} updateSection={updateSection} shop={shop} dismissed={shopDismissed} onDismiss={() => setShopDismissed(true)} />
+      <ShopTakeover character={character} refreshCharacter={async () => { await Promise.all([refetch(), refreshShop()]) }} shop={shop} dismissed={shopDismissed} onDismiss={() => setShopDismissed(true)} />
       <LootTakeover roll={lootRoll} dismissed={lootDismissed} onDismiss={() => setLootDismissed(true)} />
+      {docked && dock && (
+        <HandoutDock
+          key={`${pushKey(docked)}:${dock.arrive}`} h={docked} arrive={dock.arrive}
+          onClose={closeDock}
+          onJournal={() => { setDock(null); if (onMyScreen) dismiss(docked); nav('/journal', { state: { handout: docked.id } }) }}
+        />
+      )}
       {/* The character rides along so the panel's catalog sheet can resolve a
           roll's subject: every catalog table is DM-only, so the player's copy of
           the facts is the snapshot on their own row. */}

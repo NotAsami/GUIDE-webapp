@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 import type { CharacterRow, Relation } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
@@ -184,7 +184,12 @@ export function Lore() {
                   </section>
 
                   <section className={styles.dossierSec} aria-label="Relations">
-                    <div className={styles.secLabel}><span className={styles.num}>05</span> Relations</div>
+                    <div className={styles.secLabel}>
+                      <span className={styles.num}>05</span> Relations
+                      {/* The same people, drawn as a web: who they are to each
+                          other, as far as the Operator has told you. */}
+                      <Link to="/lore/relations" className={styles.webLink}>View as a web <span aria-hidden="true">&#9656;</span></Link>
+                    </div>
                     {lore.relations && lore.relations.length > 0 ? (
                       <div className={styles.relations}>
                         {lore.relations.map((r, i) => <RelationRow key={i} r={r} />)}

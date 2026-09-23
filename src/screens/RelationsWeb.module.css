@@ -1,0 +1,24 @@
+/* The player's relations web. The drawing is components/NpcWebView.module.css;
+   this is only the frame it sits in — the same box the Story screen occupies,
+   because both are places you navigate to rather than panels. */
+
+.screen {
+  position: fixed;
+  top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
+  bottom: calc(var(--bar-bottom-h) + 18px);
+  left: 34px; right: 34px;
+  z-index: 10;
+  min-height: var(--screen-min-h);
+  border: 1px solid rgba(212, 191, 125, 0.28);
+  background: rgba(10, 11, 12, 0.5);
+}
+
+.back {
+  display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 11px;
+  border: 1px solid rgba(212, 191, 125, 0.3); background: rgba(14, 14, 15, 0.92); color: var(--beige);
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; text-decoration: none;
+}
+.back:hover { border-color: var(--cyan); color: var(--cyan-hot); }
+.title {
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--beige-dim);
+}

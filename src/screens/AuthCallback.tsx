@@ -1,10 +1,15 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { BootMark } from '../components/BootMark'
 
 /** Magic-link redirect target. Supabase's `detectSessionInUrl: true` parses the
  *  token from the URL hash inside `createClient(...)`; we just wait for the
- *  session to land, then bounce to `/`. */
+ *  session to land, then bounce to `/`.
+ *
+ *  The wait wears the same mark as the pre-bundle shell in index.html, so
+ *  clicking the link out of a mail client shows one continuous boot rather than
+ *  a white page, then a line of text, then the codex. */
 export function AuthCallback() {
   const { session, loading } = useAuth()
   const nav = useNavigate()
@@ -21,10 +26,9 @@ export function AuthCallback() {
       <div className="vignette" />
       <div style={{
         position: 'fixed', inset: 0, display: 'grid', placeItems: 'center',
-        fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.22em',
-        color: 'var(--cyan)', textTransform: 'uppercase',
+        zIndex: 100, padding: 24,
       }}>
-        Linking neural session…
+        <BootMark>Binding session</BootMark>
       </div>
     </>
   )

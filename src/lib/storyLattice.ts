@@ -41,12 +41,12 @@ export const ROW_H = 92
  *  leader docks onto sits this far into the row. */
 export const TITLE_OFF = 15
 
-const rad = (deg: number) => (deg * Math.PI) / 180
-
 /** The y a thread's title line occupies, which is the y its leader must reach. */
 export const rowY = (i: number) => ROWS_TOP + i * ROW_H + TITLE_OFF
 
-export interface Wire { nx: number; ny: number; ex: number; ey: number }
+/** nx,ny = the node. sx,sy = where its leader LEAVES the node. ex,ey = where the
+ *  leader breaks to horizontal. pad = how far sx,sy sit out from the centre. */
+export interface Wire { nx: number; ny: number; sx: number; sy: number; ex: number; ey: number; pad: number }
 
 /** Solve a thread's node and leader break-point from the row it occupies.
  *
@@ -54,15 +54,22 @@ export interface Wire { nx: number; ny: number; ex: number; ey: number }
  *  threads instead of exactly the three the design was drawn with. Past the
  *  ring's vertical reach asin has no answer: return null and let the row list
  *  without a node, which is honest degradation rather than a NaN in the markup. */
-export function solve(y: number, rNode = R_NODE, rExit = R_EXIT): Wire | null {
+export function solve(y: number, rNode = R_NODE, rExit = R_EXIT, pad = 0): Wire | null {
   const sin = (y - CY) / rExit
   if (sin < -1 || sin > 1) return null
   const theta = Math.asin(sin)
+  const c = Math.cos(theta)
+  const sn = Math.sin(theta)
   return {
-    nx: CX + rNode * Math.cos(theta),
-    ny: CY + rNode * Math.sin(theta),
-    ex: CX + rExit * Math.cos(theta),
+    nx: CX + rNode * c,
+    ny: CY + rNode * sn,
+    // Pushed out along the same radial, so the leader stays collinear with the
+    // node and its break point — it just starts at the node's edge.
+    sx: CX + (rNode + pad) * c,
+    sy: CY + (rNode + pad) * sn,
+    ex: CX + rExit * c,
     ey: y,
+    pad,
   }
 }
 
@@ -74,6 +81,17 @@ export function solve(y: number, rNode = R_NODE, rExit = R_EXIT): Wire | null {
    The compact row is not only taste. Three main plus three side at 92px would
    end at y=660 in a ~556px body; at 44px they end at 546 and fit. */
 export const R_SIDE_NODE = 300
+/** A side node's drawn radius. The screen draws it FROM this constant. */
+export const SIDE_NODE_R = 4
+/** Where a side leader leaves its node: radius plus half its 1.4px stroke.
+ *
+ *  A side node is HOLLOW, and the leader layer paints above the nodes (it has to
+ *  — main leaders cross the arc at r=250, and flipping the order would let the
+ *  arc cut them). A leader starting at the node's centre therefore drew a solid
+ *  line straight through its empty middle, which at 8px across read as a stray
+ *  digit. Main nodes never showed it: they are filled the same cyan as their
+ *  leader. So main leaders keep pad 0, and only side ones start at the edge. */
+export const SIDE_LEADER_GAP = SIDE_NODE_R + 1
 export const R_SIDE_EXIT = 315
 /** The "SIDE" rule that separates the two groups. */
 export const SIDE_GAP = 30
@@ -93,22 +111,32 @@ export function wiresFor(threads: Thread[]): (Wire | null)[] {
   let s = 0
   return threads.map(t => (t.kind === 'main'
     ? solve(rowY(m++))
-    : solve(sideRowY(s++, mainCount), R_SIDE_NODE, R_SIDE_EXIT)))
+    : solve(sideRowY(s++, mainCount), R_SIDE_NODE, R_SIDE_EXIT, SIDE_LEADER_GAP)))
 }
 
-/** The progress ring, swept clockwise from the top. */
-export function arcPath(percent: number): string | null {
+/* ---- THE PROGRESS RING ----
+   A CONSTANT full circle, with how much of it shows set by stroke-dashoffset.
+
+   It used to be a per-percent arc path, revealed once by a keyframe on mount.
+   That could never tween: switching 45% -> 33% swapped the path's shape
+   instantly, and a reveal that runs "forwards" has no way to go DOWN. With the
+   shape fixed, the only thing that changes is the offset — which a CSS
+   transition interpolates in either direction, so the ring sweeps up or rewinds
+   between any two values and the first open is just the same tween from empty.
+
+   Two semicircles from 12 o'clock with sweep-flag 1, which is clockwise on a
+   y-down screen, so the drawn part starts at the top and grows through the right
+   exactly as before. No `Z` and no 0.01px fudge: the dash starts at the path's
+   start, and the path's length is exactly ARC_LEN. */
+export const ARC_LEN = 2 * Math.PI * R_ARC
+export const RING_PATH =
+  `M ${CX} ${CY - R_ARC} A ${R_ARC} ${R_ARC} 0 1 1 ${CX} ${CY + R_ARC} `
+  + `A ${R_ARC} ${R_ARC} 0 1 1 ${CX} ${CY - R_ARC}`
+
+/** How much of the ring to HIDE at a percent. ARC_LEN = empty, 0 = full. */
+export function arcOffset(percent: number): number {
   const p = Math.max(0, Math.min(100, percent))
-  if (p <= 0) return null
-  // A 360° arc starts and ends at the same point, which an `A` command collapses
-  // to nothing — a finished story draws as a closed ring instead.
-  if (p >= 99.95) {
-    return `M ${CX} ${CY - R_ARC} A ${R_ARC} ${R_ARC} 0 1 1 ${CX - 0.01} ${CY - R_ARC} Z`
-  }
-  const sweep = (p / 100) * 360
-  const end = rad(-90 + sweep)
-  return `M ${CX} ${CY - R_ARC} A ${R_ARC} ${R_ARC} 0 ${sweep > 180 ? 1 : 0} 1 `
-    + `${(CX + R_ARC * Math.cos(end)).toFixed(2)} ${(CY + R_ARC * Math.sin(end)).toFixed(2)}`
+  return ARC_LEN * (1 - p / 100)
 }
 
 export type Tone = 'current' | 'active' | 'closed'
@@ -304,6 +332,9 @@ export interface Zoom {
   transform: string
   /** Where the focused node ends up, in the body's own px. */
   focal: { x: number; y: number }
+  /** Where its zoomed leader starts — the node's edge, scaled, toward the break.
+   *  Equal to `focal` for a filled (main) node. */
+  leaderStart: { x: number; y: number }
 }
 
 /** Zoom the instrument so `node` lands beside the row at `y`.
@@ -313,10 +344,15 @@ export interface Zoom {
  *  coordinate space, not the element's box. */
 export function zoomTo(node: Wire, y: number): Zoom {
   const focal = { x: FOCAL_X, y: y - FOCAL_RISE }
+  // The zoomed leader runs focal -> (focal.x + FOCAL_BREAK, y), so its edge start
+  // is `pad` along that direction — scaled, because the node it leaves is scaled.
+  const len = Math.hypot(FOCAL_BREAK, FOCAL_RISE)
+  const off = (node.pad * ZOOM) / len
   return {
     transform: `translate(${(focal.x - ZOOM * node.nx).toFixed(2)}px, `
       + `${(focal.y - ZOOM * node.ny).toFixed(2)}px) scale(${ZOOM})`,
     focal,
+    leaderStart: { x: focal.x + FOCAL_BREAK * off, y: focal.y + FOCAL_RISE * off },
   }
 }
 
@@ -352,4 +388,17 @@ export function completionFor(
   if (quests.length === 0) return null
   const done = quests.filter(q => q.status === 'completed').length
   return { done, total: quests.length, percent: Math.round((done / quests.length) * 100) }
+}
+
+/** THE number a card shows. The ONE home for the fallback rule.
+ *
+ *  It used to be written out inline at each render site —
+ *  `completionFor(...)?.percent ?? story.percent` in the Codex card, a different
+ *  spelling of it on the story screen's centre — and a THIRD site, the story
+ *  tabs, never got it: it kept printing the authored 23% beside a derived 33%.
+ *  That is this repo's recurring "one authored value, two render paths" bug, so
+ *  every render now routes through here and storyLattice.test.ts fails on any
+ *  that read `.percent` directly. */
+export function displayPercent(story: ProgressStory, quests: QuestRow[], character: CharacterRow): number {
+  return completionFor(story, quests, character)?.percent ?? story.percent
 }

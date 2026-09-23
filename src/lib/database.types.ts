@@ -1496,6 +1496,10 @@ export type QuestRow = {
   /** Rows written before this field existed are plain strings — every reader
    *  must accept `RelatedTag | string`, never assume the object shape. */
   related: RelatedTag[]
+  /** 0026: false keeps the quest off every player screen — the Journal, the
+   *  story lattice and the completion percent all read through one policy that
+   *  requires it, so a hidden quest is absent rather than filtered. */
+  visible: boolean
   created_at: string         // stable list order
   updated_at: string
 }
@@ -2024,6 +2028,86 @@ export type LootOpenUpdate = {
   open_for?: string | null
 }
 
+/** A document or image the DM hands to players (0023). `recipients` is who
+ *  holds it (their Journal files it); `on_screen` is who has it open right now,
+ *  always a subset — the table's check constraint holds that. */
+export type HandoutRow = {
+  id: string
+  title: string
+  body: string
+  image_url: string
+  quest_id: string | null
+  recipients: string[]
+  on_screen: string[]
+  pushed_at: string | null
+  created_at: string
+  updated_at: string
+}
+export type HandoutInsert = Partial<Omit<HandoutRow, 'id' | 'created_at' | 'updated_at'>>
+export type HandoutUpdate = Partial<Omit<HandoutRow, 'id' | 'created_at' | 'updated_at'>>
+
+/** A night's plan (0027). `session_id` is null until the DM wraps the plan into
+ *  a session log entry — which is also what marks the night as played out. */
+export type SessionPlanRow = {
+  id: string
+  title: string
+  session_id: string | null
+  closed_at: string | null
+  created_at: string
+  updated_at: string
+}
+export type PlanCardKind = 'shop' | 'loot' | 'handout' | 'npc' | 'quest' | 'note'
+/** One staged thing (0027). `ref` names the row it fires in its own table; the
+ *  card keeps no copy of it, only a title to print if that row goes away. */
+export type PlanCardRow = {
+  id: string
+  plan_id: string
+  kind: PlanCardKind
+  ref: string | null
+  title: string
+  note: string
+  target: string[]
+  sort: number
+  fired_at: string | null
+  created_at: string
+}
+export type PlanCardInsert = Pick<PlanCardRow, 'plan_id' | 'kind'> & Partial<Pick<PlanCardRow, 'ref' | 'title' | 'note' | 'target' | 'sort'>>
+export type PlanCardUpdate = Partial<Pick<PlanCardRow, 'title' | 'note' | 'target' | 'sort' | 'fired_at'>>
+
+/** An NPC record (0024). Everything else in the app still names NPCs by free
+ *  text; the NPC web matches those names to these rows. A player can read a
+ *  row only once `known_to` holds one of their characters — which is why the
+ *  DM's notes are NOT here but in NpcSecret. */
+export type NpcRow = {
+  id: string
+  name: string
+  role: string
+  location: string
+  portrait: string
+  blurb: string
+  known_to: string[]
+  created_at: string
+  updated_at: string
+}
+/** DM-only notes on an NPC (0024), split off `npcs` because players can read that. */
+export type NpcSecret = { npc_id: string; gm_notes: string; updated_at: string }
+export type NpcInsert = Partial<Omit<NpcRow, 'id' | 'created_at' | 'updated_at'>> & { name: string }
+export type NpcUpdate = Partial<Omit<NpcRow, 'id' | 'created_at' | 'updated_at'>>
+export type NpcAttitude = 'friendly' | 'neutral' | 'wary' | 'hostile'
+/** An undirected NPC ↔ NPC tie (0024). `known_to`: who has learned it. */
+export type NpcLinkRow = {
+  id: string
+  a: string
+  b: string
+  kind: string
+  attitude: NpcAttitude | null
+  label: string
+  known_to: string[]
+  created_at: string
+}
+export type NpcLinkInsert = Pick<NpcLinkRow, 'a' | 'b'> & Partial<Pick<NpcLinkRow, 'kind' | 'attitude' | 'label' | 'known_to'>>
+export type NpcLinkUpdate = Partial<Pick<NpcLinkRow, 'kind' | 'attitude' | 'label' | 'known_to'>>
+
 export type CatalogLootRow = { id: string; data: LootTable; draft: LootTable | null; updated_at: string }
 export type CatalogLootInsert = { id?: string; data?: LootTable; draft?: LootTable | null }
 export type CatalogLootUpdate = { data?: LootTable; draft?: LootTable | null }
@@ -2227,6 +2311,42 @@ export type Database = {
         Update: LootOpenUpdate
         Relationships: []
       }
+      handouts: {
+        Row: HandoutRow
+        Insert: HandoutInsert
+        Update: HandoutUpdate
+        Relationships: []
+      }
+      session_plans: {
+        Row: SessionPlanRow
+        Insert: Partial<Omit<SessionPlanRow, 'id' | 'created_at' | 'updated_at'>>
+        Update: Partial<Omit<SessionPlanRow, 'id' | 'created_at' | 'updated_at'>>
+        Relationships: []
+      }
+      plan_cards: {
+        Row: PlanCardRow
+        Insert: PlanCardInsert
+        Update: PlanCardUpdate
+        Relationships: []
+      }
+      npcs: {
+        Row: NpcRow
+        Insert: NpcInsert
+        Update: NpcUpdate
+        Relationships: []
+      }
+      npc_secrets: {
+        Row: NpcSecret
+        Insert: { npc_id: string; gm_notes?: string }
+        Update: { gm_notes?: string }
+        Relationships: []
+      }
+      npc_links: {
+        Row: NpcLinkRow
+        Insert: NpcLinkInsert
+        Update: NpcLinkUpdate
+        Relationships: []
+      }
       characters: {
         Row: CharacterRow
         Insert: CharacterInsert
@@ -2292,6 +2412,11 @@ export type Database = {
     Functions: {
       /** Migration 0009's server-side purchase check — see the migration's
        *  header comment for why this can't be a plain client UPDATE. */
+      shop_purchase: { Args: {
+        p_shop_id: string; p_item_id: string; p_request_id: string
+        p_character_id: string; p_character_updated_at: string
+        p_shop_updated_at: string; p_destination: Json
+      }; Returns: Json }
       shop_buy: { Args: { p_shop_id: string; p_item_id: string }; Returns: Json }
       /** Migration 0009's atomic "close every shop, open this one" — see its
        *  header comment for why two separate client UPDATEs can't guarantee

@@ -231,7 +231,7 @@ pattern, not a new UI. Decide the scope question first (see §7).
 - **Level-up feel:** DM-authored only (simplest) vs. a guided player flow (later).
 - **Catalog location:** bundled JSON (simple, redeploy to edit) vs. Supabase tables (live
   editing in the table editor). Per-character *state* is always in Supabase regardless.
-- **Concurrency:** last-write-wins is fine at 4 users; no special handling needed.
+- **Concurrency:** character saves merge disjoint JSON fields and compare `updated_at` before committing. Competing edits to the same field or array fail with a recoverable message. Purchases commit payment, stock, and delivery together with a receipt id for retries. See `docs/persistence.md`.
 
 ---
 
