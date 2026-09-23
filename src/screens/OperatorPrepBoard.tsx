@@ -18,7 +18,7 @@ import type { DmHandoutsState } from '../lib/handouts'
 import type { DmNpcsState } from '../lib/npcs'
 import type { DmPlansState } from '../lib/plans'
 import { eventText, fireLabel, firedLabel, moveTo, planEvents, questClosedText, sortBetween, split, targetNames } from '../lib/prep'
-import { pushPatch } from '../lib/handouts'
+import { fireCard } from '../lib/fireCard'
 import { Prose } from '../lib/markdown'
 import { proseField } from '../lib/textareaHooks'
 import { Icon } from '../components/Icon'
@@ -70,37 +70,13 @@ export function OperatorPrepBoard({ lib, campaign, shopLib, lootLib, handoutLib,
     await lib.addCard({ plan_id: plan.id, kind: k, ref, title, sort: sortBetween(last, undefined) })
   }
 
-  /** Fire: the card's own system does the work, then the card is stamped. */
+  /** Fire: lib/fireCard.ts owns what each kind means — the tray presses the
+   *  same button from every other screen. */
   async function fire(c: PlanCardRow) {
-    const targets = c.target.length ? c.target : party.map(p => p.id)
     setBusy(c.id)
-    let ok = true
-    let what = ''
-    if (c.kind === 'shop' && c.ref) {
-      await shopLib.openShop(c.ref, c.target[0] ?? null)
-      what = `opened for ${targetNames(c.target, names)}`
-    } else if (c.kind === 'loot' && c.ref) {
-      ok = await onRollLoot(c.ref)
-      what = 'rolled and pushed'
-    } else if (c.kind === 'handout' && c.ref) {
-      const h = handoutLib.handouts.find(x => x.id === c.ref)
-      ok = h ? await handoutLib.update(h.id, pushPatch(h, targets)) : false
-      what = `pushed to ${targetNames(c.target, names)}`
-    } else if (c.kind === 'npc' && c.ref) {
-      for (const t of targets) ok = (await npcLib.reveal(c.ref, t, true)) && ok
-      what = `revealed to ${targetNames(c.target, names)}`
-    } else if (c.kind === 'quest' && c.ref) {
-      const q = questOf(c.ref)
-      if (!q) ok = false
-      else if (q.visible) { await campaign.updateQuest(q.id, { status: 'completed' }); what = 'closed' }
-      else { await campaign.updateQuest(q.id, { visible: true }); what = 'revealed to the party' }
-    } else {
-      what = 'marked played'
-    }
+    const what = await fireCard(c, { party, shopLib, handoutLib, npcLib, campaign, rollLoot: onRollLoot, plans: lib })
     setBusy(null)
-    if (!ok) return
-    await lib.setFired(c.id, true)
-    log(<>{c.title || 'A card'} <span className={con.obj}>{what}</span></>, 'cyan')
+    if (what) log(<>{c.title || 'A card'} <span className={con.obj}>{what}</span></>, 'cyan')
   }
 
   if (!plan) {

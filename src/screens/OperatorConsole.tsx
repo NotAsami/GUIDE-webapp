@@ -89,6 +89,7 @@ import { OperatorInventory } from './OperatorInventory'
 import { CatalogForm } from './OperatorItemForm'
 import { OperatorNpcWeb } from './OperatorNpcWeb'
 import { OperatorPrepBoard } from './OperatorPrepBoard'
+import { PrepTray } from './PrepTray'
 import { OperatorShops } from './OperatorShops'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -795,6 +796,16 @@ export function OperatorConsole() {
           </div>
         </section>}
       </div>
+
+      {/* Tonight's staged cards, on every screen but the board itself — mid-session
+          the DM is on a sheet or the dashboard, and walking back to the board to
+          press one button is how a board stops being used. */}
+      {view !== 'prep' && (
+        <PrepTray
+          lib={planLib} campaign={campaign} shopLib={shopLib} handoutLib={handoutLib} npcLib={npcLib}
+          party={party} onRollLoot={fireLootTable} onOpenBoard={openPrep} log={log}
+        />
+      )}
 
       {/* The loot roll. Portalled from inside the component, so it renders over
           everything regardless of where the DM has navigated — and survives
