@@ -19,7 +19,10 @@ export async function writeCharacter(
   let current: CharacterRow | undefined
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
-      current = await store.read(base.id)
+      // FIRST TRY BLIND. The row on screen is almost always the latest one, and
+      // the CAS already refuses a stale base — so reading first only doubled
+      // every save's latency (~250 ms each way). Read and merge only after a miss.
+      current = attempt === 0 ? base : await store.read(base.id)
       const merged = mergeCharacterPatch(base, patch as Partial<CharacterRow>, current) as CharacterUpdate
       // Never accept a stale derived cache from the caller.
       merged.public_vitals = publicVitals({ ...current, ...merged } as CharacterRow, shardTrees)
