@@ -1,147 +1,186 @@
-/* Lore screen. Shared chrome (topbar, dock nav, tickers, side-rails, bottombar)
-   lives in Layout / Nav / Deco; this module owns the two-column body: a left
-   DOSSIER region (portrait + identity vitals, non-scrolling frame around a
-   scrolling vitals list) and a right RECORD region (one scrolling reading
-   panel: Backstory / Nature / Relations).
+/* Lore screen — "as they remember it". One scroll container (.lore) holding a
+   two-column page: a RAIL (portrait, vitals, and a contents list that pins
+   while the article scrolls) and the ARTICLE (the lore record, then Chronicle,
+   What you've learned, and the people web). Framed by G.U.I.D.E.'s readout,
+   because the machine is the one reading this back to you.
 
-   Layout model matches Journal: position:fixed body between the dock nav and
-   the bottombar, with a row floor so a short viewport scrolls instead of
-   crushing the panels. Both regions are elastic (.rInner stays
-   position:absolute) — do NOT switch to the in-flow .rInner variant, it
-   breaks the `flex:1; min-height:0; overflow:auto` children below it. */
+   Layout model: the same fixed box between the dock nav and the bottombar as
+   every screen, but the WHOLE page scrolls inside it — a 2000-word record
+   cannot live in an absolutely-positioned region. The rail's contents list is
+   `position: sticky` against that scroller. */
 
 .lore {
   position: fixed;
   top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
   bottom: calc(var(--bar-bottom-h) + 18px);
   left: 0; right: 0;
-  display: grid;
-  grid-template-columns: 34fr 66fr;
-  grid-template-rows: minmax(var(--screen-min-h), 1fr);
-  gap: 22px;
-  padding: 0 34px;
   z-index: 10;
   overflow-y: auto;
   overflow-x: hidden;
+  scroll-behavior: smooth;
   scrollbar-width: thin;
+  scrollbar-color: var(--cyan-dim) transparent;
+  background-image:
+    linear-gradient(rgba(0, 166, 214, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 166, 214, 0.035) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 .lore::-webkit-scrollbar { width: 8px; }
-.lore::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15);
-}
-.lore::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
-  border: 2px solid #111;
+.lore::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55)); border: 2px solid #111; }
+@media (prefers-reduced-motion: reduce) { .lore { scroll-behavior: auto; } }
+
+/* The article takes the slack; the rail keeps its width. */
+.page {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 760px);
+  justify-content: center;
+  gap: 48px;
+  padding: 26px 34px 80px;
 }
 
-.col { position: relative; display: flex; flex-direction: column; min-width: 0; }
+/* ---------------- rail ---------------- */
+.rail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.contents {
+  position: sticky; top: 16px;
+  /* Pinned, so it must fit the scrollport or its bottom is unreachable: the
+     screen's own height (the same sum .lore is positioned by), minus the pin. */
+  max-height: calc(100vh - var(--bar-top-h) - var(--nav-top-gap) - var(--nav-h) - 46px - var(--bar-bottom-h) - 18px - 32px);
+  overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent;
+  margin-top: 6px; padding: 14px 16px 16px;
+  border: 1px solid rgba(0, 166, 214, 0.35);
+  background: rgba(10, 18, 22, 0.92);
+}
+.cHead { display: flex; align-items: baseline; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+.cHead span:last-child { margin-left: auto; color: var(--muted); letter-spacing: 0.1em; }
+.cGroup { margin-top: 12px; }
+.cGroupRow { display: flex; align-items: baseline; gap: 8px; }
+.cGroupName { font-family: var(--font-display); font-weight: 700; font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--beige); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+.cGroupName:hover { color: var(--cyan-hot); }
+.cPct { margin-left: auto; font-family: var(--font-mono); font-size: 8.5px; color: var(--cyan); }
+.cBar { height: 2px; margin: 4px 0 5px; background: rgba(0, 166, 214, 0.15); }
+.cBar i { display: block; height: 2px; background: var(--cyan); }
+.cSec {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  padding: 2px 0 2px 10px; border: 0; border-left: 1px solid rgba(212, 191, 125, 0.2); background: none;
+  font-family: var(--font-prose); font-size: 13.5px; line-height: 1.45; color: #b9b9b9;
+}
+.cSec:hover { color: var(--text); border-left-color: var(--cyan); }
+/* A section G.U.I.D.E. is taking: the one place besides the creep itself where
+   amber appears on a player screen. */
+.cSec.taking { color: var(--amber); }
+.cGroup.taking .cPct { color: var(--amber); }
+.cGroup.taking .cBar i { background: var(--amber); }
 
-/* --- Column-level chrome (identical to Journal/Equipment) --- */
-.colHeader {
-  display: flex; align-items: baseline; gap: 14px;
-  margin-bottom: 10px;
-  padding: 0 2px 7px;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
-  flex: 0 0 auto;
+/* ---------------- article ---------------- */
+.article { min-width: 0; }
+.readout {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  padding: 9px 14px; margin-bottom: 26px;
+  border: 1px solid rgba(0, 166, 214, 0.3); background: rgba(0, 20, 28, 0.6);
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
 }
-.chNum {
-  font-family: var(--font-mono); font-size: 10px;
-  letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
-}
-.chTitle {
-  font-family: var(--font-mono); font-size: 12px;
-  letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase;
-}
-.chMeta {
-  margin-left: auto;
-  font-family: var(--font-mono); font-size: 9px;
-  letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
-}
-.chMeta :global(.acc) { color: var(--cyan); }
-.chMeta :global(.dim) { color: var(--beige-dim); }
+.readout .sys { color: var(--cyan-hot); }
+.readout .end { margin-left: auto; color: var(--cyan); }
+.kicker { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+.title { margin: 6px 0 8px; font-family: var(--font-display); font-weight: 700; font-size: 46px; letter-spacing: 0.05em; line-height: 1.1; color: var(--beige); }
+.chips { display: flex; gap: 10px; margin-bottom: 8px; }
+.chip { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; padding: 3px 8px; border: 1px solid rgba(0, 166, 214, 0.5); color: var(--cyan-hot); }
+.chip.taking { border-color: rgba(226, 176, 33, 0.5); color: var(--amber); }
 
-/* ----- Framed region: angular clip + beige double-line ----- */
-.region {
-  --cut: 16px;
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
+/* One reading measure for every block of the record. */
+.record { font-family: var(--font-prose); font-size: 18px; line-height: 1.65; color: #d6d6d6; }
+.record p { margin: 0 0 16px; text-wrap: pretty; }
+.record strong { color: #e6d5a3; font-weight: 600; }
+.record :global(.prose-quote) { margin: 24px 20px 26px; padding-left: 24px; border-left: 2px solid var(--cyan); }
+.record :global(.prose-quote) blockquote { font-size: 22px; line-height: 1.45; color: var(--text); }
+.record :global(.prose-quote) figcaption { font-size: 9.5px; }
+/* The drop cap: the first letter of the first paragraph of the record. */
+.intro > p:first-of-type::first-letter {
+  float: left; margin: 7px 12px 0 0;
+  font-family: var(--font-display); font-weight: 700; font-size: 68px; line-height: 0.82;
+  color: var(--cyan-hot); text-shadow: 0 0 16px rgba(0, 166, 214, 0.4);
 }
-.rFrame {
-  position: absolute; inset: 0;
-  background: var(--beige);
-  clip-path: polygon(var(--cut) 0, 100% 0,
-    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
-    0 100%, 0 var(--cut));
-}
-.rGap {
-  position: absolute; inset: 1.5px;
-  background: var(--bg);
-  clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
-    100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
-    0 100%, 0 calc(var(--cut) - 1px));
-}
-.rLine {
-  position: absolute; inset: 4px;
-  background: var(--beige); opacity: 0.42;
-  clip-path: polygon(calc(var(--cut) - 4px) 0, 100% 0,
-    100% calc(100% - var(--cut) + 4px), calc(100% - var(--cut) + 4px) 100%,
-    0 100%, 0 calc(var(--cut) - 4px));
-}
-.rInner {
-  position: absolute; inset: 5.5px;
-  background:
-    radial-gradient(130% 100% at 50% 0%, rgba(0, 166, 214, 0.05), transparent 60%),
-    linear-gradient(180deg, #151515, #0e0e0e);
-  clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0,
-    100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%,
-    0 100%, 0 calc(var(--cut) - 5px));
-  overflow: hidden;
-  display: flex; flex-direction: column;
-}
-.rInner::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: repeating-linear-gradient(to bottom,
-    rgba(0, 166, 214, 0.035) 0px, rgba(0, 166, 214, 0.035) 1px,
-    transparent 1px, transparent 4px);
-  mix-blend-mode: screen; opacity: 0.6;
-}
-/* 1.5px, not 1px — bare border-top/border-left rounds away at fractional zoom. */
-.rCorner {
-  position: absolute; width: 14px; height: 14px;
-  border-color: var(--cyan); opacity: 0.7; z-index: 5; pointer-events: none;
-}
-.rCorner.tl { top: 9px; left: 9px; border-top: 1.5px solid; border-left: 1.5px solid; }
-.rCorner.br { bottom: 9px; right: 9px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
 
-/* shared thin scrollbar */
-.scrollY {
-  overflow-y: auto; overflow-x: hidden;
-  scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent;
+.group { display: flex; align-items: center; gap: 16px; margin: 58px 0 6px; scroll-margin-top: 16px; }
+.group::before, .group::after { content: ""; flex: 1; height: 1px; }
+.group::before { background: linear-gradient(90deg, transparent, rgba(212, 191, 125, 0.5)); }
+.group::after { background: linear-gradient(90deg, rgba(212, 191, 125, 0.5), transparent); }
+.groupName { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 24px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige); text-align: center; }
+.section { scroll-margin-top: 16px; }
+.secName { margin: 32px 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige); }
+.secName.taking { color: var(--amber); }
+.takingNote { margin: -4px 0 14px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--amber); }
+
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 6px 0 14px; align-items: start; }
+.cardCol { display: flex; flex-direction: column; gap: 12px; }
+.cardLabel { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; }
+.card { border: 1px solid rgba(212, 191, 125, 0.25); border-top: 2px solid var(--tone, var(--beige)); background: #161614; padding: 12px 15px 13px; }
+.cardName { font-family: var(--font-prose); font-weight: 700; font-size: 18px; color: var(--tone, #e6d5a3); }
+.cardNote { font-weight: 400; color: var(--muted); }
+.cardText { margin-top: 4px; font-family: var(--font-prose); font-size: 15px; line-height: 1.5; color: #c9c9c9; }
+.cardText strong { color: #e6d5a3; font-weight: 600; }
+.toneGood { --tone: #6fcf8e; }
+.toneBad { --tone: #e07a7a; }
+@media (max-width: 1100px) { .cards { grid-template-columns: 1fr; } }
+
+/* After the record */
+.after { display: flex; align-items: center; gap: 14px; margin: 64px 0 16px; scroll-margin-top: 16px; }
+.after h2 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--beige); }
+.after::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(212, 191, 125, 0.45), transparent); }
+
+.chron { list-style: none; margin: 0; padding: 0; }
+.chron li { display: grid; grid-template-columns: 96px 14px minmax(0, 1fr); gap: 12px; }
+.chronN { text-align: right; font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--beige); }
+.chronDate { display: block; margin-top: 2px; font-family: var(--font-mono); font-weight: 400; font-size: 8px; line-height: 1.4; letter-spacing: 0.04em; color: var(--muted); }
+.chronRail { display: flex; flex-direction: column; align-items: center; }
+.chronRail::before { content: ""; width: 9px; height: 9px; margin-top: 7px; transform: rotate(45deg); border: 1px solid var(--cyan); background: #0d2a33; }
+.chronRail::after { content: ""; flex: 1; width: 1px; background: rgba(212, 191, 125, 0.25); }
+.chronBody { padding-bottom: 18px; }
+.chronTitle { font-family: var(--font-prose); font-weight: 700; font-size: 18px; color: var(--text); }
+.chronRecap { font-size: 15px; line-height: 1.5; color: #c4c4c4; margin-top: 2px; }
+.chronRecap p { margin: 0 0 6px; }
+.subhead { margin: 22px 0 8px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige); }
+.done { display: flex; flex-wrap: wrap; gap: 8px; }
+.doneQ { font-family: var(--font-prose); font-size: 15px; padding: 4px 10px; border: 1px solid rgba(79, 174, 107, 0.4); color: #cfe9d6; }
+
+.learnGrid { display: flex; flex-wrap: wrap; gap: 12px; }
+.handout {
+  display: flex; flex-direction: column; align-items: center; gap: 7px; width: 104px; cursor: pointer;
+  background: none; border: 0; padding: 0; color: var(--text); font-family: var(--font-prose); font-size: 13px; line-height: 1.2; text-align: center;
 }
-.scrollY::-webkit-scrollbar { width: 7px; }
-.scrollY::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
-.scrollY::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.45));
-  border: 2px solid #111;
+.handout::before { content: ""; width: 64px; height: 80px; background: linear-gradient(160deg, #e6d8b0, #c9b684); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); transform: rotate(-2deg); transition: transform 0.15s ease; }
+.handout:hover::before { transform: rotate(0) translateY(-3px); }
+.ties { list-style: none; margin: 0; padding: 0; }
+.ties li { padding: 5px 0; border-bottom: 1px dashed rgba(212, 191, 125, 0.12); font-size: 15.5px; line-height: 1.4; }
+.ties b { color: #e6d5a3; font-weight: 600; }
+.ties span { color: var(--muted); font-style: italic; }
+.places { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.place { border: 1px solid rgba(212, 191, 125, 0.28); padding: 12px 14px; }
+.placeName { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--beige); }
+.placeHome { margin-left: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); }
+.placeLine { margin-top: 5px; font-size: 14.5px; line-height: 1.4; color: #c4c4c4; }
+
+.webBox { position: relative; height: 560px; border: 1px solid rgba(0, 166, 214, 0.25); }
+.webMore { display: inline-block; margin-top: 10px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--cyan); text-decoration: none; }
+.webMore:hover { color: var(--cyan-hot); }
+
+@media (max-width: 980px) {
+  .page { grid-template-columns: minmax(0, 1fr); }
+  .contents { position: static; }
 }
+
 
 /* ============================================================
    01  DOSSIER — portrait + identity vitals
    ============================================================ */
-.dossierPad {
-  position: relative; z-index: 1;
-  flex: 1; min-height: 0;
-  display: flex; flex-direction: column;
-  padding: 16px 16px 14px;
-}
-
 /* --- Portrait frame --- */
 .bioPortrait {
   --cut: 20px;
   position: relative;
-  flex: 1 1 auto;
-  min-height: 190px;
+  /* A fixed portrait, not slack: the rail runs the full height of the article,
+     and an elastic portrait grew to swallow it (3800px on a long record). */
+  flex: 0 0 auto;
+  aspect-ratio: 3 / 4;
   cursor: default;
 }
 .bioPortrait::before {
@@ -233,7 +272,7 @@
   color: var(--muted); text-transform: uppercase; flex: 0 0 auto;
 }
 .vitalsLabel :global(.acc) { color: var(--cyan); }
-.vitals { flex: 1 1 auto; min-height: 60px; display: flex; flex-direction: column; gap: 2px; }
+.vitals { flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; }
 .vital {
   display: flex; justify-content: space-between; gap: 10px;
   padding: 6px 2px;
@@ -243,26 +282,6 @@
 .vK { color: var(--beige-dim); text-transform: uppercase; letter-spacing: 0.1em; }
 .vV { color: var(--text); }
 .vV.muted { color: var(--muted); }
-
-/* ============================================================
-   02  RECORD — the reading panel
-   ============================================================ */
-.readPad { position: relative; z-index: 1; flex: 1; min-height: 0; }
-/* Full width of the record panel, not a centred 700px measure. The column is
-   already narrow chrome around it, so capping the text AND padding it 48px left
-   a band of dead panel on both sides that read as a layout bug rather than a
-   reading measure. Vertical padding is unchanged — only the sides were wrong. */
-.readInner { padding: 36px 12px 44px; }
-
-.dossierSec + .dossierSec { margin-top: 46px; }
-.secLabel {
-  display: flex; align-items: baseline; gap: 8px;
-  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.3em;
-  color: var(--beige); text-transform: uppercase;
-  padding-bottom: 8px; margin-bottom: 16px;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.2);
-}
-.secLabel .num { color: var(--cyan); }
 
 .stateSub {
   font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.14em;
@@ -287,19 +306,6 @@
 .prose a, .natCard a, .relDesc a { color: var(--cyan); text-decoration: underline; text-decoration-color: rgba(0, 166, 214, 0.4); }
 .prose a:hover, .natCard a:hover, .relDesc a:hover { color: var(--cyan-hot); }
 
-.memNote {
-  display: inline-flex; flex-direction: column; gap: 2px;
-  margin: 26px 0 2px;
-  padding: 11px 14px;
-  border: 1.5px solid rgba(212, 191, 125, 0.22);
-  border-left: 2px solid rgba(0, 166, 214, 0.4);
-  background: rgba(0, 0, 0, 0.28);
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em;
-}
-.mnRow .k { color: var(--beige); }
-.mnRow .v { color: var(--cyan); opacity: 0.85; }
-
-/* --- Nature cards --- */
 .natureGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .natCard { --cut: 11px; --bc: rgba(212, 191, 125, 0.5); position: relative; min-height: 92px; }
 .ncFrame {
@@ -331,73 +337,6 @@
 .ncVal { font-family: var(--font-prose); font-size: 13.5px; line-height: 1.45; color: var(--text); }
 
 /* --- Relations --- */
-.relations { display: flex; flex-direction: column; }
-.relRow {
-  display: grid; grid-template-columns: 1fr auto; column-gap: 14px; row-gap: 6px;
-  grid-template-areas: "name attitude" "desc desc";
-  padding: 14px 4px;
-  border-bottom: 1.5px solid rgba(212, 191, 125, 0.12);
-  border-left: 2px solid transparent;
-  padding-left: 10px;
-  transition: border-color 140ms ease, background 140ms ease;
-}
-.relRow:last-child { border-bottom: 0; }
-.relHead { grid-area: name; display: flex; align-items: center; gap: 10px; }
-.relName {
-  font-family: var(--font-display); font-size: 15px; letter-spacing: 0.03em;
-  color: var(--cyan); border-bottom: 1px solid rgba(0, 166, 214, 0.35);
-}
-.relTag {
-  --cut: 5px; --bc: rgba(212, 191, 125, 0.55);
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em;
-  text-transform: uppercase; color: var(--beige);
-  padding: 4px 10px;
-  border: 1.5px solid var(--bc);
-  clip-path: polygon(var(--cut) 0, 100% 0,
-    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
-    0 100%, 0 var(--cut));
-  background-image:
-    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1.5px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1.5px), transparent 0),
-    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1.5px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1.5px), transparent 0);
-  background-repeat: no-repeat;
-  background-origin: border-box;
-  background-position: top left, bottom right;
-  background-size: calc(var(--cut) + 1.5px) calc(var(--cut) + 1.5px);
-  white-space: nowrap;
-}
-.relDesc { grid-area: desc; font-family: var(--font-prose); font-size: 15px; line-height: 1.55; color: var(--muted); }
-
-.attitude { grid-area: attitude; display: flex; align-items: center; gap: 10px; justify-self: end; }
-.attBars { display: flex; gap: 3px; }
-.attSeg { width: 14px; height: 6px; background: rgba(170, 170, 170, 0.16); border: 1px solid rgba(170, 170, 170, 0.25); }
-.attLabel {
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em;
-  text-transform: uppercase; color: var(--muted); min-width: 56px; text-align: right;
-}
-.attitude[data-att="friendly"] .attSeg { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.5); }
-.attitude[data-att="friendly"] .attLabel { color: var(--cyan); }
-.attitude[data-att="neutral"] .attSeg:nth-child(-n+2) { background: var(--beige); border-color: var(--beige); }
-.attitude[data-att="neutral"] .attLabel { color: var(--beige); }
-.attitude[data-att="wary"] .attSeg:nth-child(1) { background: var(--muted); border-color: var(--muted); }
-.attitude[data-att="wary"] .attLabel { color: var(--muted); }
-.attitude[data-att="undefined"] .attSeg { background: transparent; border-style: dashed; border-color: rgba(226, 176, 33, 0.4); }
-.attitude[data-att="undefined"] .attLabel { color: var(--gold-rare); opacity: 0.85; }
-/* hostile — 0 lit segments too, but dashed muted (not amber) so it reads distinct from
-   "unknown" at a glance while staying inside this screen's "no red" rule. */
-.attitude[data-att="hostile"] .attSeg { background: transparent; border-style: dashed; border-color: rgba(170, 170, 170, 0.4); }
-.attitude[data-att="hostile"] .attLabel { color: var(--muted); }
-
-/* G.U.I.D.E. relation — the one sanctioned amber row on this screen. */
-.relRow.guide { border-bottom-color: rgba(226, 176, 33, 0.18); }
-.relRow.guide .relName { color: var(--gold-rare); border-bottom-color: rgba(226, 176, 33, 0.4); }
-.relRow.guide .relTag { --bc: rgba(226, 176, 33, 0.5); color: var(--gold-rare); }
-
-@media (max-width: 1180px) {
-  .lore { grid-template-columns: 38fr 62fr; }
-  .readInner { padding: 28px 32px 34px; }
-  .natureGrid { grid-template-columns: 1fr; }
-}
-
 /* ---- Origin (dossier 03) ----
    The class and race descriptions, moved off the Features screen where they
    rendered on synthetic carrier rows. Two entries at most, so a plain stack
@@ -443,10 +382,3 @@
   text-transform: uppercase;
   color: var(--beige);
 }
-
-/* Section 05's way through to the relations web (RelationsWeb.tsx). */
-.webLink {
-  margin-left: auto; text-decoration: none;
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan);
-}
-.webLink:hover { color: var(--cyan-hot); }

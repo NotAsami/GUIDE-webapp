@@ -1,0 +1,5 @@
+/* The only amber a player sees before the reveal. Keep it that way. */
+.creep p { margin: 0 0 16px; font-family: var(--font-prose); font-size: 18px; line-height: 1.65; color: var(--text); }
+.creep p.quote { margin: 24px 20px 26px; padding-left: 24px; border-left: 2px solid var(--amber-dim); font-size: 21px; }
+.bit { font-family: var(--font-mono); font-size: 0.8em; letter-spacing: 0.02em; color: var(--amber); }
+.hot { color: var(--amber-hot); text-shadow: 0 0 8px rgba(255, 206, 77, 0.8); }

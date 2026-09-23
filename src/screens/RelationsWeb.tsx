@@ -84,7 +84,7 @@ export function RelationsWeb() {
                 <button type="button" className={web.tool} onClick={() => setSel(null)}>Esc · everyone</button>
               </span>
             )}
-            <span className={web.count}>{graph.nodes.length} known · {orbit.sectors.length} places</span>
+            <span className={web.count}>{graph.nodes.length} known</span>
           </div>
 
           {selected && (

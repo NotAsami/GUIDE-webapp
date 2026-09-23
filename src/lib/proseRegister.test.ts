@@ -58,6 +58,9 @@ const NOT_PROSE: Record<string, string> = {
     'the spell row rather than a prose field of its own.',
   'components/authoring.module.css:.originAuto':
     'An operator-side "derived automatically" hint. DM chrome, never player prose.',
+  'screens/Lore.module.css:.ties span':
+    'The label on a revealed tie ("— Holt answers to Voss"): short DM-typed ' +
+    'chrome in a list, rendered as plain text, not a passage of voice.',
   'screens/Spellbook.module.css:.spellRow .school':
     'The spell school in a grimoire row: an enum label (Evocation, Illusion), ' +
     'set in the prose face to sit under the bold name. Never authored text.',

@@ -145,3 +145,10 @@ test('places: homeland first, then quest locations with their quests and givers'
   assert.deepEqual(places.map(p => [p.name, p.home, p.quests.length]), [['Castella', true, 0], ['Brettany', false, 2], ['Davelguay', false, 1]])
   assert.deepEqual(places[1].people, ['Magistrate Voss'])
 })
+
+test('a start offset makes a split passage creep exactly like the whole one', () => {
+  const a = 'The war was primarily naval.', b = 'He came to Castella.'
+  const whole = creep(a + ' ' + b, 55, 9).map(r => r.t).join('')
+  const split = creep(a, 55, 9).map(r => r.t).join('') + ' ' + creep(b, 55, 9, a.length + 1).map(r => r.t).join('')
+  assert.equal(split, whole)
+})

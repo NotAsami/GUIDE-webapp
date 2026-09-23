@@ -123,10 +123,12 @@ export interface CreepRun { t: string; bit: boolean; hot?: boolean }
 const unit = (i: number) => { const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x) }
 const bitAt = (i: number, tick: number) => ((i * 31 + tick * 7 + (i >> 2)) % 5 < 2 ? '1' : '0')
 
-export function creep(text: string, remaining: number, tick: number): CreepRun[] {
+/** `start` is the index of the first letter, so a passage split into
+ *  paragraphs keeps each letter's threshold wherever the breaks fall. */
+export function creep(text: string, remaining: number, tick: number, start = 0): CreepRun[] {
   const r = Math.max(0, Math.min(100, remaining)) / 100
   const out: CreepRun[] = []
-  let i = 0
+  let i = start
   for (const ch of text) {
     const idx = i++
     const cut = r >= 1 ? 1 : r <= 0 ? 0 : Math.min(1, Math.max(0, r + 0.035 * Math.sin(tick * 0.9 + idx)))
