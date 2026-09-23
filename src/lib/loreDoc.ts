@@ -42,7 +42,9 @@ export function cardsOf(body: string): LoreCard[] | null {
 }
 
 const blocksOf = (s: string) => s.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean)
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section'
+/** Article ids live under `rec-`, so an author's `## People` or `## Nature` can
+ *  never collide with the fixed sections the screen adds after the record. */
+const slug = (s: string) => 'rec-' + (s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section')
 
 export function parseLore(md: string | undefined | null): LoreDoc {
   const doc: LoreDoc = { intro: '', groups: [] }

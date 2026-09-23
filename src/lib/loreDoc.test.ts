@@ -152,3 +152,9 @@ test('a start offset makes a split passage creep exactly like the whole one', ()
   const split = creep(a, 55, 9).map(r => r.t).join('') + ' ' + creep(b, 55, 9, a.length + 1).map(r => r.t).join('')
   assert.equal(split, whole)
 })
+
+test('article ids never collide with the screen\'s own sections (people, nature, origin…)', () => {
+  const ids = parseLore('# Social\n\n## People\n\na\n\n## Nature\n\nb\n\n## Origin\n\nc').groups.flatMap(g => [g.id, ...g.sections.map(s => s.id)])
+  for (const fixed of ['people', 'nature', 'origin', 'chronicle', 'learned']) assert.ok(!ids.includes(fixed), fixed)
+  assert.ok(ids.every(id => id.startsWith('rec-')))
+})
