@@ -18,8 +18,8 @@ import { castPartyEffect, fetchPartyRoster } from '../lib/party'
 import { colorOf } from '../lib/palette'
 import type { PartyRosterRow } from '../lib/database.types'
 import {
-  damageAt, isCaster, maxCastLevel, pactSlotCount, pactSlotLevel, pactSlotsAvail,
-  preparedUsed, preparesSpells, rollSpellDamage,
+  damageAt, isCaster, isPrepared, maxCastLevel, pactSlotCount, pactSlotLevel, pactSlotsAvail,
+  preparedUsed, preparesSpells, rollSpellDamage, shortDuration, shortTime,
 } from '../lib/spells'
 import { Icon } from '../components/Icon'
 import styles from './Spellbook.module.css'
@@ -33,11 +33,14 @@ interface RouteContext {
   shardTrees?: Record<string, ShardTree>
 }
 
-const SLOT_LABEL = ['', '1ST', '2ND', '3RD', '4TH', '5TH', '6TH', '7TH', '8TH', '9TH']
+const SLOT_LABEL = ['', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th']
 const GROUP_LABEL = [
-  'Cantrips', '1st Level', '2nd Level', '3rd Level', '4th Level',
-  '5th Level', '6th Level', '7th Level', '8th Level', '9th Level',
+  'Cantrips', 'First Circle', 'Second Circle', 'Third Circle', 'Fourth Circle',
+  'Fifth Circle', 'Sixth Circle', 'Seventh Circle', 'Eighth Circle', 'Ninth Circle',
 ]
+const ABILITY_NAME: Record<string, string> = {
+  str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma',
+}
 const SCHOOL_ICON: Record<SpellSchool, string> = {
   Evocation: 'fa-fire-flame-curved',
   Conjuration: 'fa-hand-sparkles',
@@ -376,36 +379,28 @@ export function Spellbook() {
       <Nav variant="dock" meta={meta} />
 
       <main className={styles.spellbook}>
-        {/* ============ 01 CASTER PROFILE (top band) ============ */}
-        <section className={`${styles.col} ${styles.sbBand}`} aria-label="Caster profile">
+        {/* ============ 01 CASTER (left rail) ============ */}
+        <section className={`${styles.col} ${styles.railCol}`} aria-label="Caster profile">
           <div className={styles.colHeader}>
             <span className={styles.chNum}>01</span>
-            <span className={styles.chTitle}>Caster Profile</span>
-            <span className={styles.chMeta}>
-              {caster ? <><span className="acc">Arcane</span> · Bound</> : <><span className="acc">None</span> · Inert</>}
-            </span>
+            <span className={styles.chTitle}>Caster</span>
+            <span className={styles.chMeta}>{caster ? <span className="acc">Bound</span> : 'Inert'}</span>
           </div>
           <div className={styles.region}>
             <div className={styles.rFrame} /><div className={styles.rGap} /><div className={styles.rLine} />
             <div className={styles.rInner}>
               <span className={`${styles.rCorner} ${styles.tl}`} />
               <span className={`${styles.rCorner} ${styles.br}`} />
-              <div className={styles.profilePad}>
+              <div className={`${styles.railPad} ${styles.scrollY}`}>
                 {caster ? (
                   <CasterProfile
                     sb={sb} slots={slots} preparing={preparing} pactInfo={pactInfo}
                     onTogglePip={togglePip} onTogglePactPip={togglePactPip}
                   />
                 ) : (
-                  <div className={styles.castStats}>
-                    <div className={styles.csItem}>
-                      <span className={styles.csK}>Spellcasting</span>
-                      <span className={`${styles.csV} ${styles.text} ${styles.muted}`}>None</span>
-                    </div>
-                    <div className={styles.csItem}>
-                      <span className={styles.csK}>Source</span>
-                      <span className={`${styles.csV} ${styles.text} ${styles.dim}`}>—</span>
-                    </div>
+                  <div className={styles.rpHead}>
+                    <div className={`${styles.rpClass} ${styles.muted}`}>No Spellcasting</div>
+                    <div className={styles.rpSub}>Source · —</div>
                   </div>
                 )}
               </div>
@@ -413,9 +408,8 @@ export function Spellbook() {
           </div>
         </section>
 
-        <div className={styles.sbBody}>
           {/* ============ 02 GRIMOIRE ============ */}
-          <section className={styles.col} aria-label="Grimoire">
+          <section className={`${styles.col} ${styles.grimCol}`} aria-label="Grimoire">
             <div className={styles.colHeader}>
               <span className={styles.chNum}>02</span>
               <span className={styles.chTitle}>Grimoire</span>
@@ -427,9 +421,8 @@ export function Spellbook() {
                 <span className={`${styles.rCorner} ${styles.tl}`} />
                 <span className={`${styles.rCorner} ${styles.br}`} />
                 <div className={styles.grimPad}>
-                  <div className={`${styles.grimScroll} ${styles.scrollY}`}>
                     {caster ? (
-                      <Grimoire spells={spells} slots={slots} preparing={preparing} pactInfo={pactInfo} selectedId={selectedId} onSelect={setSelectedId} />
+                      <Grimoire sb={sb} spells={spells} slots={slots} preparing={preparing} pactInfo={pactInfo} selectedId={selectedId} onSelect={setSelectedId} />
                     ) : (
                       <div className={styles.emptyState}>
                         <i className={`${styles.esGlyph} fa-solid fa-book-skull`} aria-hidden="true" />
@@ -438,7 +431,6 @@ export function Spellbook() {
                         <div className={styles.esLine}>// This bearer channels no spells<span className={styles.esCur}>█</span></div>
                       </div>
                     )}
-                  </div>
                 </div>
               </div>
             </div>
@@ -502,7 +494,6 @@ export function Spellbook() {
               </div>
             </div>
           </section>
-        </div>
       </main>
     </>
   )
@@ -521,109 +512,102 @@ function CasterProfile({
   const used = preparedUsed(sb)
   const max = sb.preparedMax ?? 0
   const known = (sb.spells ?? []).filter(s => s.level > 0).length
+  const ability = (sb.ability ?? '').toString().toLowerCase()
+  const slotted = slots.filter(s => s.total > 0)
   return (
     <>
-      <div className={styles.castStats}>
-        <div className={styles.csItem}>
-          <span className={styles.csK}>Spellcasting</span>
-          <span className={`${styles.csV} ${styles.text}`}>
-            {sb.class ?? '—'} <span className={styles.unit}>({(sb.ability ?? '').toString().toUpperCase() || '—'})</span>
-          </span>
+      <div className={styles.rpHead}>
+        <div className={styles.rpClass}>{sb.class ?? '—'}</div>
+        <div className={styles.rpSub}>
+          {ABILITY_NAME[ability] ?? (ability.toUpperCase() || '—')}
+          <span className={styles.sep}>·</span>
+          {/* Known-style casters (Sorcerer/Bard/Ranger/Warlock/…) have no daily
+              prep step and no cap — the "Prepared" stat doesn't apply to them. */}
+          {preparing
+            ? <span className={used >= max ? styles.full : ''}>{used}/{max} prepared</span>
+            : <span>{known} known</span>}
         </div>
-        <div className={styles.csItem}><span className={styles.csK}>Save DC</span><span className={styles.csV}>{sb.saveDC ?? '—'}</span></div>
-        <div className={styles.csItem}>
-          <span className={styles.csK}>Spell Atk</span>
-          <span className={styles.csV}>{sb.attackBonus != null ? `+${sb.attackBonus}` : '—'}</span>
-        </div>
-        {/* Known-style casters (Sorcerer/Bard/Ranger/Warlock/…) have no daily
-            prep step and no cap — the "Prepared" stat doesn't apply to them. */}
-        {preparing ? (
-          <div className={styles.csItem}>
-            <span className={styles.csK}>Prepared</span>
-            <span className={`${styles.csV} ${used >= max ? styles.full : ''}`}>
-              {used} <span className={styles.unit}>/ {max}</span>
-            </span>
-          </div>
-        ) : (
-          <div className={styles.csItem}>
-            <span className={styles.csK}>Known</span>
-            <span className={styles.csV}>{known}</span>
-          </div>
-        )}
       </div>
-      <div className={styles.profileRule} />
-      <div className={styles.slotTrack}>
-        <span className={styles.slotLabel}>Spell<br />Slots</span>
-        <div className={styles.slotCells}>
-          <div className={`${styles.slotCell} ${styles.cantripCell}`}>
-            <span className={styles.scLvl}>Cant</span>
-            <span className={styles.scInf}>∞</span>
-            <span className={styles.scCount}>At-Will</span>
-          </div>
-          {pactInfo ? (
-            // Pact Magic: ONE cell for the whole pool — every slot is the
-            // same derived level, so there's no per-level ladder to show.
-            <div className={`${styles.slotCell} ${styles.pactCell}`}>
-              <span className={styles.scLvl}>Pact</span>
-              <span className={styles.scPips}>
-                {Array.from({ length: pactInfo.total }, (_, i) => {
-                  const filled = i < pactInfo.avail
-                  return (
-                    <button
-                      type="button"
-                      key={i}
-                      className={`${styles.pip} ${filled ? styles.filled : styles.spent}`}
-                      aria-label={`Pact slot ${i + 1} ${filled ? 'available' : 'expended'}`}
-                      onClick={() => onTogglePactPip(i)}
-                    />
-                  )
-                })}
-              </span>
-              <span className={styles.scCount}>{pactInfo.avail}/{pactInfo.total} · Level {pactInfo.level}</span>
-            </div>
-          ) : (
-            slots.map(slot => {
-              if (slot.total === 0) {
-                return (
-                  <div className={`${styles.slotCell} ${styles.inert}`} key={slot.level}>
-                    <span className={styles.scLvl}>{SLOT_LABEL[slot.level]}</span>
-                    <span className={styles.scNone}>—</span>
-                    <span className={styles.scCount}>No Slots</span>
-                  </div>
-                )
-              }
-              const avail = slot.total - slot.expended
-              return (
-                <div className={styles.slotCell} key={slot.level}>
-                  <span className={styles.scLvl}>{SLOT_LABEL[slot.level]}</span>
-                  <span className={styles.scPips}>
-                    {Array.from({ length: slot.total }, (_, i) => {
-                      const filled = i < avail
-                      return (
-                        <button
-                          type="button"
-                          key={i}
-                          className={`${styles.pip} ${filled ? styles.filled : styles.spent}`}
-                          aria-label={`Level ${slot.level} slot ${i + 1} ${filled ? 'available' : 'expended'}`}
-                          onClick={() => onTogglePip(slot.level, i)}
-                        />
-                      )
-                    })}
-                  </span>
-                  <span className={styles.scCount}>{avail}/{slot.total}</span>
-                </div>
-              )
-            })
-          )}
+      <div className={styles.rpStats}>
+        <div className={styles.rpStat}><span className={styles.rpK}>Save DC</span><span className={styles.rpV}>{sb.saveDC ?? '—'}</span></div>
+        <div className={styles.rpStat}>
+          <span className={styles.rpK}>Spell Atk</span>
+          <span className={styles.rpV}>{sb.attackBonus != null ? formatMod(sb.attackBonus) : '—'}</span>
         </div>
+      </div>
+      <div className={styles.rpSlotHead}>
+        <span>Slots</span>
+        <span className={styles.rpHint}>tap a gem to spend</span>
+      </div>
+      <div className={styles.rpSlots}>
+        {pactInfo ? (
+          // Pact Magic: ONE row for the whole pool — every slot is the same
+          // derived level, so there's no per-level ladder to show.
+          <GemRow
+            label="Pact" note={`L${pactInfo.level}`} total={pactInfo.total} avail={pactInfo.avail}
+            ariaLabel={i => `Pact slot ${i + 1}`} onToggle={onTogglePactPip}
+          />
+        ) : slotted.length === 0 ? (
+          <div className={styles.rpNone}>// No spell slots</div>
+        ) : (
+          // Levels with no slots aren't drawn at all — a 1st-level caster
+          // doesn't need eight rows telling it so.
+          slotted.map(slot => (
+            <GemRow
+              key={slot.level} label={SLOT_LABEL[slot.level]} total={slot.total} avail={slot.total - slot.expended}
+              ariaLabel={i => `Level ${slot.level} slot ${i + 1}`} onToggle={i => onTogglePip(slot.level, i)}
+            />
+          ))
+        )}
       </div>
     </>
   )
 }
 
+/** One slot level: clickable gems with the same boundary semantics as before —
+ *  a filled gem spends down to it, a spent gem restores up to it. */
+function GemRow({ label, note, total, avail, ariaLabel, onToggle }: {
+  label: string
+  note?: string
+  total: number
+  avail: number
+  ariaLabel: (i: number) => string
+  onToggle: (i: number) => void
+}) {
+  return (
+    <div className={styles.gemRow}>
+      <span className={styles.gemLvl}>{label}{note && <span className={styles.gemNote}>{note}</span>}</span>
+      <span className={styles.gems}>
+        {Array.from({ length: total }, (_, i) => {
+          const filled = i < avail
+          return (
+            <button
+              type="button" key={i}
+              className={`${styles.gem} ${filled ? styles.filled : styles.spent}`}
+              aria-label={`${ariaLabel(i)} ${filled ? 'available' : 'expended'}`}
+              onClick={() => onToggle(i)}
+            />
+          )
+        })}
+      </span>
+      <span className={styles.gemCount}>{avail}<span className={styles.gemOf}>/{total}</span></span>
+    </div>
+  )
+}
+
+type Filter = 'all' | 'prepared' | 'ritual' | 'conc' | 'bonus'
+const FILTERS: { id: Filter; label: string; keep: (sp: Spell, sb: CharacterSpellbook) => boolean }[] = [
+  { id: 'all', label: 'All', keep: () => true },
+  { id: 'prepared', label: 'Prepared', keep: (sp, sb) => isPrepared(sp, sb) },
+  { id: 'ritual', label: 'Ritual', keep: sp => sp.ritual },
+  { id: 'conc', label: 'Conc.', keep: sp => sp.concentration },
+  { id: 'bonus', label: 'Bonus', keep: sp => shortTime(sp.castingTime) === 'Bonus' },
+]
+
 function Grimoire({
-  spells, slots, preparing, pactInfo, selectedId, onSelect,
+  sb, spells, slots, preparing, pactInfo, selectedId, onSelect,
 }: {
+  sb: CharacterSpellbook
   spells: Spell[]
   slots: SpellSlot[]
   preparing: boolean
@@ -631,8 +615,10 @@ function Grimoire({
   selectedId: string | null
   onSelect: (id: string) => void
 }) {
+  const [filter, setFilter] = useState<Filter>('all')
+  const keep = FILTERS.find(f => f.id === filter)!.keep
   const byLevel = new Map<number, Spell[]>()
-  for (const sp of spells) {
+  for (const sp of spells.filter(sp => keep(sp, sb))) {
     const arr = byLevel.get(sp.level) ?? []
     arr.push(sp)
     byLevel.set(sp.level, arr)
@@ -640,6 +626,19 @@ function Grimoire({
   const levels = [...byLevel.keys()].sort((a, b) => a - b)
   return (
     <>
+      <div className={styles.filters} role="group" aria-label="Filter spells">
+        {/* A known-style caster has nothing to prepare, so that chip would
+            always equal All. */}
+        {FILTERS.filter(f => f.id !== 'prepared' || preparing).map(f => (
+          <button
+            key={f.id} type="button" aria-pressed={filter === f.id}
+            className={`${styles.chip} ${filter === f.id ? styles.on : ''}`}
+            onClick={() => setFilter(f.id)}
+          >{f.label}</button>
+        ))}
+      </div>
+      <div className={`${styles.grimScroll} ${styles.scrollY}`}>
+      {levels.length === 0 && <div className={styles.noMatch}>// No spells match</div>}
       {levels.map(lvl => {
         const slot = lvl > 0 ? slots.find(s => s.level === lvl) : null
         // Every non-cantrip level draws from the SAME shared pact pool, not
@@ -654,25 +653,22 @@ function Grimoire({
               <span className={styles.lhSlots}>{slotNote}</span>
             </div>
             {byLevel.get(lvl)!.map(sp => (
-              <SpellRow key={sp.id} sp={sp} selected={sp.id === selectedId} preparing={preparing} onSelect={() => onSelect(sp.id)} />
+              <SpellRow key={sp.id} sp={sp} ready={isPrepared(sp, sb)} selected={sp.id === selectedId} preparing={preparing} onSelect={() => onSelect(sp.id)} />
             ))}
           </div>
         )
       })}
+      </div>
     </>
   )
 }
 
-function SpellRow({ sp, selected, preparing, onSelect }: { sp: Spell; selected: boolean; preparing: boolean; onSelect: () => void }) {
+function SpellRow({ sp, ready, selected, preparing, onSelect }: { sp: Spell; ready: boolean; selected: boolean; preparing: boolean; onSelect: () => void }) {
   const cantrip = sp.level === 0
-  // A known-style caster's levelled spells are always ready — only a
-  // preparing caster's un-prepared spells read as dimmed/"not prepared".
-  const ready = cantrip || !preparing || !!sp.prepared
-  const unprepared = !ready
   return (
     <button
       type="button"
-      className={[styles.spellRow, selected ? styles.selected : '', unprepared ? styles.unprepared : ''].filter(Boolean).join(' ')}
+      className={[styles.spellRow, selected ? styles.selected : '', ready ? styles.ready : ''].filter(Boolean).join(' ')}
       onClick={onSelect}
     >
       {cantrip ? (
@@ -686,12 +682,11 @@ function SpellRow({ sp, selected, preparing, onSelect }: { sp: Spell; selected: 
           <span className={styles.dot} />
         </span>
       )}
-      <span className={styles.spellMain}>
-        <span className={styles.spellName}>{sp.name}</span>
-        <span className={styles.spellSub}>
-          <span className={styles.school}><Icon name={spellIcon(sp)} className={styles.schoolIc} style={sp.iconColor ? { color: sp.iconColor } : undefined} />{sp.school}</span>
-        </span>
-      </span>
+      <span className={styles.spellName}>{sp.name}</span>
+      <span className={styles.school}><Icon name={spellIcon(sp)} className={styles.schoolIc} style={sp.iconColor ? { color: sp.iconColor } : undefined} />{sp.school}</span>
+      <span className={styles.cell}>{shortTime(sp.castingTime)}</span>
+      <span className={styles.cell}>{sp.range || '—'}</span>
+      <span className={`${styles.cell} ${styles.dimCell}`}>{shortDuration(sp.duration)}</span>
       <span className={styles.spellTags}>
         {sp.concentration && <span className={styles.tagChip} title="Concentration"><i className="fa-solid fa-eye" /></span>}
         {sp.ritual && <span className={`${styles.tagChip} ${styles.txt}`} title="Ritual">R</span>}
@@ -729,7 +724,7 @@ function SpellDetail({
   onTogglePrepare: () => void
 }) {
   const ic = spellIcon(spell)
-  const lvlLine = cantrip ? 'Cantrip' : `Level ${spell.level}`
+  const flags = [spell.concentration && 'Concentration', spell.ritual && 'Ritual', isReaction(spell.castingTime) && 'Reaction'].filter(Boolean).join(' · ')
   const castLabel = cantrip ? 'Cast · At-Will' : pact ? `Cast · Pact L${castLevel}` : `Cast · L${castLevel} Slot`
   /* ONE HOME FOR THE DAMAGE PALETTE. This used to read an authored per-spell
      `dmgColor` hex, so Fire Bolt was seeded orange (#f3a216) here while the roll
@@ -745,12 +740,13 @@ function SpellDetail({
     <div className={styles.detailActive}>
       {flashOn && <div className={styles.daFlashPulse} aria-hidden="true" />}
       <div className={styles.daHead}>
-        <div className={styles.daName}>{spell.name}</div>
         <div className={styles.daLine}>
-          {lvlLine}
+          {cantrip ? 'Cantrip' : GROUP_LABEL[spell.level] ?? `Level ${spell.level}`}
           <span className={styles.sep}>·</span>
           <span className={styles.school}><Icon name={ic} className={styles.schoolIc} style={spell.iconColor ? { color: spell.iconColor } : undefined} />{spell.school}</span>
         </div>
+        <div className={styles.daName}>{spell.name}</div>
+        {flags && <div className={styles.daSub}>{flags}</div>}
       </div>
 
       <div className={`${styles.daBody} ${styles.scrollY}`}>
@@ -770,13 +766,6 @@ function SpellDetail({
           </div>
           <div className={styles.daCell}><span className={styles.dcK}>Duration</span><span className={styles.dcV}>{spell.duration}</span></div>
         </div>
-
-        {(spell.concentration || spell.ritual) && (
-          <div className={styles.daFlags}>
-            {spell.concentration && <span className={styles.daFlag}><i className="fa-solid fa-eye" /> Concentration</span>}
-            {spell.ritual && <span className={styles.daFlag}><i className="fa-solid fa-hourglass-half" /> Ritual</span>}
-          </div>
-        )}
 
         <span className={styles.daDescLabel}>// Effect</span>
         <Prose text={spell.desc || '—'} className={styles.daDesc} />
