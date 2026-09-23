@@ -146,3 +146,57 @@
 }
 .emptyT { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.1em; color: var(--beige); }
 .empty > span { max-width: 520px; }
+
+/* ============================================================
+   THE TRAY (PrepTray.tsx) — tonight's cards along the bottom of every OTHER
+   console screen. Fixed above the console footer, never over the board itself.
+   ============================================================ */
+.tray {
+  position: fixed; z-index: 55; left: 12px; right: 12px; bottom: calc(var(--op-bottom-h, 34px) + 12px);
+  height: 58px; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  background: linear-gradient(180deg, rgba(20, 17, 9, 0.97), rgba(16, 15, 13, 0.97));
+  border: 1px solid rgba(226, 176, 33, 0.45); box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+  animation: trayIn 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes trayIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tray { animation: none; } }
+
+.trayName {
+  flex: 0 0 auto; border: 0; background: transparent; cursor: pointer; padding: 0;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--amber);
+}
+.trayName:hover { color: var(--amber-hot); }
+.trayRule { flex: 0 0 auto; width: 1px; height: 24px; background: rgba(212, 191, 125, 0.25); }
+.trayCards { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.trayCards::-webkit-scrollbar { display: none; }
+.trayCard {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px 0 11px;
+  border: 1px solid rgba(212, 191, 125, 0.28); background: rgba(14, 13, 11, 0.92);
+}
+.trayTitle { font-family: var(--font-prose); font-size: 14px; color: var(--text); white-space: nowrap; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
+.trayFire {
+  height: 24px; padding: 0 9px; cursor: pointer; border: 1px solid var(--amber); background: rgba(226, 176, 33, 0.16);
+  color: var(--amber-hot); font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase;
+}
+.trayFire:hover { background: rgba(226, 176, 33, 0.3); }
+.trayFire:disabled { cursor: wait; opacity: 0.6; }
+.trayMore, .trayDone {
+  flex: 0 0 auto; height: 30px; padding: 0 10px; border: 1px dashed rgba(212, 191, 125, 0.3); background: transparent;
+  color: var(--muted); font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase;
+}
+.trayMore { cursor: pointer; }
+.trayMore:hover { border-color: var(--amber); color: var(--amber-hot); }
+.trayDone { display: flex; align-items: center; border-style: solid; }
+.trayCount { flex: 0 0 auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.trayShut { flex: 0 0 auto; width: 30px; height: 30px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.trayShut:hover { color: var(--amber-hot); }
+
+/* Hidden, it leaves a handle rather than vanishing: a tray that cannot be got
+   back is a tray the DM stops trusting. */
+.trayTab {
+  position: fixed; z-index: 55; right: 12px; bottom: calc(var(--op-bottom-h, 34px) + 12px);
+  height: 28px; padding: 0 12px; cursor: pointer;
+  border: 1px solid rgba(226, 176, 33, 0.45); background: rgba(20, 17, 9, 0.97); color: var(--amber);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+}
+.trayTab:hover { color: var(--amber-hot); }
