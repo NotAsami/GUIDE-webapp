@@ -127,22 +127,22 @@ export function Lore() {
                 return (
                   <div key={g.id} className={`${styles.cGroup} ${gi < 100 ? styles.taking : ''}`}>
                     <div className={styles.cGroupRow}>
-                      <button type="button" className={styles.cGroupName} onClick={() => jump(g.id)}>{g.name || 'Record'}</button>
+                      <button type="button" className={styles.cGroupName} onClick={() => jump(g.id)}>{g.name ? <Inline text={g.name} /> : 'Record'}</button>
                       <span className={styles.cPct}>{gi}%</span>
                     </div>
                     <div className={styles.cBar}><i style={{ width: `${gi}%` }} /></div>
                     {g.sections.filter(s => s.name).map(s => (
                       <button key={s.id} type="button" onClick={() => jump(s.id)}
                         className={`${styles.cSec} ${integrityOf(integ, s.name) < 100 ? styles.taking : ''}`}>
-                        {s.name}{integrityOf(integ, s.name) < 100 ? ' ◇' : ''}
+                        <Inline text={s.name} />{integrityOf(integ, s.name) < 100 ? ' ◇' : ''}
                       </button>
                     ))}
                   </div>
                 )
               })}
-              {origin.length > 0 && <div className={styles.cGroup}><button type="button" className={styles.cGroupName} onClick={() => jump('origin')}>Origin</button></div>}
-              {hasNature && <div className={styles.cGroup}><button type="button" className={styles.cGroupName} onClick={() => jump('nature')}>Nature</button></div>}
-              {[['chronicle', 'Chronicle'], ['learned', 'What you’ve learned'], ['people', 'People']].map(([id, label]) => (
+              {origin.length > 0 && <div className={styles.cGroup}><button type="button" className={styles.cGroupName} onClick={() => jump('lore-origin')}>Origin</button></div>}
+              {hasNature && <div className={styles.cGroup}><button type="button" className={styles.cGroupName} onClick={() => jump('lore-nature')}>Nature</button></div>}
+              {[['lore-chronicle', 'Chronicle'], ['lore-learned', 'What you’ve learned'], ['lore-people', 'People']].map(([id, label]) => (
                 <div key={id} className={styles.cGroup}><button type="button" className={styles.cGroupName} onClick={() => jump(id)}>{label}</button></div>
               ))}
             </nav>
@@ -169,7 +169,7 @@ export function Lore() {
 
             {doc.groups.map(g => (
               <section key={g.id} aria-label={g.name || 'Record'}>
-                {g.name && <div id={g.id} className={styles.group}><h2 className={styles.groupName}>{g.name}</h2></div>}
+                {g.name && <div id={g.id} className={styles.group}><h2 className={styles.groupName}><Inline text={g.name} /></h2></div>}
                 {!g.name && <span id={g.id} />}
                 {g.sections.map(s => <SectionView key={s.id} s={s} remaining={integrityOf(integ, s.name)} />)}
               </section>
@@ -177,7 +177,7 @@ export function Lore() {
 
             {origin.length > 0 && (
               <section aria-label="Origin">
-                <div id="origin" className={styles.after}><h2>Origin</h2></div>
+                <div id="lore-origin" className={styles.after}><h2>Origin</h2></div>
                 {origin.map(o => (
                   <div key={o.kind} className={styles.originRow}>
                     <div className={styles.originHead}>
@@ -192,7 +192,7 @@ export function Lore() {
 
             {hasNature && (
               <section aria-label="Nature">
-                <div id="nature" className={styles.after}><h2>Nature</h2></div>
+                <div id="lore-nature" className={styles.after}><h2>Nature</h2></div>
                 <div className={styles.natureGrid}>
                   {NATURE.map(({ key, label }) => (
                     <div className={styles.natCard} key={key}>
@@ -208,7 +208,7 @@ export function Lore() {
             )}
 
             <section aria-label="Chronicle">
-              <div id="chronicle" className={styles.after}><h2>Chronicle</h2></div>
+              <div id="lore-chronicle" className={styles.after}><h2>Chronicle</h2></div>
               {lived.length === 0 ? <p className={styles.stateSub}>// Nothing lived yet</p> : (
                 <ol className={styles.chron}>
                   {lived.map((s, i) => (
@@ -232,7 +232,7 @@ export function Lore() {
             </section>
 
             <section aria-label="What you've learned">
-              <div id="learned" className={styles.after}><h2>What you&rsquo;ve learned</h2></div>
+              <div id="lore-learned" className={styles.after}><h2>What you&rsquo;ve learned</h2></div>
               <div className={styles.subhead}>Handouts · {handouts.length}</div>
               {handouts.length === 0 ? <p className={styles.stateSub}>// Nothing handed to you yet</p> : (
                 <div className={styles.learnGrid}>
@@ -262,7 +262,7 @@ export function Lore() {
             </section>
 
             <section aria-label="People">
-              <div id="people" className={styles.after}><h2>The people you know</h2></div>
+              <div id="lore-people" className={styles.after}><h2>The people you know</h2></div>
               <div className={styles.webBox}>
                 <NpcWebView
                   tone="player" web={graph} orbit={orbit} sel={sel} onSelect={setSel}
@@ -295,7 +295,7 @@ function SectionView({ s, remaining }: { s: LoreSection; remaining: number }) {
   const taking = remaining < 100
   return (
     <div id={s.id} className={styles.section}>
-      {s.name && <h3 className={`${styles.secName} ${taking ? styles.taking : ''}`}>{s.name}</h3>}
+      {s.name && <h3 className={`${styles.secName} ${taking ? styles.taking : ''}`}><Inline text={s.name} /></h3>}
       {taking && <div className={styles.takingNote}>◇ G.U.I.D.E. · digitising · {remaining}% of this memory remains in ink</div>}
       {taking ? <Creep text={s.body} remaining={remaining} />
         : s.cards ? <Cards cards={s.cards} section={s.name} />
@@ -312,7 +312,7 @@ function Cards({ cards, section }: { cards: LoreCard[]; section: string }) {
   const labels = [...new Set(cards.map(c => c.label ?? ''))]
   const card = (c: LoreCard, i: number) => (
     <div key={i} className={`${styles.card} ${tone(c)}`}>
-      <div className={styles.cardName}>{c.name}{c.note && <span className={styles.cardNote}> ({c.note})</span>}</div>
+      <div className={styles.cardName}><Inline text={c.name} />{c.note && <span className={styles.cardNote}> (<Inline text={c.note} />)</span>}</div>
       <div className={styles.cardText}><Inline text={c.text} /></div>
     </div>
   )
