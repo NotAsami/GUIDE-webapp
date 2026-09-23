@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
+import { useLocation, useOutletContext } from 'react-router-dom'
 import { Nav } from '../components/Nav'
+import { HandoutPage } from '../components/Handout'
+import type { HandoutOutlet } from '../lib/handouts'
 import { Deco } from '../components/Deco'
 import { useCampaign } from '../lib/campaign'
-import type { QuestRow, QuestStatus, QuestType, RelatedTag, SessionRow } from '../lib/database.types'
+import type { CharacterRow, HandoutRow, QuestRow, QuestStatus, QuestType, RelatedTag, SessionRow } from '../lib/database.types'
 import styles from './Journal.module.css'
-import { Prose } from '../lib/markdown'
+import { Prose, isSafeUrl } from '../lib/markdown'
 
 const TYPE_LABEL: Record<QuestType, string> = { main: 'Main Quest', side: 'Side Quest' }
 const STATUS_LABEL: Record<QuestStatus, string> = { active: 'Active', completed: 'Completed', failed: 'Failed' }
@@ -18,21 +21,37 @@ function toRelatedTag(r: RelatedTag | string): RelatedTag {
   return typeof r === 'string' ? { name: r } : r
 }
 
-/** Only ever render an http(s) URL as a real link. The DM form nudges toward
- *  a URL but writes free text, and this is the actual security boundary — a
- *  `javascript:` or other scheme in a related tag renders as inert text, not
- *  a clickable href, however the value got into the row. */
+/** The DM form nudges toward a URL but writes free text, and this is the
+ *  actual security boundary — a `javascript:` or other scheme in a related tag
+ *  renders as inert text, not a clickable href, however it got into the row. */
 function safeHref(url: string | undefined): string | null {
-  if (!url) return null
-  return /^https?:\/\//i.test(url) ? url : null
+  return url && isSafeUrl(url) ? url : null
 }
 
-type Selection = { kind: 'quest'; id: string } | { kind: 'session'; id: string } | null
+type Tab = 'quests' | 'sessions' | 'handouts'
+type Selection = { kind: 'quest' | 'session' | 'handout'; id: string } | null
+const KIND: Record<Tab, 'quest' | 'session' | 'handout'> = { quests: 'quest', sessions: 'session', handouts: 'handout' }
+
+/** When a handout reached you: the last push, else when it was authored (a
+ *  quiet file carries no push time). */
+const receivedAt = (h: HandoutRow) => new Date(h.pushed_at ?? h.created_at)
+  .toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 export function Journal() {
   const { quests, sessions, loading, error } = useCampaign()
-  const [tab, setTab] = useState<'quests' | 'sessions'>('quests')
-  const [selected, setSelected] = useState<Selection>(null)
+  const { character, handouts, seenHandouts, markHandoutSeen, openHandout } =
+    useOutletContext<HandoutOutlet & { character: CharacterRow }>()
+  // "Open in Journal" from the dock lands here with the handout already chosen —
+  // keyed on the navigation, so it also works when the Journal is already open.
+  const loc = useLocation()
+  const arrivedWith = (loc.state as { handout?: string } | null)?.handout
+  const [tab, setTab] = useState<Tab>(arrivedWith ? 'handouts' : 'quests')
+  const [selected, setSelected] = useState<Selection>(arrivedWith ? { kind: 'handout', id: arrivedWith } : null)
+  useEffect(() => {
+    if (arrivedWith) { setTab('handouts'); setSelected({ kind: 'handout', id: arrivedWith }) }
+  }, [loc.key]) // eslint-disable-line react-hooks/exhaustive-deps
+  const onScreen = handouts.filter(h => h.on_screen.includes(character.id))
+  const filed = handouts.filter(h => !h.on_screen.includes(character.id))
 
   // Main quests lead, side quests follow — within that, useCampaign()'s
   // created_at order holds (stable sort), so edits never reshuffle the list.
@@ -46,12 +65,15 @@ export function Journal() {
   // selectedId + one-shot sessionsVisited latch let them drift apart).
   useEffect(() => {
     if (loading) return
-    const list = tab === 'quests' ? [...active, ...completed, ...failed] : sessions
-    if (selected && selected.kind === (tab === 'quests' ? 'quest' : 'session')
-      && list.some(e => e.id === selected.id)) return
-    setSelected(list.length ? { kind: tab === 'quests' ? 'quest' : 'session', id: list[0].id } : null)
+    const list = tab === 'quests' ? [...active, ...completed, ...failed] : tab === 'sessions' ? sessions : [...onScreen, ...filed]
+    if (selected && selected.kind === KIND[tab] && list.some(e => e.id === selected.id)) return
+    setSelected(list.length ? { kind: KIND[tab], id: list[0].id } : null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, loading, quests, sessions])
+  }, [tab, loading, quests, sessions, handouts])
+
+  // Reading it here is reading it: the NEW dot goes out.
+  useEffect(() => { if (selected?.kind === 'handout') markHandoutSeen(selected.id) }, [selected, markHandoutSeen])
+  const showHandout = (id: string) => { setTab('handouts'); setSelected({ kind: 'handout', id }) }
 
   const meta = (
     <>
@@ -69,6 +91,7 @@ export function Journal() {
 
   const selectedQuest = selected?.kind === 'quest' ? quests.find(q => q.id === selected.id) ?? null : null
   const selectedSession = selected?.kind === 'session' ? sessions.find(s => s.id === selected.id) ?? null : null
+  const selectedHandout = selected?.kind === 'handout' ? handouts.find(h => h.id === selected.id) ?? null : null
 
   return (
     <>
@@ -108,10 +131,26 @@ export function Journal() {
                   >
                     Sessions<span className={styles.tCount}>{String(sessions.length).padStart(2, '0')}</span>
                   </button>
+                  <button
+                    type="button" role="tab" aria-selected={tab === 'handouts'}
+                    className={`${styles.tab} ${tab === 'handouts' ? styles.on : ''}`}
+                    onClick={() => setTab('handouts')}
+                  >
+                    Handouts<span className={styles.tCount}>{String(handouts.length).padStart(2, '0')}</span>
+                  </button>
                 </div>
 
                 <div className={`${styles.indexScroll} ${styles.scrollY}`}>
-                  {loading ? null : tab === 'quests' ? (
+                  {tab === 'handouts' ? (
+                    handouts.length === 0 ? (
+                      <EmptyIndex text="Nothing handed to you yet." />
+                    ) : (
+                      <>
+                        {onScreen.length > 0 && <HandoutGroup label="On screen" cls={styles.grpActive} list={onScreen} quests={quests} seen={seenHandouts} selected={selected} onSelect={showHandout} />}
+                        {filed.length > 0 && <HandoutGroup label="Filed" list={filed} quests={quests} seen={seenHandouts} selected={selected} onSelect={showHandout} />}
+                      </>
+                    )
+                  ) : loading ? null : tab === 'quests' ? (
                     quests.length === 0 ? (
                       <EmptyIndex text="No quests logged yet." />
                     ) : (
@@ -162,8 +201,10 @@ export function Journal() {
                     <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
                     <p>{error}</p>
                   </div>
+                ) : selectedHandout ? (
+                  <HandoutEntry h={selectedHandout} quest={quests.find(q => q.id === selectedHandout.quest_id)} onOpen={() => openHandout(selectedHandout.id)} />
                 ) : selectedQuest ? (
-                  <QuestEntry q={selectedQuest} />
+                  <QuestEntry q={selectedQuest} handouts={handouts.filter(h => h.quest_id === selectedQuest.id)} onHandout={showHandout} />
                 ) : selectedSession ? (
                   <SessionEntry s={selectedSession} />
                 ) : (
@@ -230,7 +271,7 @@ function SessionRowBtn({ s, selected, onSelect }: { s: SessionRow; selected: boo
   )
 }
 
-function QuestEntry({ q }: { q: QuestRow }) {
+function QuestEntry({ q, handouts, onHandout }: { q: QuestRow; handouts: HandoutRow[]; onHandout: (id: string) => void }) {
   const badgeCls = q.status === 'active' ? styles.bActive : q.status === 'completed' ? styles.bCompleted : styles.bFailed
   const entryStCls = q.status === 'active' ? styles.stActive : q.status === 'completed' ? styles.stCompleted : styles.stFailed
   const done = q.objectives.filter(o => o.done).length
@@ -257,6 +298,18 @@ function QuestEntry({ q }: { q: QuestRow }) {
                 <span className={styles.objBox}><i className={o.done ? 'fa-solid fa-circle-check' : 'fa-regular fa-circle'} /></span>
                 <span className={styles.objText}>{o.text}</span>
               </div>
+            ))}
+          </div>
+        </>
+      )}
+      {handouts.length > 0 && (
+        <>
+          <div className={styles.subLabel}>Handouts</div>
+          <div className={styles.related}>
+            {handouts.map(h => (
+              <button key={h.id} type="button" className={`${styles.chip} ${styles.hoChip}`} onClick={() => onHandout(h.id)}>
+                <i className={`fa-solid ${h.image_url ? 'fa-image' : 'fa-file-lines'}`} aria-hidden="true" />{h.title || 'Untitled'}
+              </button>
             ))}
           </div>
         </>
@@ -306,6 +359,54 @@ function SessionEntry({ s }: { s: SessionRow }) {
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function HandoutGroup({ label, cls, list, quests, seen, selected, onSelect }: {
+  label: string; cls?: string; list: HandoutRow[]; quests: QuestRow[]
+  seen: Set<string>; selected: Selection; onSelect: (id: string) => void
+}) {
+  return (
+    <>
+      <div className={`${styles.groupHead} ${cls ?? ''}`}>{label}<span className={styles.gN}>{list.length}</span></div>
+      {list.map(h => {
+        const quest = quests.find(q => q.id === h.quest_id)
+        return (
+          <button
+            key={h.id} type="button" onClick={() => onSelect(h.id)}
+            className={`${styles.idxRow} ${styles.stActive} ${selected?.kind === 'handout' && selected.id === h.id ? styles.selected : ''}`}
+          >
+            <span className={styles.irTop}>
+              <span className={styles.irGlyph}><i className={`fa-solid ${h.image_url ? 'fa-image' : 'fa-file-lines'}`} aria-hidden="true" /></span>
+              <span className={styles.irTitle}>{h.title || 'Untitled'}</span>
+              {!seen.has(h.id) && <span className={styles.irNew}>New</span>}
+            </span>
+            <span className={styles.irMeta}>
+              {h.image_url ? 'IMAGE' : 'DOCUMENT'}
+              {quest && <><span className="sep">·</span>{quest.title.toUpperCase()}</>}
+              <span className="sep">·</span>{receivedAt(h).toUpperCase()}
+            </span>
+          </button>
+        )
+      })}
+    </>
+  )
+}
+
+function HandoutEntry({ h, quest, onOpen }: { h: HandoutRow; quest?: QuestRow; onOpen: () => void }) {
+  return (
+    <div className={styles.entry}>
+      <div className={styles.badges}>
+        <span className={`${styles.badge} ${styles.bLog}`}>Handout</span>
+        <span className={`${styles.badge} ${styles.bType}`}>{h.image_url ? 'Image' : 'Document'}</span>
+      </div>
+      <div className={styles.entryMeta}>
+        <span className="k">Received:</span> <span className="v">{receivedAt(h)}</span>
+        {quest && <><span className="sep">·</span><span className="k">Quest:</span> <span className="v">{quest.title}</span></>}
+      </div>
+      <div className={styles.hoPage}><HandoutPage h={h} /></div>
+      <button type="button" className={styles.hoOpen} onClick={onOpen}>Open beside the game</button>
     </div>
   )
 }

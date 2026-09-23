@@ -103,7 +103,11 @@ export function CatalogSearch() {
         </div>
 
         <div className={styles.body}>
-          {!ready && <div className={styles.none}>Loading the catalog…</div>}
+          {!ready && (
+            <div className={styles.none} aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[0, 1, 2].map(i => <span key={i} className="sk amber" style={{ display: 'block', height: 26 }} />)}
+            </div>
+          )}
 
           {ready && !term && (
             <div className={styles.none}>

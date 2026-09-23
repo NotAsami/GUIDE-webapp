@@ -1,0 +1,182 @@
+/* The NPC web's drawing, drawer and read-only card — shared by the Operator
+   Console (OperatorNpcWeb) and the player's relations web (RelationsWeb), so
+   the two can never draw the same web differently. Node geometry (circle
+   sizes, label width, line heights) is NOT set here: it comes inline from
+   lib/npcWeb.ts, the same numbers the layout's overlap guard is tested with.
+
+   TONE: the console is amber-led and the player screens cyan-led; `.player` on
+   the pane swaps the selection and focus colour, nothing else. */
+
+.web { position: absolute; inset: 0; }
+.pane {
+  position: absolute; inset: 0; overflow: hidden;
+  background-color: #0b0b0a;
+  background-image: radial-gradient(rgba(212, 191, 125, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* The one transform: fit the whole web, or zoom to a selection. */
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; transition: transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) { .world { transition: none; } }
+.svg { position: absolute; inset: 0; overflow: visible; }
+
+.ring1 { stroke: var(--beige); stroke-opacity: 0.26; stroke-dasharray: 3 6; }
+.ring2 { stroke: var(--beige); stroke-opacity: 0.15; stroke-dasharray: 3 6; }
+.spoke { stroke: var(--beige); stroke-opacity: 0.08; }
+
+.eRel { stroke-width: 1.4; stroke-opacity: 0.85; transition: stroke-opacity 200ms ease; }
+.eQuest { stroke: var(--cyan); stroke-width: 1.4; stroke-opacity: 0.8; stroke-dasharray: 2 5; transition: stroke-opacity 200ms ease; }
+.eQuest.done { stroke: var(--muted); stroke-opacity: 0.4; }
+.eLink { stroke: var(--beige-dim); stroke-width: 1.3; stroke-opacity: 0.85; stroke-dasharray: 7 5; transition: stroke-opacity 200ms ease; }
+.eLink.hot { stroke: var(--amber); stroke-width: 1.8; }
+.off { stroke-opacity: 0.1; }
+
+.sector {
+  position: absolute; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--beige-dim);
+}
+.eLabel {
+  position: absolute; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none; z-index: 2;
+  padding: 2px 7px; background: #0e0d0b; border: 1px solid rgba(212, 191, 125, 0.22);
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige);
+}
+
+/* ---- nodes ---- */
+.node {
+  position: absolute; z-index: 3; display: flex; flex-direction: column; align-items: center;
+  padding: 0; border: 0; background: transparent; cursor: pointer; text-align: center;
+  transition: opacity 200ms ease;
+}
+.disc {
+  position: relative; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  border-radius: 50%; border: 1px solid rgba(212, 191, 125, 0.7);
+  background: radial-gradient(120% 90% at 50% 30%, rgba(212, 191, 125, 0.18), transparent 70%), #141312;
+  font-family: var(--font-display); font-weight: 600; font-size: 12.5px; letter-spacing: 0.06em; color: var(--beige);
+}
+.disc img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.node:hover .disc { border-color: var(--amber); }
+.node:focus-visible { outline: 1px solid var(--amber); outline-offset: 4px; }
+.node.sel .disc { border-color: var(--amber); box-shadow: 0 0 0 5px #0b0b0a, 0 0 0 6px var(--amber), 0 0 18px rgba(226, 176, 33, 0.45); }
+/* A name the app only knows from free text — no record yet. */
+.node.unrecorded .disc { border-style: dashed; }
+.node.system .disc { border: 0; background: transparent; overflow: visible; }
+.diamond {
+  width: 70%; height: 70%; transform: rotate(45deg);
+  border: 1px solid var(--amber); background: rgba(226, 176, 33, 0.12); box-shadow: 0 0 14px rgba(226, 176, 33, 0.4);
+}
+.node.system .name { font-family: var(--font-display); font-size: 12.5px; letter-spacing: 0.1em; color: var(--amber-hot); }
+.name {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-family: var(--font-prose); font-size: 14px; color: var(--text);
+}
+.cap {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige-dim);
+}
+.faded { opacity: 0.4; }
+
+.pc { position: absolute; z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; transition: opacity 200ms ease; }
+.hex {
+  position: relative; display: block; background: var(--cyan);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  filter: drop-shadow(0 0 10px rgba(0, 166, 214, 0.5));
+}
+.hex > span {
+  position: absolute; inset: 1.5px; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(120% 90% at 50% 35%, rgba(0, 166, 214, 0.28), transparent 65%), #0b1216;
+  clip-path: polygon(50% 3%, 100% 26%, 100% 74%, 50% 97%, 0% 74%, 0% 26%);
+  font-family: var(--font-display); font-weight: 700; font-size: 12px; color: var(--cyan-hot);
+}
+.pcName { font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: 0.06em; color: var(--cyan-hot); white-space: nowrap; }
+
+/* ---- chrome over the pane ---- */
+.toolbar { position: absolute; z-index: 6; left: 14px; right: 14px; top: 12px; display: flex; align-items: center; gap: 6px; pointer-events: none; }
+.toolbar > * { pointer-events: auto; }
+.tool {
+  height: 30px; padding: 0 11px; cursor: pointer;
+  border: 1px solid rgba(212, 191, 125, 0.3); background: rgba(14, 13, 11, 0.92); color: var(--beige);
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase;
+}
+.tool:hover { border-color: var(--amber); }
+.tool.on { border-color: var(--amber); background: rgba(226, 176, 33, 0.12); color: var(--amber-hot); }
+.toolSep { width: 1px; height: 20px; margin: 0 6px; background: rgba(212, 191, 125, 0.2); }
+.focusTag {
+  display: flex; align-items: center; gap: 10px; margin-left: 10px; padding: 3px 4px 3px 11px;
+  border: 1px solid rgba(226, 176, 33, 0.5); background: rgba(14, 13, 11, 0.92);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber-hot);
+}
+.focusTag .tool { height: 24px; }
+.count { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+
+.legend {
+  position: absolute; z-index: 6; left: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 7px;
+  padding: 10px 12px; border: 1px solid rgba(212, 191, 125, 0.2); background: rgba(14, 13, 11, 0.92);
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+}
+.legend span { display: flex; align-items: center; gap: 9px; }
+.legend i { display: block; width: 26px; height: 0; border-top: 1.5px solid; }
+.lgRel { border-color: var(--good); }
+.lgQuest { border-color: var(--cyan); border-top-style: dotted !important; }
+.lgLink { border-color: var(--beige-dim); border-top-style: dashed !important; }
+
+.empty {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  padding: 40px; text-align: center; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.12em; color: var(--muted); line-height: 1.7;
+}
+.emptyT { font-family: var(--font-display); font-size: 18px; letter-spacing: 0.1em; color: var(--beige); }
+
+/* ---- the drawer: only while someone is selected or being edited ---- */
+.drawer {
+  position: absolute; z-index: 8; top: 0; right: 0; bottom: 0; overflow-y: auto; scrollbar-width: thin;
+  background: #0f0e0c; border-left: 1px solid rgba(212, 191, 125, 0.25); box-shadow: -24px 0 50px rgba(0, 0, 0, 0.6);
+  animation: drawerIn 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes drawerIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
+
+.dossier, .form { display: flex; flex-direction: column; padding: 18px 20px 20px; min-height: 100%; box-sizing: border-box; }
+.dHead { display: flex; align-items: center; gap: 14px; }
+.dDisc {
+  flex: 0 0 auto; width: 54px; height: 54px; border-radius: 50%; border: 1px solid var(--amber);
+  display: flex; align-items: center; justify-content: center; background: #141312;
+  font-family: var(--font-display); font-weight: 600; font-size: 17px; color: var(--beige);
+}
+.dDisc .diamond { width: 50%; height: 50%; }
+.dTx { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.dName { font-family: var(--font-display); font-weight: 600; font-size: 19px; letter-spacing: 0.04em; color: var(--beige); }
+.dMeta { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.x { flex: 0 0 auto; align-self: flex-start; width: 36px; height: 36px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
+.x:hover { color: var(--text); }
+.blurb { margin-top: 14px; }
+.blurb p { margin: 0 0 10px; font-family: var(--font-prose); font-size: 15px; line-height: 1.55; color: var(--muted); }
+
+.dSub { margin: 20px 0 4px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--amber); }
+.dSub span { color: var(--beige-dim); margin-left: 6px; }
+.tie { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 4px 10px; padding: 10px 0; border-top: 1px solid rgba(212, 191, 125, 0.12); }
+.tGlyph { font-size: 11px; line-height: 20px; }
+.tRel { color: var(--good); }
+.tQuest { color: var(--cyan); }
+.tLink { color: var(--beige-dim); }
+.tWho {
+  justify-self: start; padding: 0; border: 0; background: transparent; text-align: left;
+  font-family: var(--font-prose); font-size: 15px; color: var(--text);
+}
+button.tWho { cursor: pointer; }
+button.tWho:hover { color: var(--amber-hot); }
+.tWhat { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); line-height: 1.6; }
+.tSrc { color: var(--beige-dim); }
+
+
+/* ---- the player's tone ---- */
+.player .node.sel .disc { border-color: var(--cyan); box-shadow: 0 0 0 5px #0b0b0a, 0 0 0 6px var(--cyan), 0 0 18px rgba(0, 166, 214, 0.45); }
+.player .node:hover .disc { border-color: var(--cyan); }
+.player .node:focus-visible { outline-color: var(--cyan); }
+.player .eLink.hot { stroke: var(--cyan-hot); }
+.player .tool:hover, .player .tool.on { border-color: var(--cyan); }
+.player .tool.on { background: rgba(0, 166, 214, 0.12); color: var(--cyan-hot); }
+.player .focusTag { border-color: rgba(0, 166, 214, 0.5); color: var(--cyan-hot); }
+.player .dDisc { border-color: var(--cyan); }
+.player .dSub { color: var(--cyan); }
+.player button.tWho:hover { color: var(--cyan-hot); }
+.relDesc { margin-top: 6px; }
+.relDesc p { margin: 0 0 8px; font-family: var(--font-prose); font-size: 14.5px; line-height: 1.5; color: var(--muted); text-transform: none; letter-spacing: 0; }

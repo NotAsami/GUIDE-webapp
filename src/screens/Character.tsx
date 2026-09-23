@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { useOutletContext } from 'react-router-dom'
@@ -20,7 +21,7 @@ import styles from './Character.module.css'
 
 interface RouteContext {
   character: CharacterRow
-  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<SaveResult>
   shardTrees?: Record<string, ShardTree>
 }
 
@@ -71,24 +72,13 @@ export function Character() {
   /** Roll, flash the hexagon, log it. The dice and the entry are lib/rolls.tsx's
    *  `buildCheck` — shared with the Stats screen's initiative cell — so this
    *  owns only the half that is this screen's: which hexagon lights up. */
-  function pushCheck(opts: CheckRequest & { key: AbilityKey }) {
+  async function pushCheck(opts: CheckRequest & { key: AbilityKey }) {
     const entry = buildCheck(graph, { ...opts, mode })
-    flashHex(opts.key, entry.check.total, entry.check.crit, entry.check.fumble)
-    const logged = addRoll(entry)
-    /* AND THE ARMS IT USED ARE SPENT. The weapon card has always done this
-       (attackRolled); these two screens did not, so a `once` contribution aimed
-       at a check applied to that check and to every check after it, until a rest
-       emptied the queue. See armsSpent. */
-    void spendArms(logged)
-  }
-
-  /** Mark whatever this roll consumed. Nothing to write on a roll with no arms,
-   *  which is almost all of them — so the round trip only happens when it earned
-   *  one. */
-  async function spendArms(entry: RollEntry) {
+    const rollId = crypto.randomUUID()
     const ids = armsSpentBy(...(entry.riderGroups ?? []).map(g => g.riders))
-    if (!ids.length) return
-    await updateSection('resources', armsSpent(character, ids, entry.id) as CharacterRow['resources'])
+    if (ids.length && !(await updateSection('resources', armsSpent(character, ids, rollId) as CharacterRow['resources'])).ok) return
+    flashHex(opts.key, entry.check.total, entry.check.crit, entry.check.fumble)
+    addRoll(entry, rollId)
   }
 
   function rollAbilityCheck(key: AbilityKey) {

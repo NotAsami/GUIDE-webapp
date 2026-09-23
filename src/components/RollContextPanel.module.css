@@ -80,6 +80,10 @@
 .entry.crit { --edge: var(--gold-rare); }
 .entry.crit .eFrame { box-shadow: 0 0 16px rgba(226, 176, 33, 0.35); }
 .entry.fumble { --edge: var(--danger); }
+/* A natural 20 landing: the edge blooms cyan and settles into the crit gold
+   (no end frame — it eases into whatever --edge now is). */
+.entry.flare .eFrame { animation: edgeFlare 520ms cubic-bezier(.2, .7, .2, 1); }
+@keyframes edgeFlare { from { background-color: var(--cyan-hot); box-shadow: 0 0 30px rgba(77, 214, 255, 0.8); } }
 .entry.fresh { animation: entryIn 420ms cubic-bezier(.2, .7, .2, 1); }
 @keyframes entryIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
 .entry.stale { opacity: 0.62; }
@@ -125,6 +129,7 @@
 .lType { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dt, var(--beige-dim)); border: 1px solid var(--dt-edge, rgba(212, 191, 125, 0.28)); padding: 1px 6px; }
 .lSum { margin-left: auto; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1; color: var(--text); letter-spacing: 0.02em; }
 .line.critLine .lSum { color: var(--gold-rare); text-shadow: 0 0 10px rgba(226, 176, 33, 0.45); }
+.line.fumbleLine .lSum { color: var(--danger-hot); text-shadow: 0 0 10px rgba(185, 58, 58, 0.45); }
 .lMath { margin-top: 7px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; color: var(--muted); }
 .form { color: var(--beige); letter-spacing: 0.1em; }
 .op { color: var(--beige-dim); }
@@ -146,8 +151,6 @@
 .die.dropped:hover { box-shadow: none; color: var(--muted); }
 .die.critdie { border-color: rgba(226, 176, 33, 0.55); background: rgba(226, 176, 33, 0.07); }
 .die.rerolled::after { content: "↻"; position: absolute; top: -6px; right: -5px; font-size: 8px; color: var(--cyan-hot); text-shadow: 0 0 6px rgba(0, 166, 214, 0.8); }
-.die.spin { animation: dieSpin 340ms ease-out; }
-@keyframes dieSpin { 0% { transform: translateY(-3px) scale(1.14); filter: brightness(2.2); } 100% { transform: none; filter: none; } }
 .die.lockedDie { cursor: default; border-color: rgba(212, 191, 125, 0.4); background: transparent; color: var(--text); }
 .die.lockedDie:hover { box-shadow: none; color: var(--text); background: transparent; border-color: rgba(212, 191, 125, 0.4); }
 .die.lockedDie.max { border-color: rgba(226, 176, 33, 0.55); color: var(--gold-rare); }
@@ -514,7 +517,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .rail, .scrim, .cat { animation: none; }
-  .live .dot, .entry.fresh, .die.spin { animation: none; }
+  .live .dot, .entry.fresh, .entry.flare .eFrame { animation: none; }
 }
 
 /* ---- Advance Turn ----

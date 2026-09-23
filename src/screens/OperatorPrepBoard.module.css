@@ -1,0 +1,202 @@
+/* Operator Console — the session prep board (OperatorPrepBoard.tsx).
+   Three columns: what is staged, what has been played, and what can be added.
+   The amber console tone; the played column is the one green thing, because
+   "already happened" is the only state here that is finished. */
+
+.board { position: absolute; inset: 0; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.12); }
+
+.head {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 14px;
+  padding: 13px 16px; border-bottom: 1px solid rgba(212, 191, 125, 0.2);
+}
+.headTx { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.title {
+  width: 360px; max-width: 42vw; padding: 0 0 4px; background: transparent;
+  border: 0; border-bottom: 1px dashed rgba(212, 191, 125, 0.3);
+  font-family: var(--font-display); font-weight: 600; font-size: 20px; letter-spacing: 0.06em; color: var(--beige);
+}
+.title:focus { outline: none; border-bottom-color: var(--amber); }
+.sub { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.acc { color: var(--amber); }
+.good { color: var(--good); }
+.dot { color: var(--beige-dim); margin: 0 7px; }
+.counts { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.boardPick {
+  height: 30px; padding: 0 8px; border: 1px solid rgba(212, 191, 125, 0.3); background: rgba(0, 0, 0, 0.4); color: var(--beige);
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em;
+}
+
+.cols { flex: 1 1 auto; min-height: 0; display: flex; }
+.staged { flex: 1 1 auto; min-width: 0; padding: 14px; display: flex; flex-direction: column; gap: 9px; overflow-y: auto; scrollbar-width: thin; }
+.playedCol { flex: 0 0 286px; border-left: 1px solid rgba(212, 191, 125, 0.2); padding: 14px; overflow-y: auto; scrollbar-width: thin; }
+.palette { flex: 0 0 300px; border-left: 1px solid rgba(212, 191, 125, 0.2); padding: 14px; display: flex; flex-direction: column; gap: 10px; background: rgba(0, 0, 0, 0.16); overflow-y: auto; scrollbar-width: thin; }
+
+.colHead { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--amber); }
+.goodHead { color: var(--good); }
+.hint { margin: 10px 0 0; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.06em; line-height: 1.7; color: var(--beige-dim); }
+.note { margin-top: auto; padding: 10px 11px; border: 1px solid rgba(0, 166, 214, 0.25); background: rgba(0, 166, 214, 0.05); font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.06em; line-height: 1.7; color: var(--muted); }
+
+/* ---- a staged card ---- */
+.cards { display: flex; flex-direction: column; gap: 9px; }
+.card {
+  display: flex; flex-direction: column; gap: 8px; padding: 11px 12px;
+  background: rgba(0, 0, 0, 0.26); border: 1px solid rgba(212, 191, 125, 0.16); border-left: 2px solid var(--kind, var(--beige-dim));
+}
+.card:hover { border-color: rgba(226, 176, 33, 0.35); }
+.k_shop { --kind: var(--beige); }
+.k_loot { --kind: var(--rar-artifact); }
+.k_handout { --kind: var(--cyan); }
+.k_npc { --kind: var(--violet); }
+.k_quest { --kind: var(--good); }
+.k_note { --kind: var(--muted); }
+.shop { color: var(--beige); }
+.loot { color: var(--rar-artifact); }
+.handout { color: var(--cyan); }
+.npc { color: var(--violet); }
+.quest { color: var(--good); }
+.note2 { color: var(--muted); }
+
+.cardTop { display: flex; align-items: center; gap: 10px; }
+.grip { color: #4a463c; letter-spacing: 1px; cursor: grab; }
+.cardTitle {
+  flex: 1 1 auto; min-width: 0; background: transparent; border: 0; padding: 0;
+  font-family: var(--font-prose); font-size: 16px; color: var(--text);
+}
+.cardTitle:focus { outline: none; border-bottom: 1px dashed rgba(212, 191, 125, 0.4); }
+.fire {
+  flex: 0 0 auto; height: 32px; padding: 0 14px; cursor: pointer;
+  border: 1px solid var(--amber); background: rgba(226, 176, 33, 0.16); color: var(--amber-hot);
+  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase;
+}
+.fire:hover { background: rgba(226, 176, 33, 0.28); }
+.fire:disabled { cursor: wait; opacity: 0.6; }
+.x { flex: 0 0 auto; width: 26px; height: 28px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.x:hover { color: var(--danger-hot); }
+
+.meta {
+  align-self: flex-start; padding: 0 0 0 26px; border: 0; background: transparent; cursor: pointer; text-align: left;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+}
+.more { margin-left: 10px; color: var(--amber); }
+.cardNote { padding-left: 26px; }
+.cardNote p { margin: 0; font-family: var(--font-prose); font-size: 14.5px; line-height: 1.5; color: var(--muted); }
+
+.editor { display: flex; flex-direction: column; gap: 8px; padding-left: 26px; }
+.noteIn {
+  min-height: 70px; resize: vertical; padding: 9px 10px; box-sizing: border-box;
+  border: 1px solid rgba(212, 191, 125, 0.3); background: rgba(0, 0, 0, 0.4); color: var(--text);
+  font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6;
+}
+.targets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.targetsT { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige-dim); }
+.chip {
+  height: 26px; padding: 0 9px; cursor: pointer; border: 1px solid rgba(212, 191, 125, 0.3); background: transparent; color: var(--muted);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.chip.on { border-color: var(--cyan); background: rgba(0, 166, 214, 0.12); color: var(--cyan-hot); }
+
+/* ---- played ---- */
+.playedRow { display: grid; grid-template-columns: 46px 1fr; gap: 3px 10px; padding: 10px 0; border-top: 1px solid rgba(212, 191, 125, 0.12); }
+.time { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; color: var(--beige-dim); }
+.playedTx { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.playedName { font-family: var(--font-prose); font-size: 15px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.undo {
+  margin-left: auto; height: 24px; padding: 0 8px; cursor: pointer; border: 1px solid rgba(212, 191, 125, 0.28); background: transparent;
+  color: var(--beige); font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase;
+}
+.undo:hover { border-color: var(--amber); color: var(--amber-hot); }
+.playedWhat { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+
+/* ---- palette ---- */
+.kinds { display: flex; gap: 5px; flex-wrap: wrap; }
+.kindTab {
+  height: 28px; padding: 0 9px; cursor: pointer; border: 1px solid rgba(212, 191, 125, 0.25); background: transparent; color: var(--muted);
+  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase;
+}
+.kindTab.on { border-color: var(--amber); background: rgba(226, 176, 33, 0.12); color: var(--amber-hot); }
+.sourceList { display: flex; flex-direction: column; gap: 6px; }
+.sourceRow {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; text-align: left; cursor: pointer;
+  border: 1px solid rgba(212, 191, 125, 0.14); background: transparent;
+}
+.sourceRow:hover { border-color: rgba(226, 176, 33, 0.4); }
+.sourceRow.dim { opacity: 0.5; }
+.sourceRow:disabled { cursor: default; }
+.sourceTx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sourceName { font-family: var(--font-prose); font-size: 14.5px; color: var(--text); }
+.sourceMeta { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige-dim); }
+.plus { margin-left: auto; color: var(--amber); font-size: 13px; }
+
+/* ---- wrap ---- */
+.wrap { flex: 1 1 auto; min-height: 0; display: flex; }
+.wrapMain { flex: 1 1 auto; min-width: 0; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; scrollbar-width: thin; }
+.wrapSide { flex: 0 0 300px; border-left: 1px solid rgba(212, 191, 125, 0.2); padding: 18px 16px; }
+.wrapNote { margin: 0; max-width: 620px; font-family: var(--font-prose); font-size: 15.5px; line-height: 1.6; color: var(--muted); }
+.wrapGrid { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 10px; align-items: center; max-width: 620px; }
+.wrapGrid input { margin-bottom: 0; }
+.events { display: flex; flex-direction: column; gap: 6px; max-width: 620px; }
+.eventRow { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid rgba(212, 191, 125, 0.16); background: rgba(0, 0, 0, 0.25); }
+.eventIn { flex: 1 1 auto; min-width: 0; background: transparent; border: 0; font-family: var(--font-prose); font-size: 15px; color: var(--text); }
+.eventIn:focus { outline: none; }
+.wrapActions { display: flex; gap: 9px; margin-top: 4px; }
+
+.empty {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding: 40px; text-align: center; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; line-height: 1.8; color: var(--muted);
+}
+.emptyT { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.1em; color: var(--beige); }
+.empty > span { max-width: 520px; }
+
+/* ============================================================
+   THE TRAY (PrepTray.tsx) — tonight's cards along the bottom of every OTHER
+   console screen. Fixed above the console footer, never over the board itself.
+   ============================================================ */
+.tray {
+  position: fixed; z-index: 55; left: 12px; right: 12px; bottom: calc(var(--op-bottom-h, 34px) + 12px);
+  height: 58px; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  background: linear-gradient(180deg, rgba(20, 17, 9, 0.97), rgba(16, 15, 13, 0.97));
+  border: 1px solid rgba(226, 176, 33, 0.45); box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+  animation: trayIn 260ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes trayIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tray { animation: none; } }
+
+.trayName {
+  flex: 0 0 auto; border: 0; background: transparent; cursor: pointer; padding: 0;
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--amber);
+}
+.trayName:hover { color: var(--amber-hot); }
+.trayRule { flex: 0 0 auto; width: 1px; height: 24px; background: rgba(212, 191, 125, 0.25); }
+.trayCards { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.trayCards::-webkit-scrollbar { display: none; }
+.trayCard {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px 0 11px;
+  border: 1px solid rgba(212, 191, 125, 0.28); background: rgba(14, 13, 11, 0.92);
+}
+.trayTitle { font-family: var(--font-prose); font-size: 14px; color: var(--text); white-space: nowrap; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
+.trayFire {
+  height: 24px; padding: 0 9px; cursor: pointer; border: 1px solid var(--amber); background: rgba(226, 176, 33, 0.16);
+  color: var(--amber-hot); font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase;
+}
+.trayFire:hover { background: rgba(226, 176, 33, 0.3); }
+.trayFire:disabled { cursor: wait; opacity: 0.6; }
+.trayMore, .trayDone {
+  flex: 0 0 auto; height: 30px; padding: 0 10px; border: 1px dashed rgba(212, 191, 125, 0.3); background: transparent;
+  color: var(--muted); font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase;
+}
+.trayMore { cursor: pointer; }
+.trayMore:hover { border-color: var(--amber); color: var(--amber-hot); }
+.trayDone { display: flex; align-items: center; border-style: solid; }
+.trayCount { flex: 0 0 auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.trayShut { flex: 0 0 auto; width: 30px; height: 30px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.trayShut:hover { color: var(--amber-hot); }
+
+/* Hidden, it leaves a handle rather than vanishing: a tray that cannot be got
+   back is a tray the DM stops trusting. */
+.trayTab {
+  position: fixed; z-index: 55; right: 12px; bottom: calc(var(--op-bottom-h, 34px) + 12px);
+  height: 28px; padding: 0 12px; cursor: pointer;
+  border: 1px solid rgba(226, 176, 33, 0.45); background: rgba(20, 17, 9, 0.97); color: var(--amber);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+}
+.trayTab:hover { color: var(--amber-hot); }

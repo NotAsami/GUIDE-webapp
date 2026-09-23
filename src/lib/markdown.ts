@@ -32,8 +32,10 @@ function useLive(text: string): string {
 }
 
 /** Only these schemes render as a real link; anything else (e.g. `javascript:`)
- *  falls back to plain text since the parser returns React nodes directly. */
-function isSafeUrl(url: string): boolean {
+ *  falls back to plain text since the parser returns React nodes directly.
+ *  The ONE scheme rule: markdown links, and the related-tag links in the
+ *  Journal and the story overview, all go through it. */
+export function isSafeUrl(url: string): boolean {
   return /^https?:\/\//i.test(url) || url.startsWith('/')
 }
 

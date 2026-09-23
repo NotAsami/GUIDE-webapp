@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 /**
  * Using a feature — the whole press, in one place.
  *
@@ -30,8 +31,8 @@ export type ActivationHost = {
   character: CharacterRow
   graph: GraphContext
   shardTrees?: Record<string, ShardTree>
-  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
-  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<SaveResult>
+  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<SaveResult>
 }
 
 /** Can this feature be pressed at all? A spent one cannot.
@@ -230,16 +231,18 @@ export function useActivation(host: ActivationHost) {
     /* THREE COLUMNS, ONE WRITE. Variables land in `resources`, use counters on
        `sheet`, spell slots in `spellbook` — and a press that spends a slot to
        refill a counter has to land both or neither. */
+    let saved: SaveResult = { ok: true }
     if (applied.length) {
-      await updateSections({
+      saved = await updateSections({
         ...(nextSheet !== sheet ? { sheet: nextSheet } : {}),
         ...(spellbook ? { spellbook } : {}),
         resources: resources as CharacterRow['resources'],
       })
     } else if (nextSheet !== sheet) {
-      await updateSection('sheet', nextSheet)
+      saved = await updateSection('sheet', nextSheet)
     }
     setBusy(false)
+    if (!saved.ok) return
 
     const subtitle = u ? `${remaining} / ${u.max} uses left` : (f.usage ?? 'Feature')
     addRoll({

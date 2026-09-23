@@ -53,7 +53,8 @@ Total Damage: 13
 ```bash
 git clone <repo-url>
 cd GUIDE-webapp
-npm install
+nvm use                      # Node version pinned in .nvmrc
+npm ci
 cp .env.example .env.local   # then fill in your Supabase URL + anon key
 npm run dev                  # http://localhost:5173
 ```
@@ -69,6 +70,15 @@ seed) via the Supabase SQL editor.
 | ------------------- | ------------------------------------------------- |
 | `npm run dev`       | Vite dev server on http://localhost:5173          |
 | `npm run preview`   | Serve the production build locally                |
+| `npm test`          | Unit, React lifecycle, and isolated PostgreSQL tests |
+| `npm run build`     | Typecheck and create the production bundle          |
+| `npm run check`     | Run tests and the production build                  |
+
+## Persistence updates
+
+Apply `supabase/migrations/0025_reliable_writes.sql` **before deploying this client**, then reload existing clients. It makes purchase delivery atomic, stores receipts for safe retries, and advances update timestamps monotonically for conflict checks. The old debit-only purchase RPC becomes inaccessible to clients, so older clients fail without charging.
+
+Tests use an isolated in-memory PostgreSQL runtime; they never access your Supabase project. CI runs the same test suite and production build. See [persistence notes](docs/persistence.md) for the conflict and recovery behavior.
 
 ## Project layout
 

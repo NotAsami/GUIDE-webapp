@@ -1,21 +1,23 @@
-import { useMemo } from 'react'
-import { Link, Navigate, useOutletContext, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useOutletContext, useParams } from 'react-router-dom'
+import { NotFound } from './NotFound'
 import type { CharacterRow, SessionRow } from '../lib/database.types'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { useCampaign } from '../lib/campaign'
-import { Prose } from '../lib/markdown'
+import type { HandoutOutlet } from '../lib/handouts'
+import { Prose, isSafeUrl } from '../lib/markdown'
 /* Geometry and thread sources live in lib/ with storyLattice.test.ts beside
    them: a leader that misses its node by four pixels reads as a rendering
    quirk, so the invariants are asserted rather than eyeballed. */
 import type { Thread } from '../lib/storyLattice'
 import {
-  COL, CX, CY, FOCAL_BREAK, R_ARC, ROW_H, SIDE_GAP, SIDE_ROW_H,
-  arcPath, completionFor, recordFor, threadsFor, wiresFor, zoomTo,
+  COL, CX, CY, FOCAL_BREAK, R_ARC, ROW_H, SIDE_GAP, SIDE_NODE_R, SIDE_ROW_H,
+  ARC_LEN, RING_PATH, arcOffset, completionFor, displayPercent, recordFor, threadsFor, wiresFor, zoomTo,
 } from '../lib/storyLattice'
 import styles from './Story.module.css'
 
-interface RouteContext {
+interface RouteContext extends HandoutOutlet {
   character: CharacterRow
 }
 
@@ -58,7 +60,7 @@ function Row({ t, story, open }: { t: Thread; story: string; open: boolean }) {
  *  you", which a story you chose to read is not. There is no scrim here at all,
  *  so the sigil keeps turning and no backdrop-filter ever runs over it. */
 export function Story() {
-  const { character } = useOutletContext<RouteContext>()
+  const { character, handouts, openHandout } = useOutletContext<RouteContext>()
   const { storyId, threadId } = useParams()
   const { quests, sessions, loading, error } = useCampaign()
 
@@ -73,16 +75,29 @@ export function Story() {
   // alone — three main and three side do not solve the same as six main.
   const wires = useMemo(() => wiresFor(threads), [threads])
 
+  // The ring's first reveal and every later change are the SAME transition. It
+  // mounts empty and is armed once the campaign has loaded; from then on any
+  // new percent — a story switch, a quest completing — tweens from wherever the
+  // ring is to wherever it should be, up or down. No requestAnimationFrame: the
+  // campaign fetch is a network round trip, so the empty ring has always been
+  // painted by the time it resolves, and the flip lands as a real change.
+  // (Switching story does not remount this screen, which is why `armed` survives
+  // it — and why the old one-shot reveal never replayed.)
+  const [armed, setArmed] = useState(false)
+  useEffect(() => { if (!loading) setArmed(true) }, [loading])
+
   // A card the DM deleted, or a hand-typed id. The route table's `*` cannot
   // catch this one — it matched a real route with an id that finds nothing.
-  if (!story) return <Navigate to="/" replace />
+  // It used to redirect home, which made a dead link look like a live one.
+  if (!story) return <NotFound />
 
   // DEPTH IS THE URL: a :threadId in the path IS the thread depth. Nothing
   // mirrors it into state, so back and a shared link both work for free.
   const record = threadId ? recordFor(story, threadId, quests, character) : null
-  // Only redirect once the campaign has actually loaded — quests start empty, so
-  // resolving this during the fetch would bounce every deep link on arrival.
-  if (threadId && !loading && !record) return <Navigate to={`/story/${story.id}`} replace />
+  // Only call it missing once the campaign has actually loaded — quests start
+  // empty, so resolving this during the fetch would strand every deep link on
+  // arrival. Same boundary as a missing card, with a way up to the story too.
+  if (threadId && !loading && !record) return <NotFound up={{ to: `/story/${story.id}`, label: story.title }} />
 
   const focus = threadId ? threads.findIndex(t => t.id === threadId) : -1
   // At the thread depth the instrument zooms so the open node comes to rest
@@ -101,9 +116,8 @@ export function Story() {
   // of them, side quests included. Null where there is nothing countable (region
   // has no locations table, a relation never completes), and there the DM's
   // authored number still stands.
-  const done = completionFor(story, quests, character)
-  const pct = done ? done.percent : story.percent
-  const arc = arcPath(pct)
+  const done = completionFor(story, quests, character)   // for the "2 / 6 closed" line
+  const pct = displayPercent(story, quests, character)
   const latest: SessionRow | undefined = sessions[0]
 
   return (
@@ -152,7 +166,10 @@ export function Story() {
 
             <svg className={styles.marks} aria-hidden="true" fill="none">
               <circle className={styles.ring} cx={CX} cy={CY} r={R_ARC} strokeWidth="3" />
-              {arc && <path className={styles.arc} d={arc} strokeWidth="3.5" />}
+              <path
+                className={styles.arc} d={RING_PATH} strokeWidth="3.5"
+                style={{ strokeDasharray: ARC_LEN, strokeDashoffset: armed ? arcOffset(pct) : ARC_LEN }}
+              />
               {wires.map((w, i) => w && (
                 <g
                   key={threads[i].id}
@@ -160,7 +177,7 @@ export function Story() {
                     + `${focus >= 0 && i !== focus ? ' ' + styles.wireDim : ''}`}
                 >
                   {threads[i].kind === 'side'
-                    ? <circle cx={w.nx} cy={w.ny} r="4" className={styles.sideNode} />
+                    ? <circle cx={w.nx} cy={w.ny} r={SIDE_NODE_R} className={styles.sideNode} />
                     : <circle cx={w.nx} cy={w.ny} r={i === lit ? 5.5 : 4.5} className={styles.node} />}
                   {i === lit && <circle cx={w.nx} cy={w.ny} r="13" className={styles.halo} />}
                 </g>
@@ -191,12 +208,12 @@ export function Story() {
                  where the node actually came to rest, so it still reads as the
                  same circuit rather than a line to nowhere. */
               <g className={threads[focus].kind === 'side' ? styles.wireSide : threads[focus].tone === 'closed' ? styles.wireOff : styles.wire}>
-                <line x1={zoom.focal.x} y1={zoom.focal.y} x2={zoom.focal.x + FOCAL_BREAK} y2={wires[focus]!.ey} />
+                <line x1={zoom.leaderStart.x} y1={zoom.leaderStart.y} x2={zoom.focal.x + FOCAL_BREAK} y2={wires[focus]!.ey} />
                 <line x1={zoom.focal.x + FOCAL_BREAK} y1={wires[focus]!.ey} x2={COL - 4} y2={wires[focus]!.ey} />
               </g>
             ) : wires.map((w, i) => w && (
               <g key={threads[i].id} className={threads[i].kind === 'side' ? styles.wireSide : threads[i].tone === 'closed' ? styles.wireOff : styles.wire}>
-                <line x1={w.nx} y1={w.ny} x2={w.ex} y2={w.ey} />
+                <line x1={w.sx} y1={w.sy} x2={w.ex} y2={w.ey} />
                 <line x1={w.ex} y1={w.ey} x2={COL - 4} y2={w.ey} />
               </g>
             ))}
@@ -228,7 +245,7 @@ export function Story() {
                   aria-selected={s.id === story.id}
                   className={`${styles.tab} ${s.id === story.id ? styles.on : ''}`}
                 >
-                  {s.title}<span className={styles.tabPct}>{s.percent}%</span>
+                  {s.title}<span className={styles.tabPct}>{displayPercent(s, quests, character)}%</span>
                 </Link>
               ))}
             </div>
@@ -305,6 +322,30 @@ export function Story() {
                       </>
                     )}
 
+                    {/* A quest thread's handouts — only the ones this player holds
+                        (RLS), so the section is absent rather than empty for
+                        anyone the DM never handed them to. Opens beside the
+                        story, the same dock a push arrives in. */}
+                    {(() => {
+                      const held = handouts.filter(h => h.quest_id === threadId)
+                      return held.length > 0 && (
+                        <>
+                          <div className={styles.subHead}>Handouts</div>
+                          {held.map(h => (
+                            <button key={h.id} type="button" className={`${styles.logRow} ${styles.logNow} ${styles.hoRow}`} onClick={() => openHandout(h.id)}>
+                              <span className={styles.logNum} aria-hidden="true">
+                                <i className={`fa-solid ${h.image_url ? 'fa-image' : 'fa-file-lines'}`} />
+                              </span>
+                              <div>
+                                <div className={styles.logTitle}>{h.title || 'Untitled'}</div>
+                                <div className={styles.logDate}>{h.image_url ? 'Image' : 'Document'} · open beside</div>
+                              </div>
+                            </button>
+                          ))}
+                        </>
+                      )
+                    })()}
+
                     {record.links.length > 0 && (
                       <>
                         <div className={styles.subHead}>Quests here</div>
@@ -323,11 +364,15 @@ export function Story() {
                     {record.related.length > 0 && (
                       <>
                         <div className={styles.subHead}>Related</div>
-                        {/* Inert text, not links. A tag's `url` is DM-authored free
-                            text, and rendering it as an href would need the Journal's
-                            scheme check; there is nowhere to navigate to from here. */}
+                        {/* A tag with a url links out, the same as in the Journal;
+                            the url is DM-authored free text, so it goes through the
+                            one scheme check and anything else stays inert text. */}
                         <div className={styles.chips}>
-                          {record.related.map((r, i) => <span key={i} className={styles.chip}>{r.name}</span>)}
+                          {record.related.map((r, i) => r.url && isSafeUrl(r.url) ? (
+                            <a key={i} className={styles.chip} href={r.url} target="_blank" rel="noopener noreferrer">
+                              {r.name}<i className={`fa-solid fa-arrow-up-right-from-square ${styles.chipLink}`} aria-hidden="true" />
+                            </a>
+                          ) : <span key={i} className={styles.chip}>{r.name}</span>)}
                         </div>
                       </>
                     )}

@@ -15,14 +15,15 @@
  * record parks in the row's `draft` slot, where it is safe (those tables have
  * no player policy), and promotes itself when fixed.
  *
- * WHY NOT REUSE useLocalDraft'S DEBOUNCE: that tier writes to localStorage at
- * 400ms, which is free. This tier writes to Postgres, so it waits longer and
+ * Local recovery writes immediately so leaving a record loses no keystrokes.
+ * This tier writes to Postgres, so it waits longer and
  * refuses to overlap — a fast typist should produce one round trip after they
  * stop, not one per character.
  *
  * Features and the shard lattice deliberately keep their manual flow.
  */
-import { useCallback, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { SaveQueue, type SaveStatus } from './saveQueue.ts'
 
 /**
  * Stamp an SRD-imported row as edited, the moment a human changes it.
@@ -75,124 +76,124 @@ export interface AutoPublishArgs<T> {
 }
 
 export interface AutoPublishState {
-  /** A write is in flight. */
   busy: boolean
+  status: SaveStatus
+  error: string | null
+  retry: () => void
+}
+
+/** Backup for forms with no server draft column. Restored when reopened, even
+ * if an invalid name or graph prevented the last version reaching the server. */
+export function readAutoSaveDraft<T>(key: string): T | null {
+  try { return JSON.parse(localStorage.getItem(`guide:autosave:${key}`) ?? 'null') as T | null } catch { return null }
+}
+function backup<T>(key: string, value: T) {
+  try { localStorage.setItem(`guide:autosave:${key}`, JSON.stringify(value)) } catch { /* Pending state remains visible. */ }
+}
+function clearBackup<T>(key: string, value: T) {
+  try {
+    if (localStorage.getItem(`guide:autosave:${key}`) === JSON.stringify(value)) localStorage.removeItem(`guide:autosave:${key}`)
+  } catch { /* Retain the recovery copy. */ }
+}
+
+function useQueue(key: string) {
+  const [queue] = useState(() => new SaveQueue())
+  const [, render] = useState(0)
+  useEffect(() => {
+    queue.onChange = () => render(n => n + 1)
+    return () => { queue.onChange = undefined; void queue.flush() }
+  }, [queue])
+  const snapshot = queue.state(key)
+  return { queue, state: { ...snapshot, busy: snapshot.status === 'saving', retry: () => { void queue.flush() } } }
 }
 
 export function useAutoPublish<T>({
   draft, dirty, errs, id, saveDraft, publish, onCreated, enabled = true,
 }: AutoPublishArgs<T>): AutoPublishState {
-  const busy = useRef(false)
-  const timer = useRef<number | undefined>(undefined)
-  /* The id to write against. Tracked in a ref, not read from props, because the
-     first write of a NEW record mints one and the next write must use it — and
-     props have not re-rendered yet when the debounce fires again quickly. */
-  const rowId = useRef<string | null>(id)
-  /* A write that arrived while one was in flight. Kept as a flag rather than a
-     queue: only the newest state matters, and the latest draft is read fresh
-     when the retry runs. */
-  const again = useRef(false)
-  const latest = useRef<{ draft: T | null; errs: number }>({ draft, errs })
-
-  useEffect(() => { rowId.current = id }, [id])
-  latest.current = { draft, errs }
-
-  const flush = useCallback(async () => {
-    if (busy.current) { again.current = true; return }
-    const { draft: value, errs: e } = latest.current
-    if (!value) return
-    busy.current = true
-    try {
-      const write = e > 0 ? saveDraft : publish
-      const got = await write(rowId.current, markEdited(value))
-      if (got && !rowId.current) { rowId.current = got; onCreated(got) }
-    } finally {
-      busy.current = false
-      if (again.current) { again.current = false; void flush() }
-    }
-  }, [saveDraft, publish, onCreated])
+  const target = useRef({ id, propId: id, notify: id === null, key: id ?? crypto.randomUUID() })
+  if (target.current.propId !== id) target.current = { id, propId: id, notify: id === null, key: id ?? crypto.randomUUID() }
+  const record = target.current
+  const { queue, state } = useQueue(record.key)
+  useEffect(() => () => { void queue.flush() }, [queue, record])
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const json = JSON.stringify(draft)
+  const latest = useRef({ draft, saveDraft, publish, onCreated })
+  latest.current = { draft, saveDraft, publish, onCreated }
 
   useEffect(() => {
-    if (!enabled || !dirty || !draft) return
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => { void flush() }, SETTLE_MS)
-    return () => window.clearTimeout(timer.current)
-    // `errs` is deliberately a dependency: fixing the last error with no other
-    // edit still has to trigger the promote from draft to published.
-  }, [draft, dirty, errs, enabled, flush])
-
-  return { busy: busy.current }
+    if (!enabled || latest.current.draft === null) { queue.cancel(record.key); return }
+    if (!dirty && queue.state(record.key).status !== 'saving') { queue.cancel(record.key); return }
+    const { draft: value, saveDraft: park, publish: promote, onCreated: created } = latest.current
+    const write = errs > 0 ? park : promote
+    queue.enqueue({ key: record.key, version: `${errs > 0}:${json}`, write: async () => {
+      const got = await write(record.id, markEdited(value))
+      if (!got) throw new Error('Changes were not saved. Please retry.')
+      record.id = got
+      // Wait for the latest edit before remounting a new record under its id.
+      if (record.notify && mounted.current && target.current === record
+        && JSON.stringify(latest.current.draft) === JSON.stringify(value)) {
+        record.notify = false
+        record.propId = got
+        created(got)
+      }
+    } })
+    const timer = window.setTimeout(() => { void queue.flush() }, SETTLE_MS)
+    return () => window.clearTimeout(timer)
+  }, [json, dirty, errs, enabled, record, queue])
+  return state
 }
 
-/**
- * Autosave for the forms with NO draft tier — items, spells, effects, shops.
- *
- * Those tables have one payload column and no `draft` beside it, so there is
- * nowhere to park a broken record: the choice is write it or do not. This hook
- * therefore holds the write while `ready` is false, exactly as the Save button
- * it replaced was disabled while the name was empty or the graph had errors.
- * The last good version stays live in the meantime, which is the same guarantee
- * the draft tier gives the other forms, reached a different way.
- *
- * COMPARED BY VALUE, not by reference. These forms rebuild their payload from a
- * dozen useState fields on every render, so a new object identity means nothing
- * and an effect keyed on it would fire forever.
- */
 export interface AutoSaveArgs<T> {
-  /** The built payload, rebuilt each render. */
   value: T
-  /** False while the form is not safe to write — holds the save. */
   ready: boolean
-  /** Row id, or null while creating. Changing it re-baselines, so SELECTING a
-   *  different record never counts as an edit to it. */
   id: string | null
-  save: (value: T) => Promise<string | null | void>
+  /** A stable recovery key, including catalog and record identity. */
+  draftKey: string
+  save: (value: T, id: string | null) => Promise<string | null | void>
   onCreated?: (id: string) => void
   enabled?: boolean
 }
 
-export function useAutoSave<T>({
-  value, ready, id, save, onCreated, enabled = true,
-}: AutoSaveArgs<T>): AutoPublishState {
-  const busy = useRef(false)
-  const timer = useRef<number | undefined>(undefined)
-  const again = useRef(false)
-  /** What is already stored, serialised. Null until the first baseline is set,
-   *  which is what stops a freshly-opened form writing itself back. */
-  const saved = useRef<string | null>(null)
-  const owner = useRef<string | null>(id)
-  const latest = useRef<{ json: string; value: T; ready: boolean }>({ json: '', value, ready })
-
+export function useAutoSave<T>({ value, ready, id, draftKey, save, onCreated, enabled = true }: AutoSaveArgs<T>): AutoPublishState {
+  const { queue, state } = useQueue(draftKey)
+  const latest = useRef({ value, save, onCreated })
+  latest.current = { value, save, onCreated }
   const json = JSON.stringify(value)
-  latest.current = { json, value, ready }
-
-  /* Selection changed: adopt the new record as the baseline rather than
-     treating it as an edit of the old one. Without this, clicking through a
-     list would write every row it passed. */
-  if (owner.current !== id) { owner.current = id; saved.current = json }
-
-  const flush = useCallback(async () => {
-    if (busy.current) { again.current = true; return }
-    const { json: j, value: v, ready: r } = latest.current
-    if (!r || j === saved.current) return
-    busy.current = true
-    try {
-      const got = await save(markEdited(v))
-      saved.current = j
-      if (got && !owner.current) { owner.current = got; onCreated?.(got) }
-    } finally {
-      busy.current = false
-      if (again.current) { again.current = false; void flush() }
-    }
-  }, [save, onCreated])
+  const baseline = useRef<string | null>(null)
+  const owner = useRef(id)
+  const target = useRef({ id, notify: id === null })
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
 
   useEffect(() => {
-    if (saved.current === null) { saved.current = json; return }
-    if (!enabled || !ready || json === saved.current) return
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => { void flush() }, SETTLE_MS)
-    return () => window.clearTimeout(timer.current)
-  }, [json, ready, enabled, flush])
-
-  return { busy: busy.current }
+    if (owner.current !== id) { owner.current = id; baseline.current = null; target.current = { id, notify: id === null } }
+    if (baseline.current === null) {
+      baseline.current = json
+      if (!readAutoSaveDraft(draftKey)) { queue.baseline(draftKey, json); return }
+    }
+    if (!enabled) return
+    if (json === baseline.current && !readAutoSaveDraft(draftKey)) return
+    const { value: captured, save: write, onCreated: created } = latest.current
+    backup(draftKey, captured)
+    if (!ready) { queue.cancel(draftKey); return }
+    const record = target.current
+    queue.enqueue({ key: draftKey, version: json, write: async () => {
+      const got = await write(markEdited(captured), record.id)
+      if (got === null) throw new Error('Changes were not saved. Please retry.')
+      clearBackup(draftKey, captured)
+      if (owner.current === id) baseline.current = json
+      if (got) {
+        record.id = got
+        if (record.notify && mounted.current && target.current === record
+          && JSON.stringify(latest.current.value) === JSON.stringify(captured)) {
+          record.notify = false
+          created?.(got)
+        }
+      }
+    } })
+    const timer = window.setTimeout(() => { void queue.flush() }, SETTLE_MS)
+    return () => window.clearTimeout(timer)
+  }, [json, ready, id, draftKey, enabled, queue])
+  return state
 }

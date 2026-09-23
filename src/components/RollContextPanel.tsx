@@ -46,9 +46,11 @@ import {
   releaseIdsOf, resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
   type CatalogView, type Die, type DieAddr, type RiderView, type RollLineView,
 } from '../lib/rollView'
+import { burstClock, entryClock, natOf, SETTLE, type LineClock } from '../lib/resolve'
 import styles from './RollContextPanel.module.css'
 import { useTip, tipProps, type ShowTip } from './Tip'
 import { Icon } from './Icon'
+import { Val, useResolveClock } from './Resolve'
 
 const cx = (...v: (string | false | undefined)[]) => v.filter(Boolean).join(' ')
 
@@ -297,9 +299,10 @@ function Entry({
   // Rider fold state is local for the same reason entry fold state is: it is how
   // you are reading the list, not part of the roll.
   const [foldedRiders, setFoldedRiders] = useState<Set<number>>(new Set())
-  // Which die is mid-flourish, as "<line>:<die>" or "r<rider>:*" for a whole
-  // rider. One at a time — you can only click one.
-  const [spin, setSpin] = useState<string | null>(null)
+  /* The last reroll, as "<line>:<die>" or "r<rider>:*" for a whole rider, and
+     when. A reroll is a resolve of just those dice — the roll's own motion on
+     its own clock (lib/resolve.ts). One at a time: you can only click one. */
+  const [burst, setBurst] = useState<{ key: string; at: number } | null>(null)
   /* 'idle' | 'sending' | 'sent' | 'gone'. Local to the entry and never stored:
      whether a roll was posted is a fact about this session's Foundry, not about
      the roll. */
@@ -313,16 +316,39 @@ function Entry({
      expression — `{level >= 17 ? 2d10 : 1d10}`. <Prose> reads the scope from
      context; a plain string builder cannot, so it is handed over explicitly. */
   const scope = useContext(ScopeContext)
-  const spinTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const flash = useCallback((key: string) => {
-    setSpin(key)
-    clearTimeout(spinTimer.current)
-    spinTimer.current = setTimeout(() => setSpin(null), 360)
-  }, [])
-  useEffect(() => () => clearTimeout(spinTimer.current), [])
+  const flash = useCallback((key: string) => setBurst({ key, at: Date.now() }), [])
 
-  const crit = !!(entry.check?.crit || entry.attack?.crit)
-  const fumble = !!(entry.check?.fumble || entry.attack?.fumble)
+  /* THE RESOLVE. One clock from the roll's own `at` — the toast computes the
+     same one, so the two lock together. A history entry is simply past all of
+     it and paints settled. */
+  const clock = useMemo(() => {
+    const [line, die] = burst && !burst.key.startsWith('r') ? burst.key.split(':').map(Number) : []
+    return entryClock(entry.at, lines, line === undefined ? null : { at: burst!.at, line, die })
+  }, [entry.at, lines, burst])
+  const riderBurst = useMemo(() => {
+    const v = burst && views.find(x => burst.key === `r${x.index}:*`)
+    if (!burst || !v) return null
+    return {
+      index: v.index, onAttack: v.group === 'Attack' || v.group === 'Check' || v.group === 'Save',
+      ...burstClock(burst.at, v.rider.rolledDice?.length ?? 0),
+    }
+  }, [burst, views])
+  const now = useResolveClock(Math.max(clock.done, riderBurst?.total ?? 0))
+  /* What the roll MEANS waits for the kept d20 to land: the Critical and Fumble
+     tags, the edge colour, the Hit/Miss verdict. Before it, the numbers are
+     still noise and a gold edge would be the outcome arriving ahead of them. */
+  const decided = now >= clock.decide
+  const crit = decided && !!(entry.check?.crit || entry.attack?.crit)
+  const fumble = decided && !!(entry.check?.fumble || entry.attack?.fumble)
+  const flare = crit && lines.some(l => natOf(l) === 'nat20') && now - clock.decide < SETTLE
+  // The footer's totals include riders, so a rider rolled after the fact
+  // re-locks the total it feeds.
+  const lockOf = (kinds: string[], rider: boolean) => Math.max(
+    clock.lines[lines.findIndex(l => kinds.includes(l.kind))]?.total ?? 0,
+    riderBurst && riderBurst.onAttack === rider ? riderBurst.total : 0)
+  const atkLock = lockOf(['attack', 'check'], true)
+  const dmgLock = lockOf(['damage'], false)
+  const dmgVal = totals.damage !== undefined && <Val v={totals.damage} lockAt={dmgLock} now={now} seed={99} />
   // Only real failures. An audit item can be 'ok' or 'warn' — an authoring note
   // rendered as a red "Not applied" is the panel lying about the roll.
   const problems = (entry.problems ?? []).filter(p => p.sev === 'err')
@@ -331,7 +357,8 @@ function Entry({
 
   return (
     <article data-entry={entry.id} className={cx(styles.entry, latest ? styles.latest : styles.stale,
-      fresh && styles.fresh, folded && styles.foldedEntry, crit && styles.crit, fumble && !crit && styles.fumble)}>
+      fresh && styles.fresh, folded && styles.foldedEntry, crit && styles.crit, fumble && !crit && styles.fumble,
+      flare && styles.flare)}>
       {crit && <span className={styles.eTag}>Critical</span>}
       {fumble && !crit && <span className={styles.eTag}>Fumble</span>}
       <span className={styles.eFrame} aria-hidden="true" />
@@ -360,7 +387,7 @@ function Entry({
             {entry.target && !folded && (
               <div className={styles.vs}>
                 vs {entry.target.name}
-                {entry.target.hit !== undefined && (
+                {entry.target.hit !== undefined && decided && (
                   <span className={entry.target.hit ? styles.vsHit : styles.vsMiss}>
                     {entry.target.hit ? 'Hit' : 'Miss'}
                   </span>
@@ -377,7 +404,7 @@ function Entry({
         {!folded && (
           <div className={styles.eBody}>
             {lines.map((l, i) => (
-              <Line key={i} line={l} index={i} showTip={showTip} spin={spin}
+              <Line key={i} line={l} index={i} showTip={showTip} lc={clock.lines[i]} now={now}
                 onReroll={die => reroll({ line: i, die }, `${i}:${die}`)} />
             ))}
 
@@ -502,7 +529,8 @@ function Entry({
                   ) : (
                     sec.views.map(v => (
                     <Ask
-                      key={v.index} v={v} onPatch={onPatch} showTip={showTip} spin={spin}
+                      key={v.index} v={v} onPatch={onPatch} showTip={showTip} now={now}
+                      burst={riderBurst?.index === v.index ? riderBurst : null}
                       folded={foldedRiders.has(v.index)}
                       onFold={() => setFoldedRiders(prev => {
                         const next = new Set(prev)
@@ -536,16 +564,16 @@ function Entry({
                     const l = lines.find(x => x.kind === 'attack' || x.kind === 'check')
                     return l?.totalLabel ?? `Total ${l?.label ?? 'Attack'}`
                   })()}</span>
-                  <span className={styles.v}>{totals.attack}</span>
+                  <span className={styles.v}><Val v={totals.attack} lockAt={atkLock} now={now} seed={90} /></span>
                 </div>
               )}</div>
               <div>{totals.damage !== undefined && (
                 <div className={styles.tot}>
                   <span className={styles.k}>Total Damage</span>
-                  <span className={styles.v}>{totals.damage}</span>
+                  <span className={styles.v}>{dmgVal}</span>
                   <div className={styles.split}>
-                    {Object.entries(totals.byType).map(([t, n]) => (
-                      <span key={t} data-t={t} style={dt(t)}>{t} <b>{n}</b></span>
+                    {Object.entries(totals.byType).map(([t, n], i) => (
+                      <span key={t} data-t={t} style={dt(t)}>{t} <b><Val v={n} lockAt={dmgLock} now={now} seed={91 + i} /></b></span>
                     ))}
                   </div>
                 </div>
@@ -628,12 +656,12 @@ function Entry({
               >
                 <i className="fa-solid fa-burst" />
                 <span className={styles.fvttLab}>
-                  {dealt === 'done' ? `Posted · ${totals.damage} dealt to ${entry.target.name}`
+                  {dealt === 'done' ? <>Posted · {dmgVal} dealt to {entry.target.name}</>
                     : dealt === 'gone' ? 'No bridge — is Foundry open?'
                     : dealt === 'sending' ? 'Applying…'
                     : entry.posted
-                      ? `Apply ${totals.damage} to ${entry.target.name}`
-                      : `Post & apply ${totals.damage} to ${entry.target.name}`}
+                      ? <>Apply {dmgVal} to {entry.target.name}</>
+                      : <>Post &amp; apply {dmgVal} to {entry.target.name}</>}
                 </span>
               </button>
             )}
@@ -713,22 +741,33 @@ function Entry({
 
 /* ---------------- pieces ---------------- */
 
-function DieChip({ d, locked, spinning, mode, showTip, onReroll }: {
-  d: Die; locked?: boolean; spinning?: boolean
+function DieChip({ d, locked, mode, showTip, onReroll, lockAt = 0, dimAt = 0, now = Infinity, seed = 0, tone, undecided }: {
+  d: Die; locked?: boolean
   mode?: 'adv' | 'dis'
   showTip: ShowTip
   onReroll?: () => void
+  /** Resolve timing, epoch ms (lib/resolve.ts). Omitted = long settled. */
+  lockAt?: number; dimAt?: number; now?: number; seed?: number
+  /** The kept d20's natural face — the lock flares or stutters. */
+  tone?: 'nat20' | 'nat1'
+  /** The roll's outcome has not landed: crit-only dice stay untinted. */
+  undecided?: boolean
 }) {
   // A penalty die (Bane's -1d4) shows a negative face. "Max" and "min" are
   // statements about the FACE, and a -3 is neither, so neither fires.
-  const best = !d.dropped && d.v > 0 && d.v === d.sides
-  const worst = !d.dropped && d.v === 1
+  // Gold, red and struck-through all say what the die MEANS, so each waits for
+  // the die to land: both adv/dis dice lock bright, then the loser dims (the
+  // chip's own transition does the dimming).
+  const on = now >= lockAt
+  const best = on && !d.dropped && d.v > 0 && d.v === d.sides
+  const worst = on && !d.dropped && d.v === 1
+  const dim = !!d.dropped && now >= dimAt
   const inert = !!d.dropped || !!locked
   return (
     <button
       type="button" tabIndex={inert ? -1 : 0}
-      className={cx(styles.die, d.dropped && styles.dropped, best && styles.max, worst && styles.min,
-        d.crit && styles.critdie, d.rerolled && styles.rerolled, spinning && styles.spin,
+      className={cx(styles.die, dim && styles.dropped, best && styles.max, worst && styles.min,
+        d.crit && !undecided && styles.critdie, d.rerolled && styles.rerolled,
         locked && styles.lockedDie)}
       onClick={inert ? undefined : onReroll}
       {...tipProps(showTip, () => ({
@@ -742,17 +781,22 @@ function DieChip({ d, locked, spinning, mode, showTip, onReroll }: {
         </>),
         hint: locked ? 'Locked — rolled riders keep their value' : d.dropped ? null : 'Click to reroll this die',
       }))}
-    >{d.v}</button>
+    ><Val v={d.v} lockAt={lockAt} now={now} seed={seed} tone={tone} /></button>
   )
 }
 
-function Line({ line, index, showTip, spin, onReroll }: {
-  line: RollLineView; index: number; showTip: ShowTip; spin: string | null
+function Line({ line, index, showTip, lc, now, onReroll }: {
+  line: RollLineView; index: number; showTip: ShowTip
+  /** When this line's dice and total lock (lib/resolve.ts). */
+  lc: LineClock; now: number
   onReroll: (die: number) => void
 }) {
   const isAtk = line.kind !== 'damage'
+  const nat = natOf(line)
+  // The total's colour IS the outcome, so it arrives with the total.
+  const landed = now >= lc.total
   return (
-    <section className={cx(styles.line, line.crit && styles.critLine)}>
+    <section className={cx(styles.line, landed && line.crit && styles.critLine, landed && nat === 'nat1' && styles.fumbleLine)}>
       <div className={styles.lHead}>
         <span className={cx(styles.lTag, !isAtk && styles.dmg)}>{line.label}</span>
         {line.type && <span className={styles.lType} data-t={line.type.toLowerCase()} style={dt(line.type)}>{line.type}</span>}
@@ -761,8 +805,8 @@ function Line({ line, index, showTip, spin, onReroll }: {
             {line.mode === 'adv' ? 'Advantage' : 'Disadvantage'}
           </span>
         )}
-        {line.crit && <span className={styles.lType} data-t="radiant" style={dt('radiant')}>Crit ×2</span>}
-        <span className={styles.lSum}>{line.total}</span>
+        {line.crit && now >= lc.decide && <span className={styles.lType} data-t="radiant" style={dt('radiant')}>Crit ×2</span>}
+        <span className={styles.lSum}><Val v={line.total} lockAt={lc.total} now={now} seed={index * 16 + 15} tone={nat} /></span>
       </div>
       <div className={styles.lMath}>
         {line.dice.length > 0 && <span className={styles.form}>{line.formula}</span>}
@@ -772,8 +816,9 @@ function Line({ line, index, showTip, spin, onReroll }: {
         {line.dice.map((d, i) => (
           <Fragment key={i}>
             {i > 0 && <span className={styles.op}>{line.mode ? 'vs' : '+'}</span>}
-            <DieChip d={d} mode={line.mode} showTip={showTip}
-              spinning={spin === `${index}:${i}`} onReroll={() => onReroll(i)} />
+            <DieChip d={d} mode={line.mode} showTip={showTip} onReroll={() => onReroll(i)}
+              lockAt={lc.dice[i]} dimAt={lc.dim} now={now} seed={index * 16 + i}
+              tone={isAtk && !d.dropped && d.sides === 20 ? nat : undefined} undecided={now < lc.decide} />
           </Fragment>
         ))}
         {line.mods !== 0 && (<>
@@ -790,7 +835,8 @@ function Line({ line, index, showTip, spin, onReroll }: {
             {line.dice.length === 0 && line.mods < 0 ? '−' : ''}{Math.abs(line.mods)}
           </span>
         </>)}
-        <span className={styles.eq}>=</span><span className={styles.res}>{line.total}</span>
+        <span className={styles.eq}>=</span>
+        <span className={styles.res}><Val v={line.total} lockAt={lc.total} now={now} seed={index * 16 + 14} /></span>
       </div>
     </section>
   )
@@ -919,7 +965,7 @@ function Contribution({ group, showTip, held, onLeave }: {
                   {faces.map((d, i) => (
                     <Fragment key={i}>
                       {i > 0 && <span className={styles.op}>+</span>}
-                      <DieChip d={d} locked showTip={showTip} spinning={false} />
+                      <DieChip d={d} locked showTip={showTip} />
                     </Fragment>
                   ))}
                 </div>
@@ -1067,14 +1113,16 @@ function Choice({ views, showTip, onPick, onUndo, onLeave }: {
 
 /** UNRESOLVED — the toggle. Formula, never a pre-rolled number, until the
  *  player says yes. Once rolled it locks. */
-function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin, onLeave }: {
+function Ask({ v, folded, onPatch, onFold, onRolled, showTip, burst, now, onLeave }: {
   v: RiderView
   folded: boolean
   onPatch: (index: number, patch: Partial<RiderView['rider']>) => void
   onFold: () => void
   onRolled: () => void
   showTip: ShowTip
-  spin: string | null
+  /** This rider's own roll resolving, when it was just rolled (lib/resolve.ts). */
+  burst: { dice: number[]; total: number } | null
+  now: number
   onLeave?: () => void
 }) {
   const r = v.rider
@@ -1085,7 +1133,7 @@ function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin, onLeave }: {
   const locked = v.kind === 'value' && !!r.rolled
   const faces: Die[] = r.rolledDice ?? []
   const onAttack = v.group === 'Attack' || v.group === 'Check' || v.group === 'Save'
-  const spinAll = spin === `r${v.index}:*`
+  const lockAt = burst?.total ?? 0
 
   return (
     <div className={cx(styles.rider, !r.on ? styles.off : locked ? styles.locked : styles.on,
@@ -1124,7 +1172,7 @@ function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin, onLeave }: {
           </span>
         )}
         {v.kind === 'value' && r.on && r.rolled && (
-          <span className={styles.rdVal}>{riderAmount(r)}{onAttack ? ' atk' : r.dmgType ? ` ${r.dmgType}` : ''}</span>
+          <span className={styles.rdVal}><Val v={riderAmount(r)} lockAt={lockAt} now={now} seed={40} />{onAttack ? ' atk' : r.dmgType ? ` ${r.dmgType}` : ''}</span>
         )}
         {v.kind === 'note' && r.on && <span className={styles.rdVal}><i className="fa-solid fa-eye" /></span>}
         <span className={styles.rdFold}><i className="fa-solid fa-chevron-down" /></span>
@@ -1163,10 +1211,11 @@ function Ask({ v, folded, onPatch, onFold, onRolled, showTip, spin, onLeave }: {
               {faces.map((d, i) => (
                 <span key={i}>
                   {i > 0 && <span className={styles.op}>+</span>}
-                  <DieChip d={d} locked showTip={showTip} spinning={spinAll} />
+                  <DieChip d={d} locked showTip={showTip} lockAt={burst?.dice[i] ?? 0} now={now} seed={41 + i} />
                 </span>
               ))}
-              <span className={styles.eq}>=</span><span className={styles.res}>{v.value}</span>
+              <span className={styles.eq}>=</span>
+              <span className={styles.res}><Val v={v.value ?? ''} lockAt={lockAt} now={now} seed={60} /></span>
               {r.dmgType && <span className={styles.lType} data-t={r.dmgType.toLowerCase()} style={{ marginLeft: 4, ...dt(r.dmgType) }}>{r.dmgType}</span>}
             </div>
             {/* Says the quiet part: the number is settled. Toggling reuses it. */}

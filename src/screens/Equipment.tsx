@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useOutletContext } from 'react-router-dom'
@@ -35,8 +36,8 @@ import { Inline } from '../lib/markdown'
 
 interface RouteContext {
   character: CharacterRow
-  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<void>
-  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<void>
+  updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<SaveResult>
+  updateSections: (patch: Partial<Pick<CharacterRow, CharacterSection>>) => Promise<SaveResult>
   shardTrees?: Record<string, ShardTree>
 }
 
@@ -200,24 +201,26 @@ export function Equipment() {
    *  The dice live in lib/weaponRoll.ts, shared with the Foundry hotbar: a swing
    *  asked for from the map must be the same swing as this one, and two copies
    *  of a hundred lines is how they stop being. */
-  function attack(weapon: EquippedWeapon) {
+  async function attack(weapon: EquippedWeapon) {
     const out = rollWeapon({
       character, weapon, sheet, graph,
       ammo: isRanged(weapon) ? activeAmmo : null,
       target,
     })
-    const entry = addRoll(out.entry)
-    if (!out.rolled) return
+    if (!out.rolled) { addRoll(out.entry); return }
+    const rollId = crypto.randomUUID()
     /* EVERY SWING COUNTS, and every arm it used is spent HERE. See attackRolled:
        a `when` gate is read when the arm is minted and never again, so an arm
        that survives its roll fires next time under a condition nobody
        re-checks. Folded into the SAME write as the arrow, because two round
        trips can land apart and the shot that counted but did not spend is the
        worse half to lose. */
-    void updateSections({
-      resources: attackRolled(character, out.arms, entry.id) as CharacterRow['resources'],
+    const saved = await updateSections({
+      resources: attackRolled(character, out.arms, rollId) as CharacterRow['resources'],
       ...(out.inventory ? { inventory: out.inventory as unknown as CharacterRow['inventory'] } : {}),
     })
+    if (!saved.ok) return
+    addRoll(out.entry, rollId)
   }
 
   /** Equip a carried container into its kind's slot. Its CONTENTS don't move —

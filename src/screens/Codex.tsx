@@ -1,3 +1,4 @@
+import type { SaveResult } from '../lib/saveResult'
 import { useMemo } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterUpdate, ProgressStory, ShardTree } from '../lib/database.types'
@@ -5,12 +6,12 @@ import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { StartingKit } from '../components/StartingKit'
 import { useCampaign } from '../lib/campaign'
-import { completionFor } from '../lib/storyLattice'
+import { displayPercent } from '../lib/storyLattice'
 import styles from './Codex.module.css'
 
 interface RouteContext {
   character: CharacterRow
-  updateSections: (patch: CharacterUpdate) => Promise<void>
+  updateSections: (patch: CharacterUpdate) => Promise<SaveResult>
   /** Passed straight through to StartingKit: a released level-up clamps current
    *  HP against the EFFECTIVE ceiling, which a shard can move. */
   shardTrees: Record<string, ShardTree>
@@ -64,7 +65,7 @@ export function Codex() {
           <StoryCard
             key={story.id}
             story={story}
-            percent={completionFor(story, quests, character)?.percent ?? story.percent}
+            percent={displayPercent(story, quests, character)}
           />
         ))}
       </section>
