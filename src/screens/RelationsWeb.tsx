@@ -15,7 +15,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { KnownCard, NpcWebView } from '../components/NpcWebView'
-import { derive, layout } from '../lib/npcWeb'
+import { asSeenBy, derive, layout } from '../lib/npcWeb'
 import { useKnownNpcs } from '../lib/npcs'
 import { useCampaign } from '../lib/campaign'
 import type { CharacterRow } from '../lib/database.types'
@@ -29,7 +29,12 @@ export function RelationsWeb() {
   const { quests } = useCampaign()
   const { npcs, links, loading } = useKnownNpcs()
 
-  const graph = useMemo(() => derive(npcs, links, [character], quests), [npcs, links, character, quests])
+  // RLS already limits a player to what they've been shown — but the DM's own
+  // character reads EVERY row, so the page applies the same filter itself.
+  const graph = useMemo(() => {
+    const seen = asSeenBy(npcs, links, character.id)
+    return derive(seen.npcs, seen.links, [character], quests)
+  }, [npcs, links, character, quests])
   const orbit = useMemo(() => layout(graph), [graph])
   const [sel, setSel] = useState<string | null>(null)
   const selected = sel ? graph.nodes.find(n => n.id === sel) ?? null : null
