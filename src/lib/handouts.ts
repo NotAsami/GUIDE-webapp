@@ -72,7 +72,9 @@ export function useHandouts(characterId: string | undefined): PlayerHandouts {
   const fetchAll = useCallback(async () => {
     if (!characterId) { setHandouts([]); return }
     const { data } = await supabase.from('handouts').select('*').order('created_at', { ascending: false })
-    setHandouts((data as HandoutRow[]) ?? [])
+    // RLS already limits a player to their own — but the DM's own character reads
+    // EVERY row, so the list says what it means instead of trusting the role.
+    setHandouts(((data as HandoutRow[]) ?? []).filter(h => h.recipients.includes(characterId)))
   }, [characterId])
 
   useEffect(() => { void fetchAll() }, [fetchAll])

@@ -2,8 +2,8 @@
  * NPC records, their DM-only notes, and NPC ↔ NPC links (0024).
  *
  *   useDmNpcs()     the console: everything, plus writes and reveals.
- *   useKnownNpcs()  a player: only what was revealed to one of their
- *                   characters — RLS does the filtering, not this file.
+ *   useKnownNpcs()  a player: only what was revealed to ONE character —
+ *                   RLS for a real player, asSeenBy() for the DM's own.
  *
  * No subscription on either side: the DM is the only writer and re-reads its
  * own rows, and a reveal reaching a player the next time they open the web is
@@ -13,7 +13,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { useAuth } from './auth'
 import type { NpcInsert, NpcLinkInsert, NpcLinkRow, NpcLinkUpdate, NpcRow, NpcSecret, NpcUpdate } from './database.types'
-import { revealNpc, revealTie } from './npcWeb'
+import { asSeenBy, revealNpc, revealTie } from './npcWeb'
 
 export interface DmNpcsState {
   npcs: NpcRow[]
@@ -135,9 +135,11 @@ export function useDmNpcs(): DmNpcsState {
   return { npcs, links, notes, loading, error, create, update, remove, link, updateLink, unlink, saveNotes, reveal, revealLink }
 }
 
-/** A player's view: the records and ties revealed to one of their characters.
- *  Screen-local (called by the relations web, not Layout), same as useCampaign. */
-export function useKnownNpcs(): { npcs: NpcRow[]; links: NpcLinkRow[]; loading: boolean } {
+/** A player's view: the records and ties revealed to ONE character. Filtered
+ *  here, not by each caller: RLS does it for a player, but the DM's own
+ *  character reads every row, and every new list would otherwise have to
+ *  remember asSeenBy(). Screen-local, same as useCampaign. */
+export function useKnownNpcs(characterId: string | undefined): { npcs: NpcRow[]; links: NpcLinkRow[]; loading: boolean } {
   const { session } = useAuth()
   const [npcs, setNpcs] = useState<NpcRow[]>([])
   const [links, setLinks] = useState<NpcLinkRow[]>([])
@@ -148,10 +150,11 @@ export function useKnownNpcs(): { npcs: NpcRow[]; links: NpcLinkRow[]; loading: 
       supabase.from('npcs').select('*').order('name'),
       supabase.from('npc_links').select('*'),
     ]).then(([n, l]) => {
-      setNpcs((n.data as NpcRow[]) ?? [])
-      setLinks((l.data as NpcLinkRow[]) ?? [])
+      const seen = asSeenBy((n.data as NpcRow[]) ?? [], (l.data as NpcLinkRow[]) ?? [], characterId ?? '')
+      setNpcs(seen.npcs)
+      setLinks(seen.links)
       setLoading(false)
     })
-  }, [session])
+  }, [session, characterId])
   return { npcs, links, loading }
 }
