@@ -15,7 +15,7 @@ test('HP changes preserve concurrent coin changes and recompute vitals', async (
   const store: CharacterStore = {
     read: async () => stored,
     compareAndSwap: async (expected, patch) => {
-      assert.equal(expected.updated_at, '2')
+      if (expected.updated_at !== stored.updated_at) return null
       stored = { ...stored, ...patch, updated_at: '3' } as CharacterRow
       return stored
     },
@@ -28,8 +28,11 @@ test('HP changes preserve concurrent coin changes and recompute vitals', async (
 })
 
 test('conflicting HP edits fail without replacing the latest row', async () => {
-  const base = row(), current = row({ sheet: { hp: { current: 8, max: 20 } } })
-  const result = await writeCharacter({ read: async () => current, compareAndSwap: async () => assert.fail('must not write') }, base,
+  const base = row(), current = row({ updated_at: '2', sheet: { hp: { current: 8, max: 20 } } })
+  const result = await writeCharacter({ read: async () => current, compareAndSwap: async expected => {
+    if (expected.updated_at !== current.updated_at) return null
+    return assert.fail('must not write')
+  } }, base,
     { sheet: { ...base.sheet, hp: { current: 9, max: 20 } } }, {})
   assert.equal(result.ok, false)
   assert.equal(result.row, current)
@@ -73,4 +76,16 @@ test('nested deletion preserves unrelated remote fields; concurrent deletion con
 test('two actions based on the same resource count cannot both report success', () => {
   const base = { charges: 3 }
   assert.throws(() => mergeCharacterPatch(base, { charges: 2 }, { charges: 2 }), CharacterConflict)
+})
+
+test('an up-to-date base saves in ONE round trip: no read before the write', async () => {
+  const base = row()
+  let reads = 0
+  const result = await writeCharacter({
+    read: async () => { reads++; return base },
+    compareAndSwap: async (expected, patch) => expected.updated_at === base.updated_at
+      ? { ...base, ...patch, updated_at: '2' } as CharacterRow : null,
+  }, base, { sheet: { ...base.sheet, hp: { current: 9, max: 20 } } }, {})
+  assert.equal(result.ok, true)
+  assert.equal(reads, 0)
 })
