@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useOutletContext } from 'react-router-dom'
+import { createPortal } from 'react-dom'
+import { useOutletContext } from 'react-router-dom'
 import type { CharacterRow } from '../lib/database.types'
 import type { HandoutOutlet } from '../lib/handouts'
 import { Nav } from '../components/Nav'
@@ -72,12 +73,45 @@ export function Lore() {
   const selected = sel ? graph.nodes.find(n => n.id === sel) ?? null : null
   useEffect(() => { if (sel && !selected) setSel(null) }, [sel, selected])
 
+  // Full screen is an app layer, not the browser's Fullscreen API: that can be
+  // refused (a hidden tab, a permission) with nothing to show for the click, and
+  // iPhone Safari has no element fullscreen at all. The web's box just covers the
+  // app; NpcWebView refits because it measures its pane. Esc closes a selected
+  // person first, then the layer.
+  const [full, setFull] = useState(false)
+  useEffect(() => {
+    if (!full) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (sel) setSel(null); else setFull(false) } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [full, sel])
+
   const lived = [...sessions].sort((a, b) => a.num - b.num)
   const done = quests.filter(q => q.status === 'completed')
   const places = placesOf(quests, lore.identity?.homeland)
   const byId = new Map(npcs.map(n => [n.id, n.name]))
   const ties = links.filter(l => byId.has(l.a) && byId.has(l.b))
   const hasNature = NATURE.some(n => lore.personality?.[n.key])
+
+  const webView = (
+    <NpcWebView
+      tone="player" web={graph} orbit={orbit} sel={sel} onSelect={setSel}
+      drawerOpen={!!selected} drawerW={DRAWER_W}
+      empty={<div className={web.empty}><span className={web.emptyT}>Nobody on your web yet</span></div>}
+    >
+      <div className={web.toolbar}>
+        <span className={web.count}>{graph.nodes.length} known</span>
+        <button type="button" className={web.tool} onClick={() => setFull(f => !f)} aria-pressed={full}>
+          {full ? 'Esc · leave full screen' : '⛶ Full screen'}
+        </button>
+      </div>
+      {selected && (
+        <aside className={web.drawer} style={{ width: DRAWER_W }} aria-label={selected.name}>
+          <KnownCard n={selected} web={graph} onSelect={setSel} onClose={() => setSel(null)} />
+        </aside>
+      )}
+    </NpcWebView>
+  )
 
   const idLine = [identity.race, identity.class].filter(Boolean).join(' ')
   const meta = (
@@ -263,20 +297,15 @@ export function Lore() {
 
             <section aria-label="People">
               <div id="lore-people" className={styles.after}><h2>The people you know</h2></div>
-              <div className={styles.webBox}>
-                <NpcWebView
-                  tone="player" web={graph} orbit={orbit} sel={sel} onSelect={setSel}
-                  drawerOpen={!!selected} drawerW={DRAWER_W}
-                  empty={<div className={web.empty}><span className={web.emptyT}>Nobody on your web yet</span></div>}
-                >
-                  {selected && (
-                    <aside className={web.drawer} style={{ width: DRAWER_W }} aria-label={selected.name}>
-                      <KnownCard n={selected} web={graph} onSelect={setSel} onClose={() => setSel(null)} />
-                    </aside>
-                  )}
-                </NpcWebView>
-              </div>
-              <Link to="/lore/relations" className={styles.webMore}>Open the full web ▸</Link>
+              {/* The same web, either in its place on the page or lifted over the whole
+                  app. Full screen goes through a portal: .lore is a fixed stacking
+                  context, so nothing inside it can rise above the bars. */}
+              {full
+                ? <>
+                    <div className={styles.webBox} />
+                    {createPortal(<div className={styles.webFull} role="dialog" aria-label="The people you know">{webView}</div>, document.body)}
+                  </>
+                : <div className={styles.webBox}>{webView}</div>}
             </section>
           </article>
         </div>
