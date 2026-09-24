@@ -6825,10 +6825,6 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
   )
 }
 
-/** Memory-fidelity levels (eerie player-facing horror descriptor), ordered from
- *  intact to fully corrupted — mirrors the design's MEM_LEVELS. */
-const MEM_LEVELS = ['INTACT', 'PARTIAL', 'DEGRADED', 'FRAGMENTED', 'CORRUPTED'] as const
-
 /** Preset roster glyphs the DM can assign as a character's menu portrait. */
 const GLYPHS = ['fa-user', 'fa-chess-rook', 'fa-hat-wizard', 'fa-shield-halved', 'fa-mask', 'fa-skull', 'fa-dragon', 'fa-khanda', 'fa-cross', 'fa-feather', 'fa-hand-fist', 'fa-eye']
 
@@ -7293,8 +7289,7 @@ function ShardsTab({ row, member, shardLib, onUpdate, onVoice, log }: {
 /** The DM-only Lore tab. Two layers in ONE save:
  *   - `character_secrets` (DM-only, RLS, migration 0002): digitization + true lore —
  *     a player can NEVER read these.
- *   - `characters` row (player-readable): everything else — memory-fidelity descriptor,
- *     menu glyph, portrait, and the full player-facing lore form (backstory / nature /
+ *   - `characters` row (player-readable): everything else — menu glyph, portrait, and the full player-facing lore form (backstory / nature /
  *     relations / identity). All of it folds into ONE `patch.lore` + `patch.identity`
  *     write so no widget's draft can clobber another's.
  *  Drafts are local with a single explicit "Save Lore" (matches the design) so typing
@@ -7308,7 +7303,6 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
 }) {
   const savedDig = secret?.digitization ?? 0
   const savedLore = secret?.true_lore ?? ''
-  const savedMem = row.lore?.memoryFidelity ?? 'INTACT'
   const savedIcon = row.identity?.icon ?? 'fa-user'
   const savedPortrait = row.identity?.portrait ?? ''
   const savedFocus = row.identity?.portraitFocus ?? 'center top'
@@ -7319,7 +7313,6 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
 
   const [dig, setDig] = useState(savedDig)
   const [lore, setLore] = useState(savedLore)
-  const [mem, setMem] = useState(savedMem)
   const [icon, setIcon] = useState(savedIcon)
   const [portrait, setPortrait] = useState(savedPortrait)
   const [portraitFailed, setPortraitFailed] = useState(false)
@@ -7340,7 +7333,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
   const secretDirty = dig !== savedDig || lore !== savedLore
   const personality = { trait, ideal, bond, flaw }
   const identityLore = { alignment, age, height, deity, homeland }
-  const charDirty = mem !== savedMem || icon !== savedIcon || portrait !== savedPortrait || focus !== savedFocus
+  const charDirty = icon !== savedIcon || portrait !== savedPortrait || focus !== savedFocus
     || backstory !== savedBackstory
     || JSON.stringify(personality) !== JSON.stringify({ trait: savedPersonality.trait ?? '', ideal: savedPersonality.ideal ?? '', bond: savedPersonality.bond ?? '', flaw: savedPersonality.flaw ?? '' })
     || JSON.stringify(relations) !== JSON.stringify(savedRelations)
@@ -7359,7 +7352,6 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
       const patch: CharacterUpdate = {}
       const nextLore: CharacterLore = {
         ...(row.lore ?? {}),
-        memoryFidelity: mem,
         backstory,
         personality,
         relations,
@@ -7512,40 +7504,25 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
         </div>
       </div>
 
-      {/* DM-only tools — digitization, memory fidelity, true lore. Never sent to players
-          (memory fidelity is the one exception: it's a player-readable descriptor). */}
+      {/* DM-only tools — digitization and true lore. Never sent to players. (Memory
+          fidelity retired 2026-09-24: per-section integrity, lore.integrity, replaced it.) */}
       <LoreSecHead icon="fa-satellite-dish" label="DM Intelligence" />
-      <div className={styles.loreGrid}>
-        <div className={styles.actCard}>
-          <div className={styles.acTitle}><i className="fa-solid fa-radiation lead" /><span className={styles.t}>Digitization</span></div>
-          <div className={cx(styles.digRead, digClass && styles[digClass])}>
-            <span className={styles.digNum}>{dig}</span><span className={styles.digPct}>%</span>
-          </div>
-          <input
-            className={cx(styles.digSlider, digClass && styles[digClass])}
-            type="range" min={0} max={100} value={dig}
-            aria-label="Digitization level"
-            onChange={e => setDig(Number(e.target.value))}
-          />
-          <div className={styles.digSteps}>
-            <Btn tone="ghost" sm icon="fa-minus" label="5" onClick={() => setDig(d => Math.max(0, d - 5))} disabled={dig <= 0} />
-            <Btn tone="ghost" sm icon="fa-plus" label="5" onClick={() => setDig(d => Math.min(100, d + 5))} disabled={dig >= 100} />
-          </div>
-          <p className={styles.acHint}>Hidden corruption metric · DM only</p>
+      <div className={styles.actCard}>
+        <div className={styles.acTitle}><i className="fa-solid fa-radiation lead" /><span className={styles.t}>Digitization</span></div>
+        <div className={cx(styles.digRead, digClass && styles[digClass])}>
+          <span className={styles.digNum}>{dig}</span><span className={styles.digPct}>%</span>
         </div>
-
-        <div className={styles.actCard}>
-          <div className={styles.acTitle}><i className="fa-solid fa-wave-square lead" /><span className={styles.t}>Memory Fidelity</span></div>
-          <select className={styles.memSelect} value={mem} onChange={e => setMem(e.target.value)} aria-label="Memory fidelity">
-            {MEM_LEVELS.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-          <div className={styles.memBars} aria-hidden="true">
-            {MEM_LEVELS.map((m, i) => (
-              <span key={m} className={cx(styles.memBar, i <= MEM_LEVELS.indexOf(mem as typeof MEM_LEVELS[number]) && styles.on, i >= 3 && styles.warn)} />
-            ))}
-          </div>
-          <p className={styles.acHint}>System descriptor · shown on the player Lore screen</p>
+        <input
+          className={cx(styles.digSlider, digClass && styles[digClass])}
+          type="range" min={0} max={100} value={dig}
+          aria-label="Digitization level"
+          onChange={e => setDig(Number(e.target.value))}
+        />
+        <div className={styles.digSteps}>
+          <Btn tone="ghost" sm icon="fa-minus" label="5" onClick={() => setDig(d => Math.max(0, d - 5))} disabled={dig <= 0} />
+          <Btn tone="ghost" sm icon="fa-plus" label="5" onClick={() => setDig(d => Math.min(100, d + 5))} disabled={dig >= 100} />
         </div>
+        <p className={styles.acHint}>Hidden corruption metric · DM only</p>
       </div>
 
       {/* true lore — the dramatic-irony layer (design: q-gm-head + q-gmnotes) */}
