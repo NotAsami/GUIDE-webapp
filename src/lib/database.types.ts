@@ -1323,7 +1323,6 @@ export type CharacterLore = {
   relations?: Relation[]
   /** Only fields NOT already on `identity` — race/class/archetype/background live there. */
   identity?: { alignment?: string; age?: string; height?: string; deity?: string; homeland?: string }
-  memoryFidelity?: string
   /** Per-section integrity, `## heading` → percent still in ink (0–100, 100 when
    *  absent). What G.U.I.D.E. has taken; the Lore screen renders a section under
    *  100 as its letters falling to 1s and 0s (lib/loreDoc.ts). A placeholder until
