@@ -1,6 +1,6 @@
 /**
  * The NPC web as drawn — shared by the Operator Console (OperatorNpcWeb) and
- * the player's relations web (RelationsWeb). Both pass a Web from derive() and
+ * the player's web on the Lore screen. Both pass a Web from derive() and
  * an Orbit from layout(); this owns only the drawing, the fit-or-focus
  * transform, and the read-only card. Selection state belongs to the caller.
  */

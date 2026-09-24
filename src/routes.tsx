@@ -34,7 +34,6 @@ export const router = createBrowserRouter([
           { path: 'lore', lazy: async () => ({ Component: (await import('./screens/Lore')).Lore }) },
           /* The Relations section drawn as a web — a place you navigate to, like
              a story card, because a graph needs the room. */
-          { path: 'lore/relations', lazy: async () => ({ Component: (await import('./screens/RelationsWeb')).RelationsWeb }) },
           { path: 'journal', lazy: async () => ({ Component: (await import('./screens/Journal')).Journal }) },
           { path: 'spellbook', lazy: async () => ({ Component: (await import('./screens/Spellbook')).Spellbook }) },
           { path: '*', lazy: async () => ({ Component: (await import('./screens/NotFound')).NotFound }) },
