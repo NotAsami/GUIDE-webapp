@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useOutletContext } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 import type { CharacterRow } from '../lib/database.types'
 import type { HandoutOutlet } from '../lib/handouts'
 import { Nav } from '../components/Nav'
@@ -12,7 +12,8 @@ import { origins } from '../lib/featureView'
 import { useCampaign } from '../lib/campaign'
 import { useKnownNpcs } from '../lib/npcs'
 import { derive, groupByTie, layout } from '../lib/npcWeb'
-import { integrityOf, overallIntegrity, parseLore, placesOf, type LoreCard, type LoreSection } from '../lib/loreDoc'
+import { integrityOf, overallIntegrity, parseLore, type LoreCard, type LoreSection } from '../lib/loreDoc'
+import { placeId, placesFrom } from '../lib/storyLattice'
 import { Icon } from '../components/Icon'
 import web from '../components/NpcWebView.module.css'
 import styles from './Lore.module.css'
@@ -41,7 +42,6 @@ const NATURE: { key: 'trait' | 'ideal' | 'bond' | 'flaw'; label: string }[] = [
 ]
 
 const DRAWER_W = 320
-const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
 
 /** Scroll the page to a heading. A button rather than an `#anchor` link: the
  *  router owns the URL, and a hash there would be a navigation. */
@@ -55,7 +55,7 @@ const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ block
  *  0s. After it: the sessions lived, what they've been handed and told, and the
  *  people they know. Read-only for players; authored DM-side. */
 export function Lore() {
-  const { character, handouts, openHandout } = useOutletContext<RouteContext>()
+  const { character, handouts } = useOutletContext<RouteContext>()
   const { quests, sessions } = useCampaign()
   const { npcs, links } = useKnownNpcs(character.id)
   const identity = character.identity ?? {}
@@ -86,9 +86,15 @@ export function Lore() {
     return () => window.removeEventListener('keydown', onKey)
   }, [full, sel])
 
-  const lived = [...sessions].sort((a, b) => a.num - b.num)
-  const done = quests.filter(q => q.status === 'completed')
-  const places = placesOf(quests, lore.identity?.homeland)
+  // The Journal owns sessions and handouts, the Region story card owns places;
+  // Lore only says what it knows about them and links there.
+  const latest = sessions[0]                           // newest first, from useCampaign
+  const recent = handouts.slice(0, 3)                  // newest first, from useHandouts
+  const home = lore.identity?.homeland?.trim()
+  const visited = placesFrom(quests)
+  const places = home && !visited.some(p => p.id === placeId(home))
+    ? [{ id: placeId(home), name: home, quests: [] }, ...visited] : visited
+  const region = (character.progress?.stories ?? []).find(s => s.emblem === 'region')
   const byId = new Map(npcs.map(n => [n.id, n.name]))
   const ties = links.filter(l => byId.has(l.a) && byId.has(l.b))
   const hasNature = NATURE.some(n => lore.personality?.[n.key])
@@ -243,26 +249,13 @@ export function Lore() {
 
             <section aria-label="Chronicle">
               <div id="lore-chronicle" className={styles.after}><h2>Chronicle</h2></div>
-              {lived.length === 0 ? <p className={styles.stateSub}>// Nothing lived yet</p> : (
-                <ol className={styles.chron}>
-                  {lived.map((s, i) => (
-                    <li key={s.id}>
-                      <div className={styles.chronN}>{ROMAN[i] ?? s.num}<span className={styles.chronDate}>{s.date}</span></div>
-                      <div className={styles.chronRail} aria-hidden="true" />
-                      <div className={styles.chronBody}>
-                        <div className={styles.chronTitle}>{s.title}</div>
-                        {s.recap ? <Prose text={s.recap} className={styles.chronRecap} /> : <div className={styles.chronRecap}>—</div>}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-              {done.length > 0 && (
-                <>
-                  <div className={styles.subhead}>Quests completed</div>
-                  <div className={styles.done}>{done.map(q => <span key={q.id} className={styles.doneQ}>{q.title}</span>)}</div>
-                </>
-              )}
+              {latest ? (
+                <Link to="/journal" state={{ tab: 'sessions' }} className={styles.onward}>
+                  {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'} lived
+                  <span className={styles.sep}> · </span>latest: <b>{latest.title}</b>
+                  <span className={styles.go}> ▸</span>
+                </Link>
+              ) : <p className={styles.stateSub}>// Nothing lived yet</p>}
             </section>
 
             <section aria-label="What you've learned">
@@ -270,7 +263,12 @@ export function Lore() {
               <div className={styles.subhead}>Handouts · {handouts.length}</div>
               {handouts.length === 0 ? <p className={styles.stateSub}>// Nothing handed to you yet</p> : (
                 <div className={styles.learnGrid}>
-                  {handouts.map(h => <button key={h.id} type="button" className={styles.handout} onClick={() => openHandout(h.id)}>{h.title || 'Untitled'}</button>)}
+                  {recent.map(h => (
+                    <Link key={h.id} to="/journal" state={{ handout: h.id }} className={styles.handout}>{h.title || 'Untitled'}</Link>
+                  ))}
+                  <Link to="/journal" state={{ tab: 'handouts' }} className={styles.onward}>
+                    All handouts<span className={styles.go}> ▸</span>
+                  </Link>
                 </div>
               )}
               <div className={styles.subhead}>Ties revealed to you · {ties.length}</div>
@@ -284,13 +282,17 @@ export function Lore() {
               <div className={styles.subhead}>Places · {places.length}</div>
               {places.length === 0 ? <p className={styles.stateSub}>// No places yet</p> : (
                 <div className={styles.places}>
-                  {places.map(p => (
-                    <div key={p.name} className={styles.place}>
-                      <span className={styles.placeName}>{p.name}</span>{p.home && <span className={styles.placeHome}>Home</span>}
-                      {p.quests.length > 0 && <div className={styles.placeLine}>{p.quests.map(q => q.title).join(' · ')}</div>}
-                      {p.people.length > 0 && <div className={styles.placeLine}>{p.people.join(' · ')}</div>}
-                    </div>
-                  ))}
+                  {places.map(p => {
+                    const label = <>
+                      <span className={styles.placeName}>{p.name}</span>
+                      {p.id === (home && placeId(home)) && <span className={styles.placeHome}>Home</span>}
+                      <span className={styles.placeLine}>{p.quests.length ? `${p.quests.length} ${p.quests.length === 1 ? 'quest' : 'quests'}` : 'no quests yet'}</span>
+                    </>
+                    // A place opens as its thread on the Region card — the map owns it.
+                    return region && p.quests.length
+                      ? <Link key={p.id} to={`/story/${region.id}/${p.id}`} className={styles.place}>{label}<span className={styles.go}> ▸</span></Link>
+                      : <div key={p.id} className={styles.place}>{label}</div>
+                  })}
                 </div>
               )}
             </section>

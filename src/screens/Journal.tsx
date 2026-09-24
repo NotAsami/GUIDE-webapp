@@ -44,11 +44,15 @@ export function Journal() {
   // "Open in Journal" from the dock lands here with the handout already chosen —
   // keyed on the navigation, so it also works when the Journal is already open.
   const loc = useLocation()
-  const arrivedWith = (loc.state as { handout?: string } | null)?.handout
-  const [tab, setTab] = useState<Tab>(arrivedWith ? 'handouts' : 'quests')
+  const arrival = loc.state as { handout?: string; tab?: Tab } | null
+  const arrivedWith = arrival?.handout
+  // Other screens link in to a tab (Lore's "all handouts", "sessions lived").
+  const arrivedTab: Tab | undefined = arrivedWith ? 'handouts' : arrival?.tab
+  const [tab, setTab] = useState<Tab>(arrivedTab ?? 'quests')
   const [selected, setSelected] = useState<Selection>(arrivedWith ? { kind: 'handout', id: arrivedWith } : null)
   useEffect(() => {
     if (arrivedWith) { setTab('handouts'); setSelected({ kind: 'handout', id: arrivedWith }) }
+    else if (arrivedTab) setTab(arrivedTab)
   }, [loc.key]) // eslint-disable-line react-hooks/exhaustive-deps
   const onScreen = handouts.filter(h => h.on_screen.includes(character.id))
   const filed = handouts.filter(h => !h.on_screen.includes(character.id))

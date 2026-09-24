@@ -128,25 +128,21 @@
 .after h2 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--beige); }
 .after::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(212, 191, 125, 0.45), transparent); }
 
-.chron { list-style: none; margin: 0; padding: 0; }
-.chron li { display: grid; grid-template-columns: 96px 14px minmax(0, 1fr); gap: 12px; }
-.chronN { text-align: right; font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--beige); }
-.chronDate { display: block; margin-top: 2px; font-family: var(--font-mono); font-weight: 400; font-size: 8px; line-height: 1.4; letter-spacing: 0.04em; color: var(--muted); }
-.chronRail { display: flex; flex-direction: column; align-items: center; }
-.chronRail::before { content: ""; width: 9px; height: 9px; margin-top: 7px; transform: rotate(45deg); border: 1px solid var(--cyan); background: #0d2a33; }
-.chronRail::after { content: ""; flex: 1; width: 1px; background: rgba(212, 191, 125, 0.25); }
-.chronBody { padding-bottom: 18px; }
-.chronTitle { font-family: var(--font-prose); font-weight: 700; font-size: 18px; color: var(--text); }
-.chronRecap { font-size: 15px; line-height: 1.5; color: #c4c4c4; margin-top: 2px; }
-.chronRecap p { margin: 0 0 6px; }
+/* A line that says what Lore knows and hands you on to the screen that owns it. */
+.onward {
+  display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 0 2px; align-self: center;
+  font-family: var(--font-prose); font-size: 17px; color: var(--text); text-decoration: none;
+  border-bottom: 1px solid rgba(0, 166, 214, 0.35); padding-bottom: 2px;
+}
+.onward:hover { color: var(--cyan-hot); border-bottom-color: var(--cyan); }
+.onward b { color: #e6d5a3; font-weight: 600; }
+.go { color: var(--cyan); }
 .subhead { margin: 22px 0 8px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige); }
-.done { display: flex; flex-wrap: wrap; gap: 8px; }
-.doneQ { font-family: var(--font-prose); font-size: 15px; padding: 4px 10px; border: 1px solid rgba(79, 174, 107, 0.4); color: #cfe9d6; }
-
 .learnGrid { display: flex; flex-wrap: wrap; gap: 12px; }
 .handout {
   display: flex; flex-direction: column; align-items: center; gap: 7px; width: 104px; cursor: pointer;
   background: none; border: 0; padding: 0; color: var(--text); font-family: var(--font-prose); font-size: 13px; line-height: 1.2; text-align: center;
+  text-decoration: none;
 }
 .handout::before { content: ""; width: 64px; height: 80px; background: linear-gradient(160deg, #e6d8b0, #c9b684); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); transform: rotate(-2deg); transition: transform 0.15s ease; }
 .handout:hover::before { transform: rotate(0) translateY(-3px); }
@@ -154,11 +150,15 @@
 .ties li { padding: 5px 0; border-bottom: 1px dashed rgba(212, 191, 125, 0.12); font-size: 15.5px; line-height: 1.4; }
 .ties b { color: #e6d5a3; font-weight: 600; }
 .ties span { color: var(--muted); font-style: italic; }
-.places { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.place { border: 1px solid rgba(212, 191, 125, 0.28); padding: 12px 14px; }
-.placeName { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: var(--beige); }
-.placeHome { margin-left: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); }
-.placeLine { margin-top: 5px; font-size: 14.5px; line-height: 1.4; color: #c4c4c4; }
+.places { display: flex; flex-wrap: wrap; gap: 10px; }
+.place {
+  display: inline-flex; align-items: baseline; gap: 8px; padding: 8px 12px;
+  border: 1px solid rgba(212, 191, 125, 0.28); color: var(--text); text-decoration: none;
+}
+a.place:hover { border-color: var(--cyan); }
+.placeName { font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--beige); }
+.placeHome { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); }
+.placeLine { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; color: var(--muted); }
 
 .webBox { position: relative; height: 560px; border: 1px solid rgba(0, 166, 214, 0.25); }
 /* Full screen: the same box, lifted over the whole app (above the bars and the

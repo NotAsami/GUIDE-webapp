@@ -1,7 +1,7 @@
 // Run: node --test src/lib/loreDoc.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cardsOf, creep, integrityOf, overallIntegrity, parseLore, placesOf, plainText } from './loreDoc.ts'
+import { cardsOf, creep, integrityOf, overallIntegrity, parseLore, plainText } from './loreDoc.ts'
 
 // The shape World Anvil exports convert to: quote, intro, # groups, ## sections.
 const ARTICLE = `> *"He doesn't talk much about the war."*
@@ -133,17 +133,6 @@ test('less memory means more bits', () => {
 
 test('plainText drops markdown markers but keeps the words', () => {
   assert.equal(plainText('**bold** *it* ***both*** [link](https://x) [red]{danger}'), 'bold it both link red')
-})
-
-test('places: homeland first, then quest locations with their quests and givers', () => {
-  const places = placesOf([
-    { id: '1', title: 'Clear Your Name', status: 'active', location: 'Brettany', given_by: 'Magistrate Voss' },
-    { id: '2', title: 'Arrival', status: 'completed', location: 'brettany ', given_by: '' },
-    { id: '3', title: 'Stolen Tome', status: 'active', location: 'Davelguay', given_by: 'The Lady' },
-    { id: '4', title: 'Nowhere', status: 'active', location: '', given_by: 'X' },
-  ], 'Castella')
-  assert.deepEqual(places.map(p => [p.name, p.home, p.quests.length]), [['Castella', true, 0], ['Brettany', false, 2], ['Davelguay', false, 1]])
-  assert.deepEqual(places[1].people, ['Magistrate Voss'])
 })
 
 test('a start offset makes a split passage creep exactly like the whole one', () => {
