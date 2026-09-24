@@ -161,8 +161,9 @@
 .placeLine { margin-top: 5px; font-size: 14.5px; line-height: 1.4; color: #c4c4c4; }
 
 .webBox { position: relative; height: 560px; border: 1px solid rgba(0, 166, 214, 0.25); }
-.webMore { display: inline-block; margin-top: 10px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--cyan); text-decoration: none; }
-.webMore:hover { color: var(--cyan-hot); }
+/* Full screen: the same box, lifted over the whole app (above the bars and the
+   handout dock, below modal pickers). It brings its own ground. */
+.webFull { position: fixed; inset: 0; z-index: 300; background: var(--bg-2); }
 
 @media (max-width: 980px) {
   .page { grid-template-columns: minmax(0, 1fr); }
