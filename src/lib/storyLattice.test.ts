@@ -13,7 +13,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import {
+import { placesFrom, placeId,
   CX, CY, R_NODE, R_EXIT, COL, HEAD_H, HEADS_TOP, ROW_H, ROWS_TOP, TITLE_OFF,
   FOCAL_BREAK, R_SIDE_NODE, SIDE_GAP, SIDE_LEADER_GAP, SIDE_ROW_H, SIDE_TITLE_OFF, ZOOM,
   ARC_LEN, RING_PATH, arcOffset, completionFor, recordFor, rowY, sideRowY, solve, threadsFor, wiresFor, zoomTo,
@@ -477,4 +477,16 @@ test('zoomed in, a side leader still leaves from the scaled edge, toward its bre
   const main = ws[0]
   const zm = zoomTo(main, main.ey)
   assert.deepEqual(zm.leaderStart, zm.focal, 'a filled main node keeps a centre start when zoomed too')
+})
+
+test('places: one list for the Region card and Lore — spelling variants merge, most-quested first', () => {
+  const qs = [
+    quest({ id: 'a', location: 'Brettany' }), quest({ id: 'b', location: 'brettany ' }),
+    quest({ id: 'c', location: 'Davelguay' }), quest({ id: 'd', location: '' }),
+  ]
+  const ps = placesFrom(qs)
+  assert.deepEqual(ps.map(p => [p.id, p.name, p.quests.length]), [['brettany', 'Brettany', 2], ['davelguay', 'Davelguay', 1]])
+  assert.equal(placeId(' Brettany '), 'brettany')
+  // and the Region card's record opens the merged place, both spellings in it
+  assert.equal(recordFor(story('region'), 'brettany', qs, {} as CharacterRow)?.links.length, 2)
 })

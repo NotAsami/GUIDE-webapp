@@ -148,6 +148,27 @@ export interface Thread { id: string; title: string; meta: string; tone: Tone; k
 
 const slug = (s: string) => s.toLowerCase().replace(/\s+/g, '-')
 
+/** THE list of places — the Region card's threads and Lore's "places you've
+ *  been" both read this, so they cannot disagree. There is no locations table:
+ *  a place is a quest location, spelled however the DM spelled it first, with
+ *  "Brettany" and "brettany " counted as one. Most-quested first; ties keep the
+ *  quest log's order. `id` is the Region card's thread id for it. */
+export interface Place { id: string; name: string; quests: QuestRow[] }
+export function placesFrom(quests: QuestRow[]): Place[] {
+  const by = new Map<string, Place>()
+  for (const q of quests) {
+    const name = q.location.trim()
+    if (!name) continue
+    const id = slug(name)
+    const p = by.get(id) ?? { id, name, quests: [] }
+    p.quests.push(q)
+    by.set(id, p)
+  }
+  return [...by.values()].sort((a, b) => b.quests.length - a.quests.length)
+}
+/** The thread id a place name would have on the Region card. */
+export const placeId = (name: string) => slug(name.trim())
+
 /** What a story card's threads ARE depends on its emblem, and each emblem
  *  already has a natural source in content the DM authors today — which is why
  *  no join column exists between `progress.stories[]` and `quests`, and why none
@@ -190,20 +211,13 @@ export function threadsFor(story: ProgressStory, quests: QuestRow[], character: 
   }
 
   if (story.emblem === 'region') {
-    const seen = new Map<string, number>()
-    for (const q of quests) {
-      const loc = q.location.trim()
-      if (loc) seen.set(loc, (seen.get(loc) ?? 0) + 1)
-    }
-    return [...seen.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([loc, n], i) => ({
-        id: slug(loc),
-        title: loc,
-        meta: `${n} ${n === 1 ? 'quest' : 'quests'} logged`,
-        tone: i === 0 ? 'current' : 'active',
-        kind: 'main',
-      }))
+    return placesFrom(quests).map((p, i) => ({
+      id: p.id,
+      title: p.name,
+      meta: `${p.quests.length} ${p.quests.length === 1 ? 'quest' : 'quests'} logged`,
+      tone: i === 0 ? 'current' : 'active',
+      kind: 'main',
+    }))
   }
 
   const relations: Relation[] = character.lore?.relations ?? []
@@ -275,12 +289,13 @@ export function recordFor(
   }
 
   if (story.emblem === 'region') {
-    const here = quests.filter(q => slug(q.location.trim()) === threadId && q.location.trim())
-    if (here.length === 0) return null
+    const place = placesFrom(quests).find(p => p.id === threadId)
+    if (!place) return null
+    const here = place.quests
     const open = here.filter(q => q.status === 'active').length
     return {
       ...blank,
-      title: here[0].location.trim(),
+      title: place.name,
       kicker: 'Location',
       status: `${open} open`,
       meta: [{ k: 'Logged', v: `${here.length} ${here.length === 1 ? 'quest' : 'quests'}` }],

@@ -6,8 +6,6 @@
  *  section whose every paragraph reads `**Name** - text` is shown as cards, so
  *  the author writes it once and nothing is typed twice. */
 
-import type { QuestRow } from './database.types.ts'
-
 export interface LoreCard {
   name: string
   /** A parenthetical after the name — `**Mira Saltwhisper** (Guild Office) - …`. */
@@ -147,30 +145,4 @@ export function creep(text: string, remaining: number, tick: number, start = 0):
  *  a `**` falling to a 1 would be a bit of syntax, not of memory. */
 export function plainText(md: string): string {
   return md.replace(/\*\*\*|\*\*|\*/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]*)\]\{[^}]*\}/g, '$1')
-}
-
-/* ── Places: derived, never authored (for now) ──────────────────────────────
-   Every quest location, plus the character's homeland. A DM-written place
-   description would need its own table; until then a place is what the quest
-   log and the character sheet already say about it. */
-
-export interface LorePlace { name: string; home: boolean; quests: Pick<QuestRow, 'id' | 'title' | 'status'>[]; people: string[] }
-
-export function placesOf(quests: Pick<QuestRow, 'id' | 'title' | 'status' | 'location' | 'given_by'>[], homeland?: string | null): LorePlace[] {
-  const by = new Map<string, LorePlace>()
-  const at = (name: string) => {
-    const k = name.trim().toLowerCase()
-    let p = by.get(k)
-    if (!p) { p = { name: name.trim(), home: false, quests: [], people: [] }; by.set(k, p) }
-    return p
-  }
-  if (homeland?.trim()) at(homeland).home = true
-  for (const q of quests) {
-    if (!q.location?.trim()) continue
-    const p = at(q.location)
-    p.quests.push({ id: q.id, title: q.title, status: q.status })
-    const giver = q.given_by?.trim()
-    if (giver && !p.people.includes(giver)) p.people.push(giver)
-  }
-  return [...by.values()].sort((a, b) => Number(b.home) - Number(a.home) || b.quests.length - a.quests.length)
 }
