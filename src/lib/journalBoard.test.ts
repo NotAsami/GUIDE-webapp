@@ -1,7 +1,7 @@
 // Run: node --test src/lib/journalBoard.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { boardOf, sessionsByRef } from './journalBoard.ts'
+import { boardOf, hang, roman, sessionsByRef } from './journalBoard.ts'
 import type { HandoutRow, QuestRow, SessionRow } from './database.types.ts'
 
 const quest = (p: Partial<QuestRow>): QuestRow => ({
@@ -45,4 +45,17 @@ test('sessionsByRef: which sessions moved a thing, oldest first, once each; pre-
   assert.deepEqual(m.get('q1')!.map(s => s.id), ['s1', 's2'])
   assert.deepEqual(m.get('h1')!.map(s => s.id), ['s1'])
   assert.equal(m.size, 2)
+})
+
+test('roman numerals for the session strip', () => {
+  assert.deepEqual([1, 4, 5, 9, 14, 40, 1247].map(roman), ['I', 'IV', 'V', 'IX', 'XIV', 'XL', 'MCCXLVII'])
+  assert.equal(roman(0), '0', 'a session 0 prints as itself, not as nothing')
+})
+
+test('hang is stable per id and stays within ±1.2°', () => {
+  assert.deepEqual(hang('abc'), hang('abc'))
+  for (const id of ['a', 'dc60cecf-2a2c', 'f0d4f5d5', 'x'.repeat(40)]) {
+    const { rot, edge } = hang(id)
+    assert.ok(Math.abs(rot) <= 1.2 && [0, 1, 2].includes(edge), id)
+  }
 })
