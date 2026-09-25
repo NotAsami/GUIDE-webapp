@@ -23,7 +23,10 @@ export interface CampaignState {
  *  screen-local, and Layout would refetch it on every route change. There is no
  *  realtime subscription (only `characters` is in the publication), so a DM edit
  *  lands on the player's next reload. */
-export function useCampaign(): CampaignState {
+/** `characterId`: whose view this is. A personal quest belongs to one character,
+ *  and the player policy keeps other players' out — but the DM's own character
+ *  reads every row, so the list is narrowed here too (the handouts fix, again). */
+export function useCampaign(characterId?: string): CampaignState {
   const { session } = useAuth()
   const [quests, setQuests] = useState<QuestRow[]>([])
   const [sessions, setSessions] = useState<SessionRow[]>([])
@@ -45,10 +48,10 @@ export function useCampaign(): CampaignState {
     setError(err ? err.message : null)
     // A hidden quest is already absent for a player (RLS); the DM's own account
     // reads it anyway, so the player's view drops it here too.
-    setQuests(((qs.data as QuestRow[]) ?? []).filter(q => q.visible !== false))
+    setQuests(((qs.data as QuestRow[]) ?? []).filter(q => q.visible !== false && (!q.character_id || q.character_id === characterId)))
     setSessions((ss.data as SessionRow[]) ?? [])
     setLoading(false)
-  }, [session])
+  }, [session, characterId])
 
   useEffect(() => { void fetchAll() }, [fetchAll])
 

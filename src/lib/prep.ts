@@ -7,7 +7,7 @@
  * opens through useDmShops, a handout through pushPatch, a quest through its
  * `visible` flag (0026). A card holds a reference and a time, nothing else.
  */
-import type { PlanCardKind, PlanCardRow } from './database.types.ts'
+import type { PlanCardKind, PlanCardRow, SessionLink } from './database.types.ts'
 
 /** What the button on a staged card says. A quest that the party can already
  *  see has nothing left to reveal, so the card closes it instead. */
@@ -69,6 +69,25 @@ export function planEvents(cards: PlanCardRow[], names: Map<string, string>, que
     .filter(c => c.fired_at)
     .sort((a, b) => (a.fired_at! < b.fired_at! ? -1 : 1))
     .map(c => (c.kind === 'quest' && questClosed(c.ref) ? questClosedText(c.title) : eventText(c, names)))
+}
+
+/** What the night MOVED, for the player's Journal (sessions.links, 0028): every
+ *  quest and handout card that was fired, once each, in the order played.
+ *  References only — the player resolves them against rows they may read, so a
+ *  handout pushed to one player does not surface in anyone else's log. Shops,
+ *  loot, NPC reveals and notes stay DM-side: they are events, not things a
+ *  quest notice can point back to. */
+export function planLinks(cards: PlanCardRow[]): SessionLink[] {
+  const seen = new Set<string>()
+  const out: SessionLink[] = []
+  for (const c of [...cards].filter(c => c.fired_at && c.ref).sort((a, b) => (a.fired_at! < b.fired_at! ? -1 : 1))) {
+    if (c.kind !== 'quest' && c.kind !== 'handout') continue
+    const key = `${c.kind}:${c.ref}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ kind: c.kind, ref: c.ref! })
+  }
+  return out
 }
 
 /* ---- hand ordering ---- */

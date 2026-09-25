@@ -29,7 +29,7 @@ const story = (emblem: ProgressStory['emblem']): ProgressStory =>
 const quest = (p: Partial<QuestRow>): QuestRow => ({
   id: 'q', title: 'Q', type: 'main', status: 'active', location: 'Brettany',
   given_by: 'Voss', description: '', objectives: [], related: [],
-  created_at: '', updated_at: '', ...p,
+  created_at: '', updated_at: '', character_id: null, ...p,
 })
 
 /* ---------------- the join between the two SVGs ---------------- */
@@ -176,11 +176,26 @@ test('REGION groups the locations quests name, busiest first', () => {
   assert.match(t[1].meta, /1 quest logged/)
 })
 
-test('CHARACTER reads lore.relations, and an absent attitude says so', () => {
-  const ch = { lore: { relations: [{ name: 'The Lady', type: 'Enigma', desc: '' }] } } as CharacterRow
-  const t = threadsFor(story('character'), [], ch)
-  assert.equal(t[0].title, 'The Lady')
-  assert.match(t[0].meta, /unknown/)
+test('PERSONAL QUESTS ARE ON THE CHARACTER CARD AND OFF THE MAIN ONE', () => {
+  const ros = { id: 'ros' } as CharacterRow
+  const qs = [
+    quest({ id: 'party' }),
+    quest({ id: 'mine', character_id: 'ros' }),
+    quest({ id: 'theirs', character_id: 'cornelius' }),   // the DM account can read it; Ros must not see it
+  ]
+  assert.deepEqual(threadsFor(story('main'), qs, ros).map(t => t.id), ['party'])
+  assert.deepEqual(threadsFor(story('character'), qs, ros).map(t => t.id), ['mine'])
+  assert.equal(recordFor(story('character'), 'mine', qs, ros)!.kicker, 'Personal Quest')
+  assert.equal(recordFor(story('character'), 'theirs', qs, ros), null)
+  assert.equal(recordFor(story('main'), 'mine', qs, ros), null)
+})
+
+test('the Character card counts its own quests, and keeps the authored number with none', () => {
+  const ros = { id: 'ros' } as CharacterRow
+  const qs = [quest({ id: 'a', character_id: 'ros', status: 'completed' }), quest({ id: 'b', character_id: 'ros' }), quest({ id: 'p' })]
+  assert.deepEqual(completionFor(story('character'), qs, ros), { done: 1, total: 2, percent: 50 })
+  assert.deepEqual(completionFor(story('main'), qs, ros), { done: 0, total: 1, percent: 0 })
+  assert.equal(completionFor(story('character'), [quest({})], ros), null)
 })
 
 test('an unauthored story card lists nothing rather than throwing', () => {
@@ -236,15 +251,6 @@ test('REGION opens a place and lists the quests that name it', () => {
   assert.equal(r.body, '', 'a place has no description of its own — there is no locations table')
 })
 
-test('CHARACTER opens a relation and titlecases its attitude', () => {
-  const ch = { lore: { relations: [
-    { name: 'Magistrate Voss', type: 'Magistrate', attitude: 'wary', desc: 'Holds the writ.' },
-    { name: 'The Lady', type: 'Enigma', desc: '' },
-  ] } } as CharacterRow
-  assert.equal(recordFor(story('character'), 'magistrate-voss', [], ch)!.status, 'Wary')
-  assert.equal(recordFor(story('character'), 'the-lady', [], ch)!.status, '—', 'no attitude is not "undefined"')
-})
-
 test('A DELETED OR HAND-TYPED THREAD RETURNS NULL, so the screen can redirect', () => {
   const ch = { lore: { relations: [] } } as unknown as CharacterRow
   for (const e of ['main', 'region', 'character'] as const) {
@@ -255,8 +261,8 @@ test('A DELETED OR HAND-TYPED THREAD RETURNS NULL, so the screen can redirect', 
 test('every thread listed can actually be opened — the id round-trips', () => {
   // threadsFor and recordFor derive ids independently; if they ever disagree,
   // every row on the screen becomes a link to a redirect.
-  const qs = [quest({ id: 'q1', location: 'Davelguay' }), quest({ id: 'q2', location: 'Brettany' })]
-  const ch = { lore: { relations: [{ name: 'The Lady', type: 'Enigma', desc: '' }] } } as CharacterRow
+  const qs = [quest({ id: 'q1', location: 'Davelguay' }), quest({ id: 'q2', location: 'Brettany', character_id: 'c' })]
+  const ch = { id: 'c' } as CharacterRow
   for (const e of ['main', 'region', 'character'] as const) {
     for (const t of threadsFor(story(e), qs, ch)) {
       assert.ok(recordFor(story(e), t.id, qs, ch), `${e} thread "${t.id}" lists but does not open`)

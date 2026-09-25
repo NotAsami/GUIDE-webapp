@@ -10,7 +10,7 @@
 // horizontal slack to its right, which is why the leader runs never change.
 
 import type {
-  CharacterRow, ProgressStory, QuestObjective, QuestRow, QuestStatus, RelatedTag, Relation,
+  CharacterRow, ProgressStory, QuestObjective, QuestRow, QuestStatus, RelatedTag,
 } from './database.types'
 
 /* NO CANVAS HEIGHT CONSTANT. The body sizes to whatever the chrome leaves it,
@@ -177,14 +177,29 @@ export const placeId = (name: string) => slug(name.trim())
  *    main      → the campaign's main quests
  *    region    → the distinct locations those quests name (there is no locations
  *                table; the card's own percent stays the authored number)
- *    character → this character's relations, from `lore`
+ *    character → this character's PERSONAL quests (`quests.character_id`, 0028).
+ *                Relations used to live here; the people web on Lore owns them now.
  *
  *  KNOWN LIMIT: a second card of the same emblem repeats the first's threads,
  *  because nothing distinguishes them. The fix, if it ever bites, is a nullable
  *  `quests.story_id` plus a picker in the console's quest form — not worth a
  *  migration until someone actually wants two cards of one kind. */
-export function threadsFor(story: ProgressStory, quests: QuestRow[], character: CharacterRow): Thread[] {
-  if (story.emblem === 'main') {
+/** Party quests feed the Main card; one character's own feed the Character
+ *  card. A personal quest is on exactly one of them, never both. */
+const partyQuests = (quests: QuestRow[]) => quests.filter(q => !q.character_id)
+const personalQuests = (quests: QuestRow[], character: CharacterRow) =>
+  quests.filter(q => q.character_id != null && q.character_id === character.id)
+
+/** The quests an emblem counts — region reads every place, so it takes all. */
+function questsOn(story: ProgressStory, quests: QuestRow[], character: CharacterRow): QuestRow[] {
+  return story.emblem === 'main' ? partyQuests(quests)
+    : story.emblem === 'character' ? personalQuests(quests, character)
+      : quests
+}
+
+export function threadsFor(story: ProgressStory, allQuests: QuestRow[], character: CharacterRow): Thread[] {
+  const quests = questsOn(story, allQuests, character)
+  if (story.emblem !== 'region') {
     // Active first, then failed, then completed — and a stable sort keeps
     // useCampaign's created_at order inside each group, so a DM edit never
     // reshuffles the list under the player.
@@ -210,21 +225,10 @@ export function threadsFor(story: ProgressStory, quests: QuestRow[], character: 
     return [...group('main'), ...group('side')]
   }
 
-  if (story.emblem === 'region') {
-    return placesFrom(quests).map((p, i) => ({
-      id: p.id,
-      title: p.name,
-      meta: `${p.quests.length} ${p.quests.length === 1 ? 'quest' : 'quests'} logged`,
-      tone: i === 0 ? 'current' : 'active',
-      kind: 'main',
-    }))
-  }
-
-  const relations: Relation[] = character.lore?.relations ?? []
-  return relations.map((r, i) => ({
-    id: slug(r.name),
-    title: r.name,
-    meta: [r.type, r.attitude ?? 'unknown'].join(' · '),
+  return placesFrom(quests).map((p, i) => ({
+    id: p.id,
+    title: p.name,
+    meta: `${p.quests.length} ${p.quests.length === 1 ? 'quest' : 'quests'} logged`,
     tone: i === 0 ? 'current' : 'active',
     kind: 'main',
   }))
@@ -240,7 +244,7 @@ export function threadsFor(story: ProgressStory, quests: QuestRow[], character: 
 
 export interface ThreadRecord {
   title: string
-  /** What KIND of thing this is — "Main Quest", "Location", "Relation". */
+  /** What KIND of thing this is — "Main Quest", "Location", "Personal Quest". */
   kicker: string
   status: string | null
   meta: { k: string; v: string }[]
@@ -264,11 +268,12 @@ const STATUS: Record<QuestStatus, string> = { active: 'Active', completed: 'Comp
  *  the DM deleted, or a hand-typed URL. The caller redirects rather than
  *  rendering an empty husk. */
 export function recordFor(
-  story: ProgressStory, threadId: string, quests: QuestRow[], character: CharacterRow,
+  story: ProgressStory, threadId: string, allQuests: QuestRow[], character: CharacterRow,
 ): ThreadRecord | null {
   const blank = { status: null, meta: [], body: '', objectives: [], related: [], links: [] }
+  const quests = questsOn(story, allQuests, character)
 
-  if (story.emblem === 'main') {
+  if (story.emblem !== 'region') {
     // Any quest on this card, main or side — the filter used to be `type ===
     // 'main'`, which would now list a side thread and refuse to open it.
     const q = quests.find(x => x.id === threadId)
@@ -276,7 +281,7 @@ export function recordFor(
     return {
       ...blank,
       title: q.title,
-      kicker: q.type === 'main' ? 'Main Quest' : 'Side Quest',
+      kicker: story.emblem === 'character' ? 'Personal Quest' : q.type === 'main' ? 'Main Quest' : 'Side Quest',
       status: STATUS[q.status],
       meta: [
         ...(q.given_by ? [{ k: 'Given by', v: q.given_by }] : []),
@@ -288,36 +293,23 @@ export function recordFor(
     }
   }
 
-  if (story.emblem === 'region') {
-    const place = placesFrom(quests).find(p => p.id === threadId)
-    if (!place) return null
-    const here = place.quests
-    const open = here.filter(q => q.status === 'active').length
-    return {
-      ...blank,
-      title: place.name,
-      kicker: 'Location',
-      status: `${open} open`,
-      meta: [{ k: 'Logged', v: `${here.length} ${here.length === 1 ? 'quest' : 'quests'}` }],
-      // No locations table, so a place has no description of its own — what is
-      // genuinely known about it is which quests name it.
-      links: here.map(q => ({
-        id: q.id,
-        title: q.title,
-        meta: [STATUS[q.status], q.type === 'main' ? 'Main' : 'Side', q.given_by].filter(Boolean).join(' · '),
-      })),
-    }
-  }
-
-  const r = (character.lore?.relations ?? []).find(x => slug(x.name) === threadId)
-  if (!r) return null
+  const place = placesFrom(quests).find(p => p.id === threadId)
+  if (!place) return null
+  const here = place.quests
+  const open = here.filter(q => q.status === 'active').length
   return {
     ...blank,
-    title: r.name,
-    kicker: 'Relation',
-    status: r.attitude ? r.attitude[0].toUpperCase() + r.attitude.slice(1) : '—',
-    meta: [{ k: 'Type', v: r.type }],
-    body: r.desc,
+    title: place.name,
+    kicker: 'Location',
+    status: `${open} open`,
+    meta: [{ k: 'Logged', v: `${here.length} ${here.length === 1 ? 'quest' : 'quests'}` }],
+    // No locations table, so a place has no description of its own — what is
+    // genuinely known about it is which quests name it.
+    links: here.map(q => ({
+      id: q.id,
+      title: q.title,
+      meta: [STATUS[q.status], q.type === 'main' ? 'Main' : 'Side', q.given_by].filter(Boolean).join(' · '),
+    })),
   }
 }
 
@@ -391,15 +383,14 @@ export function zoomTo(node: Wire, y: number): Zoom {
 export interface Completion { done: number; total: number; percent: number }
 
 /** Null means "nothing countable here" and the caller must fall back to the
- *  authored number — which is the honest state for two of the three emblems
- *  today: region has no locations table, and a relation never completes. Both
- *  become countable when their deferred schema lands (a `locations` table, and
- *  `quests.character_id` for personal quests). */
+ *  authored number: always for region (no locations table yet), and for a
+ *  Main or Character card with no quests on it yet. */
 export function completionFor(
-  story: ProgressStory, quests: QuestRow[], _character: CharacterRow,
+  story: ProgressStory, allQuests: QuestRow[], character: CharacterRow,
 ): Completion | null {
-  if (story.emblem !== 'main') return null
+  if (story.emblem === 'region') return null
   // Every quest on this card, both ranks — that is the whole point.
+  const quests = questsOn(story, allQuests, character)
   if (quests.length === 0) return null
   const done = quests.filter(q => q.status === 'completed').length
   return { done, total: quests.length, percent: Math.round((done / quests.length) * 100) }

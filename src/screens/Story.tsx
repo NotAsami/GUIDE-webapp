@@ -62,7 +62,7 @@ function Row({ t, story, open }: { t: Thread; story: string; open: boolean }) {
 export function Story() {
   const { character, handouts, openHandout } = useOutletContext<RouteContext>()
   const { storyId, threadId } = useParams()
-  const { quests, sessions, loading, error } = useCampaign()
+  const { quests, sessions, loading, error } = useCampaign(character.id)
 
   const stories = character.progress?.stories ?? []
   const story = stories.find(s => s.id === storyId)

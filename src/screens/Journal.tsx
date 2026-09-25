@@ -38,9 +38,9 @@ const receivedAt = (h: HandoutRow) => new Date(h.pushed_at ?? h.created_at)
   .toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 export function Journal() {
-  const { quests, sessions, loading, error } = useCampaign()
   const { character, handouts, seenHandouts, markHandoutSeen, openHandout } =
     useOutletContext<HandoutOutlet & { character: CharacterRow }>()
+  const { quests, sessions, loading, error } = useCampaign(character.id)
   // "Open in Journal" from the dock lands here with the handout already chosen —
   // keyed on the navigation, so it also works when the Journal is already open.
   const loc = useLocation()

@@ -38,7 +38,7 @@ export function Codex() {
   // Two extra selects on the home screen, and the price of the cards meaning
   // completion. While it loads `quests` is empty, completionFor returns null and
   // the authored number shows — so the card never flashes a wrong 0%.
-  const { quests } = useCampaign()
+  const { quests } = useCampaign(character.id)
 
   return (
     <>
