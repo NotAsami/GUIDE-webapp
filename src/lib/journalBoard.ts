@@ -50,3 +50,22 @@ export function sessionsByRef(sessions: SessionRow[]): Map<string, SessionRow[]>
   }
   return out
 }
+
+/** Session numbers on the board read as a chronicle: I, II, … XIV. */
+export function roman(n: number): string {
+  if (!Number.isFinite(n) || n < 1) return String(n)
+  let out = ''
+  for (const [v, s] of [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']] as const) {
+    while (n >= v) { out += s; n -= v }
+  }
+  return out
+}
+
+/** How a notice hangs: a fixed tilt and edge per quest, from its id — never
+ *  random, or every realtime refetch would reshuffle the board. */
+export function hang(id: string): { rot: number; edge: 0 | 1 | 2 } {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
+  h = Math.abs(h)
+  return { rot: ((h % 25) - 12) / 10, edge: (h % 3) as 0 | 1 | 2 }
+}
