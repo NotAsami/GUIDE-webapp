@@ -17,7 +17,7 @@ import { lootContent, type DmCampaignState, type DmLootState, type DmShopsState 
 import type { DmHandoutsState } from '../lib/handouts'
 import type { DmNpcsState } from '../lib/npcs'
 import type { DmPlansState } from '../lib/plans'
-import { eventText, fireLabel, firedLabel, moveTo, planEvents, questClosedText, sortBetween, split, targetNames } from '../lib/prep'
+import { planLinks, eventText, fireLabel, firedLabel, moveTo, planEvents, questClosedText, sortBetween, split, targetNames } from '../lib/prep'
 import { fireCard } from '../lib/fireCard'
 import { Prose } from '../lib/markdown'
 import { proseField } from '../lib/textareaHooks'
@@ -310,7 +310,7 @@ function WrapForm({ plan, cards, names, campaign, questOf, onDone, log }: {
     setBusy(true)
     // The recap is the DM's to write, in the Session Log, at their own pace —
     // the board only carries across what was actually played.
-    const row = await campaign.createSession({ num: Number(num) || 1, title, date, recap: '', events: events.filter(e => e.trim()) })
+    const row = await campaign.createSession({ num: Number(num) || 1, title, date, recap: '', events: events.filter(e => e.trim()), links: planLinks(cards) })
     setBusy(false)
     if (!row) return
     log(<>Session <span className={con.obj}>{row.title || row.num}</span> written from the board</>, 'cyan')

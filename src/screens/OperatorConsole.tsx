@@ -718,7 +718,7 @@ export function OperatorConsole() {
                   ))}
                 </div>
               ) : view === 'quests' ? (
-                <QuestsSurface campaign={campaign} />
+                <QuestsSurface campaign={campaign} party={party} />
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
               ) : view === 'prep' ? (
@@ -7573,7 +7573,7 @@ type QuestFields = Omit<QuestRow, 'id' | 'created_at' | 'updated_at'>
 /** Quest Log: grouped index (left) + create/edit form (right) — the authoring
  *  twin of the player Journal's quest log. gmNotes round-trips through the DM-only
  *  `quest_secrets` table; everything else is on the player-facing `quests` row. */
-function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
+function QuestsSurface({ campaign, party }: { campaign: DmCampaignState; party: CharacterRow[] }) {
   const { quests, questSecrets, createQuest, updateQuest, deleteQuest, updateQuestSecret, loading, error } = campaign
   const [selId, setSelId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -7626,7 +7626,10 @@ function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
                         <span className={styles.qGlyph}>{questGlyph(q.type)}</span>
                         <span className={styles.qRtx}>
                           <span className={styles.qRt}>{q.title || 'Untitled'}</span>
-                          <span className={styles.qRl}>{q.location || '—'}</span>
+                          <span className={styles.qRl}>
+                            {q.location || '—'}
+                            {q.character_id && <> · <i className="fa-solid fa-user" /> {party.find(c => c.id === q.character_id)?.name ?? 'personal'}</>}
+                          </span>
                         </span>
                       </button>
                     )) : <div className={styles.qEmpty}>{loading ? '· loading ·' : '— none —'}</div>}
@@ -7642,6 +7645,7 @@ function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
               key={activeId ?? 'new'}
               quest={selected}
               gmNotes={selected ? (questSecrets[selected.id]?.gm_notes ?? '') : ''}
+              party={party}
               onSubmit={handleSubmit}
               onDelete={selected ? handleDelete : undefined}
               onNew={() => { setCreating(true); setSelId(null) }}
@@ -7653,9 +7657,11 @@ function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
   )
 }
 
-function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
+function QuestForm({ quest, gmNotes, party, onSubmit, onDelete, onNew }: {
   quest: QuestRow | null
   gmNotes: string
+  /** Who a quest can belong to (0028). */
+  party: CharacterRow[]
   onSubmit: (fields: QuestFields, gmNotes: string) => Promise<void>
   onDelete?: () => void
   onNew: () => void
@@ -7674,6 +7680,9 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
      is still the normal way to hand the party a quest — the prep board is what
      creates hidden ones. */
   const [visible, setVisible] = useState(quest?.visible ?? true)
+  /* 0028: a personal quest is on its owner's board and Character card only —
+     the player policy keeps it off everyone else's client. */
+  const [owner, setOwner] = useState<string | null>(quest?.character_id ?? null)
   const [objInput, setObjInput] = useState('')
   const [tagInput, setTagInput] = useState('')
   const [tagUrlInput, setTagUrlInput] = useState('')
@@ -7695,7 +7704,7 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
   }
   async function submit() {
     setBusy(true)
-    await onSubmit({ title, type, status, location, given_by: givenBy, description, objectives, related, visible }, gm)
+    await onSubmit({ title, type, status, location, given_by: givenBy, description, objectives, related, visible, character_id: owner }, gm)
     setBusy(false)
   }
 
@@ -7733,6 +7742,18 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
         <button className={cx(styles.qSegOpt, !visible && styles.sel)} onClick={() => setVisible(false)}>
           <i className="fa-solid fa-eye-slash" /> Hidden until revealed
         </button>
+      </div>
+
+      <span className={styles.fieldLab}>Belongs to</span>
+      <div className={styles.qSeg}>
+        <button className={cx(styles.qSegOpt, !owner && styles.sel)} onClick={() => setOwner(null)}>
+          <i className="fa-solid fa-users" /> The whole party
+        </button>
+        {party.map(c => (
+          <button key={c.id} className={cx(styles.qSegOpt, owner === c.id && styles.sel)} onClick={() => setOwner(c.id)}>
+            <i className="fa-solid fa-user" /> {c.name}
+          </button>
+        ))}
       </div>
 
       <div className={styles.qGrid2}>

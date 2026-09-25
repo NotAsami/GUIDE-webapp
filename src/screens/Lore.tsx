@@ -56,7 +56,7 @@ const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ block
  *  people they know. Read-only for players; authored DM-side. */
 export function Lore() {
   const { character, handouts } = useOutletContext<RouteContext>()
-  const { quests, sessions } = useCampaign()
+  const { quests, sessions } = useCampaign(character.id)
   const { npcs, links } = useKnownNpcs(character.id)
   const identity = character.identity ?? {}
   const lore = character.lore ?? {}

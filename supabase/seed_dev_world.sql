@@ -10,7 +10,7 @@
 begin;
 
 delete from handouts where title in ('Warrant of Arrest', 'A Page from Sera''s Ledger', 'The Lady''s Letter');
-delete from quests where title in ('The Fence''s Ledger', 'A Clerk''s Alibi', 'Witch of the Thicket');
+delete from quests where title in ('The Fence''s Ledger', 'A Clerk''s Alibi', 'Witch of the Thicket', 'The Harbour Dues');
 delete from npcs where name in (
   'Magistrate Voss', 'The Lady', 'The Mayor', 'Maren of the Waterfront', 'Brother Aldric',
   'Sera Quill', 'Captain Holt', 'Old Tamsin', 'The Grey Hand');   -- cascades links + secrets
@@ -73,6 +73,15 @@ insert into quests (title, type, status, location, given_by, description, object
    '[{"text":"Answer the first riddle","done":true},{"text":"Answer the second riddle","done":true},{"text":"Answer the third riddle","done":true}]',
    '[{"name":"Old Tamsin"},{"name":"Davelguay"}]');
 
+-- A PERSONAL quest (0028): Ros's board and Character card only; Cornelius's
+-- client never receives the row.
+insert into quests (title, type, status, location, given_by, description, objectives, related, character_id)
+select 'The Harbour Dues', 'side', 'active', 'Castella', 'Maren of the Waterfront',
+   'Castella''s harbour dues have come in short three months running. As mayor, find out where they go.',
+   '[{"text":"Ask Maren which hulls skip the dues","done":true},{"text":"Check the harbour book against the treasury","done":false}]',
+   '[{"name":"Maren of the Waterfront"},{"name":"Castella"}]', pc.ros
+from pc;
+
 insert into handouts (title, body, quest_id, recipients)
 select h.title, h.body, (select id from quests where title = h.quest),
        case h.who when 'ros' then array[pc.ros] else array[pc.ros, pc.cor] end
@@ -90,5 +99,18 @@ Buyer: *the grey hand*. No name given.', 'The Fence''s Ledger', 'both'),
 
 *Burn this.*', 'A Clerk''s Alibi', 'ros')
 ) as h(title, body, quest, who);
+
+-- What sessions IV and V moved (0028), as the prep board's wrap would have
+-- written them. The one EDIT this file makes to rows it did not create; it
+-- overwrites links wholesale, so re-running is safe.
+update sessions set links = coalesce((select jsonb_agg(jsonb_build_object('kind', l.kind, 'ref', l.id) order by l.ord)
+  from (select 'quest' kind, id, 1 ord from quests where title = 'Clear Your Name'
+        union all select 'handout', id, 2 from handouts where title = 'Warrant of Arrest') l), '[]')
+where num = 4;
+update sessions set links = coalesce((select jsonb_agg(jsonb_build_object('kind', l.kind, 'ref', l.id) order by l.ord)
+  from (select 'quest' kind, id, 1 ord from quests where title = 'Clear Your Name'
+        union all select 'quest', id, 2 from quests where title = 'A Clerk''s Alibi'
+        union all select 'handout', id, 3 from handouts where title = 'The Lady''s Letter') l), '[]')
+where num = 5;
 
 commit;

@@ -1504,6 +1504,10 @@ export type QuestRow = {
    *  story lattice and the completion percent all read through one policy that
    *  requires it, so a hidden quest is absent rather than filtered. */
   visible: boolean
+  /** 0028: a PERSONAL quest belongs to one character — on their board and their
+   *  Character story card only; null = the whole party. The player policy is what
+   *  keeps it off everyone else's client. */
+  character_id: string | null
   created_at: string         // stable list order
   updated_at: string
 }
@@ -1523,8 +1527,12 @@ export type SessionRow = {
   date: string
   recap: string
   events: string[]
+  /** 0028: what this session moved, written by the prep board's wrap. References
+   *  only, resolved against the rows the reader may see (lib/journalBoard.ts). */
+  links?: SessionLink[]
   updated_at: string
 }
+export type SessionLink = { kind: 'quest' | 'handout'; ref: string }
 export type SessionInsert = Partial<Omit<SessionRow, 'updated_at'>>
 export type SessionUpdate = Partial<Omit<SessionRow, 'id'>>
 
