@@ -10,9 +10,13 @@
  * Heights are computed, not measured: every port and wire position is a
  * function of the node's kind and row count, so the SVG never waits on layout.
  */
-import { useLayoutEffect, useMemo, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import type { CatalogFeatureData, GraphEffect, VarDef } from '../lib/database.types'
-import { autoLayout, project, type FeatureGraph as Graph, type GEdge, type GNode, type WireType } from '../lib/featureGraph'
+import {
+  addNode, autoLayout, editGate, editedGateKey, project, regate, removeNode, setPos,
+  type AddKind, type FeatureGraph as Graph, type GEdge, type GNode, type WireType,
+} from '../lib/featureGraph'
+import { blankEffect } from '../lib/opSchema'
 import { colour, serialize } from '../lib/featureScript'
 import { matchCount, type AuditItem, type AuthoredNode } from '../lib/graph'
 import { OPS } from '../lib/opSchema'
@@ -157,12 +161,172 @@ export type GraphProps = {
   onForm: () => void
   /** Room the floating inspector takes on the right, so the zoom buttons clear it. */
   rightInset?: number
+  /** Every canvas edit, already applied — the host writes it through its draft. */
+  onChange: (f: CatalogFeatureData) => void
+  onToggleInsp?: () => void
 }
 
-export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit, sel, onSelect, focusTick, fitKey, onForm, rightInset = 10 }: GraphProps) {
-  const g = useMemo(() => project(d, catalogTypes), [d, catalogTypes])
-  const vs = useMemo(() => views(g, d.layout), [g, d.layout])
+/** What can be added, in the mockup's "Node kinds" order. */
+export const ADD_KINDS: { k: AddKind; l: string; s: string; c: string; sw: string }[] = [
+  { k: 'press', l: 'Event', s: 'the press · one per feature', c: 'var(--amber)', sw: 'event' },
+  { k: 'cond', l: 'Condition', s: 'when · app decides', c: 'var(--beige)', sw: 'cond' },
+  { k: 'ask', l: 'Ask', s: 'ask · a human decides', c: 'var(--cyan)', sw: 'ask' },
+  { k: 'outcome', l: 'Activation outcome', s: 'writes on press', c: 'var(--text)', sw: 'action' },
+  { k: 'contrib', l: 'Contribution', s: 'modifies a roll', c: 'var(--violet)', sw: 'contrib' },
+  { k: 'sheet', l: 'Sheet rule', s: 'moves a sheet number', c: '#bfae80', sw: 'sheet' },
+  { k: 'var', l: 'Variable', s: 'derived · a formula', c: 'var(--good)', sw: 'var' },
+  { k: 'picks', l: 'Picks', s: 'take N of the offers', c: 'var(--amber)', sw: 'picks' },
+]
+/** The HTML drag type a Node-kinds row carries onto the canvas. */
+export const KIND_DRAG = 'application/x-guide-node-kind'
+const FLOW_CHILD: AddKind[] = ['outcome', 'cond', 'ask']
+
+/** The mockup's "Node kinds" list — rows dragged onto the canvas. */
+export function NodeKinds() {
+  return (
+    <div className={styles.kinds}>
+      {ADD_KINDS.map(K => (
+        <div key={K.k} className={styles.kindRow} draggable title={`${K.l} — ${K.s}`}
+          style={{ ['--kc' as string]: K.c } as CSSProperties}
+          onDragStart={e => { e.dataTransfer.setData(KIND_DRAG, K.k); e.dataTransfer.effectAllowed = 'copy' }}>
+          <span className={cx(styles.sw, styles[`sw_${K.sw}`])} />{K.l}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+type WireDrag = { mode: 'out' | 'lift'; key: string; x: number; y: number; over: string | null; legal: Map<string, string | null> }
+
+export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit, sel: selProp, onSelect, focusTick, fitKey, onForm, rightInset = 10, onChange, onToggleInsp }: GraphProps) {
   const pz = usePanZoom({ skip: t => !!t.closest('[data-node]') })
+  const dRef = useRef(d)
+  dRef.current = d
+  /* A node being dragged is drawn at its live position; the layout is written
+     once, on release, so a drag is one edit rather than sixty. */
+  const [moving, setMoving] = useState<{ key: string; xy: [number, number] } | null>(null)
+  const [wire, setWire] = useState<WireDrag | null>(null)
+  const [quick, setQuick] = useState<{ sx: number; sy: number; wx: number; wy: number; src?: string } | null>(null)
+  const [notice, setNotice] = useState<{ text: string; x?: number; y?: number } | null>(null)
+  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 2200); return () => clearTimeout(t) }, [notice])
+
+  const layout = useMemo(() => (moving ? { ...d.layout, pos: { ...d.layout?.pos, [moving.key]: moving.xy } } : d.layout), [d.layout, moving])
+  const g = useMemo(() => project(d, catalogTypes), [d, catalogTypes])
+  const vs = useMemo(() => views(g, layout), [g, layout])
+  const vsRef = useRef(vs)
+  vsRef.current = vs
+  /* A selection whose node is gone (a pending gate that just turned real, a
+     deleted rule) is no selection — otherwise every wire dims for nothing. */
+  const sel = selProp && vs.has(selProp) ? selProp : null
+
+  const apply = (r: { ok: true; f: CatalogFeatureData } | { ok: false; why: string }, at?: [number, number]) => {
+    if (r.ok) { onChange(r.f); return true }
+    setNotice({ text: r.why, x: at?.[0], y: at?.[1] })
+    return false
+  }
+  const nodeAt = (cx: number, cy: number) => (document.elementFromPoint(cx, cy)?.closest('[data-node]') as HTMLElement | null)?.dataset.node ?? null
+
+  function startMove(key: string, e: RPointerEvent) {
+    const v = vsRef.current.get(key)
+    if (!v) return
+    const sx = e.clientX, sy = e.clientY, x0 = v.x, y0 = v.y
+    let moved = false
+    const move = (ev: PointerEvent) => {
+      const dx = (ev.clientX - sx) / pz.view.z, dy = (ev.clientY - sy) / pz.view.z
+      if (!moved && Math.abs(dx) + Math.abs(dy) < 3) return
+      moved = true
+      setMoving({ key, xy: [x0 + dx, y0 + dy] })
+    }
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      setMoving(null)
+      if (!moved) { onSelect(key); return }
+      onChange(setPos(dRef.current, key, [x0 + (ev.clientX - sx) / pz.view.z, y0 + (ev.clientY - sy) / pz.view.z]))
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
+  /* FLOW WIRING. From an out-port (press, ask, cond) onto something that takes
+     the flow, or lift an in-port and drop it on a new parent. Legality is the
+     edit itself: `regate` is run for every candidate up front, so a port that
+     dims is one whose edit would be refused, with the same sentence. */
+  function startWire(mode: 'out' | 'lift', key: string, e: RPointerEvent) {
+    const f = dRef.current
+    const legal = new Map<string, string | null>()
+    for (const n of g.nodes) {
+      if (n.key === key) continue
+      const r = mode === 'out' ? regate(f, n.key, key, catalogTypes) : regate(f, key, n.key, catalogTypes)
+      legal.set(n.key, r.ok ? null : r.why)
+    }
+    const [x, y] = pz.toWorld(e.clientX, e.clientY)
+    setWire({ mode, key, x, y, over: null, legal })
+    const move = (ev: PointerEvent) => {
+      const [wx, wy] = pz.toWorld(ev.clientX, ev.clientY)
+      const over = nodeAt(ev.clientX, ev.clientY)
+      setWire(w => (w ? { ...w, x: wx, y: wy, over } : w))
+    }
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      setWire(null)
+      const over = nodeAt(ev.clientX, ev.clientY)
+      if (over && over !== key) {
+        const r = mode === 'out' ? regate(dRef.current, over, key, catalogTypes) : regate(dRef.current, key, over, catalogTypes)
+        apply(r, [ev.clientX, ev.clientY])
+        return
+      }
+      // Dropped on open canvas from an out-port: add something already wired.
+      if (!over && mode === 'out' && (ev.target as Element | null)?.closest?.(`.${styles.pad}`)) {
+        const r = pz.ref.current!.getBoundingClientRect()
+        const [wx, wy] = pz.toWorld(ev.clientX, ev.clientY)
+        setQuick({ sx: ev.clientX - r.left, sy: ev.clientY - r.top, wx, wy, src: key })
+      }
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
+  function add(kind: AddKind, at: [number, number], src?: string) {
+    setQuick(null)
+    const r = addNode(dRef.current, kind, at, blankEffect)
+    if (!r.ok) { setNotice({ text: r.why }); return }
+    let f = r.f
+    if (src && r.key) {
+      const w = regate(f, r.key, src, catalogTypes)
+      if (w.ok) f = w.f
+    }
+    onChange(f)
+    if (r.key) onSelect(r.key)
+  }
+
+  /* Keys, as the mockup: Del deletes, A adds, I folds the inspector, Esc backs
+     out. Never while typing — the inspector is full of inputs. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (e.key === 'Escape') { setQuick(null); return }
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
+        e.preventDefault()
+        const r = removeNode(dRef.current, sel, catalogTypes)
+        if (apply(r)) onSelect(null)
+      } else if (e.key === 'a' || e.key === 'A') {
+        const r = pz.ref.current?.getBoundingClientRect()
+        if (!r) return
+        e.preventDefault()
+        const [wx, wy] = pz.toWorld(r.left + r.width / 2, r.top + r.height / 2)
+        setQuick({ sx: r.width / 2 - 110, sy: r.height / 2 - 120, wx, wy })
+      } else if ((e.key === 'i' || e.key === 'I') && onToggleInsp) {
+        e.preventDefault()
+        onToggleInsp()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   const bbox = () => {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
@@ -244,6 +408,20 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
       d={e.and ? curve(jx + 7, y0, dv.x - 6, dv.y + dv.h / 2) : curve(x0, y0, dv.x - 6, dv.y + dv.h / 2)} markerEnd="url(#fgAtHead)" />)
   }
 
+  if (wire) {
+    const a = vs.get(wire.key)
+    if (a) {
+      const why = wire.over ? wire.legal.get(wire.over) : null
+      const tgt = wire.over && why === null ? vs.get(wire.over) : null
+      const [x1, y1] = wire.mode === 'out' ? flowOut(a) : [wire.x, wire.y]
+      const [x2, y2] = wire.mode === 'out'
+        ? (tgt ? flowIn(tgt) : [wire.x, wire.y])
+        : (tgt ? flowOut(tgt) : flowIn(a))
+      wires.push(<path key="ghost" className={cx(styles.wGhost, !!why && styles.refuse)}
+        d={wire.mode === 'out' ? curve(x1, y1, x2, y2) : curve(x2, y2, x1, y1)} />)
+    }
+  }
+
   /* ---- nodes ---- */
   const connected = new Set(g.edges.flatMap(e => [e.from, e.to]))
   const nodeEls = [...vs.values()].map(v => {
@@ -313,10 +491,23 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
       : n.kind === 'ext' ? cx(styles.kVar, styles.decl)
       : styles[`k_${n.kind}`]
     const own = 'own' in n && n.own
+    const pend = (n.kind === 'ask' || n.kind === 'cond') && !!n.pending
+    const verdict = wire && wire.key !== n.key ? wire.legal.get(n.key) : undefined
     return (
-      <div key={n.key} data-node={n.key} className={cx(styles.gn, kindCls, sel === n.key && styles.sel, sev === 'err' && styles.bad)}
+      <div key={n.key} data-node={n.key}
+        className={cx(styles.gn, kindCls, sel === n.key && styles.sel, sev === 'err' && styles.bad, pend && styles.pend,
+          verdict === null && styles.can, typeof verdict === 'string' && styles.no, wire?.over === n.key && typeof verdict === 'string' && styles.deny,
+          moving?.key === n.key && styles.lifting)}
         style={{ left: v.x, top: v.y, width: v.w, height: v.h } as CSSProperties}
-        onClick={e => { e.stopPropagation(); onSelect(n.key) }}>
+        onClick={e => e.stopPropagation()}
+        onPointerDown={e => {
+          if (e.button !== 0) return
+          e.stopPropagation()
+          const port = (e.target as Element).closest('[data-port]') as HTMLElement | null
+          if (port?.dataset.port === 'out') startWire('out', n.key, e)
+          else if (port?.dataset.port === 'in') startWire('lift', n.key, e)
+          else startMove(n.key, e)
+        }}>
         <div className={styles.gf} />
         <div className={styles.gi}>
           <div className={styles.gh}>
@@ -332,8 +523,13 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
           ))}
         </div>
         {(n.kind === 'ask' || n.kind === 'cond' || n.kind === 'outcome') &&
-          <span className={cx(styles.port, styles.flow, styles.on)} style={{ left: 0, top: flowIn(v)[1] - v.y }} />}
-        {n.kind === 'press' && <span className={cx(styles.port, styles.flow, connected.has('press') && styles.on)} style={{ left: v.w, top: v.h / 2 }} />}
+          <span data-port="in" title="Drag onto another gate or the press to move this" className={cx(styles.port, styles.flow, styles.live, connected.has(n.key) && styles.on)}
+            style={{ left: 0, top: flowIn(v)[1] - v.y }} />}
+        {(n.kind === 'press' || n.kind === 'ask' || n.kind === 'cond') &&
+          <span data-port="out" title="Drag onto an outcome, an Ask or a Condition — or onto empty canvas to add one"
+            className={cx(styles.port, styles.flow, styles.live, g.edges.some(e => e.kind === 'flow' && e.from === n.key) && styles.on)}
+            style={{ left: v.w, top: v.h / 2 }} />}
+        {pend && <span className={cx(styles.gbadge, styles.pendB)}><Icon name="fa-link-slash" />unwired</span>}
         {v.ins.map((id, i) => <span key={id} className={cx(styles.port, styles.data, styles.on, styles[`t_${edgesOf('data').find(e => e.to === n.key && e.ident === id)?.type ?? 'n'}`])}
           style={{ left: 0, top: HDR + v.body + i * ROW + 11 }} />)}
         {v.out && <span className={cx(styles.port, styles.data, connected.has(n.key) && styles.on, styles[`t_${v.out}`])} style={{ left: v.w, top: HDR + v.body + 11 }} />}
@@ -358,8 +554,21 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
 
   return (
     <div className={styles.graphPane}>
-      <div ref={pz.ref} className={cx(styles.pad, pz.grabbing && styles.grabbing)} onPointerDown={pz.onPointerDown}
-        onClick={() => { if (!pz.wasDrag()) onSelect(null) }}>
+      <div ref={pz.ref} className={cx(styles.pad, pz.grabbing && styles.grabbing, wire && styles.wiring)} onPointerDown={pz.onPointerDown}
+        onClick={() => { if (!pz.wasDrag()) { onSelect(null); setQuick(null) } }}
+        onDoubleClick={e => {
+          if ((e.target as Element).closest('[data-node]')) return
+          const r = pz.ref.current!.getBoundingClientRect()
+          const [wx, wy] = pz.toWorld(e.clientX, e.clientY)
+          setQuick({ sx: e.clientX - r.left, sy: e.clientY - r.top, wx, wy })
+        }}
+        onDragOver={e => { if (e.dataTransfer.types.includes(KIND_DRAG)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' } }}
+        onDrop={e => {
+          const k = e.dataTransfer.getData(KIND_DRAG) as AddKind
+          if (!k) return
+          e.preventDefault()
+          add(k, pz.toWorld(e.clientX, e.clientY))
+        }}>
         <div className={styles.wcanvas} style={{ transform: `translate(${pz.view.x}px,${pz.view.y}px) scale(${pz.view.z})` }}>
           <svg className={styles.wsvg} width="1" height="1">
             <defs>
@@ -372,7 +581,23 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
           {juncEls}
         </div>
       </div>
-      {formFits && (
+      {quick && (
+        <div className={styles.qadd} style={{ left: Math.max(8, quick.sx), top: Math.max(8, quick.sy) }}
+          onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+          <div className={styles.qaH}><Icon name={quick.src ? 'fa-plug' : 'fa-plus'} />{quick.src ? 'Add, wired from here' : 'Add node'}</div>
+          {ADD_KINDS.filter(K => !quick.src || FLOW_CHILD.includes(K.k)).map(K => (
+            <button key={K.k} type="button" className={styles.qaI} style={{ ['--kc' as string]: K.c } as CSSProperties}
+              onClick={() => add(K.k, [quick.wx, quick.wy], quick.src)}>
+              <span className={cx(styles.sw, styles[`sw_${K.sw}`])} />{K.l}<span className={styles.s}>{K.s}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {wire?.over && typeof wire.legal.get(wire.over) === 'string' && (
+        <div className={styles.refuseTip}><b><Icon name="fa-ban" />Refused</b>{wire.legal.get(wire.over)}</div>
+      )}
+      {notice && <div className={styles.refuseTip}><b><Icon name="fa-ban" />Not done</b>{notice.text}</div>}
+      {formFits && !quick && (
         <div className={styles.graphNote}>
           <Icon name="fa-circle-info" />
           <span className={styles.gt2}><b>The form fits this feature</b>One press, one write, nothing derived. The graph shows the same thing in more space.</span>
@@ -443,7 +668,19 @@ export function FeatureScript({ d, catalogTypes, sel, onSelect }: {
 
 /* ---------- inspector ---------- */
 
-export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid, featureList, onSelect, onShowInForm }: {
+/** A gate's text. Committed on blur or Enter, not per keystroke: a real gate's
+ *  node key is derived from its text, so writing every letter would re-key the
+ *  node (and drop the selection) under the author's cursor. */
+function GateText({ value, tone, placeholder, onCommit }: { value: string; tone: string; placeholder: string; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(value)
+  useEffect(() => setV(value), [value])
+  const commit = () => { const t = v.trim(); if (t && t !== value) onCommit(t); else setV(value) }
+  return <input className={styles.gateIn} style={{ ['--gc' as string]: tone } as CSSProperties} value={v} placeholder={placeholder}
+    spellCheck={false} onChange={e => setV(e.target.value)} onBlur={commit}
+    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit() } if (e.key === 'Escape') setV(value) }} />
+}
+
+export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid, featureList, onSelect, pressFields }: {
   d: CatalogFeatureData
   catalogTypes: Record<string, 'num' | 'bool'>
   sel: string | null
@@ -452,17 +689,14 @@ export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid
   namesByGid: Map<string, { name: string; kind: string }>
   featureList: { gid: string; name: string }[]
   onSelect: (key: string | null) => void
-  /** Switch to the form and reveal this audit id (a field or a node). */
-  onShowInForm: (auditId: string) => void
+  /** The form's own activation / uses / picks block, for the press and picks nodes. */
+  pressFields: ReactNode
 }) {
   const g = useMemo(() => project(d, catalogTypes), [d, catalogTypes])
   const n = sel ? g.nodes.find(x => x.key === sel) : undefined
   const graph = d.graph ?? [], vars = d.vars ?? []
   const setGraph = (next: GraphEffect[]) => update(x => ({ ...x, graph: next }))
   const setVars = (next: VarDef[]) => update(x => ({ ...x, vars: next }))
-  const formBtn = (id: string) => (
-    <button type="button" className={styles.noteBtn} onClick={() => onShowInForm(id)}><Icon name="fa-list" /> Show in form</button>
-  )
   const gated = (key: string) => g.edges.filter(e => e.kind === 'flow' && e.from === key).map(e => g.nodes.find(x => x.key === e.to)).filter(Boolean) as GNode[]
   const label = (x: GNode) => ('eff' in x ? x.eff.label || x.eff.op : x.kind === 'cond' ? `if ${x.when}` : x.kind === 'ask' ? `ask “${x.ask}”` : x.key)
 
@@ -495,32 +729,36 @@ export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid
   )
   switch (n.kind) {
     case 'press': return <>
-      {block('The press · one per feature', <>These are the feature’s own Activation fields. Every outcome wired from here runs on the same press — outcomes have no order.</>, 'var(--amber)')}
-      <div className={styles.kv}><span>Activation</span><b>{ACT_LABEL[d.activation ?? ''] ?? 'none'}</b></div>
-      <div className={styles.kv}><span>Max uses</span><b>{d.uses?.max != null ? String(d.uses.max) : 'at-will'}</b></div>
-      <div className={styles.kv}><span>Resets on</span><b>{RESET_LABEL[d.recharge ?? ''] ?? 'manual'}</b></div>
-      {formBtn('field:name')}
+      {block('The press · one per feature', <>These are the feature’s own Activation fields — the same inputs as the form. Every outcome wired from here runs on the same press; outcomes have no order.</>, 'var(--amber)')}
+      {pressFields}
     </>
     case 'cond': case 'ask': {
       const kids = gated(n.key)
+      const commit = (t: string) => {
+        const nk = editedGateKey(d, n.key, t, catalogTypes)
+        update(x => editGate(x, n.key, t, catalogTypes))
+        onSelect(nk)
+      }
       return <>
         {n.kind === 'cond'
-          ? block('when · the app decides', <>This is the <code>when</code> written on every outcome under it: <code>{n.when}</code></>, 'var(--beige)')
-          : block('ask · a human decides', <>Outcomes sharing one ask are a single checkbox. There is no “no” branch: unticked, they simply don’t resolve.</>, 'var(--cyan-hot)')}
+          ? block('when · the app decides', <>Written as the <code>when</code> on every outcome under it.{n.pending && <> Nothing is under it yet — drag a wire from it onto an outcome.</>}</>, 'var(--beige)')
+          : block('ask · a human decides', <>Outcomes sharing one ask are a single checkbox. There is no “no” branch: unticked, they simply don’t resolve.{n.pending && <> Nothing is under it yet — drag a wire from it onto an outcome.</>}</>, 'var(--cyan-hot)')}
+        <span className={styles.gateLab}>{n.kind === 'cond' ? 'when — formula' : 'ask — the checkbox text'}</span>
+        <GateText key={n.key} value={n.kind === 'cond' ? n.when : n.ask} tone={n.kind === 'cond' ? 'var(--beige)' : 'var(--cyan)'}
+          placeholder={n.kind === 'cond' ? 'hp < hpMax / 2' : 'Did it hit?'} onCommit={commit} />
         <div className={styles.conns}>{kids.map(k => (
           <button key={k.key} type="button" className={styles.conn} onClick={() => onSelect(k.key)}><b>{label(k)}</b></button>
         ))}</div>
-        {kids[0] && 'eff' in kids[0] && formBtn(kids[0].eff.id)}
       </>
     }
     case 'picks': {
       const offers = g.edges.filter(e => e.kind === 'offer').map(e => g.nodes.find(x => x.key === e.from)).filter(Boolean) as GNode[]
       return <>
-        {block('Feature-level · picks', <>Every <code>once</code> rule carrying an <code>ask</code> is an offer; the player may take <b>{String(d.picks ?? '—')}</b> of them.</>, 'var(--amber)')}
+        {block('Feature-level · picks', <>Every <code>once</code> rule carrying an <code>ask</code> is an offer; the player may take <b>{String(d.picks ?? '—')}</b> of them. Not wired — the dashed tethers show which.</>, 'var(--amber)')}
         <div className={styles.conns}>{offers.map(k => (
           <button key={k.key} type="button" className={styles.conn} onClick={() => onSelect(k.key)}><b>{label(k)}</b></button>
         ))}</div>
-        {formBtn('field:name')}
+        {pressFields}
       </>
     }
     case 'ext': return block(`Declared elsewhere · ${n.decl}`, <><code>{n.ident}</code> — {EXT_NOTE[n.decl]}. Read-only here.</>, 'var(--good)')

@@ -27,7 +27,7 @@ import { useState } from 'react'
 import type { GraphEffect, GraphOp, VarDef } from '../lib/database.types'
 import {
   OPS, OP_ORDER, OP_TITLE, PALETTE, PALETTE_MORE, PALETTE_ACT, PALETTE_SHEET, ROLL_SELECTORS,
-  HAS_TARGET, IS_ACTIVATION, IS_DAMAGE_FLAG, IS_SHEET, type OpField,
+  HAS_TARGET, IS_ACTIVATION, IS_DAMAGE_FLAG, IS_SHEET, blankEffect, type OpField,
 } from '../lib/opSchema'
 import { proseField, useAutoGrow } from '../lib/textareaHooks'
 import { matchCount, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
@@ -60,18 +60,6 @@ export function splitSel(s: string): { kind: SelKind; value: string } {
 const joinSel = (kind: SelKind, value: string) =>
   kind === 'tag' ? `tag:${value}` : kind === 'roll' ? `roll:${value}` : value
 
-const blankArr = () => new Array<string>(21).fill('')
-const newId = () => `e${Math.random().toString(36).slice(2, 8)}`
-
-function blankEffect(op: GraphOp): GraphEffect {
-  const eff: GraphEffect = { id: newId(), op, target: [], label: '' }
-  for (const fd of OPS[op].fields) {
-    if (fd.type === 'array') (eff as unknown as Record<string, unknown>)[fd.key] = blankArr()
-    else if (fd.type === 'boolean') (eff as unknown as Record<string, unknown>)[fd.key] = false
-    else (eff as unknown as Record<string, unknown>)[fd.key] = ''
-  }
-  return eff
-}
 
 const HELP = {
   when: {
@@ -717,7 +705,7 @@ function SchemaField({ fd, eff, ei, setEffect, vars }: {
     </select></>
   }
   if (fd.type === 'array') {
-    const arr = Array.isArray(raw) ? (raw as string[]) : blankArr()
+    const arr: string[] = Array.isArray(raw) ? (raw as string[]) : new Array<string>(21).fill('')
     const filled = arr.filter((x, i) => i > 0 && String(x).trim()).length
     return <>{label}
       <div className={styles.arr}>

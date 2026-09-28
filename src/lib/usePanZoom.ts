@@ -96,5 +96,11 @@ export function usePanZoom({ min = 0.25, max = 2.2, skip }: {
     window.addEventListener('pointerup', up)
   }, [skip])
 
-  return { ref, view, zoomAt, fit, centreOn, onPointerDown, grabbing, wasDrag: () => dragged.current }
+  /** A client (screen) point in world coordinates. */
+  const toWorld = useCallback((cx: number, cy: number): [number, number] => {
+    const r = ref.current?.getBoundingClientRect(), v = viewRef.current
+    return r ? [(cx - r.left - v.x) / v.z, (cy - r.top - v.y) / v.z] : [0, 0]
+  }, [])
+
+  return { ref, view, zoomAt, fit, centreOn, toWorld, onPointerDown, grabbing, wasDrag: () => dragged.current }
 }
