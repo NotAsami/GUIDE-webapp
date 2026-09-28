@@ -169,6 +169,21 @@
 .kinds { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 6px; padding: 4px 10px 10px; }
 .kindRow { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 5px 6px; font-family: var(--font-mono); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; color: var(--text); cursor: grab; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kindRow:hover { background: rgba(226,176,33,.06); }
+.wGhost.at { stroke: var(--orange); stroke-width: 2.2; opacity: 1; }
+.wGhost.at.refuse { stroke: var(--danger-hot); stroke-dasharray: 3 4; }
+.wHit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+.mt { cursor: pointer; font-family: var(--font-mono); }
+.mt:hover { color: var(--amber-hot); border-color: var(--amber-hot); }
+.qadd.wide { width: 290px; }
+.qaI:disabled { opacity: .35; cursor: not-allowed; }
+.qaI.on { color: var(--orange); background: rgba(208,138,60,.12); }
+.qaI > i { width: 14px; color: var(--orange); }
+.chooser { display: flex; flex-direction: column; margin-bottom: 12px; }
+.chooser .gateIn { margin-top: 0; }
+.chList { max-height: min(280px, 45vh); overflow-y: auto; overscroll-behavior: contain; border: 1px solid rgba(208,138,60,.25); padding: 3px; }
+.chList::-webkit-scrollbar { width: 6px; }
+.chList::-webkit-scrollbar-thumb { background: rgba(208,138,60,.45); }
+.chNone { padding: 8px 6px; font-family: var(--font-mono); font-size: 8px; color: var(--muted); }
 .gateIn { width: 100%; box-sizing: border-box; margin: 4px 0 12px; padding: 8px 10px; background: rgba(0,0,0,.5); border: 1.5px solid rgba(212,191,125,.34); border-left: 2px solid var(--gc, var(--beige)); color: var(--text); font-family: var(--font-mono); font-size: 11px; }
 .gateIn:focus { outline: none; border-color: var(--amber); }
 .gateLab { display: block; font-family: var(--font-mono); font-size: 8px; letter-spacing: .2em; color: var(--beige-dim); text-transform: uppercase; }

@@ -15,7 +15,7 @@
  */
 import type { CatalogFeatureData, FeatureLayout, GraphEffect, VarDef } from './database.types.ts'
 import { ROLL_IDENTS, VAR_IDENTS, freeIdents, interpolations, isHasIdent } from './expr.ts'
-import { askKey, asKey, probeScope } from './graph.ts'
+import { askKey, asKey, auditNode, probeScope, type AuthoredNode } from './graph.ts'
 import { HAS_TARGET, OPS } from './opSchema.ts'
 import { isUsable } from './featureView.ts'
 
@@ -391,7 +391,67 @@ export function removeNode(f: CatalogFeatureData, key: string, catalogTypes: Rec
   return { ok: true, f: prune(next, catalogTypes) }
 }
 
-export type AddKind = 'contrib' | 'sheet' | 'outcome' | 'var' | 'cond' | 'ask' | 'picks' | 'press'
+/* ---------- applies-to ---------- */
+
+function mapEff(f: CatalogFeatureData, key: string, fn: (e: GraphEffect) => GraphEffect): CatalogFeatureData {
+  const i = effKeys(f).indexOf(key)
+  return i < 0 ? f : { ...f, graph: (f.graph ?? []).map((e, j) => (j === i ? fn(e) : e)) }
+}
+
+/** Why `sel` may NOT be added to this rule's targets, or null if it may. The
+ *  answer is the AUDIT's: the feature is audited with and without the new entry
+ *  and the first new error on that rule is the reason. No second copy of the
+ *  targeting rules (addUses → a feature, grant → a roll, armed → a roll, a
+ *  dangling reference…) can drift from the one that blocks Publish. */
+export function targetRefusal(
+  f: CatalogFeatureData, key: string, sel: string,
+  nodes: AuthoredNode[], catalogTypes: Record<string, 'num' | 'bool'> = {},
+): string | null {
+  const i = effKeys(f).indexOf(key)
+  const e = f.graph?.[i]
+  if (!e) return 'No such rule.'
+  if (!HAS_TARGET(e.op)) return `${OPS[e.op]?.label ?? e.op} has no target — it writes this feature’s own state.`
+  if ((e.target ?? []).some(t => asKey(t) === asKey(sel))) return `${e.label || e.op} already applies to ${asKey(sel)}.`
+  /* The selector ALONE, not added to the list: every target rule judges the
+     whole list, so a list that is already wrong (a grant with no roll yet)
+     would mask whether this entry is. Isolated, a target error on the rule can
+     only be about `sel`. `and` impossibilities are the junction's to report. */
+  const probe = (f.graph ?? []).map((x, j) => (j === i ? { ...x, target: [sel], match: undefined } : x))
+  const bad = auditNode({ graph: probe, vars: f.vars }, nodes, catalogTypes)
+    .find(a => a.sev === 'err' && a.id === e.id && /target/i.test(a.t))
+  return bad ? `${bad.t} — ${bad.s}` : null
+}
+
+export function connectTarget(f: CatalogFeatureData, key: string, sel: string): CatalogFeatureData {
+  return mapEff(f, key, e => ((e.target ?? []).some(t => asKey(t) === asKey(sel)) ? e : { ...e, target: [...(e.target ?? []), sel] }))
+}
+
+/** Removes the entry AND any legacy spelling that normalises to it (`tag:Fire`). */
+export function disconnectTarget(f: CatalogFeatureData, key: string, sel: string): CatalogFeatureData {
+  return mapEff(f, key, e => ({ ...e, target: (e.target ?? []).filter(t => asKey(t) !== asKey(sel)) }))
+}
+
+/** Point every rule aimed at `oldSel` at `sel` instead; the target keeps its place. */
+export function retarget(f: CatalogFeatureData, oldSel: string, sel: string): CatalogFeatureData {
+  const graph = (f.graph ?? []).map(e => {
+    if (!(e.target ?? []).some(t => asKey(t) === oldSel)) return e
+    const next = (e.target ?? []).map(t => (asKey(t) === oldSel ? sel : t))
+    return { ...e, target: next.filter((t, i) => next.findIndex(x => asKey(x) === asKey(t)) === i) }
+  })
+  const pos = { ...f.layout?.pos }
+  if (pos[`dest:${oldSel}`] && !pos[`dest:${asKey(sel)}`]) pos[`dest:${asKey(sel)}`] = pos[`dest:${oldSel}`]
+  delete pos[`dest:${oldSel}`]
+  return f.layout ? { ...f, graph, layout: { ...f.layout, pos } } : { ...f, graph }
+}
+
+export function setMatch(f: CatalogFeatureData, key: string, match: 'or' | 'and'): CatalogFeatureData {
+  return mapEff(f, key, e => {
+    const { match: _m, ...rest } = e
+    return match === 'and' ? { ...rest, match: 'and' } : rest
+  })
+}
+
+export type AddKind ='contrib' | 'sheet' | 'outcome' | 'var' | 'cond' | 'ask' | 'picks' | 'press'
 
 /** A new node at `at`. Effects start from `blankOf(op)` — the form's own defaults
  *  (opSchema.blankEffect), passed in so this file stays free of id minting. */
