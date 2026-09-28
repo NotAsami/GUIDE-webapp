@@ -7,7 +7,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatalogFeatureData, GraphEffect } from './database.types.ts'
-import { autoLayout, project, type GEdge, type FeatureGraph } from './featureGraph.ts'
+import { addNode, autoLayout, editGate, project, regate, removeNode, setPos, type GEdge, type FeatureGraph } from './featureGraph.ts'
+import { blankEffect } from './opSchema.ts'
 
 const feat = (over: Partial<CatalogFeatureData>) => ({ name: 'Test', ...over }) as CatalogFeatureData
 const eff = (over: Partial<GraphEffect>): GraphEffect => ({ id: 'e1', op: 'add', label: 'L', target: [], ...over }) as GraphEffect
@@ -244,4 +245,100 @@ test('a derived variable sits right of what it reads, and the press right of eve
   assert.ok(x('var:isMerciful') < x('var:nextJudgementState'))
   assert.ok(x('var:nextJudgementState') < x('press'))
   assert.ok(x('press') < x('eff:set'))
+})
+
+/* ---------- edits ---------- */
+
+const ok = (r: { ok: boolean; f?: CatalogFeatureData; why?: string }) => {
+  assert.ok(r.ok, (r as { why?: string }).why)
+  return (r as { f: CatalogFeatureData }).f
+}
+const gatesOf = (f: CatalogFeatureData, id: string) => {
+  const e = f.graph!.find(x => x.id === id)!
+  return { ask: e.ask, when: e.when }
+}
+const PLAIN = feat({ activation: 'action', graph: [
+  eff({ id: 'a', op: 'setHp', value: '1' }),
+  eff({ id: 'b', op: 'setHp', value: '2', ask: 'Q?' }),
+  eff({ id: 'c', op: 'setHp', value: '3', ask: 'Q?', when: 'hp < 5' }),
+] })
+
+test('regate: an outcome hung from an ask takes that ask; hung from the press loses its gates', () => {
+  const f1 = ok(regate(PLAIN, 'eff:a', 'ask:q?'))
+  assert.deepEqual(gatesOf(f1, 'a'), { ask: 'Q?', when: undefined })
+  const f2 = ok(regate(PLAIN, 'eff:c', 'press'))
+  assert.deepEqual(gatesOf(f2, 'c'), { ask: undefined, when: undefined })
+})
+
+test('regate: a condition under a condition is written as their conjunction', () => {
+  const two = feat({ activation: 'action', graph: [eff({ id: 'x', op: 'setHp', value: '1', when: 'a' }), eff({ id: 'y', op: 'setHp', value: '1', when: 'b' })] })
+  // Hanging the CONDITION b under a: everything behind b now needs both.
+  const f = ok(regate(two, 'when:press|b', 'when:press|a'))
+  assert.equal(gatesOf(f, 'y').when, '(a) && (b)')
+  assert.equal(gatesOf(f, 'x').when, 'a')
+  // Rewiring the OUTCOME y into a replaces its incoming wire: it now needs a only.
+  assert.equal(gatesOf(ok(regate(two, 'eff:y', 'when:press|a')), 'y').when, 'a')
+})
+
+test('regate: moving a gate moves everything under it, and a second ask is refused', () => {
+  const f = ok(regate(PLAIN, 'when:ask:q?|hp < 5', 'press'))
+  assert.deepEqual(gatesOf(f, 'c'), { ask: undefined, when: 'hp < 5' })
+  const twoAsks = feat({ activation: 'action', graph: [eff({ id: 'p', op: 'setHp', value: '1', ask: 'One?' }), eff({ id: 'q', op: 'setHp', value: '1', ask: 'Two?' })] })
+  const r = regate(twoAsks, 'ask:two?', 'ask:one?')
+  assert.equal(r.ok, false)
+})
+
+test('regate refuses what the schema cannot say', () => {
+  assert.equal(regate(PLAIN, 'ask:q?', 'when:ask:q?|hp < 5').ok, false) // under itself
+  const armed = feat({ activation: 'action', graph: [eff({ id: 'o', op: 'add', once: true, target: ['roll:attack'] })] })
+  const r = regate(armed, 'eff:o', 'press')
+  assert.ok(!r.ok && /armed/.test(r.why))
+})
+
+test('a pending gate is drawn, and wiring an outcome into it makes it real and keeps its place', () => {
+  const add = addNode(PLAIN, 'cond', [500, 40], blankEffect)
+  const f1 = ok(add)
+  const pk = add.key!
+  assert.equal(project(f1).nodes.find(n => n.key === pk)?.kind, 'cond')
+  const f2 = ok(regate(editGate(f1, pk, 'hp > 0'), 'eff:a', pk))
+  assert.deepEqual(gatesOf(f2, 'a'), { ask: undefined, when: 'hp > 0' })
+  assert.equal(f2.layout?.pending?.length, 0)
+  assert.deepEqual(f2.layout?.pos?.['when:press|hp > 0'], [500, 40])
+})
+
+test('editGate rewrites exactly the outcomes under it, and its position follows the new key', () => {
+  const f0 = setPos(PLAIN, 'ask:q?', [10, 20])
+  const f = editGate(f0, 'ask:q?', 'Did it land?')
+  assert.equal(gatesOf(f, 'b').ask, 'Did it land?')
+  assert.equal(gatesOf(f, 'c').ask, 'Did it land?')
+  assert.equal(gatesOf(f, 'a').ask, undefined)
+  assert.deepEqual(f.layout?.pos?.['ask:did it land?'], [10, 20])
+})
+
+test('removeNode: a gate hands its outcomes to its parent; a target leaves every rule', () => {
+  const f = ok(removeNode(PLAIN, 'ask:q?'))
+  assert.deepEqual(gatesOf(f, 'b'), { ask: undefined, when: undefined })
+  assert.deepEqual(gatesOf(f, 'c'), { ask: undefined, when: 'hp < 5' })
+  const g = ok(removeNode(EMBER, 'dest:tag:fire'))
+  assert.deepEqual(g.graph!.find(e => e.id === 'k1')!.target, ['roll:damage'])
+  assert.deepEqual(g.graph!.find(e => e.id === 'k5')!.target, ['tag:weapon'])
+  assert.equal(removeNode(PLAIN, 'press').ok, false)
+})
+
+test('removeNode prunes the deleted node’s saved position', () => {
+  const f = ok(removeNode(setPos(PLAIN, 'eff:a', [1, 2]), 'eff:a'))
+  assert.equal(f.layout?.pos?.['eff:a'], undefined)
+  assert.equal(f.graph!.some(e => e.id === 'a'), false)
+})
+
+test('addNode: effects come from the form’s defaults, and one-per-feature kinds refuse a second', () => {
+  const r = addNode(feat({}), 'contrib', [0, 0], blankEffect)
+  const f = ok(r)
+  assert.equal(f.graph!.length, 1)
+  assert.equal(f.graph![0].op, 'add')
+  assert.deepEqual(f.layout?.pos?.[r.key!], [0, 0])
+  assert.equal(addNode(PLAIN, 'press', [0, 0], blankEffect).ok, false)
+  assert.equal(addNode(feat({ picks: 2 }), 'picks', [0, 0], blankEffect).ok, false)
+  const v = ok(addNode(feat({ vars: [{ name: 'newVariable', kind: 'stored', type: 'num' }] }), 'var', [0, 0], blankEffect))
+  assert.equal(v.vars![1].name, 'newVariable2')
 })

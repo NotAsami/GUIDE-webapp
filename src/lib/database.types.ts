@@ -520,6 +520,12 @@ export type FeatureLayout = {
   pos?: Record<string, [number, number]>
   /** Labelled frames around nodes, for reading the canvas. */
   groups?: { m: string[]; l: string; s?: string }[]
+  /** A Condition or Ask placed on the canvas with nothing wired into it yet. A
+   *  gate is otherwise only the `when`/`ask` text on the outcomes behind it, so
+   *  until one is wired this is the only place it can live. Wiring an outcome in
+   *  writes the text onto that outcome and removes the entry. `parent` is the
+   *  node key it hangs from (the press, or another gate). */
+  pending?: { id: string; kind: 'cond' | 'ask'; text: string; parent: string }[]
 }
 
 /** A variable declaration. Definitions ride on the node that introduces them, so

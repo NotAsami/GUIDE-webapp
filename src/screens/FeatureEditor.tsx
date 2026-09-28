@@ -55,7 +55,7 @@ import styles from '../components/authoring.module.css'
 import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
 import { ProsePreview } from '../components/ProsePreview'
-import { FeatureGraph, FeatureScript, GraphInspector, auditNodeKey } from '../components/FeatureGraph'
+import { FeatureGraph, FeatureScript, GraphInspector, NodeKinds, auditNodeKey } from '../components/FeatureGraph'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
 
@@ -590,7 +590,8 @@ export default function FeatureEditor() {
         <FeatureGraph d={draft} catalogTypes={catalogTypes} nodes={nodes} namesByGid={namesByGid} ready={ready}
           audit={audit} sel={sel} onSelect={setSel} focusTick={focusTick}
           fitKey={creating ? 'new' : selId ?? ''} onForm={() => setMode('form')}
-          rightInset={inspOpen ? 410 : 60} />
+          rightInset={inspOpen ? 410 : 60} onChange={f => update(() => f)}
+          onToggleInsp={() => { setView(v => ({ ...v, insp: !inspOpen })); setInspAuto(false) }} />
       ) : (
         <FeatureScript d={draft} catalogTypes={catalogTypes} sel={sel} onSelect={setSel} />
       )}
@@ -772,6 +773,12 @@ export default function FeatureEditor() {
                 return body
               })()}
             </div>
+            {draft && graphOn && (
+              <>
+                <div className={styles.auditHead}><span className={styles.t}>Node kinds</span><span className={styles.n}>drag onto the canvas</span></div>
+                <NodeKinds />
+              </>
+            )}
             {draft && (view.audit ? (
               <div className={styles.listAudit}>
                 {/* The shared panel — same component the class editor mounts.
@@ -877,7 +884,8 @@ export default function FeatureEditor() {
                         <div className={styles.inspBody}>
                           <GraphInspector d={draft} catalogTypes={catalogTypes} sel={sel} update={update}
                             nodes={nodes} namesByGid={namesByGid} featureList={featureList}
-                            onSelect={setSel} onShowInForm={showInForm} />
+                            onSelect={setSel}
+                            pressFields={<ActivationFields d={draft} set={set} />} />
                         </div>
                       </div>
                     </>) : (
@@ -1088,13 +1096,8 @@ function OriginChain({ steps, onChange }: { steps: string[]; onChange: (next: st
 function FeatureForm(p: FormProps) {
   const { d, set, update } = p
   const deepRef = useAutoGrow(d.deep_description ?? '')
-  const act = ACTIVATIONS[(d.activation ?? 'none') as ActivationKind] ?? ACTIVATIONS.none
   const vars = d.vars ?? []
   const graph = d.graph ?? []
-  /* The armed offers — a `once` effect carrying an `ask`. Two or more of them
-     are the pick-one the roll panel renders, and the only place `picks` means
-     anything. */
-  const offers = graph.filter(e => e.once && e.ask?.trim()).length
   const varErr = vars.some(v => !v.name?.trim() || (v.kind === 'derived' && !v.formula?.trim()))
   const effErr = graph.some(e => !e.label?.trim())
 
@@ -1201,83 +1204,7 @@ function FeatureForm(p: FormProps) {
         onChange={e => set({ deep_description: e.target.value })} />
       <div className={styles.subHint}>The detail, on the expanded card.</div>
 
-      <div className={styles.grid2}>
-        <div>
-          <span className={styles.fieldLab}>Activation<span className={styles.ty}>enum</span></span>
-          <select className={styles.in} value={d.activation ?? 'none'} onChange={e => set({ activation: e.target.value as ActivationKind })}>
-            {ACT_ORDER.map(k => <option key={k} value={k}>{ACTIVATIONS[k].label}</option>)}
-          </select>
-        </div>
-        <div />
-      </div>
-      <div className={styles.actNote} style={{ ['--an' as string]: act.color }}>
-        <Icon name={act.icon} /><span>{act.note}</span>
-      </div>
-
-      <div className={styles.grid2} style={{ marginBottom: 2 }}>
-        <div>
-          <span className={styles.fieldLab}>Max uses</span>
-          {/* A FORMULA, not a number input. "The Rages column of the Barbarian
-              table" is `rages`, and a spinner cannot say that. Blank or 0 is
-              at-will; `current` is deliberately not written, because absent
-              means FULL and a template cannot know what its own max comes to on
-              a character it has not met. */}
-          <input className={styles.in} type="text" value={String(d.uses?.max ?? '')}
-            placeholder="0 = at-will · or rages"
-            onChange={e => {
-              const raw = e.target.value.trim()
-              const n = Number(raw)
-              const off = !raw || (Number.isFinite(n) && Math.trunc(n) <= 0)
-              set({
-                uses: off ? undefined : { max: Number.isFinite(n) ? Math.trunc(n) : raw },
-                ...(off ? { recharge: undefined } : {}),
-              })
-            }} />
-        </div>
-        <div>
-          <span className={styles.fieldLab}>Resets on</span>
-          <select className={styles.in} value={d.recharge ?? ''} disabled={!d.uses}
-            onChange={e => set({ recharge: (e.target.value || undefined) as 'turn' | 'short' | 'long' | undefined,
-              // A full short-rest refill makes a partial one meaningless.
-              ...(e.target.value === 'short' || e.target.value === 'turn' ? { shortRecharge: undefined } : {}) })}>
-            {RECHARGES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
-          </select>
-        </div>
-      </div>
-      {/* A PICK-TWO. Only means anything where there is a pick to widen — two or
-          more armed offers from this feature — so it is offered exactly there
-          rather than sitting inert on every form. */}
-      {offers >= 2 && (
-        <div style={{ marginBottom: 2 }}>
-          <span className={styles.fieldLab}>Of its {offers} offers, the player may take</span>
-          <input className={styles.in} type="text" value={String(d.picks ?? '')}
-            placeholder="blank = one · 2 · level >= 17 ? 2 : 1"
-            onChange={e => {
-              const raw = e.target.value.trim()
-              const n = Number(raw)
-              set({ picks: !raw ? undefined : Number.isFinite(n) ? Math.max(1, Math.trunc(n)) : raw })
-            }} />
-        </div>
-      )}
-      {/* THE THIRD COMBINATION. "All of them on a long rest, one on a short" is
-          Rage, and no single value of Resets-on says it — so it is its own field,
-          offered only where it means something. */}
-      {d.recharge === 'long' && (
-        <div style={{ marginBottom: 2 }}>
-          <span className={styles.fieldLab}>…and on a short rest, give back</span>
-          <input className={styles.in} type="text" value={String(d.shortRecharge ?? '')}
-            placeholder="blank = nothing · 1 · a formula"
-            onChange={e => {
-              const raw = e.target.value.trim()
-              const n = Number(raw)
-              set({ shortRecharge: !raw ? undefined : Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : raw })
-            }} />
-        </div>
-      )}
-      <div className={styles.actNote} style={{ ['--an' as string]: 'var(--beige-dim)', marginTop: -2 }}>
-        <i className="fa-solid fa-rotate" />
-        <span>Uses are independent of activation — <b>0 means at-will</b>, and a passive feature can still track uses.</span>
-      </div>
+      <ActivationFields d={d} set={set} />
 
       {/* THE PRESS CAN ROLL SOMETHING. `roll`/`rollTone`/`rollLabel` have been in
           the type and read by the activation sheet since Second Wind was
@@ -1712,5 +1639,94 @@ function Popover({ pop, onClose, draft, set, update, nodes, namesByGid, selId, r
         </>)}
       </div>
     </div>
+  )
+}
+
+/** Activation, uses, resets, picks — the press's own fields. ONE component, so
+ *  the form and the Graph view's press/picks inspector are the same inputs and
+ *  cannot drift. Picks shows once there is a choice to widen, or a value to clear. */
+export function ActivationFields({ d, set }: { d: CatalogFeatureData; set: (p: Partial<CatalogFeatureData>) => void }) {
+  const act = ACTIVATIONS[(d.activation ?? 'none') as ActivationKind] ?? ACTIVATIONS.none
+  const offers = (d.graph ?? []).filter(e => e.once && e.ask?.trim()).length
+  return (
+    <>
+    <div className={styles.grid2}>
+      <div>
+        <span className={styles.fieldLab}>Activation<span className={styles.ty}>enum</span></span>
+        <select className={styles.in} value={d.activation ?? 'none'} onChange={e => set({ activation: e.target.value as ActivationKind })}>
+          {ACT_ORDER.map(k => <option key={k} value={k}>{ACTIVATIONS[k].label}</option>)}
+        </select>
+      </div>
+      <div />
+    </div>
+    <div className={styles.actNote} style={{ ['--an' as string]: act.color }}>
+      <Icon name={act.icon} /><span>{act.note}</span>
+    </div>
+
+    <div className={styles.grid2} style={{ marginBottom: 2 }}>
+      <div>
+        <span className={styles.fieldLab}>Max uses</span>
+        {/* A FORMULA, not a number input. "The Rages column of the Barbarian
+            table" is `rages`, and a spinner cannot say that. Blank or 0 is
+            at-will; `current` is deliberately not written, because absent
+            means FULL and a template cannot know what its own max comes to on
+            a character it has not met. */}
+        <input className={styles.in} type="text" value={String(d.uses?.max ?? '')}
+          placeholder="0 = at-will · or rages"
+          onChange={e => {
+            const raw = e.target.value.trim()
+            const n = Number(raw)
+            const off = !raw || (Number.isFinite(n) && Math.trunc(n) <= 0)
+            set({
+              uses: off ? undefined : { max: Number.isFinite(n) ? Math.trunc(n) : raw },
+              ...(off ? { recharge: undefined } : {}),
+            })
+          }} />
+      </div>
+      <div>
+        <span className={styles.fieldLab}>Resets on</span>
+        <select className={styles.in} value={d.recharge ?? ''} disabled={!d.uses}
+          onChange={e => set({ recharge: (e.target.value || undefined) as 'turn' | 'short' | 'long' | undefined,
+            // A full short-rest refill makes a partial one meaningless.
+            ...(e.target.value === 'short' || e.target.value === 'turn' ? { shortRecharge: undefined } : {}) })}>
+          {RECHARGES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
+        </select>
+      </div>
+    </div>
+    {/* A PICK-TWO. Only means anything where there is a pick to widen — two or
+        more armed offers from this feature — so it is offered exactly there
+        rather than sitting inert on every form. */}
+    {(offers >= 2 || (d.picks != null && String(d.picks).trim() !== '')) && (
+      <div style={{ marginBottom: 2 }}>
+        <span className={styles.fieldLab}>Of its {offers} offers, the player may take</span>
+        <input className={styles.in} type="text" value={String(d.picks ?? '')}
+          placeholder="blank = one · 2 · level >= 17 ? 2 : 1"
+          onChange={e => {
+            const raw = e.target.value.trim()
+            const n = Number(raw)
+            set({ picks: !raw ? undefined : Number.isFinite(n) ? Math.max(1, Math.trunc(n)) : raw })
+          }} />
+      </div>
+    )}
+    {/* THE THIRD COMBINATION. "All of them on a long rest, one on a short" is
+        Rage, and no single value of Resets-on says it — so it is its own field,
+        offered only where it means something. */}
+    {d.recharge === 'long' && (
+      <div style={{ marginBottom: 2 }}>
+        <span className={styles.fieldLab}>…and on a short rest, give back</span>
+        <input className={styles.in} type="text" value={String(d.shortRecharge ?? '')}
+          placeholder="blank = nothing · 1 · a formula"
+          onChange={e => {
+            const raw = e.target.value.trim()
+            const n = Number(raw)
+            set({ shortRecharge: !raw ? undefined : Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : raw })
+          }} />
+      </div>
+    )}
+    <div className={styles.actNote} style={{ ['--an' as string]: 'var(--beige-dim)', marginTop: -2 }}>
+      <i className="fa-solid fa-rotate" />
+      <span>Uses are independent of activation — <b>0 means at-will</b>, and a passive feature can still track uses.</span>
+    </div>
+    </>
   )
 }
