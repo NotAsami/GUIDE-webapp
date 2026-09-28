@@ -326,6 +326,11 @@ export const OP_ORDER: GraphOp[] = [...PALETTE, ...PALETTE_MORE, ...PALETTE_SHEE
 export const IS_ACTIVATION = (op: GraphOp) => OPS[op].group === 'activation'
 /** Skipped by resolve() — it never reaches a roll. Compiled by sheetEffects. */
 export const IS_SHEET = (op: GraphOp) => OPS[op].group === 'sheet'
+/** Does this op point at something? Every roll modifier does. Of the activation
+ *  outcomes only two reach past this feature: `addUses` (another feature's
+ *  counter) and `grant` (the roll the gift answers to); the rest write this
+ *  feature's own variables. Sheet ops never target. */
+export const HAS_TARGET = (op: GraphOp) => OPS[op].group === 'passive' || op === 'addUses' || op === 'grant'
 
 export const OP_TITLE: Record<GraphOp, string> = {
   add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', floor: 'Floor', reroll: 'Reroll', note: 'Note', boost: 'Boost',

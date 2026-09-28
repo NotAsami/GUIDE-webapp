@@ -509,6 +509,17 @@ export type Feature = {
    *  writes the midpoint, so a reorder is one row write instead of renumbering
    *  every sibling. */
   order?: number
+  /** Where the Feature Editor's Graph view put things. Layout only — the engine,
+   *  the form and the player never read it, and deleting it loses nothing but
+   *  positions (lib/featureGraph.ts lays out anything it does not name). */
+  layout?: FeatureLayout
+}
+
+/** Keyed by lib/featureGraph.ts node keys (`eff:<id>`, `var:<name>`, `dest:<sel>`…). */
+export type FeatureLayout = {
+  pos?: Record<string, [number, number]>
+  /** Labelled frames around nodes, for reading the canvas. */
+  groups?: { m: string[]; l: string; s?: string }[]
 }
 
 /** A variable declaration. Definitions ride on the node that introduces them, so
