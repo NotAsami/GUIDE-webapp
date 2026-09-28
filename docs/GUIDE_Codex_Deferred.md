@@ -415,3 +415,40 @@ app. The bridge would be shouting the whole battlemap at four phones so that one
 of them can care about one line of it, and every player's codex would know the
 HP of everything on the scene.
 
+
+---
+
+## Triggers other than the press
+
+**Trigger.** A feature whose rule starts from something other than the player
+pressing it — "when a creature you can see drops to 0 HP", "at the start of your
+turn", "when you are hit" — and the DM wants the app to run it, not just print it.
+
+**Where the design is.** The Feature Graph mockup
+(`guide-hud/project/feature-graph.js`, `EVENTS`) already draws these as proposed
+event nodes, sorted by who could see them happen: the sheet (a roll made, a
+variable changing, you at 0 HP) or the Foundry bridge (turn start, a target
+selected, a creature reduced to 0). The shipped Graph view leaves them out on
+purpose: the schema has one trigger, `Feature.activation`, and a node that saves
+nowhere would be a claim the engine does not keep.
+
+**What building it needs.** A `trigger` field on the feature (or on an
+activation effect), a place in `graphState.ts` that runs outcomes when the event
+arrives rather than on a press, and — for the bridge ones — the GM client
+forwarding the event (see the entry above about who may see what).
+
+## The feature Script view's language
+
+**Trigger.** A written spec for the language. Nothing before that.
+
+**Where it is.** The Feature Editor's Script tab is a locked mock-up
+(`guide-hud/project/feature-script.js`) so the space exists and the layout,
+cross-linking and error states can be judged. Its syntax is labelled a
+placeholder and is not one. It never parses or writes anything back.
+
+**What the mockup already settled.** One object, three views: text that does
+not parse is not data, so the Form and Graph views keep showing the last valid
+version, read-only, until it does. A broken RULE (an unknown identifier, an arm
+reading `hit`) is not a syntax error — the text still parses, and the problem
+lands in the shared Audit like any other. The graph engine doc §14 ("a calculator,
+not a language") has to be reconciled with whatever this becomes.

@@ -212,7 +212,7 @@ export const toggleVars = (f: Pick<Feature, 'vars'>): VarDef[] =>
  *
  *  `once` counts because arming IS the press (§16): without it a feature whose
  *  only effect is "arm your next attack" would have no button to arm it with. */
-export function isUsable(f: Feature): boolean {
+export function isUsable(f: Pick<Feature, 'roll' | 'uses' | 'activation' | 'vars' | 'graph'>): boolean {
   return !!f.roll
     || !!f.uses
     || (!!f.activation && f.activation !== 'none')
