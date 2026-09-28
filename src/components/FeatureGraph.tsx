@@ -13,12 +13,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import type { CatalogFeatureData, GraphEffect, VarDef } from '../lib/database.types'
 import {
-  addNode, autoLayout, editGate, editedGateKey, project, regate, removeNode, setPos,
+  addNode, autoLayout, connectTarget, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
+  setMatch, setPos, targetRefusal,
   type AddKind, type FeatureGraph as Graph, type GEdge, type GNode, type WireType,
 } from '../lib/featureGraph'
-import { blankEffect } from '../lib/opSchema'
+import { ROLL_SELECTORS, blankEffect } from '../lib/opSchema'
 import { colour, serialize } from '../lib/featureScript'
-import { matchCount, type AuditItem, type AuthoredNode } from '../lib/graph'
+import { asKey, matchCount, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
 import { OPS } from '../lib/opSchema'
 import { Inline } from '../lib/markdown'
 import { usePanZoom } from '../lib/usePanZoom'
@@ -196,7 +197,96 @@ export function NodeKinds() {
   )
 }
 
-type WireDrag = { mode: 'out' | 'lift'; key: string; x: number; y: number; over: string | null; legal: Map<string, string | null> }
+type WireDrag = { mode: 'out' | 'lift' | 'at'; key: string; x: number; y: number; over: string | null; legal: Map<string, string | null> }
+
+type SelKind = 'tag' | 'roll' | 'thing'
+const SEL_KINDS: { k: SelKind; l: string; ic: string; s: string }[] = [
+  { k: 'tag', l: 'Tag', ic: 'fa-tags', s: 'a set — everything carrying it' },
+  { k: 'roll', l: 'Roll kind', ic: 'fa-dice-d20', s: 'every roll of one kind' },
+  { k: 'thing', l: 'Thing', ic: 'fa-arrow-up-right-from-square', s: 'one catalog row' },
+]
+
+/** Pick a target for one or more rules. Every candidate is filtered by
+ *  `targetRefusal` — the audit's own answer — so what is offered is exactly
+ *  what would pass, for every rule it would be written to. */
+export function TargetChooser({ f, srcs, cur, nodes, namesByGid, catalogTypes, onPick }: {
+  f: CatalogFeatureData
+  /** Rule keys the pick is written to (one for a new wire; all of a target's for a retarget). */
+  srcs: string[]
+  /** The selector being replaced, when retargeting. */
+  cur?: string
+  nodes: AuthoredNode[]
+  namesByGid: Map<string, { name: string; kind: string }>
+  catalogTypes: Record<string, 'num' | 'bool'>
+  onPick: (sel: string) => void
+}) {
+  /* ONE AUDIT PER KIND, not per candidate. The target rules judge a selector by
+     what it is — a tag, a roll kind, a feature/spell/item reference — never by
+     its particular name, and every candidate here comes from the catalog, so
+     none can be dangling. Auditing each of a thousand catalog rows (each audit
+     scanning the catalog) froze the tab for most of a minute. */
+  const verdicts = useMemo(() => new Map<string, boolean>(), [f, srcs.join(), nodes, catalogTypes]) // eslint-disable-line react-hooks/exhaustive-deps
+  /* Already targeted by one of these rules: offering it again would be a no-op. */
+  const have = useMemo(() => {
+    const g = project(f, catalogTypes)
+    return new Set(srcs.flatMap(k => {
+      const n = g.nodes.find(x => x.key === k)
+      return n && 'eff' in n ? (n.eff.target ?? []).map(asKey) : []
+    }))
+  }, [f, srcs.join(), catalogTypes]) // eslint-disable-line react-hooks/exhaustive-deps
+  const legal = (c: string) => {
+    if (have.has(asKey(c))) return false
+    const rep = c.startsWith('roll:') ? c : c.startsWith('tag:') ? 'tag:' : c.slice(0, c.indexOf(':') + 1)
+    let ok = verdicts.get(rep)
+    if (ok === undefined) {
+      ok = srcs.every(s => targetRefusal(f, s, c, nodes, catalogTypes) === null)
+      verdicts.set(rep, ok)
+    }
+    return ok
+  }
+  const pool = useMemo(() => ({
+    tag: [...new Set(nodes.flatMap(n => (n.tags ?? []).map(t => `tag:${normalizeTag(t)}`)))].sort(),
+    roll: ROLL_SELECTORS.map(r => `roll:${r}`),
+    thing: [...namesByGid.keys()],
+  }), [nodes, namesByGid])
+  const legalPool = useMemo(() => ({
+    tag: pool.tag.filter(legal), roll: pool.roll.filter(legal), thing: pool.thing.filter(legal),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [pool, f, srcs.join()])
+  const open = SEL_KINDS.filter(K => legalPool[K.k].length || (K.k === 'tag' && legal('tag:new_tag')))
+  const [kind, setKind] = useState<SelKind | null>(cur ? destKind(cur) : open.length === 1 ? open[0].k : null)
+  const [q, setQ] = useState('')
+  const lab = (c: string) => (destKind(c) === 'thing' ? namesByGid.get(c)?.name ?? c : c.slice(c.indexOf(':') + 1))
+  if (!kind) return (
+    <div className={styles.chooser}>
+      {SEL_KINDS.map(K => {
+        const ok = open.some(o => o.k === K.k)
+        return <button key={K.k} type="button" className={styles.qaI} disabled={!ok} onClick={() => setKind(K.k)}>
+          <Icon name={K.ic} />{K.l}<span className={styles.s}>{ok ? K.s : 'not for this rule'}</span>
+        </button>
+      })}
+    </div>
+  )
+  const needle = q.trim().toLowerCase()
+  let items = legalPool[kind].filter(c => !needle || c.toLowerCase().includes(needle) || lab(c).toLowerCase().includes(needle))
+  const typed = kind === 'tag' && needle ? `tag:${normalizeTag(needle)}` : null
+  if (typed && !pool.tag.includes(typed) && legal(typed)) items = [typed, ...items]
+  return (
+    <div className={styles.chooser}>
+      <input className={styles.gateIn} autoFocus value={q} onChange={e => setQ(e.target.value)} spellCheck={false}
+        placeholder={kind === 'tag' ? 'Search, or type a new tag…' : kind === 'roll' ? 'Search roll kinds…' : 'Search the catalog…'}
+        onKeyDown={e => { if (e.key === 'Enter' && items[0]) onPick(items[0]) }} />
+      <div className={styles.chList}>
+        {items.slice(0, 60).map(c => (
+          <button key={c} type="button" className={cx(styles.qaI, c === cur && styles.on)} disabled={c === cur} onClick={() => onPick(c)}>
+            {lab(c)}<span className={styles.s}>{c === cur ? 'current' : kind === 'tag' && !pool.tag.includes(c) ? 'new tag · 0 things' : kind === 'tag' ? `${matchCount(c, nodes)} things` : kind === 'thing' ? namesByGid.get(c)?.kind : ''}</span>
+          </button>
+        ))}
+        {!items.length && <div className={styles.chNone}>Nothing legal matches.</div>}
+      </div>
+    </div>
+  )
+}
 
 export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit, sel: selProp, onSelect, focusTick, fitKey, onForm, rightInset = 10, onChange, onToggleInsp }: GraphProps) {
   const pz = usePanZoom({ skip: t => !!t.closest('[data-node]') })
@@ -207,6 +297,8 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
   const [moving, setMoving] = useState<{ key: string; xy: [number, number] } | null>(null)
   const [wire, setWire] = useState<WireDrag | null>(null)
   const [quick, setQuick] = useState<{ sx: number; sy: number; wx: number; wy: number; src?: string } | null>(null)
+  /** An applies-to wire dropped on open canvas: choose what it points at. */
+  const [pick, setPick] = useState<{ sx: number; sy: number; key: string } | null>(null)
   const [notice, setNotice] = useState<{ text: string; x?: number; y?: number } | null>(null)
   useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 2200); return () => clearTimeout(t) }, [notice])
 
@@ -217,7 +309,8 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
   vsRef.current = vs
   /* A selection whose node is gone (a pending gate that just turned real, a
      deleted rule) is no selection — otherwise every wire dims for nothing. */
-  const sel = selProp && vs.has(selProp) ? selProp : null
+  const sel = selProp && (vs.has(selProp) || selProp.startsWith('w:')) ? selProp : null
+  const selWire = sel?.startsWith('w:') ? { key: sel.slice(2, sel.indexOf('|')), sel: sel.slice(sel.indexOf('|') + 1) } : null
 
   const apply = (r: { ok: true; f: CatalogFeatureData } | { ok: false; why: string }, at?: [number, number]) => {
     if (r.ok) { onChange(r.f); return true }
@@ -288,6 +381,45 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
     window.addEventListener('pointerup', up)
   }
 
+  /* APPLIES-TO. From a rule's square port onto a target: legal where the audit
+     would pass it (targetRefusal), refused with the audit's sentence otherwise.
+     Dropped on open canvas, it opens the chooser there. */
+  function startAt(key: string, e: RPointerEvent) {
+    const f = dRef.current
+    const legal = new Map<string, string | null>()
+    for (const n of g.nodes) {
+      if (n.key === key) continue
+      legal.set(n.key, n.kind === 'dest' ? targetRefusal(f, key, n.sel, nodes, catalogTypes)
+        : 'A target is a tag, a roll kind or a catalog row — drop on open canvas to choose one.')
+    }
+    const [x, y] = pz.toWorld(e.clientX, e.clientY)
+    setWire({ mode: 'at', key, x, y, over: null, legal })
+    const move = (ev: PointerEvent) => {
+      const [wx, wy] = pz.toWorld(ev.clientX, ev.clientY)
+      const over = nodeAt(ev.clientX, ev.clientY)
+      setWire(w => (w ? { ...w, x: wx, y: wy, over } : w))
+    }
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      setWire(null)
+      const over = nodeAt(ev.clientX, ev.clientY)
+      const n = over ? g.nodes.find(x => x.key === over) : null
+      if (n && over !== key) {
+        const why = legal.get(over!)
+        if (why) { setNotice({ text: why }); return }
+        if (n.kind === 'dest') onChange(connectTarget(dRef.current, key, n.sel))
+        return
+      }
+      if (!over && (ev.target as Element | null)?.closest?.(`.${styles.pad}`)) {
+        const r = pz.ref.current!.getBoundingClientRect()
+        setPick({ sx: ev.clientX - r.left, sy: ev.clientY - r.top, key })
+      }
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
   function add(kind: AddKind, at: [number, number], src?: string) {
     setQuick(null)
     const r = addNode(dRef.current, kind, at, blankEffect)
@@ -305,11 +437,15 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
      out. Never while typing — the inspector is full of inputs. */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null
+      const t = e.target instanceof Element ? e.target : null
       if (t?.closest('input, textarea, select, [contenteditable="true"]')) return
-      if (e.key === 'Escape') { setQuick(null); return }
+      if (e.key === 'Escape') { setQuick(null); setPick(null); return }
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selWire) {
+        e.preventDefault()
+        onChange(disconnectTarget(dRef.current, selWire.key, selWire.sel))
+        onSelect(null)
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
         e.preventDefault()
         const r = removeNode(dRef.current, sel, catalogTypes)
         if (apply(r)) onSelect(null)
@@ -404,11 +540,21 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
       juncs.add(e.from)
       wires.push(<path key={`j${e.from}`} className={cx(styles.wAt, gate, sel && !hi && styles.dim)} d={`M${x0},${y0} L${jx - 7},${y0}`} />)
     }
-    wires.push(<path key={`t${e.from}>${e.to}`} className={cx(styles.wAt, gate, sel && (hi ? styles.hi : styles.dim))}
-      d={e.and ? curve(jx + 7, y0, dv.x - 6, dv.y + dv.h / 2) : curve(x0, y0, dv.x - 6, dv.y + dv.h / 2)} markerEnd="url(#fgAtHead)" />)
+    const wk = `w:${e.from}|${dv.n.kind === 'dest' ? dv.n.sel : ''}`
+    const p = e.and ? curve(jx + 7, y0, dv.x - 6, dv.y + dv.h / 2) : curve(x0, y0, dv.x - 6, dv.y + dv.h / 2)
+    wires.push(<path key={`t${e.from}>${e.to}`} className={cx(styles.wAt, gate, sel && (hi || sel === wk ? styles.hi : styles.dim))}
+      d={p} markerEnd="url(#fgAtHead)" />)
+    wires.push(<path key={`h${e.from}>${e.to}`} className={styles.wHit} d={p}
+      onPointerDown={ev => ev.stopPropagation()} onClick={ev => { ev.stopPropagation(); onSelect(wk) }} />)
   }
 
-  if (wire) {
+  if (wire?.mode === 'at') {
+    const a = vs.get(wire.key)
+    const why = wire.over ? wire.legal.get(wire.over) : null
+    const tgt = wire.over && why === null ? vs.get(wire.over) : null
+    if (a) wires.push(<path key="ghost" className={cx(styles.wGhost, styles.at, !!why && styles.refuse)}
+      d={curve(a.x + a.w + 7, a.y + 15, tgt ? tgt.x - 6 : wire.x, tgt ? tgt.y + tgt.h / 2 : wire.y)} />)
+  } else if (wire) {
     const a = vs.get(wire.key)
     if (a) {
       const why = wire.over ? wire.legal.get(wire.over) : null
@@ -504,7 +650,8 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
           if (e.button !== 0) return
           e.stopPropagation()
           const port = (e.target as Element).closest('[data-port]') as HTMLElement | null
-          if (port?.dataset.port === 'out') startWire('out', n.key, e)
+          if (port?.dataset.port === 'at') startAt(n.key, e)
+          else if (port?.dataset.port === 'out') startWire('out', n.key, e)
           else if (port?.dataset.port === 'in') startWire('lift', n.key, e)
           else startMove(n.key, e)
         }}>
@@ -534,9 +681,15 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
           style={{ left: 0, top: HDR + v.body + i * ROW + 11 }} />)}
         {v.out && <span className={cx(styles.port, styles.data, connected.has(n.key) && styles.on, styles[`t_${v.out}`])} style={{ left: v.w, top: HDR + v.body + 11 }} />}
         {'eff' in n && (!!n.eff.target?.length || own) && n.kind !== 'sheet' && (<>
-          <span className={cx(styles.port, styles.at, !!n.eff.target?.length && styles.on)} style={{ left: v.w, top: 15 }} />
+          <span data-port="at" title="Drag onto a target — or onto open canvas to choose one" className={cx(styles.port, styles.at, styles.live, !!n.eff.target?.length && styles.on)} style={{ left: v.w, top: 15 }} />
           {own && <span className={cx(styles.ownMk, n.eff.op === 'grant' && styles.err)}>{n.eff.op === 'grant' ? 'no target' : n.eff.op === 'addUses' ? 'own uses' : 'own roll'}</span>}
-          {(n.eff.target?.length ?? 0) > 1 && <span className={cx(styles.mt, n.eff.match === 'and' && styles.and)}>{n.eff.match === 'and' ? 'and' : 'or'}</span>}
+          {(n.eff.target?.length ?? 0) > 1 && (
+            <button type="button" className={cx(styles.mt, n.eff.match === 'and' && styles.and)} title="How these targets combine — click to switch"
+              onPointerDown={ev => ev.stopPropagation()}
+              onClick={ev => { ev.stopPropagation(); onChange(setMatch(dRef.current, n.key, n.eff.match === 'and' ? 'or' : 'and')) }}>
+              {n.eff.match === 'and' ? 'and' : 'or'}
+            </button>
+          )}
         </>)}
         {n.kind === 'dest' && <span className={styles.atin} />}
         {sev === 'err' && <span className={styles.gbadge}><Icon name="fa-triangle-exclamation" />Error</span>}
@@ -555,7 +708,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
   return (
     <div className={styles.graphPane}>
       <div ref={pz.ref} className={cx(styles.pad, pz.grabbing && styles.grabbing, wire && styles.wiring)} onPointerDown={pz.onPointerDown}
-        onClick={() => { if (!pz.wasDrag()) { onSelect(null); setQuick(null) } }}
+        onClick={() => { if (!pz.wasDrag()) { onSelect(null); setQuick(null); setPick(null) } }}
         onDoubleClick={e => {
           if ((e.target as Element).closest('[data-node]')) return
           const r = pz.ref.current!.getBoundingClientRect()
@@ -591,6 +744,14 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
               <span className={cx(styles.sw, styles[`sw_${K.sw}`])} />{K.l}<span className={styles.s}>{K.s}</span>
             </button>
           ))}
+        </div>
+      )}
+      {pick && (
+        <div className={cx(styles.qadd, styles.wide)} style={{ left: Math.max(8, pick.sx), top: Math.max(8, pick.sy) }}
+          onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+          <div className={styles.qaH}><Icon name="fa-crosshairs" />Applies to a…</div>
+          <TargetChooser f={d} srcs={[pick.key]} nodes={nodes} namesByGid={namesByGid} catalogTypes={catalogTypes}
+            onPick={t => { onChange(connectTarget(dRef.current, pick.key, t)); setPick(null) }} />
         </div>
       )}
       {wire?.over && typeof wire.legal.get(wire.over) === 'string' && (
@@ -700,6 +861,20 @@ export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid
   const gated = (key: string) => g.edges.filter(e => e.kind === 'flow' && e.from === key).map(e => g.nodes.find(x => x.key === e.to)).filter(Boolean) as GNode[]
   const label = (x: GNode) => ('eff' in x ? x.eff.label || x.eff.op : x.kind === 'cond' ? `if ${x.when}` : x.kind === 'ask' ? `ask “${x.ask}”` : x.key)
 
+  if (sel?.startsWith('w:')) {
+    const key = sel.slice(2, sel.indexOf('|')), t = sel.slice(sel.indexOf('|') + 1)
+    const src = g.nodes.find(x => x.key === key)
+    return <>
+      <div className={styles.iblk} style={{ ['--bc' as string]: 'var(--orange)' }}>
+        <b>Applies-to wire</b>One entry in <code>{src ? label(src) : key}</code>’s target list: <code>{t}</code>. Removing
+        the wire removes that entry, and any other spelling that means the same target.
+      </div>
+      <button type="button" className={styles.noteBtn} onClick={() => { update(x => disconnectTarget(x, key, t)); onSelect(null) }}>
+        <Icon name="fa-link-slash" /> Remove wire · Del
+      </button>
+    </>
+  }
+
   if (!n) return (
     <div className={styles.inspEmpty}>
       <div className={styles.t}>No node selected</div>
@@ -769,10 +944,16 @@ export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid
       return <>
         {block(kind === 'tag' ? 'Tag' : kind === 'roll' ? 'Roll kind' : 'Reference', <>
           <code>{n.sel}</code> — {kind === 'roll' ? 'every roll of this kind' : kind === 'tag' ? `${matchCount(n.sel, nodes)} things carry it` : namesByGid.get(n.sel)?.name ?? 'no catalog row'}.
-          Targets live on the rules; change them there.</>, 'var(--orange)')}
+          It is an entry in each rule’s target list below.</>, 'var(--orange)')}
         <div className={styles.conns}>{srcs.map(k => (
           <button key={k.key} type="button" className={styles.conn} onClick={() => onSelect(k.key)}><b>{label(k)}</b></button>
         ))}</div>
+        <span className={styles.gateLab}>Retarget · {srcs.length} rule{srcs.length === 1 ? '' : 's'}</span>
+        <TargetChooser key={n.key} f={d} srcs={srcs.map(x => x.key)} cur={n.sel} nodes={nodes} namesByGid={namesByGid}
+          catalogTypes={catalogTypes} onPick={t => { update(x => retarget(x, n.sel, t)); onSelect(`dest:${asKey(t)}`) }} />
+        <button type="button" className={styles.noteBtn} onClick={() => { update(x => { const r = removeNode(x, n.key, catalogTypes); return r.ok ? r.f : x }); onSelect(null) }}>
+          <Icon name="fa-link-slash" /> Remove from every rule
+        </button>
       </>
     }
   }

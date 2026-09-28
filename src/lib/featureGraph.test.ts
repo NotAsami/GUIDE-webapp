@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatalogFeatureData, GraphEffect } from './database.types.ts'
-import { addNode, autoLayout, editGate, project, regate, removeNode, setPos, type GEdge, type FeatureGraph } from './featureGraph.ts'
+import { addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
 import { blankEffect } from './opSchema.ts'
 
 const feat = (over: Partial<CatalogFeatureData>) => ({ name: 'Test', ...over }) as CatalogFeatureData
@@ -341,4 +341,86 @@ test('addNode: effects come from the form’s defaults, and one-per-feature kind
   assert.equal(addNode(feat({ picks: 2 }), 'picks', [0, 0], blankEffect).ok, false)
   const v = ok(addNode(feat({ vars: [{ name: 'newVariable', kind: 'stored', type: 'num' }] }), 'var', [0, 0], blankEffect))
   assert.equal(v.vars![1].name, 'newVariable2')
+})
+
+/* ---------- applies-to edits ---------- */
+
+const CAT = [{ gid: 'feature:rage' as const, tags: ['barbarian'] }, { gid: 'spell:fire_bolt' as const, tags: ['fire'] }]
+const TGT = feat({ activation: 'bonus', graph: [
+  eff({ id: 'g', op: 'grant', value: '1d6', label: 'Inspire', target: [] }),
+  eff({ id: 'u', op: 'addUses', value: '1', label: 'Regain', target: [] }),
+  eff({ id: 'p', op: 'add', value: '1', label: 'Bonus', target: ['tag:Fire'] }),
+] })
+
+test('targetRefusal answers with the audit: grant takes a roll, addUses a feature', () => {
+  assert.equal(targetRefusal(TGT, 'eff:g', 'roll:d20', CAT), null)
+  assert.match(targetRefusal(TGT, 'eff:g', 'tag:fire', CAT) ?? '', /Grant needs a roll target/)
+  assert.equal(targetRefusal(TGT, 'eff:u', 'feature:rage', CAT), null)
+  assert.match(targetRefusal(TGT, 'eff:u', 'roll:attack', CAT) ?? '', /addUses targets a feature/)
+})
+
+test('targetRefusal refuses a duplicate spelling and a rule with no target at all', () => {
+  assert.match(targetRefusal(TGT, 'eff:p', 'tag:fire', CAT) ?? '', /already applies/)
+  const sv = feat({ graph: [eff({ id: 's', op: 'setVar', variable: 'x', value: '1', label: 'Set' })] })
+  assert.match(targetRefusal(sv, 'eff:s', 'roll:attack', CAT) ?? '', /no target/)
+})
+
+test('connect adds once; disconnect removes every spelling; match toggles', () => {
+  const f1 = connectTarget(TGT, 'eff:p', 'roll:damage')
+  assert.deepEqual(f1.graph![2].target, ['tag:Fire', 'roll:damage'])
+  assert.deepEqual(connectTarget(f1, 'eff:p', 'roll:damage').graph![2].target, ['tag:Fire', 'roll:damage'])
+  assert.deepEqual(disconnectTarget(f1, 'eff:p', 'tag:fire').graph![2].target, ['roll:damage'])
+  assert.equal(setMatch(f1, 'eff:p', 'and').graph![2].match, 'and')
+  assert.equal(setMatch(setMatch(f1, 'eff:p', 'and'), 'eff:p', 'or').graph![2].match, undefined)
+})
+
+test('retarget moves every rule on that target, and the target keeps its place', () => {
+  const two = feat({ graph: [eff({ id: 'a', target: ['tag:fire'] }), eff({ id: 'b', target: ['tag:fire', 'roll:damage'] })], layout: { pos: { 'dest:tag:fire': [9, 9] } } })
+  const f = retarget(two, 'tag:fire', 'tag:cold')
+  assert.deepEqual(f.graph!.map(e => e.target), [['tag:cold'], ['tag:cold', 'roll:damage']])
+  assert.deepEqual(f.layout?.pos?.['dest:tag:cold'], [9, 9])
+  // Retargeting onto a target the rule already has does not duplicate it.
+  assert.deepEqual(retarget(two, 'tag:fire', 'roll:damage').graph![1].target, ['roll:damage'])
+})
+
+test('targetRefusal: an armed rule takes rolls only, and a dangling reference is refused', () => {
+  const armed = feat({ graph: [eff({ id: 'o', op: 'add', value: '1', once: true, target: [] })] })
+  assert.match(targetRefusal(armed, 'eff:o', 'tag:fire', CAT) ?? '', /roll target/)
+  assert.equal(targetRefusal(armed, 'eff:o', 'roll:attack', CAT), null)
+  assert.match(targetRefusal(TGT, 'eff:p', 'spell:nope', CAT) ?? '', /Dangling target/)
+  assert.equal(targetRefusal(TGT, 'eff:p', 'spell:fire_bolt', CAT), null)
+})
+
+test('targetRefusal judges the new selector alone — a list already wrong does not taint it', () => {
+  // A grant whose list is already bad (a tag) may still take a roll.
+  const bad = feat({ graph: [eff({ id: 'g', op: 'grant', value: '1d6', label: 'Inspire', target: ['tag:x'] })] })
+  assert.equal(targetRefusal(bad, 'eff:g', 'roll:d20', CAT), null)
+  // And an error that is not about targets (no label) is not a reason to refuse one.
+  const unlabelled = feat({ graph: [eff({ id: 'g', op: 'grant', value: '1d6', label: '', target: [] })] })
+  assert.equal(targetRefusal(unlabelled, 'eff:g', 'roll:d20', CAT), null)
+})
+
+test('a target’s legality depends on its kind, not its name — what lets the chooser audit once per kind', () => {
+  // The chooser (components/FeatureGraph.tsx TargetChooser) audits one
+  // representative per tag / roll kind / reference prefix. A future audit rule
+  // that judged a selector by its particular name would make that wrong
+  // silently — this is where it would show first.
+  const cat = [
+    { gid: 'feature:rage' as const, tags: ['barbarian', 'rage'] }, { gid: 'feature:bi' as const, tags: ['bard'] },
+    { gid: 'spell:fire_bolt' as const, tags: ['fire'] }, { gid: 'spell:frost' as const, tags: ['cold'] },
+    { gid: 'item:sunblade' as const, tags: ['radiant'] }, { gid: 'item:rope' as const, tags: [] },
+  ]
+  const byKind = (sels: string[]) => [sels.filter(s => s.startsWith('tag:')), ...['feature:', 'spell:', 'item:'].map(p => sels.filter(s => s.startsWith(p)))]
+  const sels = [...cat.map(c => c.gid), ...cat.flatMap(c => c.tags.map(t => `tag:${t}`))]
+  for (const e of [
+    eff({ id: 'x', op: 'add', value: '1' }), eff({ id: 'x', op: 'add', value: '1', once: true }),
+    eff({ id: 'x', op: 'grant', value: '1d6' }), eff({ id: 'x', op: 'addUses', value: '1' }),
+    eff({ id: 'x', op: 'resist' }), eff({ id: 'x', op: 'note', text: 'n' }),
+  ]) {
+    const f = feat({ graph: [e] })
+    for (const group of byKind(sels)) {
+      const verdicts = new Set(group.map(s => targetRefusal(f, 'eff:x', s, cat) === null))
+      assert.equal(verdicts.size, 1, `${e.op}${e.once ? ' (once)' : ''} judges ${group.join(', ')} differently`)
+    }
+  }
 })
