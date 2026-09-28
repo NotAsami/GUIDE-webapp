@@ -224,6 +224,18 @@ test('auto layout places every node once, and a saved position wins', () => {
   assert.equal(new Set(auto).size, auto.length)
 })
 
+test('a target sits level with the rule pointing at it, and two targets never overlap', () => {
+  const g = project(EMBER)
+  const h = () => 80
+  const pos = autoLayout(g, {}, h)
+  assert.equal(pos['dest:tag:weapon'][1] >= pos['eff:k5'][1], true)
+  const ys = g.nodes.filter(n => n.kind === 'dest').map(n => pos[n.key][1]).sort((a, b) => a - b)
+  for (let i = 1; i < ys.length; i++) assert.ok(ys[i] - ys[i - 1] >= 80, `dests overlap: ${ys}`)
+  const lone = project(feat({ graph: [eff({ id: 'a', target: ['roll:attack'] })] }))
+  const p = autoLayout(lone, { 'eff:a': [0, 500] }, h)
+  assert.equal(p['dest:roll:attack'][1], 500)
+})
+
 test('a derived variable sits right of what it reads, and the press right of every variable', () => {
   const pos = autoLayout(project(JUDGEMENT))
   const x = (k: string) => pos[k][0]

@@ -60,8 +60,8 @@
 /* ---------- shell ---------- */
 .editor { position: fixed; top: 60px; bottom: 38px; left: 0; right: 0; z-index: 10; display: grid; grid-template-columns: 288px minmax(0, 1fr); gap: 10px; padding: 10px; }
 .region { position: relative; min-height: 0; min-width: 0; }
-.region .frame { position: absolute; inset: 0; background: var(--beige); opacity: .85; clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px); }
-.region .inner { position: absolute; inset: 1.5px; background: linear-gradient(180deg, #161513, #0e0d0b); clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); display: flex; flex-direction: column; overflow: hidden; }
+.region .frame, .inspFloat .frame { position: absolute; inset: 0; background: var(--beige); opacity: .85; clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px); }
+.region .inner, .inspFloat .inner { position: absolute; inset: 1.5px; background: linear-gradient(180deg, #161513, #0e0d0b); clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); display: flex; flex-direction: column; overflow: hidden; }
 .rCorner { position: absolute; width: 12px; height: 12px; border-color: var(--amber); opacity: .7; z-index: 6; pointer-events: none; }
 .rCorner.tl { top: 7px; left: 7px; border-top: 1.5px solid; border-left: 1.5px solid; }
 .rCorner.br { bottom: 7px; right: 7px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
@@ -75,6 +75,66 @@
 .rScroll::-webkit-scrollbar { width: 7px; }
 .rScroll::-webkit-scrollbar-track { background: rgba(0,0,0,.3); }
 .rScroll::-webkit-scrollbar-thumb { background: rgba(226,176,33,.35); }
+
+/* ---------- Form | Graph | Script (G.U.I.D.E. Feature Graph.html) ----------
+   Region 01 and the inspector both collapse to a 40px rail. The list folding
+   is the one change to the mockup, which only folds the inspector. */
+.editor.listClosed { grid-template-columns: 40px minmax(0, 1fr); }
+.railTog {
+  --cut: 4px; --bc: rgba(212,191,125,.3);
+  flex: 0 0 auto; margin-left: 8px; align-self: center; width: 24px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center;
+  background-color: rgba(0,0,0,.35); border: 1.5px solid var(--bc); color: var(--beige); font-size: 10px; cursor: pointer;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.railTog:hover { color: var(--amber-hot); --bc: var(--amber); }
+.rail { position: relative; z-index: 3; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px 0; background: transparent; border: 0; cursor: pointer; color: var(--beige); min-height: 0; }
+.rail:hover { color: var(--amber-hot); background: rgba(226,176,33,.05); }
+.rail i { font-size: 11px; }
+.railLab { writing-mode: vertical-rl; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .32em; text-transform: uppercase; }
+.railSel { writing-mode: vertical-rl; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .14em; color: var(--amber-hot); max-height: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Never shrinks: sharing the column with the list, a shrinkable audit lost
+   out to the list's far taller natural height and collapsed to a sliver. */
+.listAudit { position: relative; z-index: 2; flex: 0 0 auto; max-height: 35%; overflow-y: auto; background: rgba(0,0,0,.22); border-top: 1px solid rgba(212,191,125,.24); }
+.listAudit .auditHead { border-top: 0; }
+.listAudit::-webkit-scrollbar { width: 7px; }
+.listAudit::-webkit-scrollbar-thumb { background: rgba(226,176,33,.35); }
+
+.center { container-type: inline-size; container-name: fe; }
+.tools { position: relative; z-index: 4; flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 9px 12px 9px 46px; border-bottom: 1px solid rgba(212,191,125,.24); min-width: 0; }
+.modeSeg {
+  --cut: 6px; --bc: var(--amber);
+  flex: 0 0 auto; display: flex; border: 1.5px solid var(--bc);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+.modeSeg button { background: rgba(0,0,0,.4); border: 0; cursor: pointer; font-family: var(--font-mono); font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--muted); padding: 9px 16px; display: flex; align-items: center; gap: 8px; }
+.modeSeg button + button { border-left: 1px solid rgba(226,176,33,.35); }
+.modeSeg button:hover { color: var(--text); }
+.modeSeg button.on { color: var(--amber-hot); background: rgba(226,176,33,.16); }
+.toolsGrow { flex: 1; }
+.sync { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-family: var(--font-mono); font-size: 8px; letter-spacing: .16em; color: var(--beige-dim); text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+.toolsMeta { position: relative; display: flex; align-items: center; font-family: var(--font-mono); font-size: 8px; letter-spacing: .18em; color: var(--muted); text-transform: uppercase; }
+@container fe (max-width: 640px) { .sync { display: none; } }
+
+.views { position: relative; z-index: 1; flex: 1; min-height: 0; display: flex; }
+.pane { position: relative; min-width: 0; min-height: 0; flex: 1; display: flex; flex-direction: column; }
+/* Wider than the mockup's 320: the inspector hosts the form's own EffectCard,
+   whose header row alone needs ~330px. The container rules below fold the
+   card's two-up rows so it reads at this width instead of clipping. */
+.inspFloat { position: absolute; top: 10px; right: 10px; bottom: 10px; width: 390px; z-index: 20; filter: drop-shadow(-10px 0 22px rgba(0,0,0,.6)); }
+.inspFloat.closed { width: 40px; }
+.inspBody { padding: 13px 14px 18px; }
+@container ed (max-width: 460px) {
+  .inspBody .cardHead { flex-wrap: wrap; row-gap: 6px; }
+  .inspBody .grid2 { grid-template-columns: minmax(0, 1fr); }
+}
+.auditFold { position: relative; z-index: 2; flex: 0 0 auto; display: flex; align-items: center; gap: 9px; width: 100%; padding: 10px 13px; cursor: pointer; text-align: left; background: rgba(0,0,0,.22); border: 0; border-top: 1px solid rgba(212,191,125,.24); font-family: var(--font-mono); font-size: 9px; letter-spacing: .26em; color: var(--beige); text-transform: uppercase; }
+.auditFold:hover { color: var(--amber-hot); }
+.auditFold .n { margin-left: auto; font-size: 8px; letter-spacing: .16em; color: var(--muted); }
+.auditFold .n.bad { color: var(--danger-hot); }
+.auditFold i { font-size: 8px; color: var(--amber); }
+.listAudit .auditHead { padding-right: 34px; }
+.auditX { position: absolute; top: 8px; right: 10px; z-index: 3; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; color: var(--beige-dim); cursor: pointer; font-size: 9px; }
+.auditX:hover { color: var(--amber-hot); }
 
 /* ---------- kebab menu ---------- */
 .rhKebab {
@@ -729,7 +789,7 @@ select.in option { background: #14130f; }
    glitch rather than a missing style. */
 .opRootpill, .opBack, .auditItem, .in, .prose, .chip, .seg, .vname, .perm,
 .opb, .efrow, .opSel, .tgt, .flSrch, .rhKebab, .gpX, .swrow button,
-.icongrid button, .blk, .oppal, .toastEl, .matchSeg {
+.icongrid button, .blk, .oppal, .toastEl, .matchSeg, .modeSeg, .railTog {
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
     linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);

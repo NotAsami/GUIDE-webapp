@@ -166,15 +166,22 @@ export function project(f: CatalogFeatureData, catalogTypes: Record<string, 'num
   return { nodes: [...nodes.values()], edges }
 }
 
-const COL_W = 320
-const ROW_H = 150
+const COL_W = 380
+const GAP = 36
 
 /** Where every node goes. Saved positions win; the rest fall into columns in
  *  reading order — what is read, what derives from it, the press, its gates,
- *  what the feature does, the choice, and what it applies to.
- *  ponytail: fixed pitch, blind to node height and to saved neighbours. A real
- *  layered layout when a feature outgrows it. */
-export function autoLayout(g: FeatureGraph, saved: FeatureLayout['pos'] = {}): Record<string, [number, number]> {
+ *  what the feature does, the choice, and what it applies to. A target sits
+ *  level with the average of the rules pointing at it (the mockup's rule),
+ *  pushed down until it clears its neighbours.
+ *  ponytail: column stacking, blind to saved neighbours. A real layered layout
+ *  when a feature outgrows it. */
+export function autoLayout(
+  g: FeatureGraph,
+  saved: FeatureLayout['pos'] = {},
+  /** Rendered height of a node, so a column stacks without overlap. */
+  heightOf: (key: string) => number = () => 110,
+): Record<string, [number, number]> {
   const byKey = new Map(g.nodes.map(n => [n.key, n]))
   /* A derived variable sits one column right of the deepest variable it reads. */
   const depth = new Map<string, number>()
@@ -210,8 +217,22 @@ export function autoLayout(g: FeatureGraph, saved: FeatureLayout['pos'] = {}): R
   }
   const out: Record<string, [number, number]> = {}
   ;[...cols.keys()].sort((a, b) => a - b).forEach((c, i) => {
-    let row = 0
-    for (const key of cols.get(c)!) out[key] = saved[key] ?? [60 + i * COL_W, 60 + row++ * ROW_H]
+    let y = 60
+    const taken: [number, number][] = []
+    for (const key of cols.get(c)!) {
+      if (saved[key]) { out[key] = saved[key]; continue }
+      const h = heightOf(key)
+      if (byKey.get(key)?.kind === 'dest') {
+        const ys = g.edges.filter(e => e.kind === 'target' && e.to === key).map(e => out[e.from]?.[1]).filter((v): v is number => v != null)
+        let dy = ys.length ? Math.round(ys.reduce((a, b) => a + b, 0) / ys.length) : y
+        while (taken.some(([t, th]) => dy < t + th + GAP && dy + h + GAP > t)) dy += 30
+        out[key] = [60 + i * COL_W, dy]
+        taken.push([dy, h])
+        continue
+      }
+      out[key] = [60 + i * COL_W, y]
+      y += h + GAP
+    }
   })
   return out
 }
