@@ -27,7 +27,7 @@ import { useState } from 'react'
 import type { GraphEffect, GraphOp, VarDef } from '../lib/database.types'
 import {
   OPS, OP_ORDER, OP_TITLE, PALETTE, PALETTE_MORE, PALETTE_ACT, PALETTE_SHEET, ROLL_SELECTORS,
-  IS_ACTIVATION, IS_DAMAGE_FLAG, IS_SHEET, type OpField,
+  HAS_TARGET, IS_ACTIVATION, IS_DAMAGE_FLAG, IS_SHEET, type OpField,
 } from '../lib/opSchema'
 import { proseField, useAutoGrow } from '../lib/textareaHooks'
 import { matchCount, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
@@ -47,7 +47,8 @@ const KINDS: { k: SelKind; ic: string; l: string }[] = [
 ]
 
 type PopKind =
-  | { k: 'thing'; ei: number; ti: number }
+  /** `feature`: addUses can only move a feature's counter. */
+  | { k: 'thing'; ei: number; ti: number; only?: 'feature' }
   | { k: 'help'; which: 'when' | 'ask' | 'target' }
   | null
 
@@ -277,7 +278,7 @@ function GraphPopover({ pop, onClose, nodes, namesByGid, onPick }: {
               {(() => {
                 const rows = nodes
                   .map(n => ({ n, meta: namesByGid.get(n.gid) }))
-                  .filter(x => x.meta && (!q.trim() || x.meta.name.toLowerCase().includes(q.toLowerCase().trim())))
+                  .filter(x => x.meta && (!pop.only || x.n.gid.startsWith(`${pop.only}:`)) && (!q.trim() || x.meta.name.toLowerCase().includes(q.toLowerCase().trim())))
                   .slice(0, 60)
                 if (!rows.length) return <div className={styles.pkNone}>Nothing in the catalog matches that.</div>
                 return rows.map(({ n, meta }) => (
@@ -378,12 +379,16 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
   const isFlag = IS_DAMAGE_FLAG(eff.op)
   const isAct = IS_ACTIVATION(eff.op)
   const isSheet = IS_SHEET(eff.op)
+  /* The two activations that reach past this feature each take ONE kind of
+     selector — the audit refuses the others — so the picker offers only that. */
+  const onlyKind: SelKind | null = eff.op === 'addUses' ? 'thing' : eff.op === 'grant' ? 'roll' : null
+  const kinds = onlyKind ? KINDS.filter(K => K.k === onlyKind) : KINDS
 
   const counts = targets.map(t => (t.startsWith('roll:') ? Infinity : matchCount(t, nodes)))
   const thingsAndTags = counts.filter(n => Number.isFinite(n)).reduce((a: number, b) => a + b, 0)
   const rollCount = counts.filter(n => !Number.isFinite(n)).length
   const summary = !targets.length
-    ? { own: true, text: 'this node’s own roll' }
+    ? { own: true, text: eff.op === 'addUses' ? 'this feature’s own uses' : eff.op === 'grant' ? 'no roll yet' : 'this node’s own roll' }
     : {
         own: false,
         zero: thingsAndTags === 0 && rollCount === 0,
@@ -426,8 +431,9 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
       </div>
       <div className={styles.opBlurb}>{cfg?.blurb}</div>
 
-      {/* targets — activations have none: they write a variable on this
-          character rather than reaching out at another node. */}
+      {/* targets — most activations have none: they write a variable on this
+          character. addUses and grant reach out, so they get the picker
+          (HAS_TARGET is the one answer the graph view reads too). */}
       {isSheet ? (
         <div className={styles.tgtOwn}>
           <i className="fa-solid fa-arrow-up-right-dots" />
@@ -436,7 +442,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
             roll built from that number moves with it. It is never a contribution to one roll.
           </span>
         </div>
-      ) : isAct ? (
+      ) : !HAS_TARGET(eff.op) ? (
         <div className={styles.tgtOwn}>
           <i className="fa-solid fa-bolt" />
           <span>No target — this writes one of this feature’s own variables when the player presses Use.</span>
@@ -447,7 +453,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
         {/* How the list combines. Only meaningful once there are two, so it
             appears then — a toggle over one selector is noise, and the audit
             says so if you set it anyway. */}
-        {targets.length > 1 && (
+        {targets.length > 1 && !isAct && (
           <span className={styles.matchSeg}>
             <button type="button" className={cx(eff.match !== 'and' && styles.on)}
               onClick={() => setEffect(ei, { match: undefined })}
@@ -468,7 +474,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
         return (
           <div key={ti} className={cx(styles.tgt, s.kind === 'thing' ? styles.kThing : s.kind === 'tag' ? styles.kTag : styles.kRoll)}>
             <span className={cx(styles.seg, styles.tiny, styles.kseg)}>
-              {KINDS.map(K => (
+              {kinds.map(K => (
                 <button key={K.k} type="button" title={K.l}
                   className={cx(s.kind === K.k && styles.on, s.kind === K.k && styles[K.k])}
                   onClick={() => { if (s.kind !== K.k) setTarget(ti, joinSel(K.k, '')) }}>
@@ -479,7 +485,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
             <span className={styles.tval}>
               {s.kind === 'thing' && (
                 <button type="button" className={styles.pickbtn} style={{ flex: 1 }}
-                  onClick={() => setPop({ k: 'thing', ei, ti })}>
+                  onClick={() => setPop({ k: 'thing', ei, ti, only: eff.op === 'addUses' ? 'feature' : undefined })}>
                   <span className={styles.in} style={{ margin: 0, display: 'block', textAlign: 'left' }}>
                     {namesByGid.get(t)?.name ?? (t || 'Search the catalog…')}
                   </span>
@@ -509,10 +515,14 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
       {!targets.length && (
         <div className={styles.tgtOwn}>
           <i className="fa-solid fa-arrow-turn-down" />
-          <span>No selectors — this node applies to its own roll. Add one to reach out at other things. Multiple selectors are OR.</span>
+          <span>{eff.op === 'addUses'
+            ? 'No selector — this moves this feature’s own use counter. Add a feature to spend or restore its uses instead.'
+            : eff.op === 'grant'
+              ? 'No selector — a grant needs the roll it answers to. roll:d20 is “their next D20 Test”.'
+              : 'No selectors — this node applies to its own roll. Add one to reach out at other things. Multiple selectors are OR.'}</span>
         </div>
       )}
-      <button type="button" className={styles.addmini} onClick={() => setEffect(ei, { target: [...targets, 'tag:'] })}>
+      <button type="button" className={styles.addmini} onClick={() => setEffect(ei, { target: [...targets, joinSel(onlyKind ?? 'tag', '')] })}>
         <i className="fa-solid fa-plus" /> Add selector
       </button>
       </>)}
