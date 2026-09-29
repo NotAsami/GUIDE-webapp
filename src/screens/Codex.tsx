@@ -30,7 +30,7 @@ const FALLBACK_STORIES: ProgressStory[] = []
  *  at all. A card is a COMPLETIONIST measure — how much of this have I finished,
  *  side quests included — so the number is derived wherever there is something
  *  to count, and falls back to the DM's authored one where there is not (region
- *  has no locations table; a relation never completes). Nothing in this file
+ *  has no locations table; a Character card with no personal quests yet). Nothing in this file
  *  hardcodes a percentage or a chapter name. */
 export function Codex() {
   const { character, updateSections, shardTrees } = useOutletContext<RouteContext>()
