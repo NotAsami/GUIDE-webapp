@@ -17,6 +17,9 @@
 - Notes (feature editor) don't resolve markdown in the roll context panel.
 - Feature editor should have Reset on turn in the reset picker (short and long rest) so you don't have to make variables to reset on advancing turn.
 - The filters on the feature panel should be on the same line as the usable & passive filters, so it doesn't take up valuable space on the laptops and to fill the empty space on the right of them.
+- In the handouts menus, what is "On screen" and "filed" like even if you close the handout that was popped out "on screen" its still filed under "on screen" can only the DM change that?
+- The new NPCs only show up on the web-map, not on the actual relations in the "lore screen"
+- Update the handout paper look
 
 ## GRAND UNIFICATION
 - A centralized editor for everything (except shards). Effects, features, spells, items, shopkeepers, loot tables. Exactly like in Dicecloud, where you first set what each node is supposed to be and then edit from there, like you set an item node, and you get stuff regarding items in the editor. Exactly like in Dicecloud (last, post launch, just QOL)
