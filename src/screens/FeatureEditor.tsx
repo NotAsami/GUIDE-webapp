@@ -1419,6 +1419,18 @@ function GuidePanel({ open, helpOn, setHelpOn, onClose }: { open: boolean; helpO
           <span className={styles.k}>Warning</span><span className={styles.v}>Informs only. Publish is allowed — an empty tag can be a tag nothing carries yet.</span>
           <span className={cx(styles.k, styles.ok)}>Clean</span><span className={styles.v}>Nothing outstanding.</span>
         </div>
+
+        <div className={styles.sec}><span className={styles.num}>14</span><span className={styles.fieldLab}>The Graph view</span></div>
+        <p className={styles.gtext}>The same feature as the form, drawn. Every node is a field you could edit in the form, and the inspector opens the form’s own editor for it.</p>
+        <div className={styles.gdl}>
+          <span className={styles.k}>Pale wires</span><span className={styles.v}>The press, through any Ask or Condition, to the outcomes it runs. Drag one from a gate onto an outcome to change its ask / when.</span>
+          <span className={styles.k}>Thin wires</span><span className={styles.v}>What a formula reads. Show-only — edit the formula to change them.</span>
+          <span className={styles.k}>Orange wires</span><span className={styles.v}>Applies-to. Drag a rule’s square port onto a target, or onto open canvas to choose one. Click a wire, Del removes it.</span>
+          <span className={styles.k}>Add · delete</span><span className={styles.v}>Node kinds list, double-click or A to add; Del to delete. A new Condition or Ask stays “unwired” until an outcome is wired into it.</span>
+          <span className={styles.k}>Groups</span><span className={styles.v}>Shift-click or Shift-drag to select several, G to frame them. Layout only — the engine never sees a group.</span>
+          <span className={styles.k}>Zoom</span><span className={styles.v}>Overview shows names only; Detail shows targets, flags and note text.</span>
+          <span className={styles.k}>Class preview</span><span className={styles.v}>Pick a class and level: rules that are definitely off there dim. It only knows level and class grants — anything else stays undetermined, and an ask is never guessed.</span>
+        </div>
         <p className={styles.gtext} style={{ color: 'var(--muted)', fontSize: 13.5 }}>
           Per-field help — each field’s schema description and example — lives behind <strong>Per-field help</strong> above.
           The long-form version of this guide, with worked recipes, is <code>docs/GUIDE_Codex_Authoring.md</code>.
