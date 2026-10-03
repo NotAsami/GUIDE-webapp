@@ -31,13 +31,22 @@ export function fitView(box: Box, w: number, h: number, pad: number, min: number
   return { z, x: (w - bw * z) / 2 - box.x0 * z, y: (h - bh * z) / 2 - box.y0 * z }
 }
 
-export function usePanZoom({ min = 0.25, max = 2.2, skip }: {
+export function usePanZoom({ min = 0.25, max = 2.2, fitMax = 1.15, skip }: {
   min?: number
   max?: number
+  /** The most `fit` may zoom in. The graph caps it so a two-node feature does
+   *  not balloon; a shard tree is meant to fill its stage, so passes its max. */
+  fitMax?: number
   /** A pointerdown on this target starts no pan (a node, a port, a button). */
   skip?: (target: Element) => boolean
 } = {}) {
-  const ref = useRef<HTMLDivElement | null>(null)
+  /* A CALLBACK ref, and the element in state. A stage that mounts after the
+     hook does — the Shard Lattice renders a loading placeholder first — would
+     otherwise never get its wheel listener: an effect keyed on a ref object
+     runs once, while the ref is still empty. */
+  const node = useRef<HTMLDivElement | null>(null)
+  const [el, setEl] = useState<HTMLDivElement | null>(null)
+  const ref = useCallback((n: HTMLDivElement | null) => { node.current = n; setEl(n) }, [])
   const [view, setView] = useState<View>({ x: 0, y: 0, z: 1 })
   const [grabbing, setGrabbing] = useState(false)
   const viewRef = useRef(view)
@@ -45,27 +54,26 @@ export function usePanZoom({ min = 0.25, max = 2.2, skip }: {
   const dragged = useRef(false)
 
   const zoomAt = useCallback((k: number, ox?: number, oy?: number) => {
-    const r = ref.current?.getBoundingClientRect()
+    const r = node.current?.getBoundingClientRect()
     setView(v => zoomView(v, k, ox ?? (r ? r.width / 2 : 0), oy ?? (r ? r.height / 2 : 0), min, max))
   }, [min, max])
 
-  /** Fit a world box. Capped at 1.15 so a two-node feature does not balloon. */
+  /** Fit a world box, zooming in no further than `fitMax`. */
   const fit = useCallback((box: Box, pad = 48, coveredRight = 0) => {
-    const r = ref.current?.getBoundingClientRect()
+    const r = node.current?.getBoundingClientRect()
     if (!r || !r.width || !r.height) return
     // A panel floating over the right edge (an inspector) is not stage.
-    setView(fitView(box, Math.max(200, r.width - coveredRight), r.height, pad, min, Math.min(max, 1.15)))
-  }, [min, max])
+    setView(fitView(box, Math.max(200, r.width - coveredRight), r.height, pad, min, Math.min(max, fitMax)))
+  }, [min, max, fitMax])
 
   /** Centre a world point without changing the zoom. */
   const centreOn = useCallback((wx: number, wy: number, coveredRight = 0) => {
-    const r = ref.current?.getBoundingClientRect()
+    const r = node.current?.getBoundingClientRect()
     if (!r) return
     setView(v => ({ ...v, x: (r.width - coveredRight) / 2 - wx * v.z, y: r.height / 2 - wy * v.z }))
   }, [])
 
   useEffect(() => {
-    const el = ref.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
@@ -74,7 +82,7 @@ export function usePanZoom({ min = 0.25, max = 2.2, skip }: {
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [zoomAt])
+  }, [el, zoomAt])
 
   const onPointerDown = useCallback((e: ReactPointerEvent) => {
     if (e.button !== 0 || (skip && skip(e.target as Element))) return
@@ -98,9 +106,10 @@ export function usePanZoom({ min = 0.25, max = 2.2, skip }: {
 
   /** A client (screen) point in world coordinates. */
   const toWorld = useCallback((cx: number, cy: number): [number, number] => {
-    const r = ref.current?.getBoundingClientRect(), v = viewRef.current
+    const r = node.current?.getBoundingClientRect(), v = viewRef.current
     return r ? [(cx - r.left - v.x) / v.z, (cy - r.top - v.y) / v.z] : [0, 0]
   }, [])
 
-  return { ref, view, zoomAt, fit, centreOn, toWorld, onPointerDown, grabbing, wasDrag: () => dragged.current }
+  /** `ref` goes on the stage; `node` reads it; `el` changes when it mounts. */
+  return { ref, node, el, view, zoomAt, fit, centreOn, toWorld, onPointerDown, grabbing, wasDrag: () => dragged.current }
 }

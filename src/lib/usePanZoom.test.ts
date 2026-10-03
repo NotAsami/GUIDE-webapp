@@ -23,3 +23,9 @@ test('fit centres the box inside the padding', () => {
   assert.equal(v.x + 100 * v.z, 50) // left edge lands on the padding
   assert.equal(v.y + 100 * v.z, (400 - 100 * 2) / 2)
 })
+
+test('fit zooms in no further than the cap it is given', () => {
+  const small = { x0: 0, y0: 0, x1: 100, y1: 100 }
+  assert.equal(fitView(small, 1000, 1000, 8, 0.3, 1.15).z, 1.15) // the graph's cap
+  assert.equal(fitView(small, 1000, 1000, 8, 0.3, 2.6).z, 2.6) // a shard tree fills its stage
+})
