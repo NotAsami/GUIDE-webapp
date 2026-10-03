@@ -13,7 +13,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import type { CatalogFeatureData, GraphEffect, VarDef } from '../lib/database.types'
 import {
-  addNode, autoLayout, connectTarget, detailLines, editGroup, makeGroup, setPositions, ungroup, ovFit, zoomLevel, type ZoomLevel, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
+  addNode, affectingInCatalog, autoLayout, graphFit, connectTarget, detailLines, editGroup, makeGroup, setPositions, ungroup, ovFit, zoomLevel, type ZoomLevel, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
   setMatch, targetRefusal,
   type AddKind, type FeatureGraph as Graph, type GEdge, type GNode, type WireType,
 } from '../lib/featureGraph'
@@ -589,8 +589,8 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
 
   const related = (e: { from: string; to: string }) => !sel || e.from === sel || e.to === sel
   const edgesOf = <K extends GEdge['kind']>(k: K) => g.edges.filter((e): e is Extract<GEdge, { kind: K }> => e.kind === k)
-  const effects = g.nodes.filter(n => n.kind === 'outcome' || n.kind === 'contrib' || n.kind === 'sheet')
-  const formFits = effects.length <= 1 && !g.nodes.some(n => n.kind === 'var')
+  const fit = graphFit(g)
+  const formFits = fit.fit === 'form'
 
   /* ---- wires ---- */
   const wires: ReactNode[] = []
@@ -900,7 +900,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
       {formFits && !quick && (
         <div className={styles.graphNote}>
           <Icon name="fa-circle-info" />
-          <span className={styles.gt2}><b>The form fits this feature</b>One press, one write, nothing derived. The graph shows the same thing in more space.</span>
+          <span className={styles.gt2}><b>The form fits this feature</b>{fit.why}</span>
           <button type="button" className={styles.noteBtn} onClick={onForm}><Icon name="fa-list" /> Back to form</button>
         </div>
       )}
@@ -1013,7 +1013,7 @@ function GateText({ value, tone, placeholder, onCommit, allowEmpty }: { value: s
     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit() } if (e.key === 'Escape') setV(value) }} />
 }
 
-export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid, featureList, onSelect, pressFields, multi, onMulti }: {
+export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid, featureList, onSelect, pressFields, multi, onMulti, library, featureId, onOpenFeature }: {
   d: CatalogFeatureData
   catalogTypes: Record<string, 'num' | 'bool'>
   sel: string | null
@@ -1024,6 +1024,11 @@ export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid
   onSelect: (key: string | null) => void
   /** The form's own activation / uses / picks block, for the press and picks nodes. */
   pressFields: ReactNode
+  /** The feature catalog, for a target's "Affected by" and a feature target's peek. */
+  library: { id: string; name: string; category?: string; graph?: GraphEffect[]; tags?: string[]; light_description?: string }[]
+  /** The open feature's id, so its own rules select instead of navigating. */
+  featureId: string | null
+  onOpenFeature: (id: string) => void
   multi: string[]
   onMulti: (keys: string[]) => void
 }) {
@@ -1159,6 +1164,35 @@ export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid
         <button type="button" className={styles.noteBtn} onClick={() => { update(x => { const r = removeNode(x, n.key, catalogTypes); return r.ok ? r.f : x }); onSelect(null) }}>
           <Icon name="fa-link-slash" /> Remove from every rule
         </button>
+        {(() => {
+          /* PEEK (mockup peekHTML): a feature target, as the catalog has it. */
+          const row = n.sel.startsWith('feature:') ? library.find(r => `feature:${r.id}` === n.sel) : undefined
+          if (!row) return null
+          return <div className={styles.iblk} style={{ ['--bc' as string]: 'var(--beige)', marginTop: 12 }}>
+            <b>Peek · {row.category ?? 'feature'}</b>
+            <span className={styles.peekName}>{row.name}</span>
+            {!!row.tags?.length && <span className={styles.peekTags}>{row.tags.map(t => `tag:${normalizeTag(t)}`).join(' ')}</span>}
+            {row.light_description && <span className={styles.peekText}><Inline text={row.light_description} /></span>}
+          </div>
+        })()}
+        {(() => {
+          /* AFFECTED BY (mockup renderInspAt): every rule in the feature catalog that
+             reaches this target — the open feature's own rules select their node. */
+          const tags = destKind(n.sel) === 'thing' ? nodes.find(x => x.gid === n.sel)?.tags ?? [] : []
+          const live = featureId ? [...library.filter(r => r.id !== featureId), { id: featureId, name: d.name ?? '', graph: d.graph }] : library
+          const rows = affectingInCatalog(n.sel, live, tags)
+          return <>
+            <span className={styles.gateLab} style={{ marginTop: 14 }}>Affected by · {rows.length} · across the feature catalog</span>
+            <div className={styles.conns}>{rows.map((r, i) => {
+              const mine = r.featureId === featureId
+              const own = mine ? g.nodes.find(x => 'eff' in x && (x.eff.label || x.eff.op) === r.label) : undefined
+              return <button key={i} type="button" className={styles.conn} title={mine ? 'This feature' : `Open ${r.featureName}`}
+                onClick={() => (own ? onSelect(own.key) : !mine && onOpenFeature(r.featureId))}>
+                <b>{r.label}</b><span className={styles.cs}>{mine ? 'this feature' : r.featureName} · {r.gated === 'always' ? 'always' : `${r.gated}-gated`}</span>
+              </button>
+            })}{!rows.length && <span className={styles.chNone}>Nothing in the feature catalog aims here.</span>}</div>
+          </>
+        })()}
       </>
     }
   }

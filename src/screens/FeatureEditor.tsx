@@ -56,6 +56,7 @@ import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
 import { ProsePreview } from '../components/ProsePreview'
 import { FeatureGraph, FeatureScript, GraphInspector, NodeKinds, auditNodeKey } from '../components/FeatureGraph'
+import { graphFit, project } from '../lib/featureGraph'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
 
@@ -211,6 +212,16 @@ export default function FeatureEditor() {
     return { id: r.id, name: c.name, features: c.features ?? [], vars: c.vars }
   }), [classLib.classes])
   const featureNames = useMemo(() => new Map(lib.features.map(r => [r.id, featureContent(r).name ?? ''])), [lib.features])
+  /* The catalog as the Graph inspector reads it ("Affected by", peek), and which
+     features read better as a graph (the list's tag). Memoised on the library,
+     like the per-row audit dot, so a keystroke does not re-project 300 rows. */
+  const library = useMemo(() => lib.features.map(r => {
+    const c = featureContent(r)
+    return { id: r.id, name: c.name ?? '', category: c.category, graph: c.graph, tags: c.tags, light_description: c.light_description }
+  }), [lib.features])
+  const graphHelps = useMemo(() => new Set(lib.features
+    .filter(r => graphFit(project(featureContent(r), catalogTypes)).fit === 'graph').map(r => r.id)), [lib.features, catalogTypes])
+  const draftFit = useMemo(() => (draft ? graphFit(project(draft, catalogTypes)) : null), [draft, catalogTypes])
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
@@ -584,6 +595,12 @@ export default function FeatureEditor() {
       {m === 'form' ? (
         <div className={styles.rScroll} ref={scrollRef}>
           <div className={cx(styles.insp, helpOn && styles.helpon)}>
+            {draft && draftFit?.fit === 'graph' && (
+              <div className={styles.fvHint}>
+                <i className="fa-solid fa-diagram-project" /><span>{draftFit.why}</span>
+                <button type="button" className={styles.fvBtn} onClick={() => setMode('graph')}>Open graph</button>
+              </div>
+            )}
             {!draft ? emptyEl : (
               <FeatureForm
                 d={draft} previewScope={pvScope} set={set} setEffect={setEffect} setVar={setVar} update={update}
@@ -760,6 +777,7 @@ export default function FeatureEditor() {
                                   <span className={styles.frM}>
                                     <span className={styles.frSrc}>{SOURCES[d.category ?? 'other'] ?? d.category}</span>
                                     {m.via && <span className={cx(styles.frSrc, styles.frHit)}>{m.via}</span>}
+                                    {graphHelps.has(r.id) && <span className={cx(styles.frSrc, styles.frGraph)} title="Reads better in the Graph view">graph helps</span>}
                                     {r.draft && <span className={styles.frDrf}>draft</span>}
                                     {!d.published && !r.draft && <span className={styles.frDrf}>unpublished</span>}
                                   </span>
@@ -896,6 +914,7 @@ export default function FeatureEditor() {
                           <GraphInspector d={draft} catalogTypes={catalogTypes} sel={sel} update={update}
                             nodes={nodes} namesByGid={namesByGid} featureList={featureList}
                             onSelect={setSel} multi={multi} onMulti={setMulti}
+                            library={library} featureId={creating ? null : selId} onOpenFeature={id => select(id)}
                             pressFields={<ActivationFields d={draft} set={set} />} />
                         </div>
                       </div>
