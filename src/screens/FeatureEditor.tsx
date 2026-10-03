@@ -101,7 +101,7 @@ function useFolderCollapse() {
 type Mode = 'form' | 'graph' | 'script'
 /** Which view is up and which rails are folded — the editor opens the way it
  *  was left. Same persistence pattern as the folders above. */
-type EditorView = { mode: Mode; list: boolean; insp: boolean; audit: boolean }
+type EditorView = { mode: Mode; list: boolean; insp: boolean; audit: boolean; pv?: { cls: string; lv: number } | null }
 const VIEW_KEY = 'guide.featureEditor.view'
 const VIEW0: EditorView = { mode: 'form', list: true, insp: true, audit: true }
 const MODES: { m: Mode; l: string; ic: string }[] = [
@@ -145,6 +145,8 @@ export default function FeatureEditor() {
   /** The selected graph node (a lib/featureGraph key), shared by canvas, script and inspector. */
   const [sel, setSel] = useState<string | null>(null)
   const [focusTick, setFocusTick] = useState(0)
+  /** Two or more node keys selected together (Shift-click / marquee). */
+  const [multi, setMulti] = useState<string[]>([])
   /* A folded inspector opens for a selection and folds again without one — the
      mockup's rule. Folding it by hand wins until the selection changes. */
   const [inspAuto, setInspAuto] = useState(false)
@@ -201,6 +203,14 @@ export default function FeatureEditor() {
     ...raceLib.races.map(raceContent),
     ...bgLib.backgrounds.map(backgroundContent),
   ].filter(Boolean) as VarOwner[], [classLib.classes, raceLib.races, bgLib.backgrounds])
+
+  /* The Graph view's class-progression lens: every class with its grants, and
+     feature names so a grant can become `has_<name>`. */
+  const progClasses = useMemo(() => classLib.classes.map(r => {
+    const c = classContent(r)
+    return { id: r.id, name: c.name, features: c.features ?? [], vars: c.vars }
+  }), [classLib.classes])
+  const featureNames = useMemo(() => new Map(lib.features.map(r => [r.id, featureContent(r).name ?? ''])), [lib.features])
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
@@ -395,11 +405,11 @@ export default function FeatureEditor() {
 
   /* ---- actions ---- */
   function select(id: string) {
-    setSelId(id); setCreating(false); setOpenEffect(null); setMenuOn(false); setSel(null)
+    setSelId(id); setCreating(false); setOpenEffect(null); setMenuOn(false); setSel(null); setMulti([])
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
   function onNew() {
-    setSelId(null); setCreating(true); setOpenEffect(null); setMenuOn(false); setSel(null)
+    setSelId(null); setCreating(true); setOpenEffect(null); setMenuOn(false); setSel(null); setMulti([])
     setOpen({ vars: false, effects: false })
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
@@ -590,7 +600,8 @@ export default function FeatureEditor() {
         <FeatureGraph d={draft} catalogTypes={catalogTypes} nodes={nodes} namesByGid={namesByGid} ready={ready}
           audit={audit} sel={sel} onSelect={setSel} focusTick={focusTick}
           fitKey={creating ? 'new' : selId ?? ''} onForm={() => setMode('form')}
-          rightInset={inspOpen ? 410 : 60} onChange={f => update(() => f)}
+          rightInset={inspOpen ? 410 : 60} onChange={f => update(() => f)} multi={multi} onMulti={setMulti}
+          progression={{ classes: progClasses, names: featureNames, featureId: creating ? null : selId, pv: view.pv ?? null, onPv: pv => setView(v => ({ ...v, pv })) }}
           onToggleInsp={() => { setView(v => ({ ...v, insp: !inspOpen })); setInspAuto(false) }} />
       ) : (
         <FeatureScript d={draft} catalogTypes={catalogTypes} sel={sel} onSelect={setSel} />
@@ -884,7 +895,7 @@ export default function FeatureEditor() {
                         <div className={styles.inspBody}>
                           <GraphInspector d={draft} catalogTypes={catalogTypes} sel={sel} update={update}
                             nodes={nodes} namesByGid={namesByGid} featureList={featureList}
-                            onSelect={setSel}
+                            onSelect={setSel} multi={multi} onMulti={setMulti}
                             pressFields={<ActivationFields d={draft} set={set} />} />
                         </div>
                       </div>

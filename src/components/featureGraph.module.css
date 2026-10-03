@@ -133,6 +133,59 @@
 .jd { width: 14px; height: 14px; background: var(--orange); transform: rotate(45deg); border: 2px solid #140f08; box-shadow: 0 0 0 1.5px var(--orange); }
 .jc { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--orange); background: rgba(14,12,9,.9); padding: 1px 5px; white-space: nowrap; transform: translateY(-14px); }
 
+/* ---------- semantic zoom (slice 4a, mockup .zl-over / .gdet / .ov) ---------- */
+.gdet { flex: 0 0 auto; padding: 1px 12px; border-top: 1px dashed rgba(212,191,125,.18); display: flex; flex-direction: column; justify-content: center; background: rgba(0,0,0,.18); overflow: hidden; }
+.dl { font-family: var(--font-mono); font-size: 8.5px; line-height: 15px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k_contrib .gdet { padding-left: 16px; }
+.k_cond .gdet { padding-left: 20px; padding-right: 20px; }
+.ov { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; justify-content: safe center; gap: 3px; padding: 6px 12px 6px 20px; pointer-events: none; overflow: hidden; }
+.kDest .ov { padding-left: 32px; } .k_press .ov { padding-right: 30px; } .k_cond .ov { padding-left: 24px; padding-right: 24px; }
+.ovK { font-family: var(--font-mono); font-size: min(calc(7.5px * var(--inv)), calc(var(--fmax) * .5)); letter-spacing: .18em; text-transform: uppercase; color: var(--kc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ovN { font-family: var(--font-mono); font-size: min(calc(12.5px * var(--inv)), var(--fmax)); line-height: 1.1; color: var(--text); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ovS { font-family: var(--font-mono); font-size: min(calc(8.5px * var(--inv)), calc(var(--fmax) * .58)); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gn.sel .ovN { color: var(--amber-hot); }
+.zlOver .gh, .zlOver .gb, .zlOver .growR, .zlOver .gdet { opacity: 0; }
+.zlOver .port, .zlOver .ownMk, .zlOver .mt, .zlOver .jc, .zlOver .atin { opacity: 0; pointer-events: none; }
+.zlOver .gbadge { transform: scale(min(calc(var(--inv) * .8), 2.6)); transform-origin: right bottom; }
+.zlOver .wData { stroke-width: min(calc(1.2px * var(--inv)), 4px); }
+.zlOver .wAt { stroke-width: min(calc(1.4px * var(--inv)), 4.5px); }
+.gh, .gb, .growR, .gdet, .port, .ownMk, .mt, .jc, .atin { transition: opacity .22s ease; }
+.zl { position: absolute; left: 10px; bottom: 52px; z-index: 6; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.zlSeg { display: flex; border: 1px solid rgba(226,176,33,.5); background: rgba(10,9,8,.9); }
+.zlSeg button { background: none; border: 0; color: var(--muted); font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .18em; text-transform: uppercase; padding: 6px 9px; cursor: pointer; }
+.zlSeg button + button { border-left: 1px solid rgba(226,176,33,.25); }
+.zlSeg button:hover { color: var(--text); }
+.zlSeg button.on { color: #140f08; background: var(--amber); }
+.zlChip { font-family: var(--font-mono); font-size: 8px; letter-spacing: .14em; color: var(--beige-dim); background: rgba(10,9,8,.85); padding: 4px 7px; }
+
+/* ---------- multi-select + groups (slice 4b, mockup .grp / .marq / .msel) ---------- */
+.grp { position: absolute; z-index: 0; border: 1px dashed rgba(212,191,125,.2); background: rgba(212,191,125,.018); pointer-events: none; }
+.grp.sel { border: 1.5px solid rgba(226,176,33,.7); background: rgba(226,176,33,.03); }
+.gl { pointer-events: auto; cursor: grab; position: absolute; left: 12px; top: -9px; display: flex; align-items: center; gap: 8px; background: #12110f; padding: 0 8px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .24em; text-transform: uppercase; color: var(--beige); white-space: nowrap; }
+.grp.sel .gl { color: var(--amber-hot); }
+.gs { color: var(--muted); letter-spacing: .12em; font-size: 8.5px; }
+.zlOver .gl { transform: scale(min(calc(var(--inv) * .6), 2)); transform-origin: left bottom; }
+.zlOver .gs { display: none; }
+.gn.msel .gf { background: var(--amber); opacity: 1; }
+.gn.msel { filter: drop-shadow(0 0 6px rgba(226,176,33,.4)); }
+.marq { position: absolute; z-index: 8; border: 1px dashed var(--amber-hot); background: rgba(226,176,33,.07); pointer-events: none; }
+
+/* ---------- class-progression lens (slice 4c, mockup .probe / .off) ---------- */
+.probe { position: absolute; left: 10px; top: 10px; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; max-width: calc(100% - 460px); padding: 5px 6px 5px 10px; background: rgba(10,9,8,.92); border: 1px solid rgba(212,191,125,.3); font-family: var(--font-mono); font-size: 8px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.selw { position: relative; display: block; }
+.probeSel { appearance: none; background: rgba(0,0,0,.4); border: 1.5px solid rgba(212,191,125,.35); color: var(--beige); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; padding: 5px 22px 5px 9px; cursor: pointer; }
+.probeSel option { background: #14130f; color: var(--text); text-transform: none; }
+.selw::after { content: "▾"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--amber); pointer-events: none; font-size: 9px; }
+.seg2 { display: flex; border: 1.5px solid rgba(212,191,125,.35); }
+.seg2 button { background: rgba(0,0,0,.4); border: 0; padding: 5px 10px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .2em; color: var(--muted); cursor: pointer; }
+.seg2 button + button { border-left: 1px solid rgba(212,191,125,.2); }
+.seg2 button.on { color: var(--amber-hot); background: rgba(226,176,33,.14); }
+.pvOn { color: var(--amber-hot); border: 1px solid var(--amber); padding: 3px 7px; letter-spacing: .16em; }
+.gn.off { opacity: .36; }
+.gn.off .gf { background: var(--beige-dim); }
+.wData.off, .wArm.off, .wOffer.off, .wAt.off { opacity: .12; }
+.gbadge.offB { background: #111; color: var(--beige); border-color: var(--beige-dim); }
+
 /* ---------- authoring (slice 3) ---------- */
 .gn { touch-action: none; }
 .gn.lifting { z-index: 5; filter: drop-shadow(0 10px 18px rgba(0,0,0,.6)); }
