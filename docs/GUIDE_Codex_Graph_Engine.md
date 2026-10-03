@@ -906,6 +906,12 @@ escape hatch). Tag input with autocomplete. Live match count. Inline audit.
 **Panes 1 and 3 first.** The middle pane is the most deferrable and the most likely to eat
 a week on layout tuning. Add it once there are enough features to need an overview.
 
+**Since (2026-10):** the Feature Editor gained a **Graph view** — but of ONE feature's
+internals (its press, gates, rules, variables and targets; `GUIDE_Codex_Feature_Editor.md`
+§11), from the "Feature Graph" mockup. The catalog-wide graph described above — features
+linked to what they reference across the catalog — is still not built. When it is,
+`lib/usePanZoom.ts` is the canvas and `lib/featureGraph.ts autoLayout` the column pattern.
+
 ---
 
 ## 28. Scope correction
@@ -1505,7 +1511,7 @@ discharged: `EffectForm.addTag` imports it, and the Feature Editor never had a s
 
 | | Why |
 |---|---|
-| **Pane 02, the dependency graph** | §27 defers it by name; its own build order says panes 1 and 3 first. Ships as the reserved overlay the mockup specifies, so its absence is a stated decision rather than an oversight. |
+| **Pane 02, the dependency graph** | §27 defers it by name; its own build order says panes 1 and 3 first. Ships as the reserved overlay the mockup specifies, so its absence is a stated decision rather than an oversight. *(2026-10: the overlay is gone — the editor's Form · Graph · Script switch replaced it. That Graph view is one feature's internals; the catalog-wide graph is still deferred, see §27.)* |
 | **The five activation ops** (`heal`, `tempHp`, `grantEffect`, `setVar`, `addVar`) | Activations are a later slice. `grantEffect` additionally needs `EffectRef`'s shape and a snapshot-on-grant, because players cannot read `effect_catalog` either. The `reference` field type is declared in the schema and has no control yet — the type costs a union member; the control waits for a caller. |
 | **Persisted empty folders** | `folder` is a name on the feature and the folder list is derived from its members, so there is no second store to drift. The cost is that a folder emptied of its last member stops existing. |
 
