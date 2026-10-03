@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatalogFeatureData, GraphEffect } from './database.types.ts'
-import { detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
+import { affectingInCatalog, graphFit, detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
 import { blankEffect } from './opSchema.ts'
 
 const feat = (over: Partial<CatalogFeatureData>) => ({ name: 'Test', ...over }) as CatalogFeatureData
@@ -477,4 +477,46 @@ test('rename and ungroup touch the frame only, never the nodes', () => {
 test('deleting a grouped node drops it from its group (prune)', () => {
   const f = ok(removeNode(makeGroup(PLAIN, ['eff:a', 'eff:b'], 'G'), 'eff:a'))
   assert.deepEqual(f.layout?.groups?.[0].m, ['eff:b'])
+})
+
+/* ---------- graph helps / form fits; affected by ---------- */
+
+test('one rule decides which view a feature reads best in', () => {
+  assert.equal(graphFit(project(BRUTAL)).fit, 'graph') // two has_* plus the turn counter, two offers
+  assert.equal(graphFit(project(JUDGEMENT)).fit, 'graph') // a derived chain
+  assert.equal(graphFit(project(SECOND_WIND)).fit, 'form')
+  const plain = feat({ graph: [1, 2, 3, 4].map(i => eff({ id: `p${i}`, op: 'add', value: '1', target: ['roll:attack'] })) })
+  assert.equal(graphFit(project(plain)).fit, 'form')
+  // an ask with a condition under it is two gates: wiring worth drawing
+  assert.equal(graphFit(project(PLAIN)).fit, 'graph')
+  // one gate alone is not
+  const oneGate = feat({ activation: 'action', graph: [eff({ id: 'g', op: 'setHp', value: '1', ask: 'Q?' })] })
+  assert.equal(graphFit(project(oneGate)).fit, 'form')
+})
+
+test('affected by: the same selector, or for a thing its gid and its tags, across the feature catalog', () => {
+  const lib = [
+    { id: 'a', name: 'Alpha', graph: [eff({ id: 'x', label: 'Hot', target: ['tag:Fire'] }), eff({ id: 'y', label: 'Melee', target: ['roll:damage.melee'], when: 'w' })] },
+    { id: 'b', name: 'Beta', graph: [eff({ id: 'z', label: 'Direct', target: ['spell:fire_bolt'], ask: 'Q?' })] },
+  ]
+  assert.deepEqual(affectingInCatalog('tag:fire', lib).map(r => r.label), ['Hot'])
+  assert.deepEqual(affectingInCatalog('roll:damage.melee', lib).map(r => [r.label, r.gated]), [['Melee', 'when']])
+  // a thing is reached by its gid AND by any tag it carries
+  assert.deepEqual(affectingInCatalog('spell:fire_bolt', lib, ['fire']).map(r => `${r.featureName}:${r.label}:${r.gated}`).sort(), ['Alpha:Hot:always', 'Beta:Direct:ask'])
+})
+
+test('each graph-helps reason stands on its own', () => {
+  const derivedOnly = feat({ vars: [
+    { name: 'a', kind: 'stored', type: 'num' }, { name: 'b', kind: 'derived', formula: 'a + 1' }, { name: 'c', kind: 'derived', formula: 'b * 2' },
+  ], graph: [eff({ id: 'r', value: 'c', target: ['roll:attack'] })] })
+  assert.equal(graphFit(project(derivedOnly)).fit, 'graph')
+  const extOnly = feat({ graph: [eff({ id: 'r', value: '1', when: 'has_x && has_y', target: ['roll:attack'] })] })
+  assert.equal(graphFit(project(extOnly)).fit, 'graph')
+  const oneExt = feat({ graph: [eff({ id: 'r', value: '1', when: 'has_x', target: ['roll:attack'] })] })
+  assert.equal(graphFit(project(oneExt)).fit, 'form')
+})
+
+test('two offers competing for Picks is reason enough on its own', () => {
+  const offersOnly = feat({ graph: [eff({ id: 'a', once: true, ask: 'A?', target: ['roll:attack'] }), eff({ id: 'b', once: true, ask: 'B?', target: ['roll:attack'] })] })
+  assert.equal(graphFit(project(offersOnly)).fit, 'graph')
 })

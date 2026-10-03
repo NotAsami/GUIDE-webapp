@@ -186,6 +186,12 @@
 .wData.off, .wArm.off, .wOffer.off, .wAt.off { opacity: .12; }
 .gbadge.offB { background: #111; color: var(--beige); border-color: var(--beige-dim); }
 
+/* ---------- target inspector: peek + affected by ---------- */
+.peekName { display: block; font-family: var(--font-display); font-size: 16px; color: var(--amber-hot); margin: 4px 0 2px; }
+.peekTags { display: block; font-family: var(--font-mono); font-size: 8.5px; color: var(--muted); margin-bottom: 6px; overflow-wrap: anywhere; }
+.peekText { display: block; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.cs { margin-left: auto; padding-left: 8px; font-size: 8px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
 /* ---------- authoring (slice 3) ---------- */
 .gn { touch-action: none; }
 .gn.lifting { z-index: 5; filter: drop-shadow(0 10px 18px rgba(0,0,0,.6)); }

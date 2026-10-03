@@ -176,6 +176,50 @@ export function project(f: CatalogFeatureData, catalogTypes: Record<string, 'num
   return { nodes: [...nodes.values()], edges }
 }
 
+/* ---------- which view reads it best ---------- */
+
+/** Does this feature read better as a graph? ONE rule for the list tag, the
+ *  form's hint and the canvas note. The mockup hand-set it per feature; derived,
+ *  it cannot go stale. The graph helps when the WIRING is the hard part: values
+ *  feeding values, identifiers from elsewhere, gates, or a choice between offers. */
+export function graphFit(g: FeatureGraph): { fit: 'graph' | 'form'; why: string } {
+  const count = (p: (n: GNode) => boolean) => g.nodes.filter(p).length
+  const derived = count(n => n.kind === 'var' && n.def.kind === 'derived')
+  const ext = count(n => n.kind === 'ext')
+  const gates = count(n => n.kind === 'cond' || n.kind === 'ask')
+  const offers = g.edges.filter(e => e.kind === 'offer').length
+  const rules = count(n => n.kind === 'outcome' || n.kind === 'contrib' || n.kind === 'sheet')
+  if (derived >= 2) return { fit: 'graph', why: `${derived} derived variables feed each other here. The chain is easier to read as a graph.` }
+  if (ext >= 2) return { fit: 'graph', why: `${rules} rule${rules === 1 ? '' : 's'} read ${ext} identifiers declared elsewhere. The coupling is easier to see as a graph.` }
+  if (gates >= 2) return { fit: 'graph', why: `The press runs through ${gates} gates. Which outcome sits behind which is easier to see as a graph.` }
+  if (offers >= 2) return { fit: 'graph', why: `${offers} offers compete for its Picks. The choice is easier to see as a graph.` }
+  return { fit: 'form', why: 'One press, plain rules, nothing derived. The graph shows the same thing in more space.' }
+}
+
+/* ---------- what in the catalog reaches a target ---------- */
+
+export type Affecting = { featureId: string; featureName: string; label: string; gated: 'always' | 'when' | 'ask' }
+
+/** Every rule in the FEATURE catalog whose target list reaches `sel`: the same
+ *  selector for a tag or roll kind; for a thing, its gid or any tag it carries —
+ *  the engine's own matching (asKey). Features only: spells, items and shards
+ *  keep their rules in catalogs the Feature Editor does not load. */
+export function affectingInCatalog(
+  sel: string,
+  features: { id: string; name: string; graph?: GraphEffect[] }[],
+  thingTags: string[] = [],
+): Affecting[] {
+  const keys = new Set([asKey(sel), ...thingTags.map(t => asKey(`tag:${t}`))])
+  const out: Affecting[] = []
+  for (const f of features) {
+    for (const e of f.graph ?? []) {
+      if (!(e.target ?? []).some(t => keys.has(asKey(t)))) continue
+      out.push({ featureId: f.id, featureName: f.name, label: e.label || e.op, gated: e.ask?.trim() ? 'ask' : e.when?.trim() ? 'when' : 'always' })
+    }
+  }
+  return out
+}
+
 /* ---------- semantic zoom ---------- */
 
 export type ZoomLevel = 'over' | 'normal' | 'detail'
