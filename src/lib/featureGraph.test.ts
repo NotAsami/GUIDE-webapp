@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatalogFeatureData, GraphEffect } from './database.types.ts'
-import { addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
+import { detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
 import { blankEffect } from './opSchema.ts'
 
 const feat = (over: Partial<CatalogFeatureData>) => ({ name: 'Test', ...over }) as CatalogFeatureData
@@ -423,4 +423,58 @@ test('a target’s legality depends on its kind, not its name — what lets the 
       assert.equal(verdicts.size, 1, `${e.op}${e.once ? ' (once)' : ''} judges ${group.join(', ')} differently`)
     }
   }
+})
+
+/* ---------- semantic zoom ---------- */
+
+test('zoom levels switch at the mockup’s thresholds', () => {
+  assert.deepEqual([0.3, 0.5, 0.51, 1, 1.14, 1.15, 2].map(zoomLevel), ['over', 'over', 'normal', 'normal', 'normal', 'detail', 'detail'])
+})
+
+test('detail lines say what the normal card leaves out', () => {
+  const g = project(BRUTAL)
+  const n = (k: string) => g.nodes.find(x => x.key === k)!
+  const add = detailLines(n('eff:add'), BRUTAL, g)
+  assert.ok(add[0].startsWith('label · Add {'))
+  assert.equal(add[1], 'targets · roll:damage.melee')
+  assert.equal(add[2], 'once')
+  assert.ok(detailLines(n('eff:fb'), BRUTAL, g).includes('once · offer · picks'))
+  assert.equal(detailLines(n('picks'), BRUTAL, g)[0], 'Forceful Blow · Hamstring Blow')
+  for (const x of g.nodes) assert.ok(detailLines(x, BRUTAL, g).length <= 3)
+})
+
+test('overview text fits: a short name gets a big face, a long one shrinks, nothing overflows', () => {
+  const short = ovFit('rage', 240, 90, false), long = ovFit('has_improved_brutal_strike_enhanced', 240, 90, false)
+  assert.ok(short.fs > long.fs)
+  assert.ok(long.lines <= 3)
+  assert.equal(ovFit('x'.repeat(400), 100, 40, true).fs, 9)
+})
+
+/* ---------- multi-move and groups ---------- */
+
+test('setPositions writes several nodes in one edit, rounded', () => {
+  const f = setPositions(PLAIN, { 'eff:a': [1.4, 2.6], 'eff:b': [10, 20] })
+  assert.deepEqual(f.layout?.pos, { 'eff:a': [1, 3], 'eff:b': [10, 20] })
+})
+
+test('a node is in at most one group; emptying a group removes it', () => {
+  const f1 = makeGroup(PLAIN, ['eff:a', 'eff:b'], 'Pair')
+  const f2 = makeGroup(f1, ['eff:a', 'eff:b', 'eff:c'], 'All')
+  assert.deepEqual(f2.layout?.groups, [{ m: ['eff:a', 'eff:b', 'eff:c'], l: 'All', s: '' }])
+  const f3 = makeGroup(f1, ['eff:b'], 'Solo')
+  assert.deepEqual(f3.layout?.groups?.map(g => g.m), [['eff:a'], ['eff:b']])
+})
+
+test('rename and ungroup touch the frame only, never the nodes', () => {
+  const f1 = setPos(makeGroup(PLAIN, ['eff:a'], 'G'), 'eff:a', [5, 5])
+  assert.equal(editGroup(f1, 0, { l: 'Renamed', s: 'sub' }).layout?.groups?.[0].l, 'Renamed')
+  const f2 = ungroup(f1, 0)
+  assert.deepEqual(f2.layout?.groups, [])
+  assert.deepEqual(f2.layout?.pos?.['eff:a'], [5, 5])
+  assert.equal(f2.graph!.length, PLAIN.graph!.length)
+})
+
+test('deleting a grouped node drops it from its group (prune)', () => {
+  const f = ok(removeNode(makeGroup(PLAIN, ['eff:a', 'eff:b'], 'G'), 'eff:a'))
+  assert.deepEqual(f.layout?.groups?.[0].m, ['eff:b'])
 })

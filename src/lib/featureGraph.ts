@@ -176,6 +176,69 @@ export function project(f: CatalogFeatureData, catalogTypes: Record<string, 'num
   return { nodes: [...nodes.values()], edges }
 }
 
+/* ---------- semantic zoom ---------- */
+
+export type ZoomLevel = 'over' | 'normal' | 'detail'
+/** The mockup's thresholds: far enough out, a node is its name; close enough
+ *  in, it shows what the normal card leaves out. */
+export const zoomLevel = (z: number): ZoomLevel => (z <= 0.5 ? 'over' : z >= 1.15 ? 'detail' : 'normal')
+
+/** Up to three extra lines a node shows at Detail zoom — what its normal card
+ *  leaves out. Derived from the node, like everything else on the canvas. */
+export function detailLines(n: GNode, f: CatalogFeatureData, g: FeatureGraph): string[] {
+  const out: string[] = []
+  switch (n.kind) {
+    case 'contrib': case 'outcome': case 'sheet': {
+      const e = n.eff
+      if (/\{/.test(e.label ?? '')) out.push(`label · ${e.label}`)
+      if (n.kind === 'outcome') out.push(`${e.variable ? `writes ${e.variable}` : 'runs on the press'}${e.value ? ` ← ${e.value}` : ''}`)
+      if (n.kind === 'sheet') out.push('no target · changes the sheet')
+      if (HAS_TARGET(e.op) && n.kind !== 'outcome') {
+        out.push(`targets · ${e.target?.length ? e.target.map(asKey).join(e.match === 'and' ? ' + ' : ' | ') : 'own roll'}`)
+      }
+      const offer = g.edges.some(x => x.kind === 'offer' && x.from === n.key)
+      const flags = [e.once && 'once', e.oneOf && 'one of', offer && 'offer · picks'].filter(Boolean)
+      if (flags.length) out.push(flags.join(' · '))
+      if (e.op === 'note' && e.text) out.push(`“${e.text}”`)
+      break
+    }
+    case 'var': {
+      const d = n.def
+      out.push(d.uses ? 'reads a use counter'
+        : d.kind === 'derived' ? 'derived · recomputed on every read'
+        : `stored · resets ${d.resetOn === 'turn' ? 'each turn' : d.resetOn ? `on a ${d.resetOn} rest` : 'never'} · ${d.scope === 'dm' ? 'DM-only' : 'player'}`)
+      break
+    }
+    case 'ext': out.push(`declared by ${n.decl === 'has_*' ? 'owning that feature' : n.decl === 'engine' ? 'the turn tracker' : 'another node'}`); break
+    case 'press': out.push(`${f.activation && f.activation !== 'none' ? f.activation : 'no activation'} · ${f.uses?.max != null ? `${f.uses.max} use${f.uses.max === 1 ? '' : 's'}` : 'at-will'}`); break
+    case 'cond': out.push(n.pending ? 'unwired · nothing gated yet' : 'the app decides · true / false'); break
+    case 'ask': out.push(n.pending ? 'unwired · nothing gated yet' : 'a player answers · never previewed'); break
+    case 'picks': {
+      const offers = g.edges.filter(x => x.kind === 'offer').map(x => g.nodes.find(y => y.key === x.from))
+        .map(o => (o && 'eff' in o ? o.eff.label || o.eff.op : '')).filter(Boolean)
+      out.push(offers.join(' · ') || 'no offers')
+      break
+    }
+  }
+  return out.slice(0, 3)
+}
+
+/** Overview text fitting (mockup `ovFit`): the largest font, 28px down to 9px,
+ *  at which the name wraps to ≤ 3 lines and the kind (and a sub line, if it
+ *  still fits) stay inside the node. Pure, so the canvas never measures text. */
+export function ovFit(name: string, w: number, h: number, withSub: boolean): { fs: number; lines: number; sub: boolean } {
+  const L = Math.max(1, name.length)
+  for (const sub of withSub ? [true, false] : [false]) {
+    for (let fs = 28; fs >= 9; fs--) {
+      const cpl = Math.max(4, Math.floor((w - 34) / (fs * 0.62))), lines = Math.ceil(L / cpl)
+      if (lines > 3) continue
+      const need = lines * fs * 1.18 + fs * 0.5 * 1.4 + 6 + (sub ? fs * 0.58 * 1.3 + 3 : 0) + 18
+      if (need <= h) return { fs, lines, sub }
+    }
+  }
+  return { fs: 9, lines: 2, sub: false }
+}
+
 /* ==========================================================================
  * EDITS. Every one is `(f, …) => f'`: pure, no mutation, and it writes the
  * SCHEMA's own fields — a gate edit is a `when`/`ask` edit on outcomes, a target
@@ -201,6 +264,33 @@ const withLayout = (f: CatalogFeatureData, l: FeatureLayout): CatalogFeatureData
 
 export function setPos(f: CatalogFeatureData, key: string, xy: [number, number]): CatalogFeatureData {
   return withLayout(f, { ...f.layout, pos: { ...f.layout?.pos, [key]: [Math.round(xy[0]), Math.round(xy[1])] } })
+}
+
+/** Several positions in one edit — a multi-node drag is one change, not N. */
+export function setPositions(f: CatalogFeatureData, at: Record<string, [number, number]>): CatalogFeatureData {
+  const pos = { ...f.layout?.pos }
+  for (const [k, [x, y]] of Object.entries(at)) pos[k] = [Math.round(x), Math.round(y)]
+  return withLayout(f, { ...f.layout, pos })
+}
+
+/* ---------- groups: labelled frames, layout only ---------- */
+
+/** Frame `keys` under `label`. A node belongs to at most one group, so they
+ *  leave whatever group they were in; a group emptied by that disappears. */
+export function makeGroup(f: CatalogFeatureData, keys: string[], label = 'New group'): CatalogFeatureData {
+  const m = [...new Set(keys)]
+  if (!m.length) return f
+  const rest = (f.layout?.groups ?? []).map(g => ({ ...g, m: g.m.filter(k => !m.includes(k)) })).filter(g => g.m.length)
+  return withLayout(f, { ...f.layout, groups: [...rest, { m, l: label, s: '' }] })
+}
+
+/** Remove the frame. The nodes stay exactly where they are. */
+export function ungroup(f: CatalogFeatureData, i: number): CatalogFeatureData {
+  return withLayout(f, { ...f.layout, groups: (f.layout?.groups ?? []).filter((_, j) => j !== i) })
+}
+
+export function editGroup(f: CatalogFeatureData, i: number, patch: { l?: string; s?: string }): CatalogFeatureData {
+  return withLayout(f, { ...f.layout, groups: (f.layout?.groups ?? []).map((g, j) => (j === i ? { ...g, ...patch } : g)) })
 }
 
 /** Drop saved positions and group members whose node no longer exists. */
