@@ -13,7 +13,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import type { CatalogFeatureData, GraphEffect, VarDef } from '../lib/database.types'
 import {
-  addNode, affectingInCatalog, autoLayout, graphFit, connectTarget, detailLines, editGroup, makeGroup, setPositions, ungroup, ovFit, zoomLevel, type ZoomLevel, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
+  addNode, affectingInCatalog, autoLayout, graphFit, connectTarget, detailLines, editGroup, makeGroup, setPositions, ungroup, ovFit, zoomLevel, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
   setMatch, targetRefusal,
   type AddKind, type FeatureGraph as Graph, type GEdge, type GNode, type WireType,
 } from '../lib/featureGraph'
@@ -63,7 +63,9 @@ const DET_LINE = 15
 
 /** Placed and sized nodes. Auto-placed nodes space by the height they are
  *  DRAWN at, so Detail's taller nodes never overlap; saved positions stay put. */
-function views(g: Graph, saved: CatalogFeatureData['layout'], f: CatalogFeatureData, level: ZoomLevel): Map<string, NodeView> {
+/** `zt` is how far into Detail the canvas is, 0..1 — it tweens, so the extra
+ *  lines grow in and every port and wire follows them. */
+function views(g: Graph, saved: CatalogFeatureData['layout'], f: CatalogFeatureData, zt: number): Map<string, NodeView> {
   const ins = new Map<string, string[]>()
   const out = new Map<string, WireType>()
   for (const e of g.edges) {
@@ -80,8 +82,8 @@ function views(g: Graph, saved: CatalogFeatureData['layout'], f: CatalogFeatureD
   const size = new Map<string, Size>(g.nodes.map((n): [string, Size] => {
     if (n.kind === 'dest') return [n.key, { base: 0, body: 0, h: DEST_H, ins: [], out: null, det: [] }]
     const i = ins.get(n.key) ?? [], o = outOf(n), rows = Math.max(i.length, o ? 1 : 0)
-    const det = level === 'detail' ? detailLines(n, f, g) : []
-    const extra = det.length ? det.length * DET_LINE + 2 : 0
+    const det = zt > 0 ? detailLines(n, f, g) : []
+    const extra = det.length ? Math.round((det.length * DET_LINE + 2) * zt) : 0
     return [n.key, { base: bodyH(n), body: bodyH(n) + extra, h: HDR + bodyH(n) + extra + rows * ROW + 8, ins: i, out: o, det }]
   }))
   const pos = autoLayout(g, saved?.pos, k => size.get(k)?.h ?? 100)
@@ -199,6 +201,8 @@ export const ADD_KINDS: { k: AddKind; l: string; s: string; c: string; sw: strin
   { k: 'var', l: 'Variable', s: 'derived · a formula', c: 'var(--good)', sw: 'var' },
   { k: 'picks', l: 'Picks', s: 'take N of the offers', c: 'var(--amber)', sw: 'picks' },
 ]
+const NOTE_KEY = 'guide.featureEditor.formFitsNoteOff'
+
 /** The HTML drag type a Node-kinds row carries onto the canvas. */
 export const KIND_DRAG = 'application/x-guide-node-kind'
 const FLOW_CHILD: AddKind[] = ['outcome', 'cond', 'ask']
@@ -328,7 +332,25 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
   const layout = useMemo(() => (moving ? { ...d.layout, pos: { ...d.layout?.pos, ...moving } } : d.layout), [d.layout, moving])
   const g = useMemo(() => project(d, catalogTypes), [d, catalogTypes])
   const zl = zoomLevel(pz.view.z)
-  const vs = useMemo(() => views(g, layout, d, zl), [g, layout, d, zl])
+  /* THE DETAIL TWEEN (mockup animZt): 240 ms ease-out between Normal and
+     Detail, so the extra lines grow in instead of snapping. */
+  const [zt, setZt] = useState(zl === 'detail' ? 1 : 0)
+  const ztRef = useRef(zt)
+  useEffect(() => {
+    const to = zl === 'detail' ? 1 : 0, from = ztRef.current
+    if (from === to) return
+    const t0 = performance.now()
+    let raf = 0
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / 240), v = from + (to - from) * (1 - (1 - p) ** 3)
+      ztRef.current = v
+      setZt(v)
+      if (p < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [zl])
+  const vs = useMemo(() => views(g, layout, d, zt), [g, layout, d, zt])
   const vsRef = useRef(vs)
   vsRef.current = vs
   /* A selection whose node is gone (a pending gate that just turned real, a
@@ -590,7 +612,11 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
   const related = (e: { from: string; to: string }) => !sel || e.from === sel || e.to === sel
   const edgesOf = <K extends GEdge['kind']>(k: K) => g.edges.filter((e): e is Extract<GEdge, { kind: K }> => e.kind === k)
   const fit = graphFit(g)
-  const formFits = fit.fit === 'form'
+  /* The "form fits" note is advice, not state: once dismissed it stays gone, in
+     this browser, for every feature. */
+  const [noteOff, setNoteOff] = useState(() => { try { return localStorage.getItem(NOTE_KEY) === '1' } catch { return false } })
+  const dismissNote = () => { setNoteOff(true); try { localStorage.setItem(NOTE_KEY, '1') } catch { /* private mode: this session only */ } }
+  const formFits = fit.fit === 'form' && !noteOff
 
   /* ---- wires ---- */
   const wires: ReactNode[] = []
@@ -768,7 +794,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
           </div>
           <div className={styles.gb} style={{ height: v.base || v.h - HDR - 8 }}>{body}</div>
           {v.det.length > 0 && (
-            <div className={styles.gdet} style={{ height: v.det.length * 15 + 2 }}>
+            <div className={styles.gdet} style={{ height: v.body - v.base, opacity: zt }}>
               {/* Inline: a detail line can carry a note's authored markdown. */}
               {v.det.map((l, i) => <div key={i} className={styles.dl} title={l}><Inline text={l} /></div>)}
             </div>
@@ -902,6 +928,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
           <Icon name="fa-circle-info" />
           <span className={styles.gt2}><b>The form fits this feature</b>{fit.why}</span>
           <button type="button" className={styles.noteBtn} onClick={onForm}><Icon name="fa-list" /> Back to form</button>
+          <button type="button" className={styles.noteX} onClick={dismissNote} title="Dismiss — don’t show this again" aria-label="Dismiss"><Icon name="fa-xmark" /></button>
         </div>
       )}
       <div className={styles.probe} onPointerDown={e => e.stopPropagation()}>
