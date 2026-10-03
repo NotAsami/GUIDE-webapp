@@ -1,11 +1,12 @@
 import type { SaveResult } from '../lib/saveResult'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CharacterRow, CharacterSection, ShardNode, ShardSlot, ShardTree } from '../lib/database.types'
 import { RING_GAP, branchColor, nodeState, nodeXY, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
 import styles from './ShardTree.module.css'
 import { Icon } from '../components/Icon'
 import { Inline } from '../lib/markdown'
+import { usePanZoom } from '../lib/usePanZoom'
 
 interface Props {
   character: CharacterRow
@@ -45,13 +46,9 @@ export function ShardTreeModal({ character, updateSection, slotKey, slot, tree, 
   const [denyMsg, setDenyMsg] = useState('')
   const [justId, setJustId] = useState<string | null>(null)
   const [bump, setBump] = useState(false)
-  const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
-  const [grabbing, setGrabbing] = useState(false)
-
-  const stageRef = useRef<HTMLDivElement | null>(null)
-  const dragRef = useRef({ dragging: false, moved: false, sx: 0, sy: 0, spx: 0, spy: 0 })
-  const dragMovedRef = useRef(false)
+  /* lib/usePanZoom — shared with the Shard Lattice editor and the Feature
+     Graph; it is what stops the wheel scrolling the page behind the modal. */
+  const pz = usePanZoom({ min: 0.3, max: 2.6, fitMax: 2.6 })
 
   const byId = useCallback((id: string) => tree.nodes.find(n => n.id === id), [tree])
 
@@ -94,7 +91,7 @@ export function ShardTreeModal({ character, updateSection, slotKey, slot, tree, 
   }
 
   function onNodeClick(n: ShardNode) {
-    if (dragMovedRef.current) return
+    if (pz.wasDrag()) return // the click that ends a pan is not a choice
     const state = nodeState(n, slot)
     if (state === 'attuned') { setSelectedId(n.id); return }
     if (state === 'locked') {
@@ -107,63 +104,14 @@ export function ShardTreeModal({ character, updateSection, slotKey, slot, tree, 
   }
 
   /* ---------- pan / zoom viewport ---------- */
-  const clampZoom = (z: number) => Math.max(0.3, Math.min(2.6, z))
-
-  const fitView = useCallback(() => {
-    const stage = stageRef.current
-    if (!stage) return
-    const vw = stage.clientWidth, vh = stage.clientHeight
-    if (!vw || !vh) return
-    const z = clampZoom(Math.min(vw / canvasSz, vh / canvasSz) * 0.98)
-    setZoom(z)
-    setPan({ x: (vw - canvasSz * z) / 2, y: (vh - canvasSz * z) / 2 })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasSz])
+  const fitView = useCallback(() => pz.fit({ x0: 0, y0: 0, x1: canvasSz, y1: canvasSz }, 8), [pz.fit, canvasSz]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useLayoutEffect(() => {
     fitView()
     window.addEventListener('resize', fitView)
     return () => window.removeEventListener('resize', fitView)
-  }, [fitView])
+  }, [fitView, pz.el])
 
-  function zoomAt(factor: number, ox: number, oy: number) {
-    setZoom(z => {
-      const nz = clampZoom(z * factor)
-      const wx = (ox - pan.x) / z, wy = (oy - pan.y) / z
-      setPan({ x: ox - wx * nz, y: oy - wy * nz })
-      return nz
-    })
-  }
-
-  function onWheel(e: React.WheelEvent) {
-    e.preventDefault()
-    const rect = stageRef.current?.getBoundingClientRect()
-    if (!rect) return
-    zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - rect.left, e.clientY - rect.top)
-  }
-
-  function onStagePointerDown(e: React.PointerEvent) {
-    dragRef.current = { dragging: true, moved: false, sx: e.clientX, sy: e.clientY, spx: pan.x, spy: pan.y }
-  }
-
-  useEffect(() => {
-    function move(e: PointerEvent) {
-      const d = dragRef.current
-      if (!d.dragging) return
-      const dx = e.clientX - d.sx, dy = e.clientY - d.sy
-      if (!d.moved && Math.hypot(dx, dy) > 4) { d.moved = true; setGrabbing(true) }
-      if (d.moved) setPan({ x: d.spx + dx, y: d.spy + dy })
-    }
-    function up() {
-      const d = dragRef.current
-      if (d.dragging && d.moved) { dragMovedRef.current = true; window.setTimeout(() => { dragMovedRef.current = false }, 0) }
-      d.dragging = false; d.moved = false
-      setGrabbing(false)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
-  }, [])
 
   /* ---------- close on Escape ---------- */
   useEffect(() => {
@@ -217,17 +165,16 @@ export function ShardTreeModal({ character, updateSection, slotKey, slot, tree, 
                   <div className={styles.inner}>
                     <span className={`${styles.corner} ${styles.tl}`} /><span className={`${styles.corner} ${styles.br}`} />
                     <div
-                      ref={stageRef}
-                      className={`${styles.treePad} ${grabbing ? styles.grabbing : ''}`}
-                      onWheel={onWheel}
-                      onPointerDown={onStagePointerDown}
+                      ref={pz.ref}
+                      className={`${styles.treePad} ${pz.grabbing ? styles.grabbing : ''}`}
+                      onPointerDown={pz.onPointerDown}
                     >
                       <div className={styles.treeStage}>
                         {spokes[0] && <span className={`${styles.axisLabel} ${styles.left}`}>{spokes[0][1]}</span>}
                         {spokes[1] && <span className={`${styles.axisLabel} ${styles.right}`}>{spokes[1][1]}</span>}
                         {spokes[2] && <span className={`${styles.axisLabel} ${styles.bottom}`}>{spokes[2][1]}</span>}
 
-                        <div className={styles.treeCanvas} style={{ width: canvasSz, height: canvasSz, transform: `translate(${pan.x}px,${pan.y}px) scale(${zoom})` }}>
+                        <div className={styles.treeCanvas} style={{ width: canvasSz, height: canvasSz, transform: `translate(${pz.view.x}px,${pz.view.y}px) scale(${pz.view.z})` }}>
                           <svg className={styles.treeSvg} viewBox={`0 0 ${canvasSz} ${canvasSz}`} width={canvasSz} height={canvasSz} aria-hidden="true">
                             {Array.from({ length: maxTier }, (_, i) => i + 1).map(t => (
                               <circle key={t} className={styles.ringGuide} cx={canvasR} cy={canvasR} r={RING_GAP * t} />
@@ -285,8 +232,8 @@ export function ShardTreeModal({ character, updateSection, slotKey, slot, tree, 
                       </div>
 
                       <div className={styles.treeControls}>
-                        <button type="button" onClick={() => zoomAt(1.25, (stageRef.current?.clientWidth ?? 0) / 2, (stageRef.current?.clientHeight ?? 0) / 2)} aria-label="Zoom in"><i className="fa-solid fa-plus" /></button>
-                        <button type="button" onClick={() => zoomAt(1 / 1.25, (stageRef.current?.clientWidth ?? 0) / 2, (stageRef.current?.clientHeight ?? 0) / 2)} aria-label="Zoom out"><i className="fa-solid fa-minus" /></button>
+                        <button type="button" onClick={() => pz.zoomAt(1.25)} aria-label="Zoom in"><i className="fa-solid fa-plus" /></button>
+                        <button type="button" onClick={() => pz.zoomAt(1 / 1.25)} aria-label="Zoom out"><i className="fa-solid fa-minus" /></button>
                         <button type="button" onClick={fitView} aria-label="Fit to view"><i className="fa-solid fa-expand" /></button>
                       </div>
                       <span className={styles.treeHint}>Drag to pan · scroll to zoom</span>

@@ -455,7 +455,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
       }
       // Dropped on open canvas from an out-port: add something already wired.
       if (!over && mode === 'out' && (ev.target as Element | null)?.closest?.(`.${styles.pad}`)) {
-        const r = pz.ref.current!.getBoundingClientRect()
+        const r = pz.node.current!.getBoundingClientRect()
         const [wx, wy] = pz.toWorld(ev.clientX, ev.clientY)
         setQuick({ sx: ev.clientX - r.left, sy: ev.clientY - r.top, wx, wy, src: key })
       }
@@ -495,7 +495,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
         return
       }
       if (!over && (ev.target as Element | null)?.closest?.(`.${styles.pad}`)) {
-        const r = pz.ref.current!.getBoundingClientRect()
+        const r = pz.node.current!.getBoundingClientRect()
         setPick({ sx: ev.clientX - r.left, sy: ev.clientY - r.top, key })
       }
     }
@@ -548,7 +548,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
         const r = removeNode(dRef.current, sel, catalogTypes)
         if (apply(r)) onSelect(null)
       } else if (e.key === 'a' || e.key === 'A') {
-        const r = pz.ref.current?.getBoundingClientRect()
+        const r = pz.node.current?.getBoundingClientRect()
         if (!r) return
         e.preventDefault()
         const [wx, wy] = pz.toWorld(r.left + r.width / 2, r.top + r.height / 2)
@@ -833,7 +833,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
         onClick={e => { if (!pz.wasDrag() && !e.shiftKey) { onSelect(null); onMulti([]); setQuick(null); setPick(null) } }}
         onDoubleClick={e => {
           if ((e.target as Element).closest('[data-node]')) return
-          const r = pz.ref.current!.getBoundingClientRect()
+          const r = pz.node.current!.getBoundingClientRect()
           const [wx, wy] = pz.toWorld(e.clientX, e.clientY)
           setQuick({ sx: e.clientX - r.left, sy: e.clientY - r.top, wx, wy })
         }}
