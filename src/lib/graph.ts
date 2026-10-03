@@ -145,6 +145,15 @@ export function probeScope(
      identifier rather than an unknown one; auditVars is what refuses it, with
      the reason, instead of letting the walk report "unknown". */
   for (const d of defs) if (d.kind === 'derived' && d.uses) scope[d.name] = 1
+  /* The catalog goes in BEFORE the walk: a derived formula may read another
+     node's variable (`recklessAttack && attacksThisTurn == 0`), exactly as the
+     runtime walk over every active source allows. Seeded after, the walk saw an
+     unknown name and reported a legal variable as "did not resolve". A local
+     declaration still wins — it is skipped here and bound by the walk. */
+  const local = new Set(defs.map(d => d.name))
+  for (const [name, t] of Object.entries(catalogTypes)) {
+    if (!(name in scope) && !local.has(name)) scope[name] = probe(t)
+  }
 
   // Only the derived variable's TYPE is wanted, never its probe value: binding
   // the computed number would let `level - 1` reintroduce the zero this exists
@@ -341,7 +350,13 @@ export function varCollisions(decls: { name: string; from: string }[], sev: 'war
 /** Author-time checks on declarations alone — no character needed. Everything
  *  here is catchable when the DM saves the node, which is the entire reason the
  *  runtime defaults above are allowed to be silent. */
-export function auditVars(defs: VarDef[]): AuditItem[] {
+export function auditVars(
+  defs: VarDef[],
+  /** Variables declared on OTHER nodes, name -> type. A derived formula may
+   *  read them: the runtime binds every active source's variables into one
+   *  scope, and an inactive one reads its type's zero (§30 row 2). */
+  catalogTypes: Record<string, 'num' | 'bool'> = {},
+): AuditItem[] {
   const out: AuditItem[] = []
   const declared = new Set(defs.map(d => d.name))
   // Which of them read a feature's use counter — see the rule below.
@@ -384,8 +399,8 @@ export function auditVars(defs: VarDef[]): AuditItem[] {
           out.push({ sev: 'err', id: d.name, t: 'A derived variable cannot read a use counter', s: `${label(d)} reads "${id}", which is a feature's use count. Those are resolved after every derived variable — a formula would read zero. Put the condition on the effect's when instead, where it works.` })
           continue
         }
-        if (declared.has(id) || (VAR_IDENTS as readonly string[]).includes(id)) continue
-        out.push({ sev: 'err', id: d.name, t: 'Unknown identifier', s: `${label(d)} reads "${id}", which no variable declares and the character state whitelist does not contain.` })
+        if (declared.has(id) || (VAR_IDENTS as readonly string[]).includes(id) || id in catalogTypes) continue
+        out.push({ sev: 'err', id: d.name, t: 'Unknown identifier', s: `${label(d)} reads "${id}", which no variable in the catalog declares and the character state whitelist does not contain.` })
       }
     }
   }
@@ -393,7 +408,7 @@ export function auditVars(defs: VarDef[]): AuditItem[] {
   // Cycles are catchable here, from the declarations alone. Without this a
   // self-referential variable saves clean and breaks at the table, where
   // characterVars reports it to nobody who can fix it.
-  probeScope(defs, out)
+  probeScope(defs, out, catalogTypes)
   return out
 }
 
@@ -1463,7 +1478,7 @@ export function auditNode(
    *  degrades to the old behaviour rather than guessing. */
   catalogTypes: Record<string, 'num' | 'bool'> = {},
 ): AuditItem[] {
-  const out: AuditItem[] = auditVars(node.vars ?? [])
+  const out: AuditItem[] = auditVars(node.vars ?? [], catalogTypes)
   const known = new Set(nodes.map(n => n.gid))
   const declared = new Set((node.vars ?? []).map(v => v.name))
   // Type-correct, non-zero — §41. auditVars already reported anything wrong with

@@ -7,6 +7,7 @@ import { useDmStatus, useDmFeatures, type DmFeaturesState } from '../lib/dm'
 import { BootMark } from '../components/BootMark'
 import { useDmShards, type EditorNode, type EditorTree } from '../lib/dmShards'
 import { useLocalDraft } from '../lib/draft'
+import { usePanZoom } from '../lib/usePanZoom'
 import { RING_GAP, branchColor, nodeXY } from '../lib/shards'
 import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '../lib/modEditor'
 import { auditNode, type AuditItem, type AuthoredNode } from '../lib/graph'
@@ -148,14 +149,12 @@ export function ShardLattice() {
   const [mode, setMode] = useState<Mode>('author')
   const [sim, setSim] = useState<Set<string> | null>(null)
   const [simPts, setSimPts] = useState(0)
-  const [zoom, setZoom] = useState(1)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
-  const [grabbing, setGrabbing] = useState(false)
   const [toast, setToast] = useState<{ msg: string; warn?: boolean } | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const stageRef = useRef<HTMLDivElement | null>(null)
-  const dragRef = useRef({ dragging: false, moved: false, sx: 0, sy: 0, spx: 0, spy: 0 })
+  /* Pan/zoom is lib/usePanZoom — shared with the Feature Graph, and the copy
+     that stops the wheel scrolling the page underneath the canvas. */
+  const pz = usePanZoom({ min: 0.28, max: 2.4, fitMax: 2.4, skip: t => !!t.closest('button') })
   const nodeDragRef = useRef<{ id: string } | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
 
@@ -194,48 +193,8 @@ export function ShardLattice() {
   const edges = useMemo(() => (draft?.nodes ?? []).flatMap(n => n.prereqs.map(p => ({ key: `${p}__${n.id}`, parent: p, child: n.id }))), [draft])
 
   /* ---------- pan / zoom ---------- */
-  const clampZoom = (z: number) => Math.max(0.28, Math.min(2.4, z))
-  const fit = useCallback(() => {
-    const stage = stageRef.current
-    if (!stage) return
-    const vw = stage.clientWidth, vh = stage.clientHeight
-    if (!vw) return
-    const z = clampZoom(Math.min(vw / canvasSz, vh / canvasSz) * 0.98)
-    setZoom(z); setPan({ x: (vw - canvasSz * z) / 2, y: (vh - canvasSz * z) / 2 })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasSz])
-  useLayoutEffect(() => { fit(); window.addEventListener('resize', fit); return () => window.removeEventListener('resize', fit) }, [fit, activeId])
-
-  function zoomAt(factor: number, ox: number, oy: number) {
-    setZoom(z => {
-      const nz = clampZoom(z * factor)
-      const wx = (ox - pan.x) / z, wy = (oy - pan.y) / z
-      setPan({ x: ox - wx * nz, y: oy - wy * nz })
-      return nz
-    })
-  }
-  function onWheel(e: React.WheelEvent) {
-    e.preventDefault()
-    const r = stageRef.current?.getBoundingClientRect()
-    if (!r) return
-    zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - r.left, e.clientY - r.top)
-  }
-  function onPadPointerDown(e: React.PointerEvent) {
-    if ((e.target as HTMLElement).closest('button')?.dataset.id) return // node drag handles itself
-    dragRef.current = { dragging: true, moved: false, sx: e.clientX, sy: e.clientY, spx: pan.x, spy: pan.y }
-  }
-  useEffect(() => {
-    function move(e: PointerEvent) {
-      const d = dragRef.current
-      if (!d.dragging) return
-      const dx = e.clientX - d.sx, dy = e.clientY - d.sy
-      if (!d.moved && Math.hypot(dx, dy) > 4) { d.moved = true; setGrabbing(true) }
-      if (d.moved) setPan({ x: d.spx + dx, y: d.spy + dy })
-    }
-    function up() { dragRef.current.dragging = false; dragRef.current.moved = false; setGrabbing(false) }
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
-    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
-  }, [])
+  const fit = useCallback(() => pz.fit({ x0: 0, y0: 0, x1: canvasSz, y1: canvasSz }, 8), [pz.fit, canvasSz]) // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { fit(); window.addEventListener('resize', fit); return () => window.removeEventListener('resize', fit) }, [fit, activeId, pz.el])
 
   /* ---------- node drag-to-retier ---------- */
   function onNodePointerDown(e: React.PointerEvent, n: EditorNode) {
@@ -244,9 +203,7 @@ export function ShardLattice() {
     nodeDragRef.current = { id: n.id }
     setSelId(n.id); setTab('node'); setSelEdge(null)
     function move(ev: PointerEvent) {
-      const r = stageRef.current?.getBoundingClientRect()
-      if (!r) return
-      const wx = (ev.clientX - r.left - pan.x) / zoom, wy = (ev.clientY - r.top - pan.y) / zoom
+      const [wx, wy] = pz.toWorld(ev.clientX, ev.clientY)
       const pol = polar(wx, wy)
       let tier = Math.round(pol.r / RING_GAP)
       tier = Math.max(isRoot(n) ? 0 : 1, Math.min(rings, tier))
@@ -453,16 +410,15 @@ export function ShardLattice() {
 
                 <div className={styles.pad}>
                   <div
-                    ref={stageRef}
-                    className={`${styles.latStage} ${grabbing ? styles.grabbing : tool === 'link' ? styles.linking : tool === 'add' ? styles.adding : ''}`}
-                    onWheel={onWheel}
-                    onPointerDown={onPadPointerDown}
-                    onClick={e => { if (tool === 'add' && stageRef.current) {
-                      const r = stageRef.current.getBoundingClientRect()
-                      addNodeAt((e.clientX - r.left - pan.x) / zoom, (e.clientY - r.top - pan.y) / zoom)
-                    } }}
+                    ref={pz.ref}
+                    className={`${styles.latStage} ${pz.grabbing ? styles.grabbing : tool === 'link' ? styles.linking : tool === 'add' ? styles.adding : ''}`}
+                    onPointerDown={pz.onPointerDown}
+                    onClick={e => {
+                      // The click that ends a pan is not a click on the canvas.
+                      if (tool === 'add' && !pz.wasDrag()) { const [x, y] = pz.toWorld(e.clientX, e.clientY); addNodeAt(x, y) }
+                    }}
                   >
-                    <div className={`${styles.latCanvas} ${mode === 'preview' ? styles.preview : ''}`} style={{ width: canvasSz, height: canvasSz, transform: `translate(${pan.x}px,${pan.y}px) scale(${zoom})` }}>
+                    <div className={`${styles.latCanvas} ${mode === 'preview' ? styles.preview : ''}`} style={{ width: canvasSz, height: canvasSz, transform: `translate(${pz.view.x}px,${pz.view.y}px) scale(${pz.view.z})` }}>
                       <svg className={styles.latSvg} viewBox={`0 0 ${canvasSz} ${canvasSz}`} width={canvasSz} height={canvasSz} aria-hidden="true">
                         {Array.from({ length: rings }, (_, i) => i + 1).map(t => (
                           <g key={t}>
@@ -487,7 +443,7 @@ export function ShardLattice() {
                             <g key={e.key}>
                               <path className={cls} stroke={branchColor(draft, cn.branch)} d={d} />
                               {mode === 'author' && (
-                                <path className={styles.edgeHit} d={d} onClick={ev => { ev.stopPropagation(); setSelEdge(e.key); setSelId(null); setTab('node') }} />
+                                <path className={styles.edgeHit} d={d} onClick={ev => { ev.stopPropagation(); if (pz.wasDrag()) return; setSelEdge(e.key); setSelId(null); setTab('node') }} />
                               )}
                             </g>
                           )
@@ -540,8 +496,8 @@ export function ShardLattice() {
                       </div>
                     )}
                     <div className={styles.zoomers}>
-                      <button type="button" onClick={() => zoomAt(1.25, (stageRef.current?.clientWidth ?? 0) / 2, (stageRef.current?.clientHeight ?? 0) / 2)}><i className="fa-solid fa-plus" /></button>
-                      <button type="button" onClick={() => zoomAt(1 / 1.25, (stageRef.current?.clientWidth ?? 0) / 2, (stageRef.current?.clientHeight ?? 0) / 2)}><i className="fa-solid fa-minus" /></button>
+                      <button type="button" onClick={() => pz.zoomAt(1.25)}><i className="fa-solid fa-plus" /></button>
+                      <button type="button" onClick={() => pz.zoomAt(1 / 1.25)}><i className="fa-solid fa-minus" /></button>
                       <button type="button" onClick={fit}><i className="fa-solid fa-expand" /></button>
                     </div>
                     <span className={styles.canvasHint}>Drag node to re-tier · Drag empty space to pan · Scroll to zoom</span>

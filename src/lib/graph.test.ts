@@ -151,6 +151,17 @@ test('row 1 — a name declared nowhere is an author-time error', () => {
   assert.ok(out.some(a => a.sev === 'err' && a.t === 'Unknown identifier'))
 })
 
+test('a derived variable may read ANOTHER node\'s variable, as a rule\'s when already can', () => {
+  // Brutal Strike's gate: `recklessAttack` is declared by Reckless Attack.
+  const ready = [{ name: 'recklessAttackReady', kind: 'derived' as const, formula: 'recklessAttack && attacksThisTurn == 0' }]
+  assert.deepEqual(auditVars(ready, { recklessAttack: 'bool' }).filter(a => a.sev === 'err'), [])
+  assert.deepEqual(auditNode({ vars: ready }, [], { recklessAttack: 'bool' }).filter(a => a.sev === 'err'), [])
+  // …and its type still comes out right: it is a boolean, usable in a when.
+  assert.equal(probeScope(ready, undefined, { recklessAttack: 'bool' }).recklessAttackReady, false)
+  // Without the catalog it is still the author-time error row 1 describes.
+  assert.ok(auditVars(ready).some(a => a.t === 'Unknown identifier'))
+})
+
 test('row 2 — declared in the catalog but not active reads the type\'s zero', () => {
   const c = character({ sheet: { ...SHEET, features: [feat('Reader', [{ name: 'x', kind: 'derived', formula: 'mercy + 1' }])] } })
   // No catalog types: the name is simply unknown, so the formula fails.
