@@ -30,14 +30,8 @@ It also gets you something forms can't: type-checked ports. The engine's rules �
 The one caution: nodes are great for Sanctity and worse than a form for Second Wind. So make them two views of1 the same data — simple features stay in the form, complex ones open as a graph. No migration, no choice forced. And your shard lattice editor already solved pan, zoom, and node hit-testing, so there's a head start.
 
 ## MORE THINGS
-Handouts — push a lore document or image to a player's screen. - DONE, not tested
-NPC relationship web — who knows whom, rendered as a graph.
-Session prep board — shops, loot, and encounters staged before a session.
 The medieval skin — illuminated manuscript, gold leaf on parchment.
 A printable character sheet, styled as a G.U.I.D.E. dossier printout.
-JOURNAL redesign (handouts + general updates)
-LORE redesign (new things + npc web map)
-SPELLBOOK redesign (Too much wasted space imo)
 
 ## EVOLUTION
 Evolution. The core horror mechanic from your original pitch — invest enough points, evolve, gain power, lose something. Glitch marks, ones and zeroes on the body. It's the campaign's centrepiece and it has no screen.

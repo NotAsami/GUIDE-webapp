@@ -4,6 +4,7 @@
  * an Orbit from layout(); this owns only the drawing, the fit-or-focus
  * transform, and the read-only card. Selection state belongs to the caller.
  */
+import { ManagedImage } from './ManagedImage'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ATTITUDE_LABEL, LABEL_GAP, LABEL_W, NAME_LINE, NODE_SIZE, PARTY, PC_SIZE, SUB_LINE, SYSTEM_TYPE,
@@ -143,7 +144,7 @@ export function NpcWebView({ web, orbit, sel, onSelect, show = SHOW_ALL, drawerO
               >
                 <span className={styles.disc} style={{ width: size, height: size }}>
                   {n.system ? <span className={styles.diamond} /> : initials(n.name)}
-                  {n.record?.portrait && <img src={n.record.portrait} alt="" onError={e => { e.currentTarget.style.display = 'none' }} />}
+                  {n.record?.portrait && <ManagedImage src={n.record.portrait} alt="" />}
                 </span>
                 <span className={styles.name} style={{ marginTop: LABEL_GAP, lineHeight: `${NAME_LINE}px`, maxHeight: NAME_LINE * 2 }}>{n.name}</span>
                 <span className={styles.cap} style={{ marginTop: LABEL_GAP / 2, lineHeight: `${SUB_LINE}px` }}>{caption(web, n, nameOf)}</span>

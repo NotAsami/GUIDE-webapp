@@ -52,8 +52,7 @@ export type CharacterIdentity = {
   /** Font Awesome glyph (e.g. "fa-chess-rook") for the roster/menu portrait when
    *  no image is set. Authored DM-side in the Lore tab; defaults to "fa-user". */
   icon?: string
-  /** Public image URL for the operator portrait (e.g. a Supabase Storage public
-   *  URL). Absent/failed → the screen falls back to the handshake "PORTRAIT_FEED"
+  /** External URL or private storage:guide-images/… reference. Absent/failed → the screen falls back to the handshake "PORTRAIT_FEED"
    *  panel, so the layout is identical whether or not an image is set. */
   portrait?: string | null
   /** CSS object-position for the portrait crop, so a DM can keep a face in

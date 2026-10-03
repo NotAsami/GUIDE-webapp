@@ -1,3 +1,5 @@
+import { ImageUpload } from '../components/ImageUpload'
+import { ManagedImage } from '../components/ManagedImage'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
@@ -206,6 +208,7 @@ export function OperatorConsole() {
       router state, so returning does not dump you on the overview. */
   const navState = useLocation().state as { view?: View } | null
   const [view, setView] = useState<View>(navState?.view ?? 'overview')
+  const wide = view === 'npcs' || view === 'prep'
   const [selectedId, setSelectedId] = useState<string | null>(null)
   /** Which per-character tab is showing when a PC is selected. */
   const [charTab, setCharTab] = useState<CharTab>('actions')
@@ -658,9 +661,10 @@ export function OperatorConsole() {
           )}
         </section>
 
-        {/* MAIN — WORK AREA. The NPC web takes region 03's column too: a graph
-            needs the width, and 14 people in the narrow one overlapped. */}
-        <section className={cx(styles.region, view === 'npcs' && styles.regionWide)} aria-label="Work area">
+        {/* MAIN — WORK AREA. The NPC web and the prep board take region 03's
+            column too: a graph needs the width (14 people in the narrow one
+            overlapped), and the board's three columns left the staged one ~125px. */}
+        <section className={cx(styles.region, wide && styles.regionWide)} aria-label="Work area">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
             {/* Per-character tabs — campaign surfaces (overview / quests /
@@ -767,7 +771,7 @@ export function OperatorConsole() {
 
         {/* RIGHT — BROADCAST + ACTIVITY LOG (slice 6). Stepped aside while the
             NPC web is open; the log keeps collecting, it lives in state above. */}
-        {view !== 'npcs' && <section className={styles.region} aria-label="Broadcast and system log">
+        {!wide && <section className={styles.region} aria-label="Broadcast and system log">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
             <div className={styles.rHead}>
@@ -7316,6 +7320,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
   const [icon, setIcon] = useState(savedIcon)
   const [portrait, setPortrait] = useState(savedPortrait)
   const [portraitFailed, setPortraitFailed] = useState(false)
+  const [imagePending, setImagePending] = useState(false)
   const [focus, setFocus] = useState(savedFocus)
   const [backstory, setBackstory] = useState(savedBackstory)
   const [trait, setTrait] = useState(savedPersonality.trait ?? '')
@@ -7461,20 +7466,15 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
       <div className={styles.loreGrid}>
         <div className={styles.portraitPrev}>
           {portrait && !portraitFailed ? (
-            <img src={portrait} alt="" style={{ objectPosition: focus }} onError={() => setPortraitFailed(true)} />
+            <ManagedImage key={portrait} src={portrait} alt="" style={{ objectPosition: focus }} onError={() => setPortraitFailed(true)} />
           ) : (
             <Icon name={icon} />
           )}
         </div>
         <div>
-          <span className={styles.fieldLab}>Public Image URL</span>
-          <input
-            className={styles.sessIn} value={portrait}
-            onChange={e => { setPortrait(e.target.value); setPortraitFailed(false) }}
-            placeholder="https://…/storage/v1/object/public/portraits/…"
-          />
-          <Btn tone="ghost" sm icon="fa-xmark" label="Clear" onClick={() => setPortrait('')} disabled={!portrait} />
-          <p className={styles.acHint}>Paste the public URL of a file already uploaded to the Storage "portraits" bucket. Absent/failed → the menu glyph below is shown instead.</p>
+          <ImageUpload value={portrait} scope="characters" characterId={row.id} aspect={3 / 4} disabled={busy}
+            onPendingChange={setImagePending}
+            onChange={value => { setPortrait(value); setPortraitFailed(false); setFocus('center center') }} />
         </div>
       </div>
       <div className={styles.glyphRow}>
@@ -7544,7 +7544,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
           left in place here renders with correct geometry but never actually paints. */}
       {dirty && createPortal(
         <div className={styles.loreFloatSave}>
-          <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : 'Save Lore'} onClick={() => void save()} disabled={busy} />
+          <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : 'Save Lore'} onClick={() => void save()} disabled={busy || imagePending} />
         </div>,
         document.body,
       )}

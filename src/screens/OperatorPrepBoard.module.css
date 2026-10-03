@@ -5,13 +5,28 @@
 
 .board { position: absolute; inset: 0; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.12); }
 
+/* Wraps, and the two buttons carry their own width: .btn takes its size from
+   `flex: 1`, so in a row this full the leftover was nothing and both came out
+   0 wide — the board could not be wrapped and no second board could be made. */
 .head {
-  flex: 0 0 auto; display: flex; align-items: center; gap: 14px;
+  flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
   padding: 13px 16px; border-bottom: 1px solid rgba(212, 191, 125, 0.2);
 }
-.headTx { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.head button:not(.discard) { flex: 0 0 auto; width: 152px; }
+.discard {
+  flex: 0 0 auto; height: 31px; padding: 0 10px; cursor: pointer; border: 1px solid rgba(212, 191, 125, 0.28); background: transparent;
+  color: var(--muted); font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase;
+}
+.discard:hover { border-color: var(--amber); color: var(--amber-hot); }
+.discard.bin { width: 31px; padding: 0; }
+.discard.bin:hover, .discard.yes { border-color: var(--danger); color: var(--danger-hot); }
+.discard.yes:hover { background: rgba(185, 58, 58, 0.18); }
+.discardAsk { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--danger-hot); }
+/* Gives way first: the subtitle wraps before the buttons are pushed to a row
+   of their own. */
+.headTx { flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .title {
-  width: 360px; max-width: 42vw; padding: 0 0 4px; background: transparent;
+  width: 100%; max-width: 360px; padding: 0 0 4px; background: transparent;
   border: 0; border-bottom: 1px dashed rgba(212, 191, 125, 0.3);
   font-family: var(--font-display); font-weight: 600; font-size: 20px; letter-spacing: 0.06em; color: var(--beige);
 }
@@ -146,6 +161,10 @@
 }
 .emptyT { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.1em; color: var(--beige); }
 .empty > span { max-width: 520px; }
+/* The console button (OperatorConsole .btn) is drawn from two ABSOLUTE layers
+   and takes its size from `flex: 1` in a button row. Centred in this column it
+   flexed along the wrong axis: 0 wide, column-tall, invisible. Size it here. */
+.empty button { flex: 0 0 auto; width: 210px; }
 
 /* ============================================================
    THE TRAY (PrepTray.tsx) — tonight's cards along the bottom of every OTHER
