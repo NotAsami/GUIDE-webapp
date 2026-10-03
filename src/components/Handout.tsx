@@ -1,3 +1,4 @@
+import { ManagedImage } from './ManagedImage'
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { HandoutRow } from '../lib/database.types'
@@ -122,7 +123,7 @@ export function HandoutPage({ h, arrive = false, onSettled, onEnlarge }: {
               {broken ? (
                 <div className={styles.broken}>Image could not be loaded</div>
               ) : (
-                <img src={h.image_url} alt={h.title} onError={() => setBroken(true)} />
+                <ManagedImage src={h.image_url} alt={h.title} onError={() => setBroken(true)} />
               )}
               <span className={styles.veil} aria-hidden="true" />
               <span className={styles.beam} aria-hidden="true" />
@@ -200,7 +201,7 @@ function Enlarged({ h, onClose }: { h: HandoutRow; onClose: () => void }) {
   }, [onClose])
   return createPortal(
     <div className={styles.lightbox} role="dialog" aria-modal="true" aria-label={h.title || 'Handout image'} onClick={onClose}>
-      <img src={h.image_url} alt={h.title} onClick={e => e.stopPropagation()} />
+      <ManagedImage src={h.image_url} alt={h.title} onClick={e => e.stopPropagation()} />
       <button type="button" className={styles.primary} onClick={onClose}>Close</button>
     </div>,
     document.body,

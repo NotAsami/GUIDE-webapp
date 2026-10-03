@@ -99,7 +99,7 @@
   border: 2px solid #111;
 }
 .region { position: relative; min-height: 0; min-width: 0; }
-/* The work area over regions 02 AND 03 — only the NPC web asks for it. */
+/* The work area over regions 02 AND 03 — the NPC web and the prep board. */
 .region.regionWide { grid-column: 2 / 4; }
 .rFrame {
   position: absolute; inset: 0; background: var(--beige); opacity: 0.85;

@@ -1,3 +1,4 @@
+import { ManagedImage } from '../components/ManagedImage'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useOutletContext } from 'react-router-dom'
@@ -379,7 +380,7 @@ function BioPortrait({ character }: { character: CharacterRow }) {
         <span className={styles.bpGrid} />
         <div className={styles.bpArt}>
           {showImage ? (
-            <img
+            <ManagedImage
               className={styles.bpImg}
               src={id.portrait ?? undefined}
               alt={character.name}
