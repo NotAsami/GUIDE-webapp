@@ -15,9 +15,10 @@
  * reimplemented: one vocabulary for what blocks a publish, shared with the
  * Shard Lattice Editor.
  *
- * Region 02 (the dependency graph) is a reserved overlay on purpose — panes 1
- * and 3 first, per the layout spec. The tab is there so its absence is a stated
- * decision rather than an oversight.
+ * FORM | GRAPH | SCRIPT are three views of the one draft ("G.U.I.D.E. Feature
+ * Graph.html"). The graph and script are projections (components/FeatureGraph);
+ * the only thing either may own is `layout`. Script is a locked mock-up until
+ * its language exists (docs/GUIDE_Codex_Deferred.md).
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -54,6 +55,7 @@ import styles from '../components/authoring.module.css'
 import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
 import { ProsePreview } from '../components/ProsePreview'
+import { FeatureGraph, FeatureScript, GraphInspector, NodeKinds, auditNodeKey } from '../components/FeatureGraph'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
 
@@ -96,6 +98,26 @@ function useFolderCollapse() {
   return [openFolders, setOpenFolders] as const
 }
 
+type Mode = 'form' | 'graph' | 'script'
+/** Which view is up and which rails are folded — the editor opens the way it
+ *  was left. Same persistence pattern as the folders above. */
+type EditorView = { mode: Mode; list: boolean; insp: boolean; audit: boolean; pv?: { cls: string; lv: number } | null }
+const VIEW_KEY = 'guide.featureEditor.view'
+const VIEW0: EditorView = { mode: 'form', list: true, insp: true, audit: true }
+const MODES: { m: Mode; l: string; ic: string }[] = [
+  { m: 'form', l: 'Form', ic: 'fa-list' }, { m: 'graph', l: 'Graph', ic: 'fa-diagram-project' }, { m: 'script', l: 'Script', ic: 'fa-code' },
+]
+
+function useEditorView() {
+  const [view, setView] = useState<EditorView>(() => {
+    try { return { ...VIEW0, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}') } } catch { return VIEW0 }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify(view)) } catch { /* private mode: forget it */ }
+  }, [view])
+  return [view, setView] as const
+}
+
 
 const BLANK: CatalogFeatureData = {
   name: '', category: 'class', icon: 'fa-star', color: DEFAULT_COLOR, activation: 'none',
@@ -118,7 +140,17 @@ export default function FeatureEditor() {
   const [openEffect, setOpenEffect] = useState<number | null>(null)
   const [moreOps, setMoreOps] = useState(false)
   const [helpOn, setHelpOn] = useState(false)
-  const [overlay, setOverlay] = useState<'graph' | 'guide' | 'origin' | null>(null)
+  const [overlay, setOverlay] = useState<'guide' | 'origin' | null>(null)
+  const [view, setView] = useEditorView()
+  /** The selected graph node (a lib/featureGraph key), shared by canvas, script and inspector. */
+  const [sel, setSel] = useState<string | null>(null)
+  const [focusTick, setFocusTick] = useState(0)
+  /** Two or more node keys selected together (Shift-click / marquee). */
+  const [multi, setMulti] = useState<string[]>([])
+  /* A folded inspector opens for a selection and folds again without one — the
+     mockup's rule. Folding it by hand wins until the selection changes. */
+  const [inspAuto, setInspAuto] = useState(false)
+  useEffect(() => { setInspAuto(!!sel) }, [sel])
   const [menuOn, setMenuOn] = useState(false)
   const [pop, setPop] = useState<PopKind>(null)
   const [saving, setSaving] = useState(false)
@@ -171,6 +203,14 @@ export default function FeatureEditor() {
     ...raceLib.races.map(raceContent),
     ...bgLib.backgrounds.map(backgroundContent),
   ].filter(Boolean) as VarOwner[], [classLib.classes, raceLib.races, bgLib.backgrounds])
+
+  /* The Graph view's class-progression lens: every class with its grants, and
+     feature names so a grant can become `has_<name>`. */
+  const progClasses = useMemo(() => classLib.classes.map(r => {
+    const c = classContent(r)
+    return { id: r.id, name: c.name, features: c.features ?? [], vars: c.vars }
+  }), [classLib.classes])
+  const featureNames = useMemo(() => new Map(lib.features.map(r => [r.id, featureContent(r).name ?? ''])), [lib.features])
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
@@ -365,11 +405,11 @@ export default function FeatureEditor() {
 
   /* ---- actions ---- */
   function select(id: string) {
-    setSelId(id); setCreating(false); setOpenEffect(null); setMenuOn(false)
+    setSelId(id); setCreating(false); setOpenEffect(null); setMenuOn(false); setSel(null); setMulti([])
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
   function onNew() {
-    setSelId(null); setCreating(true); setOpenEffect(null); setMenuOn(false)
+    setSelId(null); setCreating(true); setOpenEffect(null); setMenuOn(false); setSel(null); setMulti([])
     setOpen({ vars: false, effects: false })
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
@@ -511,6 +551,64 @@ export default function FeatureEditor() {
   const selectorMode = parsed.mode !== 'text'
   const canDelete = !!selId && !creating
 
+  /* ---- Form | Graph | Script (the mockup's setMode) ---- */
+  const mainPane: Mode = view.mode
+  const graphOn = mainPane === 'graph'
+  const setMode = (m: Mode) => setView(v => ({ ...v, mode: m }))
+  const inspOpen = view.insp || inspAuto
+  /** Reveal a field or node in the form, switching to it if it is not showing. */
+  const showInForm = (auditId: string | null) => {
+    if (mainPane !== 'form') setMode('form')
+    setOpen({ vars: true, effects: true })
+    revealAudit(auditId)
+  }
+  const onAuditJump = (a: AuditItem) => {
+    const key = draft && graphOn ? auditNodeKey(a, draft) : null
+    if (key) { setSel(key); setFocusTick(t => t + 1) } else showInForm(a.id)
+  }
+  const selLabel = (() => {
+    if (!sel || !draft) return ''
+    const e = sel.startsWith('eff:') ? (draft.graph ?? []).find(x => `eff:${x.id}` === sel) : null
+    return e ? e.label || e.op : sel.replace(/^[a-z]+:/, '')
+  })()
+
+  const emptyEl = (
+    <div className={styles.inspEmpty}>
+      <div className={styles.icBigFrame}><i className="fa-solid fa-diagram-project" /></div>
+      <div className={styles.t}>No Feature Selected</div>
+      <div className={styles.d}>Pick a feature from the list, or start a new one.</div>
+    </div>
+  )
+  const paneEl = (m: Mode) => (
+    <div key={m} className={styles.pane}>
+      {m === 'form' ? (
+        <div className={styles.rScroll} ref={scrollRef}>
+          <div className={cx(styles.insp, helpOn && styles.helpon)}>
+            {!draft ? emptyEl : (
+              <FeatureForm
+                d={draft} previewScope={pvScope} set={set} setEffect={setEffect} setVar={setVar} update={update}
+                open={open} setOpen={setOpen} openEffect={openEffect} setOpenEffect={setOpenEffect}
+                moreOps={moreOps} setMoreOps={setMoreOps}
+                folders={folders} nodes={nodes} namesByGid={namesByGid} featureList={featureList} tagUse={tagUse}
+                tagInput={tagInput} setTagInput={setTagInput} tagAcOpen={tagAcOpen} setTagAcOpen={setTagAcOpen}
+                addTag={addTag} setPop={setPop} openOrigin={() => setOverlay('origin')}
+              />
+            )}
+          </div>
+        </div>
+      ) : !draft ? emptyEl : m === 'graph' ? (
+        <FeatureGraph d={draft} catalogTypes={catalogTypes} nodes={nodes} namesByGid={namesByGid} ready={ready}
+          audit={audit} sel={sel} onSelect={setSel} focusTick={focusTick}
+          fitKey={creating ? 'new' : selId ?? ''} onForm={() => setMode('form')}
+          rightInset={inspOpen ? 410 : 60} onChange={f => update(() => f)} multi={multi} onMulti={setMulti}
+          progression={{ classes: progClasses, names: featureNames, featureId: creating ? null : selId, pv: view.pv ?? null, onPv: pv => setView(v => ({ ...v, pv })) }}
+          onToggleInsp={() => { setView(v => ({ ...v, insp: !inspOpen })); setInspAuto(false) }} />
+      ) : (
+        <FeatureScript d={draft} catalogTypes={catalogTypes} sel={sel} onSelect={setSel} />
+      )}
+    </div>
+  )
+
   return (
     <div className={styles.page}>
       <div className={styles.stage} />
@@ -537,15 +635,19 @@ export default function FeatureEditor() {
         </div>
       </header>
 
-      <div className={styles.editor}>
+      <div className={cx(styles.editor, !view.list && styles.listClosed)}>
         {/* ---------------- 01 — FEATURE LIST ---------------- */}
         <section className={styles.region}>
           <div className={styles.frame} />
           <div className={styles.inner}>
             <span className={cx(styles.rCorner, styles.tl)} /><span className={cx(styles.rCorner, styles.br)} />
+            {view.list ? (<>
             <div className={styles.rHead}>
               <span className={styles.rhNum}>01</span><span className={styles.rhTitle}>Features</span>
               <span className={styles.rhMeta}><span className={styles.acc}>{lib.features.length}</span> Total</span>
+              <button type="button" className={styles.railTog} title="Fold the feature list" onClick={() => setView(v => ({ ...v, list: false }))}>
+                <i className="fa-solid fa-angles-left" />
+              </button>
             </div>
             <div className={styles.flTop}>
               <div className={styles.flNewrow}>
@@ -562,12 +664,14 @@ export default function FeatureEditor() {
                   placeholder="Search names, or tag:fire_damage" autoComplete="off" spellCheck={false} />
                 {query && <i className={cx('fa-solid fa-xmark', styles.clr)} onClick={() => setQuery('')} />}
               </div>
-              <div className={cx(styles.flHint, selectorMode && styles.sel)}>
-                <i className={selectorMode ? 'fa-solid fa-crosshairs' : 'fa-solid fa-circle-info'} />
-                {selectorMode
-                  ? <span>Selector query — matching features whose <b>effects target</b> {parsed.mode}:{parsed.value || '…'}</span>
-                  : <span>Plain text matches names. <b>tag:</b> or <b>roll:</b> matches what effects target. <b>Drag</b> a feature to reorder it, or onto another folder to refile it.</span>}
-              </div>
+              {/* Only while a selector query is active: it says what the list
+                  now means. The always-on how-to line cost a row of list. */}
+              {selectorMode && (
+                <div className={cx(styles.flHint, styles.sel)}>
+                  <i className="fa-solid fa-crosshairs" />
+                  <span>Selector query — matching features whose <b>effects target</b> {parsed.mode}:{parsed.value || '…'}</span>
+                </div>
+              )}
             </div>
 
             <div className={styles.rScroll}>
@@ -680,35 +784,66 @@ export default function FeatureEditor() {
                 return body
               })()}
             </div>
+            {draft && graphOn && (
+              <>
+                <div className={styles.auditHead}><span className={styles.t}>Node kinds</span><span className={styles.n}>drag onto the canvas</span></div>
+                <NodeKinds />
+              </>
+            )}
+            {draft && (view.audit ? (
+              <div className={styles.listAudit}>
+                {/* The shared panel — same component the class editor mounts.
+                    It lives here, beside the list (the mockup's place), so it
+                    stays in view whichever of the three views is up. */}
+                <button type="button" className={styles.auditX} title="Fold the audit"
+                  onClick={() => setView(v => ({ ...v, audit: false }))}><i className="fa-solid fa-chevron-down" /></button>
+                <AuditPanel title="Feature Audit" audit={audit} onJump={onAuditJump} />
+              </div>
+            ) : (
+              <button type="button" className={styles.auditFold} onClick={() => setView(v => ({ ...v, audit: true }))}>
+                <i className="fa-solid fa-chevron-up" />Feature Audit
+                <span className={cx(styles.n, errs > 0 && styles.bad)}>{errs + warns ? `${errs} err · ${warns} warn` : 'clean'}</span>
+              </button>
+            ))}
+            </>) : (
+              <button type="button" className={styles.rail} title="Open the feature list" onClick={() => setView(v => ({ ...v, list: true }))}>
+                <i className="fa-solid fa-angles-right" />
+                <span className={styles.railLab}>Features</span>
+                {draft && <span className={styles.railSel}>{draft.name || 'Untitled'}</span>}
+                {errs > 0 && <span className={styles.railSel} style={{ color: 'var(--danger-hot)' }}>{errs} error{errs === 1 ? '' : 's'}</span>}
+              </button>
+            )}
           </div>
 
-          <button type="button" className={cx(styles.gbtn, overlay === 'graph' && styles.on)}
-            title="02 · Dependency Graph" onClick={() => setOverlay(o => (o === 'graph' ? null : 'graph'))}>
-            <i className="fa-solid fa-circle-nodes" />
-            <span className={styles.gbLab}>Dependency Graph</span>
-          </button>
-          <button type="button" className={cx(styles.gbtn, styles.g2, overlay === 'origin' && styles.on)}
+          <button type="button" className={cx(styles.gbtn, overlay === 'origin' && styles.on)}
             title="Origin Chain" onClick={() => setOverlay(o => (o === 'origin' ? null : 'origin'))}>
             <i className="fa-solid fa-diagram-project" />
             <span className={styles.gbLab}>Origin Chain</span>
           </button>
-          <button type="button" className={cx(styles.gbtn, styles.g3, overlay === 'guide' && styles.on)}
+          <button type="button" className={cx(styles.gbtn, styles.g2, overlay === 'guide' && styles.on)}
             title="Authoring Guide" onClick={() => setOverlay(o => (o === 'guide' ? null : 'guide'))}>
             <i className="fa-solid fa-question" />
             <span className={styles.gbLab}>Authoring Guide</span>
           </button>
         </section>
 
-        {/* ---------------- 03 — NODE EDITOR ---------------- */}
-        <section className={styles.region}>
+        {/* ---------------- 02/03 — FORM | GRAPH | SCRIPT + INSPECTOR ---------------- */}
+        <section className={cx(styles.region, styles.center)}>
           <div className={styles.frame} />
           <div className={styles.inner}>
             <span className={cx(styles.rCorner, styles.tl)} /><span className={cx(styles.rCorner, styles.br)} />
-            <div className={cx(styles.rHead, styles.editHead)}
+            <div className={styles.tools}
               style={draft ? { background: `linear-gradient(90deg, ${draft.color || DEFAULT_COLOR}22, ${draft.color || DEFAULT_COLOR}0a 55%, transparent)` } : undefined}>
-              <span className={styles.rhNum} style={draft ? { color: draft.color || DEFAULT_COLOR } : undefined}>03</span>
-              <span className={styles.rhTitle}>Node Editor</span>
-              <span className={styles.rhMeta}>
+              <div className={styles.modeSeg}>
+                {MODES.map(({ m, l, ic }) => (
+                  <button key={m} type="button" className={cx(view.mode === m && styles.on)} onClick={() => setMode(m)}>
+                    <Icon name={ic} />{l}
+                  </button>
+                ))}
+              </div>
+              <span className={styles.toolsGrow} />
+              <span className={styles.sync}><i className="fa-solid fa-link" />one object · three views</span>
+              <span className={styles.toolsMeta}>
                 <span className={styles.idtag}>
                   {draft && <i className={cx('fa-solid fa-lock', styles.lk)} />}
                   <span className={styles.k}>Id</span>
@@ -717,56 +852,61 @@ export default function FeatureEditor() {
                     : <span className={cx(styles.v, styles.pend)}>{draft ? 'on first save' : '—'}</span>}
                   {draft && <button type="button" className={styles.idq} title="Why the id never changes" onClick={() => setPop({ k: 'idhelp' })}>?</button>}
                 </span>
+                <button type="button" className={cx(styles.rhKebab, menuOn && styles.on)} aria-haspopup="menu" aria-expanded={menuOn}
+                  title="Feature actions" onClick={() => setMenuOn(v => !v)}>
+                  <i className="fa-solid fa-ellipsis-vertical" />
+                </button>
+                {menuOn && (
+                  <div className={styles.hmenu} role="menu">
+                    <button type="button" role="menuitem" disabled={!canDelete} onClick={() => void onDuplicate()}>
+                      <i className="fa-solid fa-clone" /> Duplicate feature
+                    </button>
+                    <div className={styles.hsep} />
+                    <button type="button" role="menuitem" className={styles.danger} disabled={!canDelete}
+                      onClick={() => { setMenuOn(false); setPop({ k: 'delete' }) }}>
+                      <i className="fa-solid fa-trash" /> Delete feature
+                    </button>
+                    {!canDelete && (
+                      <div className={styles.hnote}>
+                        {!draft ? 'Select a feature first.' : 'Unsaved draft — save it before it can be duplicated or deleted.'}
+                      </div>
+                    )}
+                  </div>
+                )}
               </span>
-              <button type="button" className={cx(styles.rhKebab, menuOn && styles.on)} aria-haspopup="menu" aria-expanded={menuOn}
-                title="Feature actions" onClick={() => setMenuOn(v => !v)}>
-                <i className="fa-solid fa-ellipsis-vertical" />
-              </button>
-              {menuOn && (
-                <div className={styles.hmenu} role="menu">
-                  <button type="button" role="menuitem" disabled={!canDelete} onClick={() => void onDuplicate()}>
-                    <i className="fa-solid fa-clone" /> Duplicate feature
-                  </button>
-                  <div className={styles.hsep} />
-                  <button type="button" role="menuitem" className={styles.danger} disabled={!canDelete}
-                    onClick={() => { setMenuOn(false); setPop({ k: 'delete' }) }}>
-                    <i className="fa-solid fa-trash" /> Delete feature
-                  </button>
-                  {!canDelete && (
-                    <div className={styles.hnote}>
-                      {!draft ? 'Select a feature first.' : 'Unsaved draft — save it before it can be duplicated or deleted.'}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
-            <div className={styles.rScroll} ref={scrollRef}>
-              <div className={cx(styles.insp, helpOn && styles.helpon)}>
-                {!draft ? (
-                  <div className={styles.inspEmpty}>
-                    <div className={styles.icBigFrame}><i className="fa-solid fa-diagram-project" /></div>
-                    <div className={styles.t}>No Feature Selected</div>
-                    <div className={styles.d}>Pick a feature from the list, or start a new one.</div>
+            <div className={styles.views}>
+              {paneEl(mainPane)}
+              {graphOn && draft && (
+                <div className={cx(styles.inspFloat, !inspOpen && styles.closed)}>
+                  <div className={styles.frame} />
+                  <div className={styles.inner}>
+                    {inspOpen ? (<>
+                      <div className={styles.rHead}>
+                        <span className={styles.rhNum}>03</span><span className={styles.rhTitle}>Inspector</span>
+                        <span className={styles.rhMeta}>{selLabel}</span>
+                        <button type="button" className={styles.railTog} title="Fold the inspector"
+                          onClick={() => { setView(v => ({ ...v, insp: false })); setInspAuto(false) }}>
+                          <i className="fa-solid fa-angles-right" />
+                        </button>
+                      </div>
+                      <div className={styles.rScroll}>
+                        <div className={styles.inspBody}>
+                          <GraphInspector d={draft} catalogTypes={catalogTypes} sel={sel} update={update}
+                            nodes={nodes} namesByGid={namesByGid} featureList={featureList}
+                            onSelect={setSel} multi={multi} onMulti={setMulti}
+                            pressFields={<ActivationFields d={draft} set={set} />} />
+                        </div>
+                      </div>
+                    </>) : (
+                      <button type="button" className={styles.rail} title="Open the inspector" onClick={() => setView(v => ({ ...v, insp: true }))}>
+                        <i className="fa-solid fa-angles-left" />
+                        <span className={styles.railLab}>Inspector</span>
+                        {selLabel && <span className={styles.railSel}>{selLabel}</span>}
+                      </button>
+                    )}
                   </div>
-                ) : (
-                  <FeatureForm
-                    d={draft} previewScope={pvScope} set={set} setEffect={setEffect} setVar={setVar} update={update}
-                    open={open} setOpen={setOpen} openEffect={openEffect} setOpenEffect={setOpenEffect}
-                    moreOps={moreOps} setMoreOps={setMoreOps}
-                    folders={folders} nodes={nodes} namesByGid={namesByGid} featureList={featureList} tagUse={tagUse}
-                    tagInput={tagInput} setTagInput={setTagInput} tagAcOpen={tagAcOpen} setTagAcOpen={setTagAcOpen}
-                    addTag={addTag} setPop={setPop} openOrigin={() => setOverlay('origin')}
-                  />
-                )}
-              </div>
-              {draft && (
-                <div className={styles.edAudit}>
-                  {/* The shared panel — same component the class editor mounts,
-                      so the two cannot drift. `.edAudit` is this screen's
-                      wrapper, re-padding for the 46px step gutter. */}
-                  <AuditPanel title="Feature Audit" audit={audit}
-                    onJump={a => { setOpen({ vars: true, effects: true }); revealAudit(a.id) }} />
                 </div>
               )}
             </div>
@@ -776,18 +916,6 @@ export default function FeatureEditor() {
               conditionally is what killed the slide-in. `inert` keeps the closed
               one out of the tab order, which `pointer-events: none` alone does
               not do. */}
-          <div className={cx(styles.gpanel, overlay === 'graph' && styles.on)} {...inertWhen(overlay !== 'graph')}>
-            <div className={styles.gpHead}>
-              <span className={styles.n}>02</span><span className={styles.t}>Dependency Graph</span>
-              <button type="button" className={styles.gpX} onClick={() => setOverlay(null)}><i className="fa-solid fa-xmark" /> Close</button>
-            </div>
-            <div className={styles.resv}>
-              <div className={styles.resvIc}><i className="fa-solid fa-circle-nodes" /></div>
-              <div className={styles.t}>Reserved</div>
-              <div className={styles.s}>The graph of which features feed which — variables read across nodes, effects that grant other features — lands in this overlay.</div>
-              <div className={styles.k}>Not built in this pass</div>
-            </div>
-          </div>
           <GuidePanel open={overlay === 'guide'} helpOn={helpOn} setHelpOn={setHelpOn} onClose={() => setOverlay(null)} />
 
           {/* The origin chain gets a PANEL, not a modal: it is an editor for one
@@ -979,13 +1107,8 @@ function OriginChain({ steps, onChange }: { steps: string[]; onChange: (next: st
 function FeatureForm(p: FormProps) {
   const { d, set, update } = p
   const deepRef = useAutoGrow(d.deep_description ?? '')
-  const act = ACTIVATIONS[(d.activation ?? 'none') as ActivationKind] ?? ACTIVATIONS.none
   const vars = d.vars ?? []
   const graph = d.graph ?? []
-  /* The armed offers — a `once` effect carrying an `ask`. Two or more of them
-     are the pick-one the roll panel renders, and the only place `picks` means
-     anything. */
-  const offers = graph.filter(e => e.once && e.ask?.trim()).length
   const varErr = vars.some(v => !v.name?.trim() || (v.kind === 'derived' && !v.formula?.trim()))
   const effErr = graph.some(e => !e.label?.trim())
 
@@ -1092,83 +1215,7 @@ function FeatureForm(p: FormProps) {
         onChange={e => set({ deep_description: e.target.value })} />
       <div className={styles.subHint}>The detail, on the expanded card.</div>
 
-      <div className={styles.grid2}>
-        <div>
-          <span className={styles.fieldLab}>Activation<span className={styles.ty}>enum</span></span>
-          <select className={styles.in} value={d.activation ?? 'none'} onChange={e => set({ activation: e.target.value as ActivationKind })}>
-            {ACT_ORDER.map(k => <option key={k} value={k}>{ACTIVATIONS[k].label}</option>)}
-          </select>
-        </div>
-        <div />
-      </div>
-      <div className={styles.actNote} style={{ ['--an' as string]: act.color }}>
-        <Icon name={act.icon} /><span>{act.note}</span>
-      </div>
-
-      <div className={styles.grid2} style={{ marginBottom: 2 }}>
-        <div>
-          <span className={styles.fieldLab}>Max uses</span>
-          {/* A FORMULA, not a number input. "The Rages column of the Barbarian
-              table" is `rages`, and a spinner cannot say that. Blank or 0 is
-              at-will; `current` is deliberately not written, because absent
-              means FULL and a template cannot know what its own max comes to on
-              a character it has not met. */}
-          <input className={styles.in} type="text" value={String(d.uses?.max ?? '')}
-            placeholder="0 = at-will · or rages"
-            onChange={e => {
-              const raw = e.target.value.trim()
-              const n = Number(raw)
-              const off = !raw || (Number.isFinite(n) && Math.trunc(n) <= 0)
-              set({
-                uses: off ? undefined : { max: Number.isFinite(n) ? Math.trunc(n) : raw },
-                ...(off ? { recharge: undefined } : {}),
-              })
-            }} />
-        </div>
-        <div>
-          <span className={styles.fieldLab}>Resets on</span>
-          <select className={styles.in} value={d.recharge ?? ''} disabled={!d.uses}
-            onChange={e => set({ recharge: (e.target.value || undefined) as 'turn' | 'short' | 'long' | undefined,
-              // A full short-rest refill makes a partial one meaningless.
-              ...(e.target.value === 'short' || e.target.value === 'turn' ? { shortRecharge: undefined } : {}) })}>
-            {RECHARGES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
-          </select>
-        </div>
-      </div>
-      {/* A PICK-TWO. Only means anything where there is a pick to widen — two or
-          more armed offers from this feature — so it is offered exactly there
-          rather than sitting inert on every form. */}
-      {offers >= 2 && (
-        <div style={{ marginBottom: 2 }}>
-          <span className={styles.fieldLab}>Of its {offers} offers, the player may take</span>
-          <input className={styles.in} type="text" value={String(d.picks ?? '')}
-            placeholder="blank = one · 2 · level >= 17 ? 2 : 1"
-            onChange={e => {
-              const raw = e.target.value.trim()
-              const n = Number(raw)
-              set({ picks: !raw ? undefined : Number.isFinite(n) ? Math.max(1, Math.trunc(n)) : raw })
-            }} />
-        </div>
-      )}
-      {/* THE THIRD COMBINATION. "All of them on a long rest, one on a short" is
-          Rage, and no single value of Resets-on says it — so it is its own field,
-          offered only where it means something. */}
-      {d.recharge === 'long' && (
-        <div style={{ marginBottom: 2 }}>
-          <span className={styles.fieldLab}>…and on a short rest, give back</span>
-          <input className={styles.in} type="text" value={String(d.shortRecharge ?? '')}
-            placeholder="blank = nothing · 1 · a formula"
-            onChange={e => {
-              const raw = e.target.value.trim()
-              const n = Number(raw)
-              set({ shortRecharge: !raw ? undefined : Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : raw })
-            }} />
-        </div>
-      )}
-      <div className={styles.actNote} style={{ ['--an' as string]: 'var(--beige-dim)', marginTop: -2 }}>
-        <i className="fa-solid fa-rotate" />
-        <span>Uses are independent of activation — <b>0 means at-will</b>, and a passive feature can still track uses.</span>
-      </div>
+      <ActivationFields d={d} set={set} />
 
       {/* THE PRESS CAN ROLL SOMETHING. `roll`/`rollTone`/`rollLabel` have been in
           the type and read by the activation sheet since Second Wind was
@@ -1603,5 +1650,94 @@ function Popover({ pop, onClose, draft, set, update, nodes, namesByGid, selId, r
         </>)}
       </div>
     </div>
+  )
+}
+
+/** Activation, uses, resets, picks — the press's own fields. ONE component, so
+ *  the form and the Graph view's press/picks inspector are the same inputs and
+ *  cannot drift. Picks shows once there is a choice to widen, or a value to clear. */
+export function ActivationFields({ d, set }: { d: CatalogFeatureData; set: (p: Partial<CatalogFeatureData>) => void }) {
+  const act = ACTIVATIONS[(d.activation ?? 'none') as ActivationKind] ?? ACTIVATIONS.none
+  const offers = (d.graph ?? []).filter(e => e.once && e.ask?.trim()).length
+  return (
+    <>
+    <div className={styles.grid2}>
+      <div>
+        <span className={styles.fieldLab}>Activation<span className={styles.ty}>enum</span></span>
+        <select className={styles.in} value={d.activation ?? 'none'} onChange={e => set({ activation: e.target.value as ActivationKind })}>
+          {ACT_ORDER.map(k => <option key={k} value={k}>{ACTIVATIONS[k].label}</option>)}
+        </select>
+      </div>
+      <div />
+    </div>
+    <div className={styles.actNote} style={{ ['--an' as string]: act.color }}>
+      <Icon name={act.icon} /><span>{act.note}</span>
+    </div>
+
+    <div className={styles.grid2} style={{ marginBottom: 2 }}>
+      <div>
+        <span className={styles.fieldLab}>Max uses</span>
+        {/* A FORMULA, not a number input. "The Rages column of the Barbarian
+            table" is `rages`, and a spinner cannot say that. Blank or 0 is
+            at-will; `current` is deliberately not written, because absent
+            means FULL and a template cannot know what its own max comes to on
+            a character it has not met. */}
+        <input className={styles.in} type="text" value={String(d.uses?.max ?? '')}
+          placeholder="0 = at-will · or rages"
+          onChange={e => {
+            const raw = e.target.value.trim()
+            const n = Number(raw)
+            const off = !raw || (Number.isFinite(n) && Math.trunc(n) <= 0)
+            set({
+              uses: off ? undefined : { max: Number.isFinite(n) ? Math.trunc(n) : raw },
+              ...(off ? { recharge: undefined } : {}),
+            })
+          }} />
+      </div>
+      <div>
+        <span className={styles.fieldLab}>Resets on</span>
+        <select className={styles.in} value={d.recharge ?? ''} disabled={!d.uses}
+          onChange={e => set({ recharge: (e.target.value || undefined) as 'turn' | 'short' | 'long' | undefined,
+            // A full short-rest refill makes a partial one meaningless.
+            ...(e.target.value === 'short' || e.target.value === 'turn' ? { shortRecharge: undefined } : {}) })}>
+          {RECHARGES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
+        </select>
+      </div>
+    </div>
+    {/* A PICK-TWO. Only means anything where there is a pick to widen — two or
+        more armed offers from this feature — so it is offered exactly there
+        rather than sitting inert on every form. */}
+    {(offers >= 2 || (d.picks != null && String(d.picks).trim() !== '')) && (
+      <div style={{ marginBottom: 2 }}>
+        <span className={styles.fieldLab}>Of its {offers} offers, the player may take</span>
+        <input className={styles.in} type="text" value={String(d.picks ?? '')}
+          placeholder="blank = one · 2 · level >= 17 ? 2 : 1"
+          onChange={e => {
+            const raw = e.target.value.trim()
+            const n = Number(raw)
+            set({ picks: !raw ? undefined : Number.isFinite(n) ? Math.max(1, Math.trunc(n)) : raw })
+          }} />
+      </div>
+    )}
+    {/* THE THIRD COMBINATION. "All of them on a long rest, one on a short" is
+        Rage, and no single value of Resets-on says it — so it is its own field,
+        offered only where it means something. */}
+    {d.recharge === 'long' && (
+      <div style={{ marginBottom: 2 }}>
+        <span className={styles.fieldLab}>…and on a short rest, give back</span>
+        <input className={styles.in} type="text" value={String(d.shortRecharge ?? '')}
+          placeholder="blank = nothing · 1 · a formula"
+          onChange={e => {
+            const raw = e.target.value.trim()
+            const n = Number(raw)
+            set({ shortRecharge: !raw ? undefined : Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : raw })
+          }} />
+      </div>
+    )}
+    <div className={styles.actNote} style={{ ['--an' as string]: 'var(--beige-dim)', marginTop: -2 }}>
+      <i className="fa-solid fa-rotate" />
+      <span>Uses are independent of activation — <b>0 means at-will</b>, and a passive feature can still track uses.</span>
+    </div>
+    </>
   )
 }

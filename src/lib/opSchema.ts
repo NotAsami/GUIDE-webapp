@@ -323,9 +323,26 @@ export const PALETTE_ACT = ['setVar', 'addVar', 'addUses', 'addSlot', 'setHp', '
 export const PALETTE_SHEET = ['boost', 'useability', 'unarmored'] as const satisfies readonly GraphOp[]
 export const OP_ORDER: GraphOp[] = [...PALETTE, ...PALETTE_MORE, ...PALETTE_SHEET, ...PALETTE_ACT]
 
+/** A new effect of this op, every schema field present and blank. The ONE place
+ *  op defaults come from — the form's palette and the Graph view's add-node
+ *  both call it. Lives here (not in GraphEffects.tsx) so lib code can reach it. */
+export function blankEffect(op: GraphOp): GraphEffect {
+  const eff: GraphEffect = { id: `e${Math.random().toString(36).slice(2, 8)}`, op, target: [], label: '' }
+  for (const fd of OPS[op].fields) {
+    const rec = eff as unknown as Record<string, unknown>
+    rec[fd.key] = fd.type === 'array' ? new Array<string>(21).fill('') : fd.type === 'boolean' ? false : ''
+  }
+  return eff
+}
+
 export const IS_ACTIVATION = (op: GraphOp) => OPS[op].group === 'activation'
 /** Skipped by resolve() — it never reaches a roll. Compiled by sheetEffects. */
 export const IS_SHEET = (op: GraphOp) => OPS[op].group === 'sheet'
+/** Does this op point at something? Every roll modifier does. Of the activation
+ *  outcomes only two reach past this feature: `addUses` (another feature's
+ *  counter) and `grant` (the roll the gift answers to); the rest write this
+ *  feature's own variables. Sheet ops never target. */
+export const HAS_TARGET = (op: GraphOp) => OPS[op].group === 'passive' || op === 'addUses' || op === 'grant'
 
 export const OP_TITLE: Record<GraphOp, string> = {
   add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', floor: 'Floor', reroll: 'Reroll', note: 'Note', boost: 'Boost',

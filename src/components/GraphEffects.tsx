@@ -27,7 +27,7 @@ import { useState } from 'react'
 import type { GraphEffect, GraphOp, VarDef } from '../lib/database.types'
 import {
   OPS, OP_ORDER, OP_TITLE, PALETTE, PALETTE_MORE, PALETTE_ACT, PALETTE_SHEET, ROLL_SELECTORS,
-  IS_ACTIVATION, IS_DAMAGE_FLAG, IS_SHEET, type OpField,
+  HAS_TARGET, IS_ACTIVATION, IS_DAMAGE_FLAG, IS_SHEET, blankEffect, type OpField,
 } from '../lib/opSchema'
 import { proseField, useAutoGrow } from '../lib/textareaHooks'
 import { matchCount, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
@@ -47,7 +47,8 @@ const KINDS: { k: SelKind; ic: string; l: string }[] = [
 ]
 
 type PopKind =
-  | { k: 'thing'; ei: number; ti: number }
+  /** `feature`: addUses can only move a feature's counter. */
+  | { k: 'thing'; ei: number; ti: number; only?: 'feature' }
   | { k: 'help'; which: 'when' | 'ask' | 'target' }
   | null
 
@@ -59,18 +60,6 @@ export function splitSel(s: string): { kind: SelKind; value: string } {
 const joinSel = (kind: SelKind, value: string) =>
   kind === 'tag' ? `tag:${value}` : kind === 'roll' ? `roll:${value}` : value
 
-const blankArr = () => new Array<string>(21).fill('')
-const newId = () => `e${Math.random().toString(36).slice(2, 8)}`
-
-function blankEffect(op: GraphOp): GraphEffect {
-  const eff: GraphEffect = { id: newId(), op, target: [], label: '' }
-  for (const fd of OPS[op].fields) {
-    if (fd.type === 'array') (eff as unknown as Record<string, unknown>)[fd.key] = blankArr()
-    else if (fd.type === 'boolean') (eff as unknown as Record<string, unknown>)[fd.key] = false
-    else (eff as unknown as Record<string, unknown>)[fd.key] = ''
-  }
-  return eff
-}
 
 const HELP = {
   when: {
@@ -250,6 +239,41 @@ export function GraphEffects({ graph, vars, nodes, namesByGid, onChange, onVarsC
   )
 }
 
+/** ONE effect's full editor, outside the list — the Graph view's inspector.
+ *
+ *  The same EffectCard the list opens, not a second form: an inspector that
+ *  drew its own fields would be a second render path for every authored value,
+ *  and the one that did not get upgraded would fail silently. */
+export function EffectEditor({ eff, graph, vars, nodes, namesByGid, onChange, onVarsChange, onClose }: {
+  eff: GraphEffect
+  graph: GraphEffect[]
+  vars: VarDef[]
+  nodes: AuthoredNode[]
+  namesByGid: Map<string, { name: string; kind: string }>
+  onChange: (next: GraphEffect[]) => void
+  onVarsChange?: (next: VarDef[]) => void
+  onClose: () => void
+}) {
+  const [pop, setPop] = useState<PopKind>(null)
+  const ei = graph.indexOf(eff)
+  if (ei < 0) return null
+  const setEffect = (i: number, p: Partial<GraphEffect>) =>
+    onChange(graph.map((g, j) => (j === i ? { ...g, ...p } : g)))
+  return (
+    <>
+      <EffectCard eff={eff} ei={ei} graph={graph} vars={vars}
+        setEffect={setEffect} setGraph={onChange} onVarsChange={onVarsChange}
+        nodes={nodes} namesByGid={namesByGid} setPop={setPop} onClose={onClose} />
+      {pop && (
+        <GraphPopover pop={pop} onClose={() => setPop(null)} nodes={nodes} namesByGid={namesByGid}
+          onPick={(i, ti, gidValue) => onChange(graph.map((g, j) => (j === i
+            ? { ...g, target: (g.target ?? []).map((t, k) => (k === ti ? gidValue : t)) }
+            : g)))} />
+      )}
+    </>
+  )
+}
+
 /* ---------- popovers this block owns ---------- */
 
 function GraphPopover({ pop, onClose, nodes, namesByGid, onPick }: {
@@ -277,7 +301,7 @@ function GraphPopover({ pop, onClose, nodes, namesByGid, onPick }: {
               {(() => {
                 const rows = nodes
                   .map(n => ({ n, meta: namesByGid.get(n.gid) }))
-                  .filter(x => x.meta && (!q.trim() || x.meta.name.toLowerCase().includes(q.toLowerCase().trim())))
+                  .filter(x => x.meta && (!pop.only || x.n.gid.startsWith(`${pop.only}:`)) && (!q.trim() || x.meta.name.toLowerCase().includes(q.toLowerCase().trim())))
                   .slice(0, 60)
                 if (!rows.length) return <div className={styles.pkNone}>Nothing in the catalog matches that.</div>
                 return rows.map(({ n, meta }) => (
@@ -378,12 +402,16 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
   const isFlag = IS_DAMAGE_FLAG(eff.op)
   const isAct = IS_ACTIVATION(eff.op)
   const isSheet = IS_SHEET(eff.op)
+  /* The two activations that reach past this feature each take ONE kind of
+     selector — the audit refuses the others — so the picker offers only that. */
+  const onlyKind: SelKind | null = eff.op === 'addUses' ? 'thing' : eff.op === 'grant' ? 'roll' : null
+  const kinds = onlyKind ? KINDS.filter(K => K.k === onlyKind) : KINDS
 
   const counts = targets.map(t => (t.startsWith('roll:') ? Infinity : matchCount(t, nodes)))
   const thingsAndTags = counts.filter(n => Number.isFinite(n)).reduce((a: number, b) => a + b, 0)
   const rollCount = counts.filter(n => !Number.isFinite(n)).length
   const summary = !targets.length
-    ? { own: true, text: 'this node’s own roll' }
+    ? { own: true, text: eff.op === 'addUses' ? 'this feature’s own uses' : eff.op === 'grant' ? 'no roll yet' : 'this node’s own roll' }
     : {
         own: false,
         zero: thingsAndTags === 0 && rollCount === 0,
@@ -426,8 +454,9 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
       </div>
       <div className={styles.opBlurb}>{cfg?.blurb}</div>
 
-      {/* targets — activations have none: they write a variable on this
-          character rather than reaching out at another node. */}
+      {/* targets — most activations have none: they write a variable on this
+          character. addUses and grant reach out, so they get the picker
+          (HAS_TARGET is the one answer the graph view reads too). */}
       {isSheet ? (
         <div className={styles.tgtOwn}>
           <i className="fa-solid fa-arrow-up-right-dots" />
@@ -436,7 +465,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
             roll built from that number moves with it. It is never a contribution to one roll.
           </span>
         </div>
-      ) : isAct ? (
+      ) : !HAS_TARGET(eff.op) ? (
         <div className={styles.tgtOwn}>
           <i className="fa-solid fa-bolt" />
           <span>No target — this writes one of this feature’s own variables when the player presses Use.</span>
@@ -447,7 +476,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
         {/* How the list combines. Only meaningful once there are two, so it
             appears then — a toggle over one selector is noise, and the audit
             says so if you set it anyway. */}
-        {targets.length > 1 && (
+        {targets.length > 1 && !isAct && (
           <span className={styles.matchSeg}>
             <button type="button" className={cx(eff.match !== 'and' && styles.on)}
               onClick={() => setEffect(ei, { match: undefined })}
@@ -468,7 +497,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
         return (
           <div key={ti} className={cx(styles.tgt, s.kind === 'thing' ? styles.kThing : s.kind === 'tag' ? styles.kTag : styles.kRoll)}>
             <span className={cx(styles.seg, styles.tiny, styles.kseg)}>
-              {KINDS.map(K => (
+              {kinds.map(K => (
                 <button key={K.k} type="button" title={K.l}
                   className={cx(s.kind === K.k && styles.on, s.kind === K.k && styles[K.k])}
                   onClick={() => { if (s.kind !== K.k) setTarget(ti, joinSel(K.k, '')) }}>
@@ -479,7 +508,7 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
             <span className={styles.tval}>
               {s.kind === 'thing' && (
                 <button type="button" className={styles.pickbtn} style={{ flex: 1 }}
-                  onClick={() => setPop({ k: 'thing', ei, ti })}>
+                  onClick={() => setPop({ k: 'thing', ei, ti, only: eff.op === 'addUses' ? 'feature' : undefined })}>
                   <span className={styles.in} style={{ margin: 0, display: 'block', textAlign: 'left' }}>
                     {namesByGid.get(t)?.name ?? (t || 'Search the catalog…')}
                   </span>
@@ -509,10 +538,14 @@ function EffectCard({ eff, ei, graph, vars, setEffect, setGraph, onVarsChange, n
       {!targets.length && (
         <div className={styles.tgtOwn}>
           <i className="fa-solid fa-arrow-turn-down" />
-          <span>No selectors — this node applies to its own roll. Add one to reach out at other things. Multiple selectors are OR.</span>
+          <span>{eff.op === 'addUses'
+            ? 'No selector — this moves this feature’s own use counter. Add a feature to spend or restore its uses instead.'
+            : eff.op === 'grant'
+              ? 'No selector — a grant needs the roll it answers to. roll:d20 is “their next D20 Test”.'
+              : 'No selectors — this node applies to its own roll. Add one to reach out at other things. Multiple selectors are OR.'}</span>
         </div>
       )}
-      <button type="button" className={styles.addmini} onClick={() => setEffect(ei, { target: [...targets, 'tag:'] })}>
+      <button type="button" className={styles.addmini} onClick={() => setEffect(ei, { target: [...targets, joinSel(onlyKind ?? 'tag', '')] })}>
         <i className="fa-solid fa-plus" /> Add selector
       </button>
       </>)}
@@ -672,7 +705,7 @@ function SchemaField({ fd, eff, ei, setEffect, vars }: {
     </select></>
   }
   if (fd.type === 'array') {
-    const arr = Array.isArray(raw) ? (raw as string[]) : blankArr()
+    const arr: string[] = Array.isArray(raw) ? (raw as string[]) : new Array<string>(21).fill('')
     const filled = arr.filter((x, i) => i > 0 && String(x).trim()).length
     return <>{label}
       <div className={styles.arr}>
@@ -793,6 +826,138 @@ export function AuditPanel({ title, audit, onJump }: {
   )
 }
 
+/** One variable declaration, editable. VarsBlock lists these; the Graph
+ *  view's inspector shows one — the same card, so the two cannot drift. */
+export function VarCard({ v, set, onDelete, features }: {
+  v: VarDef
+  set: (p: Partial<VarDef>) => void
+  onDelete: () => void
+  features?: { gid: string; name: string }[]
+}) {
+  const stored = v.kind !== 'derived'
+  const dmOnly = v.scope === 'dm'
+  return (
+    <div data-audit={v.name || undefined} className={cx(styles.card, !v.name?.trim() && styles.err)}>
+      <div className={styles.cardHead}>
+        <input className={styles.vname} value={v.name ?? ''} placeholder="identifier" spellCheck={false}
+          onChange={e => set({ name: e.target.value })} />
+        <span className={styles.seg}>
+          <button type="button" className={cx(stored && styles.on)}
+            onClick={() => set({ kind: 'stored', formula: undefined, uses: undefined, type: v.type ?? 'num' })}>
+            <i className="fa-solid fa-database" /> Stored
+          </button>
+          <button type="button" className={cx(!stored && styles.on)}
+            onClick={() => set({ kind: 'derived', type: undefined, initial: undefined, scope: undefined })}>
+            <i className="fa-solid fa-function" /> Derived
+          </button>
+        </span>
+        <button type="button" className={cx('fa-solid fa-trash', styles.dx)}
+          onClick={() => onDelete()} />
+      </div>
+      {stored ? (
+        <>
+          <div className={styles.kindnote}>Stored — written on the character sheet and read back. Needs a type.</div>
+          <div className={styles.grid3}>
+            <div>
+              <span className={styles.fieldLab}>Type<span className={styles.req}>*</span><span className={styles.ty}>enum</span></span>
+              <select className={cx(styles.in, !v.type && styles.bad)} value={v.type ?? ''}
+                onChange={e => set({ type: (e.target.value || undefined) as 'num' | 'bool' | undefined })}>
+                <option value="">— required —</option>
+                <option value="num">Number</option>
+                <option value="bool">Boolean</option>
+              </select>
+            </div>
+            <div>
+              <span className={styles.fieldLab}>Initial value</span>
+              <input className={styles.in} value={v.initial === undefined ? '' : String(v.initial)}
+                placeholder="optional — e.g. 0"
+                onChange={e => {
+                  const raw = e.target.value.trim()
+                  const initial = raw === '' ? undefined
+                    : v.type === 'bool' ? raw === 'true'
+                    : Number.isFinite(Number(raw)) ? Number(raw) : undefined
+                  set({ initial })
+                }} />
+            </div>
+            <div>
+              <span className={styles.fieldLab}>Resets on<span className={styles.ty}>enum</span></span>
+              <select className={styles.in} value={v.resetOn ?? ''}
+                onChange={e => set({ resetOn: (e.target.value || undefined) as 'turn' | 'short' | 'long' | undefined })}>
+                <option value="">Never</option>
+                <option value="turn">Start of your turn</option>
+                <option value="short">Short rest</option>
+                <option value="long">Long rest</option>
+              </select>
+            </div>
+          </div>
+          <div className={styles.kindnote} style={{ margin: '-6px 0 11px' }}>
+            Resets return the variable to its initial value — the same rule a
+            feature’s uses follow. A long rest includes the short-rest ones.
+            “Start of your turn” is the odd one: it is cleared by Advance Turn and
+            NOT by a rest, and it is how “until the start of your next turn” is
+            written. Anything armed while it was true lapses with it.
+            <b> Never</b> means only an activation or the player changes it.
+          </div>
+          <div className={cx(styles.perm, !dmOnly && styles.player)}>
+            <i className={`fa-solid ${dmOnly ? 'fa-lock' : 'fa-user-pen'}`} />
+            <span>
+              <span className={styles.pt}>{dmOnly ? 'DM-only' : 'Player-writable'}</span><br />
+              <span className={styles.ps}>{dmOnly
+                ? 'permission · hidden from the player sheet, only this console writes it'
+                : 'permission · the player can change this from their sheet'}</span>
+            </span>
+            <span className={cx(styles.seg, styles.tiny)}>
+              <button type="button" className={cx(!dmOnly && styles.on, !dmOnly && styles.cy)} onClick={() => set({ scope: 'player' })}>Player</button>
+              <button type="button" className={cx(dmOnly && styles.on)} onClick={() => set({ scope: 'dm' })}><i className="fa-solid fa-lock" /> DM-only</button>
+            </span>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={styles.kindnote}>Derived — never stored. Its type comes from the formula, so there is no type to pick.</div>
+          {/* TWO SOURCES FOR A DERIVED VALUE, and they are alternatives. A
+              formula computes; a use counter is READ off a feature, which
+              is the only way to ask "how many Rages have I got left" —
+              uses live on the sheet, where no formula can reach. */}
+          {features?.length ? (
+            <span className={styles.seg} style={{ marginBottom: 4 }}>
+              <button type="button" className={cx(!v.uses && styles.on)}
+                onClick={() => set({ uses: undefined })}>
+                <i className="fa-solid fa-function" /> Formula
+              </button>
+              <button type="button" className={cx(!!v.uses && styles.on)}
+                onClick={() => set({ uses: v.uses ?? features[0].gid, formula: undefined })}>
+                <i className="fa-solid fa-battery-half" /> Feature uses
+              </button>
+            </span>
+          ) : null}
+          {v.uses ? (<>
+            <span className={styles.fieldLab}>Reads the uses of<span className={styles.req}>*</span></span>
+            <select className={styles.in} value={v.uses}
+              onChange={e => set({ uses: e.target.value })}>
+              {features?.some(f => f.gid === v.uses)
+                ? null
+                : <option value={v.uses}>{v.uses} — not in the catalog</option>}
+              {(features ?? []).map(f => <option key={f.gid} value={f.gid}>{f.name}</option>)}
+            </select>
+            <div className={styles.kindnote}>
+              Resolved after every other variable, so a formula cannot read this one —
+              use it in an effect’s <b>when</b>, a value, or a note.
+            </div>
+          </>) : (<>
+            <span className={styles.fieldLab}>Formula<span className={styles.req}>*</span></span>
+            <input className={cx(styles.in, !v.formula?.trim() && styles.bad)} value={v.formula ?? ''} spellCheck={false}
+              placeholder="level / 4 + 1" onChange={e => set({ formula: e.target.value })} />
+          </>)}
+        </>
+      )}
+      <span className={styles.fieldLab}>Display label</span>
+      <input className={styles.in} value={v.label ?? ''} style={{ marginBottom: 2 }}
+        placeholder="optional — what the sheet calls it" onChange={e => set({ label: e.target.value })} />
+    </div>
+  )
+}
+
 /** The state a node carries, and who may write it.
  *
  *  Extracted with the effect block for the same reason: a spell declaring
@@ -815,130 +980,10 @@ export function VarsBlock({ vars, onChange, features }: {
         <i className="fa-solid fa-circle-info" />
         <span>Only needed when an effect must read or write state. Stored variables are saved on the character; derived ones are recomputed from a formula on every read.</span>
       </div>
-      {vars.map((v, vi) => {
-        const stored = v.kind !== 'derived'
-        const dmOnly = v.scope === 'dm'
-        return (
-          <div key={vi} data-audit={v.name || undefined} className={cx(styles.card, !v.name?.trim() && styles.err)}>
-            <div className={styles.cardHead}>
-              <input className={styles.vname} value={v.name ?? ''} placeholder="identifier" spellCheck={false}
-                onChange={e => setVar(vi, { name: e.target.value })} />
-              <span className={styles.seg}>
-                <button type="button" className={cx(stored && styles.on)}
-                  onClick={() => setVar(vi, { kind: 'stored', formula: undefined, uses: undefined, type: v.type ?? 'num' })}>
-                  <i className="fa-solid fa-database" /> Stored
-                </button>
-                <button type="button" className={cx(!stored && styles.on)}
-                  onClick={() => setVar(vi, { kind: 'derived', type: undefined, initial: undefined, scope: undefined })}>
-                  <i className="fa-solid fa-function" /> Derived
-                </button>
-              </span>
-              <button type="button" className={cx('fa-solid fa-trash', styles.dx)}
-                onClick={() => onChange(vars.filter((_, j) => j !== vi))} />
-            </div>
-            {stored ? (
-              <>
-                <div className={styles.kindnote}>Stored — written on the character sheet and read back. Needs a type.</div>
-                <div className={styles.grid3}>
-                  <div>
-                    <span className={styles.fieldLab}>Type<span className={styles.req}>*</span><span className={styles.ty}>enum</span></span>
-                    <select className={cx(styles.in, !v.type && styles.bad)} value={v.type ?? ''}
-                      onChange={e => setVar(vi, { type: (e.target.value || undefined) as 'num' | 'bool' | undefined })}>
-                      <option value="">— required —</option>
-                      <option value="num">Number</option>
-                      <option value="bool">Boolean</option>
-                    </select>
-                  </div>
-                  <div>
-                    <span className={styles.fieldLab}>Initial value</span>
-                    <input className={styles.in} value={v.initial === undefined ? '' : String(v.initial)}
-                      placeholder="optional — e.g. 0"
-                      onChange={e => {
-                        const raw = e.target.value.trim()
-                        const initial = raw === '' ? undefined
-                          : v.type === 'bool' ? raw === 'true'
-                          : Number.isFinite(Number(raw)) ? Number(raw) : undefined
-                        setVar(vi, { initial })
-                      }} />
-                  </div>
-                  <div>
-                    <span className={styles.fieldLab}>Resets on<span className={styles.ty}>enum</span></span>
-                    <select className={styles.in} value={v.resetOn ?? ''}
-                      onChange={e => setVar(vi, { resetOn: (e.target.value || undefined) as 'turn' | 'short' | 'long' | undefined })}>
-                      <option value="">Never</option>
-                      <option value="turn">Start of your turn</option>
-                      <option value="short">Short rest</option>
-                      <option value="long">Long rest</option>
-                    </select>
-                  </div>
-                </div>
-                <div className={styles.kindnote} style={{ margin: '-6px 0 11px' }}>
-                  Resets return the variable to its initial value — the same rule a
-                  feature’s uses follow. A long rest includes the short-rest ones.
-                  “Start of your turn” is the odd one: it is cleared by Advance Turn and
-                  NOT by a rest, and it is how “until the start of your next turn” is
-                  written. Anything armed while it was true lapses with it.
-                  <b> Never</b> means only an activation or the player changes it.
-                </div>
-                <div className={cx(styles.perm, !dmOnly && styles.player)}>
-                  <i className={`fa-solid ${dmOnly ? 'fa-lock' : 'fa-user-pen'}`} />
-                  <span>
-                    <span className={styles.pt}>{dmOnly ? 'DM-only' : 'Player-writable'}</span><br />
-                    <span className={styles.ps}>{dmOnly
-                      ? 'permission · hidden from the player sheet, only this console writes it'
-                      : 'permission · the player can change this from their sheet'}</span>
-                  </span>
-                  <span className={cx(styles.seg, styles.tiny)}>
-                    <button type="button" className={cx(!dmOnly && styles.on, !dmOnly && styles.cy)} onClick={() => setVar(vi, { scope: 'player' })}>Player</button>
-                    <button type="button" className={cx(dmOnly && styles.on)} onClick={() => setVar(vi, { scope: 'dm' })}><i className="fa-solid fa-lock" /> DM-only</button>
-                  </span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className={styles.kindnote}>Derived — never stored. Its type comes from the formula, so there is no type to pick.</div>
-                {/* TWO SOURCES FOR A DERIVED VALUE, and they are alternatives. A
-                    formula computes; a use counter is READ off a feature, which
-                    is the only way to ask "how many Rages have I got left" —
-                    uses live on the sheet, where no formula can reach. */}
-                {features?.length ? (
-                  <span className={styles.seg} style={{ marginBottom: 4 }}>
-                    <button type="button" className={cx(!v.uses && styles.on)}
-                      onClick={() => setVar(vi, { uses: undefined })}>
-                      <i className="fa-solid fa-function" /> Formula
-                    </button>
-                    <button type="button" className={cx(!!v.uses && styles.on)}
-                      onClick={() => setVar(vi, { uses: v.uses ?? features[0].gid, formula: undefined })}>
-                      <i className="fa-solid fa-battery-half" /> Feature uses
-                    </button>
-                  </span>
-                ) : null}
-                {v.uses ? (<>
-                  <span className={styles.fieldLab}>Reads the uses of<span className={styles.req}>*</span></span>
-                  <select className={styles.in} value={v.uses}
-                    onChange={e => setVar(vi, { uses: e.target.value })}>
-                    {features?.some(f => f.gid === v.uses)
-                      ? null
-                      : <option value={v.uses}>{v.uses} — not in the catalog</option>}
-                    {(features ?? []).map(f => <option key={f.gid} value={f.gid}>{f.name}</option>)}
-                  </select>
-                  <div className={styles.kindnote}>
-                    Resolved after every other variable, so a formula cannot read this one —
-                    use it in an effect’s <b>when</b>, a value, or a note.
-                  </div>
-                </>) : (<>
-                  <span className={styles.fieldLab}>Formula<span className={styles.req}>*</span></span>
-                  <input className={cx(styles.in, !v.formula?.trim() && styles.bad)} value={v.formula ?? ''} spellCheck={false}
-                    placeholder="level / 4 + 1" onChange={e => setVar(vi, { formula: e.target.value })} />
-                </>)}
-              </>
-            )}
-            <span className={styles.fieldLab}>Display label</span>
-            <input className={styles.in} value={v.label ?? ''} style={{ marginBottom: 2 }}
-              placeholder="optional — what the sheet calls it" onChange={e => setVar(vi, { label: e.target.value })} />
-          </div>
-        )
-      })}
+      {vars.map((v, vi) => (
+        <VarCard key={vi} v={v} features={features}
+          set={p => setVar(vi, p)} onDelete={() => onChange(vars.filter((_, j) => j !== vi))} />
+      ))}
       <button type="button" className={styles.addbtn}
         onClick={() => onChange([...vars, { name: '', kind: 'stored', type: 'num', scope: 'player' }])}>
         <i className="fa-solid fa-plus" /> Add variable
