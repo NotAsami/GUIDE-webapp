@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatalogFeatureData, GraphEffect } from './database.types.ts'
-import { affectingInCatalog, graphFit, detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
+import { pressNeeds, affectingInCatalog, graphFit, detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
 import { blankEffect } from './opSchema.ts'
 
 const feat = (over: Partial<CatalogFeatureData>) => ({ name: 'Test', ...over }) as CatalogFeatureData
@@ -519,4 +519,28 @@ test('each graph-helps reason stands on its own', () => {
 test('two offers competing for Picks is reason enough on its own', () => {
   const offersOnly = feat({ graph: [eff({ id: 'a', once: true, ask: 'A?', target: ['roll:attack'] }), eff({ id: 'b', once: true, ask: 'B?', target: ['roll:attack'] })] })
   assert.equal(graphFit(project(offersOnly)).fit, 'graph')
+})
+
+/* ---------- deleting the press ---------- */
+
+test('Del on a press that only Activation keeps clears Activation, and the press goes', () => {
+  const placed = feat({ activation: 'action', graph: [eff({ id: 'p', op: 'add', value: '1', target: ['roll:attack'] })] })
+  const f = ok(removeNode(placed, 'press'))
+  assert.equal(f.activation, 'none')
+  assert.equal(project(f).nodes.some(n => n.kind === 'press'), false)
+})
+
+test('a press something else needs stays, and says what', () => {
+  const r = removeNode(PLAIN, 'press')
+  assert.ok(!r.ok && /3 activation outcomes/.test(r.why), (r as { why: string }).why)
+  const armed = removeNode(feat({ activation: 'bonus', uses: { max: 2 }, graph: [eff({ id: 'o', once: true, target: ['roll:attack'] })] }), 'press')
+  assert.ok(!armed.ok && /Max uses/.test(armed.why) && /1 armed \(once\) rule/.test(armed.why))
+})
+
+test('pressNeeds names a reason exactly when isUsable sees one (activation aside)', () => {
+  for (const f of [PLAIN, BRUTAL, JUDGEMENT, EMBER, SECOND_WIND, feat({}),
+    feat({ vars: [{ name: 'held', kind: 'stored', type: 'bool' }] }), feat({ roll: '1d6' })]) {
+    const none = { ...f, activation: 'none' as const }
+    assert.equal(pressNeeds(none).length > 0, project(none).nodes.some(n => n.kind === 'press'), f.name)
+  }
 })

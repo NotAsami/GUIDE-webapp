@@ -171,7 +171,7 @@
 .marq { position: absolute; z-index: 8; border: 1px dashed var(--amber-hot); background: rgba(226,176,33,.07); pointer-events: none; }
 
 /* ---------- class-progression lens (slice 4c, mockup .probe / .off) ---------- */
-.probe { position: absolute; left: 10px; top: 10px; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; max-width: calc(100% - 460px); padding: 5px 6px 5px 10px; background: rgba(10,9,8,.92); border: 1px solid rgba(212,191,125,.3); font-family: var(--font-mono); font-size: 8px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.probe { position: absolute; left: 140px; top: 10px; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; max-width: calc(100% - 560px); padding: 5px 6px 5px 10px; background: rgba(10,9,8,.92); border: 1px solid rgba(212,191,125,.3); font-family: var(--font-mono); font-size: 8px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
 .selw { position: relative; display: block; }
 .probeSel { appearance: none; background: rgba(0,0,0,.4); border: 1.5px solid rgba(212,191,125,.35); color: var(--beige); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; padding: 5px 22px 5px 9px; cursor: pointer; }
 .probeSel option { background: #14130f; color: var(--text); text-transform: none; }
@@ -323,3 +323,7 @@
   background-repeat: no-repeat; background-origin: border-box; background-position: top left, bottom right;
   background-size: calc(var(--cut) + var(--bw)) calc(var(--cut) + var(--bw));
 }
+
+/* the "form fits" note's dismiss */
+.noteX { flex: 0 0 auto; width: 22px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; color: var(--beige-dim); font-size: 11px; cursor: pointer; }
+.noteX:hover { color: var(--amber-hot); }

@@ -17,7 +17,7 @@ import type { CatalogFeatureData, FeatureLayout, GraphEffect, VarDef } from './d
 import { ROLL_IDENTS, VAR_IDENTS, freeIdents, interpolations, isHasIdent } from './expr.ts'
 import { askKey, asKey, auditNode, probeScope, type AuthoredNode } from './graph.ts'
 import { HAS_TARGET, OPS } from './opSchema.ts'
-import { isUsable } from './featureView.ts'
+import { isUsable, toggleVars } from './featureView.ts'
 
 /** The VAR_IDENTS the canvas draws. Everything else in that list is a sheet stat
  *  — `level`, `prof`, the mods — which nearly every formula reads, and a node for
@@ -489,6 +489,22 @@ export function editGate(f: CatalogFeatureData, key: string, text: string, catal
   return next.layout ? withLayout(next, { ...next.layout, pos }) : next
 }
 
+/** What keeps a feature pressable, in words — isUsable()'s reasons, minus a set
+ *  `activation`. Kept beside isUsable's test so the two cannot disagree. */
+export function pressNeeds(f: CatalogFeatureData): string[] {
+  const g = f.graph ?? []
+  const outcomes = g.filter(e => OPS[e.op]?.group === 'activation').length
+  const armed = g.filter(e => e.once && OPS[e.op]?.group !== 'activation').length
+  const toggles = toggleVars(f)
+  return [
+    f.roll ? 'its press roll' : '',
+    f.uses ? 'Max uses' : '',
+    outcomes ? `${outcomes} activation outcome${outcomes === 1 ? '' : 's'}` : '',
+    armed ? `${armed} armed (once) rule${armed === 1 ? '' : 's'}` : '',
+    toggles.length ? `the toggle variable ${toggles.map(v => v.name).join(', ')}` : '',
+  ].filter(Boolean)
+}
+
 /** Delete a node. What that means depends on what it is a view of. */
 export function removeNode(f: CatalogFeatureData, key: string, catalogTypes: Record<string, 'num' | 'bool'> = {}): Edit {
   const g = project(f, catalogTypes)
@@ -518,7 +534,17 @@ export function removeNode(f: CatalogFeatureData, key: string, catalogTypes: Rec
       }
       break
     }
-    case 'press': return { ok: false, why: 'The press is the feature’s Activation. Set it to None in the form to remove it.' }
+    case 'press': {
+      /* The press is drawn whenever there is something to press (isUsable), not
+         from `activation` alone — so clearing activation removes it only when
+         nothing else needs one. Otherwise say what does. */
+      next = { ...f, activation: 'none' }
+      if (isUsable(next)) {
+        const why = pressNeeds(next)
+        return { ok: false, why: `The press stays while ${why.length ? why.join(', ') : 'something else'} ${why.length === 1 ? 'needs' : 'need'} it. Delete ${why.length === 1 ? 'that' : 'those'} first.` }
+      }
+      break
+    }
     case 'ext': return { ok: false, why: 'Declared by another node. Remove the formulas that read it instead.' }
     case 'ctx': return { ok: false, why: 'Roll context is the engine’s. Remove the formulas that read it instead.' }
   }
