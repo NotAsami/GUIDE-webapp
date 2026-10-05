@@ -95,6 +95,24 @@ Hooks.once('ready', async () => {
     if (status === 'SUBSCRIBED') console.log(`${MOD}: joined`)
     else if (status === 'CHANNEL_ERROR') ui.notifications.error('G.U.I.D.E. Bridge: channel error.')
   })
+
+  /* THE PARTY'S INITIATIVE IS ROLLED BY THE CODEX. Every way Foundry rolls
+     initiative ends here — the tracker's d20, Roll All, Roll NPCs, and the actor
+     sheet's button, which reaches it through Actor#rollInitiative — so this one
+     wrap covers them all. Mapped characters are asked for; everyone else rolls
+     exactly as before.
+     Installed only once sign-in has worked: a bridge that cannot reach the
+     codex must not take initiative away from Foundry. */
+  const CombatClass = CONFIG.Combat.documentClass
+  const rollHere = CombatClass.prototype.rollInitiative
+  CombatClass.prototype.rollInitiative = async function (ids, options = {}) {
+    const rest = []
+    for (const id of typeof ids === 'string' ? [ids] : ids) {
+      if (!askCodex(this, id, rollHere, options)) rest.push(id)
+    }
+    if (rest.length) await rollHere.call(this, rest, options)
+    return this
+  }
 })
 
 async function onMessage(msg) {
@@ -105,10 +123,84 @@ async function onMessage(msg) {
     else if (msg?.kind === 'macros') await syncMacros(msg)
     else if (msg?.kind === 'effects') await syncEffects(msg)
     else if (msg?.kind === 'actors') await syncActors(msg)
+    else if (msg?.kind === 'initiative') await recordInitiative(msg)
   } catch (err) {
     console.error(`${MOD}:`, err)
     ui.notifications.error(`G.U.I.D.E. Bridge: ${err.message}`)
   }
+}
+
+/* ---------------------------------------------------------------------------
+   INITIATIVE
+
+   Foundry asks; the codex rolls. A PC's initiative rolled here is bare DEX plus
+   a flat bonus — no Feral Instinct, no armed modifiers — so for a mapped
+   character the roll is a request, answered with the codex's own roll.
+
+   ONE ANSWER PER REQUEST. `req` goes out on the ask and comes back on the
+   answer; the first one is taken and anything after it is dropped, which is
+   what a second codex tab answering the same ask looks like, and what an answer
+   arriving after the fallback already rolled looks like.
+
+   THE FALLBACK IS LOUD. A codex that does not answer — its tab closed — would
+   otherwise leave the tracker waiting forever. After INIT_WAIT_MS Foundry rolls
+   it after all, using the codex's flat modifier (toFoundryActor exports it) but
+   none of its features, and says so. Foundry's own card makes it obvious which
+   kind of roll it was.
+--------------------------------------------------------------------------- */
+
+const INIT_WAIT_MS = 10000
+/** req -> { combat, id, name, timer } */
+const pendingInit = new Map()
+
+/** Ask the codex for this combatant's initiative. False when it is not one of
+ *  the party, so the caller rolls it here as usual. */
+function askCodex(combat, id, rollHere, options) {
+  const combatant = combat.combatants.get(id)
+  const character = combatant?.actorId ? charOf(combatant.actorId) : undefined
+  if (!character) return false
+
+  // Already asked and not answered: Roll All pressed twice is still one roll.
+  for (const p of pendingInit.values()) if (p.combat === combat && p.id === id) return true
+
+  const req = foundry.utils.randomID()
+  const timer = setTimeout(async () => {
+    if (!pendingInit.delete(req)) return
+    ui.notifications.warn(`G.U.I.D.E. Bridge: ${combatant.name}'s codex did not answer — rolled here, without its features.`)
+    await rollHere.call(combat, [id], options)
+  }, INIT_WAIT_MS)
+  pendingInit.set(req, { combat, id, name: combatant.name, timer })
+  send({ kind: 'initRequest', character, req })
+  return true
+}
+
+/** The codex's initiative roll: the card first, then the tracker, for `apply`'s
+ *  reason — the tracker never shows a number the table did not see rolled. */
+async function recordInitiative({ req, held, total, ...msg }) {
+  let combat
+  let id
+  if (req) {
+    const asked = pendingInit.get(req)
+    if (!asked) return
+    clearTimeout(asked.timer)
+    pendingInit.delete(req)
+    /* A RIDER IS STILL OPEN, so there is no total yet. The fallback is called
+       off; the panel's Post control sends the settled roll, without a `req`,
+       and lands below. */
+    if (held) return ui.notifications.info(`G.U.I.D.E. Bridge: ${asked.name} is answering a rider — their initiative will come from the codex.`)
+    ;({ combat, id } = asked)
+  } else {
+    // Pressed in the codex, not asked for: whichever combat is on screen.
+    const actorId = actorOf(msg.character)
+    combat = game.combat
+    id = combat?.combatants.find((c) => c.actorId === actorId)?.id
+  }
+
+  if (msg.html) await postRoll(msg)
+  if (!combat?.combatants.get(id) || typeof total !== 'number') {
+    return ui.notifications.info('G.U.I.D.E. Bridge: initiative rolled, but that character is not in the active combat.')
+  }
+  await combat.setInitiative(id, total)
 }
 
 /* WHAT HAS ALREADY BEEN SAID. A roll asked for from the hotbar posts itself as

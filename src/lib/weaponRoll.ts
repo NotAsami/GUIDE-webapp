@@ -107,7 +107,7 @@ export function rollWeapon(args: {
 
   // `riders` comes back ANNOTATED — each contribution carrying the faces it
   // rolled — so the panel shows "1d6 → +4" rather than a promise.
-  const { attack: atk, damage, riders, hit } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack), {
+  const { attack: atk, damage, extraDamage, riders, hit } = rollWeaponAttack(weapon, sheet, ammoBonusOf(stack), {
     attack: atkRes,
     damage: h => (dmgRes = resolve(graph, { kind: 'damage', subject, sub, tags, targetAc, hit: h })),
   }, targetAc)
@@ -127,6 +127,9 @@ export function rollWeapon(args: {
       subject: weapon.id ? { kind: 'weapon' as const, id: weapon.id } : undefined,
       attack: atk,
       damage,
+      // A rider that brought its own damage type gets its own block, so it is
+      // never resisted as the weapon's type.
+      ...(extraDamage.length ? { extraDamage } : {}),
       /* WHO IT WAS AGAINST. The verdict, never the AC: the number is the DM's
          to reveal and the player only needs to know whether it landed. */
       ...(target ? { target: { token: target.token, name: target.name, hit } } : {}),

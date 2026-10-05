@@ -15,8 +15,8 @@ import { activeEffects, effectiveSheet } from '../lib/effects'
 import { burden, burdenTier, type BurdenTier } from '../lib/burden'
 import { handLabel, weaponAttackBonus, weaponDamageString } from '../lib/weapons'
 import { EffectsSidebar } from '../components/EffectsSidebar'
-import { buildCheck, useRollLog } from '../lib/rolls'
-import { armsSpent, armsSpentBy } from '../lib/graphState'
+import { useRollLog } from '../lib/rolls'
+import { initiativeRoll } from '../lib/initiative'
 import { useGraph } from '../lib/useGraph'
 import { useFoundryConditions } from '../lib/foundryConditions'
 import { mirroredEffects } from '../lib/foundryDamage'
@@ -92,23 +92,23 @@ export function Stats() {
     ...rowSuppressed,
     ...mirrored.filter(e => immuneTo(graph, e.name)).map(e => e.id),
   ])
-  const { addRoll } = useRollLog()
+  const { addRoll, updateRoll } = useRollLog()
   const [initFlash, setInitFlash] = useState<FlashState | null>(null)
   const initTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => { if (initTimer.current) window.clearTimeout(initTimer.current) }, [])
 
+  /* The roll itself — log, arms, Foundry — is lib/initiative.ts, shared with
+     the answer to Foundry's own initiative request. This cell only flashes. */
   async function rollInitiative() {
-    const entry = buildCheck(graph, {
-      kind: 'check', sub: 'initiative', title: 'INITIATIVE', subtitle: 'Dexterity Check',
-      terms: [{ label: 'INIT', value: view.initiative ?? 0 }],
+    const logged = await initiativeRoll({
+      character, graph, sheet: view, addRoll, updateRoll,
+      saveResources: r => updateSection('resources', r),
     })
-    const rollId = crypto.randomUUID()
-    const ids = armsSpentBy(...(entry.riderGroups ?? []).map(g => g.riders))
-    if (ids.length && !(await updateSection('resources', armsSpent(character, ids, rollId) as CharacterRow['resources'])).ok) return
+    if (!logged) return
+    const { total, crit, fumble } = logged.check!
     if (initTimer.current) window.clearTimeout(initTimer.current)
-    setInitFlash({ value: entry.check.total, crit: entry.check.crit, fumble: entry.check.fumble })
+    setInitFlash({ value: total, crit, fumble })
     initTimer.current = window.setTimeout(() => setInitFlash(null), FLASH_MS)
-    addRoll(entry, rollId)
   }
 
   async function removeEffect(id: string) {

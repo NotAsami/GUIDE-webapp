@@ -26,6 +26,7 @@ import { unlockChime } from '../lib/chime'
 import { pushableEffects } from '../lib/foundryDamage'
 import { useFoundryTarget } from '../lib/target'
 import { ammoStacksFor, rollWeapon } from '../lib/weaponRoll'
+import { initiativeRoll } from '../lib/initiative'
 import { attackRolled } from '../lib/graphState'
 import { effectiveSheet } from '../lib/effects'
 import { useGraph } from '../lib/useGraph'
@@ -256,6 +257,18 @@ export function Layout() {
 
   const foundryTarget = useFoundryTarget(character?.id)
   useFoundryMessages(async msg => {
+    /* FOUNDRY ASKED FOR INITIATIVE. Answered here rather than on the Stats
+       screen because the player can be on any screen, or none — the tab behind
+       Foundry is exactly the case. Same function the INIT cell calls. */
+    if (msg.kind === 'initRequest') {
+      if (character && msg.character === character.id) {
+        void initiativeRoll({
+          character, graph, sheet: effectiveSheet(character, shardTrees), addRoll, updateRoll,
+          saveResources: r => updateSection('resources', r), req: msg.req,
+        })
+      }
+      return
+    }
     if (msg.kind !== 'request' || !character || msg.character !== character.id) return
     const weapon = ((character.equipped ?? {}) as { weapons?: EquippedWeapon[] }).weapons
       ?.find(w => w.id === msg.weapon)

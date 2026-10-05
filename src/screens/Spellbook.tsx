@@ -5,7 +5,7 @@ import { useOutletContext } from 'react-router-dom'
 import type { CharacterRow, CharacterSection, CharacterSpellbook, ShardTree, Spell, SpellSchool, SpellSlot } from '../lib/database.types'
 import { gid, resolve, rollResolution } from '../lib/graph'
 import { formatMod } from '../lib/dnd'
-import { rollAttack } from '../lib/weapons'
+import { extraDamageRolls, rollAttack } from '../lib/weapons'
 import { useFoundryTarget } from '../lib/target'
 import { applyOutcomes, outcomeLine, planActivation } from '../lib/graphState'
 import { useGraph } from '../lib/useGraph'
@@ -258,7 +258,11 @@ export function Spellbook() {
       kind: 'damage', sub: 'spell', subject, tags: sp.tags, cast: castLevel,
       targetAc, ...(spellAtk ? { hit: spellAtk.hit } : {}),
     })
-    const roll = sp.hasDamage ? rollSpellDamage(sp, castLevel, charLevel, rollResolution(res, crit), crit) : null
+    /* The spell's OWN type is what decides which contributions belong in its
+       total: a rider in another type leaves `flat` and becomes its own damage
+       block below, so it is never resisted as this spell's type. */
+    const contrib = rollResolution(res, crit, sp.dmgType)
+    const roll = sp.hasDamage ? rollSpellDamage(sp, castLevel, charLevel, contrib, crit) : null
     if (roll) {
       setLastRollById(prev => ({ ...prev, [sp.id]: roll }))
       setFreshId(sp.id)
@@ -289,6 +293,9 @@ export function Spellbook() {
           total: roll.total, type: roll.type, crit: false,
           breakdown: `${roll.expr} = ${roll.total}`,
         },
+        // A rider in another type is its own block — never folded into the
+        // spell's total, where it would be resisted as the spell's type.
+        ...(contrib.extra.length ? { extraDamage: extraDamageRolls(contrib.extra, crit) } : {}),
         riderGroups: [
           { label: 'Attack', riders: atkGraph?.riders ?? [] },
           { label: 'Damage', riders: roll.riders },

@@ -9,7 +9,7 @@ import type { Rider } from './graph.ts'
 import type { CheckRoll, RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
 import {
-  askSections, catalogView, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf,
+  askSections, catalogView, headlineLine, lineViews, openAsks, patchRiders, pendingOf, pendingTotal, pickedOf,
   picksAllowed, picksTaken, rerollAt, rerollD20, rerollDamage, rerollsOf,
   releaseIdsOf, resolvedOf, riderAmount, riderValue, riderViews, rollTotals, sourceGroups, unresolvedOf,
 } from './rollView.ts'
@@ -29,6 +29,63 @@ const d20s = (...vs: number[]) => faces(20, ...vs)
 
 const ATTACK = { d20: 14, rolls: d20s(14), mode: 'normal' as const, bonus: 6, total: 20, crit: false, fumble: false, breakdown: '' }
 const DAMAGE = { diceExpr: '1d8', dice: faces(8, 5), bonus: 3, total: 8, type: 'slashing', crit: false, breakdown: '' }
+
+/* A SAVE DC IS NOT A ROLL. `lineViews` leads with it, and the headline total
+   used to be whichever of attack/check came first — so a spell carrying both
+   reported its DC as the attack. Fire Bolt with a save authored on it read
+   "21 to hit" where 21 was the DC, and the hit/miss verdict against a target
+   reads the very same number. */
+test('a roll carrying BOTH a save DC and an attack reports the attack', () => {
+  const e = entry({ kind: 'custom', saveDC: 21, saveAbility: 'wis', attack: ATTACK, damage: DAMAGE })
+  assert.equal(rollTotals(e, riderViews(e)).attack, 20)   // the attack's 20, never the DC's 21
+})
+
+/* …AND THE DC STILL LEADS WHEN NOTHING WAS ROLLED, which is why the fix is a
+   preference and not a filter: a spell that only imposes a save has no d20 of
+   its own, and the DC belongs in that slot. */
+test('a save-only roll still reports the DC, captioned as one', () => {
+  const e = entry({ kind: 'custom', saveDC: 15, saveAbility: 'dex', damage: DAMAGE })
+  assert.equal(rollTotals(e, riderViews(e)).attack, 15)
+  assert.equal(headlineLine(lineViews(e))?.totalLabel, 'DEX Save DC')
+})
+
+/* A RIDER THAT BROUGHT ITS OWN DAMAGE TYPE IS ITS OWN LINE. One line each is
+   all it takes: `rollTotals` sums damage lines by type, so this is what carries
+   the split to the panel footer, the chat card and dnd5e's resistances. */
+const RADIANT = { diceExpr: '2d8', dice: faces(8, 3, 4), bonus: 0, total: 7, type: 'radiant', crit: false, breakdown: '' }
+
+test('an extra damage block is its own line, and each type counts once', () => {
+  const e = entry({ damage: DAMAGE, extraDamage: [RADIANT] })
+  assert.equal(lineViews(e).filter(l => l.kind === 'damage').length, 2)
+
+  const t = rollTotals(e, riderViews(e))
+  assert.deepEqual(t.byType, { slashing: 8, radiant: 7 })
+  assert.equal(t.damage, 15)
+
+  /* MARKED, so a surface can choose. The panel draws only the roll's own line
+     and lets its footer state the split; the toast and the Foundry card, which
+     have no contribution row, show both. */
+  assert.deepEqual(lineViews(e).map(l => !!l.extra), [false, true])
+})
+
+test('rerolling a die patches the block that die belongs to', () => {
+  const e = entry({ damage: DAMAGE, extraDamage: [RADIANT] })
+  // Line 0 is the weapon's own damage, line 1 the radiant a rider brought.
+  const patch = rerollAt(e, { line: 1, die: 0 })
+  assert.ok(patch?.extraDamage, 'the radiant block should be the one rerolled')
+  assert.equal(patch!.damage, undefined, 'the slashing block must not move')
+  assert.equal(patch!.extraDamage![0].dice.length, 2)
+})
+
+test('a manual attack rider moves the attack, not the DC beside it', () => {
+  const e = entry({
+    kind: 'custom', saveDC: 21, saveAbility: 'wis', attack: ATTACK,
+    riderGroups: [{ label: 'Attack', riders: [
+      rider({ when: 'manual', on: true, rolled: true, rolledDice: [], label: 'Bless', flat: 4, dice: [] }),
+    ] }],
+  })
+  assert.equal(rollTotals(e, riderViews(e)).attack, 24)   // 20 + 4
+})
 
 test('an `always` rider is named but NOT added again', () => {
   // The roller already folded it into the line's bonus. Counting it here would

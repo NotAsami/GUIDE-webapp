@@ -10,110 +10,267 @@
    the codex paints the operator layer amber for exactly that reason — the
    colour says whose screen you are on before you have read a word of it. The
    join screen (login.css) is the player's and stays cyan.
+
+   HOW THIS WORKS — same as login.css. Foundry v14 is built on CSS variables,
+   so the bulk of this file is a palette swap rather than a pile of selectors:
+   retarget the variables and Foundry restyles itself, including the markup we
+   never named. The addon injects this file UNLAYERED and Foundry's own rules
+   all sit inside `@layer`, so unlayered rules here win regardless of
+   specificity. Nothing needs `!important`.
    ═════════════════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-:root {
-  --guide-bg: #1d1d1d;
-  --guide-bg-2: #161616;
-  --guide-text: #dedede;
-  --guide-muted: #aaaaaa;
-  --guide-amber: #e2b021;
-  --guide-amber-hot: #ffce4d;
-  --guide-amber-dim: #8a6d1a;
-  --guide-amber-deep: #2a2110;
-}
+/* ── the palette swap ───────────────────────────────────────────────────── */
 
 body {
-  background: var(--guide-bg);
+  /* Foundry's three accent slots. `warm-1` draws the ridge dividers either
+     side of every panel heading and every tab, plus checkboxes and pips;
+     `warm-2` is button hover and `--color-shadow-primary`, which is the glow
+     on the active tab; `warm-3` is the scrollbar. */
+  --color-warm-1: #ffce4d;
+  --color-warm-2: #e2b021;
+  --color-warm-3: #8a6d1a;
+
+  /* The grounds. Foundry ships these purple (#0b0a13 / #302831); the codex is
+     neutral ink. `cool-5-90` is the panel background, `cool-4` the input and
+     tag ground, `cool-3` the data border. */
+  --color-cool-3: #5c4a14;
+  --color-cool-4: #1c1c1c;
+  --color-cool-5: #0d0d0d;
+  --color-cool-5-25: rgba(13, 13, 13, 0.25);
+  --color-cool-5-50: rgba(13, 13, 13, 0.5);
+  --color-cool-5-75: rgba(13, 13, 13, 0.75);
+  --color-cool-5-90: rgba(13, 13, 13, 0.92);
+
+  /* The text ramp, brightest first. 1–3 are text (body copy is `light-3`),
+     4–6 are labels, hints, placeholders and borders. */
+  --color-light-1: #f2f2f2;
+  --color-light-2: #dedede;
+  --color-light-3: #c8c8c8;
+  --color-light-4: #aaaaaa;
+  --color-light-5: #8a8a8a;
+  --color-light-6: #6a6a6a;
+
+  --color-text-accent: var(--color-warm-1);
+  --color-scrollbar: var(--color-warm-3);
+  --color-border-highlight: var(--color-warm-1);
+  --color-border-highlight-alt: var(--color-warm-2);
+
+  /* Two faces, as everywhere else in the codex: Cinzel for display, JetBrains
+     Mono for everything that is data. */
+  --font-sans: 'JetBrains Mono', ui-monospace, monospace;
+  --font-body: var(--font-sans);
+  --font-monospace: var(--font-sans);
+  --font-h1: 'Cinzel', serif;
+  --font-h2: 'Cinzel', serif;
+  --font-h3: 'Cinzel', serif;
+  --font-h1-size: var(--font-size-36);
+  --font-h2-size: var(--font-size-24);
+
+  /* Kill Foundry's dragon art and the d20 behind the page title; the ground
+     below replaces them. */
+  --background-url: none;
+  --main-logo: none;
+}
+
+/* Foundry scopes these to `.application`, so they need their own rule rather
+   than riding along on `body`. `--color-tabs-border` is the rule above and
+   below the GAME WORLDS / GAME SYSTEMS / ADD-ON MODULES strip. */
+.application,
+.window-app {
+  --color-border: var(--color-warm-3);
+  --color-tabs-border: var(--color-warm-3);
+  --color-fieldset-border: var(--color-warm-3);
+  --color-data-border: var(--color-cool-3);
+  --color-form-label: var(--color-light-4);
+}
+
+input,
+select,
+textarea,
+search,
+.standard-form label.icon {
+  --input-background-color: #101010;
+  --input-border-color: rgba(226, 176, 33, 0.35);
+  --input-focus-outline-color: var(--color-warm-1);
+}
+
+a.button,
+button,
+kbd {
+  --button-background-color: #2a2110;
+  --button-border-color: var(--color-warm-3);
+  --button-text-color: var(--color-light-2);
+  --button-focus-outline-color: var(--color-warm-1);
+  --button-hover-background-color: rgba(226, 176, 33, 0.2);
+  --button-hover-border-color: var(--color-warm-1);
+  --button-hover-text-color: var(--color-warm-1);
+}
+
+a.button.bright,
+button.bright {
+  --button-background-color: rgba(226, 176, 33, 0.16);
+  --button-border-color: var(--color-warm-1);
+  --button-text-color: var(--color-light-1);
+  --button-hover-background-color: rgba(226, 176, 33, 0.3);
+  --button-hover-border-color: var(--color-warm-1);
+  --button-hover-text-color: #ffffff;
+}
+
+/* ── the ground ─────────────────────────────────────────────────────────── */
+
+#main-background {
+  opacity: 1;
   background-image:
     repeating-linear-gradient(
       0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px
     ),
-    radial-gradient(ellipse at 50% 0%, #232323 0%, var(--guide-bg-2) 70%);
-  background-attachment: fixed;
-  color: var(--guide-text);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+    radial-gradient(ellipse at 50% 0%, #232323 0%, #131313 70%);
+}
+
+body {
+  background: #101010;
+}
+
+/* ── type ───────────────────────────────────────────────────────────────── */
+
+h1, h2, h3 {
+  color: var(--color-warm-2);
+  letter-spacing: 0.08em;
+}
+
+/* The page title. Foundry sizes it off `--header-font-size` and reserves
+   `--header-size` of vertical room for the d20 that sat behind it; with the
+   logo gone that space is dead, so both come down. The words stay Foundry's —
+   this is a skin, not a disguise. */
+body.setup {
+  --header-size: 84px;
+  --header-font-size: var(--font-size-40);
+}
+
+#main-header h1 {
+  color: var(--color-warm-2);
+  letter-spacing: 0.12em;
+}
+
+/* Foundry's version stamp at the foot of the page. */
+#watermark #software-version {
+  font-size: var(--font-size-16);
+  letter-spacing: 0.22em;
+  color: var(--color-light-5);
+  opacity: 0.6;
+}
+
+label {
+  font-family: var(--font-body);
+  font-size: var(--font-size-11);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ── the tab strip ──────────────────────────────────────────────────────── */
+
+/* v14 builds each tab as an `h2.divider[data-tab]`, so the tabs already carry
+   the ridge treatment and the accent from `--color-warm-1`. What is left is
+   the codex's kicker on the label, and a rule under the active one — Foundry
+   marks active with a text glow alone, which reads as ambient rather than as
+   state. */
+nav.tabs [data-tab] {
+  font-family: var(--font-body);
+  font-size: var(--font-size-12);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+nav.tabs [data-tab].active {
+  color: var(--color-warm-1);
+  box-shadow: inset 0 -2px 0 var(--color-warm-2);
+}
+
+/* ── controls ───────────────────────────────────────────────────────────── */
+
+input,
+select,
+textarea,
+button,
+a.button,
+.standard-form label.icon,
+.application,
+.package-list .package {
+  border-radius: 0;
+}
+
+button:not(.icon),
+a.button:not(.icon) {
+  font-family: var(--font-body);
+  font-size: var(--font-size-11);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border-left-width: 2px;
+  border-left-color: var(--color-warm-2);
 }
 
 /* ── panels ─────────────────────────────────────────────────────────────── */
 
-.app,
-#setup-packages,
-#setup-configuration,
-section.window-content,
-.package-list .package {
-  background: rgba(22, 22, 22, 0.92);
-  border: 1px solid var(--guide-amber-dim);
+/* `section.application` is the packages panel and each sidebar card (News,
+   Featured Content). Ground and border come from the variables above. */
+.application {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
-h1, h2, h3,
-.app h1, .app h2 {
-  font-family: 'Cinzel', serif;
-  color: var(--guide-amber);
+/* ── package tiles ──────────────────────────────────────────────────────── */
+
+/* The world card. Its border reads `--color-cool-4` directly rather than
+   `--color-border`, so it needs naming. */
+body.setup .package-list .package {
+  border-color: var(--color-warm-3);
+  background: rgba(13, 13, 13, 0.75);
+}
+
+body.setup .package-list .package .package-title {
+  color: var(--color-warm-2);
+}
+
+/* The badges along the bottom of a tile. Foundry paints the system badge with
+   its semantic `success` green, which on this screen only ever means "this
+   world's system is installed and verified" — so it is the operator's amber
+   like everything else here. The `--color-level-*` variables are deliberately
+   left alone: those still carry meaning in a real notification. */
+.package-list .package .tags > .tag.badge.verified,
+.package-list .package .tags > .tag.badge.safe,
+.package-list .package .tags > .tag.badge.success {
+  background: #2a2110;
+  border-color: var(--color-warm-3);
+  color: var(--color-warm-1);
+}
+
+.package-list .package .tags > .tag {
+  font-family: var(--font-body);
+  font-size: var(--font-size-11);
   letter-spacing: 0.08em;
-  border-bottom: 1px solid rgba(226, 176, 33, 0.35);
 }
 
-/* The tab strip reads as a rail rather than as browser chrome. */
-nav.tabs .item,
-.tabs .item {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--guide-muted);
+/* ── the sidebar ────────────────────────────────────────────────────────── */
+
+/* News and Featured Content are Foundry's own art and headlines. They stay
+   legible but recede — this screen is the operator's console, not a feed. */
+#news-articles .news h3,
+#featured-content h3 {
+  font-family: 'Cinzel', serif;
+  color: var(--color-light-3);
 }
 
-nav.tabs .item.active,
-.tabs .item.active {
-  color: var(--guide-amber-hot);
-  border-bottom: 2px solid var(--guide-amber);
+#news-articles .news img,
+#featured-content img {
+  filter: saturate(0.35) brightness(0.75);
+  transition: filter 160ms;
 }
 
-label { color: var(--guide-muted); letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; }
-
-/* ── controls ───────────────────────────────────────────────────────────── */
-
-input[type='text'],
-input[type='password'],
-input[type='search'],
-select,
-textarea {
-  background: #101010;
-  border: 1px solid rgba(226, 176, 33, 0.35);
-  border-radius: 0;
-  color: var(--guide-text);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+#news-articles .news:hover img,
+#featured-content:hover img {
+  filter: none;
 }
 
-input:focus, select:focus, textarea:focus {
-  outline: none;
-  border-color: var(--guide-amber-hot);
-  box-shadow: 0 0 0 1px var(--guide-amber-hot), 0 0 14px rgba(255, 206, 77, 0.22);
-}
-
-button {
-  background: var(--guide-amber-deep);
-  border: 1px solid var(--guide-amber-dim);
-  border-left: 2px solid var(--guide-amber);
-  border-radius: 0;
-  color: var(--guide-text);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  transition: background 120ms, color 120ms;
-}
-
-button:hover {
-  background: rgba(226, 176, 33, 0.18);
-  color: var(--guide-amber-hot);
-}
-
-a { color: var(--guide-amber-hot); }
-a:hover { color: var(--guide-text); }
-
-.watermark { color: var(--guide-muted); opacity: 0.45; }
+a { color: var(--color-warm-1); }
+a:hover { color: var(--color-light-1); }

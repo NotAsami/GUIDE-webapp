@@ -8,6 +8,7 @@
   "relationships": {
     "systems": [{ "id": "dnd5e", "type": "system", "compatibility": { "minimum": "3.1.0" } }]
   },
+  "styles": ["guide-roll.css"],
   "scripts": ["lib/supabase.umd.js"],
   "esmodules": ["bridge.js"],
   "socket": false
