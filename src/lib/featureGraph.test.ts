@@ -237,6 +237,20 @@ test('a target sits level with the rule pointing at it, and two targets never ov
   assert.equal(p['dest:roll:attack'][1], 500)
 })
 
+test('an auto-placed node never lands on one the author moved', () => {
+  const g = project(BRUTAL, { recklessAttack: 'bool' })
+  const h = () => 80
+  const free = autoLayout(g, {}, h)
+  /* Drop the press exactly where some other node would auto-place. */
+  const victim = Object.keys(free).find(k => k !== 'press')!
+  const pos = autoLayout(g, { press: free[victim] }, h)
+  for (const [k, [x, y]] of Object.entries(pos)) {
+    if (k === 'press') continue
+    const [px, py] = pos.press
+    assert.ok(Math.abs(x - px) >= 310 || y >= py + 80 || y + 80 <= py, `${k} sits on the moved press`)
+  }
+})
+
 test('a derived variable sits right of what it reads, and the press right of every variable', () => {
   const pos = autoLayout(project(JUDGEMENT))
   const x = (k: string) => pos[k][0]
