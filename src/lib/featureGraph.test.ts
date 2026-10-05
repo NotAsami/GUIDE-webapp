@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatalogFeatureData, GraphEffect } from './database.types.ts'
-import { pressNeeds, affectingInCatalog, graphFit, detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
+import { junctionCount, pressNeeds, affectingInCatalog, graphFit, detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
 import { blankEffect } from './opSchema.ts'
 
 const feat = (over: Partial<CatalogFeatureData>) => ({ name: 'Test', ...over }) as CatalogFeatureData
@@ -212,6 +212,18 @@ test('an empty target means its own roll; a sheet op has no target at all', () =
   assert.equal(own('eff:u1'), true) // addUses reaches a feature — empty = this one's counter
   assert.equal(own('eff:b1'), false)
   assert.equal(kindOf(g, 'eff:b1'), 'sheet')
+})
+
+test('a junction counts the things every target holds of at once', () => {
+  const nodes = [
+    { gid: 'item:a', tags: ['Fire', 'weapon'] },
+    { gid: 'item:b', tags: ['fire'] },
+    { gid: 'item:c', tags: ['weapon'] },
+  ] as unknown as Parameters<typeof junctionCount>[1]
+  assert.equal(junctionCount(['tag:fire', 'tag:weapon'], nodes), 1)
+  assert.equal(junctionCount(['tag:fire', 'roll:damage'], nodes), 2)
+  assert.equal(junctionCount(['item:b', 'tag:fire'], nodes), 1)
+  assert.equal(junctionCount(['roll:damage', 'roll:damage.melee'], nodes), Infinity)
 })
 
 /* ---------- layout ---------- */
