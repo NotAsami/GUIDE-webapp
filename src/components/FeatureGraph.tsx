@@ -13,7 +13,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import type { CatalogFeatureData, GraphEffect, VarDef } from '../lib/database.types'
 import {
-  addNode, affectingInCatalog, autoLayout, graphFit, connectTarget, detailLines, editGroup, makeGroup, setPositions, ungroup, ovFit, zoomLevel, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
+  addNode, affectingInCatalog, junctionCount, autoLayout, graphFit, connectTarget, detailLines, editGroup, makeGroup, setPositions, ungroup, ovFit, zoomLevel, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
   setMatch, targetRefusal,
   type AddKind, type FeatureGraph as Graph, type GEdge, type GNode, type WireType,
 } from '../lib/featureGraph'
@@ -356,7 +356,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
   /* A selection whose node is gone (a pending gate that just turned real, a
      deleted rule) is no selection — otherwise every wire dims for nothing. */
   const groups = d.layout?.groups ?? []
-  const sel = selProp && (vs.has(selProp) || selProp.startsWith('w:') || (selProp.startsWith('g:') && groups[+selProp.slice(2)])) ? selProp : null
+  const sel = selProp && (vs.has(selProp) || selProp.startsWith('w:') || (selProp.startsWith('j:') && vs.has(selProp.slice(2))) || (selProp.startsWith('g:') && groups[+selProp.slice(2)])) ? selProp : null
   const selGroup = sel?.startsWith('g:') ? +sel.slice(2) : null
 
   /* CLASS PROGRESSION (lib/previewScope). Decides level and that class's grants,
@@ -561,6 +561,13 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
         onSelect(null)
         return
       }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && sel?.startsWith('j:')) {
+        /* A junction is the `and`; deleting it is going back to `or`. */
+        e.preventDefault()
+        onChange(setMatch(dRef.current, sel.slice(2), 'or'))
+        onSelect(sel.slice(2))
+        return
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selWire) {
         e.preventDefault()
         onChange(disconnectTarget(dRef.current, selWire.key, selWire.sel))
@@ -659,7 +666,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
     if (!s || !dv || !('eff' in s.n)) continue
     const eff = s.n.eff, x0 = s.x + s.w + 7, y0 = s.y + 15, jx = s.x + s.w + 46
     const gate = eff.ask ? styles.gAsk : eff.when ? styles.gWhen : undefined
-    const hi = sel === e.from || sel === e.to
+    const hi = sel === e.from || sel === e.to || (e.and && sel === `j:${e.from}`)
     if (e.and && !juncs.has(e.from)) {
       juncs.add(e.from)
       wires.push(<path key={`j${e.from}`} className={cx(styles.wAt, gate, sel && !hi && styles.dim)} d={`M${x0},${y0} L${jx - 7},${y0}`} />)
@@ -847,8 +854,8 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
   })
   const juncEls = [...juncs].map(k => {
     const s = vs.get(k)!
-    return <div key={k} className={styles.junc} style={{ left: s.x + s.w + 46, top: s.y + 15 }} title="and — every target must hold of one roll">
-      <span className={styles.jd} /><span className={styles.jc}>and</span>
+    return <div key={k} className={cx(styles.junc, sel === `j:${k}` && styles.on)} style={{ left: s.x + s.w + 46, top: s.y + 15 }} title="and — every target must hold of one roll">
+      <span className={styles.jd} onPointerDown={ev => ev.stopPropagation()} onClick={ev => { ev.stopPropagation(); onSelect(`j:${k}`) }} /><span className={styles.jc}>and</span>
     </div>
   })
 
@@ -1110,6 +1117,29 @@ export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid
         <Icon name="fa-link-slash" /> Remove wire · Del
       </button>
     </>
+  }
+
+  if (sel?.startsWith('j:')) {
+    const src = g.nodes.find(x => x.key === sel.slice(2))
+    if (src && 'eff' in src) {
+      const ts = (src.eff.target ?? []).map(asKey), c = junctionCount(ts, nodes)
+      return <>
+        <div className={styles.iblk} style={{ ['--bc' as string]: 'var(--orange)' }}>
+          <b>and · {c === Infinity ? 'every roll' : `${c} thing${c === 1 ? '' : 's'}`}</b>A junction: <code>{label(src)}</code> applies only
+          to a roll that every target below holds of at once. {c !== Infinity && ts.some(t => t.startsWith('roll:')) && <>The roll kinds then narrow it to those rolls of each.</>}
+        </div>
+        <div className={styles.conns}>{ts.map(t => (
+          <button key={t} type="button" className={styles.conn} onClick={() => onSelect(`dest:${t}`)}><b>{t}</b></button>
+        ))}</div>
+        <span className={styles.gateLab}>Affected by · 1</span>
+        <div className={styles.conns}>
+          <button type="button" className={styles.conn} onClick={() => onSelect(src.key)}><b>{label(src)}</b><span className={styles.cs}>this feature</span></button>
+        </div>
+        <button type="button" className={styles.noteBtn} onClick={() => { update(x => setMatch(x, src.key, 'or')); onSelect(src.key) }}>
+          <Icon name="fa-code-branch" /> Switch to or · Del
+        </button>
+      </>
+    }
   }
 
   if (!n) return (

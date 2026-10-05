@@ -643,6 +643,17 @@ export function addNode(f: CatalogFeatureData, kind: AddKind, at: [number, numbe
   return { ok: true, f: setPos(next, key, at), key }
 }
 
+/** An `and` junction's reach (mockup matchCount(keys, 'and')): the catalog
+ *  things every tag and thing target holds of at once — Infinity when the
+ *  targets are all roll kinds, which narrow the roll rather than the thing. */
+export function junctionCount(sels: string[], nodes: AuthoredNode[]): number {
+  const ks = sels.map(asKey).filter(k => !k.startsWith('roll:'))
+  if (!ks.length) return Infinity
+  return nodes.filter(n => ks.every(k => k.startsWith('tag:')
+    ? (n.tags ?? []).some(t => asKey(`tag:${t}`) === k)
+    : n.gid === k)).length
+}
+
 const COL_W = 380
 const GAP = 36
 /** Wider than any node, so two whose x are closer than this share a lane. */

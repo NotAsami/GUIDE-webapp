@@ -130,7 +130,8 @@
 .mt { position: absolute; left: calc(100% + 12px); top: -14px; z-index: 7; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--orange); background: #140f08; border: 1px solid var(--orange); padding: 2px 7px; }
 .mt.and { color: #140f08; background: var(--orange); }
 .junc { position: absolute; z-index: 6; display: flex; align-items: center; gap: 6px; transform: translate(-7px, -7px); pointer-events: none; }
-.jd { width: 14px; height: 14px; background: var(--orange); transform: rotate(45deg); border: 2px solid #140f08; box-shadow: 0 0 0 1.5px var(--orange); }
+.jd { width: 14px; height: 14px; background: var(--orange); transform: rotate(45deg); border: 2px solid #140f08; box-shadow: 0 0 0 1.5px var(--orange); pointer-events: auto; cursor: pointer; }
+.junc.on .jd { box-shadow: 0 0 0 1.5px var(--orange), 0 0 12px var(--orange); }
 .jc { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--orange); background: rgba(14,12,9,.9); padding: 1px 5px; white-space: nowrap; transform: translateY(-14px); }
 
 /* ---------- semantic zoom (slice 4a, mockup .zl-over / .gdet / .ov) ---------- */
