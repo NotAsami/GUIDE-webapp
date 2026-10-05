@@ -17,7 +17,7 @@ import type { CatalogFeatureData, FeatureLayout, GraphEffect, VarDef } from './d
 import { ROLL_IDENTS, VAR_IDENTS, freeIdents, interpolations, isHasIdent } from './expr.ts'
 import { askKey, asKey, auditNode, probeScope, type AuthoredNode } from './graph.ts'
 import { HAS_TARGET, OPS } from './opSchema.ts'
-import { isUsable } from './featureView.ts'
+import { isUsable, toggleVars } from './featureView.ts'
 
 /** The VAR_IDENTS the canvas draws. Everything else in that list is a sheet stat
  *  — `level`, `prof`, the mods — which nearly every formula reads, and a node for
@@ -174,6 +174,50 @@ export function project(f: CatalogFeatureData, catalogTypes: Record<string, 'num
   }
 
   return { nodes: [...nodes.values()], edges }
+}
+
+/* ---------- which view reads it best ---------- */
+
+/** Does this feature read better as a graph? ONE rule for the list tag, the
+ *  form's hint and the canvas note. The mockup hand-set it per feature; derived,
+ *  it cannot go stale. The graph helps when the WIRING is the hard part: values
+ *  feeding values, identifiers from elsewhere, gates, or a choice between offers. */
+export function graphFit(g: FeatureGraph): { fit: 'graph' | 'form'; why: string } {
+  const count = (p: (n: GNode) => boolean) => g.nodes.filter(p).length
+  const derived = count(n => n.kind === 'var' && n.def.kind === 'derived')
+  const ext = count(n => n.kind === 'ext')
+  const gates = count(n => n.kind === 'cond' || n.kind === 'ask')
+  const offers = g.edges.filter(e => e.kind === 'offer').length
+  const rules = count(n => n.kind === 'outcome' || n.kind === 'contrib' || n.kind === 'sheet')
+  if (derived >= 2) return { fit: 'graph', why: `${derived} derived variables feed each other here. The chain is easier to read as a graph.` }
+  if (ext >= 2) return { fit: 'graph', why: `${rules} rule${rules === 1 ? '' : 's'} read ${ext} identifiers declared elsewhere. The coupling is easier to see as a graph.` }
+  if (gates >= 2) return { fit: 'graph', why: `The press runs through ${gates} gates. Which outcome sits behind which is easier to see as a graph.` }
+  if (offers >= 2) return { fit: 'graph', why: `${offers} offers compete for its Picks. The choice is easier to see as a graph.` }
+  return { fit: 'form', why: 'One press, plain rules, nothing derived. The graph shows the same thing in more space.' }
+}
+
+/* ---------- what in the catalog reaches a target ---------- */
+
+export type Affecting = { featureId: string; featureName: string; label: string; gated: 'always' | 'when' | 'ask' }
+
+/** Every rule in the FEATURE catalog whose target list reaches `sel`: the same
+ *  selector for a tag or roll kind; for a thing, its gid or any tag it carries —
+ *  the engine's own matching (asKey). Features only: spells, items and shards
+ *  keep their rules in catalogs the Feature Editor does not load. */
+export function affectingInCatalog(
+  sel: string,
+  features: { id: string; name: string; graph?: GraphEffect[] }[],
+  thingTags: string[] = [],
+): Affecting[] {
+  const keys = new Set([asKey(sel), ...thingTags.map(t => asKey(`tag:${t}`))])
+  const out: Affecting[] = []
+  for (const f of features) {
+    for (const e of f.graph ?? []) {
+      if (!(e.target ?? []).some(t => keys.has(asKey(t)))) continue
+      out.push({ featureId: f.id, featureName: f.name, label: e.label || e.op, gated: e.ask?.trim() ? 'ask' : e.when?.trim() ? 'when' : 'always' })
+    }
+  }
+  return out
 }
 
 /* ---------- semantic zoom ---------- */
@@ -445,6 +489,22 @@ export function editGate(f: CatalogFeatureData, key: string, text: string, catal
   return next.layout ? withLayout(next, { ...next.layout, pos }) : next
 }
 
+/** What keeps a feature pressable, in words — isUsable()'s reasons, minus a set
+ *  `activation`. Kept beside isUsable's test so the two cannot disagree. */
+export function pressNeeds(f: CatalogFeatureData): string[] {
+  const g = f.graph ?? []
+  const outcomes = g.filter(e => OPS[e.op]?.group === 'activation').length
+  const armed = g.filter(e => e.once && OPS[e.op]?.group !== 'activation').length
+  const toggles = toggleVars(f)
+  return [
+    f.roll ? 'its press roll' : '',
+    f.uses ? 'Max uses' : '',
+    outcomes ? `${outcomes} activation outcome${outcomes === 1 ? '' : 's'}` : '',
+    armed ? `${armed} armed (once) rule${armed === 1 ? '' : 's'}` : '',
+    toggles.length ? `the toggle variable ${toggles.map(v => v.name).join(', ')}` : '',
+  ].filter(Boolean)
+}
+
 /** Delete a node. What that means depends on what it is a view of. */
 export function removeNode(f: CatalogFeatureData, key: string, catalogTypes: Record<string, 'num' | 'bool'> = {}): Edit {
   const g = project(f, catalogTypes)
@@ -474,7 +534,17 @@ export function removeNode(f: CatalogFeatureData, key: string, catalogTypes: Rec
       }
       break
     }
-    case 'press': return { ok: false, why: 'The press is the feature’s Activation. Set it to None in the form to remove it.' }
+    case 'press': {
+      /* The press is drawn whenever there is something to press (isUsable), not
+         from `activation` alone — so clearing activation removes it only when
+         nothing else needs one. Otherwise say what does. */
+      next = { ...f, activation: 'none' }
+      if (isUsable(next)) {
+        const why = pressNeeds(next)
+        return { ok: false, why: `The press stays while ${why.length ? why.join(', ') : 'something else'} ${why.length === 1 ? 'needs' : 'need'} it. Delete ${why.length === 1 ? 'that' : 'those'} first.` }
+      }
+      break
+    }
     case 'ext': return { ok: false, why: 'Declared by another node. Remove the formulas that read it instead.' }
     case 'ctx': return { ok: false, why: 'Roll context is the engine’s. Remove the formulas that read it instead.' }
   }
@@ -573,16 +643,49 @@ export function addNode(f: CatalogFeatureData, kind: AddKind, at: [number, numbe
   return { ok: true, f: setPos(next, key, at), key }
 }
 
+/** What a just-made applies-to wire quietly changed (mockup connectNotice):
+ *  a second target on an armed rule is a second bonus, unless the rule says
+ *  `oneOf`. `fix` = ticking oneOf is the cure. Null when nothing changed. */
+export function connectNotice(f: CatalogFeatureData, key: string): { t: string; s: string; fix: boolean } | null {
+  const n = project(f).nodes.find(x => x.key === key)
+  if (!n || !('eff' in n)) return null
+  const e = n.eff, ts = e.target ?? [], name = e.label || e.id
+  if (ts.length < 2) return null
+  if (e.op === 'grant') return {
+    t: 'Grant hands out one bonus per target', fix: false,
+    s: `${name} now names ${ts.length} rolls, so the recipient gets ${ts.length} separate bonuses. For “their next D20 Test”, target roll:d20 alone.`,
+  }
+  if (e.once && !e.oneOf && OPS[e.op].fields.some(fd => fd.key === 'oneOf')) return {
+    t: 'Arms once per target', fix: true,
+    s: `${name} now arms ${ts.length} separate bonuses, one on each target, and every one can be spent. If it is one bonus the player takes on either, make it one across all targets.`,
+  }
+  return null
+}
+
+/** An `and` junction's reach (mockup matchCount(keys, 'and')): the catalog
+ *  things every tag and thing target holds of at once — Infinity when the
+ *  targets are all roll kinds, which narrow the roll rather than the thing. */
+export function junctionCount(sels: string[], nodes: AuthoredNode[]): number {
+  const ks = sels.map(asKey).filter(k => !k.startsWith('roll:'))
+  if (!ks.length) return Infinity
+  return nodes.filter(n => ks.every(k => k.startsWith('tag:')
+    ? (n.tags ?? []).some(t => asKey(`tag:${t}`) === k)
+    : n.gid === k)).length
+}
+
 const COL_W = 380
 const GAP = 36
+/** Wider than any node, so two whose x are closer than this share a lane. */
+const NODE_W = 310
 
 /** Where every node goes. Saved positions win; the rest fall into columns in
  *  reading order — what is read, what derives from it, the press, its gates,
  *  what the feature does, the choice, and what it applies to. A target sits
  *  level with the average of the rules pointing at it (the mockup's rule),
- *  pushed down until it clears its neighbours.
- *  ponytail: column stacking, blind to saved neighbours. A real layered layout
- *  when a feature outgrows it. */
+ *  pushed down until it clears its neighbours — the hand-placed ones included,
+ *  so a node added later never lands on one the author moved.
+ *  ponytail: column stacking with a slide-down; a real layered layout when a
+ *  feature outgrows it. */
 export function autoLayout(
   g: FeatureGraph,
   saved: FeatureLayout['pos'] = {},
@@ -623,22 +726,27 @@ export function autoLayout(
     cols.set(c, [...(cols.get(c) ?? []), n.key])
   }
   const out: Record<string, [number, number]> = {}
+  /* Everything already standing: [x, y, h]. Saved nodes go in first, wherever
+     the author dropped them. */
+  const taken: [number, number, number][] = g.nodes.filter(n => saved[n.key]).map(n => [...saved[n.key], heightOf(n.key)])
+  const clear = (x: number, y: number, h: number) => {
+    while (taken.some(([tx, ty, th]) => Math.abs(tx - x) < NODE_W && y < ty + th + GAP && y + h + GAP > ty)) y += 30
+    taken.push([x, y, h])
+    return y
+  }
   ;[...cols.keys()].sort((a, b) => a - b).forEach((c, i) => {
+    const x = 60 + i * COL_W
     let y = 60
-    const taken: [number, number][] = []
     for (const key of cols.get(c)!) {
       if (saved[key]) { out[key] = saved[key]; continue }
       const h = heightOf(key)
       if (byKey.get(key)?.kind === 'dest') {
         const ys = g.edges.filter(e => e.kind === 'target' && e.to === key).map(e => out[e.from]?.[1]).filter((v): v is number => v != null)
-        let dy = ys.length ? Math.round(ys.reduce((a, b) => a + b, 0) / ys.length) : y
-        while (taken.some(([t, th]) => dy < t + th + GAP && dy + h + GAP > t)) dy += 30
-        out[key] = [60 + i * COL_W, dy]
-        taken.push([dy, h])
+        out[key] = [x, clear(x, ys.length ? Math.round(ys.reduce((a, b) => a + b, 0) / ys.length) : y, h)]
         continue
       }
-      out[key] = [60 + i * COL_W, y]
-      y += h + GAP
+      out[key] = [x, clear(x, y, h)]
+      y = out[key][1] + h + GAP
     }
   })
   return out
