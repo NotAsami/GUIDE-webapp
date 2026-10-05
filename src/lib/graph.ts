@@ -1383,7 +1383,7 @@ export function total(res: Resolution): { flat: number; dice: string[] } {
  *  resulting list, which summed correctly and lost track of which contribution
  *  each face belonged to — so a rider could be named but its result could not be
  *  shown, and the player was asked to trust a number they could not check. */
-export function rollResolution(res: Resolution, double = false): {
+export function rollResolution(res: Resolution, double = false, ownType?: string): {
   flat: number
   riders: Rider[]
   /** The same fold, ITEMISED BY SOURCE — "Divine Smite +8", not "FEAT +8".
@@ -1398,23 +1398,54 @@ export function rollResolution(res: Resolution, double = false): {
    *  Summed per source, so two contributions from one feature are one line.
    *  A zero contributes nothing and is left out. */
   terms: { label: string; value: number }[]
+  /** Contributions in a damage type THIS ROLL IS NOT, grouped by that type.
+   *
+   *  A total is per type or it is nothing: Divine Smite's 2d8 radiant folded
+   *  into a slashing sword's total is resisted as slashing — on the sheet, in
+   *  the chat card, and by dnd5e when the damage is applied. So a rider whose
+   *  `dmgType` differs leaves `flat` and comes back here for the caller to give
+   *  its own line.
+   *
+   *  Only when the caller says what type the roll itself is. Without `ownType`
+   *  there is nothing to differ FROM, and everything folds exactly as before —
+   *  which is what keeps the check, activation and consumable callers unchanged. */
+  extra: { type: string; expr: string; dice: ReturnType<typeof rolledDiceTerms>; flat: number; sources: string[] }[]
 } {
   let flat = 0
   const bySource = new Map<string, number>()
+  const byType = new Map<string, { expr: string[]; dice: ReturnType<typeof rolledDiceTerms>; flat: number; sources: string[] }>()
+  const own = ownType?.trim().toLowerCase()
   const riders = res.riders.map(r => {
     if (r.op !== 'add' || r.when === 'manual') return r
     let value = r.flat
+    let rolled: ReturnType<typeof rolledDiceTerms> = []
     let out = r
     if (r.dice.length) {
       const rolledDice = rolledDiceTerms(r.dice, double)
+      rolled = rolledDice
       value += rolledDice.reduce((n, d) => n + d.v, 0)
       out = { ...r, rolledDice }
+    }
+    const type = r.dmgType?.trim().toLowerCase()
+    if (own !== undefined && type && type !== own) {
+      const e = byType.get(type) ?? { expr: [], dice: [], flat: 0, sources: [] }
+      e.expr.push(...r.dice)
+      e.dice.push(...rolled)
+      e.flat += r.flat
+      if (!e.sources.includes(r.source)) e.sources.push(r.source)
+      byType.set(type, e)
+      return out
     }
     flat += value
     if (value) bySource.set(r.source, (bySource.get(r.source) ?? 0) + value)
     return out
   })
-  return { flat, riders, terms: [...bySource].map(([label, value]) => ({ label, value })) }
+  return {
+    flat,
+    riders,
+    terms: [...bySource].map(([label, value]) => ({ label, value })),
+    extra: [...byType].map(([type, e]) => ({ type, ...e, expr: e.expr.join(' + ') })),
+  }
 }
 
 /* ---------- author-time (§17) ---------- */

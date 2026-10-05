@@ -11,131 +11,216 @@
    sees, so it speaks in the player's colour. The setup screen (setup.css) is
    the DM's and speaks in amber.
 
-   Written conservatively: broad element selectors and colour, no layout
-   surgery and no clip-path chamfers. A missed selector then leaves a plain
-   control on a styled page rather than an invisible one — and Foundry moves
-   this markup between versions.
+   HOW THIS WORKS. Foundry v14's own stylesheet is built almost entirely on CSS
+   variables: `h2.divider`'s ridge rules read `--color-warm-1`, every panel's
+   ground is `--color-cool-5-90`, every input and button reads an `--input-*`
+   or `--button-*` name. So the bulk of this file is a palette swap, not a pile
+   of selectors — retarget the variables and Foundry restyles itself, including
+   the markup we never named. That also survives Foundry moving its markup
+   between versions, which the handful of selectors below would not.
+
+   The addon injects this file UNLAYERED, and Foundry's own rules all sit
+   inside `@layer`. Unlayered styles beat every layer regardless of
+   specificity, so plain `body`-level overrides here win against Foundry's own
+   `body` rules. Nothing needs `!important`.
    ═════════════════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-:root {
-  --guide-bg: #1d1d1d;
-  --guide-bg-2: #161616;
-  --guide-text: #dedede;
-  --guide-muted: #aaaaaa;
-  --guide-cyan: #00a6d6;
-  --guide-cyan-hot: #4dd6ff;
-  --guide-cyan-dim: #0d6e8c;
-  --guide-beige: #d4bf7d;
+/* ── the palette swap ───────────────────────────────────────────────────── */
+
+body {
+  /* Foundry's three accent slots. `warm-1` draws the ridge dividers either
+     side of every panel heading, the `.bright` submit button, checkboxes and
+     range thumbs; `warm-2` is button hover and `--color-shadow-primary`;
+     `warm-3` is the scrollbar. */
+  --color-warm-1: #4dd6ff;
+  --color-warm-2: #00a6d6;
+  --color-warm-3: #0d6e8c;
+
+  /* The grounds. Foundry ships these purple (#0b0a13 / #302831); the codex is
+     neutral ink. `cool-5-90` is the panel background, `cool-4` the input and
+     tag ground, `cool-3` the data border. */
+  --color-cool-3: #16495c;
+  --color-cool-4: #1c1c1c;
+  --color-cool-5: #0d0d0d;
+  --color-cool-5-25: rgba(13, 13, 13, 0.25);
+  --color-cool-5-50: rgba(13, 13, 13, 0.5);
+  --color-cool-5-75: rgba(13, 13, 13, 0.75);
+  --color-cool-5-90: rgba(13, 13, 13, 0.92);
+
+  /* The text ramp, brightest first. 1–3 are text (body copy is `light-3`),
+     4–6 are labels, hints, placeholders and borders. */
+  --color-light-1: #f2f2f2;
+  --color-light-2: #dedede;
+  --color-light-3: #c8c8c8;
+  --color-light-4: #aaaaaa;
+  --color-light-5: #8a8a8a;
+  --color-light-6: #6a6a6a;
+
+  --color-text-accent: var(--color-warm-1);
+  --color-scrollbar: var(--color-warm-3);
+  --color-border-highlight: var(--color-warm-1);
+  --color-border-highlight-alt: var(--color-warm-2);
+
+  /* Two faces, as everywhere else in the codex: Cinzel for display, JetBrains
+     Mono for everything that is data. */
+  --font-sans: 'JetBrains Mono', ui-monospace, monospace;
+  --font-body: var(--font-sans);
+  --font-monospace: var(--font-sans);
+  --font-h1: 'Cinzel', serif;
+  --font-h2: 'Cinzel', serif;
+  --font-h3: 'Cinzel', serif;
+  --font-h1-size: var(--font-size-36);
+  --font-h2-size: var(--font-size-24);
+
+  /* Kill Foundry's dragon art and the d20 in the header; the ground below
+     replaces them. */
+  --background-url: none;
+  --main-logo: none;
+}
+
+/* Foundry scopes these to `.application`, so they need their own rule rather
+   than riding along on `body`. */
+.application,
+.window-app {
+  --color-border: var(--color-warm-3);
+  --color-tabs-border: var(--color-warm-3);
+  --color-fieldset-border: var(--color-warm-3);
+  --color-data-border: var(--color-cool-3);
+  --color-form-label: var(--color-light-4);
+}
+
+input,
+select,
+textarea,
+search,
+.standard-form label.icon {
+  --input-background-color: #101010;
+  --input-border-color: rgba(0, 166, 214, 0.35);
+  --input-focus-outline-color: var(--color-warm-1);
+}
+
+a.button,
+button,
+kbd {
+  --button-background-color: rgba(0, 166, 214, 0.08);
+  --button-border-color: var(--color-warm-2);
+  --button-text-color: var(--color-light-2);
+  --button-focus-outline-color: var(--color-warm-1);
+  --button-hover-background-color: rgba(0, 166, 214, 0.22);
+  --button-hover-border-color: var(--color-warm-1);
+  --button-hover-text-color: var(--color-warm-1);
+}
+
+/* The submit button. Foundry's `.bright` is a solid warm fill with dark text;
+   the codex's affirmative control is a lit outline instead. */
+a.button.bright,
+button.bright {
+  --button-background-color: rgba(0, 166, 214, 0.16);
+  --button-border-color: var(--color-warm-1);
+  --button-text-color: var(--color-light-1);
+  --button-hover-background-color: rgba(0, 166, 214, 0.3);
+  --button-hover-border-color: var(--color-warm-1);
+  --button-hover-text-color: #ffffff;
 }
 
 /* ── the ground ─────────────────────────────────────────────────────────── */
 
-body {
-  background: var(--guide-bg);
-  /* The codex's stage: a slow vertical gradient over the flat ground, with the
-     faint scanline the whole app wears. Fixed, so it does not scroll away. */
+/* `#main-background` is Foundry's fixed art layer, sitting behind everything
+   at z-index -1. Foundry dims its own art to 0.5; ours is the codex's stage —
+   a slow radial over flat ink, under the scanline the whole app wears. */
+#main-background {
+  opacity: 1;
   background-image:
     repeating-linear-gradient(
       0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px
     ),
-    radial-gradient(ellipse at 50% 0%, #232323 0%, var(--guide-bg-2) 70%);
-  background-attachment: fixed;
-  color: var(--guide-text);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+    radial-gradient(ellipse at 50% 0%, #232323 0%, #131313 70%);
 }
 
-#join-game,
-#setup,
-.app,
-.window-app {
-  color: var(--guide-text);
+body {
+  background: #101010;
 }
 
-/* ── panels ─────────────────────────────────────────────────────────────── */
+/* ── type ───────────────────────────────────────────────────────────────── */
 
-.app,
-#join-game .form-group,
-#world-description,
-section.window-content {
-  background: rgba(22, 22, 22, 0.92);
-  border: 1px solid var(--guide-cyan-dim);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 40px rgba(0, 0, 0, 0.55);
-}
-
-/* Headings carry the display face, and the letter-spaced kicker treatment the
-   codex uses on every panel title. */
-h1, h2, h3,
-.app h1, .app h2 {
-  font-family: 'Cinzel', serif;
-  color: var(--guide-beige);
+/* Panel headings. The beige is the codex's display colour; the cyan ridges
+   either side of each one come from `--color-warm-1` above, not from here. */
+h1, h2, h3 {
+  color: #d4bf7d;
   letter-spacing: 0.08em;
-  border-bottom: 1px solid rgba(0, 166, 214, 0.35);
 }
 
-label,
-.form-group > label {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 11px;
+/* Every form label on this screen is the codex's letter-spaced kicker. The
+   `.icon` labels are the little boxed glyphs beside the two inputs — labels
+   too, but they must keep their own sizing. */
+.application .form-group > label:not(.icon) {
+  font-family: var(--font-body);
+  font-size: var(--font-size-11);
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--guide-muted);
+}
+
+/* Foundry's version stamp at the foot of the page. It picks up Cinzel from
+   `--font-h2` already; this only takes the size down and quiets it, because it
+   is Foundry's mark and not ours to shout. */
+#watermark #software-version {
+  font-size: var(--font-size-16);
+  letter-spacing: 0.22em;
+  color: var(--color-light-5);
+  opacity: 0.6;
 }
 
 /* ── controls ───────────────────────────────────────────────────────────── */
 
-input[type='text'],
-input[type='password'],
+/* The codex has no rounded corners anywhere. */
+input,
 select,
-textarea {
-  background: #101010;
-  border: 1px solid rgba(0, 166, 214, 0.35);
-  border-radius: 0;
-  color: var(--guide-text);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-}
-
-input[type='text']:focus,
-input[type='password']:focus,
-select:focus {
-  outline: none;
-  border-color: var(--guide-cyan-hot);
-  box-shadow: 0 0 0 1px var(--guide-cyan-hot), 0 0 14px rgba(77, 214, 255, 0.25);
-}
-
+textarea,
 button,
-button[type='submit'] {
-  background: rgba(0, 166, 214, 0.08);
-  border: 1px solid var(--guide-cyan);
-  border-left: 2px solid var(--guide-cyan-hot);
+a.button,
+.standard-form label.icon,
+.application.framed {
   border-radius: 0;
-  color: var(--guide-text);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 11px;
+}
+
+/* Text controls only, not the square icon buttons — letter-spacing on a button
+   whose whole content is one glyph just pushes the glyph off-centre. */
+button:not(.icon),
+a.button:not(.icon) {
+  font-family: var(--font-body);
+  font-size: var(--font-size-11);
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  transition: background 120ms, color 120ms;
 }
 
-button:hover,
-button[type='submit']:hover {
-  background: rgba(0, 166, 214, 0.2);
-  color: var(--guide-cyan-hot);
+/* The codex's lit left edge on an actionable control. */
+.form-footer button {
+  border-left-width: 2px;
+  border-left-color: var(--color-warm-1);
 }
 
-/* ── the players list ───────────────────────────────────────────────────── */
+/* ── panels ─────────────────────────────────────────────────────────────── */
 
-#join-game-form .player-list li,
-#players li {
-  border-bottom: 1px solid rgba(0, 166, 214, 0.15);
+/* `.application.framed` is each of the four cards. Their ground and border are
+   already retargeted above; this is the drop shadow that lifts them off the
+   stage. */
+.application.framed {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
-a { color: var(--guide-cyan-hot); }
-a:hover { color: var(--guide-beige); }
-
-/* Foundry's own footer stays, but quietly: this is a skin, not a disguise. */
-.watermark {
-  color: var(--guide-muted);
-  opacity: 0.45;
+#world-description {
+  font-family: var(--font-body);
+  font-size: var(--font-size-13);
+  color: var(--color-light-3);
 }
+
+/* The player count in Game Details, which Foundry renders as two `.count`
+   spans either side of a separator. */
+.current-players .count {
+  color: var(--color-warm-1);
+}
+
+a { color: var(--color-warm-1); }
+a:hover { color: #d4bf7d; }

@@ -55,3 +55,53 @@ export function colorOf(spec: string): string | null {
   if (/^#[0-9a-fA-F]{3,6}$/.test(spec)) return spec
   return null
 }
+
+type RGB = [number, number, number]
+
+function parseHex(hex: string): RGB | null {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return null
+  const full = m[1].length === 3 ? m[1].replace(/./g, c => c + c) : m[1]
+  const n = parseInt(full, 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+/** WCAG relative luminance. */
+function lumOf([r, g, b]: RGB): number {
+  const chan = (c: number) => {
+    const s = c / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  }
+  return 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b)
+}
+
+const toHex = (c: RGB) => '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('')
+
+/** The brightest a fill can be and still carry white text at 4.5:1 — AA for
+ *  small text, which is what a chip is. Derived from the ratio, not picked. */
+const MAX_FILL_LUM = 1.05 / 4.5 - 0.05
+
+/**
+ * A damage colour as a FILLED CHIP: the shade to paint and the ink to write on
+ * it. Null when `colour` is not a hex — load-bearing exactly as in `colorOf`,
+ * because a caller that cannot be given a legible pair must not paint one.
+ *
+ * ONE INK, ALWAYS WHITE, and the fill moves to meet it. The obvious version of
+ * this picked the ink to suit the colour, which put near-black on `--danger-hot`
+ * — legible by the numbers at 5.98:1 and genuinely hard to read at 8px, because
+ * dark text on a saturated bright red is where contrast ratios and eyes stop
+ * agreeing. Shading the fill instead gives every chip the same treatment, which
+ * is also one less thing for a reader to parse.
+ *
+ * A SHADE, NOT A TINT: the channels scale toward black, so the hue survives.
+ * Fire stays unmistakably fire (#ff5454 → #d14545); it just stops shouting.
+ */
+export function chipOn(colour: string): { fill: string; ink: string } | null {
+  const base = parseHex(colour)
+  if (!base) return null
+  for (let k = 1; k > 0; k -= 0.02) {
+    const shade = base.map(v => v * k) as RGB
+    if (lumOf(shade) <= MAX_FILL_LUM) return { fill: toHex(shade), ink: '#ffffff' }
+  }
+  return { fill: '#000000', ink: '#ffffff' }
+}

@@ -42,6 +42,10 @@ export type RollEntry = {
   id: string
   at: number
   kind: 'weapon' | 'check' | 'save' | 'custom'
+  /** The `roll:<kind>.<sub>` a check or save was made on — `initiative`, a skill
+   *  key, an ability. Carried so the panel can tell an initiative roll, which
+   *  also sets Foundry's combat tracker, from every other check. */
+  sub?: string
   /** Headline, e.g. the weapon name. */
   title: string
   /** Secondary line, e.g. "Main Hand · Attack". */
@@ -50,6 +54,14 @@ export type RollEntry = {
   /** Weapon rolls carry both. */
   attack?: AttackRoll
   damage?: DamageRoll
+  /** Damage in a type this roll is NOT — a rider that brought its own, like
+   *  Divine Smite's radiant on a slashing sword.
+   *
+   *  Its own block rather than more of `damage`, because a total is per type:
+   *  folded in, that radiant is resisted as slashing by the panel's split, by
+   *  the chat card, and by dnd5e when the damage is applied. See
+   *  `rollResolution`'s `extra`. */
+  extraDamage?: DamageRoll[]
   /** Ability check / saving throw / skill check rolls (Character screen). */
   check?: CheckRoll
   /** The DC the TARGET rolls against — a spell's save. Not a roll: it is a
@@ -185,7 +197,7 @@ export function buildCheck(graph: GraphContext, req: CheckRequest): Omit<RollEnt
   const { total, breakdown, crit, fumble } = composeCheck(pick, terms, res.critFrom, res.floor)
 
   return {
-    kind: req.kind, title: req.title, subtitle: req.subtitle, icon: req.icon ?? 'fa-dice-d20',
+    kind: req.kind, sub: req.sub, title: req.title, subtitle: req.subtitle, icon: req.icon ?? 'fa-dice-d20',
     check: { mode: eff, rolls, pick, breakdown, terms, total, crit, fumble },
     riderGroups: contrib.riders.length
       ? [{ label: req.kind === 'save' ? 'Save' : 'Check', riders: contrib.riders }]

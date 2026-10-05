@@ -23,6 +23,10 @@ webapp uses (`guide-foundry`) and:
 - receives `{kind:'macros'}` → keeps a hotbar macro per equipped weapon. The
   macro ASKS the codex to roll (`{kind:'request'}`); it never rolls here, since
   this side knows nothing about shards, features or armed modifiers;
+- sends `{kind:'initRequest'}` whenever Foundry is asked to roll a mapped
+  character's initiative — the tracker's d20, **Roll All**, the actor sheet's
+  Initiative button — and rolls nothing itself; receives `{kind:'initiative'}` →
+  posts the codex's card and sets the tracker. See *Initiative* below;
 - receives `{kind:'effects'}` → projects the character's OWN effects onto their
   token, reconciled to the codex's list. A name that matches a real condition
   lights Foundry's own icon; anything else appears as a named effect. Clearing
@@ -88,6 +92,29 @@ One difference from pressing Attack in the app: no priming sheet. The button
 offers armable modifiers first when there are any, and a macro has nobody
 looking at that screen, so it rolls with whatever is already armed.
 
+## Initiative
+
+For the party, Foundry never rolls initiative itself. Every way of asking for
+it — the tracker's d20, **Roll All**, the actor sheet's Initiative button —
+sends a request, and the codex rolls it with everything it knows (Feral
+Instinct's advantage, armed modifiers) and answers with the card and the total.
+Press **Roll All** as usual: enemies roll here, the party rolls in the codex.
+Pressing **INIT** on the codex's Stats screen does the same thing unprompted.
+
+- **The codex has to be open** on that character, as with the weapon macros. If
+  it has not answered after 10 seconds, Foundry rolls it after all — with the
+  codex's flat modifier but none of its features — and the GM gets a
+  notification saying so.
+- **A roll with a rider still open** waits for the Roll Context Panel's **Post &
+  set initiative**, because its total is still moving. The GM is told who is
+  holding it, and the fallback is called off.
+- **Keep one codex tab per character.** The bridge takes the first answer to
+  each request and drops the rest, but every tab that answers has rolled and
+  spent its arms.
+- **A player pressing the d20 in their own Foundry client is not intercepted**:
+  the bridge runs on the GM client only. They get Foundry's roll, with the
+  codex's flat modifier and no features.
+
 ## Using it
 
 1. **Operator Console → the d20 button** in the header syncs the party. Actors
@@ -118,6 +145,45 @@ on the GM client.
 `lib/supabase.umd.js` is a verbatim copy of
 `node_modules/@supabase/supabase-js/dist/umd/supabase.js` — re-copy it when the
 app bumps supabase-js. There is no build step for this module on purpose.
+
+## The roll card's own styling
+
+`guide-roll.css` ships with this module and needs no patch — it loads with the
+module like any other stylesheet. It styles ONE class, `.guide-roll`, which is
+the wrapper `rollChatHtml` puts around every roll the codex posts. A dnd5e card
+is untouched.
+
+**Foundry v14 hard-codes the chat log to light.**
+`templates/sidebar/tabs/chat/log.hbs` ships
+`<ol class="chat-log plain themed theme-light">`, and `Game#configureUI` skips
+any element whose classes already say `themed`. The Interface and Applications
+colour-scheme settings therefore theme everything except the chat log, and no
+setting reaches it — so the card cannot assume it knows what it is sitting on.
+
+It answers that by **bringing no ground at all**: it borrows the log's paper and
+its ink and spends everything on one cyan rail. What carries colour instead is
+the damage type, as a FILLED CHIP. The codex's palette is built to glow on a
+near-black ground — force is `#a594ba`, about 2.4:1 on white — so tinted text
+could not be legible on both; a fill carries its own contrast.
+
+`chipOn` (`src/lib/palette.ts`) makes the pair: it SHADES the colour until white
+text clears 4.5:1 on it, rather than picking an ink to suit the colour. Picking
+the ink was the first attempt and it put near-black on `--danger-hot` — 5.98:1
+by the numbers and hard to read at 8px, which is where contrast ratios and eyes
+stop agreeing. Shading keeps the hue (fire `#ff5454` → `#d14545`) and gives
+every chip the same treatment.
+
+The footer totals stay the log's own ink. They cannot be damage-coloured: small
+text needs luminance ≤ 0.183 to clear AA on the light log and ≥ 0.214 to clear
+it on a dark one, and no colour is both.
+
+Small text takes no fixed accent for the same reason — `--cyan` is 2.83:1 on
+white — so labels are the log's own ink, quietened. The rail keeps the cyan:
+it is a 2px block, not something anyone has to read.
+
+Module styles load in the `modules` cascade layer, which comes after `system`,
+so these rules beat dnd5e's without `!important`. Inline still wins over both,
+and inline is exactly the chip's two colours — the roll's own data.
 
 ## Dressing Foundry's own screens (optional)
 

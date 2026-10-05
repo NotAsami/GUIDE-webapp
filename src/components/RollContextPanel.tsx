@@ -43,7 +43,7 @@ import type { CharacterRow, ShardTree } from '../lib/database.types'
 import {
   armedIdsOf, askSections, catalogView, lineViews, openAsks, patchRiders, pickedOf,
   picksAllowed, picksTaken, rerollAt, rerollD20, rerollDamage, rerollsOf,
-  releaseIdsOf, resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
+  headlineLine, releaseIdsOf, resolvedOf, riderAmount, riderViews, rollTotals, sourceGroups,
   type CatalogView, type Die, type DieAddr, type RiderView, type RollLineView,
 } from '../lib/rollView'
 import { burstClock, entryClock, natOf, SETTLE, type LineClock } from '../lib/resolve'
@@ -403,7 +403,16 @@ function Entry({
 
         {!folded && (
           <div className={styles.eBody}>
-            {lines.map((l, i) => (
+            {/* A TYPE A RIDER BROUGHT IS STATED ONCE, in the footer's split.
+                Its own line here would be the third place this panel says
+                "4 radiant" — after the contribution row that names where it
+                came from. The line still exists; the panel just does not draw
+                it, and everything that counts still reads it.
+
+                INDEXED FROM THE UNFILTERED LIST: `reroll` addresses a die by
+                its line index in `lineViews`, so filtering before mapping would
+                send a click on one line's die to another line. */}
+            {lines.map((l, i) => [l, i] as const).filter(([l]) => !l.extra).map(([l, i]) => (
               <Line key={i} line={l} index={i} showTip={showTip} lc={clock.lines[i]} now={now}
                 onReroll={die => reroll({ line: i, die }, `${i}:${die}`)} />
             ))}
@@ -561,7 +570,7 @@ function Entry({
                   {/* The line's OWN label — "Total Save DC" vs "Total Check" is a
                       difference the footer must not guess at. */}
                   <span className={styles.k}>{(() => {
-                    const l = lines.find(x => x.kind === 'attack' || x.kind === 'check')
+                    const l = headlineLine(lines)
                     return l?.totalLabel ?? `Total ${l?.label ?? 'Attack'}`
                   })()}</span>
                   <span className={styles.v}><Val v={totals.attack} lockAt={atkLock} now={now} seed={90} /></span>
@@ -683,10 +692,16 @@ function Entry({
                 title={totals.pending > 0 ? 'Answer the riders first — the total is still moving' : undefined}
                 onClick={async () => {
                   setPosted('sending')
-                  const ok = await sendFoundry({
-                    kind: 'roll', character: characterId, roll: entry.id,
+                  const card = {
+                    character: characterId, roll: entry.id,
                     title: entry.title, html: rollChatHtml(entry, cssVar, scope),
-                  })
+                  }
+                  /* AN INITIATIVE ROLL ALSO SETS THE TRACKER. This is where one
+                     held back by an open rider finally lands, so it has to carry
+                     the settled total, riders included. */
+                  const ok = await sendFoundry(entry.sub === 'initiative'
+                    ? { kind: 'initiative', ...card, total: totals.attack }
+                    : { kind: 'roll', ...card })
                   setPosted(ok ? 'sent' : 'gone')
                   if (ok) onPatchEntry({ posted: true })
                 }}
@@ -696,6 +711,7 @@ function Entry({
                   {posted === 'sent' || entry.posted ? 'Posted to Foundry'
                     : posted === 'gone' ? 'No bridge — is Foundry open?'
                     : posted === 'sending' ? 'Posting…'
+                    : entry.sub === 'initiative' ? 'Post & set initiative'
                     : 'Post to Foundry'}
                 </span>
               </button>

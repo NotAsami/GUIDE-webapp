@@ -29,6 +29,9 @@ test('the totals in the card are the panel’s totals', () => {
   const html = rollChatHtml(entry({ attack: ATTACK, damage: DAMAGE }), resolve)
   assert.match(html, /<b>20<\/b> to hit/)
   assert.match(html, /<b>8<\/b> slashing/)
+  /* Foundry's own break line, not a border of ours: `hr` is styled app-wide
+     with the gradient the rest of the interface uses. */
+  assert.match(html, /<hr>/)
 })
 
 /* THE SAME SPLIT §49 GUARDS. The roller already folded a non-manual rider into
@@ -51,16 +54,81 @@ test('a manual rider the player left off contributes nothing and is not listed',
   assert.match(html, /<b>8<\/b> slashing/)
 })
 
-test('a damage type carries its palette colour, resolved to a literal', () => {
+/* "4 5" WAS TWO NUMBERS WITH NOTHING TO SAY THEY WERE DICE. The formula in
+   front of the faces is what makes the row readable, and the rows are a real
+   table so the columns line up however long a formula runs. */
+test('a rolled line shows its formula in front of its faces', () => {
+  const html = rollChatHtml(entry({ attack: ATTACK, damage: DAMAGE }), resolve)
+  assert.match(html, /<table class="gr-rows">/)
+  assert.match(html, /<span class="gr-fx">1d8<\/span> \(/)
+  assert.match(html, /<span class="gr-d">5<\/span>\)/)
+})
+
+/* THE DC IS A BUTTON, NOT A NUMBER TO COPY OUT. Foundry enriches a chat
+   message's content when it renders, so dnd5e's own save enricher reaches the
+   log as a control that rolls the save for whatever is selected. Raw: escaped,
+   it would sit in the card as the literal text `[[/save dex 15]]`. */
+test('a save DC crosses as dnd5e’s own save enricher', () => {
+  const html = rollChatHtml(entry({ kind: 'custom', title: 'Fireball', saveDC: 15, saveAbility: 'dex' }), resolve)
+  assert.match(html, /\[\[\/save dex 15\]\]\{DC 15\}/)
+  // The DC is the number the TARGET rolls against, so it is never also a "+15".
+  assert.ok(!html.includes('+15'))
+})
+
+test('a DC with no ability named stays a plain number — the enricher needs one', () => {
+  const html = rollChatHtml(entry({ kind: 'custom', title: 'Trap', saveDC: 15 }), resolve)
+  assert.ok(!html.includes('[[/save'))
+  assert.match(html, />15</)
+})
+
+/* A FILLED CHIP, NOT TINTED TEXT. The palette is built to glow on the codex's
+   near-black ground and Foundry's chat log is hard-coded light, so a tint could
+   never be legible on both. The ink is computed from the fill — see inkOn. */
+test('a damage type is a filled chip, shaded so white text survives on it', () => {
   const html = rollChatHtml(entry({ damage: DAMAGE }), resolve)
-  assert.ok(html.includes('color:#8a8a8a'))
+  // The fill is a SHADE of the palette colour, never the colour itself — see
+  // chipOn. What the card guarantees is the pairing; palette.test.ts proves the
+  // ratio.
+  assert.match(html, /class="gr-type" style="background:#[0-9a-f]{6};color:#ffffff"/)
+  assert.ok(!html.includes('background:#8a8a8a'), 'the raw palette colour must not be the fill')
   // A `var()` reaching Foundry would render as inherited text — it has no tokens.
   assert.ok(!html.includes('var(--'))
 })
 
-test('an unresolvable colour is omitted rather than emitted as var()', () => {
+/* THE VERDICT IS A CHIP FOR THE PALETTE'S OWN REASON: green text is 2.76:1 on
+   the log's white, and the log is hard-coded light. Filled and inked, it is
+   legible on whatever ground it lands on. */
+test('a verdict is filled and inked, and says which way it went', () => {
+  const green = (s: string | null) => (s === 'var(--good)' ? '#4fae6b' : s === 'var(--danger-hot)' ? '#ff5454' : null)
+  const card = (hit: boolean) =>
+    rollChatHtml(entry({ attack: ATTACK, target: { token: 't1', name: 'Goblin', hit } }), green)
+  assert.match(card(true), /class="gr-verdict" style="background:#[0-9a-f]{6};color:#ffffff">HIT</)
+  assert.match(card(false), /class="gr-verdict" style="background:#[0-9a-f]{6};color:#ffffff">MISS</)
+  // No target verdict at all: no chip to colour.
+  assert.ok(!rollChatHtml(entry({ attack: ATTACK }), green).includes('gr-verdict'))
+})
+
+/* THE TYPE TRAVELS WITH THE AMOUNT. The panel appends it to the contribution
+   itself, so a card printing a bare "+4" for a rider that reads "+4 radiant" is
+   the same value rendered two ways — and the reader cannot tell what the 4 is. */
+test('a rider carries its damage type into the card', () => {
+  const html = rollChatHtml(entry({
+    damage: DAMAGE,
+    riderGroups: [{ label: 'Damage', riders: [
+      rider({ label: 'Divine Smite', source: 'Paladin', flat: 4, dmgType: 'radiant' }),
+    ] }],
+  }), resolve)
+  assert.match(html, /Paladin · Divine Smite/)
+  assert.match(html, /\+4 <span class="gr-or">radiant<\/span>/)
+})
+
+test('an unresolvable colour outlines the type rather than filling it', () => {
   const html = rollChatHtml(entry({ damage: { ...DAMAGE, type: 'fire' } }), () => null)
   assert.ok(!html.includes('var(--'))
+  /* No fill means no ink that can be proven legible on it, so the type is drawn
+     in the reader's own ink instead — the same fail-closed rule colorOf has. */
+  assert.ok(!html.includes('background:'))
+  assert.match(html, /gr-plain/)
   assert.match(html, /<b>8<\/b> fire/)
 })
 
@@ -76,7 +144,10 @@ test('a dropped die is struck through, not dropped from the card', () => {
   const html = rollChatHtml(entry({
     attack: { ...ATTACK, rolls: faces(20, 14, 3), mode: 'adv' },
   }), resolve)
-  assert.match(html, /line-through/)
+  /* The strike itself is the stylesheet's now (`gr-out` in guide-roll.css) —
+     what this guards is that the losing die is still MARKED and still there.
+     Seeing what you beat is most of the point of advantage. */
+  assert.match(html, /class="gr-d gr-out"/)
   assert.ok(html.includes('>3<'))
 })
 
@@ -96,6 +167,24 @@ test('an answered note reaches the card, rendered as prose', () => {
   assert.match(html, /pushed 15 feet/)
   // The source string must not survive — that is the "prose printed raw" bug.
   assert.ok(!html.includes('**'))
+})
+
+/* A CONDITION IN A NOTE IS A RULE THE DM CAN ACT ON. dnd5e's reference
+   enricher links the SRD entry and hangs its apply-to-selected control off it,
+   so "knocked Prone" stops being a word somebody retypes into the token. */
+test('a condition named in a note crosses as dnd5e’s reference enricher', () => {
+  const html = rollChatHtml(entry({
+    damage: DAMAGE,
+    riderGroups: [{ label: 'Damage', riders: [rider({
+      op: 'note', label: 'Topple', source: 'Mastery',
+      text: 'the target is knocked **Prone** until it stands.',
+      when: 'manual', on: true,
+    })] }],
+  }), resolve)
+  // Lowercased for the lookup, but the sentence keeps the author's own casing.
+  assert.match(html, /&Reference\[prone\]\{Prone\}/)
+  // Markup is not prose: the enricher must never land inside a tag.
+  assert.ok(!/<[^>]*&Reference/.test(html))
 })
 
 test('an option the player did not choose stays out of the card', () => {

@@ -266,6 +266,10 @@ export function rollWeaponAttack(
   targetAc?: number,
 ): {
   attack: AttackRoll; damage: DamageRoll
+  /** Damage a rider brought in ANOTHER type — Divine Smite's radiant on a
+   *  slashing sword. Its own block, because a total is per type. Empty when
+   *  nothing typed contributed. */
+  extraDamage: DamageRoll[]
   riders: { attack: Rider[]; damage: Rider[] }
   /** Did it land — undefined when there was no target to land on. */
   hit?: boolean
@@ -310,7 +314,11 @@ export function rollWeaponAttack(
   // Graph damage. Its dice ride WITH the weapon's, so a crit doubles them too —
   // which is why resolve() hands them over unrolled and `crit` is passed here.
   const dmgRes = graph?.damage?.(hit, crit)
-  const dmgGraph = dmgRes ? rollResolution(dmgRes, crit) : { flat: 0, riders: [] as Rider[], terms: [] }
+  /* The WEAPON'S type decides which contributions belong in its total. One in
+     another type leaves `flat` and becomes its own block — see `extra`. */
+  const dmgGraph = dmgRes
+    ? rollResolution(dmgRes, crit, weapon.type)
+    : { flat: 0, riders: [] as Rider[], terms: [], extra: [] }
 
   const totalDmg = Math.max(0, diceSum + dmgBonus + ammoBonus + dmgGraph.flat)
   const damage: DamageRoll = {
@@ -326,6 +334,42 @@ export function rollWeaponAttack(
       + (ammoBonus ? ` ${formatMod(ammoBonus)} (${ammo!.label})` : '')
       + (dmgGraph.flat ? ` ${formatMod(dmgGraph.flat)}` : ''),
   }
-  return { attack, damage, hit, riders: { attack: atkGraph.riders, damage: dmgGraph.riders } }
+  return {
+    attack, damage, hit,
+    extraDamage: extraDamageRolls(dmgGraph.extra, crit),
+    riders: { attack: atkGraph.riders, damage: dmgGraph.riders },
+  }
+}
+
+/**
+ * Contributions in another damage type, as damage blocks of their own.
+ *
+ * ONE PER TYPE, carrying the faces the resolution already rolled — Divine Smite
+ * is `2d8` radiant, not a flat 4, and a crit has already doubled those dice by
+ * the time they arrive here.
+ *
+ * No `terms`: the sources are named in the contributions list beside the roll,
+ * and itemising a block whose every part came from one rider would print the
+ * same name twice.
+ */
+export function extraDamageRolls(
+  extra: { type: string; expr: string; dice: RolledDie[]; flat: number; sources: string[] }[],
+  crit = false,
+): DamageRoll[] {
+  return extra.map(e => {
+    const faces = e.dice.map(d => d.v)
+    return {
+      diceExpr: e.expr,
+      dice: e.dice,
+      bonus: e.flat,
+      total: Math.max(0, faces.reduce((a, b) => a + b, 0) + e.flat),
+      type: e.type,
+      crit,
+      breakdown: [
+        e.expr ? `${e.expr}(${faces.join(' + ')})` : '',
+        e.flat ? formatMod(e.flat) : '',
+      ].filter(Boolean).join(' ') || String(e.flat),
+    }
+  })
 }
 

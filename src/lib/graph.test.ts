@@ -1781,6 +1781,49 @@ test('rollResolution doubles dice for a crit, and never the flats', () => {
   assert.equal(rollResolution(res, true).riders.find(r => r.label === 'Flat')!.rolledDice, undefined)
 })
 
+/* A TOTAL IS PER TYPE, or it is nothing. Divine Smite's radiant folded into a
+   slashing sword's total is resisted as slashing — on the sheet, in the Foundry
+   card, and by dnd5e when the damage lands. So a contribution in another type
+   leaves `flat` and comes back for a block of its own. */
+test('a rider in another damage type leaves the total and brings its faces', () => {
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '3', label: 'Sharp', target: ['roll:damage'] },
+    { id: 'e2', op: 'add', value: '2d8', label: 'Smite', target: ['roll:damage'], dmgType: 'radiant' },
+  ])])
+  const res = resolve(buildContext(c), { kind: 'damage' })
+  const rolled = rollResolution(res, false, 'slashing')
+
+  assert.equal(rolled.flat, 3, 'the radiant must not be in the slashing total')
+  assert.equal(rolled.extra.length, 1)
+  assert.equal(rolled.extra[0].type, 'radiant')
+  assert.equal(rolled.extra[0].dice.length, 2)
+  assert.deepEqual(rolled.extra[0].sources, ['F'])
+  // Its dice ride with the weapon's, so a crit doubles them too.
+  assert.equal(rollResolution(res, true, 'slashing').extra[0].dice.length, 4)
+})
+
+test('a rider in the roll’s own type folds in, and so does an untyped one', () => {
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '2', label: 'Fiery', target: ['roll:damage'], dmgType: 'fire' },
+    { id: 'e2', op: 'add', value: '3', label: 'Plain', target: ['roll:damage'] },
+  ])])
+  // Case-insensitive: an authored "Fire" is the same type as a weapon's "fire".
+  const rolled = rollResolution(resolve(buildContext(c), { kind: 'damage' }), false, 'Fire')
+  assert.equal(rolled.flat, 5)
+  assert.deepEqual(rolled.extra, [])
+})
+
+test('with no type named, nothing splits out — the other callers are untouched', () => {
+  // Checks, activations and consumables pass no type; there is nothing to
+  // differ FROM, so the fold stays exactly as it was.
+  const c = withFeatures([gfeat('F', [
+    { id: 'e1', op: 'add', value: '4', label: 'Smite', target: ['roll:damage'], dmgType: 'radiant' },
+  ])])
+  const rolled = rollResolution(resolve(buildContext(c), { kind: 'damage' }), false)
+  assert.equal(rolled.flat, 4)
+  assert.deepEqual(rolled.extra, [])
+})
+
 test('a negative contribution still subtracts once rolled', () => {
   const c = withFeatures([gfeat('Bane', [
     { id: 'e1', op: 'add', value: '-1d4', label: 'Bane', target: ['roll:attack'] },

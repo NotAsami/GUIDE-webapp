@@ -88,6 +88,23 @@ export type BridgeMsg =
   | { kind: 'conditions'; character: string; statuses: string[] }
   /** Foundry → app. The actor-id → character-id map after a sync. */
   | { kind: 'mapped'; map: Record<string, string> }
+  /** Foundry → app. Foundry was asked to roll this character's initiative — the
+   *  tracker's d20, Roll All, the actor sheet's button — and asks the codex
+   *  instead, the same way a weapon macro does. `req` comes back on the answer,
+   *  so the bridge takes the first one and can tell a late answer from a fresh
+   *  press. */
+  | { kind: 'initRequest'; character: string; req: string }
+  /** App → Foundry. An initiative roll: post the card, then set the tracker.
+   *  One message, for `apply`'s reason — the tracker never shows a number the
+   *  table did not see rolled.
+   *  `req` is present when Foundry asked; absent, the player pressed INIT and
+   *  the bridge finds the combatant itself. `held` answers a request whose roll
+   *  still has a rider open: no total yet, so it only calls off the fallback,
+   *  and the panel's Post control sends the total once it settles. */
+  | {
+    kind: 'initiative'; character: string; req?: string; held?: true
+    roll?: string; title?: string; html?: string; total?: number
+  }
 
 const CHANNEL = 'guide-foundry'
 const EVENT = 'fvtt'
