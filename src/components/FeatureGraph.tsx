@@ -13,7 +13,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import type { CatalogFeatureData, GraphEffect, VarDef } from '../lib/database.types'
 import {
-  addNode, affectingInCatalog, junctionCount, autoLayout, graphFit, connectTarget, detailLines, editGroup, makeGroup, setPositions, ungroup, ovFit, zoomLevel, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
+  addNode, affectingInCatalog, connectNotice, junctionCount, autoLayout, graphFit, connectTarget, detailLines, editGroup, makeGroup, setPositions, ungroup, ovFit, zoomLevel, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
   setMatch, targetRefusal,
   type AddKind, type FeatureGraph as Graph, type GEdge, type GNode, type WireType,
 } from '../lib/featureGraph'
@@ -326,8 +326,16 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
   const [quick, setQuick] = useState<{ sx: number; sy: number; wx: number; wy: number; src?: string } | null>(null)
   /** An applies-to wire dropped on open canvas: choose what it points at. */
   const [pick, setPick] = useState<{ sx: number; sy: number; key: string } | null>(null)
-  const [notice, setNotice] = useState<{ text: string; x?: number; y?: number } | null>(null)
-  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 2200); return () => clearTimeout(t) }, [notice])
+  /* A refusal (red, brief), or a connect notice (amber, with its one-click cure). */
+  const [notice, setNotice] = useState<{ text: string; x?: number; y?: number; warn?: string; fix?: string } | null>(null)
+  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), notice.warn ? 7000 : 2200); return () => clearTimeout(t) }, [notice])
+  /** Add a target, and say so if that quietly turned one bonus into several. */
+  const connect = (key: string, sel: string) => {
+    const next = connectTarget(dRef.current, key, sel)
+    onChange(next)
+    const nt = connectNotice(next, key)
+    setNotice(nt ? { text: nt.s, warn: nt.t, fix: nt.fix ? key : undefined } : null)
+  }
 
   const layout = useMemo(() => (moving ? { ...d.layout, pos: { ...d.layout?.pos, ...moving } } : d.layout), [d.layout, moving])
   const g = useMemo(() => project(d, catalogTypes), [d, catalogTypes])
@@ -513,7 +521,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
       if (n && over !== key) {
         const why = legal.get(over!)
         if (why) { setNotice({ text: why }); return }
-        if (n.kind === 'dest') onChange(connectTarget(dRef.current, key, n.sel))
+        if (n.kind === 'dest') connect(key, n.sel)
         return
       }
       if (!over && (ev.target as Element | null)?.closest?.(`.${styles.pad}`)) {
@@ -923,13 +931,21 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
           onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
           <div className={styles.qaH}><Icon name="fa-crosshairs" />Applies to a…</div>
           <TargetChooser f={d} srcs={[pick.key]} nodes={nodes} namesByGid={namesByGid} catalogTypes={catalogTypes}
-            onPick={t => { onChange(connectTarget(dRef.current, pick.key, t)); setPick(null) }} />
+            onPick={t => { connect(pick.key, t); setPick(null) }} />
         </div>
       )}
       {wire?.over && typeof wire.legal.get(wire.over) === 'string' && (
         <div className={styles.refuseTip}><b><Icon name="fa-ban" />Refused</b>{wire.legal.get(wire.over)}</div>
       )}
-      {notice && <div className={styles.refuseTip}><b><Icon name="fa-ban" />Not done</b>{notice.text}</div>}
+      {notice && !notice.warn && <div className={styles.refuseTip}><b><Icon name="fa-ban" />Not done</b>{notice.text}</div>}
+      {notice?.warn && <div className={cx(styles.refuseTip, styles.warnTip)} onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+        <b><Icon name="fa-triangle-exclamation" />{notice.warn}</b>{notice.text}
+        {notice.fix && <button type="button" className={styles.noteBtn} onClick={() => {
+          const k = notice.fix!
+          onChange({ ...dRef.current, graph: (dRef.current.graph ?? []).map(e => (`eff:${e.id}` === k ? { ...e, oneOf: true } : e)) })
+          setNotice(null)
+        }}><Icon name="fa-link" /> One across all targets</button>}
+      </div>}
       {formFits && !quick && (
         <div className={styles.graphNote}>
           <Icon name="fa-circle-info" />
