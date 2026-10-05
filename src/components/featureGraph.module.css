@@ -211,6 +211,9 @@
 .gbadge.pendB { background: #111; color: var(--beige); border-color: var(--beige-dim); border-style: dashed; left: 10px; right: auto; }
 .refuseTip { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); z-index: 9; max-width: min(420px, calc(100% - 40px)); padding: 9px 12px; background: #170b0b; border: 1.5px solid rgba(185,58,58,.8); border-left: 3px solid var(--danger-hot); box-shadow: 0 8px 20px rgba(0,0,0,.6); font-family: var(--font-prose); font-size: 13.5px; line-height: 1.35; color: var(--text); pointer-events: none; }
 .refuseTip b { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-weight: 400; font-size: 8px; letter-spacing: .22em; text-transform: uppercase; color: var(--danger-hot); margin-bottom: 3px; }
+.warnTip { background: #17130a; border-color: rgba(226,176,33,.7); border-left-color: var(--amber); pointer-events: auto; }
+.warnTip b { color: var(--amber-hot); }
+.warnTip .noteBtn { margin-top: 8px; }
 .qadd { position: absolute; z-index: 12; width: 240px; padding: 8px; background: #12110e; border: 1.5px solid var(--amber); box-shadow: 0 12px 30px rgba(0,0,0,.7); }
 .qaH { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; color: var(--amber-hot); padding: 2px 2px 7px; }
 .qaI { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px; background: transparent; border: 0; cursor: pointer; font-family: var(--font-mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--text); text-align: left; white-space: nowrap; }

@@ -643,6 +643,25 @@ export function addNode(f: CatalogFeatureData, kind: AddKind, at: [number, numbe
   return { ok: true, f: setPos(next, key, at), key }
 }
 
+/** What a just-made applies-to wire quietly changed (mockup connectNotice):
+ *  a second target on an armed rule is a second bonus, unless the rule says
+ *  `oneOf`. `fix` = ticking oneOf is the cure. Null when nothing changed. */
+export function connectNotice(f: CatalogFeatureData, key: string): { t: string; s: string; fix: boolean } | null {
+  const n = project(f).nodes.find(x => x.key === key)
+  if (!n || !('eff' in n)) return null
+  const e = n.eff, ts = e.target ?? [], name = e.label || e.id
+  if (ts.length < 2) return null
+  if (e.op === 'grant') return {
+    t: 'Grant hands out one bonus per target', fix: false,
+    s: `${name} now names ${ts.length} rolls, so the recipient gets ${ts.length} separate bonuses. For “their next D20 Test”, target roll:d20 alone.`,
+  }
+  if (e.once && !e.oneOf && OPS[e.op].fields.some(fd => fd.key === 'oneOf')) return {
+    t: 'Arms once per target', fix: true,
+    s: `${name} now arms ${ts.length} separate bonuses, one on each target, and every one can be spent. If it is one bonus the player takes on either, make it one across all targets.`,
+  }
+  return null
+}
+
 /** An `and` junction's reach (mockup matchCount(keys, 'and')): the catalog
  *  things every tag and thing target holds of at once — Infinity when the
  *  targets are all roll kinds, which narrow the roll rather than the thing. */

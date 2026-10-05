@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatalogFeatureData, GraphEffect } from './database.types.ts'
-import { junctionCount, pressNeeds, affectingInCatalog, graphFit, detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
+import { connectNotice, junctionCount, pressNeeds, affectingInCatalog, graphFit, detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
 import { blankEffect } from './opSchema.ts'
 
 const feat = (over: Partial<CatalogFeatureData>) => ({ name: 'Test', ...over }) as CatalogFeatureData
@@ -212,6 +212,15 @@ test('an empty target means its own roll; a sheet op has no target at all', () =
   assert.equal(own('eff:u1'), true) // addUses reaches a feature — empty = this one's counter
   assert.equal(own('eff:b1'), false)
   assert.equal(kindOf(g, 'eff:b1'), 'sheet')
+})
+
+test('a second target on an armed rule says it is now two bonuses', () => {
+  const one = feat({ graph: [eff({ id: 'a', op: 'add', value: '2', once: true, target: ['roll:attack'] })] })
+  assert.equal(connectNotice(one, 'eff:a'), null)
+  const two = connectTarget(one, 'eff:a', 'roll:check')
+  assert.equal(connectNotice(two, 'eff:a')?.fix, true)
+  assert.equal(connectNotice({ ...two, graph: two.graph!.map(e => ({ ...e, oneOf: true })) }, 'eff:a'), null)
+  assert.equal(connectNotice({ ...two, graph: two.graph!.map(e => ({ ...e, once: false })) }, 'eff:a'), null)
 })
 
 test('a junction counts the things every target holds of at once', () => {
