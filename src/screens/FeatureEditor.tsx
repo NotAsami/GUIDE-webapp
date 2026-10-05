@@ -44,7 +44,7 @@ import {
   type ActivationKind,
 } from '../lib/opSchema'
 import type {
-  CatalogFeatureData, CatalogFeatureRow, Feature, FeatureCategory, GraphEffect, VarDef,
+  CatalogFeatureData, CatalogFeatureRow, Feature, FeatureCategory,
 } from '../lib/database.types'
 import { originChain, runsActivation, toggleVar } from '../lib/featureView'
 import { SEP, depthOf, folderSet, hiddenUnder, leafOf } from '../lib/folders'
@@ -138,8 +138,6 @@ export default function FeatureEditor() {
   const [query, setQuery] = useState('')
   const [openFolders, setOpenFolders] = useFolderCollapse()
   const [open, setOpen] = useState({ vars: false, effects: false })
-  const [openEffect, setOpenEffect] = useState<number | null>(null)
-  const [moreOps, setMoreOps] = useState(false)
   const [helpOn, setHelpOn] = useState(false)
   const [overlay, setOverlay] = useState<'guide' | 'origin' | null>(null)
   const [view, setView] = useEditorView()
@@ -416,11 +414,11 @@ export default function FeatureEditor() {
 
   /* ---- actions ---- */
   function select(id: string) {
-    setSelId(id); setCreating(false); setOpenEffect(null); setMenuOn(false); setSel(null); setMulti([])
+    setSelId(id); setCreating(false); setMenuOn(false); setSel(null); setMulti([])
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
   function onNew() {
-    setSelId(null); setCreating(true); setOpenEffect(null); setMenuOn(false); setSel(null); setMulti([])
+    setSelId(null); setCreating(true); setMenuOn(false); setSel(null); setMulti([])
     setOpen({ vars: false, effects: false })
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
@@ -493,10 +491,6 @@ export default function FeatureEditor() {
   }, [selId, row, lib.features])
 
   const set = useCallback((patch: Partial<CatalogFeatureData>) => update(d => ({ ...d, ...patch })), [update])
-  const setEffect = useCallback((i: number, patch: Partial<GraphEffect>) =>
-    update(d => ({ ...d, graph: (d.graph ?? []).map((e, j) => (j === i ? { ...e, ...patch } : e)) })), [update])
-  const setVar = useCallback((i: number, patch: Partial<VarDef>) =>
-    update(d => ({ ...d, vars: (d.vars ?? []).map((v, j) => (j === i ? { ...v, ...patch } : v)) })), [update])
 
   function addTag(raw: string) {
     const t = normalizeTag(raw)
@@ -603,9 +597,8 @@ export default function FeatureEditor() {
             )}
             {!draft ? emptyEl : (
               <FeatureForm
-                d={draft} previewScope={pvScope} set={set} setEffect={setEffect} setVar={setVar} update={update}
-                open={open} setOpen={setOpen} openEffect={openEffect} setOpenEffect={setOpenEffect}
-                moreOps={moreOps} setMoreOps={setMoreOps}
+                d={draft} previewScope={pvScope} set={set} update={update}
+                open={open} setOpen={setOpen}
                 folders={folders} nodes={nodes} namesByGid={namesByGid} featureList={featureList} tagUse={tagUse}
                 tagInput={tagInput} setTagInput={setTagInput} tagAcOpen={tagAcOpen} setTagAcOpen={setTagAcOpen}
                 addTag={addTag} setPop={setPop} openOrigin={() => setOverlay('origin')}
@@ -1009,15 +1002,9 @@ type FormProps = {
   /** Values the player-preview evaluates `{…}` against. */
   previewScope: ExprScope
   set: (p: Partial<CatalogFeatureData>) => void
-  setEffect: (i: number, p: Partial<GraphEffect>) => void
-  setVar: (i: number, p: Partial<VarDef>) => void
   update: (fn: (t: CatalogFeatureData) => CatalogFeatureData) => void
   open: { vars: boolean; effects: boolean }
   setOpen: (v: { vars: boolean; effects: boolean }) => void
-  openEffect: number | null
-  setOpenEffect: (v: number | null) => void
-  moreOps: boolean
-  setMoreOps: (v: boolean) => void
   folders: string[]
   nodes: AuthoredNode[]
   namesByGid: Map<string, { name: string; kind: string }>
