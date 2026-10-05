@@ -21,6 +21,7 @@ import { armsSpent, armsSpentBy } from './graphState.ts'
 import { pendingOf } from './rollView.ts'
 import { sendFoundry } from './foundry.ts'
 import { cssVar, rollChatHtml } from './foundryChat.ts'
+import { fireTrigger } from './triggers.ts'
 
 export async function initiativeRoll(o: {
   character: CharacterRow
@@ -48,6 +49,8 @@ export async function initiativeRoll(o: {
   const ids = armsSpentBy(...(built.riderGroups ?? []).map(g => g.riders))
   if (ids.length && !(await o.saveResources(armsSpent(o.character, ids, rollId) as CharacterRow['resources'])).ok) return null
   const logged = o.addRoll(built, rollId)
+  // AFTER the roll is in the log, so a refill it causes reads below it.
+  fireTrigger('initiative')
 
   const character = o.character.id
   if (pendingOf(logged).asks > 0) {

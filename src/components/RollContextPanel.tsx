@@ -80,7 +80,7 @@ const sgn = (n: number) => `${n < 0 ? '−' : '+'} ${Math.abs(n)}`
 
 /* ---------------- the rail ---------------- */
 
-export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed, onAdvanceTurn, turnState }: {
+export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed, onAdvanceTurn, turnState, onOffer }: {
   onClose: () => void
   character?: CharacterRow | null
   shardTrees?: Record<string, ShardTree>
@@ -94,6 +94,9 @@ export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed
   /** What is on a timer, for the button's subtitle — a tracker that does not say
    *  what it is tracking is a button you press hopefully. */
   turnState?: { running: number; ticking: number }
+  /** A trigger's offer answered — Use presses the feature, false dismisses it.
+   *  Absent = no character to press for, and the offer reads as a line only. */
+  onOffer?: (entry: RollEntry, use: boolean) => void
 }) {
   const { rolls, updateRoll, clear } = useRollLog()
   const [folded, setFolded] = useState<Set<string>>(new Set())
@@ -234,7 +237,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed
                   onOpenCat={() => { if (entry.subject) setCat(entry) }}
                   hasCat={!!entry.subject}
                   stillArmed={stillArmed} onAnswerArmed={onAnswerArmed} characterId={character?.id}
-                  onLeave={onClose}
+                  onLeave={onClose} onOffer={onOffer}
                 />
               ))}
         </div>
@@ -251,7 +254,7 @@ export function RollContextPanel({ onClose, character, shardTrees, onAnswerArmed
 
 function Entry({
   entry, latest, fresh, folded, onFold, onPatch, onPatchMany, onReroll, onPatchEntry, showTip, onOpenCat, hasCat,
-  stillArmed, onAnswerArmed, onLeave, characterId,
+  stillArmed, onAnswerArmed, onLeave, characterId, onOffer,
 }: {
   entry: RollEntry; latest: boolean; fresh: boolean; folded: boolean
   /** Who the Foundry bridge should speak as. Absent = no character bound, and
@@ -274,6 +277,7 @@ function Entry({
    *  leaving it open over the screen you just asked for means dismissing it
    *  before you can read the thing you clicked through to. */
   onLeave: () => void
+  onOffer?: (entry: RollEntry, use: boolean) => void
 }) {
   const views = useMemo(() => riderViews(entry), [entry])
   const lines = useMemo(() => lineViews(entry), [entry])
@@ -674,6 +678,20 @@ function Entry({
                 </span>
               </button>
             )}
+
+            {/* A TRIGGER'S OFFER. The event happened; pressing is the player's
+                call because it would spend or ask. Open until answered, or
+                until the same event comes round again. */}
+            {entry.offer && (entry.offer.state
+              ? <div className={styles.offerDone}>{entry.offer.state === 'used' ? 'Used' : entry.offer.state === 'dismissed' ? 'Dismissed' : 'Lapsed — the moment passed'}</div>
+              : onOffer && <div className={styles.offerRow}>
+                <button type="button" className={cx(styles.fvtt, styles.offerUse)} onClick={() => onOffer(entry, true)}>
+                  <i className="fa-solid fa-play" /><span className={styles.fvttLab}>Use {entry.title}</span>
+                </button>
+                <button type="button" className={cx(styles.fvtt, styles.offerNo)} onClick={() => onOffer(entry, false)}>
+                  <span className={styles.fvttLab}>Dismiss</span>
+                </button>
+              </div>)}
 
             {/* POSTING ALONE is for everything the merged control is not: a
                 miss, a check, a save, a roll with nobody targeted. Where damage

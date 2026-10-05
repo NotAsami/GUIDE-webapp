@@ -20,7 +20,7 @@ import type { RolledDie } from './dice'
 import { rolledDice } from './dice'
 import type { CheckTerm } from './dnd'
 import { composeCheck, effectiveMode, usesProficiency } from './dnd'
-import type { AbilityKey } from './database.types'
+import type { AbilityKey, Feature } from './database.types'
 
 /** A d20 roll behind an ability check, saving throw, or skill check — rolled on
  *  the Character screen. `rolls` holds one entry normally, two under adv/dis. */
@@ -119,6 +119,10 @@ export type RollEntry = {
    *  and treating that as outstanding would pulse at someone already done. See
    *  `pendingOf` in lib/rollView.ts. */
   acked?: boolean
+  /** A trigger OFFERING a feature it would not press on its own — it spends or
+   *  asks (lib/triggers.ts). Open until the player uses or dismisses it, or the
+   *  same event comes round again and it lapses. Counts on the ROLLS badge. */
+  offer?: { feature: string; via: NonNullable<Feature['trigger']>; state?: 'used' | 'dismissed' | 'lapsed' }
 }
 
 /** Riders, labelled by the roll that produced them ("Attack", "Damage", "Save"). */

@@ -427,9 +427,30 @@ HP of everything on the scene.
 
 ---
 
-## Triggers other than the press
+## Triggers other than the press — PARTLY BUILT
 
-**Trigger.** A feature whose rule starts from something other than the player
+**Built (2026-10-05):** `Feature.trigger` — `initiative`, `hpZero`, `turnStart`
+(`lib/triggers.ts`, `components/Triggers.tsx`). Chosen by the catalog: those are
+the events content waits on (4, 1 and 1 features) that the app already sees. A
+trigger is another way to press; a press that would spend or ask is offered in
+the roll panel rather than run.
+
+**Still deferred, each with its own trigger:**
+
+- **When you are hit** (Retaliation, Stone's Endurance). Needs Foundry to say
+  who attacked whom — the bridge sees damage land, not the attack roll's target.
+  Build when a reaction like these is wanted at the table.
+- **End of your turn** (Self-Restoration). The bridge sends a `turn` only to the
+  character whose turn starts; the previous one's end is the same message read
+  from the other side. Build with the first content that needs it beyond one feature.
+- **You reduce a creature to 0** — zero catalog features, and `downed` is
+  deliberately unattributed. Needs the same attribution as "when you are hit".
+- **Roll made / variable changes** (the mockup's sheet events). "When you hit"
+  is already a roll-time rider and needs no trigger; nothing else asked yet.
+- **Two tabs on one character** each answer an event. A lease in `resources`
+  if that ever happens at the table.
+
+**Original entry, for the remaining events.** A feature whose rule starts from something other than the player
 pressing it — "when a creature you can see drops to 0 HP", "at the start of your
 turn", "when you are hit" — and the DM wants the app to run it, not just print it.
 

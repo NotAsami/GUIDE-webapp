@@ -822,3 +822,10 @@ test('reporting the faces does not add them to the total a second time', () => {
   assert.equal(views[0].value, 5)                 // the working says 5…
   assert.equal(rollTotals(e, views).damage, 8)    // …and the total is still the line's 8
 })
+
+test('an open trigger offer counts once, and stops counting once answered or seen', () => {
+  const offer = { feature: 'f1', via: 'hpZero' as const }
+  assert.equal(pendingOf(entry({ offer })).total, 1)
+  assert.equal(pendingOf(entry({ offer: { ...offer, state: 'dismissed' } })).total, 0)
+  assert.equal(pendingOf(entry({ offer, acked: true })).total, 0)
+})

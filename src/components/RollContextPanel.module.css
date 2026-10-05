@@ -631,6 +631,13 @@
   transition: background 120ms;
 }
 .fvtt:hover:not(:disabled) { background: rgba(160, 122, 214, 0.15); }
+.offerRow { display: flex; gap: 6px; }
+.offerUse { background: rgba(226, 176, 33, 0.07); border-color: rgba(226, 176, 33, 0.35); border-left-color: var(--amber); }
+.offerUse:hover:not(:disabled) { background: rgba(226, 176, 33, 0.16); }
+.offerUse > i { color: var(--amber-hot); }
+.offerNo { width: auto; flex: 0 0 auto; background: transparent; border-color: rgba(212, 191, 125, 0.25); border-left-color: rgba(212, 191, 125, 0.5); }
+.offerNo .fvttLab { color: var(--muted); }
+.offerDone { margin-top: 9px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
 .fvtt:disabled { cursor: not-allowed; opacity: 0.45; }
 .fvtt > i { font-size: 10px; color: var(--violet-hot); }
 .fvttLab {

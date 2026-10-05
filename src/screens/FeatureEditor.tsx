@@ -47,6 +47,7 @@ import type {
   CatalogFeatureData, CatalogFeatureRow, Feature, FeatureCategory,
 } from '../lib/database.types'
 import { originChain, runsActivation, toggleVar } from '../lib/featureView'
+import { TRIGGERS, triggerOf, triggerProblem } from '../lib/triggers'
 import { SEP, depthOf, folderSet, hiddenUnder, leafOf } from '../lib/folders'
 import { previewScope, type VarOwner } from '../lib/previewScope'
 import type { ExprScope } from '../lib/expr'
@@ -237,6 +238,8 @@ export default function FeatureEditor() {
     if (!draft.name?.trim()) out.unshift({ sev: 'err', id: 'field:name', t: 'Unnamed feature', s: 'A feature needs a name before it can be granted.' })
     if (!draft.light_description?.trim()) out.push({ sev: 'warn', id: 'field:light', t: 'No card text', s: 'The collapsed card in play will have nothing to scan.' })
     if (!draft.deep_description?.trim()) out.push({ sev: 'warn', id: 'field:deep', t: 'No detail text', s: 'The expanded card will have nothing below the card text.' })
+    const trig = triggerProblem(draft)
+    if (trig) out.push({ sev: 'err', id: 'field:trigger', t: 'A trigger with nothing to press', s: trig })
     if (draft.uses && !draft.recharge) out.push({ sev: 'warn', id: null, t: 'Uses never reset', s: 'Max uses is set but no recharge was chosen — the DM restores them by hand.' })
     /* A STANCE THAT COSTS SOMETHING HAS TO SPEND IT. The hexagon on a single-
        toggle feature enters the stance, and entering only spends a use when
@@ -1686,7 +1689,16 @@ export function ActivationFields({ d, set }: { d: CatalogFeatureData; set: (p: P
           {ACT_ORDER.map(k => <option key={k} value={k}>{ACTIVATIONS[k].label}</option>)}
         </select>
       </div>
-      <div />
+      <div>
+        <span className={styles.fieldLab}>Trigger<span className={styles.ty}>event</span></span>
+        {/* SOMETHING ELSE MAY PRESS IT (lib/triggers.ts). The same press — a
+            free one runs, one that spends or asks is offered in the roll panel. */}
+        <select className={styles.in} value={d.trigger ?? ''} title={triggerOf(d.trigger)?.note}
+          onChange={e => set({ trigger: (e.target.value || undefined) as CatalogFeatureData['trigger'] })}>
+          <option value="">Press only</option>
+          {TRIGGERS.map(t => <option key={t.k} value={t.k}>{t.label}</option>)}
+        </select>
+      </div>
     </div>
     <div className={styles.actNote} style={{ ['--an' as string]: act.color }}>
       <Icon name={act.icon} /><span>{act.note}</span>
