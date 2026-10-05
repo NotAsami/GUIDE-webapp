@@ -341,7 +341,8 @@ export function pendingOf(entry: RollEntry): Pending {
      an item or an active effect is a free-text reminder ("10 rounds") that
      nothing counts down — so this contributes nothing today. When something does
      tick, it is one more line here and all three surfaces pick it up unchanged. */
-  return { asks, problems, total: asks + problems }
+  const offer = entry.offer && !entry.offer.state ? 1 : 0
+  return { asks: asks + offer, problems, total: asks + offer + problems }
 }
 
 /** Everything still waiting, across the whole log. What the nav badge counts:
