@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatalogFeatureData, GraphEffect } from './database.types.ts'
-import { detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
+import { connectNotice, junctionCount, pressNeeds, affectingInCatalog, graphFit, detailLines, editGroup, makeGroup, ovFit, setPositions, ungroup, zoomLevel, addNode, autoLayout, connectTarget, disconnectTarget, editGate, project, regate, removeNode, retarget, setMatch, setPos, targetRefusal, type GEdge, type FeatureGraph } from './featureGraph.ts'
 import { blankEffect } from './opSchema.ts'
 
 const feat = (over: Partial<CatalogFeatureData>) => ({ name: 'Test', ...over }) as CatalogFeatureData
@@ -214,6 +214,27 @@ test('an empty target means its own roll; a sheet op has no target at all', () =
   assert.equal(kindOf(g, 'eff:b1'), 'sheet')
 })
 
+test('a second target on an armed rule says it is now two bonuses', () => {
+  const one = feat({ graph: [eff({ id: 'a', op: 'add', value: '2', once: true, target: ['roll:attack'] })] })
+  assert.equal(connectNotice(one, 'eff:a'), null)
+  const two = connectTarget(one, 'eff:a', 'roll:check')
+  assert.equal(connectNotice(two, 'eff:a')?.fix, true)
+  assert.equal(connectNotice({ ...two, graph: two.graph!.map(e => ({ ...e, oneOf: true })) }, 'eff:a'), null)
+  assert.equal(connectNotice({ ...two, graph: two.graph!.map(e => ({ ...e, once: false })) }, 'eff:a'), null)
+})
+
+test('a junction counts the things every target holds of at once', () => {
+  const nodes = [
+    { gid: 'item:a', tags: ['Fire', 'weapon'] },
+    { gid: 'item:b', tags: ['fire'] },
+    { gid: 'item:c', tags: ['weapon'] },
+  ] as unknown as Parameters<typeof junctionCount>[1]
+  assert.equal(junctionCount(['tag:fire', 'tag:weapon'], nodes), 1)
+  assert.equal(junctionCount(['tag:fire', 'roll:damage'], nodes), 2)
+  assert.equal(junctionCount(['item:b', 'tag:fire'], nodes), 1)
+  assert.equal(junctionCount(['roll:damage', 'roll:damage.melee'], nodes), Infinity)
+})
+
 /* ---------- layout ---------- */
 
 test('auto layout places every node once, and a saved position wins', () => {
@@ -235,6 +256,20 @@ test('a target sits level with the rule pointing at it, and two targets never ov
   const lone = project(feat({ graph: [eff({ id: 'a', target: ['roll:attack'] })] }))
   const p = autoLayout(lone, { 'eff:a': [0, 500] }, h)
   assert.equal(p['dest:roll:attack'][1], 500)
+})
+
+test('an auto-placed node never lands on one the author moved', () => {
+  const g = project(BRUTAL, { recklessAttack: 'bool' })
+  const h = () => 80
+  const free = autoLayout(g, {}, h)
+  /* Drop the press exactly where some other node would auto-place. */
+  const victim = Object.keys(free).find(k => k !== 'press')!
+  const pos = autoLayout(g, { press: free[victim] }, h)
+  for (const [k, [x, y]] of Object.entries(pos)) {
+    if (k === 'press') continue
+    const [px, py] = pos.press
+    assert.ok(Math.abs(x - px) >= 310 || y >= py + 80 || y + 80 <= py, `${k} sits on the moved press`)
+  }
 })
 
 test('a derived variable sits right of what it reads, and the press right of every variable', () => {
@@ -477,4 +512,70 @@ test('rename and ungroup touch the frame only, never the nodes', () => {
 test('deleting a grouped node drops it from its group (prune)', () => {
   const f = ok(removeNode(makeGroup(PLAIN, ['eff:a', 'eff:b'], 'G'), 'eff:a'))
   assert.deepEqual(f.layout?.groups?.[0].m, ['eff:b'])
+})
+
+/* ---------- graph helps / form fits; affected by ---------- */
+
+test('one rule decides which view a feature reads best in', () => {
+  assert.equal(graphFit(project(BRUTAL)).fit, 'graph') // two has_* plus the turn counter, two offers
+  assert.equal(graphFit(project(JUDGEMENT)).fit, 'graph') // a derived chain
+  assert.equal(graphFit(project(SECOND_WIND)).fit, 'form')
+  const plain = feat({ graph: [1, 2, 3, 4].map(i => eff({ id: `p${i}`, op: 'add', value: '1', target: ['roll:attack'] })) })
+  assert.equal(graphFit(project(plain)).fit, 'form')
+  // an ask with a condition under it is two gates: wiring worth drawing
+  assert.equal(graphFit(project(PLAIN)).fit, 'graph')
+  // one gate alone is not
+  const oneGate = feat({ activation: 'action', graph: [eff({ id: 'g', op: 'setHp', value: '1', ask: 'Q?' })] })
+  assert.equal(graphFit(project(oneGate)).fit, 'form')
+})
+
+test('affected by: the same selector, or for a thing its gid and its tags, across the feature catalog', () => {
+  const lib = [
+    { id: 'a', name: 'Alpha', graph: [eff({ id: 'x', label: 'Hot', target: ['tag:Fire'] }), eff({ id: 'y', label: 'Melee', target: ['roll:damage.melee'], when: 'w' })] },
+    { id: 'b', name: 'Beta', graph: [eff({ id: 'z', label: 'Direct', target: ['spell:fire_bolt'], ask: 'Q?' })] },
+  ]
+  assert.deepEqual(affectingInCatalog('tag:fire', lib).map(r => r.label), ['Hot'])
+  assert.deepEqual(affectingInCatalog('roll:damage.melee', lib).map(r => [r.label, r.gated]), [['Melee', 'when']])
+  // a thing is reached by its gid AND by any tag it carries
+  assert.deepEqual(affectingInCatalog('spell:fire_bolt', lib, ['fire']).map(r => `${r.featureName}:${r.label}:${r.gated}`).sort(), ['Alpha:Hot:always', 'Beta:Direct:ask'])
+})
+
+test('each graph-helps reason stands on its own', () => {
+  const derivedOnly = feat({ vars: [
+    { name: 'a', kind: 'stored', type: 'num' }, { name: 'b', kind: 'derived', formula: 'a + 1' }, { name: 'c', kind: 'derived', formula: 'b * 2' },
+  ], graph: [eff({ id: 'r', value: 'c', target: ['roll:attack'] })] })
+  assert.equal(graphFit(project(derivedOnly)).fit, 'graph')
+  const extOnly = feat({ graph: [eff({ id: 'r', value: '1', when: 'has_x && has_y', target: ['roll:attack'] })] })
+  assert.equal(graphFit(project(extOnly)).fit, 'graph')
+  const oneExt = feat({ graph: [eff({ id: 'r', value: '1', when: 'has_x', target: ['roll:attack'] })] })
+  assert.equal(graphFit(project(oneExt)).fit, 'form')
+})
+
+test('two offers competing for Picks is reason enough on its own', () => {
+  const offersOnly = feat({ graph: [eff({ id: 'a', once: true, ask: 'A?', target: ['roll:attack'] }), eff({ id: 'b', once: true, ask: 'B?', target: ['roll:attack'] })] })
+  assert.equal(graphFit(project(offersOnly)).fit, 'graph')
+})
+
+/* ---------- deleting the press ---------- */
+
+test('Del on a press that only Activation keeps clears Activation, and the press goes', () => {
+  const placed = feat({ activation: 'action', graph: [eff({ id: 'p', op: 'add', value: '1', target: ['roll:attack'] })] })
+  const f = ok(removeNode(placed, 'press'))
+  assert.equal(f.activation, 'none')
+  assert.equal(project(f).nodes.some(n => n.kind === 'press'), false)
+})
+
+test('a press something else needs stays, and says what', () => {
+  const r = removeNode(PLAIN, 'press')
+  assert.ok(!r.ok && /3 activation outcomes/.test(r.why), (r as { why: string }).why)
+  const armed = removeNode(feat({ activation: 'bonus', uses: { max: 2 }, graph: [eff({ id: 'o', once: true, target: ['roll:attack'] })] }), 'press')
+  assert.ok(!armed.ok && /Max uses/.test(armed.why) && /1 armed \(once\) rule/.test(armed.why))
+})
+
+test('pressNeeds names a reason exactly when isUsable sees one (activation aside)', () => {
+  for (const f of [PLAIN, BRUTAL, JUDGEMENT, EMBER, SECOND_WIND, feat({}),
+    feat({ vars: [{ name: 'held', kind: 'stored', type: 'bool' }] }), feat({ roll: '1d6' })]) {
+    const none = { ...f, activation: 'none' as const }
+    assert.equal(pressNeeds(none).length > 0, project(none).nodes.some(n => n.kind === 'press'), f.name)
+  }
 })

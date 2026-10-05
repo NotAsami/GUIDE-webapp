@@ -44,7 +44,7 @@ import {
   type ActivationKind,
 } from '../lib/opSchema'
 import type {
-  CatalogFeatureData, CatalogFeatureRow, Feature, FeatureCategory, GraphEffect, VarDef,
+  CatalogFeatureData, CatalogFeatureRow, Feature, FeatureCategory,
 } from '../lib/database.types'
 import { originChain, runsActivation, toggleVar } from '../lib/featureView'
 import { SEP, depthOf, folderSet, hiddenUnder, leafOf } from '../lib/folders'
@@ -56,6 +56,7 @@ import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
 import { ProsePreview } from '../components/ProsePreview'
 import { FeatureGraph, FeatureScript, GraphInspector, NodeKinds, auditNodeKey } from '../components/FeatureGraph'
+import { graphFit, project } from '../lib/featureGraph'
 
 const cx = (...v: (string | false | undefined | null)[]) => v.filter(Boolean).join(' ')
 
@@ -137,8 +138,6 @@ export default function FeatureEditor() {
   const [query, setQuery] = useState('')
   const [openFolders, setOpenFolders] = useFolderCollapse()
   const [open, setOpen] = useState({ vars: false, effects: false })
-  const [openEffect, setOpenEffect] = useState<number | null>(null)
-  const [moreOps, setMoreOps] = useState(false)
   const [helpOn, setHelpOn] = useState(false)
   const [overlay, setOverlay] = useState<'guide' | 'origin' | null>(null)
   const [view, setView] = useEditorView()
@@ -211,6 +210,16 @@ export default function FeatureEditor() {
     return { id: r.id, name: c.name, features: c.features ?? [], vars: c.vars }
   }), [classLib.classes])
   const featureNames = useMemo(() => new Map(lib.features.map(r => [r.id, featureContent(r).name ?? ''])), [lib.features])
+  /* The catalog as the Graph inspector reads it ("Affected by", peek), and which
+     features read better as a graph (the list's tag). Memoised on the library,
+     like the per-row audit dot, so a keystroke does not re-project 300 rows. */
+  const library = useMemo(() => lib.features.map(r => {
+    const c = featureContent(r)
+    return { id: r.id, name: c.name ?? '', category: c.category, graph: c.graph, tags: c.tags, light_description: c.light_description }
+  }), [lib.features])
+  const graphHelps = useMemo(() => new Set(lib.features
+    .filter(r => graphFit(project(featureContent(r), catalogTypes)).fit === 'graph').map(r => r.id)), [lib.features, catalogTypes])
+  const draftFit = useMemo(() => (draft ? graphFit(project(draft, catalogTypes)) : null), [draft, catalogTypes])
 
   const audit: AuditItem[] = useMemo(() => {
     if (!draft) return []
@@ -405,11 +414,11 @@ export default function FeatureEditor() {
 
   /* ---- actions ---- */
   function select(id: string) {
-    setSelId(id); setCreating(false); setOpenEffect(null); setMenuOn(false); setSel(null); setMulti([])
+    setSelId(id); setCreating(false); setMenuOn(false); setSel(null); setMulti([])
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
   function onNew() {
-    setSelId(null); setCreating(true); setOpenEffect(null); setMenuOn(false); setSel(null); setMulti([])
+    setSelId(null); setCreating(true); setMenuOn(false); setSel(null); setMulti([])
     setOpen({ vars: false, effects: false })
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
@@ -482,10 +491,6 @@ export default function FeatureEditor() {
   }, [selId, row, lib.features])
 
   const set = useCallback((patch: Partial<CatalogFeatureData>) => update(d => ({ ...d, ...patch })), [update])
-  const setEffect = useCallback((i: number, patch: Partial<GraphEffect>) =>
-    update(d => ({ ...d, graph: (d.graph ?? []).map((e, j) => (j === i ? { ...e, ...patch } : e)) })), [update])
-  const setVar = useCallback((i: number, patch: Partial<VarDef>) =>
-    update(d => ({ ...d, vars: (d.vars ?? []).map((v, j) => (j === i ? { ...v, ...patch } : v)) })), [update])
 
   function addTag(raw: string) {
     const t = normalizeTag(raw)
@@ -584,11 +589,16 @@ export default function FeatureEditor() {
       {m === 'form' ? (
         <div className={styles.rScroll} ref={scrollRef}>
           <div className={cx(styles.insp, helpOn && styles.helpon)}>
+            {draft && draftFit?.fit === 'graph' && (
+              <div className={styles.fvHint}>
+                <i className="fa-solid fa-diagram-project" /><span>{draftFit.why}</span>
+                <button type="button" className={styles.fvBtn} onClick={() => setMode('graph')}>Open graph</button>
+              </div>
+            )}
             {!draft ? emptyEl : (
               <FeatureForm
-                d={draft} previewScope={pvScope} set={set} setEffect={setEffect} setVar={setVar} update={update}
-                open={open} setOpen={setOpen} openEffect={openEffect} setOpenEffect={setOpenEffect}
-                moreOps={moreOps} setMoreOps={setMoreOps}
+                d={draft} previewScope={pvScope} set={set} update={update}
+                open={open} setOpen={setOpen}
                 folders={folders} nodes={nodes} namesByGid={namesByGid} featureList={featureList} tagUse={tagUse}
                 tagInput={tagInput} setTagInput={setTagInput} tagAcOpen={tagAcOpen} setTagAcOpen={setTagAcOpen}
                 addTag={addTag} setPop={setPop} openOrigin={() => setOverlay('origin')}
@@ -760,6 +770,7 @@ export default function FeatureEditor() {
                                   <span className={styles.frM}>
                                     <span className={styles.frSrc}>{SOURCES[d.category ?? 'other'] ?? d.category}</span>
                                     {m.via && <span className={cx(styles.frSrc, styles.frHit)}>{m.via}</span>}
+                                    {graphHelps.has(r.id) && <span className={cx(styles.frSrc, styles.frGraph)} title="Reads better in the Graph view">graph helps</span>}
                                     {r.draft && <span className={styles.frDrf}>draft</span>}
                                     {!d.published && !r.draft && <span className={styles.frDrf}>unpublished</span>}
                                   </span>
@@ -896,6 +907,7 @@ export default function FeatureEditor() {
                           <GraphInspector d={draft} catalogTypes={catalogTypes} sel={sel} update={update}
                             nodes={nodes} namesByGid={namesByGid} featureList={featureList}
                             onSelect={setSel} multi={multi} onMulti={setMulti}
+                            library={library} featureId={creating ? null : selId} onOpenFeature={id => select(id)}
                             pressFields={<ActivationFields d={draft} set={set} />} />
                         </div>
                       </div>
@@ -990,15 +1002,9 @@ type FormProps = {
   /** Values the player-preview evaluates `{…}` against. */
   previewScope: ExprScope
   set: (p: Partial<CatalogFeatureData>) => void
-  setEffect: (i: number, p: Partial<GraphEffect>) => void
-  setVar: (i: number, p: Partial<VarDef>) => void
   update: (fn: (t: CatalogFeatureData) => CatalogFeatureData) => void
   open: { vars: boolean; effects: boolean }
   setOpen: (v: { vars: boolean; effects: boolean }) => void
-  openEffect: number | null
-  setOpenEffect: (v: number | null) => void
-  moreOps: boolean
-  setMoreOps: (v: boolean) => void
   folders: string[]
   nodes: AuthoredNode[]
   namesByGid: Map<string, { name: string; kind: string }>
@@ -1418,6 +1424,18 @@ function GuidePanel({ open, helpOn, setHelpOn, onClose }: { open: boolean; helpO
           <span className={cx(styles.k, styles.er)}>Error</span><span className={styles.v}>Blocks Publish. Something the app cannot resolve.</span>
           <span className={styles.k}>Warning</span><span className={styles.v}>Informs only. Publish is allowed — an empty tag can be a tag nothing carries yet.</span>
           <span className={cx(styles.k, styles.ok)}>Clean</span><span className={styles.v}>Nothing outstanding.</span>
+        </div>
+
+        <div className={styles.sec}><span className={styles.num}>14</span><span className={styles.fieldLab}>The Graph view</span></div>
+        <p className={styles.gtext}>The same feature as the form, drawn. Every node is a field you could edit in the form, and the inspector opens the form’s own editor for it.</p>
+        <div className={styles.gdl}>
+          <span className={styles.k}>Pale wires</span><span className={styles.v}>The press, through any Ask or Condition, to the outcomes it runs. Drag one from a gate onto an outcome to change its ask / when.</span>
+          <span className={styles.k}>Thin wires</span><span className={styles.v}>What a formula reads. Show-only — edit the formula to change them.</span>
+          <span className={styles.k}>Orange wires</span><span className={styles.v}>Applies-to. Drag a rule’s square port onto a target, or onto open canvas to choose one. Click a wire, Del removes it.</span>
+          <span className={styles.k}>Add · delete</span><span className={styles.v}>Node kinds list, double-click or A to add; Del to delete. A new Condition or Ask stays “unwired” until an outcome is wired into it.</span>
+          <span className={styles.k}>Groups</span><span className={styles.v}>Shift-click or Shift-drag to select several, G to frame them. Layout only — the engine never sees a group.</span>
+          <span className={styles.k}>Zoom</span><span className={styles.v}>Overview shows names only; Detail shows targets, flags and note text.</span>
+          <span className={styles.k}>Class preview</span><span className={styles.v}>Pick a class and level: rules that are definitely off there dim. It only knows level and class grants — anything else stays undetermined, and an ask is never guessed.</span>
         </div>
         <p className={styles.gtext} style={{ color: 'var(--muted)', fontSize: 13.5 }}>
           Per-field help — each field’s schema description and example — lives behind <strong>Per-field help</strong> above.

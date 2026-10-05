@@ -210,6 +210,12 @@
 .frM { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 7px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
 .frSrc { color: var(--beige); border: 1px solid rgba(212,191,125,.28); padding: 1px 4px; }
 .frHit { color: var(--amber); border-color: rgba(226,176,33,.45); }
+.frGraph { color: var(--amber); border-color: rgba(226,176,33,.5); }
+/* The form's pointer to the Graph view, for features whose wiring is the hard part (lib/featureGraph graphFit). */
+.fvHint { display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin: 0 0 12px; border: 1px solid rgba(226,176,33,.35); background: rgba(226,176,33,.05); font-family: var(--font-prose); font-size: 14px; line-height: 1.35; color: var(--text); }
+.fvHint > i { color: var(--amber); }
+.fvBtn { margin-left: auto; flex: 0 0 auto; cursor: pointer; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--amber-hot); background: rgba(0,0,0,.35); border: 1px solid var(--amber); padding: 7px 11px; }
+.fvBtn:hover { background: rgba(226,176,33,.12); }
 .frDrf { color: var(--amber); border: 1px solid rgba(226,176,33,.4); padding: 1px 5px; letter-spacing: .16em; }
 .frDot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: transparent; }
 .frDot.err { background: var(--danger-hot); box-shadow: 0 0 7px rgba(255,84,84,.7); }

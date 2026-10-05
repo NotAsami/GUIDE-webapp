@@ -13,7 +13,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import type { CatalogFeatureData, GraphEffect, VarDef } from '../lib/database.types'
 import {
-  addNode, autoLayout, connectTarget, detailLines, editGroup, makeGroup, setPositions, ungroup, ovFit, zoomLevel, type ZoomLevel, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
+  addNode, affectingInCatalog, connectNotice, junctionCount, autoLayout, graphFit, connectTarget, detailLines, editGroup, makeGroup, setPositions, ungroup, ovFit, zoomLevel, disconnectTarget, editGate, editedGateKey, project, regate, removeNode, retarget,
   setMatch, targetRefusal,
   type AddKind, type FeatureGraph as Graph, type GEdge, type GNode, type WireType,
 } from '../lib/featureGraph'
@@ -63,7 +63,9 @@ const DET_LINE = 15
 
 /** Placed and sized nodes. Auto-placed nodes space by the height they are
  *  DRAWN at, so Detail's taller nodes never overlap; saved positions stay put. */
-function views(g: Graph, saved: CatalogFeatureData['layout'], f: CatalogFeatureData, level: ZoomLevel): Map<string, NodeView> {
+/** `zt` is how far into Detail the canvas is, 0..1 — it tweens, so the extra
+ *  lines grow in and every port and wire follows them. */
+function views(g: Graph, saved: CatalogFeatureData['layout'], f: CatalogFeatureData, zt: number): Map<string, NodeView> {
   const ins = new Map<string, string[]>()
   const out = new Map<string, WireType>()
   for (const e of g.edges) {
@@ -80,8 +82,8 @@ function views(g: Graph, saved: CatalogFeatureData['layout'], f: CatalogFeatureD
   const size = new Map<string, Size>(g.nodes.map((n): [string, Size] => {
     if (n.kind === 'dest') return [n.key, { base: 0, body: 0, h: DEST_H, ins: [], out: null, det: [] }]
     const i = ins.get(n.key) ?? [], o = outOf(n), rows = Math.max(i.length, o ? 1 : 0)
-    const det = level === 'detail' ? detailLines(n, f, g) : []
-    const extra = det.length ? det.length * DET_LINE + 2 : 0
+    const det = zt > 0 ? detailLines(n, f, g) : []
+    const extra = det.length ? Math.round((det.length * DET_LINE + 2) * zt) : 0
     return [n.key, { base: bodyH(n), body: bodyH(n) + extra, h: HDR + bodyH(n) + extra + rows * ROW + 8, ins: i, out: o, det }]
   }))
   const pos = autoLayout(g, saved?.pos, k => size.get(k)?.h ?? 100)
@@ -199,6 +201,8 @@ export const ADD_KINDS: { k: AddKind; l: string; s: string; c: string; sw: strin
   { k: 'var', l: 'Variable', s: 'derived · a formula', c: 'var(--good)', sw: 'var' },
   { k: 'picks', l: 'Picks', s: 'take N of the offers', c: 'var(--amber)', sw: 'picks' },
 ]
+const NOTE_KEY = 'guide.featureEditor.formFitsNoteOff'
+
 /** The HTML drag type a Node-kinds row carries onto the canvas. */
 export const KIND_DRAG = 'application/x-guide-node-kind'
 const FLOW_CHILD: AddKind[] = ['outcome', 'cond', 'ask']
@@ -322,19 +326,45 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
   const [quick, setQuick] = useState<{ sx: number; sy: number; wx: number; wy: number; src?: string } | null>(null)
   /** An applies-to wire dropped on open canvas: choose what it points at. */
   const [pick, setPick] = useState<{ sx: number; sy: number; key: string } | null>(null)
-  const [notice, setNotice] = useState<{ text: string; x?: number; y?: number } | null>(null)
-  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 2200); return () => clearTimeout(t) }, [notice])
+  /* A refusal (red, brief), or a connect notice (amber, with its one-click cure). */
+  const [notice, setNotice] = useState<{ text: string; x?: number; y?: number; warn?: string; fix?: string } | null>(null)
+  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), notice.warn ? 7000 : 2200); return () => clearTimeout(t) }, [notice])
+  /** Add a target, and say so if that quietly turned one bonus into several. */
+  const connect = (key: string, sel: string) => {
+    const next = connectTarget(dRef.current, key, sel)
+    onChange(next)
+    const nt = connectNotice(next, key)
+    setNotice(nt ? { text: nt.s, warn: nt.t, fix: nt.fix ? key : undefined } : null)
+  }
 
   const layout = useMemo(() => (moving ? { ...d.layout, pos: { ...d.layout?.pos, ...moving } } : d.layout), [d.layout, moving])
   const g = useMemo(() => project(d, catalogTypes), [d, catalogTypes])
   const zl = zoomLevel(pz.view.z)
-  const vs = useMemo(() => views(g, layout, d, zl), [g, layout, d, zl])
+  /* THE DETAIL TWEEN (mockup animZt): 240 ms ease-out between Normal and
+     Detail, so the extra lines grow in instead of snapping. */
+  const [zt, setZt] = useState(zl === 'detail' ? 1 : 0)
+  const ztRef = useRef(zt)
+  useEffect(() => {
+    const to = zl === 'detail' ? 1 : 0, from = ztRef.current
+    if (from === to) return
+    const t0 = performance.now()
+    let raf = 0
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / 240), v = from + (to - from) * (1 - (1 - p) ** 3)
+      ztRef.current = v
+      setZt(v)
+      if (p < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [zl])
+  const vs = useMemo(() => views(g, layout, d, zt), [g, layout, d, zt])
   const vsRef = useRef(vs)
   vsRef.current = vs
   /* A selection whose node is gone (a pending gate that just turned real, a
      deleted rule) is no selection — otherwise every wire dims for nothing. */
   const groups = d.layout?.groups ?? []
-  const sel = selProp && (vs.has(selProp) || selProp.startsWith('w:') || (selProp.startsWith('g:') && groups[+selProp.slice(2)])) ? selProp : null
+  const sel = selProp && (vs.has(selProp) || selProp.startsWith('w:') || (selProp.startsWith('j:') && vs.has(selProp.slice(2))) || (selProp.startsWith('g:') && groups[+selProp.slice(2)])) ? selProp : null
   const selGroup = sel?.startsWith('g:') ? +sel.slice(2) : null
 
   /* CLASS PROGRESSION (lib/previewScope). Decides level and that class's grants,
@@ -491,7 +521,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
       if (n && over !== key) {
         const why = legal.get(over!)
         if (why) { setNotice({ text: why }); return }
-        if (n.kind === 'dest') onChange(connectTarget(dRef.current, key, n.sel))
+        if (n.kind === 'dest') connect(key, n.sel)
         return
       }
       if (!over && (ev.target as Element | null)?.closest?.(`.${styles.pad}`)) {
@@ -537,6 +567,13 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
         e.preventDefault()
         onChange(ungroup(dRef.current, selGroup))
         onSelect(null)
+        return
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && sel?.startsWith('j:')) {
+        /* A junction is the `and`; deleting it is going back to `or`. */
+        e.preventDefault()
+        onChange(setMatch(dRef.current, sel.slice(2), 'or'))
+        onSelect(sel.slice(2))
         return
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selWire) {
@@ -589,8 +626,12 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
 
   const related = (e: { from: string; to: string }) => !sel || e.from === sel || e.to === sel
   const edgesOf = <K extends GEdge['kind']>(k: K) => g.edges.filter((e): e is Extract<GEdge, { kind: K }> => e.kind === k)
-  const effects = g.nodes.filter(n => n.kind === 'outcome' || n.kind === 'contrib' || n.kind === 'sheet')
-  const formFits = effects.length <= 1 && !g.nodes.some(n => n.kind === 'var')
+  const fit = graphFit(g)
+  /* The "form fits" note is advice, not state: once dismissed it stays gone, in
+     this browser, for every feature. */
+  const [noteOff, setNoteOff] = useState(() => { try { return localStorage.getItem(NOTE_KEY) === '1' } catch { return false } })
+  const dismissNote = () => { setNoteOff(true); try { localStorage.setItem(NOTE_KEY, '1') } catch { /* private mode: this session only */ } }
+  const formFits = fit.fit === 'form' && !noteOff
 
   /* ---- wires ---- */
   const wires: ReactNode[] = []
@@ -633,7 +674,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
     if (!s || !dv || !('eff' in s.n)) continue
     const eff = s.n.eff, x0 = s.x + s.w + 7, y0 = s.y + 15, jx = s.x + s.w + 46
     const gate = eff.ask ? styles.gAsk : eff.when ? styles.gWhen : undefined
-    const hi = sel === e.from || sel === e.to
+    const hi = sel === e.from || sel === e.to || (e.and && sel === `j:${e.from}`)
     if (e.and && !juncs.has(e.from)) {
       juncs.add(e.from)
       wires.push(<path key={`j${e.from}`} className={cx(styles.wAt, gate, sel && !hi && styles.dim)} d={`M${x0},${y0} L${jx - 7},${y0}`} />)
@@ -768,7 +809,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
           </div>
           <div className={styles.gb} style={{ height: v.base || v.h - HDR - 8 }}>{body}</div>
           {v.det.length > 0 && (
-            <div className={styles.gdet} style={{ height: v.det.length * 15 + 2 }}>
+            <div className={styles.gdet} style={{ height: v.body - v.base, opacity: zt }}>
               {/* Inline: a detail line can carry a note's authored markdown. */}
               {v.det.map((l, i) => <div key={i} className={styles.dl} title={l}><Inline text={l} /></div>)}
             </div>
@@ -821,8 +862,8 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
   })
   const juncEls = [...juncs].map(k => {
     const s = vs.get(k)!
-    return <div key={k} className={styles.junc} style={{ left: s.x + s.w + 46, top: s.y + 15 }} title="and — every target must hold of one roll">
-      <span className={styles.jd} /><span className={styles.jc}>and</span>
+    return <div key={k} className={cx(styles.junc, sel === `j:${k}` && styles.on)} style={{ left: s.x + s.w + 46, top: s.y + 15 }} title="and — every target must hold of one roll">
+      <span className={styles.jd} onPointerDown={ev => ev.stopPropagation()} onClick={ev => { ev.stopPropagation(); onSelect(`j:${k}`) }} /><span className={styles.jc}>and</span>
     </div>
   })
 
@@ -890,18 +931,27 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
           onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
           <div className={styles.qaH}><Icon name="fa-crosshairs" />Applies to a…</div>
           <TargetChooser f={d} srcs={[pick.key]} nodes={nodes} namesByGid={namesByGid} catalogTypes={catalogTypes}
-            onPick={t => { onChange(connectTarget(dRef.current, pick.key, t)); setPick(null) }} />
+            onPick={t => { connect(pick.key, t); setPick(null) }} />
         </div>
       )}
       {wire?.over && typeof wire.legal.get(wire.over) === 'string' && (
         <div className={styles.refuseTip}><b><Icon name="fa-ban" />Refused</b>{wire.legal.get(wire.over)}</div>
       )}
-      {notice && <div className={styles.refuseTip}><b><Icon name="fa-ban" />Not done</b>{notice.text}</div>}
+      {notice && !notice.warn && <div className={styles.refuseTip}><b><Icon name="fa-ban" />Not done</b>{notice.text}</div>}
+      {notice?.warn && <div className={cx(styles.refuseTip, styles.warnTip)} onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+        <b><Icon name="fa-triangle-exclamation" />{notice.warn}</b>{notice.text}
+        {notice.fix && <button type="button" className={styles.noteBtn} onClick={() => {
+          const k = notice.fix!
+          onChange({ ...dRef.current, graph: (dRef.current.graph ?? []).map(e => (`eff:${e.id}` === k ? { ...e, oneOf: true } : e)) })
+          setNotice(null)
+        }}><Icon name="fa-link" /> One across all targets</button>}
+      </div>}
       {formFits && !quick && (
         <div className={styles.graphNote}>
           <Icon name="fa-circle-info" />
-          <span className={styles.gt2}><b>The form fits this feature</b>One press, one write, nothing derived. The graph shows the same thing in more space.</span>
+          <span className={styles.gt2}><b>The form fits this feature</b>{fit.why}</span>
           <button type="button" className={styles.noteBtn} onClick={onForm}><Icon name="fa-list" /> Back to form</button>
+          <button type="button" className={styles.noteX} onClick={dismissNote} title="Dismiss — don’t show this again" aria-label="Dismiss"><Icon name="fa-xmark" /></button>
         </div>
       )}
       <div className={styles.probe} onPointerDown={e => e.stopPropagation()}>
@@ -1013,7 +1063,7 @@ function GateText({ value, tone, placeholder, onCommit, allowEmpty }: { value: s
     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit() } if (e.key === 'Escape') setV(value) }} />
 }
 
-export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid, featureList, onSelect, pressFields, multi, onMulti }: {
+export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid, featureList, onSelect, pressFields, multi, onMulti, library, featureId, onOpenFeature }: {
   d: CatalogFeatureData
   catalogTypes: Record<string, 'num' | 'bool'>
   sel: string | null
@@ -1024,6 +1074,11 @@ export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid
   onSelect: (key: string | null) => void
   /** The form's own activation / uses / picks block, for the press and picks nodes. */
   pressFields: ReactNode
+  /** The feature catalog, for a target's "Affected by" and a feature target's peek. */
+  library: { id: string; name: string; category?: string; graph?: GraphEffect[]; tags?: string[]; light_description?: string }[]
+  /** The open feature's id, so its own rules select instead of navigating. */
+  featureId: string | null
+  onOpenFeature: (id: string) => void
   multi: string[]
   onMulti: (keys: string[]) => void
 }) {
@@ -1078,6 +1133,29 @@ export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid
         <Icon name="fa-link-slash" /> Remove wire · Del
       </button>
     </>
+  }
+
+  if (sel?.startsWith('j:')) {
+    const src = g.nodes.find(x => x.key === sel.slice(2))
+    if (src && 'eff' in src) {
+      const ts = (src.eff.target ?? []).map(asKey), c = junctionCount(ts, nodes)
+      return <>
+        <div className={styles.iblk} style={{ ['--bc' as string]: 'var(--orange)' }}>
+          <b>and · {c === Infinity ? 'every roll' : `${c} thing${c === 1 ? '' : 's'}`}</b>A junction: <code>{label(src)}</code> applies only
+          to a roll that every target below holds of at once. {c !== Infinity && ts.some(t => t.startsWith('roll:')) && <>The roll kinds then narrow it to those rolls of each.</>}
+        </div>
+        <div className={styles.conns}>{ts.map(t => (
+          <button key={t} type="button" className={styles.conn} onClick={() => onSelect(`dest:${t}`)}><b>{t}</b></button>
+        ))}</div>
+        <span className={styles.gateLab}>Affected by · 1</span>
+        <div className={styles.conns}>
+          <button type="button" className={styles.conn} onClick={() => onSelect(src.key)}><b>{label(src)}</b><span className={styles.cs}>this feature</span></button>
+        </div>
+        <button type="button" className={styles.noteBtn} onClick={() => { update(x => setMatch(x, src.key, 'or')); onSelect(src.key) }}>
+          <Icon name="fa-code-branch" /> Switch to or · Del
+        </button>
+      </>
+    }
   }
 
   if (!n) return (
@@ -1159,6 +1237,35 @@ export function GraphInspector({ d, catalogTypes, sel, update, nodes, namesByGid
         <button type="button" className={styles.noteBtn} onClick={() => { update(x => { const r = removeNode(x, n.key, catalogTypes); return r.ok ? r.f : x }); onSelect(null) }}>
           <Icon name="fa-link-slash" /> Remove from every rule
         </button>
+        {(() => {
+          /* PEEK (mockup peekHTML): a feature target, as the catalog has it. */
+          const row = n.sel.startsWith('feature:') ? library.find(r => `feature:${r.id}` === n.sel) : undefined
+          if (!row) return null
+          return <div className={styles.iblk} style={{ ['--bc' as string]: 'var(--beige)', marginTop: 12 }}>
+            <b>Peek · {row.category ?? 'feature'}</b>
+            <span className={styles.peekName}>{row.name}</span>
+            {!!row.tags?.length && <span className={styles.peekTags}>{row.tags.map(t => `tag:${normalizeTag(t)}`).join(' ')}</span>}
+            {row.light_description && <span className={styles.peekText}><Inline text={row.light_description} /></span>}
+          </div>
+        })()}
+        {(() => {
+          /* AFFECTED BY (mockup renderInspAt): every rule in the feature catalog that
+             reaches this target — the open feature's own rules select their node. */
+          const tags = destKind(n.sel) === 'thing' ? nodes.find(x => x.gid === n.sel)?.tags ?? [] : []
+          const live = featureId ? [...library.filter(r => r.id !== featureId), { id: featureId, name: d.name ?? '', graph: d.graph }] : library
+          const rows = affectingInCatalog(n.sel, live, tags)
+          return <>
+            <span className={styles.gateLab} style={{ marginTop: 14 }}>Affected by · {rows.length} · across the feature catalog</span>
+            <div className={styles.conns}>{rows.map((r, i) => {
+              const mine = r.featureId === featureId
+              const own = mine ? g.nodes.find(x => 'eff' in x && (x.eff.label || x.eff.op) === r.label) : undefined
+              return <button key={i} type="button" className={styles.conn} title={mine ? 'This feature' : `Open ${r.featureName}`}
+                onClick={() => (own ? onSelect(own.key) : !mine && onOpenFeature(r.featureId))}>
+                <b>{r.label}</b><span className={styles.cs}>{mine ? 'this feature' : r.featureName} · {r.gated === 'always' ? 'always' : `${r.gated}-gated`}</span>
+              </button>
+            })}{!rows.length && <span className={styles.chNone}>Nothing in the feature catalog aims here.</span>}</div>
+          </>
+        })()}
       </>
     }
   }

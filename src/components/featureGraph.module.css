@@ -130,7 +130,8 @@
 .mt { position: absolute; left: calc(100% + 12px); top: -14px; z-index: 7; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--orange); background: #140f08; border: 1px solid var(--orange); padding: 2px 7px; }
 .mt.and { color: #140f08; background: var(--orange); }
 .junc { position: absolute; z-index: 6; display: flex; align-items: center; gap: 6px; transform: translate(-7px, -7px); pointer-events: none; }
-.jd { width: 14px; height: 14px; background: var(--orange); transform: rotate(45deg); border: 2px solid #140f08; box-shadow: 0 0 0 1.5px var(--orange); }
+.jd { width: 14px; height: 14px; background: var(--orange); transform: rotate(45deg); border: 2px solid #140f08; box-shadow: 0 0 0 1.5px var(--orange); pointer-events: auto; cursor: pointer; }
+.junc.on .jd { box-shadow: 0 0 0 1.5px var(--orange), 0 0 12px var(--orange); }
 .jc { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--orange); background: rgba(14,12,9,.9); padding: 1px 5px; white-space: nowrap; transform: translateY(-14px); }
 
 /* ---------- semantic zoom (slice 4a, mockup .zl-over / .gdet / .ov) ---------- */
@@ -171,7 +172,7 @@
 .marq { position: absolute; z-index: 8; border: 1px dashed var(--amber-hot); background: rgba(226,176,33,.07); pointer-events: none; }
 
 /* ---------- class-progression lens (slice 4c, mockup .probe / .off) ---------- */
-.probe { position: absolute; left: 10px; top: 10px; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; max-width: calc(100% - 460px); padding: 5px 6px 5px 10px; background: rgba(10,9,8,.92); border: 1px solid rgba(212,191,125,.3); font-family: var(--font-mono); font-size: 8px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.probe { position: absolute; left: 90px; top: 10px; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; max-width: calc(100% - 510px); padding: 5px 6px 5px 10px; background: rgba(10,9,8,.92); border: 1px solid rgba(212,191,125,.3); font-family: var(--font-mono); font-size: 8px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
 .selw { position: relative; display: block; }
 .probeSel { appearance: none; background: rgba(0,0,0,.4); border: 1.5px solid rgba(212,191,125,.35); color: var(--beige); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; padding: 5px 22px 5px 9px; cursor: pointer; }
 .probeSel option { background: #14130f; color: var(--text); text-transform: none; }
@@ -185,6 +186,12 @@
 .gn.off .gf { background: var(--beige-dim); }
 .wData.off, .wArm.off, .wOffer.off, .wAt.off { opacity: .12; }
 .gbadge.offB { background: #111; color: var(--beige); border-color: var(--beige-dim); }
+
+/* ---------- target inspector: peek + affected by ---------- */
+.peekName { display: block; font-family: var(--font-display); font-size: 16px; color: var(--amber-hot); margin: 4px 0 2px; }
+.peekTags { display: block; font-family: var(--font-mono); font-size: 8.5px; color: var(--muted); margin-bottom: 6px; overflow-wrap: anywhere; }
+.peekText { display: block; font-size: 13px; line-height: 1.4; color: var(--muted); }
+.cs { margin-left: auto; padding-left: 8px; font-size: 8px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* ---------- authoring (slice 3) ---------- */
 .gn { touch-action: none; }
@@ -204,6 +211,9 @@
 .gbadge.pendB { background: #111; color: var(--beige); border-color: var(--beige-dim); border-style: dashed; left: 10px; right: auto; }
 .refuseTip { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); z-index: 9; max-width: min(420px, calc(100% - 40px)); padding: 9px 12px; background: #170b0b; border: 1.5px solid rgba(185,58,58,.8); border-left: 3px solid var(--danger-hot); box-shadow: 0 8px 20px rgba(0,0,0,.6); font-family: var(--font-prose); font-size: 13.5px; line-height: 1.35; color: var(--text); pointer-events: none; }
 .refuseTip b { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-weight: 400; font-size: 8px; letter-spacing: .22em; text-transform: uppercase; color: var(--danger-hot); margin-bottom: 3px; }
+.warnTip { background: #17130a; border-color: rgba(226,176,33,.7); border-left-color: var(--amber); pointer-events: auto; }
+.warnTip b { color: var(--amber-hot); }
+.warnTip .noteBtn { margin-top: 8px; }
 .qadd { position: absolute; z-index: 12; width: 240px; padding: 8px; background: #12110e; border: 1.5px solid var(--amber); box-shadow: 0 12px 30px rgba(0,0,0,.7); }
 .qaH { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 8px; letter-spacing: .2em; text-transform: uppercase; color: var(--amber-hot); padding: 2px 2px 7px; }
 .qaI { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px; background: transparent; border: 0; cursor: pointer; font-family: var(--font-mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--text); text-align: left; white-space: nowrap; }
@@ -317,3 +327,7 @@
   background-repeat: no-repeat; background-origin: border-box; background-position: top left, bottom right;
   background-size: calc(var(--cut) + var(--bw)) calc(var(--cut) + var(--bw));
 }
+
+/* the "form fits" note's dismiss */
+.noteX { flex: 0 0 auto; width: 22px; height: 22px; padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; color: var(--beige-dim); font-size: 11px; cursor: pointer; }
+.noteX:hover { color: var(--amber-hot); }
