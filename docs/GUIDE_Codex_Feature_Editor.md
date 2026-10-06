@@ -96,6 +96,7 @@ would, not the expression.
 | Field | Type | Notes |
 | --- | --- | --- |
 | Activation | enum | `none (passive) · action · bonus · reaction · free`, each with a coloured note explaining what the player gets |
+| Trigger | enum | `Press only · When you roll initiative · When you drop to 0 HP · At the start of your turn` — `trigger`. Something else presses the feature: a press that spends nothing and asks nothing **runs**; one that spends a use, a slot or another counter, or asks, is **offered** in the roll panel (Use / Dismiss) and lapses when the same event comes round again. A trigger on a feature with nothing to press is an audit error. The Graph view prints it on the press node |
 | Max uses | **formula** | Not a spinner: `rages` is "the Rages column of the Barbarian table". Blank or 0 = at-will. `current` is never written — absent means full |
 | Resets on | enum | `Manual (DM) · Start of your turn · Short rest · Long rest`; disabled without uses |
 | Of its N offers, the player may take | formula | `picks`. Appears **only** when the feature has two or more armed offers (a `once` effect carrying an `ask`) |

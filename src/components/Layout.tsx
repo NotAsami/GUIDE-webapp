@@ -13,6 +13,9 @@ import { LootTakeover } from './LootTakeover'
 import { HandoutDock } from './Handout'
 import { liveFor, pushKey, useHandouts } from '../lib/handouts'
 import { RollContextPanel } from './RollContextPanel'
+import { Triggers } from './Triggers'
+import { fireTrigger } from '../lib/triggers'
+import type { RollEntry } from '../lib/rolls'
 import { PartyHud } from './PartyHud'
 import { usePartyPresence } from '../lib/presence'
 import { answerArmed } from '../lib/graphState'
@@ -124,6 +127,7 @@ export function Layout() {
   /* The same memo every roll uses. Advance Turn needs it to ask which armed
      modifiers were authorised by a variable that is about to reset. */
   const graph = useGraph(character, shardTrees)
+  const offerRef = useRef<((entry: RollEntry, use: boolean) => void) | null>(null)
   async function doAdvanceTurn() {
     if (!character) return
     const res = (character.resources ?? {}) as { activeEffects?: ActiveEffect[] }
@@ -144,6 +148,7 @@ export function Layout() {
     }
     if (recharged) patch.sheet = { ...(character.sheet ?? {}), features: recharged.features }
     if (!(await updateSections(patch)).ok) return
+    fireTrigger('turnStart')
 
     addRoll({
       kind: 'custom', title: 'Turn Advanced', icon: 'fa-forward-step',
@@ -487,6 +492,8 @@ export function Layout() {
       {/* The character rides along so the panel's catalog sheet can resolve a
           roll's subject: every catalog table is DM-only, so the player's copy of
           the facts is the snapshot on their own row. */}
+      <Triggers character={character} graph={graph} shardTrees={shardTrees}
+        updateSection={updateSection} updateSections={updateSections} offerRef={offerRef} />
       {rollPanelOpen && (
         <RollContextPanel
           character={character} shardTrees={shardTrees}
@@ -497,6 +504,7 @@ export function Layout() {
             ticking: activeNow.filter(e => !!e.tick?.trim()).length,
           }}
           onClose={() => setRollPanelOpen(false)}
+          onOffer={(entry, use) => offerRef.current?.(entry, use)}
         />
       )}
     </ScopeContext.Provider>

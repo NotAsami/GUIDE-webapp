@@ -12,6 +12,7 @@ import { Prose } from '../lib/markdown'
 import { interpolate, HAS_PREFIX, isHasIdent } from '../lib/expr'
 import { colorOf } from '../lib/palette'
 import { affectedBy, gid, type Gid } from '../lib/graph'
+import { triggerOf } from '../lib/triggers'
 import { featureEffects, isCarrier, isUsable, originChain, runsActivation, toggleVar, usesOf } from '../lib/featureView'
 import { useGraph } from '../lib/useGraph'
 import { gateOf, playerVars, setVars, type VarRow } from '../lib/graphState'
@@ -527,6 +528,7 @@ function FeatureCard({ row, busy, scope, on, armed, denied, gate, onOpen, onPres
                 <span className={cx(styles.actBadge, styles[f.activation])}>{ACTS[f.activation]}</span>
               )}
               <span className={cx(styles.srcTag, (group === 'gear' || group === 'shard') && styles.gearTag)}>{tag}</span>
+              {f.trigger && <span className={styles.srcTag}>{triggerOf(f.trigger)?.via}</span>}
               {on && (
                 <span className={cx(styles.actBadge, styles.reaction)}>
                   <i className="fa-solid fa-circle" style={{ fontSize: 6, verticalAlign: 'middle' }} /> Active
@@ -608,6 +610,7 @@ function FeaturePopup({ row, busy, scope, on, vars, gate, back, affected, resolv
 
   const facts: [string, string, string?][] = []
   if (f.activation && f.activation !== 'none') facts.push(['Activation', ACTS[f.activation], 'acc'])
+  if (f.trigger) facts.push(['Trigger', triggerOf(f.trigger)?.label ?? f.trigger, 'acc'])
   // A count beats "at will" even on a stance: entering Rage costs one.
   if (uses) facts.push(['Uses', `${uses.current} / ${uses.max}`, spent && !on ? 'empty' : 'acc'])
   else if (toggle) facts.push(['Uses', '∞ At will', 'acc'])
