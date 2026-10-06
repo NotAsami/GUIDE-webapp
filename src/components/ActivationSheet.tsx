@@ -23,6 +23,7 @@ import { gid, resolve, rollResolution, type GraphContext } from '../lib/graph'
 import { applyOutcomes, gateOf, outcomeLine, planActivation, slotLadder, type GrantOutcome, type Outcome, type SlotOutcome } from '../lib/graphState'
 import { grantPartyArm, usePartyRoster } from '../lib/party'
 import { usesOf } from '../lib/featureView'
+import { triggerMode, triggerOf, type TriggerEvent } from '../lib/triggers'
 import type { ExprScope } from '../lib/expr'
 import styles from './ActivationSheet.module.css'
 import { Icon } from './Icon'
@@ -126,6 +127,18 @@ export function useActivation(host: ActivationHost) {
     void run(f, outcomes)
   }
 
+  /** AN EVENT PRESSING IT — lib/triggers.ts. Runs it when the press is free,
+   *  reports 'offer' when it would spend or ask (the caller logs the offer),
+   *  and 'skip' when a press could not happen anyway: spent, or gated shut. */
+  function fire(f: Feature, via: TriggerEvent): 'ran' | 'offer' | 'skip' {
+    if (busy || !canUse(f, graph.scope)) return 'skip'
+    if (gateOf(f, graph, character, gid('feature', f))) return 'skip'
+    const outcomes = planActivation(f, graph, character, gid('feature', f))
+    if (triggerMode(f, outcomes, graph.scope) === 'offer') return 'offer'
+    void run(f, outcomes, undefined, undefined, via)
+    return 'ran'
+  }
+
   /** Spend/roll a feature: roll its expression (if any), decrement its use
    *  counter (if any), apply the accepted activation outcomes — in ONE write. */
   /** What the confirm sheet came back with. An object rather than three
@@ -138,6 +151,8 @@ export function useActivation(host: ActivationHost) {
     picked: Picked = { answers: new Set() },
     /** The press already resolved in start(), when a confirm sheet was shown. */
     pre?: ReturnType<typeof pressRoll>,
+    /** The event that pressed it, when one did — said in the log line. */
+    via?: TriggerEvent,
   ) {
     const { answers, recipient, slotLevel, slots } = picked
     if (busy || !canUse(f, graph.scope)) return
@@ -244,7 +259,7 @@ export function useActivation(host: ActivationHost) {
     setBusy(false)
     if (!saved.ok) return
 
-    const subtitle = u ? `${remaining} / ${u.max} uses left` : (f.usage ?? 'Feature')
+    const subtitle = [u ? `${remaining} / ${u.max} uses left` : (f.usage ?? 'Feature'), triggerOf(via)?.via].filter(Boolean).join(' · ')
     addRoll({
       kind: 'custom', title: f.name, subtitle, icon: f.icon, lines,
       subject: { kind: 'feature', id: f.id },
@@ -264,7 +279,7 @@ export function useActivation(host: ActivationHost) {
     document.body,
   )
 
-  return { start, sheet, busy }
+  return { start, fire, sheet, busy }
 }
 
 /** What pressing Use will do, before it does it.

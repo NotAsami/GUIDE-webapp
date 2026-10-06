@@ -500,6 +500,10 @@ export type Feature = {
   /** What the player spends to use it. Independent of `uses` — a passive feature
    *  can still track uses, and an at-will action can have none. */
   activation?: 'none' | 'action' | 'bonus' | 'reaction' | 'free'
+  /** Something that presses it for the player — lib/triggers.ts. Absent = only
+   *  the Use button does. Runs the same activation a press would; a press that
+   *  would spend or ask is offered in the roll panel instead of run. */
+  trigger?: 'initiative' | 'hpZero' | 'turnStart'
   /** Catalog templates only. False/absent = draft; the Grant picker hides it.
    *  Players never read feature_catalog at all (migration 0005 has no player
    *  policy), so a grant is the only path from catalog to sheet — which is

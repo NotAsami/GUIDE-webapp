@@ -24,6 +24,7 @@ import type { FeatureGrantRef } from '../lib/database.types'
 import { colour, serialize } from '../lib/featureScript'
 import { asKey, matchCount, normalizeTag, probeScope, type AuditItem, type AuthoredNode } from '../lib/graph'
 import { OPS } from '../lib/opSchema'
+import { triggerOf } from '../lib/triggers'
 import { Inline } from '../lib/markdown'
 import { usePanZoom } from '../lib/usePanZoom'
 import { EffectEditor, VarCard } from './GraphEffects'
@@ -719,7 +720,7 @@ export function FeatureGraph({ d, catalogTypes, nodes, namesByGid, ready, audit,
     switch (n.kind) {
       case 'press': {
         const uses = d.uses?.max != null ? `${d.uses.max} / ${RESET_LABEL[d.recharge ?? ''] ?? 'manual'}` : 'at-will'
-        body = <span className={styles.fx} style={{ color: 'var(--muted)' }}>{ACT_LABEL[d.activation ?? ''] ?? 'No activation set'} · {uses}</span>
+        body = <span className={styles.fx} style={{ color: 'var(--muted)' }}>{ACT_LABEL[d.activation ?? ''] ?? 'No activation set'} · {uses}{d.trigger && <> · <b style={{ color: 'var(--amber)', fontWeight: 400 }}>{triggerOf(d.trigger)?.via}</b></>}</span>
         break
       }
       case 'cond': body = <span className={styles.fx}>{n.when}</span>; break
