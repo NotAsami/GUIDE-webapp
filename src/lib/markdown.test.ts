@@ -538,3 +538,21 @@ test('NO OTHER ENTITY IS DECODED — these are names for characters, not HTML', 
   assert.equal(html(renderInline('&lt;script&gt;')), '<div>&amp;lt;script&amp;gt;</div>')
   assert.equal(html(renderInline('&amp;')), '<div>&amp;amp;</div>')
 })
+
+test('Prose renders a > block as a quote, and a trailing > — line as its attribution', () => {
+  const out = renderToStaticMarkup(createElement(Prose, {
+    text: '> *"I\'m a gardener now."*\n> — Ros Chrisstone, when asked\n\nAfter.',
+  }))
+  assert.match(out, /<figure class="prose-quote"><blockquote><em>&quot;I&#x27;m a gardener now.&quot;<\/em><\/blockquote><figcaption>Ros Chrisstone, when asked<\/figcaption><\/figure>/)
+  assert.match(out, /<p>After.<\/p>/)
+})
+
+test('a quote without an attribution line has no figcaption; a lone dash line stays quote text', () => {
+  assert.doesNotMatch(renderToStaticMarkup(createElement(Prose, { text: '> just a thought' })), /figcaption/)
+  // One line only: there is no quote for it to attribute, so it IS the quote.
+  assert.match(renderToStaticMarkup(createElement(Prose, { text: '> — dash' })), /<blockquote>— dash<\/blockquote>/)
+})
+
+test('a > inside a paragraph is not a quote', () => {
+  assert.doesNotMatch(renderToStaticMarkup(createElement(Prose, { text: 'HP > 10\n> not all lines' })), /blockquote/)
+})

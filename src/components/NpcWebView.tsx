@@ -1,9 +1,10 @@
 /**
  * The NPC web as drawn — shared by the Operator Console (OperatorNpcWeb) and
- * the player's relations web (RelationsWeb). Both pass a Web from derive() and
+ * the player's web on the Lore screen. Both pass a Web from derive() and
  * an Orbit from layout(); this owns only the drawing, the fit-or-focus
  * transform, and the read-only card. Selection state belongs to the caller.
  */
+import { ManagedImage } from './ManagedImage'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import {
   ATTITUDE_LABEL, LABEL_GAP, LABEL_W, NAME_LINE, NODE_SIZE, PARTY, PC_SIZE, SUB_LINE, SYSTEM_TYPE,
@@ -143,7 +144,7 @@ export function NpcWebView({ web, orbit, sel, onSelect, show = SHOW_ALL, drawerO
               >
                 <span className={styles.disc} style={{ width: size, height: size }}>
                   {n.system ? <span className={styles.diamond} /> : initials(n.name)}
-                  {n.record?.portrait && <img src={n.record.portrait} alt="" onError={e => { e.currentTarget.style.display = 'none' }} />}
+                  {n.record?.portrait && <ManagedImage src={n.record.portrait} alt="" />}
                 </span>
                 <span className={styles.name} style={{ marginTop: LABEL_GAP, lineHeight: `${NAME_LINE}px`, maxHeight: NAME_LINE * 2 }}>{n.name}</span>
                 <span className={styles.cap} style={{ marginTop: LABEL_GAP / 2, lineHeight: `${SUB_LINE}px` }}>{caption(web, n, nameOf)}</span>
@@ -194,7 +195,7 @@ export function KnownCard({ n, web, onSelect, onClose }: {
         <span className={styles.dDisc}>{n.system ? <span className={styles.diamond} /> : initials(n.name)}</span>
         <div className={styles.dTx}>
           <div className={styles.dName}>{n.name}</div>
-          <div className={styles.dMeta}>{[r?.role, r?.location || (n.sector !== 'Unplaced' && n.sector !== 'System' ? n.sector : '')].filter(Boolean).join(' · ') || 'Little is known'}</div>
+          <div className={styles.dMeta}>{[r?.role, r?.location || (() => { const at = n.place ?? n.sector; return at !== 'Unplaced' && at !== 'System' ? at : '' })()].filter(Boolean).join(' · ') || 'Little is known'}</div>
         </div>
         <button type="button" className={styles.x} onClick={onClose} aria-label="Close"><i className="fa-solid fa-xmark" /></button>
       </div>

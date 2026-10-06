@@ -1,3 +1,4 @@
+import { ManagedImage } from '../components/ManagedImage'
 import type { SaveResult } from '../lib/saveResult'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -1077,7 +1078,7 @@ function Portrait({ character }: { character: CharacterRow }) {
             <span className={`${styles.pCorner} ${styles.br}`} />
 
             {showImage ? (
-              <img
+              <ManagedImage
                 className={styles.pImg}
                 src={id.portrait ?? undefined}
                 alt={character.name}

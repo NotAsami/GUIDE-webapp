@@ -17,7 +17,7 @@ import { lootContent, type DmCampaignState, type DmLootState, type DmShopsState 
 import type { DmHandoutsState } from '../lib/handouts'
 import type { DmNpcsState } from '../lib/npcs'
 import type { DmPlansState } from '../lib/plans'
-import { eventText, fireLabel, firedLabel, moveTo, planEvents, questClosedText, sortBetween, split, targetNames } from '../lib/prep'
+import { planLinks, eventText, fireLabel, firedLabel, moveTo, planEvents, questClosedText, sortBetween, split, targetNames } from '../lib/prep'
 import { fireCard } from '../lib/fireCard'
 import { Prose } from '../lib/markdown'
 import { proseField } from '../lib/textareaHooks'
@@ -62,6 +62,9 @@ export function OperatorPrepBoard({ lib, campaign, shopLib, lootLib, handoutLib,
   const questOf = (ref: string | null) => campaign.quests.find(q => q.id === ref) ?? null
   const [kind, setKind] = useState<PlanCardKind>('shop')
   const [wrapping, setWrapping] = useState(false)
+  /** Discard asks first when the board holds anything: staged cards are prep,
+   *  played ones are the night's record. An empty board just goes. */
+  const [discarding, setDiscarding] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
 
   async function addCard(k: PlanCardKind, ref: string | null, title: string) {
@@ -105,7 +108,7 @@ export function OperatorPrepBoard({ lib, campaign, shopLib, lootLib, handoutLib,
           </span>
         </div>
         {boards.length > 1 && (
-          <select className={styles.boardPick} value={plan.id} onChange={e => setPlanId(e.target.value)} aria-label="Board">
+          <select className={styles.boardPick} value={plan.id} onChange={e => { setDiscarding(false); setPlanId(e.target.value) }} aria-label="Board">
             {boards.map(b => <option key={b.id} value={b.id}>{b.title || 'Untitled board'}</option>)}
           </select>
         )}
@@ -113,6 +116,20 @@ export function OperatorPrepBoard({ lib, campaign, shopLib, lootLib, handoutLib,
           <span className={styles.acc}>{staged.length}</span> staged <span className={styles.dot}>·</span>
           <span className={styles.good}>{played.length}</span> played
         </span>
+        {discarding ? (
+          <span className={styles.discardAsk}>
+            Discard {cards.length} card{cards.length === 1 ? '' : 's'}?
+            <button type="button" className={cx(styles.discard, styles.yes)} onClick={() => { setDiscarding(false); setPlanId(null); void lib.deletePlan(plan.id) }}>Discard</button>
+            <button type="button" className={styles.discard} onClick={() => setDiscarding(false)}>Keep</button>
+          </span>
+        ) : (
+          <button
+            type="button" className={cx(styles.discard, styles.bin)} title="Discard this board" aria-label="Discard this board"
+            onClick={() => (cards.length ? setDiscarding(true) : (setPlanId(null), void lib.deletePlan(plan.id)))}
+          >
+            <Icon name="fa-trash" />
+          </button>
+        )}
         <Btn tone="ghost" sm icon="fa-plus" label="New board" onClick={() => void lib.createPlan('Tonight').then(p => p && setPlanId(p.id))} />
         <Btn tone="amber" sm icon={wrapping ? 'fa-xmark' : 'fa-flag-checkered'} label={wrapping ? 'Keep planning' : 'Wrap the session'} onClick={() => setWrapping(w => !w)} />
       </div>
@@ -310,7 +327,7 @@ function WrapForm({ plan, cards, names, campaign, questOf, onDone, log }: {
     setBusy(true)
     // The recap is the DM's to write, in the Session Log, at their own pace —
     // the board only carries across what was actually played.
-    const row = await campaign.createSession({ num: Number(num) || 1, title, date, recap: '', events: events.filter(e => e.trim()) })
+    const row = await campaign.createSession({ num: Number(num) || 1, title, date, recap: '', events: events.filter(e => e.trim()), links: planLinks(cards) })
     setBusy(false)
     if (!row) return
     log(<>Session <span className={con.obj}>{row.title || row.num}</span> written from the board</>, 'cyan')

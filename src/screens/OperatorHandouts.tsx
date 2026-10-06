@@ -6,6 +6,7 @@
  * edit in the form would otherwise put the old text on the player's screen and
  * the new text nowhere.
  */
+import { ImageUpload } from '../components/ImageUpload'
 import { useState, type ReactNode } from 'react'
 import type { HandoutRow, HandoutUpdate, QuestRow } from '../lib/database.types'
 import { RECALL, filePatch, pushPatch, stateOf, takeBackPatch, type DmHandoutsState, type HandoutState } from '../lib/handouts'
@@ -114,6 +115,7 @@ function HandoutForm({ h, quests, members, onNew, onCreate, onSave, onDelete, on
   const [title, setTitle] = useState(h?.title ?? '')
   const [questId, setQuestId] = useState(h?.quest_id ?? '')
   const [imageUrl, setImageUrl] = useState(h?.image_url ?? '')
+  const [imagePending, setImagePending] = useState(false)
   const [body, setBody] = useState(h?.body ?? '')
   const [pick, setPick] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
@@ -127,7 +129,7 @@ function HandoutForm({ h, quests, members, onNew, onCreate, onSave, onDelete, on
     : ids.map(id => members.find(m => m.id === id)?.name ?? '?').join(', ')
 
   async function run(patch: HandoutUpdate) {
-    if (!h) return false
+    if (!h || imagePending) return false
     setBusy(true)
     const ok = await onSave(h.id, { ...fields, ...patch })
     setBusy(false)
@@ -154,6 +156,7 @@ function HandoutForm({ h, quests, members, onNew, onCreate, onSave, onDelete, on
     log(<>Handout <span className={styles.obj}>{name}</span> taken back from <span className={styles.who}>{who(pick)}</span></>, 'danger')
   }
   async function save() {
+    if (imagePending) return
     setBusy(true)
     if (h) await onSave(h.id, fields)
     else await onCreate(fields)
@@ -179,14 +182,13 @@ function HandoutForm({ h, quests, members, onNew, onCreate, onSave, onDelete, on
           </select>
         </div>
         <div>
-          <span className={styles.fieldLab}>Image URL · optional</span>
-          <input className={styles.sessIn} type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)}
-            placeholder="https://…/storage/v1/object/public/…" />
+          <span className={styles.fieldLab}>Image · optional</span>
+          <ImageUpload value={imageUrl} onChange={setImageUrl} onPendingChange={setImagePending} scope="handouts" disabled={busy} />
         </div>
       </div>
       <div className={styles.subNote}>
         <i className="fa-solid fa-circle-info" />
-        <span>Paste the public URL of an uploaded file, the same way portraits work. With an image, the text below becomes its caption. A linked quest shows the handout on that quest's thread, to the players who hold it.</span>
+        <span>With an image, the text below becomes its caption. A linked quest shows the handout on that quest's thread, to the players who hold it.</span>
       </div>
 
       <div className={styles.qLabRow}>
@@ -198,8 +200,8 @@ function HandoutForm({ h, quests, members, onNew, onCreate, onSave, onDelete, on
         {...proseField(setBody)} placeholder="The document as the players will read it…" />
 
       <div className={styles.qActions}>
-        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : h ? 'Save Handout' : 'Create Handout'} onClick={() => void save()} disabled={busy || !fields.title} />
-        {h && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={() => void onDelete(h.id)} disabled={busy} />}
+        <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : h ? 'Save Handout' : 'Create Handout'} onClick={() => void save()} disabled={busy || imagePending || !fields.title} />
+        {h && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={() => void onDelete(h.id)} disabled={busy || imagePending} />}
       </div>
 
       {h && (
@@ -224,10 +226,10 @@ function HandoutForm({ h, quests, members, onNew, onCreate, onSave, onDelete, on
           </div>
           {/* Four verbs in a column this narrow: they wrap to two rows. */}
           <div className={styles.qActions} style={{ flexWrap: 'wrap' }}>
-            <Btn tone="amber" icon="fa-display" label="Push to screen" onClick={() => void push()} disabled={busy || !pick.length || !fields.title} />
-            <Btn tone="cyan" icon="fa-box-archive" label="File quietly" onClick={() => void file()} disabled={busy || !pick.length || !fields.title} />
-            <Btn tone="ghost" icon="fa-eye-slash" label="Recall" onClick={() => void recall()} disabled={busy || !h.on_screen.length} />
-            <Btn tone="danger" icon="fa-rotate-left" label="Take back" onClick={() => void takeBack()} disabled={busy || !pick.some(id => h.recipients.includes(id))} />
+            <Btn tone="amber" icon="fa-display" label="Push to screen" onClick={() => void push()} disabled={busy || imagePending || !pick.length || !fields.title} />
+            <Btn tone="cyan" icon="fa-box-archive" label="File quietly" onClick={() => void file()} disabled={busy || imagePending || !pick.length || !fields.title} />
+            <Btn tone="ghost" icon="fa-eye-slash" label="Recall" onClick={() => void recall()} disabled={busy || imagePending || !h.on_screen.length} />
+            <Btn tone="danger" icon="fa-rotate-left" label="Take back" onClick={() => void takeBack()} disabled={busy || imagePending || !pick.some(id => h.recipients.includes(id))} />
           </div>
         </>
       )}

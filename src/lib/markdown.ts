@@ -26,7 +26,10 @@ import { interpolate, type ExprScope } from './expr.ts'
 export const ScopeContext = createContext<ExprScope | null>(null)
 
 /** Interpolate against the ambient scope, or pass the text through untouched. */
-function useLive(text: string): string {
+/** Resolve `{variables}` against the character in scope, exactly as `Prose`
+ *  and `Inline` do. Exported for renderers that must transform the resolved
+ *  text themselves (the Lore creep effect) so they never print raw source. */
+export function useLive(text: string): string {
   const scope = useContext(ScopeContext)
   return scope ? interpolate(text, scope).text : text
 }
@@ -168,10 +171,23 @@ const HEADING_RE = /^(#{1,3})\s+(.*)$/
  *  line-shaped and neither can match what the other does. */
 const RULE_RE = /^-{3,}$/
 
+/** A block whose every line starts with `>` is a quote. A last line that opens
+ *  with a dash (`> — An old fisherman`) is its attribution, not more quote —
+ *  the shape World Anvil's `[quote]text|who[/quote]` converts to. */
+const QUOTE_RE = /^>\s?/
+const CITE_RE = /^[—–-]\s*(.+)$/
+function quoteOf(block: string): { lines: string[]; cite?: string } | null {
+  const raw = block.split('\n')
+  if (!raw.every(l => QUOTE_RE.test(l))) return null
+  const lines = raw.map(l => l.replace(QUOTE_RE, ''))
+  const cite = lines.length > 1 ? CITE_RE.exec(lines[lines.length - 1].trim()) : null
+  return cite ? { lines: lines.slice(0, -1), cite: cite[1] } : { lines }
+}
+
 /** Render prose with blank-line paragraph breaks, `#`/`##`/`###` headings, a
- *  `---` divider, and inline markdown. A heading line inside a block starts its
- *  own element even without a surrounding blank line, so `## Title\nbody` needs
- *  no blank line. */
+ *  `---` divider, `>` quotes (with an optional `> — attribution` line), and
+ *  inline markdown. A heading line inside a block starts its own element even
+ *  without a surrounding blank line, so `## Title\nbody` needs no blank line. */
 export function Prose({ text, className }: { text: string; className?: string }) {
   const blocks = useLive(text).split(/\n\s*\n/).filter(Boolean)
   const elements: ReactNode[] = []
@@ -182,6 +198,13 @@ export function Prose({ text, className }: { text: string; className?: string })
     paraLines = []
   }
   for (const block of blocks) {
+    const quote = quoteOf(block)
+    if (quote) {
+      elements.push(createElement('figure', { key: key++, className: 'prose-quote' },
+        createElement('blockquote', null, renderInline(quote.lines.join('\n'))),
+        quote.cite ? createElement('figcaption', null, renderInline(quote.cite)) : null))
+      continue
+    }
     for (const line of block.split('\n')) {
       if (RULE_RE.test(line.trim())) {
         flushPara()

@@ -80,6 +80,16 @@ Apply `supabase/migrations/0025_reliable_writes.sql` **before deploying this cli
 
 Tests use an isolated in-memory PostgreSQL runtime; they never access your Supabase project. CI runs the same test suite and production build. See [persistence notes](docs/persistence.md) for the conflict and recovery behavior.
 
+## Image uploads
+
+Apply [0029_image_uploads.sql](supabase/migrations/0029_image_uploads.sql) after the earlier migrations, before using uploads. It creates the private `guide-images` bucket and its access policies. No manual bucket setup is needed.
+
+DMs can choose or drop a JPG, PNG, or WebP in Character → Lore, the NPC editor, or Handouts. Portraits have zoom and position controls; handouts retain their full image. Click **Upload**, then save the record (or deliver the handout). Existing image URLs still work.
+
+Sources are limited to 20 MB / 40 megapixels, resized to at most 1600 px for portraits or 4096 px for handouts, and re-encoded without source metadata. Uploaded objects are capped at 8 MB. Players can read only their own portrait, revealed NPC images, and received handout images. Signed links last five minutes; a link already issued remains usable until expiry after access is revoked. External URLs retain their original hosting permissions.
+
+Replacing or removing an image changes the record reference; it does not delete stored files. Cancelled uploads and replaced images may leave unreferenced objects for later maintenance. New clients are required to display uploaded images; reload older sessions after deploying.
+
 ## Project layout
 
 ```

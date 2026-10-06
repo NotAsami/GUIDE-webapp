@@ -5,6 +5,7 @@ import type { CharacterSpellbook, Spell } from './database.types.ts'
 import {
   cantripTier, damageAt, isCaster, isPrepared, maxCastLevel,
   pactSlotCount, pactSlotLevel, pactSlotsAvail, preparedUsed, preparesSpells, rollSpellDamage,
+  shortDuration, shortTime,
 } from './spells.ts'
 import type { Rider } from './graph.ts'
 
@@ -285,4 +286,19 @@ test('a cantrip that has scaled by level doubles what it actually rolls', () => 
     () => rollSpellDamage(scaled, 0, 11, undefined, true))!
   assert.equal(crit.rolls.length, 6)
   assert.equal(crit.expr, '6d10')
+})
+
+test('shortTime gives one spelling per authored casting time', () => {
+  for (const [raw, want] of [
+    ['action', 'Action'], ['1 Action', 'Action'], ['bonus-action', 'Bonus'], ['1 Bonus Action', 'Bonus'],
+    ['1 reaction, which you take when…', 'Reaction'], ['1minute', '1 min'], ['10 minutes', '10 min'],
+    ['1hour', '1 hr'], ['8 hours', '8 hr'], ['', '—'], [undefined, '—'], ['special', 'Special'],
+  ] as const) assert.equal(shortTime(raw), want, String(raw))
+})
+
+test('shortDuration shortens counts and leaves prose alone', () => {
+  for (const [raw, want] of [
+    ['Instantaneous', 'Inst.'], ['instantaneous', 'Inst.'], ['1 minute', '1 min'], ['up to 1 hour', '1 hr'],
+    ['10 days', '10 days'], ['1 day', '1 day'], ['until dispelled', 'Until dispelled'], ['', '—'],
+  ] as const) assert.equal(shortDuration(raw), want, String(raw))
 })
