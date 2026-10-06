@@ -148,13 +148,13 @@ function Glyph() {
             <polygon points="320,250 380,355 260,355" strokeOpacity="0.8" />
             <polygon points="320,390 260,285 380,285" strokeOpacity="0.8" />
             <g className={styles.pulse}>
-              <circle cx="320" cy="320" r="14" fill="rgba(0,166,214,0.45)" stroke="#00a6d6" strokeOpacity="0.9" strokeWidth="0.8" />
-              <circle cx="320" cy="320" r="4" fill="#00a6d6" />
+              <circle cx="320" cy="320" r="14" style={{ fill: 'color-mix(in srgb, var(--cyan) 45%, transparent)', stroke: 'var(--cyan)' }} strokeOpacity="0.9" strokeWidth="0.8" />
+              <circle cx="320" cy="320" r="4" style={{ fill: 'var(--cyan)' }} />
             </g>
           </g>
         </g>
 
-        <g fill="currentColor" stroke="none" fontFamily="JetBrains Mono, monospace" fontSize="9" opacity="0.55" letterSpacing="2">
+        <g fill="currentColor" stroke="none" style={{ fontFamily: 'var(--font-mono)' }} fontSize="9" opacity="0.55" letterSpacing="2">
           <text x="320" y="32" textAnchor="middle">0x4F1A · 22:08:47</text>
           <text x="608" y="324" textAnchor="end">SECTOR.12</text>
           <text x="320" y="616" textAnchor="middle">NODE → CASTELLA-08</text>

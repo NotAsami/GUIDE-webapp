@@ -10,9 +10,9 @@
   background-color: rgba(8, 8, 8, 0.97);
   border: 1px solid var(--beige);
   box-shadow:
-    0 0 0 1px rgba(212, 191, 125, 0.15),
+    0 0 0 1px color-mix(in srgb, var(--beige) 15%, transparent),
     0 14px 28px rgba(0, 0, 0, 0.6),
-    0 0 22px rgba(0, 166, 214, 0.22);
+    0 0 22px color-mix(in srgb, var(--cyan) 22%, transparent);
   font-family: var(--font-mono);
   color: var(--text);
   font-size: 11px;
@@ -62,8 +62,8 @@
   text-transform: uppercase;
 }
 .tt[data-rarity="common"] .ttName { color: var(--text); }
-.tt[data-rarity="rare"] .ttName { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(77, 214, 255, 0.4); }
-.tt[data-rarity="legendary"] .ttName { color: var(--gold-rare); text-shadow: 0 0 8px rgba(226, 176, 33, 0.4); }
+.tt[data-rarity="rare"] .ttName { color: var(--cyan-hot); text-shadow: 0 0 8px color-mix(in srgb, var(--cyan-hot) 40%, transparent); }
+.tt[data-rarity="legendary"] .ttName { color: var(--gold-rare); text-shadow: 0 0 8px color-mix(in srgb, var(--gold-rare) 40%, transparent); }
 
 .ttSub {
   color: var(--beige);
@@ -72,7 +72,7 @@
   text-transform: uppercase;
   margin-bottom: 10px;
   padding-bottom: 8px;
-  border-bottom: 1px dashed rgba(212, 191, 125, 0.25);
+  border-bottom: 1px dashed color-mix(in srgb, var(--beige) 25%, transparent);
 }
 .ttRow { display: flex; gap: 8px; margin: 4px 0; align-items: baseline; }
 .ttRow .k {
@@ -86,7 +86,7 @@
 .ttFlavor {
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px dashed rgba(212, 191, 125, 0.25);
+  border-top: 1px dashed color-mix(in srgb, var(--beige) 25%, transparent);
   font-family: var(--font-prose);
   font-size: 13px;
   line-height: 1.45;

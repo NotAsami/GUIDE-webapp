@@ -504,7 +504,7 @@ function VigorEmblem() {
       <polygon className={styles.facet} points="10,38 40,38 40,96" />
       <polygon className={styles.facet} points="70,38 40,38 40,96" />
       <polygon className={styles.high} points="40,8 56,30 40,30" opacity="0.65" />
-      <ellipse cx="40" cy="50" rx="34" ry="6" fill="none" stroke="#00a6d6" strokeWidth="0.6" opacity="0.4" />
+      <ellipse cx="40" cy="50" rx="34" ry="6" fill="none" style={{ stroke: 'var(--cyan)' }} strokeWidth="0.6" opacity="0.4" />
     </svg>
   )
 }

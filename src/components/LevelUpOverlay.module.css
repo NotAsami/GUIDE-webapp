@@ -104,7 +104,7 @@
     radial-gradient(120% 90% at 50% 0%, rgba(var(--accRGB), 0.09), transparent 55%),
     linear-gradient(180deg, var(--pnA, #161310), var(--pnB, #0d0c0a));
   clip-path: polygon(calc(var(--cut) - 7px) 0, 100% 0, 100% calc(100% - var(--cut) + 7px), calc(100% - var(--cut) + 7px) 100%, 0 100%, 0 calc(var(--cut) - 7px));
-  box-shadow: inset 0 0 72px rgba(var(--accRGB), 0.10), inset 0 0 1px rgba(212, 191, 125, 0.25);
+  box-shadow: inset 0 0 72px rgba(var(--accRGB), 0.10), inset 0 0 1px color-mix(in srgb, var(--beige) 25%, transparent);
   overflow: hidden; display: flex; flex-direction: column;
 }
 .pnInner::before {
@@ -125,7 +125,7 @@
 .head {
   position: relative; z-index: 3; flex: 0 0 auto;
   display: flex; align-items: center; gap: 15px; padding: 18px 22px 15px;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.32);
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 32%, transparent);
 }
 .head::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1.5px;
@@ -169,7 +169,7 @@
 .stat.dice .statV .from, .stat.dice .statV .to { font-family: var(--font-mono); font-weight: 500; }
 .stat.dice .statV .from { font-size: 14px; }
 .stat.dice .statV .to { font-size: 20px; }
-.vrule { width: 1px; align-self: stretch; background: rgba(212, 191, 125, 0.22); }
+.vrule { width: 1px; align-self: stretch; background: color-mix(in srgb, var(--beige) 22%, transparent); }
 
 /* Two clipped layers, so the chamfer needs no border of its own. */
 .close {
@@ -186,7 +186,7 @@
   clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
   transition: color 150ms ease, box-shadow 150ms ease;
 }
-.close:hover .cli { color: var(--danger-hot); box-shadow: inset 0 0 16px rgba(185, 58, 58, 0.3); }
+.close:hover .cli { color: var(--danger-hot); box-shadow: inset 0 0 16px color-mix(in srgb, var(--danger) 30%, transparent); }
 
 /* ---- body / steps ---- */
 .body {
@@ -201,19 +201,19 @@
 .step { position: relative; }
 .stepHead {
   display: flex; align-items: center; gap: 11px; margin-bottom: 9px;
-  padding: 0 2px 7px; border-bottom: 1px solid rgba(212, 191, 125, 0.22);
+  padding: 0 2px 7px; border-bottom: 1px solid color-mix(in srgb, var(--beige) 22%, transparent);
 }
 .sn { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; color: var(--acc); }
 .st { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.34em; color: var(--beige); text-transform: uppercase; }
 .tag {
-  --cut: 4px; --bw: 1.5px; --bc: rgba(0, 166, 214, 0.45);
+  --cut: 4px; --bw: 1.5px; --bc: color-mix(in srgb, var(--cyan) 45%, transparent);
   margin-left: auto; font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em;
   text-transform: uppercase; padding: 3px 8px; color: var(--cyan);
   border: 1.5px solid var(--bc);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
 }
 .tag.cond { --bc: rgba(var(--accRGB), 0.5); color: var(--acc); }
-.tag.off { --bc: rgba(138, 122, 74, 0.4); color: var(--beige-dim); }
+.tag.off { --bc: color-mix(in srgb, var(--beige-dim) 40%, transparent); color: var(--beige-dim); }
 
 /* Layered like the panel: a beige silhouette with a dark interior inset 1px,
    so the chamfer carries an edge without a border to slice. */
@@ -232,7 +232,7 @@
 /* ---- 01 hit points ---- */
 .modes { display: flex; gap: 7px; margin-bottom: 13px; }
 .mode {
-  --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.26);
+  --cut: 5px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 26%, transparent);
   flex: 1; position: relative; cursor: pointer; text-align: center; padding: 9px 6px;
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
   background-color: rgba(0, 0, 0, 0.4);
@@ -286,7 +286,7 @@
 .dievals .reroll { height: 30px; width: 148px; flex: 0 0 auto; }
 
 .stepperbox {
-  --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.3);
+  --cut: 5px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 30%, transparent);
   display: inline-flex; align-items: center;
   border: 1.5px solid var(--bc);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
@@ -320,14 +320,14 @@
 .newmax .l { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; color: var(--beige); text-transform: uppercase; }
 .newmax .from { font-family: var(--font-display); font-weight: 600; font-size: 20px; color: var(--muted); }
 .newmax .arrow { font-family: var(--font-mono); color: var(--acc); }
-.newmax .to { font-family: var(--font-display); font-weight: 700; font-size: 26px; color: var(--good); text-shadow: 0 0 13px rgba(79, 174, 107, 0.35); }
+.newmax .to { font-family: var(--font-display); font-weight: 700; font-size: 26px; color: var(--good); text-shadow: 0 0 13px color-mix(in srgb, var(--good) 35%, transparent); }
 .note { margin-top: 10px; font-family: var(--font-mono); font-size: 9.5px; line-height: 1.6; letter-spacing: 0.04em; color: var(--beige-dim); }
 .note b { color: var(--acc); font-weight: 500; }
 
 /* ---- 02 derived ---- */
 .derived { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .pill {
-  --cut: 6px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.26);
+  --cut: 6px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 26%, transparent);
   display: flex; align-items: center; gap: 10px; padding: 9px 14px;
   background-color: rgba(0, 0, 0, 0.4);
   border: 1.5px solid var(--bc);
@@ -341,12 +341,12 @@
 .pill.nochange .pv .to { color: var(--text); }
 .pill .badge {
   font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase;
-  padding: 2px 7px; color: var(--beige-dim); border: 1.5px solid rgba(138, 122, 74, 0.4);
+  padding: 2px 7px; color: var(--beige-dim); border: 1.5px solid color-mix(in srgb, var(--beige-dim) 40%, transparent);
 }
 .pill.changed .badge { color: var(--acc); border-color: rgba(var(--accRGB), 0.5); }
 /* A value the DM typed. Danger-toned because "we are NOT writing this" is the
    news, and it must not read like the same kind of note as "no change". */
-.pill.held .badge { color: var(--danger-hot); border-color: rgba(185, 58, 58, 0.5); }
+.pill.held .badge { color: var(--danger-hot); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
 .pill.held .pv .to { color: var(--text); }
 .dnote { flex: 1; min-width: 200px; font-family: var(--font-mono); font-size: 9px; line-height: 1.6; letter-spacing: 0.04em; color: var(--beige-dim); }
 .dnote b { color: var(--acc); font-weight: 500; }
@@ -354,7 +354,7 @@
 /* ---- 03 ASI / feat ---- */
 .seg { display: flex; gap: 8px; margin-bottom: 14px; }
 .segopt {
-  --cut: 7px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.26);
+  --cut: 7px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 26%, transparent);
   flex: 1; cursor: pointer; padding: 11px 13px; display: flex; align-items: center; gap: 11px; text-align: left;
   background-color: rgba(0, 0, 0, 0.4);
   border: 1.5px solid var(--bc);
@@ -372,7 +372,7 @@
 
 .abils { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
 .ab {
-  --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.24);
+  --cut: 5px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 24%, transparent);
   position: relative; min-width: 0;
   background-color: rgba(0, 0, 0, 0.4); padding: 9px 10px;
   border: 1.5px solid var(--bc);
@@ -387,7 +387,7 @@
 .abval .pl { font-family: var(--font-mono); font-size: 11px; color: var(--good); margin-left: 4px; }
 .abctl { display: flex; align-items: center; gap: 7px; }
 .abctl button {
-  --cut: 4px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.28);
+  --cut: 4px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 28%, transparent);
   flex: 1; height: 26px; background-color: rgba(0, 0, 0, 0.5);
   border: 1.5px solid var(--bc);
   color: var(--acc); font-size: 12px; cursor: pointer;
@@ -422,7 +422,7 @@
 /* ---- pick rows (feats + gated features) ---- */
 .pick { display: flex; flex-direction: column; gap: 7px; }
 .row {
-  --cut: 6px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.24);
+  --cut: 6px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 24%, transparent);
   display: flex; align-items: center; gap: 11px; padding: 10px 12px; cursor: pointer; text-align: left; width: 100%;
   background-color: rgba(0, 0, 0, 0.4);
   border: 1.5px solid var(--bc);
@@ -455,7 +455,7 @@
 }
 .rsrc .stale { display: block; color: var(--danger-hot); }
 .rcheck {
-  --cut: 3px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.4);
+  --cut: 3px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 40%, transparent);
   flex: 0 0 auto; width: 18px; height: 18px;
   border: 1.5px solid var(--bc);
   display: flex; align-items: center; justify-content: center; color: transparent; font-size: 10px;
@@ -465,7 +465,7 @@
    DM should see that the feat exists and why it is out of reach, otherwise the
    list silently shortens and looks like a catalog problem. */
 .row.locked { opacity: 0.45; cursor: not-allowed; }
-.row.locked:hover { --bc: rgba(212, 191, 125, 0.24); }
+.row.locked:hover { --bc: color-mix(in srgb, var(--beige) 24%, transparent); }
 .rpreUnmet { color: var(--danger-hot); }
 /* A clause the parser could not read. Never blocks — this only says so. */
 .rpreOpen { color: var(--beige-dim); }
@@ -479,7 +479,7 @@
 .empty {
   display: flex; align-items: center; gap: 11px; padding: 16px 15px;
   font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; line-height: 1.6; color: var(--muted);
-  background-color: rgba(0, 0, 0, 0.3); border: 1.5px dashed rgba(212, 191, 125, 0.3);
+  background-color: rgba(0, 0, 0, 0.3); border: 1.5px dashed color-mix(in srgb, var(--beige) 30%, transparent);
 }
 .empty > i { flex: 0 0 auto; color: var(--beige-dim); font-size: 15px; }
 .empty b { color: var(--beige); font-weight: 500; }
@@ -490,7 +490,7 @@
 /* ---- 05 spell slots ---- */
 .slottab { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 11px; }
 .slot {
-  --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.24);
+  --cut: 5px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 24%, transparent);
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 9px 12px; min-width: 62px;
   background-color: rgba(0, 0, 0, 0.4);
   border: 1.5px solid var(--bc);
@@ -499,13 +499,13 @@
 .slot .sl { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; }
 .slot .pips { display: flex; gap: 4px; }
 /* Circles, not polygons — a real border is fine here. */
-.slot .pip { width: 9px; height: 9px; background-color: rgba(0, 0, 0, 0.5); border: 1.5px solid rgba(0, 166, 214, 0.4); border-radius: 50%; }
-.slot .pip.on { background-color: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.6); }
+.slot .pip { width: 9px; height: 9px; background-color: rgba(0, 0, 0, 0.5); border: 1.5px solid color-mix(in srgb, var(--cyan) 40%, transparent); border-radius: 50%; }
+.slot .pip.on { background-color: var(--cyan); box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 60%, transparent); }
 .slot .pip.new { background-color: var(--acc); border-color: var(--acc); box-shadow: 0 0 7px rgba(var(--accRGB), 0.7); animation: pipBlink 1.6s steps(2, end) infinite; }
 /* Slot pips are cyan in BOTH tones — a spell slot is a spell slot. So in the
    player tone the accent no longer distinguishes a gained pip from a held one,
    and the "new" marker moves to green. */
-.overlay.player .slot .pip.new { background-color: var(--good); border-color: var(--good); box-shadow: 0 0 7px rgba(79, 174, 107, 0.7); }
+.overlay.player .slot .pip.new { background-color: var(--good); border-color: var(--good); box-shadow: 0 0 7px color-mix(in srgb, var(--good) 70%, transparent); }
 @keyframes pipBlink { 50% { opacity: 0.35; } }
 
 .pactline {
@@ -519,7 +519,7 @@
 /* ---- footer ---- */
 .foot {
   position: relative; z-index: 3; flex: 0 0 auto;
-  border-top: 1px solid rgba(212, 191, 125, 0.3); padding: 13px 22px 15px; background: rgba(10, 9, 7, 0.7);
+  border-top: 1px solid color-mix(in srgb, var(--beige) 30%, transparent); padding: 13px 22px 15px; background: rgba(10, 9, 7, 0.7);
 }
 .foot::before {
   content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 1.5px;
@@ -532,7 +532,7 @@
 .footrow { display: flex; align-items: flex-end; gap: 18px; }
 .summary { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 7px 9px; }
 .sumline {
-  --cut: 5px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.24);
+  --cut: 5px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 24%, transparent);
   display: flex; align-items: center; gap: 8px; padding: 6px 11px;
   background-color: rgba(0, 0, 0, 0.4);
   border: 1.5px solid var(--bc);

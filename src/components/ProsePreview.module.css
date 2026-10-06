@@ -5,14 +5,14 @@
 .wrap { position: relative; display: inline-flex; margin-left: auto; }
 
 .btn {
-  --cut: 3px; --bc: rgba(0, 166, 214, 0.5);
+  --cut: 3px; --bc: color-mix(in srgb, var(--cyan) 50%, transparent);
   display: inline-flex; align-items: center; gap: 6px;
   padding: 3px 8px; cursor: pointer;
   /* background-COLOR, not the shorthand: `background:` resets background-image,
      which is where the corner diagonals live. It happens to work while the
      shorthand sits above them; reorder the two and the chamfers go bare. The
      guard test forbids the shorthand for exactly that reason. */
-  background-color: rgba(0, 166, 214, 0.07);
+  background-color: color-mix(in srgb, var(--cyan) 7%, transparent);
   border: 1px solid var(--bc);
   font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
   text-transform: uppercase; color: var(--cyan);
@@ -38,14 +38,14 @@
   display: flex; flex-direction: column;
   width: min(460px, 78vw); max-height: 340px;
   background: linear-gradient(180deg, #12100c, #0c0b09);
-  border: 1px solid rgba(0, 166, 214, 0.45);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.7), 0 0 24px rgba(0, 166, 214, 0.14);
+  border: 1px solid color-mix(in srgb, var(--cyan) 45%, transparent);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.7), 0 0 24px color-mix(in srgb, var(--cyan) 14%, transparent);
 }
 .pop.popLeft { right: auto; left: 0; }
 .head {
   flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
-  padding: 7px 10px; border-bottom: 1px solid rgba(0, 166, 214, 0.28);
-  background: rgba(0, 166, 214, 0.07);
+  padding: 7px 10px; border-bottom: 1px solid color-mix(in srgb, var(--cyan) 28%, transparent);
+  background: color-mix(in srgb, var(--cyan) 7%, transparent);
   font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.22em;
   text-transform: uppercase; color: var(--cyan);
 }
@@ -57,10 +57,10 @@
 .body {
   flex: 1 1 auto; min-height: 0; overflow-y: auto;
   padding: 12px 14px 14px;
-  scrollbar-width: thin; scrollbar-color: rgba(0, 166, 214, 0.4) rgba(0, 0, 0, 0.3);
+  scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--cyan) 40%, transparent) rgba(0, 0, 0, 0.3);
 }
 .body::-webkit-scrollbar { width: 7px; }
-.body::-webkit-scrollbar-thumb { background: rgba(0, 166, 214, 0.4); }
+.body::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--cyan) 40%, transparent); }
 .body::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
 
 /* Matches the player-side prose. The point is FIDELITY, so the slant is not
@@ -84,7 +84,7 @@
    it qualifies the preview above rather than competing with it. */
 .unres {
   flex: 0 0 auto; display: flex; align-items: center; gap: 7px;
-  padding: 6px 12px; border-top: 1px solid rgba(0, 166, 214, 0.2);
+  padding: 6px 12px; border-top: 1px solid color-mix(in srgb, var(--cyan) 20%, transparent);
   background: rgba(0, 0, 0, 0.35);
   font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--beige-dim);

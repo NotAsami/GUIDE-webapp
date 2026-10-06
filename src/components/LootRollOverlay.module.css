@@ -39,7 +39,7 @@
 .panel::before {
   content: ""; position: absolute; inset: 0; background: var(--beige);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
-  filter: drop-shadow(0 26px 64px rgba(0, 0, 0, 0.72)) drop-shadow(0 0 44px rgba(226, 176, 33, 0.22));
+  filter: drop-shadow(0 26px 64px rgba(0, 0, 0, 0.72)) drop-shadow(0 0 44px color-mix(in srgb, var(--amber) 22%, transparent));
 }
 .pnGap {
   position: absolute; inset: 6px; background: #0a0908;
@@ -52,15 +52,15 @@
 .pnInner {
   position: absolute; inset: 8px;
   background:
-    radial-gradient(120% 90% at 50% 0%, rgba(226, 176, 33, 0.09), transparent 55%),
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--amber) 9%, transparent), transparent 55%),
     linear-gradient(180deg, #161310, #0d0c0a);
   clip-path: polygon(calc(var(--cut) - 7px) 0, 100% 0, 100% calc(100% - var(--cut) + 7px), calc(100% - var(--cut) + 7px) 100%, 0 100%, 0 calc(var(--cut) - 7px));
-  box-shadow: inset 0 0 60px rgba(226, 176, 33, 0.06), inset 0 0 1px rgba(212, 191, 125, 0.25);
+  box-shadow: inset 0 0 60px color-mix(in srgb, var(--amber) 6%, transparent), inset 0 0 1px color-mix(in srgb, var(--beige) 25%, transparent);
   overflow: hidden; display: flex; flex-direction: column;
 }
 .pnInner::before {
   content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: repeating-linear-gradient(to bottom, rgba(226, 176, 33, 0.025) 0px, rgba(226, 176, 33, 0.025) 1px, transparent 1px, transparent 4px);
+  background: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--amber) 2.5%, transparent) 0px, color-mix(in srgb, var(--amber) 2.5%, transparent) 1px, transparent 1px, transparent 4px);
   mix-blend-mode: screen; opacity: 0.6;
 }
 .pnCorner { position: absolute; width: 18px; height: 18px; border-color: var(--amber); opacity: 0.8; z-index: 6; pointer-events: none; }
@@ -71,11 +71,11 @@
 .head {
   position: relative; z-index: 3; flex: 0 0 auto;
   display: flex; align-items: center; gap: 15px; padding: 18px 22px 15px;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.32);
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 32%, transparent);
 }
 .head::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
-  background: rgba(226, 176, 33, 0.45); box-shadow: 0 0 10px rgba(226, 176, 33, 0.4);
+  background: color-mix(in srgb, var(--amber) 45%, transparent); box-shadow: 0 0 10px color-mix(in srgb, var(--amber) 40%, transparent);
 }
 /* A hexagon, so it needs the frame+inner treatment if it ever gains a border.
    It has none — flat amber fill, glyph knocked out in the dark — so a single
@@ -85,7 +85,7 @@
   display: flex; align-items: center; justify-content: center;
   color: #14120c; font-size: 20px; background: var(--amber);
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  filter: drop-shadow(0 0 11px rgba(226, 176, 33, 0.45));
+  filter: drop-shadow(0 0 11px color-mix(in srgb, var(--amber) 45%, transparent));
 }
 .titles { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 /* nowrap because appending " · Pushed To Party" wraps it onto a second line
@@ -99,7 +99,7 @@
 .hname {
   font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: 0.05em;
   color: var(--amber-hot); text-transform: uppercase; line-height: 1;
-  text-shadow: 0 0 15px rgba(226, 176, 33, 0.3);
+  text-shadow: 0 0 15px color-mix(in srgb, var(--amber) 30%, transparent);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .hclass { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
@@ -114,8 +114,8 @@
   color: var(--beige); font-variant-numeric: tabular-nums;
 }
 /* Only when every line has landed. An always-hot number says nothing. */
-.stat .v.done { color: var(--amber-hot); text-shadow: 0 0 16px rgba(226, 176, 33, 0.5); }
-.vrule { width: 1px; align-self: stretch; background: rgba(212, 191, 125, 0.22); }
+.stat .v.done { color: var(--amber-hot); text-shadow: 0 0 16px color-mix(in srgb, var(--amber) 50%, transparent); }
+.vrule { width: 1px; align-self: stretch; background: color-mix(in srgb, var(--beige) 22%, transparent); }
 
 .close {
   flex: 0 0 auto; --cut: 8px; margin-left: 6px; width: 42px; height: 42px;
@@ -131,16 +131,16 @@
   clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
   transition: color 150ms ease, box-shadow 150ms ease;
 }
-.close:hover .cli { color: var(--danger-hot); box-shadow: inset 0 0 16px rgba(185, 58, 58, 0.3); }
+.close:hover .cli { color: var(--danger-hot); box-shadow: inset 0 0 16px color-mix(in srgb, var(--danger) 30%, transparent); }
 
 /* ---- body ---- */
 .body {
   position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto;
   padding: 16px 22px 18px; display: flex; flex-direction: column; gap: 13px;
-  scrollbar-width: thin; scrollbar-color: rgba(226, 176, 33, 0.4) rgba(0, 0, 0, 0.3);
+  scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--amber) 40%, transparent) rgba(0, 0, 0, 0.3);
 }
 .body::-webkit-scrollbar { width: 7px; }
-.body::-webkit-scrollbar-thumb { background: rgba(226, 176, 33, 0.4); }
+.body::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--amber) 40%, transparent); }
 .body::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
 
 .rows { display: flex; flex-direction: column; gap: 7px; }
@@ -163,7 +163,7 @@
 .pick {
   flex: 0 0 auto; width: 168px; height: 32px; margin: 0;
   background: rgba(0, 0, 0, 0.45); color: var(--text);
-  border: 1px solid rgba(212, 191, 125, 0.3);
+  border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent);
   font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em;
   padding: 0 8px; cursor: pointer;
 }
@@ -193,7 +193,7 @@
 /* ---- footer ---- */
 .foot {
   position: relative; z-index: 3; flex: 0 0 auto;
-  border-top: 1px solid rgba(212, 191, 125, 0.3);
+  border-top: 1px solid color-mix(in srgb, var(--beige) 30%, transparent);
   padding: 13px 22px 15px; background: rgba(10, 9, 7, 0.7);
 }
 .sumhead { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
