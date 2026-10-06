@@ -372,7 +372,7 @@ export function Layout() {
                 className="sk"
                 style={{
                   width: 'min(900px, 80%)', height: 168,
-                  border: '1px solid rgba(138, 122, 74, 0.35)',
+                  border: '1px solid color-mix(in srgb, var(--beige-dim) 35%, transparent)',
                 }}
               />
             </div>
@@ -538,7 +538,7 @@ function SignOutButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       style={{
         marginTop: 24, padding: '10px 28px',
-        background: 'rgba(185, 58, 58, 0.08)',
+        background: 'color-mix(in srgb, var(--danger) 8%, transparent)',
         border: '1px solid var(--danger)',
         color: 'var(--danger-hot)',
         fontFamily: 'var(--font-display)', fontSize: 12, letterSpacing: '0.3em',

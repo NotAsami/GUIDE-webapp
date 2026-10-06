@@ -37,9 +37,9 @@
   min-height: 100%;
 }
 .eq::-webkit-scrollbar { width: 8px; }
-.eq::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15); }
+.eq::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); border-left: 1px solid color-mix(in srgb, var(--beige) 15%, transparent); }
 .eq::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  background: linear-gradient(180deg, var(--cyan-dim), color-mix(in srgb, var(--beige) 55%, transparent));
   border: 2px solid #111;
 }
 
@@ -55,7 +55,7 @@
   display: flex; align-items: baseline; gap: 14px;
   margin-bottom: 12px;
   padding: 0 4px 8px;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 35%, transparent);
 }
 .chNum {
   font-family: var(--font-mono); font-size: 10px;
@@ -113,7 +113,7 @@
 .wcInner { flex: 1; }
 .wcInner {
   background:
-    radial-gradient(160% 110% at 0% 50%, rgba(0, 166, 214, 0.08), transparent 60%),
+    radial-gradient(160% 110% at 0% 50%, color-mix(in srgb, var(--cyan) 8%, transparent), transparent 60%),
     linear-gradient(180deg, #1c1c1c, #141414);
   clip-path: polygon(0 0,
     calc(100% - var(--cut) + 1px) 0, calc(100% - 1px) calc(var(--cut) - 1px),
@@ -141,17 +141,17 @@
 }
 .weaponCard[data-rarity="uncommon"] .wcInner::before {
   background: var(--cyan);
-  box-shadow: 0 0 12px rgba(0, 166, 214, 0.45);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 45%, transparent);
 }
 .weaponCard[data-rarity="common"] .wcInner::before { background: var(--beige); opacity: 0.5; }
 .weaponCard[data-rarity="rare"] .wcInner::before {
   background: var(--cyan-hot);
-  box-shadow: 0 0 14px rgba(77, 214, 255, 0.6);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--cyan-hot) 60%, transparent);
 }
 
 .weaponCard:hover .wcInner {
-  box-shadow: inset 0 0 26px rgba(0, 166, 214, 0.15),
-              0 0 22px rgba(0, 166, 214, 0.25);
+  box-shadow: inset 0 0 26px color-mix(in srgb, var(--cyan) 15%, transparent),
+              0 0 22px color-mix(in srgb, var(--cyan) 25%, transparent);
 }
 
 .wcIcon {
@@ -160,7 +160,7 @@
   display: flex; align-items: center; justify-content: center;
   color: var(--beige);
   font-size: 22px;
-  border: 1px solid rgba(212, 191, 125, 0.4);
+  border: 1px solid color-mix(in srgb, var(--beige) 40%, transparent);
   background: rgba(0, 0, 0, 0.4);
 }
 .wcName {
@@ -215,8 +215,8 @@
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em;
   text-transform: uppercase; color: var(--gold-rare);
-  border: 1px solid rgba(226, 176, 33, 0.55);
-  background: rgba(226, 176, 33, 0.12);
+  border: 1px solid color-mix(in srgb, var(--gold-rare) 55%, transparent);
+  background: color-mix(in srgb, var(--gold-rare) 12%, transparent);
   padding: 2px 6px;
 }
 .wcArmed i { font-size: 7px; }
@@ -228,13 +228,13 @@
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em;
   text-transform: uppercase; color: var(--beige-dim);
-  border: 1px dashed rgba(212, 191, 125, 0.45); background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--beige) 45%, transparent); background: transparent;
   padding: 2px 6px;
   transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
 }
 .wcArmable:hover {
-  color: var(--gold-rare); border-color: rgba(226, 176, 33, 0.6);
-  background: rgba(226, 176, 33, 0.1);
+  color: var(--gold-rare); border-color: color-mix(in srgb, var(--gold-rare) 60%, transparent);
+  background: color-mix(in srgb, var(--gold-rare) 10%, transparent);
 }
 .wcArmable i { font-size: 7px; }
 
@@ -255,7 +255,7 @@
 .wcAttack i { font-size: 10px; opacity: 0.9; }
 .wcAttack:hover {
   color: #fff;
-  box-shadow: inset 0 0 16px rgba(0, 166, 214, 0.35), 0 0 14px rgba(0, 166, 214, 0.45);
+  box-shadow: inset 0 0 16px color-mix(in srgb, var(--cyan) 35%, transparent), 0 0 14px color-mix(in srgb, var(--cyan) 45%, transparent);
 }
 .wcAttack:active { transform: scale(0.96); }
 
@@ -275,7 +275,7 @@
   line-height: 1.7;
   color: var(--muted);
   text-transform: uppercase;
-  border: 1px dashed rgba(212, 191, 125, 0.3);
+  border: 1px dashed color-mix(in srgb, var(--beige) 30%, transparent);
   background: rgba(0, 0, 0, 0.25);
   cursor: pointer;
   transition: color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
@@ -295,8 +295,8 @@
 }
 .weaponSlotEmpty:hover {
   color: var(--cyan-hot);
-  border-color: rgba(0, 166, 214, 0.5);
-  box-shadow: inset 0 0 20px rgba(0, 166, 214, 0.1);
+  border-color: color-mix(in srgb, var(--cyan) 50%, transparent);
+  box-shadow: inset 0 0 20px color-mix(in srgb, var(--cyan) 10%, transparent);
 }
 .weaponSlotEmpty:hover .em { color: var(--cyan); }
 
@@ -312,7 +312,7 @@
   line-height: 1.7;
   color: var(--muted);
   text-transform: uppercase;
-  border: 1px dashed rgba(212, 191, 125, 0.3);
+  border: 1px dashed color-mix(in srgb, var(--beige) 30%, transparent);
   background: rgba(0, 0, 0, 0.25);
 }
 .weaponEmpty .em {
@@ -333,7 +333,7 @@
 }
 .statLine {
   display: flex; justify-content: space-between; align-items: baseline;
-  border-bottom: 1px dashed rgba(212, 191, 125, 0.18);
+  border-bottom: 1px dashed color-mix(in srgb, var(--beige) 18%, transparent);
   padding: 6px 4px;
 }
 .slLabel {
@@ -379,10 +379,10 @@
   text-decoration: none;
 }
 /* active toggle (Effects open) */
-.paOn .paFrame { background: var(--cyan); box-shadow: 0 0 16px rgba(0, 166, 214, 0.45); }
+.paOn .paFrame { background: var(--cyan); box-shadow: 0 0 16px color-mix(in srgb, var(--cyan) 45%, transparent); }
 .paOn .paInner {
   color: #fff;
-  box-shadow: inset 0 0 20px rgba(0, 166, 214, 0.3), 0 0 16px rgba(0, 166, 214, 0.4);
+  box-shadow: inset 0 0 20px color-mix(in srgb, var(--cyan) 30%, transparent), 0 0 16px color-mix(in srgb, var(--cyan) 40%, transparent);
 }
 /* placeholder (Features) */
 .paSoon { cursor: default; opacity: 0.5; }
@@ -399,7 +399,7 @@
 .paTag {
   font-size: 7.5px; letter-spacing: 0.1em;
   color: var(--muted);
-  border: 1px solid rgba(212, 191, 125, 0.3);
+  border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent);
   padding: 1px 4px;
 }
 .paFrame {
@@ -425,8 +425,8 @@
 }
 .paBtn:hover .paInner {
   color: #fff;
-  box-shadow: inset 0 0 22px rgba(0, 166, 214, 0.3),
-              0 0 18px rgba(0, 166, 214, 0.5);
+  box-shadow: inset 0 0 22px color-mix(in srgb, var(--cyan) 30%, transparent),
+              0 0 18px color-mix(in srgb, var(--cyan) 50%, transparent);
 }
 .paInner i { font-size: 11px; opacity: 0.85; }
 
@@ -480,14 +480,14 @@
   margin: 12px;
   flex: 1;
   background:
-    radial-gradient(120% 90% at 50% 50%, rgba(0, 166, 214, 0.10), transparent 65%),
-    linear-gradient(180deg, #161616, #0d0d0d);
+    radial-gradient(120% 90% at 50% 50%, color-mix(in srgb, var(--cyan) 10%, transparent), transparent 65%),
+    linear-gradient(180deg, var(--bg-2), #0d0d0d);
   clip-path: polygon(calc(var(--cut) - 10px) 0, 100% 0,
     100% calc(100% - var(--cut) + 10px), calc(100% - var(--cut) + 10px) 100%,
     0 100%, 0 calc(var(--cut) - 10px));
   box-shadow:
-    inset 0 0 40px rgba(0, 166, 214, 0.10),
-    inset 0 0 1px rgba(212, 191, 125, 0.2);
+    inset 0 0 40px color-mix(in srgb, var(--cyan) 10%, transparent),
+    inset 0 0 1px color-mix(in srgb, var(--beige) 20%, transparent);
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   padding: 36px 28px;
@@ -499,7 +499,7 @@
   pointer-events: none;
   z-index: 2; /* keep CRT scanlines above the portrait image (.pImg z-index 1) */
   background: repeating-linear-gradient(to bottom,
-    rgba(0, 166, 214, 0.06) 0px, rgba(0, 166, 214, 0.06) 1px,
+    color-mix(in srgb, var(--cyan) 6%, transparent) 0px, color-mix(in srgb, var(--cyan) 6%, transparent) 1px,
     transparent 1px, transparent 4px);
   mix-blend-mode: screen;
   opacity: 0.7;
@@ -537,7 +537,7 @@
   text-align: center;
   line-height: 1.9;
   text-transform: uppercase;
-  text-shadow: 0 0 10px rgba(0, 166, 214, 0.35);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 35%, transparent);
   position: relative;
   z-index: 2;
 }
@@ -569,7 +569,7 @@
   top: 0; left: 0; bottom: 0;
   width: 0%;
   background: linear-gradient(90deg, var(--cyan-dim), var(--cyan-hot));
-  box-shadow: 0 0 10px rgba(0, 166, 214, 0.6);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 60%, transparent);
   animation: loadbar 6s cubic-bezier(.4, .0, .6, 1) infinite;
 }
 @keyframes loadbar {
@@ -588,11 +588,11 @@
 .portrait:hover { filter: brightness(1.08); }
 .portrait:hover .pInner { animation: portraitPulse 1.6s ease-in-out infinite; }
 @keyframes portraitPulse {
-  0%, 100% { box-shadow: inset 0 0 40px rgba(0, 166, 214, 0.10),
-                         inset 0 0 1px rgba(212, 191, 125, 0.2); }
-  50%      { box-shadow: inset 0 0 60px rgba(0, 166, 214, 0.28),
-                         inset 0 0 1px rgba(212, 191, 125, 0.3),
-                         0 0 24px rgba(0, 166, 214, 0.3); }
+  0%, 100% { box-shadow: inset 0 0 40px color-mix(in srgb, var(--cyan) 10%, transparent),
+                         inset 0 0 1px color-mix(in srgb, var(--beige) 20%, transparent); }
+  50%      { box-shadow: inset 0 0 60px color-mix(in srgb, var(--cyan) 28%, transparent),
+                         inset 0 0 1px color-mix(in srgb, var(--beige) 30%, transparent),
+                         0 0 24px color-mix(in srgb, var(--cyan) 30%, transparent); }
 }
 
 .charInfo { margin-top: 18px; text-align: center; }
@@ -604,7 +604,7 @@
   color: var(--beige);
   text-transform: uppercase;
   line-height: 1;
-  text-shadow: 0 0 14px rgba(212, 191, 125, 0.2);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--beige) 20%, transparent);
 }
 .ciTagline {
   margin-top: 8px;
@@ -677,7 +677,7 @@
 .sInner {
   position: absolute; inset: 1.5px;
   background:
-    radial-gradient(120% 90% at 50% 60%, rgba(0, 166, 214, 0.05), transparent 60%),
+    radial-gradient(120% 90% at 50% 60%, color-mix(in srgb, var(--cyan) 5%, transparent), transparent 60%),
     linear-gradient(180deg, #1a1a1a, #111);
   clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
     100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
@@ -701,7 +701,7 @@
   display: flex; align-items: center; justify-content: center;
   color: var(--beige);
   font-size: 26px;
-  filter: drop-shadow(0 0 6px rgba(212, 191, 125, 0.2));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--beige) 20%, transparent));
   transition: color 200ms ease, filter 200ms ease;
 }
 .sName {
@@ -718,7 +718,7 @@
 .slot[data-rarity="empty"] .sName { color: var(--muted); }
 .slot[data-rarity="common"] .sName { color: var(--text); }
 .slot[data-rarity="empty"] .sIcon { color: var(--beige-dim); opacity: 0.6; }
-.slot[data-rarity="rare"] .sName { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(0, 166, 214, 0.3); }
+.slot[data-rarity="rare"] .sName { color: var(--cyan-hot); text-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 30%, transparent); }
 
 .rarityDot {
   position: absolute;
@@ -728,20 +728,20 @@
   background: var(--beige);
   z-index: 3;
 }
-.slot[data-rarity="uncommon"] .rarityDot { background: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.6); }
-.slot[data-rarity="rare"] .rarityDot { background: var(--cyan-hot); box-shadow: 0 0 8px rgba(77, 214, 255, 0.7); }
+.slot[data-rarity="uncommon"] .rarityDot { background: var(--cyan); box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 60%, transparent); }
+.slot[data-rarity="rare"] .rarityDot { background: var(--cyan-hot); box-shadow: 0 0 8px color-mix(in srgb, var(--cyan-hot) 70%, transparent); }
 .slot[data-rarity="empty"] .rarityDot { background: transparent; border: 1px dashed var(--beige-dim); }
 
 .slot:hover .sInner {
-  box-shadow: inset 0 0 22px rgba(0, 166, 214, 0.18),
-              0 0 18px rgba(0, 166, 214, 0.32);
+  box-shadow: inset 0 0 22px color-mix(in srgb, var(--cyan) 18%, transparent),
+              0 0 18px color-mix(in srgb, var(--cyan) 32%, transparent);
 }
-.slot:hover .sIcon { color: #fff; filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.55)); }
+.slot:hover .sIcon { color: #fff; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--cyan) 55%, transparent)); }
 
 .slot.special .sFrame { background: var(--cyan); }
 .slot.special .sInner {
   background:
-    radial-gradient(120% 90% at 50% 60%, rgba(0, 166, 214, 0.16), transparent 60%),
+    radial-gradient(120% 90% at 50% 60%, color-mix(in srgb, var(--cyan) 16%, transparent), transparent 60%),
     linear-gradient(180deg, #16252b, #0f1b21);
 }
 .slot.special .sIcon { color: var(--cyan-hot); }
@@ -780,7 +780,7 @@
   letter-spacing: 0.24em; color: var(--beige); text-transform: uppercase;
 }
 .shardLink { color: var(--cyan); text-decoration: none; letter-spacing: 0.16em; }
-.shardLink:hover { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(0, 166, 214, 0.5); }
+.shardLink:hover { color: var(--cyan-hot); text-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 50%, transparent); }
 .shardSubs {
   display: grid; grid-template-columns: repeat(3, 1fr);
   flex: 1; min-height: 0;
@@ -791,8 +791,8 @@
   text-decoration: none; color: var(--cyan-hot);
   transition: background 160ms ease, color 160ms ease;
 }
-.shardSub + .shardSub { border-left: 1px solid rgba(212, 191, 125, 0.25); }
-.shardSub i { font-size: 22px; filter: drop-shadow(0 0 6px rgba(0, 166, 214, 0.25)); }
+.shardSub + .shardSub { border-left: 1px solid color-mix(in srgb, var(--beige) 25%, transparent); }
+.shardSub i { font-size: 22px; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--cyan) 25%, transparent)); }
 .shardSubLabel {
   font-family: var(--font-mono); font-size: 8px;
   letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige);
@@ -801,8 +801,8 @@
 .shardSub.empty { color: var(--beige-dim); }
 .shardSub.empty i { opacity: 0.55; filter: none; }
 .shardSub.empty .shardSubLabel { color: var(--muted); }
-.shardSub:hover { background: rgba(0, 166, 214, 0.1); color: #fff; }
-.shardSub:hover i { filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.6)); }
+.shardSub:hover { background: color-mix(in srgb, var(--cyan) 10%, transparent); color: #fff; }
+.shardSub:hover i { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--cyan) 60%, transparent)); }
 .shardSub:hover .shardSubLabel { color: var(--cyan-hot); }
 
 /* Active-effects chips moved to components/EffectsSidebar.module.css
@@ -843,13 +843,13 @@
     100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
     0 100%, 0 var(--cut));
 }
-.modalFrame[data-rarity="uncommon"] { background: var(--cyan); box-shadow: 0 0 26px rgba(0, 166, 214, 0.4); }
-.modalFrame[data-rarity="rare"]     { background: var(--cyan-hot); box-shadow: 0 0 30px rgba(77, 214, 255, 0.5); }
+.modalFrame[data-rarity="uncommon"] { background: var(--cyan); box-shadow: 0 0 26px color-mix(in srgb, var(--cyan) 40%, transparent); }
+.modalFrame[data-rarity="rare"]     { background: var(--cyan-hot); box-shadow: 0 0 30px color-mix(in srgb, var(--cyan-hot) 50%, transparent); }
 .modalInner {
   position: relative;
   margin: 1.5px;
   background:
-    radial-gradient(120% 80% at 50% 0%, rgba(0, 166, 214, 0.10), transparent 60%),
+    radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--cyan) 10%, transparent), transparent 60%),
     linear-gradient(180deg, #1b1b1b, #121212);
   clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0,
     100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%,
@@ -860,13 +860,13 @@
 .modalHead {
   display: flex; align-items: center; gap: 14px;
   padding-bottom: 14px;
-  border-bottom: 1px dashed rgba(212, 191, 125, 0.3);
+  border-bottom: 1px dashed color-mix(in srgb, var(--beige) 30%, transparent);
 }
 .mhIcon {
   width: 46px; height: 46px; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   color: var(--beige); font-size: 22px;
-  border: 1px solid rgba(212, 191, 125, 0.4);
+  border: 1px solid color-mix(in srgb, var(--beige) 40%, transparent);
   background: rgba(0, 0, 0, 0.4);
 }
 .mhTitles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -884,13 +884,13 @@
   width: 28px; height: 28px;
   display: flex; align-items: center; justify-content: center;
   color: var(--muted); font-size: 14px;
-  border: 1px solid rgba(212, 191, 125, 0.25);
+  border: 1px solid color-mix(in srgb, var(--beige) 25%, transparent);
   transition: color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 .modalClose:hover {
   color: var(--cyan-hot);
   border-color: var(--cyan);
-  box-shadow: 0 0 12px rgba(0, 166, 214, 0.4);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 40%, transparent);
 }
 
 .modalBody {
@@ -916,7 +916,7 @@
 .detailRow .v { color: var(--text); }
 .detailFlavor {
   margin-top: 14px; padding-top: 12px;
-  border-top: 1px dashed rgba(212, 191, 125, 0.25);
+  border-top: 1px dashed color-mix(in srgb, var(--beige) 25%, transparent);
   font-family: var(--font-prose);
   font-size: 14px; line-height: 1.5; color: var(--muted);
 }
@@ -944,7 +944,7 @@
   position: relative;
   display: flex; align-items: center; gap: 12px;
   padding: 10px 12px;
-  border: 1px solid rgba(212, 191, 125, 0.28);
+  border: 1px solid color-mix(in srgb, var(--beige) 28%, transparent);
   background: rgba(0, 0, 0, 0.3);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
@@ -954,12 +954,12 @@
 }
 .pickRow[data-rarity="uncommon"]::before { background: var(--cyan); opacity: 1; }
 .pickRow[data-rarity="rare"]::before { background: var(--cyan-hot); opacity: 1; }
-.pickRow:hover { border-color: rgba(0, 166, 214, 0.5); box-shadow: inset 0 0 18px rgba(0, 166, 214, 0.1); }
+.pickRow:hover { border-color: color-mix(in srgb, var(--cyan) 50%, transparent); box-shadow: inset 0 0 18px color-mix(in srgb, var(--cyan) 10%, transparent); }
 .pkIcon {
   width: 34px; height: 34px; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   color: var(--beige); font-size: 16px;
-  border: 1px solid rgba(212, 191, 125, 0.3);
+  border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent);
   background: rgba(0, 0, 0, 0.4);
 }
 .pkBody { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
@@ -981,9 +981,9 @@
   background: linear-gradient(180deg, #16252b, #0f1b21);
   transition: color 160ms ease, box-shadow 160ms ease;
 }
-.pkBtn:hover { color: #fff; box-shadow: inset 0 0 18px rgba(0, 166, 214, 0.35), 0 0 16px rgba(0, 166, 214, 0.45); }
+.pkBtn:hover { color: #fff; box-shadow: inset 0 0 18px color-mix(in srgb, var(--cyan) 35%, transparent), 0 0 16px color-mix(in srgb, var(--cyan) 45%, transparent); }
 .pkBtn:disabled {
-  color: var(--muted); border-color: rgba(212, 191, 125, 0.28);
+  color: var(--muted); border-color: color-mix(in srgb, var(--beige) 28%, transparent);
   background: rgba(0, 0, 0, 0.4); cursor: not-allowed;
 }
 .pkBtn:disabled:hover { box-shadow: none; }
@@ -996,7 +996,7 @@
 /* --- footer / unequip --- */
 .modalFoot {
   margin-top: 16px; padding-top: 14px;
-  border-top: 1px dashed rgba(212, 191, 125, 0.3);
+  border-top: 1px dashed color-mix(in srgb, var(--beige) 30%, transparent);
 }
 .modalActions { display: flex; gap: 10px; }
 .modalActions > * { flex: 1; }
@@ -1028,7 +1028,7 @@
 .unequipBtn:hover .ubFrame { background: var(--danger); }
 .unequipBtn:hover .ubInner {
   color: var(--danger-hot);
-  box-shadow: inset 0 0 22px rgba(185, 58, 58, 0.3), 0 0 18px rgba(185, 58, 58, 0.4);
+  box-shadow: inset 0 0 22px color-mix(in srgb, var(--danger) 30%, transparent), 0 0 18px color-mix(in srgb, var(--danger) 40%, transparent);
 }
 .ubInner i { font-size: 11px; opacity: 0.9; }
 
@@ -1047,7 +1047,7 @@
 .useBtn:hover .ubFrame { background: var(--cyan); }
 .useBtn:hover .ubInner {
   color: #fff;
-  box-shadow: inset 0 0 22px rgba(0, 166, 214, 0.3), 0 0 18px rgba(0, 166, 214, 0.45);
+  box-shadow: inset 0 0 22px color-mix(in srgb, var(--cyan) 30%, transparent), 0 0 18px color-mix(in srgb, var(--cyan) 45%, transparent);
 }
 
 /* ============================================================
@@ -1081,7 +1081,7 @@
 .sidebarInner {
   position: absolute; inset: 1.5px 0 1.5px 1.5px;
   background:
-    radial-gradient(120% 50% at 100% 0%, rgba(0, 166, 214, 0.12), transparent 60%),
+    radial-gradient(120% 50% at 100% 0%, color-mix(in srgb, var(--cyan) 12%, transparent), transparent 60%),
     linear-gradient(180deg, #1b1b1b, #121212);
   clip-path: polygon(17px 0, 100% 0, 100% 100%, 0 100%, 0 17px);
   display: flex; flex-direction: column;
@@ -1091,7 +1091,7 @@
 .sidebarHead {
   display: flex; align-items: center; gap: 12px;
   padding-bottom: 12px; margin-bottom: 12px;
-  border-bottom: 1px dashed rgba(212, 191, 125, 0.3);
+  border-bottom: 1px dashed color-mix(in srgb, var(--beige) 30%, transparent);
 }
 .shTitles { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .shKicker {
@@ -1106,7 +1106,7 @@
 .sidebarBody { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
 .sidebarFoot {
   margin-top: 12px; padding-top: 10px;
-  border-top: 1px dashed rgba(212, 191, 125, 0.25);
+  border-top: 1px dashed color-mix(in srgb, var(--beige) 25%, transparent);
   font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em;
   color: var(--muted); text-transform: uppercase; text-align: center; line-height: 1.5;
 }
@@ -1146,7 +1146,7 @@
   /* Cyan, not beige: this sits between the gear grid and the SHARDS panel and
      directly above EFFECTS / FEATURES, all of which are cyan-framed. Beige made
      the one control in that stack that opens a panel look like the odd one. */
-  background: rgba(0, 166, 214, 0.55);
+  background: color-mix(in srgb, var(--cyan) 55%, transparent);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   transition: background 200ms ease;
 }
@@ -1165,22 +1165,22 @@
   min-width: 14px; text-align: right;
 }
 .cbChev { font-size: 9px; color: var(--cyan-dim); }
-.carryBtn:hover .cbInner { color: #fff; box-shadow: inset 0 0 20px rgba(0, 166, 214, 0.28), 0 0 14px rgba(0, 166, 214, 0.3); }
+.carryBtn:hover .cbInner { color: #fff; box-shadow: inset 0 0 20px color-mix(in srgb, var(--cyan) 28%, transparent), 0 0 14px color-mix(in srgb, var(--cyan) 30%, transparent); }
 .carryBtn:hover .cbInner > i { color: var(--cyan-hot); }
 .carryBtn.on .cbFrame { background: var(--cyan); }
 .carryBtn.on .cbInner {
   color: var(--cyan-hot);
   background:
-    radial-gradient(120% 90% at 50% 60%, rgba(0, 166, 214, 0.16), transparent 60%),
+    radial-gradient(120% 90% at 50% 60%, color-mix(in srgb, var(--cyan) 16%, transparent), transparent 60%),
     linear-gradient(180deg, #16252b, #0f1b21);
-  box-shadow: inset 0 0 22px rgba(0, 166, 214, 0.26);
+  box-shadow: inset 0 0 22px color-mix(in srgb, var(--cyan) 26%, transparent);
 }
 .carryBtn.on .cbInner > i, .carryBtn.on .cbChev { color: var(--cyan-hot); }
 
 /* --- container rows inside the sidebar --- */
 .carryRow {
   flex: 0 0 auto;
-  border: 1px solid rgba(212, 191, 125, 0.2);
+  border: 1px solid color-mix(in srgb, var(--beige) 20%, transparent);
   background: rgba(0, 0, 0, 0.28);
 }
 .crMain { display: flex; align-items: center; gap: 9px; padding: 9px 10px; }
@@ -1207,7 +1207,7 @@
 .carryRow.expanded .crChev { transform: rotate(90deg); }
 
 .cAct {
-  --cut: 3px; --bc: rgba(212, 191, 125, 0.28);
+  --cut: 3px; --bc: color-mix(in srgb, var(--beige) 28%, transparent);
   flex: 0 0 auto;
   background-color: transparent; border: 1px solid var(--bc);
   color: var(--beige-dim);
@@ -1223,16 +1223,16 @@
   background-position: top left, bottom right;
   background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
-.cAct:hover { color: var(--danger-hot); --bc: rgba(185, 58, 58, 0.6); }
-.cAct.equip { color: var(--cyan); --bc: rgba(0, 166, 214, 0.42); }
-.cAct.equip:hover { color: var(--cyan-hot); --bc: var(--cyan); box-shadow: 0 0 9px rgba(0, 166, 214, 0.26); }
+.cAct:hover { color: var(--danger-hot); --bc: color-mix(in srgb, var(--danger) 60%, transparent); }
+.cAct.equip { color: var(--cyan); --bc: color-mix(in srgb, var(--cyan) 42%, transparent); }
+.cAct.equip:hover { color: var(--cyan-hot); --bc: var(--cyan); box-shadow: 0 0 9px color-mix(in srgb, var(--cyan) 26%, transparent); }
 .cAct.danger { color: var(--danger-hot); --bc: var(--danger); }
 
 /* inline expansion — contents in place, CAPPED so the panel below can't shift
    by an unpredictable amount */
 .crBody {
   margin: 0 10px 8px 34px; padding: 5px 9px;
-  border-left: 1px solid rgba(0, 166, 214, 0.35);
+  border-left: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
   background: rgba(0, 0, 0, 0.3);
 }
 .crLine {
@@ -1253,7 +1253,7 @@
   flex: 0 0 auto;
   display: flex; flex-direction: column; gap: 5px;
   padding: 8px 10px;
-  border: 1px dashed rgba(212, 191, 125, 0.22);
+  border: 1px dashed color-mix(in srgb, var(--beige) 22%, transparent);
   background: rgba(0, 0, 0, 0.22);
 }
 .csKey {
@@ -1273,7 +1273,7 @@
    ============================================================ */
 .ammo { position: relative; flex: 0 0 auto; }
 .ammoBtn {
-  --cut: 5px; --bc: rgba(212, 191, 125, 0.32);
+  --cut: 5px; --bc: color-mix(in srgb, var(--beige) 32%, transparent);
   display: flex; align-items: center; gap: 7px;
   height: 24px; padding: 0 9px;
   background-color: rgba(0, 0, 0, 0.4); border: 1px solid var(--bc);
@@ -1300,7 +1300,7 @@
 .amCt, .amChev { flex: 0 0 auto; }
 .amCt { color: var(--cyan); }
 .amChev { font-size: 8px; color: var(--beige-dim); }
-.ammoBtn:hover { color: var(--text); --bc: rgba(0, 166, 214, 0.5); }
+.ammoBtn:hover { color: var(--text); --bc: color-mix(in srgb, var(--cyan) 50%, transparent); }
 .ammo.open .ammoBtn { --bc: var(--cyan); color: var(--text); }
 
 /* Portalled to document.body and positioned by JS. It CANNOT be a child of the
@@ -1311,7 +1311,7 @@
   position: fixed; z-index: 300;
   min-width: 210px; max-width: 280px; padding: 5px;
   background-color: rgba(8, 8, 8, 0.97); border: 1px solid var(--bc);
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.6), 0 0 16px rgba(0, 166, 214, 0.18);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.6), 0 0 16px color-mix(in srgb, var(--cyan) 18%, transparent);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   /* cut-corner border fix — this file styles each chamfered element inline
      rather than sharing one block, so the diagonals are painted here. */
@@ -1332,7 +1332,7 @@
   text-transform: uppercase; color: var(--muted);
 }
 .amOptName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.amOpt:hover { color: var(--text); background: rgba(0, 166, 214, 0.09); }
+.amOpt:hover { color: var(--text); background: color-mix(in srgb, var(--cyan) 9%, transparent); }
 .amOpt.on { color: var(--cyan-hot); }
 .amOpt .q { color: var(--beige); }
 .amOpt.on .q { color: var(--cyan); }
@@ -1341,17 +1341,17 @@
    why, rather than vanishing or rolling a number that can't be delivered. */
 .wcAttack.dry {
   color: var(--beige-dim);
-  border-color: rgba(212, 191, 125, 0.3);
+  border-color: color-mix(in srgb, var(--beige) 30%, transparent);
   background: rgba(0, 0, 0, 0.35);
   cursor: not-allowed;
 }
-.wcAttack.dry:hover { color: var(--danger-hot); border-color: rgba(185, 58, 58, 0.5); box-shadow: none; }
+.wcAttack.dry:hover { color: var(--danger-hot); border-color: color-mix(in srgb, var(--danger) 50%, transparent); box-shadow: none; }
 .ammoNone {
   display: flex; align-items: center; justify-content: center;
   height: 24px; padding: 0 9px;
   font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--beige-dim);
-  border: 1px dashed rgba(212, 191, 125, 0.28);
+  border: 1px dashed color-mix(in srgb, var(--beige) 28%, transparent);
 }
 /* flat damage an ammunition stack adds, shown before you fire rather than only
    in the toast afterwards */

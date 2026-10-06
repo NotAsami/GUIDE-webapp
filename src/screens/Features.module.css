@@ -25,7 +25,7 @@
 .colHeader {
   display: flex; align-items: baseline; gap: 14px;
   padding: 0 2px 7px;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 35%, transparent);
   flex: 0 0 auto;
 }
 .chNum { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85; }
@@ -42,7 +42,7 @@
   margin-left: 14px;
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em;
   color: var(--muted); text-transform: uppercase;
-  background: transparent; border: 1.5px solid rgba(212, 191, 125, 0.35);
+  background: transparent; border: 1.5px solid color-mix(in srgb, var(--beige) 35%, transparent);
   padding: 4px 9px; cursor: pointer;
   transition: color 140ms ease, border-color 140ms ease;
 }
@@ -57,7 +57,7 @@
 .tabrow { flex: 0 0 auto; display: flex; align-items: flex-end; gap: 10px; }
 .tab { --cut: 10px; position: relative; background: transparent; border: 0; padding: 0; width: 214px; height: 46px; cursor: pointer; }
 .tFrame {
-  position: absolute; inset: 0; background: rgba(212, 191, 125, 0.55);
+  position: absolute; inset: 0; background: color-mix(in srgb, var(--beige) 55%, transparent);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   transition: background 160ms ease;
 }
@@ -69,10 +69,10 @@
 }
 .tLab { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.3em; color: var(--muted); text-transform: uppercase; }
 .tCount { font-family: var(--font-display); font-weight: 600; font-size: 15px; color: var(--beige); line-height: 1; }
-.tab:hover .tInner { box-shadow: inset 0 0 22px rgba(0, 166, 214, 0.16); }
+.tab:hover .tInner { box-shadow: inset 0 0 22px color-mix(in srgb, var(--cyan) 16%, transparent); }
 .tab:hover .tLab { color: var(--text); }
 .tabOn .tFrame { background: var(--cyan); }
-.tabOn .tInner { background: linear-gradient(180deg, #16252b, #0f1b21); box-shadow: inset 0 0 26px rgba(0, 166, 214, 0.26), 0 0 18px rgba(0, 166, 214, 0.35); }
+.tabOn .tInner { background: linear-gradient(180deg, #16252b, #0f1b21); box-shadow: inset 0 0 26px color-mix(in srgb, var(--cyan) 26%, transparent), 0 0 18px color-mix(in srgb, var(--cyan) 35%, transparent); }
 .tabOn .tLab, .tabOn .tCount { color: var(--cyan-hot); }
 
 /* ---- source filter chips ---- */
@@ -80,7 +80,7 @@
 .chips { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .chip { --cut: 6px; position: relative; display: inline-flex; background: transparent; border: 0; padding: 1px; height: 28px; cursor: pointer; }
 .cf {
-  position: absolute; inset: 0; background: rgba(212, 191, 125, 0.32);
+  position: absolute; inset: 0; background: color-mix(in srgb, var(--beige) 32%, transparent);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   transition: background 150ms ease;
 }
@@ -93,9 +93,9 @@
   transition: color 150ms ease, box-shadow 150ms ease;
 }
 .ci b { font-family: var(--font-display); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--beige-dim); }
-.chip:hover .ci { color: var(--text); box-shadow: inset 0 0 18px rgba(0, 166, 214, 0.14); }
+.chip:hover .ci { color: var(--text); box-shadow: inset 0 0 18px color-mix(in srgb, var(--cyan) 14%, transparent); }
 .chipOn .cf { background: var(--cyan); }
-.chipOn .ci { color: var(--cyan-hot); box-shadow: inset 0 0 20px rgba(0, 166, 214, 0.22); }
+.chipOn .ci { color: var(--cyan-hot); box-shadow: inset 0 0 20px color-mix(in srgb, var(--cyan) 22%, transparent); }
 .chipOn .ci b { color: var(--cyan-hot); }
 .chipZero { opacity: 0.45; }
 .gearNote {
@@ -104,7 +104,7 @@
   color: var(--cyan); text-transform: uppercase;
 }
 .gearNote :global(.dim) { color: var(--beige-dim); }
-.lk { width: 5px; height: 5px; background: var(--cyan); box-shadow: 0 0 7px rgba(0, 166, 214, 0.8); transform: rotate(45deg); }
+.lk { width: 5px; height: 5px; background: var(--cyan); box-shadow: 0 0 7px color-mix(in srgb, var(--cyan) 80%, transparent); transform: rotate(45deg); }
 
 /* ---- framed region ---- */
 .region { --cut: 16px; position: relative; flex: 1 1 auto; min-height: 0; }
@@ -122,13 +122,13 @@
 }
 .rInner {
   position: absolute; inset: 5.5px;
-  background: radial-gradient(130% 100% at 50% 0%, rgba(0, 166, 214, 0.05), transparent 60%), linear-gradient(180deg, #151515, #0e0e0e);
+  background: radial-gradient(130% 100% at 50% 0%, color-mix(in srgb, var(--cyan) 5%, transparent), transparent 60%), linear-gradient(180deg, #151515, #0e0e0e);
   clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0, 100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%, 0 100%, 0 calc(var(--cut) - 5px));
   overflow: hidden; display: flex; flex-direction: column;
 }
 .rInner::before {
   content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: repeating-linear-gradient(to bottom, rgba(0, 166, 214, 0.035) 0px, rgba(0, 166, 214, 0.035) 1px, transparent 1px, transparent 4px);
+  background: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--cyan) 3.5%, transparent) 0px, color-mix(in srgb, var(--cyan) 3.5%, transparent) 1px, transparent 1px, transparent 4px);
   mix-blend-mode: screen; opacity: 0.6;
 }
 .rCorner { position: absolute; width: 14px; height: 14px; border-color: var(--cyan); opacity: 0.7; z-index: 5; pointer-events: none; }
@@ -143,7 +143,7 @@
 }
 .featScroll::-webkit-scrollbar { width: 7px; }
 .featScroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
-.featScroll::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.45)); border: 2px solid #111; }
+.featScroll::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan-dim), color-mix(in srgb, var(--beige) 45%, transparent)); border: 2px solid #111; }
 
 /* Continuous masonry stream — no group headers. */
 .gGrid { column-count: 2; column-gap: 10px; }
@@ -152,8 +152,8 @@
 
 .streamEmpty {
   padding: 26px 20px; text-align: center;
-  background: repeating-linear-gradient(135deg, rgba(212, 191, 125, 0.045) 0 6px, transparent 6px 12px);
-  box-shadow: inset 0 0 0 1px rgba(212, 191, 125, 0.2);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--beige) 4.5%, transparent) 0 6px, transparent 6px 12px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--beige) 20%, transparent);
 }
 .geGlyph { font-size: 17px; color: var(--beige-dim); margin-bottom: 8px; }
 .geT { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.28em; color: var(--beige); text-transform: uppercase; }
@@ -162,7 +162,7 @@
 /* ---- feature card ---- */
 .fcard { --cut: 9px; position: relative; text-align: left; width: 100%; background: transparent; border: 0; padding: 1.5px; color: inherit; cursor: pointer; }
 .fcFrame {
-  position: absolute; inset: 0; background: rgba(212, 191, 125, 0.34);
+  position: absolute; inset: 0; background: color-mix(in srgb, var(--beige) 34%, transparent);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   transition: background 160ms ease;
 }
@@ -172,12 +172,12 @@
   padding: 11px 14px 12px;
   transition: background 160ms ease;
 }
-.fcard:hover .fcFrame { background: rgba(0, 166, 214, 0.6); }
+.fcard:hover .fcFrame { background: color-mix(in srgb, var(--cyan) 60%, transparent); }
 .fcard:hover .fcInner { background: linear-gradient(180deg, #1b1f21, #131617); }
 .fcard:focus-visible .fcFrame { background: var(--cyan); }
-.isOn .fcFrame { background: var(--cyan); box-shadow: 0 0 16px rgba(0, 166, 214, 0.35); }
+.isOn .fcFrame { background: var(--cyan); box-shadow: 0 0 16px color-mix(in srgb, var(--cyan) 35%, transparent); }
 .isOn .fcInner { background: linear-gradient(180deg, #16252b, #101719); }
-.spent .fcInner { background: linear-gradient(180deg, #161616, #111); }
+.spent .fcInner { background: linear-gradient(180deg, var(--bg-2), #111); }
 .denied { animation: deniedShakeX 260ms ease; }
 @keyframes deniedShakeX {
   0%, 100% { transform: translateX(0); }
@@ -194,7 +194,7 @@
 /* the hexagon — doubles as the USE affordance on usable features */
 .fcHex { position: relative; width: 40px; height: 44px; background: transparent; border: 0; padding: 0; display: block; color: inherit; }
 .hxFrame {
-  position: absolute; inset: 0; background: rgba(212, 191, 125, 0.5);
+  position: absolute; inset: 0; background: color-mix(in srgb, var(--beige) 50%, transparent);
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   transition: background 150ms ease, box-shadow 150ms ease;
 }
@@ -209,9 +209,9 @@
 .usable .hxFrame { background: var(--cyan); }
 .usable .hxInner { background: linear-gradient(180deg, #16252b, #0e1316); }
 .usable .fcIcon { color: var(--cyan); }
-.usable:hover .hxFrame { background: var(--cyan-hot); box-shadow: 0 0 16px rgba(0, 166, 214, 0.55); }
-.usable:hover .hxInner { box-shadow: inset 0 0 22px rgba(0, 166, 214, 0.4); }
-.usable:hover .fcIcon { color: #fff; text-shadow: 0 0 10px rgba(0, 166, 214, 0.85); }
+.usable:hover .hxFrame { background: var(--cyan-hot); box-shadow: 0 0 16px color-mix(in srgb, var(--cyan) 55%, transparent); }
+.usable:hover .hxInner { box-shadow: inset 0 0 22px color-mix(in srgb, var(--cyan) 40%, transparent); }
+.usable:hover .fcIcon { color: #fff; text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 85%, transparent); }
 .usable:disabled { cursor: wait; opacity: 0.7; }
 .hxPip {
   position: absolute; left: 50%; bottom: -13px; transform: translateX(-50%);
@@ -219,29 +219,29 @@
   color: var(--cyan); text-transform: uppercase; white-space: nowrap;
 }
 .pipOff { color: var(--danger); }
-.exhausted .hxFrame { background: rgba(185, 58, 58, 0.55); box-shadow: none; }
+.exhausted .hxFrame { background: color-mix(in srgb, var(--danger) 55%, transparent); box-shadow: none; }
 .exhausted .hxInner { background: linear-gradient(180deg, #1a1414, #121010); }
-.exhausted .fcIcon { color: rgba(222, 222, 222, 0.35); }
+.exhausted .fcIcon { color: color-mix(in srgb, var(--text) 35%, transparent); }
 .exhausted:hover .hxFrame { background: var(--danger); box-shadow: none; }
 .exhausted:hover .hxInner { box-shadow: none; }
 .exhausted:hover .fcIcon { color: var(--danger); text-shadow: none; }
-.held .hxFrame { background: var(--cyan-hot); box-shadow: 0 0 18px rgba(0, 166, 214, 0.6); }
-.held .fcIcon { color: var(--cyan-hot); text-shadow: 0 0 10px rgba(0, 166, 214, 0.8); }
+.held .hxFrame { background: var(--cyan-hot); box-shadow: 0 0 18px color-mix(in srgb, var(--cyan) 60%, transparent); }
+.held .fcIcon { color: var(--cyan-hot); text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 80%, transparent); }
 /* the pip sits below the hexagon, so the card needs room for it */
 .fcTop { padding-bottom: 4px; }
 
 .fcName { font-family: var(--font-display); font-weight: 600; font-size: 15.5px; letter-spacing: 0.05em; color: var(--text); line-height: 1.15; }
 .isOn .fcName { color: var(--cyan-hot); }
-.isOn .fcIcon { color: var(--cyan-hot); text-shadow: 0 0 10px rgba(0, 166, 214, 0.7); }
+.isOn .fcIcon { color: var(--cyan-hot); text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 70%, transparent); }
 .fcSummary { font-family: var(--font-prose); font-size: 14.5px; line-height: 1.3; color: var(--muted); margin-top: 3px; text-wrap: pretty; }
 .fcSummary p { margin: 0; }
 .fcMeta { display: flex; align-items: center; gap: 9px; margin-top: 7px; flex-wrap: wrap; }
 
 .srcTag {
   font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; color: var(--beige);
-  text-transform: uppercase; white-space: nowrap; border: 1.5px solid rgba(212, 191, 125, 0.35); padding: 2px 6px;
+  text-transform: uppercase; white-space: nowrap; border: 1.5px solid color-mix(in srgb, var(--beige) 35%, transparent); padding: 2px 6px;
 }
-.gearTag { color: var(--cyan); border-color: rgba(0, 166, 214, 0.45); }
+.gearTag { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 45%, transparent); }
 /* The border is here on every variant — the same colour as the fill, so it is
    invisible on the filled ones and only FREE (transparent) shows it. That keeps
    all three badges the same size, and gives FREE its two 45° corner diagonals,
@@ -266,12 +266,12 @@
 .free { background-color: transparent; color: var(--beige); }
 .passBadge {
   font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.26em; text-transform: uppercase;
-  color: var(--muted); border-left: 1px solid rgba(212, 191, 125, 0.4); padding-left: 10px; white-space: nowrap;
+  color: var(--muted); border-left: 1px solid color-mix(in srgb, var(--beige) 40%, transparent); padding-left: 10px; white-space: nowrap;
 }
 .armed {
   display: inline-flex; align-items: center; gap: 3px;
   font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em;
-  color: var(--amber); border: 1.5px solid rgba(226, 176, 33, 0.45); padding: 2px 6px;
+  color: var(--amber); border: 1.5px solid color-mix(in srgb, var(--amber) 45%, transparent); padding: 2px 6px;
 }
 
 /* right rail: uses */
@@ -284,7 +284,7 @@
 .inf { font-size: 13px; line-height: 1; color: var(--cyan-hot); }
 
 /* effect sub-rows */
-.fx { margin-top: 10px; border-top: 1px solid rgba(212, 191, 125, 0.18); padding-top: 8px; display: flex; flex-direction: column; }
+.fx { margin-top: 10px; border-top: 1px solid color-mix(in srgb, var(--beige) 18%, transparent); padding-top: 8px; display: flex; flex-direction: column; }
 .fxRow { display: grid; grid-template-columns: 16px 1fr auto; gap: 10px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.045); }
 .fxRow:last-child { border-bottom: 0; }
 .fxOp { font-family: var(--font-mono); font-size: 11px; color: var(--cyan); opacity: 0.85; text-align: center; line-height: 1; }
@@ -319,31 +319,31 @@
 }
 .tinted .fcName { color: var(--tint-name); }
 .tinted .fcHex .hxFrame { background: color-mix(in srgb, var(--tint) 70%, transparent); }
-.tinted .fcHex .hxInner { background: linear-gradient(180deg, color-mix(in srgb, var(--tint) 26%, #161616), color-mix(in srgb, var(--tint) 11%, #101010)); }
+.tinted .fcHex .hxInner { background: linear-gradient(180deg, color-mix(in srgb, var(--tint) 26%, var(--bg-2)), color-mix(in srgb, var(--tint) 11%, #101010)); }
 .tinted .fcIcon { color: var(--tint-name); }
-.tinted .usable:hover .hxFrame { background: var(--cyan-hot); box-shadow: 0 0 16px rgba(0, 166, 214, 0.55); }
-.tinted .usable:hover .hxInner { box-shadow: inset 0 0 22px rgba(0, 166, 214, 0.4); }
-.tinted .usable:hover .fcIcon { color: #fff; text-shadow: 0 0 10px rgba(0, 166, 214, 0.85); }
+.tinted .usable:hover .hxFrame { background: var(--cyan-hot); box-shadow: 0 0 16px color-mix(in srgb, var(--cyan) 55%, transparent); }
+.tinted .usable:hover .hxInner { box-shadow: inset 0 0 22px color-mix(in srgb, var(--cyan) 40%, transparent); }
+.tinted .usable:hover .fcIcon { color: #fff; text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 85%, transparent); }
 /* spent — red border, desaturated glyph and a quieter wash, tint kept as identity */
 .tinted.spent { --wash: 14%; }
 .tinted.spent .fcInner::before { filter: saturate(0.6); }
-.tinted .exhausted .hxFrame { background: rgba(185, 58, 58, 0.55); }
+.tinted .exhausted .hxFrame { background: color-mix(in srgb, var(--danger) 55%, transparent); }
 .tinted .exhausted .hxInner { background: linear-gradient(180deg, #1a1414, #121010); }
-.tinted .exhausted .fcIcon { color: rgba(222, 222, 222, 0.35); }
+.tinted .exhausted .fcIcon { color: color-mix(in srgb, var(--text) 35%, transparent); }
 .tinted .exhausted:hover .hxFrame { background: var(--danger); }
 .tinted .exhausted:hover .fcIcon { color: var(--danger); text-shadow: none; }
 /* active-ON keeps its cyan treatment; tint drops back to a trace */
 .tinted.isOn { --wash: 15%; }
 .tinted.isOn .fcName { color: var(--cyan-hot); }
-.tinted.isOn .fcHex .hxFrame { background: var(--cyan); box-shadow: 0 0 18px rgba(0, 166, 214, 0.6); }
+.tinted.isOn .fcHex .hxFrame { background: var(--cyan); box-shadow: 0 0 18px color-mix(in srgb, var(--cyan) 60%, transparent); }
 .tinted.isOn .fcHex .hxInner { background: linear-gradient(180deg, #16252b, #0e1316); }
-.tinted.isOn .fcIcon { color: var(--cyan-hot); text-shadow: 0 0 10px rgba(0, 166, 214, 0.7); }
+.tinted.isOn .fcIcon { color: var(--cyan-hot); text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 70%, transparent); }
 
 /* ---- extras below the stream (not in the mockup — see Features.tsx) ---- */
 .extra { margin-top: 20px; }
 .exHead {
   display: flex; align-items: center; gap: 9px; padding-bottom: 8px; margin-bottom: 10px;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.2);
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 20%, transparent);
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.28em; color: var(--beige); text-transform: uppercase;
 }
 .exHead i { color: var(--cyan); }
@@ -353,13 +353,13 @@
 .psHead { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; color: var(--beige-dim); text-transform: uppercase; }
 .psRow {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
-  background: rgba(0, 0, 0, 0.3); border: 1.5px solid rgba(212, 191, 125, 0.22);
+  background: rgba(0, 0, 0, 0.3); border: 1.5px solid color-mix(in srgb, var(--beige) 22%, transparent);
   color: var(--muted); padding: 6px 9px; cursor: pointer;
   font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
   transition: color 140ms ease, border-color 140ms ease;
 }
-.psRow:hover:not(:disabled) { color: var(--text); border-color: rgba(0, 166, 214, 0.45); }
-.psOn { color: var(--cyan-hot); border-color: var(--cyan); box-shadow: inset 0 0 14px rgba(0, 166, 214, 0.16); }
+.psRow:hover:not(:disabled) { color: var(--text); border-color: color-mix(in srgb, var(--cyan) 45%, transparent); }
+.psOn { color: var(--cyan-hot); border-color: var(--cyan); box-shadow: inset 0 0 14px color-mix(in srgb, var(--cyan) 16%, transparent); }
 .psName { flex: 1 1 auto; min-width: 0; }
 .psVal { font-family: var(--font-display); font-size: 12px; color: var(--beige); }
 .psStep { display: inline-flex; align-items: center; gap: 6px; }
@@ -392,7 +392,7 @@
 .imPanel::before {
   content: ""; position: absolute; inset: 0; background: var(--beige);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
-  filter: drop-shadow(0 22px 50px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 34px rgba(0, 166, 214, 0.2));
+  filter: drop-shadow(0 22px 50px rgba(0, 0, 0, 0.7)) drop-shadow(0 0 34px color-mix(in srgb, var(--cyan) 20%, transparent));
 }
 .pnGap {
   position: absolute; inset: 5px; background: #0a0a0a;
@@ -404,14 +404,14 @@
 }
 .imInner {
   position: relative; flex: 1; min-width: 0; margin: 7px;
-  background: radial-gradient(120% 90% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 55%), linear-gradient(180deg, #151515, #0d0d0d);
+  background: radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--cyan) 8%, transparent), transparent 55%), linear-gradient(180deg, #151515, #0d0d0d);
   clip-path: polygon(calc(var(--cut) - 6px) 0, 100% 0, 100% calc(100% - var(--cut) + 6px), calc(100% - var(--cut) + 6px) 100%, 0 100%, 0 calc(var(--cut) - 6px));
-  box-shadow: inset 0 0 50px rgba(0, 166, 214, 0.06);
+  box-shadow: inset 0 0 50px color-mix(in srgb, var(--cyan) 6%, transparent);
   display: flex; flex-direction: column; min-height: 0; overflow: hidden;
 }
 .imInner::before {
   content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: repeating-linear-gradient(to bottom, rgba(0, 166, 214, 0.03) 0px, rgba(0, 166, 214, 0.03) 1px, transparent 1px, transparent 4px);
+  background: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--cyan) 3%, transparent) 0px, color-mix(in srgb, var(--cyan) 3%, transparent) 1px, transparent 1px, transparent 4px);
   mix-blend-mode: screen; opacity: 0.6;
 }
 .imCorner { position: absolute; width: 16px; height: 16px; border-color: var(--cyan); opacity: 0.75; z-index: 6; pointer-events: none; }
@@ -420,9 +420,9 @@
 
 .imHead {
   position: relative; z-index: 3; flex: 0 0 auto; display: flex; align-items: flex-start; gap: 9px;
-  padding: 18px 18px 14px; border-bottom: 1px solid rgba(212, 191, 125, 0.32);
+  padding: 18px 18px 14px; border-bottom: 1px solid color-mix(in srgb, var(--beige) 32%, transparent);
 }
-.imHead::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: rgba(0, 166, 214, 0.35); box-shadow: 0 0 9px rgba(0, 166, 214, 0.3); }
+.imHead::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: color-mix(in srgb, var(--cyan) 35%, transparent); box-shadow: 0 0 9px color-mix(in srgb, var(--cyan) 30%, transparent); }
 .imHead.tinted {
   --tint-name: color-mix(in oklab, var(--tint) 42%, #efeae0);
   background: linear-gradient(180deg, color-mix(in srgb, var(--tint) 28%, transparent) 0%, color-mix(in srgb, var(--tint) 10%, transparent) 50%, transparent 100%);
@@ -437,28 +437,28 @@
 .imHead.tinted .imCrystal::before {
   background: radial-gradient(120% 90% at 50% 40%, color-mix(in srgb, var(--tint) 26%, transparent), transparent 65%), #0b0b0b;
 }
-.imHead.tinted.spent .imCrystal { --edge: rgba(185, 58, 58, 0.6); color: rgba(222, 222, 222, 0.4); filter: none; }
+.imHead.tinted.spent .imCrystal { --edge: color-mix(in srgb, var(--danger) 60%, transparent); color: color-mix(in srgb, var(--text) 40%, transparent); filter: none; }
 .imHead.tinted.spent .imCrystal::before { background: #0b0b0b; }
 .imCrystal {
-  --edge: rgba(0, 166, 214, 0.5);
+  --edge: color-mix(in srgb, var(--cyan) 50%, transparent);
   position: relative; flex: 0 0 auto; width: 44px; height: 48px;
   display: flex; align-items: center; justify-content: center;
   color: var(--cyan-hot); font-size: 20px;
   background: var(--edge);
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  filter: drop-shadow(0 0 9px rgba(0, 166, 214, 0.4));
+  filter: drop-shadow(0 0 9px color-mix(in srgb, var(--cyan) 40%, transparent));
 }
 .imCrystal::before {
   content: ""; position: absolute; inset: 1.5px; z-index: 0;
-  background: radial-gradient(120% 90% at 50% 40%, rgba(0, 166, 214, 0.18), transparent 65%), #0b0b0b;
+  background: radial-gradient(120% 90% at 50% 40%, color-mix(in srgb, var(--cyan) 18%, transparent), transparent 65%), #0b0b0b;
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 .imCrystal i { position: relative; z-index: 1; }
-.imCrystal.passive { --edge: rgba(212, 191, 125, 0.5); color: var(--beige); filter: none; }
+.imCrystal.passive { --edge: color-mix(in srgb, var(--beige) 50%, transparent); color: var(--beige); filter: none; }
 .imCrystal.passive::before { background: #0b0b0b; }
 .imTitles { display: flex; flex-direction: column; gap: 7px; min-width: 0; margin-left: 5px; }
 .imName { font-family: var(--font-display); font-weight: 600; font-size: 20px; letter-spacing: 0.1em; color: var(--text); text-transform: uppercase; line-height: 1.05; }
-.imName.on { color: var(--cyan-hot); text-shadow: 0 0 14px rgba(0, 166, 214, 0.25); }
+.imName.on { color: var(--cyan-hot); text-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 25%, transparent); }
 .imTags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .imClose, .imBack {
   --cut: 6px;
@@ -478,11 +478,11 @@
   background-position: top left, bottom right;
   background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
-.imClose { --bc: rgba(212, 191, 125, 0.4); margin-left: auto; color: var(--beige); font-size: 13px; }
-.imClose:hover { --bc: var(--cyan); color: var(--cyan-hot); box-shadow: 0 0 12px rgba(0, 166, 214, 0.3); }
-.imBack { --bc: rgba(0, 166, 214, 0.45); margin-left: auto; align-self: flex-start; color: var(--cyan); font-family: var(--font-mono); font-size: 15px; line-height: 1; }
+.imClose { --bc: color-mix(in srgb, var(--beige) 40%, transparent); margin-left: auto; color: var(--beige); font-size: 13px; }
+.imClose:hover { --bc: var(--cyan); color: var(--cyan-hot); box-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 30%, transparent); }
+.imBack { --bc: color-mix(in srgb, var(--cyan) 45%, transparent); margin-left: auto; align-self: flex-start; color: var(--cyan); font-family: var(--font-mono); font-size: 15px; line-height: 1; }
 .imBack + .imClose { margin-left: 0; }
-.imBack:hover { --bc: var(--cyan-hot); color: var(--cyan-hot); box-shadow: 0 0 12px rgba(0, 166, 214, 0.3); }
+.imBack:hover { --bc: var(--cyan-hot); color: var(--cyan-hot); box-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 30%, transparent); }
 
 .imBody {
   position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto;
@@ -490,12 +490,12 @@
 }
 .imBody::-webkit-scrollbar { width: 6px; }
 .imBody::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
-.imBody::-webkit-scrollbar-thumb { background: rgba(0, 166, 214, 0.4); }
+.imBody::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--cyan) 40%, transparent); }
 
-.imOrigin { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding-bottom: 13px; border-bottom: 1px dashed rgba(212, 191, 125, 0.25); }
+.imOrigin { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding-bottom: 13px; border-bottom: 1px dashed color-mix(in srgb, var(--beige) 25%, transparent); }
 .ok { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; color: var(--beige-dim); text-transform: uppercase; width: 100%; margin-bottom: 3px; }
 .step {
-  --cut: 4px; --bc: rgba(212, 191, 125, 0.28);
+  --cut: 4px; --bc: color-mix(in srgb, var(--beige) 28%, transparent);
   font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; color: var(--muted);
   text-transform: uppercase; white-space: nowrap; padding: 3px 8px;
   border: 1.5px solid var(--bc);
@@ -512,7 +512,7 @@
   background-position: top left, bottom right;
   background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
-.step.last { --bc: rgba(0, 166, 214, 0.55); color: var(--cyan-hot); }
+.step.last { --bc: color-mix(in srgb, var(--cyan) 55%, transparent); color: var(--cyan-hot); }
 .arw { font-family: var(--font-mono); font-size: 10px; color: var(--beige-dim); }
 
 .imFacts { display: flex; flex-wrap: wrap; gap: 9px 26px; margin-top: 13px; }
@@ -532,7 +532,7 @@
   display: flex; align-items: center; gap: 8px; padding-bottom: 8px;
 }
 .imSecH :global(.dim) { color: var(--beige-dim); letter-spacing: 0.2em; font-size: 8.5px; }
-.imSecH::after { content: ""; flex: 1; height: 1px; background: rgba(0, 166, 214, 0.22); }
+.imSecH::after { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--cyan) 22%, transparent); }
 .imFx { display: flex; flex-direction: column; gap: 5px; }
 .imRow {
   display: grid; grid-template-columns: 16px 1fr auto; gap: 10px; align-items: center;
@@ -547,13 +547,13 @@
 .imRow.aff .op.link { color: var(--cyan); }
 .affLink {
   background: transparent; border: 0; padding: 0; font: inherit; color: var(--cyan-hot);
-  text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer; border-bottom: 1px solid rgba(0, 166, 214, 0.45);
+  text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer; border-bottom: 1px solid color-mix(in srgb, var(--cyan) 45%, transparent);
 }
 .affLink:hover { color: #fff; border-bottom-color: var(--cyan-hot); }
 
 .imActions {
   position: relative; z-index: 3; flex: 0 0 auto; display: flex; gap: 9px;
-  padding: 13px 18px 16px; border-top: 1px solid rgba(212, 191, 125, 0.28);
+  padding: 13px 18px 16px; border-top: 1px solid color-mix(in srgb, var(--beige) 28%, transparent);
 }
 .ia { --cut: 8px; position: relative; background: transparent; border: 0; padding: 0; height: 40px; cursor: pointer; font-family: var(--font-mono); flex: 1; }
 .af {
@@ -567,11 +567,11 @@
   color: var(--cyan-hot); font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase;
   transition: box-shadow 160ms ease, color 160ms ease;
 }
-.ia:hover .ai { color: #fff; box-shadow: inset 0 0 20px rgba(0, 166, 214, 0.3), 0 0 15px rgba(0, 166, 214, 0.4); }
+.ia:hover .ai { color: #fff; box-shadow: inset 0 0 20px color-mix(in srgb, var(--cyan) 30%, transparent), 0 0 15px color-mix(in srgb, var(--cyan) 40%, transparent); }
 .ia:disabled { opacity: 0.6; cursor: wait; }
-.ia.ghost .af { background: rgba(212, 191, 125, 0.45); }
+.ia.ghost .af { background: color-mix(in srgb, var(--beige) 45%, transparent); }
 .ia.ghost .ai { color: var(--beige); }
-.ia.ghost:hover .ai { color: var(--text); box-shadow: inset 0 0 18px rgba(212, 191, 125, 0.14); }
-.ia.out .af { background: rgba(185, 58, 58, 0.55); }
+.ia.ghost:hover .ai { color: var(--text); box-shadow: inset 0 0 18px color-mix(in srgb, var(--beige) 14%, transparent); }
+.ia.out .af { background: color-mix(in srgb, var(--danger) 55%, transparent); }
 .ia.out .ai { color: var(--danger); }
 .ia.out:hover .ai { color: var(--danger); box-shadow: none; }

@@ -26,7 +26,7 @@
   display: flex; align-items: baseline; gap: 14px;
   margin-bottom: 10px;
   padding: 0 2px 7px;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 35%, transparent);
   flex: 0 0 auto;
 }
 .chNum {
@@ -118,7 +118,7 @@
   position: absolute; inset: 2px;
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
   background:
-    radial-gradient(120% 90% at 50% 50%, rgba(0, 166, 214, 0.08), transparent 60%),
+    radial-gradient(120% 90% at 50% 50%, color-mix(in srgb, var(--cyan) 8%, transparent), transparent 60%),
     linear-gradient(180deg, #1c1c1c, #131313);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 18px 8px 14px; gap: 2px;
@@ -132,7 +132,7 @@
   font-family: var(--font-display); font-weight: 600; font-size: 40px;
   line-height: 1;
   color: var(--cyan-hot); letter-spacing: 0.02em;
-  text-shadow: 0 0 14px rgba(0, 166, 214, 0.45);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 45%, transparent);
   margin: 2px 0 0;
   transition: color 200ms ease, transform 200ms ease, text-shadow 200ms ease, font-size 200ms ease;
   font-variant-numeric: tabular-nums;
@@ -154,7 +154,7 @@
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em;
   color: var(--muted); text-transform: uppercase;
   background: transparent; padding: 0 0 1px;
-  border: 0; border-bottom: 1px dashed rgba(212, 191, 125, 0.45);
+  border: 0; border-bottom: 1px dashed color-mix(in srgb, var(--beige) 45%, transparent);
   transition: color 140ms ease, border-color 140ms ease;
 }
 /* Brightens on hover. It used to resolve to var(--text), which is DIMMER than
@@ -169,33 +169,33 @@
 .profShield {
   width: 7px; height: 7px; flex: 0 0 auto;
   background: var(--cyan); transform: rotate(45deg);
-  box-shadow: 0 0 6px rgba(0, 166, 214, 0.7);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 70%, transparent);
 }
 .hex.profSav .hSav { color: var(--cyan); }
 
 .hex:hover .hFrame, .hex:focus-visible .hFrame {
   background: var(--cyan-hot);
-  filter: drop-shadow(0 0 14px rgba(0, 166, 214, 0.55));
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--cyan) 55%, transparent));
 }
 .hex:hover .hInner, .hex:focus-visible .hInner {
   background:
-    radial-gradient(120% 90% at 50% 50%, rgba(0, 166, 214, 0.16), transparent 60%),
+    radial-gradient(120% 90% at 50% 50%, color-mix(in srgb, var(--cyan) 16%, transparent), transparent 60%),
     linear-gradient(180deg, #16252b, #0f1b21);
-  box-shadow: inset 0 0 28px rgba(0, 166, 214, 0.35);
+  box-shadow: inset 0 0 28px color-mix(in srgb, var(--cyan) 35%, transparent);
   animation: hexpulse 1.4s ease-in-out infinite;
 }
 @keyframes hexpulse {
-  0%, 100% { box-shadow: inset 0 0 28px rgba(0, 166, 214, 0.35); }
-  50%      { box-shadow: inset 0 0 48px rgba(0, 166, 214, 0.55); }
+  0%, 100% { box-shadow: inset 0 0 28px color-mix(in srgb, var(--cyan) 35%, transparent); }
+  50%      { box-shadow: inset 0 0 48px color-mix(in srgb, var(--cyan) 55%, transparent); }
 }
 
-.hex.rolling .hScore { font-size: 50px; text-shadow: 0 0 22px rgba(0, 166, 214, 0.9); }
+.hex.rolling .hScore { font-size: 50px; text-shadow: 0 0 22px color-mix(in srgb, var(--cyan) 90%, transparent); }
 .hex.critSuccess .hScore {
-  color: var(--gold-rare); text-shadow: 0 0 26px rgba(226, 176, 33, 0.9);
+  color: var(--gold-rare); text-shadow: 0 0 26px color-mix(in srgb, var(--gold-rare) 90%, transparent);
   animation: critShine 0.6s ease-out;
 }
 .hex.critFail .hScore {
-  color: var(--danger); text-shadow: 0 0 22px rgba(185, 58, 58, 0.9);
+  color: var(--danger); text-shadow: 0 0 22px color-mix(in srgb, var(--danger) 90%, transparent);
   animation: critFlicker 0.5s steps(6, end);
 }
 @keyframes critShine {
@@ -230,7 +230,7 @@
 .slInner {
   position: absolute; inset: 2px;
   background:
-    radial-gradient(120% 90% at 0% 50%, rgba(0, 166, 214, 0.08), transparent 60%),
+    radial-gradient(120% 90% at 0% 50%, color-mix(in srgb, var(--cyan) 8%, transparent), transparent 60%),
     linear-gradient(180deg, #1a1a1a, #111);
   display: flex; flex-direction: column; justify-content: center; gap: 2px;
 }
@@ -257,7 +257,7 @@
   transition: background 160ms ease;
 }
 .skillCard:focus-visible { outline: 1.5px solid var(--cyan); outline-offset: -1px; }
-.skillCard + .skillCard { border-top: 1px dashed rgba(212, 191, 125, 0.16); }
+.skillCard + .skillCard { border-top: 1px dashed color-mix(in srgb, var(--beige) 16%, transparent); }
 .scName {
   font-family: var(--font-display); font-weight: 500; font-size: 10px;
   letter-spacing: 0.16em; color: var(--beige); text-transform: uppercase;
@@ -266,26 +266,26 @@
   font-family: var(--font-mono); font-weight: 600; font-size: 11px;
   letter-spacing: 0.05em; color: var(--cyan-hot); margin-left: 8px;
 }
-.skillCard.prof { background: linear-gradient(90deg, rgba(0, 166, 214, 0.10), transparent 70%); }
+.skillCard.prof { background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 10%, transparent), transparent 70%); }
 .skillCard.prof::before {
   content: ""; position: absolute; left: -1px; top: 50%; margin-top: -3px;
   width: 6px; height: 6px; background: var(--cyan); transform: rotate(45deg);
-  box-shadow: 0 0 6px rgba(0, 166, 214, 0.75);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 75%, transparent);
 }
 .skillCard.prof .scName { color: #efeacd; }
 /* Expertise (double proficiency) reads by a SECOND diamond, not color alone —
    a single stronger cyan tint next to a single diamond reads too close to
    plain proficiency at a glance (same failure mode fixed on the DM console's
    Proficiencies card: color-only distinctions don't hold up here). */
-.skillCard.exp { background: linear-gradient(90deg, rgba(0, 166, 214, 0.22), transparent 75%); padding-left: 16px; }
+.skillCard.exp { background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 22%, transparent), transparent 75%); padding-left: 16px; }
 .skillCard.exp::after {
   content: ""; position: absolute; left: 7px; top: 50%; margin-top: -3px;
   width: 6px; height: 6px; background: var(--cyan); transform: rotate(45deg);
-  box-shadow: 0 0 6px rgba(0, 166, 214, 0.75);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 75%, transparent);
 }
 .skillCard.exp .scName { color: var(--cyan-hot); }
-.skillCard.exp .scMod { color: var(--cyan-hot); text-shadow: 0 0 6px rgba(0, 166, 214, 0.5); }
-.skillCard:hover { background: rgba(0, 166, 214, 0.14); }
+.skillCard.exp .scMod { color: var(--cyan-hot); text-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 50%, transparent); }
+.skillCard:hover { background: color-mix(in srgb, var(--cyan) 14%, transparent); }
 .skillCard:hover .scName { color: #fff; }
 
 /* ============================================================
@@ -337,7 +337,7 @@
 .rollLog::-webkit-scrollbar { width: 7px; }
 .rollLog::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
 .rollLog::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.45));
+  background: linear-gradient(180deg, var(--cyan-dim), color-mix(in srgb, var(--beige) 45%, transparent));
   border: 2px solid #111;
 }
 
@@ -362,8 +362,8 @@
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
 }
 .rollEntry.critSuccess .reFrame, .rollEntry.critFail .reFrame { opacity: 1; }
-.rollEntry.critSuccess .reFrame { background: var(--gold-rare); box-shadow: 0 0 14px rgba(226, 176, 33, 0.5); }
-.rollEntry.critFail .reFrame { background: var(--danger); box-shadow: 0 0 14px rgba(185, 58, 58, 0.5); }
+.rollEntry.critSuccess .reFrame { background: var(--gold-rare); box-shadow: 0 0 14px color-mix(in srgb, var(--gold-rare) 50%, transparent); }
+.rollEntry.critFail .reFrame { background: var(--danger); box-shadow: 0 0 14px color-mix(in srgb, var(--danger) 50%, transparent); }
 .reInner {
   position: relative; margin: 1.5px;
   background: linear-gradient(180deg, #1a1a1a, #111);
@@ -380,11 +380,11 @@
 .reTotal {
   grid-column: 2; grid-row: 1 / span 2; align-self: center;
   font-family: var(--font-display); font-weight: 600; font-size: 30px;
-  color: var(--cyan-hot); text-shadow: 0 0 10px rgba(0, 166, 214, 0.4);
+  color: var(--cyan-hot); text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 40%, transparent);
   font-variant-numeric: tabular-nums;
 }
-.rollEntry.critSuccess .reTotal { color: var(--gold-rare); text-shadow: 0 0 12px rgba(226, 176, 33, 0.6); }
-.rollEntry.critFail .reTotal { color: var(--danger); text-shadow: 0 0 10px rgba(185, 58, 58, 0.55); }
+.rollEntry.critSuccess .reTotal { color: var(--gold-rare); text-shadow: 0 0 12px color-mix(in srgb, var(--gold-rare) 60%, transparent); }
+.rollEntry.critFail .reTotal { color: var(--danger); text-shadow: 0 0 10px color-mix(in srgb, var(--danger) 55%, transparent); }
 .reD20 {
   grid-column: 1;
   font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em;
@@ -411,9 +411,9 @@
   font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.32em;
   padding: 2px 6px;
   background: var(--bg); border: 1.5px solid var(--gold-rare); color: var(--gold-rare);
-  text-transform: uppercase; box-shadow: 0 0 10px rgba(226, 176, 33, 0.45); z-index: 2;
+  text-transform: uppercase; box-shadow: 0 0 10px color-mix(in srgb, var(--gold-rare) 45%, transparent); z-index: 2;
 }
-.rollEntry.critFail .reCrit { border-color: var(--danger); color: var(--danger); box-shadow: 0 0 10px rgba(185, 58, 58, 0.45); }
+.rollEntry.critFail .reCrit { border-color: var(--danger); color: var(--danger); box-shadow: 0 0 10px color-mix(in srgb, var(--danger) 45%, transparent); }
 
 @media (max-width: 1180px) {
   .rolls { grid-template-columns: 1fr; grid-template-rows: minmax(360px, 1fr) minmax(260px, 320px); overflow-y: auto; }

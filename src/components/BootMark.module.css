@@ -2,18 +2,18 @@
    lands (its .boot-* rules) — a wait that starts before React and ends after it
    must not change shape halfway through. */
 .wrap {
-  --edge: rgba(212, 191, 125, 0.55);
-  --glow: #4dd6ff;
-  --rail: rgba(138, 122, 74, 0.25);
+  --edge: color-mix(in srgb, var(--beige) 55%, transparent);
+  --glow: var(--cyan-hot);
+  --rail: color-mix(in srgb, var(--beige-dim) 25%, transparent);
   --lab: var(--cyan-dim);
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 .amber {
-  --edge: rgba(226, 176, 33, 0.55);
+  --edge: color-mix(in srgb, var(--amber) 55%, transparent);
   --glow: var(--amber-hot);
-  --rail: rgba(138, 109, 26, 0.3);
+  --rail: color-mix(in srgb, var(--amber-dim) 30%, transparent);
   --lab: var(--amber-dim);
 }
 /* Two layers, not a border — a hexagon's obliques are not 45°, so the chamfer

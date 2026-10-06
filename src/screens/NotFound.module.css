@@ -32,8 +32,8 @@
   width: var(--edge);
   pointer-events: none;
   background-image:
-    linear-gradient(to right, rgba(212, 191, 125, 0.07) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(212, 191, 125, 0.07) 1px, transparent 1px);
+    linear-gradient(to right, color-mix(in srgb, var(--beige) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--beige) 7%, transparent) 1px, transparent 1px);
   background-size: 48px 48px;
   background-position: -1px -1px;
 }
@@ -128,7 +128,7 @@
 .leader {
   flex: 1 0 24px;
   height: 0;
-  border-top: 1px dashed rgba(138, 122, 74, 0.6);
+  border-top: 1px dashed color-mix(in srgb, var(--beige-dim) 60%, transparent);
   position: relative;
 }
 .leader::after {
@@ -177,7 +177,7 @@
     calc(100% - var(--cut)) 100%,
     0 100%,
     0 var(--cut));
-  background-color: rgba(0, 166, 214, 0.1);
+  background-color: color-mix(in srgb, var(--cyan) 10%, transparent);
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
     linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
@@ -193,7 +193,7 @@
   text-transform: uppercase;
   transition: background-color 140ms ease;
 }
-.home:hover { background-color: rgba(0, 166, 214, 0.2); }
+.home:hover { background-color: color-mix(in srgb, var(--cyan) 20%, transparent); }
 
 .up {
   display: inline-flex;

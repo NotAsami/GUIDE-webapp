@@ -3,13 +3,13 @@
 
 .lc { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .lcKind, .lcLabel {
-  height: 28px; border: 1px solid rgba(212, 191, 125, 0.3); background: rgba(0, 0, 0, 0.4); color: var(--text);
+  height: 28px; border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent); background: rgba(0, 0, 0, 0.4); color: var(--text);
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em;
 }
 .lcKind { padding: 0 6px; }
 .lcLabel { flex: 1 1 auto; min-width: 0; padding: 0 8px; }
 .lcLabel::placeholder { color: var(--beige-dim); }
-.lcAtt { flex: 0 0 auto; width: 28px; height: 28px; border: 1px solid rgba(212, 191, 125, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.lcAtt { flex: 0 0 auto; width: 28px; height: 28px; border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .lcAtt i { width: 10px; height: 10px; border-radius: 50%; border: 1px dashed var(--beige-dim); }
 .lcX { flex: 0 0 auto; width: 26px; height: 28px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
 .lcX:hover { color: var(--danger-hot); }
@@ -19,7 +19,7 @@
 .addTie > button { flex: 0 0 auto; min-width: 84px; }
 .err { margin-top: 10px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.1em; color: var(--danger-hot); }
 
-.gm { margin-top: 18px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px dashed rgba(160, 122, 214, 0.45); background: rgba(160, 122, 214, 0.05); }
+.gm { margin-top: 18px; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px dashed color-mix(in srgb, var(--violet) 45%, transparent); background: color-mix(in srgb, var(--violet) 5%, transparent); }
 .gmT { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--violet); }
 .gmB { font-family: var(--font-mono); font-size: 10px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; }
 
@@ -35,12 +35,12 @@
 .revealT { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige-dim); margin-right: 2px; }
 .chip {
   height: 26px; padding: 0 9px; cursor: pointer;
-  border: 1px solid rgba(212, 191, 125, 0.3); background: transparent; color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent); background: transparent; color: var(--muted);
   font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase;
 }
 .chip:hover { border-color: var(--cyan); }
-.chip.on { border-color: var(--cyan); background: rgba(0, 166, 214, 0.12); color: var(--cyan-hot); }
+.chip.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 12%, transparent); color: var(--cyan-hot); }
 .hint { margin-top: 6px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.06em; line-height: 1.6; color: var(--beige-dim); }
 .linkBox { display: flex; flex-direction: column; min-width: 0; }
-.viewAs { height: 30px; padding: 0 8px; border: 1px solid rgba(212, 191, 125, 0.3); background: rgba(14, 13, 11, 0.92); color: var(--beige); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+.viewAs { height: 30px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent); background: rgba(14, 13, 11, 0.92); color: var(--beige); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; }
 .viewAs.on { border-color: var(--cyan); color: var(--cyan-hot); }

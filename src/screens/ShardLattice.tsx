@@ -1049,7 +1049,7 @@ function PlayerRead({ tree, node, sim, canAttune }: { tree: EditorTree; node: Ed
   const concealed = node.concealed && !sim?.has(node.id)
   return (
     <>
-      <div className={styles.imeta} style={{ borderLeftColor: 'var(--cyan)', background: 'rgba(0,166,214,.06)', borderColor: 'rgba(0,166,214,.3)' }}>
+      <div className={styles.imeta} style={{ borderLeftColor: 'var(--cyan)', background: 'color-mix(in srgb, var(--cyan) 6%, transparent)', borderColor: 'color-mix(in srgb, var(--cyan) 30%, transparent)' }}>
         <Icon name={concealed ? 'fa-question' : node.icon} style={{ color: 'var(--cyan-hot)' }} />
         <span className={styles.t} style={{ color: 'var(--cyan-hot)' }}>{concealed ? '???' : node.name}</span><span className={styles.s}>{state}</span>
       </div>

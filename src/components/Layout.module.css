@@ -22,10 +22,10 @@
   padding: 0 36px;
   background: linear-gradient(to bottom,
     rgba(15, 15, 15, 0.95) 0%,
-    rgba(22, 22, 22, 0.92) 100%);
+    color-mix(in srgb, var(--bg-2) 92%, transparent) 100%);
   border-bottom: 1px solid var(--beige);
   box-shadow:
-    0 1px 0 rgba(212, 191, 125, 0.15),
+    0 1px 0 color-mix(in srgb, var(--beige) 15%, transparent),
     0 8px 24px -8px rgba(0, 0, 0, 0.6);
 }
 .topbar::before {
@@ -48,7 +48,7 @@
   left: 0; right: 0; bottom: -1px;
   height: 1px;
   background: var(--beige);
-  box-shadow: 0 0 8px rgba(212, 191, 125, 0.4);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--beige) 40%, transparent);
 }
 
 .topLeft, .topRight {
@@ -98,7 +98,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
-  box-shadow: 0 0 6px rgba(0, 166, 214, 0.6);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 60%, transparent);
   display: block;
 }
 
@@ -206,7 +206,7 @@
 .hpStepper button:hover:not(:disabled) {
   border-color: var(--cyan);
   color: var(--cyan);
-  background: rgba(0, 166, 214, 0.08);
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
 }
 .hpStepper button:disabled { opacity: 0.35; cursor: not-allowed; }
 
@@ -231,10 +231,10 @@
   align-items: center;
   gap: 6px;
   text-decoration: none;
-  color: var(--amber, #e2b021);
-  border-color: rgba(226, 176, 33, 0.35);
+  color: var(--amber, var(--amber));
+  border-color: color-mix(in srgb, var(--amber) 35%, transparent);
 }
-.dmLink:hover { color: var(--amber-hot, #ffcc3d); border-color: var(--amber, #e2b021); }
+.dmLink:hover { color: var(--amber-hot, #ffcc3d); border-color: var(--amber, var(--amber)); }
 .dmLink i { font-size: 9px; }
 
 /* ---- Main ---- */
@@ -257,10 +257,10 @@
   background:
     linear-gradient(to top,
       rgba(15, 15, 15, 0.95) 0%,
-      rgba(22, 22, 22, 0.92) 100%);
+      color-mix(in srgb, var(--bg-2) 92%, transparent) 100%);
   border-top: 1px solid var(--beige);
   box-shadow:
-    0 -1px 0 rgba(212, 191, 125, 0.15),
+    0 -1px 0 color-mix(in srgb, var(--beige) 15%, transparent),
     0 -8px 24px -8px rgba(0, 0, 0, 0.6);
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -306,7 +306,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--cyan);
-  box-shadow: 0 0 8px rgba(0, 166, 214, 0.7);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 70%, transparent);
 }
 
 /* Bottombar action buttons (Reopen Shop / Roll Context) — same compact pill
@@ -321,7 +321,7 @@
   letter-spacing: 0.16em;
   color: var(--cyan);
   padding: 4px 9px;
-  background: rgba(0, 166, 214, 0.06);
+  background: color-mix(in srgb, var(--cyan) 6%, transparent);
   border: 1.5px solid var(--cyan-dim);
   cursor: pointer;
   transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
@@ -329,13 +329,13 @@
 .bbBtn:hover {
   color: var(--cyan-hot);
   border-color: var(--cyan);
-  background: rgba(0, 166, 214, 0.12);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
 }
 .bbBtn.on {
   color: var(--cyan-hot);
   border-color: var(--cyan);
-  background: rgba(0, 166, 214, 0.16);
-  box-shadow: inset 0 0 10px rgba(0, 166, 214, 0.2);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  box-shadow: inset 0 0 10px color-mix(in srgb, var(--cyan) 20%, transparent);
 }
 .bbBtn i { font-size: 9px; }
 
@@ -360,7 +360,7 @@
   color: #17130a;
   font-family: var(--font-mono); font-size: 9px; font-weight: 700;
   letter-spacing: 0;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 9px rgba(226, 176, 33, 0.75);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 9px color-mix(in srgb, var(--amber) 75%, transparent);
   animation: bbBadgePulse 2.6s ease-in-out infinite;
 }
 /* The ring: same loop, larger displacement, no layout cost. Peripheral vision
@@ -402,15 +402,15 @@
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 0.18em;
-  color: rgba(0, 166, 214, 0.55);
+  color: color-mix(in srgb, var(--cyan) 55%, transparent);
   pointer-events: none;
   overflow: hidden;
   white-space: nowrap;
 }
 .ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
-.ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212, 191, 125, 0.45); }
+.ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: color-mix(in srgb, var(--beige) 45%, transparent); }
 .ticker :global(.gap) { width: 32px; display: inline-block; }
-.ticker :global(.dim) { color: rgba(170, 170, 170, 0.4); }
+.ticker :global(.dim) { color: color-mix(in srgb, var(--muted) 40%, transparent); }
 
 /* Side-rails + corner frame moved to components/Deco.tsx (per-screen). */
 

@@ -29,7 +29,7 @@
      gradient stripe width has to match the border width or the straight and
      diagonal edges visibly disagree at the corner. */
   --cut: 9px;
-  --bc: rgba(0, 166, 214, 0.5);
+  --bc: color-mix(in srgb, var(--cyan) 50%, transparent);
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1.5px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1.5px), transparent 0),
     linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1.5px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1.5px), transparent 0),
@@ -39,7 +39,7 @@
   background-position: top left, bottom right, 0 0;
   background-size: calc(var(--cut) + 1.5px) calc(var(--cut) + 1.5px), calc(var(--cut) + 1.5px) calc(var(--cut) + 1.5px), auto;
   border: 1.5px solid var(--bc);
-  box-shadow: 0 0 0 1px rgba(0, 166, 214, 0.15), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(0, 166, 214, 0.18);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cyan) 15%, transparent), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px color-mix(in srgb, var(--cyan) 18%, transparent);
   clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
   padding: 13px 16px 14px;
   transform: translateX(120%);
@@ -65,12 +65,12 @@
 .tgIc {
   width: 34px; height: 34px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
   position: relative; isolation: isolate;
-  color: var(--cyan-hot); font-size: 16px; background: rgba(0, 166, 214, 0.5);
+  color: var(--cyan-hot); font-size: 16px; background: color-mix(in srgb, var(--cyan) 50%, transparent);
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 .tgIc::before {
   content: ""; position: absolute; inset: 1.5px; z-index: -1;
-  background: #11252d; /* toast bg + the old rgba(0,166,214,0.08) wash, flattened */
+  background: #11252d; /* toast bg + the old color-mix(in srgb, var(--cyan) 8%, transparent) wash, flattened */
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 .tgTx { min-width: 0; }
@@ -78,18 +78,18 @@
 .tgN { font-family: var(--font-prose); font-size: 16.5px; color: var(--text); line-height: 1.25; margin-top: 3px; }
 .tgN .rar, .rar { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .tgFoot { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; margin-top: 9px; display: flex; align-items: center; gap: 6px; }
-.led { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.8); }
+.led { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 80%, transparent); }
 
 /* corrupted tone — amber, glitched title */
 .toast.corrupted {
   --bc: var(--amber);
-  box-shadow: 0 0 0 1px rgba(226, 176, 33, 0.25), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(226, 176, 33, 0.35);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 25%, transparent), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px color-mix(in srgb, var(--amber) 35%, transparent);
 }
-.toast.corrupted .tgIc { color: var(--amber-hot); background: rgba(226, 176, 33, 0.5); }
+.toast.corrupted .tgIc { color: var(--amber-hot); background: color-mix(in srgb, var(--amber) 50%, transparent); }
 .toast.corrupted .tgIc::before { background: #28291e; /* toast bg + amber wash, flattened */ }
 .toast.corrupted .tgT { color: var(--amber-hot); animation: glitchT 1.6s steps(3, end) infinite; }
-.toast.corrupted .tgN { color: var(--amber); font-family: var(--font-mono); letter-spacing: 0.04em; text-shadow: 0 0 6px rgba(226, 176, 33, 0.45); }
-.toast.corrupted .led { background: var(--amber); box-shadow: 0 0 6px rgba(226, 176, 33, 0.9); }
+.toast.corrupted .tgN { color: var(--amber); font-family: var(--font-mono); letter-spacing: 0.04em; text-shadow: 0 0 6px color-mix(in srgb, var(--amber) 45%, transparent); }
+.toast.corrupted .led { background: var(--amber); box-shadow: 0 0 6px color-mix(in srgb, var(--amber) 90%, transparent); }
 @keyframes glitchT {
   0%, 100% { transform: translateX(0); opacity: 1; }
   33% { transform: translateX(1px); opacity: 0.75; }
@@ -102,21 +102,21 @@
    different axis: who's speaking, not what landed on you). */
 .toast.cond {
   --bc: var(--amber);
-  box-shadow: 0 0 0 1px rgba(226, 176, 33, 0.2), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(226, 176, 33, 0.3);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 20%, transparent), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px color-mix(in srgb, var(--amber) 30%, transparent);
 }
-.toast.cond .tgIc { color: var(--amber-hot); background: rgba(226, 176, 33, 0.5); }
+.toast.cond .tgIc { color: var(--amber-hot); background: color-mix(in srgb, var(--amber) 50%, transparent); }
 .toast.cond .tgIc::before { background: #28291e; }
 .toast.cond .tgT { color: var(--amber-hot); }
-.toast.cond .led { background: var(--amber); box-shadow: 0 0 6px rgba(226, 176, 33, 0.8); }
+.toast.cond .led { background: var(--amber); box-shadow: 0 0 6px color-mix(in srgb, var(--amber) 80%, transparent); }
 
 .toast.debuff {
   --bc: var(--danger-hot);
-  box-shadow: 0 0 0 1px rgba(255, 84, 84, 0.2), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px rgba(255, 84, 84, 0.3);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger-hot) 20%, transparent), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px color-mix(in srgb, var(--danger-hot) 30%, transparent);
 }
-.toast.debuff .tgIc { color: var(--danger-hot); background: rgba(185, 58, 58, 0.55); }
+.toast.debuff .tgIc { color: var(--danger-hot); background: color-mix(in srgb, var(--danger) 55%, transparent); }
 .toast.debuff .tgIc::before { background: #241010; }
 .toast.debuff .tgT { color: var(--danger-hot); }
-.toast.debuff .led { background: var(--danger-hot); box-shadow: 0 0 6px rgba(255, 84, 84, 0.8); }
+.toast.debuff .led { background: var(--danger-hot); box-shadow: 0 0 6px color-mix(in srgb, var(--danger-hot) 80%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
   .toast, .toast.out { animation: none; transform: none; opacity: 1; }

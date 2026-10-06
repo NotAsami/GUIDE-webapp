@@ -9,7 +9,7 @@
   gap: 5px;
   margin-top: 9px;
   padding-top: 8px;
-  border-top: 1px solid rgba(212, 191, 125, 0.16);
+  border-top: 1px solid color-mix(in srgb, var(--beige) 16%, transparent);
   /* Load-bearing, not decoration. The layered cards this sits inside paint
      their interior with an opaque absolutely-positioned ::before and lift only
      their own known children above it. Without this the rider block renders

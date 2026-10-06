@@ -17,7 +17,7 @@
   display: flex;
   align-items: center;
   width: 100%;
-  border: 1px solid rgba(212, 191, 125, 0.35);
+  border: 1px solid color-mix(in srgb, var(--beige) 35%, transparent);
   background: rgba(0, 0, 0, 0.4);
 }
 .field:focus-within { border-color: var(--cyan); }
@@ -84,9 +84,9 @@
   scrollbar-color: var(--cyan-dim) rgba(0, 0, 0, 0.5);
 }
 .grid::-webkit-scrollbar { width: 8px; }
-.grid::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15); }
+.grid::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); border-left: 1px solid color-mix(in srgb, var(--beige) 15%, transparent); }
 .grid::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  background: linear-gradient(180deg, var(--cyan-dim), color-mix(in srgb, var(--beige) 55%, transparent));
   border: 2px solid #111;
 }
 
@@ -95,7 +95,7 @@
    Recolour through --bc, never `border-color` — src/lib/chamferBorders.test.ts
    fails on both mistakes. */
 .cell {
-  --cut: 4px; --bw: 1.5px; --bc: rgba(212, 191, 125, 0.2);
+  --cut: 4px; --bw: 1.5px; --bc: color-mix(in srgb, var(--beige) 20%, transparent);
   aspect-ratio: 1;
   display: flex; align-items: center; justify-content: center;
   font-size: 17px;
@@ -109,8 +109,8 @@
     linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - var(--bw)), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + var(--bw)), transparent 0);
   background-repeat: no-repeat;
 }
-.cell:hover { color: var(--text); --bc: rgba(226, 176, 33, 0.45); }
-.cell.on { color: var(--cyan); --bc: var(--cyan); background-color: rgba(0, 166, 214, 0.12); }
+.cell:hover { color: var(--text); --bc: color-mix(in srgb, var(--amber) 45%, transparent); }
+.cell.on { color: var(--cyan); --bc: var(--cyan); background-color: color-mix(in srgb, var(--cyan) 12%, transparent); }
 .cell:focus-visible { outline: 1px solid var(--cyan); outline-offset: 2px; }
 
 /* ---- the chosen icon, then the rule ---- */
@@ -124,7 +124,7 @@
   padding-bottom: 10px;
   /* 2px and brighter: at 1px/0.2 alpha it disappeared against the panel, which
      is what made it read as somebody else's border rather than a divider. */
-  border-bottom: 2px solid rgba(212, 191, 125, 0.34);
+  border-bottom: 2px solid color-mix(in srgb, var(--beige) 34%, transparent);
 }
 .selIcon { font-size: 20px; color: var(--beige); }
 .selName {
@@ -159,10 +159,10 @@
   margin-left: 10px;
   display: inline-flex; align-items: center; gap: 5px;
   background: none; cursor: pointer;
-  border: 1px solid rgba(212, 191, 125, 0.28);
+  border: 1px solid color-mix(in srgb, var(--beige) 28%, transparent);
   padding: 3px 7px;
   font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em;
   text-transform: uppercase; color: var(--beige-dim);
 }
-.selAuto:hover { color: var(--amber); border-color: rgba(226, 176, 33, 0.5); }
+.selAuto:hover { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 50%, transparent); }
 .selAuto i { font-size: 8px; }
