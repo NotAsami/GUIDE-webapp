@@ -1,6 +1,7 @@
 /* Spellbook screen. Shared chrome (topbar, dock nav, tickers, side-rails,
    bottombar) lives in Layout / Nav / Deco; this module owns the body: a fixed-
-   height CASTER PROFILE band over a two-column GRIMOIRE + SPELL DETAIL body.
+   three columns: a CASTER rail (stats + slot gems), the GRIMOIRE table, and
+   the SPELL DETAIL. The grimoire absorbs the slack; rail and detail are fixed.
    Ported from guide-hud/project/G.U.I.D.E. Spellbook.html — chrome classes
    (.region/.rFrame/.rGap/.rLine/.rInner/.rCorner, .colHeader, .scrollY) copied
    verbatim from Lore.module.css, the established pattern for this shape.
@@ -17,13 +18,14 @@
   top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 46px);
   bottom: calc(var(--bar-bottom-h) + 18px);
   left: 0; right: 0;
-  display: flex; flex-direction: column;
-  gap: 18px;
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr) 390px;
+  gap: 22px;
   padding: 0 34px;
   z-index: 10;
   /* On a short viewport .detailCol's floor (below) can need more than this
-     fixed box has — scroll past the caster band rather than let .rInner's
-     overflow:hidden clip the spell detail's table/cast button unreadable. */
+     fixed box has — scroll rather than let .rInner's overflow:hidden clip the
+     spell detail's table/cast button unreadable. */
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
@@ -86,10 +88,6 @@
 .scrollY::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
 .scrollY::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.45)); border: 2px solid #111; }
 
-/* fixed-height top band — its region's .rInner is absolutely positioned, so
-   the band must carry an explicit height for the region to size to. */
-.sbBand { flex: 0 0 auto; height: 196px; }
-.sbBody { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 55fr 42fr; gap: 22px; }
 /* .rInner below is absolutely positioned, so it contributes nothing to this
    column's intrinsic height — without an explicit floor the column (and the
    grid row it shares with Grimoire) can shrink to near nothing, squeezing
@@ -100,135 +98,110 @@
 .detailCol { min-height: 330px; }
 
 /* ============================================================
-   01  CASTER PROFILE  (top band)
+   01  CASTER  (left rail)
    ============================================================ */
-.profilePad { position: relative; z-index: 1; padding: 13px 20px 15px; display: flex; flex-direction: column; gap: 12px; }
+.railPad { position: relative; z-index: 1; flex: 1; min-height: 0; padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; }
 
-.castStats { display: flex; align-items: stretch; flex-wrap: wrap; gap: 0; }
-.csItem { display: flex; flex-direction: column; gap: 5px; padding: 0 22px; border-right: 1px dashed rgba(212, 191, 125, 0.2); }
-.csItem:first-child { padding-left: 2px; }
-.csItem:last-child { border-right: 0; }
-.csK { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em; color: var(--cyan); text-transform: uppercase; }
-.csV { font-family: var(--font-display); font-weight: 600; font-size: 19px; letter-spacing: 0.04em; color: var(--beige); line-height: 1; }
-.csV .unit { font-family: var(--font-mono); font-size: 10px; font-weight: 400; letter-spacing: 0.16em; color: var(--muted); margin-left: 4px; }
-.csV.text { font-size: 16px; }
-.csV.muted { color: var(--muted); }
-.csV.dim { color: var(--beige-dim); }
-.csV.full { color: var(--cyan-hot); }
+.rpHead { flex: 0 0 auto; }
+.rpClass { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: 0.04em; color: var(--beige); line-height: 1.1; }
+.rpClass.muted { color: var(--muted); font-size: 17px; }
+.rpSub { margin-top: 5px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); display: flex; gap: 7px; }
+.rpSub .sep { color: var(--beige-dim); }
+.rpSub .full { color: var(--cyan-hot); }
 
-.profileRule {
-  height: 1px;
-  background: repeating-linear-gradient(to right, rgba(212, 191, 125, 0.28) 0, rgba(212, 191, 125, 0.28) 6px, transparent 6px, transparent 12px);
-}
+.rpStats { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid rgba(212, 191, 125, 0.3); }
+.rpStat { padding: 9px 12px; display: flex; flex-direction: column; gap: 3px; }
+.rpStat + .rpStat { border-left: 1px solid rgba(212, 191, 125, 0.3); }
+.rpK { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--cyan); }
+.rpV { font-family: var(--font-display); font-weight: 700; font-size: 28px; line-height: 1.05; color: var(--text); }
 
-.slotTrack { display: flex; align-items: stretch; gap: 8px; }
-.slotLabel {
-  flex: 0 0 auto; align-self: center;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.24em; color: var(--beige); text-transform: uppercase;
-  padding-right: 6px;
-}
-.slotCells { display: flex; gap: 7px; flex: 1 1 auto; flex-wrap: nowrap; }
-/* TWO LAYERS, NOT AN INSET SHADOW.
-   This used to draw its edge with `box-shadow: inset 0 0 0 1px`, which follows
-   the border-box RECTANGLE — so the clip-path sliced both diagonals off with no
-   stroke on them and the cells rendered with two bare corners. Same bug as a
-   plain `border` next to a chamfer (docs/Chamfered_clip-path_corners_fix.md),
-   reached through a different property, which is why the guard did not see it.
+.rpSlotHead { display: flex; align-items: baseline; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--cyan); }
+.rpHint { margin-left: auto; font-size: 8px; letter-spacing: 0.12em; color: var(--muted); }
+.rpSlots { display: flex; flex-direction: column; gap: 15px; }
+.rpNone { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige-dim); }
 
-   The gradient recipe would work, but every variant here overrides `background`
-   to retint the cell — and that shorthand resets background-image, taking the
-   corner stripes with it. So this uses the frame+inner pattern instead: the
-   shape is FILLED with the edge colour and a ::before inset 1.5px paints the
-   interior on top, leaving the fill showing as a ring on every edge, oblique
-   ones included. Variants then only have to override --edge and --fill. */
-.slotCell {
-  --cut: 7px;
-  --edge: rgba(212, 191, 125, 0.28);
-  --fill: linear-gradient(180deg, rgba(0, 166, 214, 0.04), transparent 70%), #131313;
-  flex: 1 1 0; min-width: 0; position: relative; isolation: isolate;
-  padding: 8px 6px 9px;
-  display: flex; flex-direction: column; align-items: center; gap: 7px;
-  background: var(--edge);
-  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
-}
-/* 1.5px, not 1px: a hairline ring rounds away entirely at the 110% zoom this
-   app is read at. Same reason the doc gives for border widths. */
-.slotCell::before {
-  content: ""; position: absolute; inset: 1.5px; z-index: -1;
-  background: var(--fill);
-  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
-}
-.slotCell.cantripCell { --edge: rgba(0, 166, 214, 0.4); --fill: linear-gradient(180deg, rgba(0, 166, 214, 0.08), transparent 70%), #131313; }
-.slotCell.inert { --edge: rgba(212, 191, 125, 0.1); --fill: #101010; }
-/* Pact Magic: a single cell replaces the 9-level ladder — cap its width so
-   it doesn't stretch to fill the whole row next to just the cantrip cell. */
-.slotCell.pactCell { flex: 0 1 220px; --edge: rgba(0, 166, 214, 0.4); --fill: linear-gradient(180deg, rgba(0, 166, 214, 0.08), transparent 70%), #131313; }
-.scLvl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; color: var(--beige); text-transform: uppercase; }
-.slotCell.cantripCell .scLvl { color: var(--cyan); }
-.slotCell.inert .scLvl { color: var(--beige-dim); opacity: 0.6; }
-.slotCell.pactCell .scLvl { color: var(--cyan); }
-.scPips { display: flex; gap: 4px; align-items: center; min-height: 13px; }
-.pip {
-  width: 11px; height: 11px; border-radius: 50%;
-  border: 1px solid var(--cyan); background: transparent; padding: 0; cursor: pointer;
+.gemRow { display: flex; align-items: center; gap: 12px; }
+.gemLvl { flex: 0 0 38px; display: flex; flex-direction: column; font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--beige); line-height: 1; }
+.gemNote { margin-top: 3px; font-family: var(--font-mono); font-weight: 400; font-size: 8px; letter-spacing: 0.14em; color: var(--muted); }
+/* Diamonds are rotated squares: the gap has to clear the rotated corners
+   (18px square → ~25px wide), so 12px here reads as ~5px between tips. */
+.gems { display: flex; flex-wrap: wrap; gap: 12px; padding-left: 3px; }
+.gem {
+  width: 17px; height: 17px; padding: 0; transform: rotate(45deg);
+  border: 1.5px solid var(--cyan); cursor: pointer;
   transition: background 140ms ease, box-shadow 140ms ease, transform 120ms ease;
 }
-.pip.filled { background: var(--cyan); box-shadow: 0 0 7px rgba(0, 166, 214, 0.6); }
-.pip.spent { background: transparent; border-color: var(--beige-dim); box-shadow: none; }
-.pip:hover { transform: scale(1.18); }
-.pip.filled:hover { box-shadow: 0 0 11px rgba(0, 166, 214, 0.85); }
-.scInf { font-family: var(--font-display); font-size: 18px; color: var(--cyan-hot); line-height: 0.8; text-shadow: 0 0 10px rgba(0, 166, 214, 0.5); }
-.scNone { font-family: var(--font-mono); font-size: 13px; color: var(--beige-dim); opacity: 0.55; line-height: 0.9; }
-.scCount { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; color: var(--muted); }
-.slotCell.cantripCell .scCount { color: var(--cyan); opacity: 0.8; }
-.slotCell.inert .scCount { opacity: 0.4; }
-.slotCell.pactCell .scCount { color: var(--cyan); opacity: 0.8; }
+.gem.filled { background: linear-gradient(135deg, var(--cyan-hot), var(--cyan) 60%, var(--cyan-dim)); border-color: var(--cyan-hot); box-shadow: 0 0 10px rgba(0, 166, 214, 0.65); }
+.gem.spent { background: #121212; border-color: var(--cyan-dim); }
+.gem:hover { transform: rotate(45deg) scale(1.15); }
+.gem:focus-visible { outline: 1.5px solid var(--cyan-hot); outline-offset: 3px; }
+.gemCount { margin-left: auto; font-family: var(--font-display); font-weight: 600; font-size: 16px; color: var(--text); }
+.gemOf { font-size: 12px; color: var(--muted); }
 
 /* ============================================================
    02  GRIMOIRE  (left column — the spell list)
    ============================================================ */
-.grimPad { position: relative; z-index: 1; flex: 1; min-height: 0; padding: 6px 8px 10px 4px; }
-.grimScroll { height: 100%; padding: 6px 8px 6px 4px; display: flex; flex-direction: column; }
+.grimPad { position: relative; z-index: 1; flex: 1; min-height: 0; padding: 6px 8px 10px 4px; display: flex; flex-direction: column; container-type: inline-size; }
+.grimScroll { flex: 1; min-height: 0; padding: 2px 8px 6px 4px; display: flex; flex-direction: column; }
+
+.filters { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px 10px 8px; border-bottom: 1px solid rgba(212, 191, 125, 0.18); margin-bottom: 4px; }
+.chip {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 5px 10px; min-height: 26px; cursor: pointer;
+  color: var(--muted); background: transparent; border: 1px solid rgba(212, 191, 125, 0.35);
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.chip:hover { color: var(--text); border-color: var(--beige); }
+.chip.on { color: var(--cyan-hot); border-color: var(--cyan); background: rgba(0, 166, 214, 0.1); }
+.noMatch { padding: 18px 8px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige-dim); }
 
 .lvlHead {
   display: flex; align-items: center; gap: 11px;
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase;
-  color: var(--beige); opacity: 0.9;
-  margin: 17px 6px 7px;
+  font-family: var(--font-display); font-weight: 700; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--beige);
+  margin: 14px 6px 4px;
 }
-.lvlHead:first-child { margin-top: 4px; }
+.lvlHead:first-child { margin-top: 6px; }
 .lvlHead.cantripHead { color: var(--cyan); }
-.lvlHead::after { content: ""; flex: 1; height: 1px; background: rgba(212, 191, 125, 0.18); }
-.lhSlots { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; color: var(--muted); }
+.lvlHead::after { content: ""; order: 1; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(212, 191, 125, 0.45), transparent); }
+.lhSlots { order: 2; }
+.lhSlots { font-family: var(--font-mono); font-weight: 400; font-size: 8px; letter-spacing: 0.1em; color: var(--muted); }
 
 .spellRow {
-  position: relative; display: flex; align-items: center; gap: 12px;
+  --cols: 16px minmax(0, 1.5fr) minmax(0, 1fr) 62px 62px minmax(0, 0.85fr) 60px;
+  position: relative; display: grid; grid-template-columns: var(--cols); align-items: center; gap: 10px;
   width: 100%; text-align: left;
   background: transparent; border: 0; cursor: pointer;
-  padding: 10px 13px 10px 12px;
+  padding: 3px 8px;
   border-left: 2px solid transparent;
   transition: background 150ms ease, border-color 150ms ease;
   font: inherit; color: inherit;
 }
-.spellRow + .spellRow { border-top: 1px dashed rgba(212, 191, 125, 0.1); }
 .spellRow:hover { background: rgba(0, 166, 214, 0.06); }
 .spellRow.selected { background: linear-gradient(90deg, rgba(0, 166, 214, 0.13), transparent 82%); border-left-color: var(--cyan); }
 
-.prepDot { flex: 0 0 auto; width: 13px; height: 13px; display: flex; align-items: center; justify-content: center; }
-.prepDot .dot { width: 11px; height: 11px; border-radius: 50%; border: 1px solid var(--cyan); }
-.prepDot.prep .dot { background: var(--cyan); box-shadow: 0 0 7px rgba(0, 166, 214, 0.6); }
+.prepDot { width: 13px; height: 13px; display: flex; align-items: center; justify-content: center; }
+.prepDot .dot { width: 9px; height: 9px; transform: rotate(45deg); border: 1px solid var(--cyan); }
+.prepDot.prep .dot { background: var(--beige); border-color: var(--beige); }
 .prepDot.unprep .dot { background: transparent; border-color: var(--beige-dim); }
 .prepDot.prepCantrip { font-family: var(--font-display); font-size: 15px; color: var(--cyan-hot); line-height: 1; }
 
-.spellMain { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.spellName { font-family: var(--font-prose); font-size: 16.5px; color: var(--text); letter-spacing: 0.01em; line-height: 1.15; }
-.spellRow.selected .spellName { color: var(--cyan-hot); }
-.spellRow.unprepared .spellName { color: var(--muted); }
-.spellSub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
-.spellSub .school { display: inline-flex; align-items: center; gap: 5px; color: var(--beige); }
-.spellSub .school .schoolIc { color: var(--cyan); font-size: 9px; opacity: 0.85; }
+/* THE NAME IS THE ROW. Bold serif so a spell reads at a glance; gold when it
+   can be cast today, plain when it's only known, cyan when selected. */
+.spellName { font-family: var(--font-prose); font-weight: 700; font-size: 18px; letter-spacing: 0.01em; line-height: 1.2; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.spellRow.ready .spellName { color: var(--beige); }
+.spellRow.selected .spellName { color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0, 166, 214, 0.55); }
+.spellRow .school { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-family: var(--font-prose); font-style: italic; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.spellRow .school .schoolIc { flex: 0 0 auto; color: var(--cyan); font-size: 10px; opacity: 0.8; font-style: normal; }
+.cell { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell.dimCell { color: var(--muted); }
+/* A narrow grimoire drops the school first — the detail panel still names it. */
+@container (max-width: 640px) {
+  .spellRow { --cols: 16px minmax(0, 1fr) 62px 62px minmax(0, 0.7fr) 60px; }
+  .spellRow .school { display: none; }
+}
 
-.spellTags { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; }
+.spellTags { display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
 
 /* --- small chamfered chips: clip-path + border needs the corner-fix recipe --- */
 .tagChip {
@@ -265,9 +238,10 @@
 .daFlashPulse { position: absolute; inset: 0; z-index: 2; pointer-events: none; animation: castFlash 620ms ease-out; }
 @keyframes castFlash { 0% { box-shadow: inset 0 0 0 rgba(0, 166, 214, 0); } 25% { box-shadow: inset 0 0 50px rgba(0, 166, 214, 0.4); } 100% { box-shadow: inset 0 0 0 rgba(0, 166, 214, 0); } }
 
-.daHead { flex: 0 0 auto; padding: 15px 20px 11px; }
-.daName { font-family: var(--font-display); font-weight: 600; font-size: 21px; letter-spacing: 0.03em; line-height: 1.1; color: var(--text); text-shadow: 0 0 16px rgba(0, 166, 214, 0.12); }
-.daLine { margin-top: 6px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan); display: flex; align-items: center; gap: 8px; }
+.daHead { flex: 0 0 auto; padding: 16px 20px 12px; }
+.daName { margin-top: 7px; font-family: var(--font-prose); font-weight: 700; font-size: 34px; line-height: 1.05; color: var(--cyan-hot); text-shadow: 0 0 18px rgba(0, 166, 214, 0.4); }
+.daSub { margin-top: 4px; font-family: var(--font-prose); font-style: italic; font-size: 15px; color: var(--muted); }
+.daLine { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan); display: flex; align-items: center; gap: 8px; }
 .daLine .school { color: var(--beige); display: inline-flex; align-items: center; gap: 6px; }
 .daLine .sep { color: var(--beige-dim); }
 
@@ -276,7 +250,7 @@
 .daCell { padding: 8px 11px; border-right: 1px solid rgba(212, 191, 125, 0.22); border-bottom: 1px solid rgba(212, 191, 125, 0.22); display: flex; flex-direction: column; gap: 4px; }
 .daCell.span2 { grid-column: 1 / -1; }
 .daCell .dcK { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.22em; color: var(--cyan); text-transform: uppercase; }
-.daCell .dcV { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.05em; color: var(--text); }
+.daCell .dcV { font-family: var(--font-prose); font-weight: 600; font-size: 15px; color: var(--text); }
 .daCell .dcV .mat { display: block; margin-top: 3px; font-family: var(--font-prose); font-size: 11.5px; font-style: italic; letter-spacing: 0; color: var(--muted); text-transform: none; }
 
 .compSet { display: flex; gap: 5px; }
@@ -295,24 +269,8 @@
 }
 .comp.on { --bc: rgba(0, 166, 214, 0.55); color: var(--cyan); background-color: rgba(0, 166, 214, 0.08); }
 
-.daFlags { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
-.daFlag {
-  --cut: 4px; --bc: rgba(0, 166, 214, 0.45);
-  display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--cyan);
-  border: 1.5px solid var(--bc); padding: 4px 9px; background-color: transparent;
-  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
-  background-image:
-    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1.5px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1.5px), transparent 0),
-    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1.5px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1.5px), transparent 0);
-  background-repeat: no-repeat; background-origin: border-box;
-  background-position: top left, bottom right;
-  background-size: calc(var(--cut) + 1.5px) calc(var(--cut) + 1.5px);
-}
-.daFlag i { font-size: 8px; }
-
 .daDescLabel { display: block; margin: 13px 0 6px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.26em; color: var(--cyan); text-transform: uppercase; }
-.daDesc { font-family: var(--font-prose); font-size: 13.5px; line-height: 1.55; color: var(--text); letter-spacing: 0.005em; text-wrap: pretty; }
+.daDesc { font-family: var(--font-prose); font-size: 16px; line-height: 1.5; color: var(--text); letter-spacing: 0.005em; text-wrap: pretty; }
 .daDesc p { margin: 0 0 0.8em; }
 .daDesc p:last-child { margin-bottom: 0; }
 
@@ -328,11 +286,14 @@
   transition: color 150ms ease, box-shadow 150ms ease, background 150ms ease;
 }
 .ddStep:hover:not(:disabled) { color: #fff; background: rgba(0, 166, 214, 0.18); box-shadow: 0 0 12px rgba(0, 166, 214, 0.4); }
-.ddStep:disabled { color: var(--beige-dim); border-color: rgba(212, 191, 125, 0.25); cursor: not-allowed; opacity: 0.55; }
+/* Disabled dims the GLYPH only. Fading the border too (it was 25% beige at 55%
+   opacity) erased the box's edge exactly where it meets .ddLvl, which has no
+   side borders of its own inside the stepper. */
+.ddStep:disabled { color: var(--beige-dim); cursor: not-allowed; }
 .ddLvl {
   min-width: 50px; height: 22px; display: flex; align-items: center; justify-content: center;
   font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.14em; color: var(--cyan-hot); text-transform: uppercase;
-  border: 2px solid rgba(0, 166, 214, 0.5);
+  border: 1.5px solid rgba(0, 166, 214, 0.5);
   background: rgba(0, 166, 214, 0.05);
 }
 /* Inside the stepper, the flanking +/− buttons already supply the left/right
@@ -492,9 +453,14 @@
 .emptyState .esCur { color: var(--cyan); animation: blink 1.1s steps(2, end) infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pip, .daFlashPulse, .daNote, .dmgRoll { animation: none !important; }
+  .gem, .daFlashPulse, .daNote, .dmgRoll { animation: none !important; }
 }
 
+/* Stacked: every region's .rInner is absolutely positioned, so each column
+   carries its own height here. */
 @media (max-width: 1180px) {
-  .sbBody { grid-template-columns: 1fr; grid-auto-rows: minmax(360px, 1fr); }
+  .spellbook { grid-template-columns: 1fr; grid-template-rows: none; }
+  .railCol { height: 330px; }
+  .grimCol { height: 520px; }
+  .detailCol { min-height: 460px; }
 }

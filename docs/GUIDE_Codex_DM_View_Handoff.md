@@ -56,6 +56,7 @@ interface Lore {
               height: string; homeland: string; deity: string };
   portrait: string | null;
   memoryFidelity: 'INTACT'|'PARTIAL'|'DEGRADED'|'FRAGMENTED'|'CORRUPTED'; // horror seed
+  // RETIRED 2026-09-24 — replaced by per-section `lore.integrity` (lib/loreDoc.ts)
   trueLore: string;                           // DM-ONLY — never sent to player
 }
 interface Relation {

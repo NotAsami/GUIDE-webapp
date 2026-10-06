@@ -5,7 +5,7 @@
 // offers a sentence the DM can keep.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { eventText, fireLabel, firedLabel, moveTo, planEvents, sortBetween, split, targetNames } from './prep.ts'
+import { eventText, fireLabel, firedLabel, moveTo, planEvents, planLinks, sortBetween, split, targetNames } from './prep.ts'
 import type { PlanCardRow } from './database.types.ts'
 
 const card = (over: Partial<PlanCardRow> = {}): PlanCardRow => ({
@@ -81,4 +81,16 @@ test('a dragged card writes one row, and the others keep their order', () => {
   // Dropping a card where it already is changes nothing.
   assert.equal(moveTo(cards, 'a', 0), null)
   assert.equal(moveTo(cards, 'zzz', 0), null)
+})
+
+test('planLinks: fired quest and handout cards, once each, in the order played — nothing staged, nothing DM-only', () => {
+  const links = planLinks([
+    card({ id: 'a', kind: 'handout', ref: 'h1', fired_at: '2026-09-26T20:10:00Z' }),
+    card({ id: 'b', kind: 'quest', ref: 'q1', fired_at: '2026-09-26T20:00:00Z' }),
+    card({ id: 'c', kind: 'quest', ref: 'q2' }),                                          // staged, never fired
+    card({ id: 'd', kind: 'shop', ref: 's1', fired_at: '2026-09-26T20:05:00Z' }),         // an event, not a link
+    card({ id: 'e', kind: 'note', ref: null, fired_at: '2026-09-26T20:06:00Z' }),
+    card({ id: 'f', kind: 'quest', ref: 'q1', fired_at: '2026-09-26T21:00:00Z' }),        // closed later the same night
+  ])
+  assert.deepEqual(links, [{ kind: 'quest', ref: 'q1' }, { kind: 'handout', ref: 'h1' }])
 })

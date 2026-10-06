@@ -1,3 +1,5 @@
+import { ImageUpload } from '../components/ImageUpload'
+import { ManagedImage } from '../components/ManagedImage'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
@@ -206,6 +208,7 @@ export function OperatorConsole() {
       router state, so returning does not dump you on the overview. */
   const navState = useLocation().state as { view?: View } | null
   const [view, setView] = useState<View>(navState?.view ?? 'overview')
+  const wide = view === 'npcs' || view === 'prep'
   const [selectedId, setSelectedId] = useState<string | null>(null)
   /** Which per-character tab is showing when a PC is selected. */
   const [charTab, setCharTab] = useState<CharTab>('actions')
@@ -658,9 +661,10 @@ export function OperatorConsole() {
           )}
         </section>
 
-        {/* MAIN — WORK AREA. The NPC web takes region 03's column too: a graph
-            needs the width, and 14 people in the narrow one overlapped. */}
-        <section className={cx(styles.region, view === 'npcs' && styles.regionWide)} aria-label="Work area">
+        {/* MAIN — WORK AREA. The NPC web and the prep board take region 03's
+            column too: a graph needs the width (14 people in the narrow one
+            overlapped), and the board's three columns left the staged one ~125px. */}
+        <section className={cx(styles.region, wide && styles.regionWide)} aria-label="Work area">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
             {/* Per-character tabs — campaign surfaces (overview / quests /
@@ -718,7 +722,7 @@ export function OperatorConsole() {
                   ))}
                 </div>
               ) : view === 'quests' ? (
-                <QuestsSurface campaign={campaign} />
+                <QuestsSurface campaign={campaign} party={party} />
               ) : view === 'sessions' ? (
                 <SessionsSurface campaign={campaign} />
               ) : view === 'prep' ? (
@@ -767,7 +771,7 @@ export function OperatorConsole() {
 
         {/* RIGHT — BROADCAST + ACTIVITY LOG (slice 6). Stepped aside while the
             NPC web is open; the log keeps collecting, it lives in state above. */}
-        {view !== 'npcs' && <section className={styles.region} aria-label="Broadcast and system log">
+        {!wide && <section className={styles.region} aria-label="Broadcast and system log">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
             <div className={styles.rHead}>
@@ -6825,10 +6829,6 @@ function RaceForm({ row, creating, lib, featureLib, members, onSelected, onClear
   )
 }
 
-/** Memory-fidelity levels (eerie player-facing horror descriptor), ordered from
- *  intact to fully corrupted — mirrors the design's MEM_LEVELS. */
-const MEM_LEVELS = ['INTACT', 'PARTIAL', 'DEGRADED', 'FRAGMENTED', 'CORRUPTED'] as const
-
 /** Preset roster glyphs the DM can assign as a character's menu portrait. */
 const GLYPHS = ['fa-user', 'fa-chess-rook', 'fa-hat-wizard', 'fa-shield-halved', 'fa-mask', 'fa-skull', 'fa-dragon', 'fa-khanda', 'fa-cross', 'fa-feather', 'fa-hand-fist', 'fa-eye']
 
@@ -7293,8 +7293,7 @@ function ShardsTab({ row, member, shardLib, onUpdate, onVoice, log }: {
 /** The DM-only Lore tab. Two layers in ONE save:
  *   - `character_secrets` (DM-only, RLS, migration 0002): digitization + true lore —
  *     a player can NEVER read these.
- *   - `characters` row (player-readable): everything else — memory-fidelity descriptor,
- *     menu glyph, portrait, and the full player-facing lore form (backstory / nature /
+ *   - `characters` row (player-readable): everything else — menu glyph, portrait, and the full player-facing lore form (backstory / nature /
  *     relations / identity). All of it folds into ONE `patch.lore` + `patch.identity`
  *     write so no widget's draft can clobber another's.
  *  Drafts are local with a single explicit "Save Lore" (matches the design) so typing
@@ -7308,7 +7307,6 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
 }) {
   const savedDig = secret?.digitization ?? 0
   const savedLore = secret?.true_lore ?? ''
-  const savedMem = row.lore?.memoryFidelity ?? 'INTACT'
   const savedIcon = row.identity?.icon ?? 'fa-user'
   const savedPortrait = row.identity?.portrait ?? ''
   const savedFocus = row.identity?.portraitFocus ?? 'center top'
@@ -7319,10 +7317,10 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
 
   const [dig, setDig] = useState(savedDig)
   const [lore, setLore] = useState(savedLore)
-  const [mem, setMem] = useState(savedMem)
   const [icon, setIcon] = useState(savedIcon)
   const [portrait, setPortrait] = useState(savedPortrait)
   const [portraitFailed, setPortraitFailed] = useState(false)
+  const [imagePending, setImagePending] = useState(false)
   const [focus, setFocus] = useState(savedFocus)
   const [backstory, setBackstory] = useState(savedBackstory)
   const [trait, setTrait] = useState(savedPersonality.trait ?? '')
@@ -7340,7 +7338,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
   const secretDirty = dig !== savedDig || lore !== savedLore
   const personality = { trait, ideal, bond, flaw }
   const identityLore = { alignment, age, height, deity, homeland }
-  const charDirty = mem !== savedMem || icon !== savedIcon || portrait !== savedPortrait || focus !== savedFocus
+  const charDirty = icon !== savedIcon || portrait !== savedPortrait || focus !== savedFocus
     || backstory !== savedBackstory
     || JSON.stringify(personality) !== JSON.stringify({ trait: savedPersonality.trait ?? '', ideal: savedPersonality.ideal ?? '', bond: savedPersonality.bond ?? '', flaw: savedPersonality.flaw ?? '' })
     || JSON.stringify(relations) !== JSON.stringify(savedRelations)
@@ -7359,7 +7357,6 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
       const patch: CharacterUpdate = {}
       const nextLore: CharacterLore = {
         ...(row.lore ?? {}),
-        memoryFidelity: mem,
         backstory,
         personality,
         relations,
@@ -7469,20 +7466,15 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
       <div className={styles.loreGrid}>
         <div className={styles.portraitPrev}>
           {portrait && !portraitFailed ? (
-            <img src={portrait} alt="" style={{ objectPosition: focus }} onError={() => setPortraitFailed(true)} />
+            <ManagedImage key={portrait} src={portrait} alt="" style={{ objectPosition: focus }} onError={() => setPortraitFailed(true)} />
           ) : (
             <Icon name={icon} />
           )}
         </div>
         <div>
-          <span className={styles.fieldLab}>Public Image URL</span>
-          <input
-            className={styles.sessIn} value={portrait}
-            onChange={e => { setPortrait(e.target.value); setPortraitFailed(false) }}
-            placeholder="https://…/storage/v1/object/public/portraits/…"
-          />
-          <Btn tone="ghost" sm icon="fa-xmark" label="Clear" onClick={() => setPortrait('')} disabled={!portrait} />
-          <p className={styles.acHint}>Paste the public URL of a file already uploaded to the Storage "portraits" bucket. Absent/failed → the menu glyph below is shown instead.</p>
+          <ImageUpload value={portrait} scope="characters" characterId={row.id} aspect={3 / 4} disabled={busy}
+            onPendingChange={setImagePending}
+            onChange={value => { setPortrait(value); setPortraitFailed(false); setFocus('center center') }} />
         </div>
       </div>
       <div className={styles.glyphRow}>
@@ -7512,40 +7504,25 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
         </div>
       </div>
 
-      {/* DM-only tools — digitization, memory fidelity, true lore. Never sent to players
-          (memory fidelity is the one exception: it's a player-readable descriptor). */}
+      {/* DM-only tools — digitization and true lore. Never sent to players. (Memory
+          fidelity retired 2026-09-24: per-section integrity, lore.integrity, replaced it.) */}
       <LoreSecHead icon="fa-satellite-dish" label="DM Intelligence" />
-      <div className={styles.loreGrid}>
-        <div className={styles.actCard}>
-          <div className={styles.acTitle}><i className="fa-solid fa-radiation lead" /><span className={styles.t}>Digitization</span></div>
-          <div className={cx(styles.digRead, digClass && styles[digClass])}>
-            <span className={styles.digNum}>{dig}</span><span className={styles.digPct}>%</span>
-          </div>
-          <input
-            className={cx(styles.digSlider, digClass && styles[digClass])}
-            type="range" min={0} max={100} value={dig}
-            aria-label="Digitization level"
-            onChange={e => setDig(Number(e.target.value))}
-          />
-          <div className={styles.digSteps}>
-            <Btn tone="ghost" sm icon="fa-minus" label="5" onClick={() => setDig(d => Math.max(0, d - 5))} disabled={dig <= 0} />
-            <Btn tone="ghost" sm icon="fa-plus" label="5" onClick={() => setDig(d => Math.min(100, d + 5))} disabled={dig >= 100} />
-          </div>
-          <p className={styles.acHint}>Hidden corruption metric · DM only</p>
+      <div className={styles.actCard}>
+        <div className={styles.acTitle}><i className="fa-solid fa-radiation lead" /><span className={styles.t}>Digitization</span></div>
+        <div className={cx(styles.digRead, digClass && styles[digClass])}>
+          <span className={styles.digNum}>{dig}</span><span className={styles.digPct}>%</span>
         </div>
-
-        <div className={styles.actCard}>
-          <div className={styles.acTitle}><i className="fa-solid fa-wave-square lead" /><span className={styles.t}>Memory Fidelity</span></div>
-          <select className={styles.memSelect} value={mem} onChange={e => setMem(e.target.value)} aria-label="Memory fidelity">
-            {MEM_LEVELS.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
-          <div className={styles.memBars} aria-hidden="true">
-            {MEM_LEVELS.map((m, i) => (
-              <span key={m} className={cx(styles.memBar, i <= MEM_LEVELS.indexOf(mem as typeof MEM_LEVELS[number]) && styles.on, i >= 3 && styles.warn)} />
-            ))}
-          </div>
-          <p className={styles.acHint}>System descriptor · shown on the player Lore screen</p>
+        <input
+          className={cx(styles.digSlider, digClass && styles[digClass])}
+          type="range" min={0} max={100} value={dig}
+          aria-label="Digitization level"
+          onChange={e => setDig(Number(e.target.value))}
+        />
+        <div className={styles.digSteps}>
+          <Btn tone="ghost" sm icon="fa-minus" label="5" onClick={() => setDig(d => Math.max(0, d - 5))} disabled={dig <= 0} />
+          <Btn tone="ghost" sm icon="fa-plus" label="5" onClick={() => setDig(d => Math.min(100, d + 5))} disabled={dig >= 100} />
         </div>
+        <p className={styles.acHint}>Hidden corruption metric · DM only</p>
       </div>
 
       {/* true lore — the dramatic-irony layer (design: q-gm-head + q-gmnotes) */}
@@ -7567,7 +7544,7 @@ function LoreTab({ row, member, secret, onUpdateSecret, onUpdateChar }: {
           left in place here renders with correct geometry but never actually paints. */}
       {dirty && createPortal(
         <div className={styles.loreFloatSave}>
-          <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : 'Save Lore'} onClick={() => void save()} disabled={busy} />
+          <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : 'Save Lore'} onClick={() => void save()} disabled={busy || imagePending} />
         </div>,
         document.body,
       )}
@@ -7596,7 +7573,7 @@ type QuestFields = Omit<QuestRow, 'id' | 'created_at' | 'updated_at'>
 /** Quest Log: grouped index (left) + create/edit form (right) — the authoring
  *  twin of the player Journal's quest log. gmNotes round-trips through the DM-only
  *  `quest_secrets` table; everything else is on the player-facing `quests` row. */
-function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
+function QuestsSurface({ campaign, party }: { campaign: DmCampaignState; party: CharacterRow[] }) {
   const { quests, questSecrets, createQuest, updateQuest, deleteQuest, updateQuestSecret, loading, error } = campaign
   const [selId, setSelId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -7649,7 +7626,10 @@ function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
                         <span className={styles.qGlyph}>{questGlyph(q.type)}</span>
                         <span className={styles.qRtx}>
                           <span className={styles.qRt}>{q.title || 'Untitled'}</span>
-                          <span className={styles.qRl}>{q.location || '—'}</span>
+                          <span className={styles.qRl}>
+                            {q.location || '—'}
+                            {q.character_id && <> · <i className="fa-solid fa-user" /> {party.find(c => c.id === q.character_id)?.name ?? 'personal'}</>}
+                          </span>
                         </span>
                       </button>
                     )) : <div className={styles.qEmpty}>{loading ? '· loading ·' : '— none —'}</div>}
@@ -7665,6 +7645,7 @@ function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
               key={activeId ?? 'new'}
               quest={selected}
               gmNotes={selected ? (questSecrets[selected.id]?.gm_notes ?? '') : ''}
+              party={party}
               onSubmit={handleSubmit}
               onDelete={selected ? handleDelete : undefined}
               onNew={() => { setCreating(true); setSelId(null) }}
@@ -7676,9 +7657,11 @@ function QuestsSurface({ campaign }: { campaign: DmCampaignState }) {
   )
 }
 
-function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
+function QuestForm({ quest, gmNotes, party, onSubmit, onDelete, onNew }: {
   quest: QuestRow | null
   gmNotes: string
+  /** Who a quest can belong to (0028). */
+  party: CharacterRow[]
   onSubmit: (fields: QuestFields, gmNotes: string) => Promise<void>
   onDelete?: () => void
   onNew: () => void
@@ -7697,6 +7680,9 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
      is still the normal way to hand the party a quest — the prep board is what
      creates hidden ones. */
   const [visible, setVisible] = useState(quest?.visible ?? true)
+  /* 0028: a personal quest is on its owner's board and Character card only —
+     the player policy keeps it off everyone else's client. */
+  const [owner, setOwner] = useState<string | null>(quest?.character_id ?? null)
   const [objInput, setObjInput] = useState('')
   const [tagInput, setTagInput] = useState('')
   const [tagUrlInput, setTagUrlInput] = useState('')
@@ -7718,7 +7704,7 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
   }
   async function submit() {
     setBusy(true)
-    await onSubmit({ title, type, status, location, given_by: givenBy, description, objectives, related, visible }, gm)
+    await onSubmit({ title, type, status, location, given_by: givenBy, description, objectives, related, visible, character_id: owner }, gm)
     setBusy(false)
   }
 
@@ -7756,6 +7742,18 @@ function QuestForm({ quest, gmNotes, onSubmit, onDelete, onNew }: {
         <button className={cx(styles.qSegOpt, !visible && styles.sel)} onClick={() => setVisible(false)}>
           <i className="fa-solid fa-eye-slash" /> Hidden until revealed
         </button>
+      </div>
+
+      <span className={styles.fieldLab}>Belongs to</span>
+      <div className={styles.qSeg}>
+        <button className={cx(styles.qSegOpt, !owner && styles.sel)} onClick={() => setOwner(null)}>
+          <i className="fa-solid fa-users" /> The whole party
+        </button>
+        {party.map(c => (
+          <button key={c.id} className={cx(styles.qSegOpt, owner === c.id && styles.sel)} onClick={() => setOwner(c.id)}>
+            <i className="fa-solid fa-user" /> {c.name}
+          </button>
+        ))}
       </div>
 
       <div className={styles.qGrid2}>

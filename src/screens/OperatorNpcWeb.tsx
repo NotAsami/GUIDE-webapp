@@ -1,3 +1,4 @@
+import { ImageUpload } from '../components/ImageUpload'
 /**
  * Operator Console — the NPC web: who knows whom, laid out for the DM.
  *
@@ -321,6 +322,7 @@ function NpcForm({ record, notes, startName, locations, error, onSave, onDelete,
   const [role, setRole] = useState(record?.role ?? '')
   const [location, setLocation] = useState(record?.location ?? '')
   const [portrait, setPortrait] = useState(record?.portrait ?? '')
+  const [imagePending, setImagePending] = useState(false)
   const [blurb, setBlurb] = useState(record?.blurb ?? '')
   const [gm, setGm] = useState(notes)
   const fields = { name: name.trim(), role: role.trim(), location: location.trim(), portrait: portrait.trim(), blurb }
@@ -338,8 +340,8 @@ function NpcForm({ record, notes, startName, locations, error, onSave, onDelete,
       <label className={con.fieldLab} htmlFor="npc-loc">Location · their place on the web</label>
       <input id="npc-loc" className={con.sessIn} value={location} onChange={e => setLocation(e.target.value)} list="npc-locations" placeholder="Empty: the place of a quest they gave, else Unplaced" />
       <datalist id="npc-locations">{locations.map(l => <option key={l} value={l} />)}</datalist>
-      <label className={con.fieldLab} htmlFor="npc-portrait">Portrait URL · optional</label>
-      <input id="npc-portrait" className={con.sessIn} type="url" value={portrait} onChange={e => setPortrait(e.target.value)} placeholder="https://…/storage/v1/object/public/…" />
+      <span className={con.fieldLab}>Portrait · optional</span>
+      <ImageUpload value={portrait} onChange={setPortrait} onPendingChange={setImagePending} scope="npcs" aspect={1} />
       <div className={con.qLabRow}>
         <span className={con.fieldLab}>What the party knows</span>
         <ProsePreview text={blurb} />
@@ -350,7 +352,7 @@ function NpcForm({ record, notes, startName, locations, error, onSave, onDelete,
       <textarea className={cx(con.gmNotes, styles.ta)} value={gm} onChange={e => setGm(e.target.value)} placeholder="Their secret, their agenda — DM eyes only…" />
       {error && <div className={styles.err}>{error}</div>}
       <div className={styles.fActions}>
-        <Btn tone="amber" icon="fa-floppy-disk" label={record ? 'Save NPC' : 'Add to the web'} onClick={() => onSave(fields, gm)} disabled={!fields.name} />
+        <Btn tone="amber" icon="fa-floppy-disk" label={record ? 'Save NPC' : 'Add to the web'} onClick={() => onSave(fields, gm)} disabled={!fields.name || imagePending} />
         {onDelete && <Btn tone="danger" icon="fa-trash" label="Delete" onClick={onDelete} />}
       </div>
     </div>

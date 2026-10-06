@@ -62,7 +62,7 @@ function Row({ t, story, open }: { t: Thread; story: string; open: boolean }) {
 export function Story() {
   const { character, handouts, openHandout } = useOutletContext<RouteContext>()
   const { storyId, threadId } = useParams()
-  const { quests, sessions, loading, error } = useCampaign()
+  const { quests, sessions, loading, error } = useCampaign(character.id)
 
   const stories = character.progress?.stories ?? []
   const story = stories.find(s => s.id === storyId)
@@ -114,7 +114,7 @@ export function Story() {
     + (sideThreads.length ? SIDE_GAP + sideThreads.length * SIDE_ROW_H : 0)
   // THE PERCENT IS COMPLETION, not narrative progress — closed quests over all
   // of them, side quests included. Null where there is nothing countable (region
-  // has no locations table, a relation never completes), and there the DM's
+  // has no locations table; a Character card before its first personal quest), and there the DM's
   // authored number still stands.
   const done = completionFor(story, quests, character)   // for the "2 / 6 closed" line
   const pct = displayPercent(story, quests, character)

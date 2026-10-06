@@ -17,6 +17,9 @@
 - Notes (feature editor) don't resolve markdown in the roll context panel.
 - Feature editor should have Reset on turn in the reset picker (short and long rest) so you don't have to make variables to reset on advancing turn.
 - The filters on the feature panel should be on the same line as the usable & passive filters, so it doesn't take up valuable space on the laptops and to fill the empty space on the right of them.
+- In the handouts menus, what is "On screen" and "filed" like even if you close the handout that was popped out "on screen" its still filed under "on screen" can only the DM change that?
+- The new NPCs only show up on the web-map, not on the actual relations in the "lore screen"
+- Update the handout paper look
 
 ## GRAND UNIFICATION
 - A centralized editor for everything (except shards). Effects, features, spells, items, shopkeepers, loot tables. Exactly like in Dicecloud, where you first set what each node is supposed to be and then edit from there, like you set an item node, and you get stuff regarding items in the editor. Exactly like in Dicecloud (last, post launch, just QOL)
@@ -27,14 +30,8 @@ It also gets you something forms can't: type-checked ports. The engine's rules �
 The one caution: nodes are great for Sanctity and worse than a form for Second Wind. So make them two views of1 the same data — simple features stay in the form, complex ones open as a graph. No migration, no choice forced. And your shard lattice editor already solved pan, zoom, and node hit-testing, so there's a head start.
 
 ## MORE THINGS
-Handouts — push a lore document or image to a player's screen. - DONE, not tested
-NPC relationship web — who knows whom, rendered as a graph.
-Session prep board — shops, loot, and encounters staged before a session.
 The medieval skin — illuminated manuscript, gold leaf on parchment.
 A printable character sheet, styled as a G.U.I.D.E. dossier printout.
-JOURNAL redesign (handouts + general updates)
-LORE redesign (new things + npc web map)
-SPELLBOOK redesign (Too much wasted space imo)
 
 ## EVOLUTION
 Evolution. The core horror mechanic from your original pitch — invest enough points, evolve, gain power, lose something. Glitch marks, ones and zeroes on the body. It's the campaign's centrepiece and it has no screen.

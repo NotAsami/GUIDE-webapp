@@ -52,8 +52,7 @@ export type CharacterIdentity = {
   /** Font Awesome glyph (e.g. "fa-chess-rook") for the roster/menu portrait when
    *  no image is set. Authored DM-side in the Lore tab; defaults to "fa-user". */
   icon?: string
-  /** Public image URL for the operator portrait (e.g. a Supabase Storage public
-   *  URL). Absent/failed → the screen falls back to the handshake "PORTRAIT_FEED"
+  /** External URL or private storage:guide-images/… reference. Absent/failed → the screen falls back to the handshake "PORTRAIT_FEED"
    *  panel, so the layout is identical whether or not an image is set. */
   portrait?: string | null
   /** CSS object-position for the portrait crop, so a DM can keep a face in
@@ -1344,7 +1343,11 @@ export type CharacterLore = {
   relations?: Relation[]
   /** Only fields NOT already on `identity` — race/class/archetype/background live there. */
   identity?: { alignment?: string; age?: string; height?: string; deity?: string; homeland?: string }
-  memoryFidelity?: string
+  /** Per-section integrity, `## heading` → percent still in ink (0–100, 100 when
+   *  absent). What G.U.I.D.E. has taken; the Lore screen renders a section under
+   *  100 as its letters falling to 1s and 0s (lib/loreDoc.ts). A placeholder until
+   *  the evolution system owns these numbers. */
+  integrity?: Record<string, number>
 }
 
 // ── Shards (`shard_tree_catalog` / `shard_tree_secrets`, migration 0008). A
@@ -1521,6 +1524,10 @@ export type QuestRow = {
    *  story lattice and the completion percent all read through one policy that
    *  requires it, so a hidden quest is absent rather than filtered. */
   visible: boolean
+  /** 0028: a PERSONAL quest belongs to one character — on their board and their
+   *  Character story card only; null = the whole party. The player policy is what
+   *  keeps it off everyone else's client. */
+  character_id: string | null
   created_at: string         // stable list order
   updated_at: string
 }
@@ -1540,8 +1547,12 @@ export type SessionRow = {
   date: string
   recap: string
   events: string[]
+  /** 0028: what this session moved, written by the prep board's wrap. References
+   *  only, resolved against the rows the reader may see (lib/journalBoard.ts). */
+  links?: SessionLink[]
   updated_at: string
 }
+export type SessionLink = { kind: 'quest' | 'handout'; ref: string }
 export type SessionInsert = Partial<Omit<SessionRow, 'updated_at'>>
 export type SessionUpdate = Partial<Omit<SessionRow, 'id'>>
 

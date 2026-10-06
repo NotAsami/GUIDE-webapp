@@ -99,7 +99,7 @@
   border: 2px solid #111;
 }
 .region { position: relative; min-height: 0; min-width: 0; }
-/* The work area over regions 02 AND 03 — only the NPC web asks for it. */
+/* The work area over regions 02 AND 03 — the NPC web and the prep board. */
 .region.regionWide { grid-column: 2 / 4; }
 .rFrame {
   position: absolute; inset: 0; background: var(--beige); opacity: 0.85;
@@ -691,23 +691,6 @@
 
 .acHint { margin: 0; font-family: var(--font-mono); font-size: 8px; line-height: 1.5; letter-spacing: 0.1em; color: var(--amber-dim); text-transform: uppercase; }
 
-/* memory-fidelity selector (player-facing horror descriptor on characters.lore) */
-.memSelect {
-  width: 100%; background-color: rgba(0,0,0,0.5); border: 1px solid rgba(212,191,125,0.32);
-  color: var(--text); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
-  padding: 9px 11px; margin-bottom: 11px; cursor: pointer;
-  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
-  appearance: none; -webkit-appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--amber) 50%), linear-gradient(135deg, var(--amber) 50%, transparent 50%);
-  background-position: calc(100% - 15px) 15px, calc(100% - 10px) 15px;
-  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
-}
-.memSelect:focus { outline: none; --bc: var(--amber); }
-.memSelect option { background: #14130f; color: var(--text); }
-.memBars { display: flex; gap: 5px; margin-bottom: 11px; }
-.memBar { flex: 1; height: 6px; background: rgba(0,0,0,0.6); border: 1px solid rgba(226,176,33,0.22); }
-.memBar.on { background: linear-gradient(180deg, var(--amber-dim), var(--amber)); box-shadow: 0 0 6px rgba(226,176,33,0.45); border-color: transparent; }
-.memBar.on.warn { background: linear-gradient(180deg, #6e1f1f, var(--danger-hot)); box-shadow: 0 0 6px rgba(255,84,84,0.5); }
 
 /* menu glyph picker (writes characters.identity.icon) */
 .glyphRow { display: flex; align-items: center; gap: 13px; margin: 14px 0 4px; flex-wrap: wrap; }
@@ -1451,7 +1434,6 @@
 .glyphBtn { --cut: 5px; --bc: rgba(212,191,125,0.22); }
 .gmHead { --cut: 5px; --bc: rgba(226,176,33,0.4); }
 .gmNotes { --cut: 7px; --bc: rgba(226,176,33,0.45); }
-.memSelect { --cut: 5px; --bc: rgba(212,191,125,0.32); }
 .numIn { --cut: 5px; --bc: rgba(212,191,125,0.32); }
 .profChip { --cut: 5px; --bc: rgba(212,191,125,0.22); }
 .qCheck { --cut: 4px; --bc: var(--beige-dim); }
@@ -1470,7 +1452,7 @@
    line remains. origin border-box so the corner box aligns with clip-path. */
 .opRootpill, .ovBanner .dmonly, .drFx .chip, .catFx, .catIc, .catPrev,
 .catPrev .pvCell, .catProse, .catRow .crIc, .catSoonBlock, .catTab, .catTog,
-.durOpt, .glyphBtn, .gmHead, .gmNotes, .memSelect, .numIn, .profChip, .qCheck,
+.durOpt, .glyphBtn, .gmHead, .gmNotes, .numIn, .profChip, .qCheck,
 .qPlayerDesc, .qSegOpt, .qTag, .searchIn, .selIn, .sessIn, .sessRecap,
 .toneOpt, .bcTarget .tg, .catDmg, .ccOpt, .ccB,
 .efBlock, .efChip, .efKind .k, .efPrev, .efPrev .pc, .efRefRow, .efRefTop .ic,

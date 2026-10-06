@@ -1,5 +1,5 @@
 /* The NPC web's drawing, drawer and read-only card — shared by the Operator
-   Console (OperatorNpcWeb) and the player's relations web (RelationsWeb), so
+   Console (OperatorNpcWeb) and the player's web on the Lore screen, so
    the two can never draw the same web differently. Node geometry (circle
    sizes, label width, line heights) is NOT set here: it comes inline from
    lib/npcWeb.ts, the same numbers the layout's overlap guard is tested with.
