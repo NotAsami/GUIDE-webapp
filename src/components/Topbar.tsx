@@ -7,6 +7,7 @@ import { burden } from '../lib/burden'
 import { effectiveSheet } from '../lib/effects'
 import { useFullscreen } from '../lib/fullscreen'
 import { RestButton } from './RestButton'
+import { HpControl } from './HpControl'
 import styles from './Layout.module.css'
 
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ')
@@ -18,7 +19,7 @@ interface Props {
   shardTrees?: Record<string, ShardTree>
 }
 
-/** Shared chrome. The HP pill shows current/max (editing lives in the Stat Panel);
+/** Shared chrome. The HP pill opens damage/heal from any screen (HpControl);
  *  the Rest button beside it resets daily resources. */
 export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
   const { signOut } = useAuth()
@@ -28,11 +29,9 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
   const level = character.identity?.level ?? 1
   const reputation = character.identity?.reputation ?? 0
   const gold = character.sheet?.coins?.gold ?? 0
-  const hpCurrent = character.sheet?.hp?.current ?? 0
   // Effective max — base + slotted-shard bonuses (lib/effects.ts). Current
   // HP itself is never shard-boosted; only the ceiling moves.
   const hpMax = effectiveSheet(character, shardTrees).hp?.max ?? character.sheet?.hp?.max ?? 0
-  const hpLow = hpMax > 0 && hpCurrent / hpMax <= 0.25
 
   // Burden is derived from item weights (carried + equipped) vs STR-based
   // capacity — one shared helper, also read by the Inventory screen.
@@ -60,11 +59,7 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
           </div>
           <div className={styles.bar} aria-hidden="true"><i style={{ width: `${pct(reputation, 100)}%` }} /></div>
         </div>
-        <div className={styles.hpBlock} aria-label="HP">
-          <span className="ic">♥</span>
-          <span className={`val${hpLow ? ' low' : ''}`}>{hpCurrent} / {hpMax}</span>
-          <span className="lab">HP</span>
-        </div>
+        <HpControl character={character} effMax={hpMax} updateSections={updateSections} />
       </div>
 
       <div className={styles.topCenter}>

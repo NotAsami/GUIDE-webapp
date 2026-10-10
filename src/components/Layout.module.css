@@ -185,31 +185,6 @@
 @media (max-width: 1450px) {
   .burdenBlock { display: none; }
 }
-.hpStepper {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 4px;
-}
-.hpStepper button {
-  width: 18px;
-  height: 18px;
-  border: 1px solid var(--beige-dim);
-  color: var(--beige);
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 13px;
-  line-height: 1;
-  background: rgba(0, 0, 0, 0.4);
-  transition: border-color 120ms, color 120ms, background 120ms;
-}
-.hpStepper button:hover:not(:disabled) {
-  border-color: var(--cyan);
-  color: var(--cyan);
-  background: color-mix(in srgb, var(--cyan) 8%, transparent);
-}
-.hpStepper button:disabled { opacity: 0.35; cursor: not-allowed; }
-
 .signOut {
   font-family: var(--font-mono);
   font-size: 9px;
