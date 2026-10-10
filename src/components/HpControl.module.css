@@ -1,0 +1,135 @@
+/* Topbar HP pill + its damage/heal popover. The pill borrows Layout's .hpBlock
+   type; this file adds only what makes it a control. */
+
+.wrap { position: relative; display: inline-flex; }
+
+.pill {
+  padding: 3px 8px 3px 6px;
+  margin: -3px -8px -3px -6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+.pill:hover, .pill[aria-expanded="true"] {
+  border-color: var(--cyan-dim);
+  background: color-mix(in srgb, var(--cyan) 6%, transparent);
+}
+.pill:focus-visible { outline: 2px solid var(--cyan-hot); outline-offset: 2px; }
+.temp {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cyan-hot);
+  margin-left: -4px;
+}
+
+/* "−17 · Undo" — sits in the empty run right of the pill, absolutely placed
+   so the topbar never reflows (below it would collide with the telemetry strip). */
+.echo {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 16px);
+  transform: translateY(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 8px;
+  white-space: nowrap;
+  background: rgba(10, 10, 10, 0.94);
+  border: 1px solid var(--cyan-dim);
+  animation: echoIn 220ms cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes echoIn { from { opacity: 0; transform: translate(-6px, -50%); } }
+.echoDmg, .echoHeal { font-family: var(--font-display); font-size: 16px; line-height: 1; }
+.echoDmg { color: var(--danger-hot); }
+.echoHeal { color: var(--cyan-hot); }
+.undo {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--beige);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.undo:hover, .undo:focus-visible { color: var(--cyan-hot); outline: none; }
+
+/* ---- popover ---- */
+.panel {
+  /* --cut matches the clip-path chamfer; --bc is the whole border (see
+     docs/Chamfered_clip-path_corners_fix.md). */
+  --cut: 10px;
+  --bc: var(--beige);
+  position: fixed;
+  z-index: 400;
+  width: 248px;
+  display: grid;
+  gap: 10px;
+  padding: 14px 14px 12px;
+  background-color: rgba(10, 10, 10, 0.98);
+  background-image:
+    linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
+    linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
+  background-repeat: no-repeat;
+  background-origin: border-box;
+  background-position: top left, bottom right;
+  background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px), calc(var(--cut) + 1px) calc(var(--cut) + 1px);
+  border: 1.5px solid var(--bc);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.7);
+  clip-path: polygon(var(--cut) 0, 100% 0,
+    100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
+    0 100%, 0 var(--cut));
+  animation: panelIn 180ms cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes panelIn { from { opacity: 0; transform: translateY(-6px); } }
+
+.readout { display: flex; align-items: baseline; gap: 6px; }
+.cur { font-family: var(--font-display); font-size: 30px; line-height: 1; color: var(--beige); font-variant-numeric: tabular-nums; }
+.cur.low { color: var(--danger-hot); }
+.of { font-family: var(--font-display); font-size: 16px; color: var(--beige-dim); }
+.tempTag {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--cyan-hot);
+}
+
+.amount {
+  width: 100%;
+  padding: 8px 10px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  text-align: center;
+  color: var(--beige);
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--beige-dim);
+  caret-color: var(--cyan-hot);
+  -moz-appearance: textfield;
+}
+.amount::-webkit-outer-spin-button, .amount::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.amount:focus { outline: none; border-color: var(--cyan); }
+.amount::placeholder { color: var(--beige-dim); }
+
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dmg, .heal, .setTemp {
+  min-height: 36px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  border: 1px solid;
+  transition: background 120ms, color 120ms;
+}
+.dmg { color: var(--danger-hot); border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.dmg:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 26%, transparent); }
+.heal { color: var(--cyan-hot); border-color: var(--cyan-dim); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
+.heal:hover:not(:disabled) { background: color-mix(in srgb, var(--cyan) 18%, transparent); }
+.setTemp { min-height: 30px; color: var(--beige); border-color: var(--beige-dim); background: transparent; }
+.setTemp:hover:not(:disabled) { color: var(--cyan-hot); border-color: var(--cyan-dim); }
+.dmg:focus-visible, .heal:focus-visible, .setTemp:focus-visible { outline: 2px solid var(--cyan-hot); outline-offset: 2px; }
+.dmg:disabled, .heal:disabled, .setTemp:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.hint, .error { margin: 0; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.5; }
+.hint { color: var(--muted); }
+.error { color: var(--danger-hot); }
