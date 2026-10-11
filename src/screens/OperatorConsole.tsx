@@ -78,6 +78,7 @@ import { usePartyPresence } from '../lib/presence'
 import { assignRace } from '../lib/races'
 import { longRestPatch } from '../lib/rest'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
+import { ConfirmBtn } from './OperatorBtn'
 import { pactSlotCount, pactSlotLevel } from '../lib/spells'
 import { proseField } from '../lib/textareaHooks'
 import { durationTurns } from '../lib/turns'
@@ -158,7 +159,14 @@ interface LogEntry {
   node: ReactNode
   kind?: 'cyan' | 'danger'
   time: string
+  /** Puts back what this line did. Offered for UNDO_MS, then dropped. */
+  undo?: () => Promise<boolean>
+  undone?: boolean
 }
+
+/** How long a log line offers its undo. Long enough to notice the typo'd 50,
+ *  short enough that an undo never lands on a sheet that has moved on. */
+const UNDO_MS = 10_000
 
 const nowStamp = () => {
   const d = new Date()
@@ -238,8 +246,33 @@ export function OperatorConsole() {
   const sendVoice = useGuideVoice()
   // Session-local activity log, newest first, capped like the mockup's logAct.
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
-  const log = (node: ReactNode, kind?: LogEntry['kind']) =>
-    setLogEntries(prev => [{ id: crypto.randomUUID(), node, kind, time: nowStamp() }, ...prev].slice(0, 24))
+  const log = (node: ReactNode, kind?: LogEntry['kind'], undo?: LogEntry['undo']) => {
+    const id = crypto.randomUUID()
+    setLogEntries(prev => [{ id, node, kind, time: nowStamp(), undo }, ...prev].slice(0, 24))
+    if (undo) setTimeout(() => setLogEntries(prev => prev.map(e => (e.id === id ? { ...e, undo: undefined } : e))), UNDO_MS)
+  }
+  const undoEntry = async (e: LogEntry) => {
+    if (!e.undo) return
+    const ok = await e.undo()
+    if (ok) setLogEntries(prev => prev.map(x => (x.id === e.id ? { ...x, undo: undefined, undone: true } : x)))
+  }
+
+  /* An undo restores one sheet field from the LATEST row, not the one its
+     handler closed over: in the seconds between, the DM may have moved coins
+     on the same sheet, and spreading a stale sheet would silently revert that. */
+  /* Both through refs: the undo closure is built BEFORE its write lands, so a
+     captured updateCharacter would still hold the pre-write party as its merge
+     base — and a three-way merge of "172" over a base of 172 is a no-op that
+     reports success. The latest updateCharacter merges against the latest row. */
+  const partyRef = useRef(party)
+  partyRef.current = party
+  const updateRef = useRef(updateCharacter)
+  updateRef.current = updateCharacter
+  const restoreSheet = (id: string, field: 'hp' | 'coins', value: unknown) => {
+    const latest = partyRef.current.find(c => c.id === id)
+    if (!latest?.sheet) return Promise.resolve(false)
+    return updateRef.current(id, { sheet: { ...latest.sheet, [field]: value } })
+  }
 
   /* The loot roll lives at console level, not inside the catalog tab: it has to
      survive the DM navigating away (the mockup's index row offers "Resume"),
@@ -769,7 +802,7 @@ export function OperatorConsole() {
                     log={log}
                   />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} backgroundLib={backgroundLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} backgroundLib={backgroundLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onRestore={(field, value) => restoreSheet(selectedRow.id, field, value)} onVoice={sendVoice} log={log} />
                 )
               ) : (
                 <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
@@ -796,9 +829,12 @@ export function OperatorConsole() {
               {logEntries.length ? (
                 <div className={styles.logList}>
                   {logEntries.map(e => (
-                    <div key={e.id} className={cx(styles.logItem, e.kind && styles[e.kind])}>
+                    <div key={e.id} className={cx(styles.logItem, e.kind && styles[e.kind], e.undone && styles.undone)}>
                       <div className={styles.lgLine}>{e.node}</div>
-                      <div className={styles.lgTime}>{e.time} · this session</div>
+                      <div className={styles.lgTime}>
+                        {e.time} · {e.undone ? 'undone' : 'this session'}
+                        {e.undo && <button type="button" className={styles.lgUndo} onClick={() => void undoEntry(e)}>Undo</button>}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1168,7 +1204,7 @@ function AdvStat({ label, from, to, mono, flat }: {
   )
 }
 
-function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, backgroundLib, shardCatalog, onUpdate, onVoice, log }: {
+function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, backgroundLib, shardCatalog, onUpdate, onRestore, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
   catalog: CatalogItemRow[]
@@ -1180,8 +1216,10 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
   backgroundLib: DmBackgroundsState
   shardCatalog: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  /** Puts one sheet field back, against the latest row — the log's Undo. */
+  onRestore: (field: 'hp' | 'coins', value: unknown) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
-  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+  log: (node: ReactNode, kind?: 'cyan' | 'danger', undo?: () => Promise<boolean>) => void
 }) {
   const [hpAmt, setHpAmt] = useState(5)
   const [coinAmt, setCoinAmt] = useState(50)
@@ -1218,20 +1256,24 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
   //      write that failed is worse than none. Failures show in the banner. ----
   const writeHp = (next: number, nextTemp = tempHp) =>
     onUpdate({ sheet: { ...sheet, hp: { ...hp, current: next, max: baseMax, temp: nextTemp } } })
-  const heal = async () => { if (await writeHp(Math.min(hpMax, hpCur + hpAmt))) log(<>Healed {who} <span className={styles.obj}>+{hpAmt} HP</span></>) }
-  const damage = async () => { if (await writeHp(Math.max(0, hpCur - hpAmt))) log(<>Damaged {who} <span className={styles.obj}>−{hpAmt} HP</span></>, 'danger') }
-  const setHp = async () => { if (await writeHp(Math.max(0, Math.min(hpMax, hpAmt)))) log(<>Set {who} HP to <span className={styles.obj}>{Math.max(0, Math.min(hpMax, hpAmt))}</span></>) }
-  const addTemp = async () => { if (await writeHp(hpCur, tempHp + hpAmt)) log(<>Granted {who} <span className={styles.obj}>+{hpAmt} temp HP</span></>) }
+  // Every HP write can be undone from its log line: hp before the write.
+  const undoHp = () => { const prev = hp; return () => onRestore('hp', prev) }
+  const heal = async () => { const u = undoHp(); if (await writeHp(Math.min(hpMax, hpCur + hpAmt))) log(<>Healed {who} <span className={styles.obj}>+{hpAmt} HP</span></>, undefined, u) }
+  const damage = async () => { const u = undoHp(); if (await writeHp(Math.max(0, hpCur - hpAmt))) log(<>Damaged {who} <span className={styles.obj}>−{hpAmt} HP</span></>, 'danger', u) }
+  const setHp = async () => { const u = undoHp(); if (await writeHp(Math.max(0, Math.min(hpMax, hpAmt)))) log(<>Set {who} HP to <span className={styles.obj}>{Math.max(0, Math.min(hpMax, hpAmt))}</span></>, undefined, u) }
+  const addTemp = async () => { const u = undoHp(); if (await writeHp(hpCur, tempHp + hpAmt)) log(<>Granted {who} <span className={styles.obj}>+{hpAmt} temp HP</span></>, undefined, u) }
   const longRest = async () => { if (await onUpdate(longRestPatch(row, shardCatalog).patch)) log(<>Applied <span className={styles.obj}>Long Rest</span> to {who}</>) }
 
   const coinVal = { gold, silver, copper }[coinKind]
   const moveCoins = async (op: 'award' | 'deduct') => {
     const next = op === 'award' ? coinVal + coinAmt : Math.max(0, coinVal - coinAmt)
+    const prev = coins
     const ok = await onUpdate({ sheet: { ...sheet, coins: { ...coins, [coinKind]: next } } })
     if (!ok) return
     void onVoice({ kind: 'coins', target: member.id, amount: coinAmt, coin: coinKind, op })
-    if (op === 'award') log(<>Awarded <span className={styles.obj}>{coinAmt} {coinKind} coins</span> to {who}</>)
-    else log(<>Deducted <span className={styles.obj}>{coinAmt} {coinKind} coins</span> from {who}</>, 'danger')
+    const undo = () => onRestore('coins', prev)
+    if (op === 'award') log(<>Awarded <span className={styles.obj}>{coinAmt} {coinKind} coins</span> to {who}</>, undefined, undo)
+    else log(<>Deducted <span className={styles.obj}>{coinAmt} {coinKind} coins</span> from {who}</>, 'danger', undo)
   }
   const award = () => void moveCoins('award')
   const deduct = () => void moveCoins('deduct')
@@ -1291,7 +1333,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
             <Btn tone="cyan" sm icon="fa-shield" label="+Temp" onClick={addTemp} />
           </div>
           <div className={styles.restRow}>
-            <Btn tone="amber" sm icon="fa-campground" label="Long Rest" onClick={longRest} />
+            <ConfirmBtn tone="amber" sm icon="fa-campground" label="Long Rest" confirmLabel="Rest — resets HP, slots, effects" onClick={longRest} />
           </div>
         </div>
 
@@ -3671,7 +3713,7 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
 
       <div className={styles.qActions}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : effect ? 'Save Effect' : 'Create Effect'} onClick={() => void submit()} disabled={busy || !name.trim()} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+        {onDelete && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} disabled={busy} />}
       </div>
     </>
   )
@@ -4090,7 +4132,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
 
       <div className={styles.qActions}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : spell ? 'Save Spell' : 'Create Spell'} onClick={() => void submit()} disabled={busy || !name.trim() || gErrs.length > 0} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+        {onDelete && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} disabled={busy} />}
       </div>
     </>
   )
@@ -7820,7 +7862,7 @@ function QuestForm({ quest, gmNotes, party, onSubmit, onDelete, onNew }: {
 
       <div className={styles.qActions}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : quest ? 'Save Quest' : 'Create Quest'} onClick={() => void submit()} disabled={busy || !title.trim()} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+        {onDelete && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} disabled={busy} />}
       </div>
     </>
   )
@@ -7954,7 +7996,7 @@ function SessionForm({ session, nextNum, onSubmit, onDelete }: {
 
       <div className={styles.qActions}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : session ? 'Save Session' : 'Create Session'} onClick={() => void submit()} disabled={busy || !title.trim()} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+        {onDelete && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} disabled={busy} />}
       </div>
     </>
   )

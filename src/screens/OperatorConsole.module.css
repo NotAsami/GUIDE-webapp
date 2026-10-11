@@ -3110,3 +3110,13 @@ div.skWarn { cursor: default; }
   color: var(--beige); background: transparent; border: 1px solid var(--beige-dim); cursor: pointer;
 }
 .writeErr button:hover, .writeErr button:focus-visible { border-color: var(--beige); outline: none; }
+
+/* The log's Undo — offered for 10s on HP and coin lines (OperatorConsole UNDO_MS). */
+.lgUndo {
+  margin-left: 10px; padding: 2px 8px;
+  font: inherit; font-size: var(--fs-label); text-transform: uppercase; letter-spacing: var(--ls-label);
+  color: var(--amber-hot); background: color-mix(in srgb, var(--amber) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber) 50%, transparent); cursor: pointer;
+}
+.lgUndo:hover, .lgUndo:focus-visible { background: color-mix(in srgb, var(--amber) 22%, transparent); outline: none; }
+.logItem.undone .lgLine { text-decoration: line-through; opacity: 0.6; }
