@@ -50,7 +50,7 @@ export function Bottombar({ shopOpen, shopDismissed, onReopenShop, rollPanelOpen
             onClick={onToggleRollPanel}
             title={badge > 0 ? `Roll context — ${badge} unresolved` : 'Roll context'}
           >
-            <i className="fa-solid fa-dice-d20" /> ROLLS
+            <i className="fa-solid fa-dice-d20" aria-hidden="true" /> ROLL CONTEXT
             {badge > 0 && (
               <span className={styles.bbBadge} aria-label={`${badge} unresolved`}>{badge}</span>
             )}

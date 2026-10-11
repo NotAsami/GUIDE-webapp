@@ -209,16 +209,20 @@
   color: var(--muted);
   text-transform: uppercase;
   z-index: 24;
-  opacity: 0.7;
+  white-space: nowrap;
 }
 .hint .k {
   display: inline-block;
-  padding: 1px 6px;
-  margin: 0 4px;
+  padding: 3px 8px;
+  margin: 0 2px;
   border: 1px solid var(--beige-dim);
   color: var(--beige);
   font-size: var(--fs-label);
+  text-decoration: none;
+  transition: color 120ms, border-color 120ms;
 }
+.hint .k:hover, .hint .k:focus-visible { color: var(--cyan-hot); border-color: var(--cyan); outline: none; }
+.hintSep { color: var(--beige-dim); }
 
 /* ============================================================
    DOCK VARIANT — compact top bar for content screens

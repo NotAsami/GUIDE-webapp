@@ -293,6 +293,17 @@
    ============================================================ */
 
 .advToggles { display: flex; gap: 8px; margin-bottom: 10px; flex: 0 0 auto; }
+
+/* Always-visible skills: two columns above the log, so ADV/DIS (above) reads
+   as applying to them too. The log below takes the slack. */
+.skillGrid {
+  flex: 0 0 auto;
+  display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px;
+  margin-bottom: 12px; padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 20%, transparent);
+}
+.skillGrid .skillCard + .skillCard { border-top: 0; }
+.skillGrid .skillCard { border-bottom: 1px dashed color-mix(in srgb, var(--beige) 12%, transparent); }
 .advBtn {
   --cut: 8px;
   flex: 1; height: 36px; position: relative;
