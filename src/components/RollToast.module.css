@@ -79,8 +79,8 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .sub {
-  font-family: var(--font-mono); font-size: 8.5px;
-  letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase;
 }
 .dismiss { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
 .head:hover .dismiss { color: var(--beige); }
@@ -91,8 +91,8 @@
   margin-top: 9px;
 }
 .lab {
-  font-family: var(--font-mono); font-size: 9px;
-  letter-spacing: 0.22em; color: var(--beige); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase;
 }
 .total {
   margin-left: auto;
@@ -129,8 +129,8 @@
   background: color-mix(in srgb, var(--amber) 10%, transparent);
   border: 1.5px solid color-mix(in srgb, var(--amber) 45%, transparent);
   color: var(--amber);
-  font-family: var(--font-mono); font-size: 8.5px;
-  letter-spacing: 0.18em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); text-transform: uppercase;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 /* Nothing is waiting — this is a route, not an alert, so it drops to the beige

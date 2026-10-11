@@ -40,7 +40,7 @@
 .cfOn { border-left-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
 .cfOn i { color: var(--cyan-hot); }
 .cfLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cfVal { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
+.cfVal { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
 .cfFoot { display: flex; gap: 10px; padding: 0 20px 20px; }
 .cfFoot .pUse { flex: 1; }
 .cfCancel {
@@ -62,8 +62,8 @@
   font-size: 19px; letter-spacing: 0.08em; color: var(--cyan-hot); line-height: 1.1;
 }
 .pSub {
-  font-family: var(--font-mono); font-size: 9px;
-  letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige);
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige);
 }
 .pUse {
   width: 100%;
@@ -91,8 +91,8 @@
   padding: 0 20px 14px;
 }
 .cfGrantHead {
-  font-family: var(--font-mono); font-size: 9px;
-  letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige);
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige);
   padding: 6px 0 4px;
   border-top: 1px solid color-mix(in srgb, var(--beige) 16%, transparent);
 }
@@ -133,7 +133,7 @@
   border-left: 2px solid var(--cyan);
 }
 .cfRollLab {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--cyan-hot); text-transform: uppercase;
 }
 .cfRollTotal {
@@ -144,5 +144,5 @@
 }
 .cfRollBreak {
   grid-column: 1;
-  font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+  font-family: var(--font-mono); font-size: var(--fs-label); color: var(--muted);
 }

@@ -33,12 +33,12 @@
 
 .sector {
   position: absolute; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none;
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--beige-dim);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige-mid);
 }
 .eLabel {
   position: absolute; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none; z-index: 2;
   padding: 2px 7px; background: #0e0d0b; border: 1px solid color-mix(in srgb, var(--beige) 22%, transparent);
-  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige);
 }
 
 /* ---- nodes ---- */
@@ -71,7 +71,7 @@
 }
 .cap {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige-dim);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige-mid);
 }
 .faded { opacity: 0.4; }
 
@@ -95,7 +95,7 @@
 .tool {
   height: 30px; padding: 0 11px; cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent); background: rgba(14, 13, 11, 0.92); color: var(--beige);
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .tool:hover { border-color: var(--amber); }
 .tool.on { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); color: var(--amber-hot); }
@@ -103,15 +103,15 @@
 .focusTag {
   display: flex; align-items: center; gap: 10px; margin-left: 10px; padding: 3px 4px 3px 11px;
   border: 1px solid color-mix(in srgb, var(--amber) 50%, transparent); background: rgba(14, 13, 11, 0.92);
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber-hot);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--amber-hot);
 }
 .focusTag .tool { height: 24px; }
-.count { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 
 .legend {
   position: absolute; z-index: 6; left: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 7px;
   padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--beige) 20%, transparent); background: rgba(14, 13, 11, 0.92);
-  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted);
 }
 .legend span { display: flex; align-items: center; gap: 9px; }
 .legend i { display: block; width: 26px; height: 0; border-top: 1.5px solid; }
@@ -121,7 +121,7 @@
 
 .empty {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-  padding: 40px; text-align: center; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.12em; color: var(--muted); line-height: 1.7;
+  padding: 40px; text-align: center; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.12em; color: var(--muted); line-height: 1.7;
 }
 .emptyT { font-family: var(--font-display); font-size: 18px; letter-spacing: 0.1em; color: var(--beige); }
 
@@ -144,13 +144,13 @@
 .dDisc .diamond { width: 50%; height: 50%; }
 .dTx { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .dName { font-family: var(--font-display); font-weight: 600; font-size: 19px; letter-spacing: 0.04em; color: var(--beige); }
-.dMeta { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.dMeta { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 .x { flex: 0 0 auto; align-self: flex-start; width: 36px; height: 36px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
 .x:hover { color: var(--text); }
 .blurb { margin-top: 14px; }
 .blurb p { margin: 0 0 10px; font-family: var(--font-prose); font-size: 15px; line-height: 1.55; color: var(--muted); }
 
-.dSub { margin: 20px 0 4px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--amber); }
+.dSub { margin: 20px 0 4px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--amber); }
 .dSub span { color: var(--beige-dim); margin-left: 6px; }
 .tie { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 4px 10px; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--beige) 12%, transparent); }
 .tGlyph { font-size: 11px; line-height: 20px; }
@@ -163,7 +163,7 @@
 }
 button.tWho { cursor: pointer; }
 button.tWho:hover { color: var(--amber-hot); }
-.tWhat { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); line-height: 1.6; }
+.tWhat { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); line-height: 1.6; }
 .tSrc { color: var(--beige-dim); }
 
 

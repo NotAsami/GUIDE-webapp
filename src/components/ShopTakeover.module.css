@@ -88,7 +88,7 @@
 }
 .titles { grid-column: 2; grid-row: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; align-self: center; }
 .eyebrow {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.34em; color: var(--cyan); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--cyan); text-transform: uppercase;
   display: flex; align-items: center; gap: 10px;
 }
 .tick { width: 5px; height: 5px; background: var(--cyan); box-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 85%, transparent); animation: blink 2.4s steps(2, end) infinite; }
@@ -104,7 +104,7 @@
    corners bare, so the corner stroke is painted as a background-image instead. */
 .chip {
   --cut: 4px; --bc: color-mix(in srgb, var(--beige) 45%, transparent);
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em; color: var(--beige); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase;
   border: 1px solid var(--bc); padding: 4px 9px;
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   background-image:
@@ -135,7 +135,7 @@
   background: linear-gradient(180deg, #141a1d, #0e1316);
   clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
   display: flex; align-items: center; justify-content: center; gap: 9px;
-  color: var(--cyan-hot); font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase;
+  color: var(--cyan-hot); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
   transition: box-shadow 170ms ease, color 170ms ease;
 }
 .leave:hover .leaveInner { color: #fff; box-shadow: inset 0 0 20px color-mix(in srgb, var(--cyan) 30%, transparent), 0 0 16px color-mix(in srgb, var(--cyan) 45%, transparent); }
@@ -151,7 +151,7 @@
   background: linear-gradient(180deg, color-mix(in srgb, var(--cyan) 5%, transparent), rgba(0, 0, 0, 0.28));
 }
 .purseLead { flex: 0 0 auto; display: flex; flex-direction: column; gap: 7px; }
-.subHead { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.3em; color: var(--cyan); text-transform: uppercase; }
+.subHead { font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: var(--ls-kicker); color: var(--cyan); text-transform: uppercase; }
 .goldReadout { display: flex; align-items: baseline; gap: 8px; font-family: var(--font-mono); }
 .goldReadout .cur { font-size: 32px; font-weight: 500; color: var(--cyan-hot); line-height: 1; text-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 40%, transparent); font-variant-numeric: tabular-nums; }
 .goldReadout .unit { font-size: 11px; color: var(--cyan); letter-spacing: 0.24em; }
@@ -179,11 +179,11 @@
 .coinBadge.cp .ci { background: var(--copper); color: var(--bg); }
 .ci { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 8.5px; line-height: 1; }
 .cval { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text); line-height: 1; font-variant-numeric: tabular-nums; }
-.clab { font-family: var(--font-mono); font-size: 7px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
+.clab { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase; }
 
 .purseNote {
   margin-left: auto; text-align: right;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted);
   display: flex; flex-direction: column; gap: 5px;
 }
 .purseNote .k { color: var(--beige-dim); }
@@ -208,9 +208,9 @@
    ============================================================ */
 .stockBar { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding-bottom: 9px; border-bottom: 1px dashed color-mix(in srgb, var(--beige) 22%, transparent); }
 .stockBar .sh { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase; }
-.stockBar .n { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
+.stockBar .n { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase; }
 .stockBar .n .acc { color: var(--cyan); }
-.legend { margin-left: auto; display: flex; align-items: center; gap: 14px; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.legend { margin-left: auto; display: flex; align-items: center; gap: 14px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 .legend .sw { width: 9px; height: 9px; border: 1.5px solid var(--cyan); display: inline-block; margin-right: 6px; vertical-align: -1px; }
 .legend .sw.dim { border-color: color-mix(in srgb, var(--beige) 30%, transparent); background: rgba(0, 0, 0, .4); }
 
@@ -219,21 +219,21 @@
 .stockScroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
 .stockScroll::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--cyan-dim), color-mix(in srgb, var(--beige) 50%, transparent)); border: 1px solid #111; }
 .stockGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 12px; }
-.stockEmpty { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; color: var(--beige-dim); text-transform: uppercase; padding: 20px; text-align: center; }
+.stockEmpty { grid-column: 1 / -1; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.1em; color: var(--beige-mid); text-transform: uppercase; padding: 20px; text-align: center; }
 
 .sc { --cut: 9px; position: relative; text-align: left; background: transparent; border: 0; padding: 0; cursor: pointer; font-family: var(--font-mono); transition: transform 150ms ease, filter 170ms ease; }
 .sc .scBody { position: relative; display: flex; flex-direction: column; gap: 0; min-height: 186px; padding: 0; background: rgba(0, 0, 0, 0.3); border-radius: 1px; }
 .sc .scArt { position: relative; flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 104px; }
 .sc .glyph { font-size: 40px; color: var(--text); line-height: 1; filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.65)); transition: color 160ms ease; }
-.sc .catCorner { position: absolute; top: 7px; left: 8px; font-size: 10px; color: var(--muted); opacity: .85; line-height: 1; }
-.sc .rarCorner { position: absolute; top: 7px; right: 8px; font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige-dim); }
+.sc .catCorner { position: absolute; top: 7px; left: 8px; font-size: var(--fs-label); color: var(--muted); opacity: .85; line-height: 1; }
+.sc .rarCorner { position: absolute; top: 7px; right: 8px; font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige-mid); }
 .sc .scFoot { flex: 0 0 auto; padding: 9px 10px 10px; border-top: 1px solid color-mix(in srgb, var(--beige) 16%, transparent); background: rgba(0, 0, 0, 0.34); display: flex; flex-direction: column; gap: 6px; }
 .sc .nm { font-family: var(--font-prose); font-size: 16.5px; line-height: 1.5; color: var(--text); letter-spacing: 0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc .pr { display: flex; align-items: baseline; gap: 7px; }
-.sc .pr .coin { width: 15px; height: 15px; border-radius: 50%; background: var(--beige); color: var(--bg); font-family: var(--font-display); font-weight: 700; font-size: 7.5px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; align-self: center; }
+.sc .pr .coin { width: 15px; height: 15px; border-radius: 50%; background: var(--beige); color: var(--bg); font-family: var(--font-display); font-weight: 700; font-size: var(--fs-micro); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; align-self: center; }
 .sc .pr .v { font-size: 14px; font-weight: 500; color: var(--beige); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
-.sc .pr .u { font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; }
-.sc .pr .st { margin-left: auto; font-size: 8px; letter-spacing: 0.18em; color: var(--cyan); text-transform: uppercase; }
+.sc .pr .u { font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); text-transform: uppercase; }
+.sc .pr .st { margin-left: auto; font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--cyan); text-transform: uppercase; }
 .sc:hover { transform: translateY(-2px); filter: brightness(1.14); }
 .sc:focus-visible { outline: 1px solid var(--cyan-hot); outline-offset: 3px; }
 
@@ -277,7 +277,7 @@
 .sc.sold .scBody { animation: none; box-shadow: none; }
 .sc.sold .scArt::after {
   content: "SOLD OUT"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-9deg);
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.28em; color: var(--danger-hot);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--danger-hot);
   border: 1.5px solid color-mix(in srgb, var(--danger) 75%, transparent); background: rgba(10, 10, 10, 0.85); padding: 5px 10px; white-space: nowrap;
 }
 .sc.sold .pr .v, .sc.sold .pr .u { color: var(--beige-dim); }
@@ -292,14 +292,14 @@
   position: relative; z-index: 3; flex: 0 0 auto;
   display: flex; align-items: center; gap: 14px; padding: 11px 26px 13px;
   border-top: 1px solid color-mix(in srgb, var(--beige) 28%, transparent);
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted);
 }
 .footLab { color: var(--beige-dim); }
 .footAcc { color: var(--cyan); }
 .footDot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 70%, transparent); }
 .footRight { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .footSep { color: var(--beige-dim); }
-.kbd { border: 1px solid color-mix(in srgb, var(--beige) 40%, transparent); padding: 2px 6px; color: var(--text); font-size: 8px; letter-spacing: 0.16em; }
+.kbd { border: 1px solid color-mix(in srgb, var(--beige) 40%, transparent); padding: 2px 6px; color: var(--text); font-size: var(--fs-label); letter-spacing: var(--ls-label); }
 
 /* ============================================================
    TOAST — purchase flourish, bottom-center
@@ -316,7 +316,7 @@
   background: linear-gradient(180deg, #16252b, #0d1418);
   clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
   padding: 12px 22px; display: flex; align-items: center; gap: 13px;
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--cyan-hot);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--cyan-hot);
   box-shadow: inset 0 0 26px color-mix(in srgb, var(--cyan) 22%, transparent);
 }
 .toastInner .nm { color: var(--text); font-family: var(--font-prose); font-size: 15px; letter-spacing: 0.02em; text-transform: none; font-style: italic; }
@@ -358,7 +358,7 @@
   margin-top: 8px; padding: 6px 9px;
   background: rgba(0, 0, 0, 0.3);
   border-left: 2px solid var(--beige-dim);
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--muted); text-transform: uppercase;
 }
 .rateNote i { color: var(--beige-dim); font-size: 9px; }

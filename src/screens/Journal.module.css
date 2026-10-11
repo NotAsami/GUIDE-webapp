@@ -45,8 +45,8 @@
   flex: 0 0 auto;
 }
 .chNum {
-  font-family: var(--font-mono); font-size: 10px;
-  letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+  font-family: var(--font-mono); font-size: var(--fs-kicker);
+  letter-spacing: var(--ls-kicker); color: var(--cyan); opacity: 0.85;
 }
 .chTitle {
   font-family: var(--font-mono); font-size: 12px;
@@ -54,7 +54,7 @@
 }
 .chMeta {
   margin-left: auto;
-  font-family: var(--font-mono); font-size: 9px;
+  font-family: var(--font-mono); font-size: var(--fs-kicker);
   letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
 }
 .chMeta :global(.acc) { color: var(--cyan); }
@@ -152,7 +152,7 @@
 .stopTitle { font-family: var(--font-prose); font-size: 15px; font-weight: 700; line-height: 1.2; }
 .stop:hover .stopTitle, .stop:focus-visible .stopTitle { color: var(--cyan-hot); }
 .num { font-family: var(--font-display); color: var(--beige); font-size: 0.8em; }
-.stopDate { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.05em; color: var(--muted); text-transform: uppercase; }
+.stopDate { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.05em; color: var(--muted); text-transform: uppercase; }
 
 /* ============================================================
    02  THE BOARD — the app's frame, wood inside it
@@ -251,7 +251,7 @@
 .ar {
   position: absolute; right: -12px; bottom: -12px; z-index: 8;
   display: flex; align-items: center; gap: 6px; padding: 3px 7px;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
   color: var(--cyan-hot); background: rgba(6, 16, 20, 0.86); border: 1px solid color-mix(in srgb, var(--cyan) 55%, transparent);
   white-space: nowrap;
 }
@@ -281,9 +281,9 @@
 .scrap { height: 88px; padding: 10px 8px; box-sizing: border-box; }
 .scrapTitle { font-family: var(--font-display); font-size: 9px; font-weight: 700; color: #4a3a14; line-height: 1.25; }
 .archiveBtn { position: relative; right: auto; bottom: auto; align-self: flex-start; margin: auto 0 0 22px; cursor: pointer; }
-.newCount { margin-left: 6px; padding: 0 5px; color: var(--bg); background: var(--cyan-hot); letter-spacing: 0.1em; font-family: var(--font-mono); font-size: 8px; text-transform: uppercase; }
+.newCount { margin-left: 6px; padding: 0 5px; color: var(--bg); background: var(--cyan-hot); letter-spacing: 0.1em; font-family: var(--font-mono); font-size: var(--fs-label); text-transform: uppercase; }
 
-.empty { position: relative; z-index: 1; margin: 0; padding: 14px 6px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase; }
+.empty { position: relative; z-index: 1; margin: 0; padding: 14px 6px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase; }
 .bad { color: var(--danger-hot); }
 
 /* ============================================================
@@ -318,19 +318,19 @@
   overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--cyan-dim) transparent;
 }
 .readerHead { display: flex; align-items: center; gap: 10px; }
-.chip { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--beige); border: 1px solid color-mix(in srgb, var(--beige) 45%, transparent); padding: 3px 8px; }
+.chip { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige); border: 1px solid color-mix(in srgb, var(--beige) 45%, transparent); padding: 3px 8px; }
 .chipCyan { color: var(--cyan-hot); border-color: color-mix(in srgb, var(--cyan) 50%, transparent); }
 .close {
   margin-left: auto; min-height: 34px; padding: 8px 12px; cursor: pointer;
   background: none; border: 1px solid color-mix(in srgb, var(--beige) 35%, transparent); color: var(--beige);
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .close:hover, .close:focus-visible { border-color: var(--cyan); color: var(--cyan-hot); }
 .panels { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; min-height: 0; }
 .panelCol { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .panel { border: 1px solid color-mix(in srgb, var(--beige) 22%, transparent); background: #171817; padding: 14px 16px; color: var(--text); font-family: var(--font-prose); }
 .grow { flex: 1; }
-.panelLabel { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cyan); margin: 0 0 8px; }
+.panelLabel { font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: 0.16em; text-transform: uppercase; color: var(--cyan); margin: 0 0 8px; }
 .who { display: flex; gap: 12px; align-items: center; }
 .initials {
   flex: 0 0 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--cyan);
@@ -338,15 +338,15 @@
   font-family: var(--font-display); font-weight: 700; color: var(--beige);
 }
 .whoName { font-size: 20px; font-weight: 700; line-height: 1.1; }
-.whoRole { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
+.whoRole { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); margin-top: 3px; }
 .panelProse { margin: 10px 0 8px; font-size: 15.5px; line-height: 1.5; color: #cfcfcf; }
 .panelProse p { margin: 0; }
 .tie { font-size: 14.5px; color: #c4c4c4; }
-.tieKind { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--good); }
+.tieKind { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--good); }
 .tieLabel { color: var(--muted); }
 .go {
   display: inline-block; margin-top: 10px; padding: 0; background: none; border: 0; cursor: pointer;
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
   color: var(--cyan-hot); text-decoration: none;
 }
 .go:hover, .go:focus-visible { color: #bff0ff; }
@@ -354,7 +354,7 @@
 .here { display: flex; flex-direction: column; gap: 5px; font-size: 15.5px; }
 .mark { color: var(--cyan-hot); }
 .good { color: var(--good); }
-.note { margin-left: 8px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.note { margin-left: 8px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 .hereLink {
   display: block; padding: 0; background: none; border: 0; cursor: pointer; text-align: left;
   font-family: var(--font-prose); font-size: 15.5px; color: #9a9a9a;
@@ -382,7 +382,7 @@
 .threadLink {
   margin-left: auto; padding: 10px 14px; cursor: pointer; background: none;
   border: 1px solid color-mix(in srgb, var(--cyan) 50%, transparent); color: var(--cyan-hot); text-decoration: none;
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .threadLink:hover, .threadLink:focus-visible { border-color: var(--cyan-hot); color: #bff0ff; }
 
@@ -393,9 +393,9 @@
 }
 .log { width: min(760px, 100%); }
 .logBody { min-height: 0; flex: 1; font-family: var(--font-prose); }
-.logDate { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.logDate { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 .logTitle { margin: 4px 0 2px; font-family: var(--font-display); font-size: 28px; font-weight: 700; }
-.attrib { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); margin-bottom: 14px; }
+.attrib { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--cyan); margin-bottom: 14px; }
 .logProse { font-size: 17px; line-height: 1.6; color: #d8d8d8; margin-bottom: 14px; }
 .event { font-size: 15.5px; line-height: 1.6; color: #c4c4c4; }
 .movedList { display: flex; flex-direction: column; gap: 4px; }
@@ -414,7 +414,7 @@
 .archRow.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 6%, transparent); }
 .archName { flex: 1; min-width: 0; }
 .archRead { min-height: 0; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
-.archMeta { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.archMeta { font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
 .archMeta .go { margin-top: 0; }
 .archPage { width: 100%; }
 .archRead .threadLink { margin-left: 0; }

@@ -177,13 +177,13 @@
   color: var(--text);
   line-height: 1;
 }
-.hp .sl { font-family: var(--font-mono); font-weight: 400; font-size: 9px; color: var(--muted); }
+.hp .sl { font-family: var(--font-mono); font-weight: 400; font-size: var(--fs-label); color: var(--muted); }
 .crit .hp { color: #ff8f8f; }
 
 /* Temp HP reads as its own cyan number, never folded into current HP. */
 .temp {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-label);
   color: var(--cyan);
 }
 
@@ -223,7 +223,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 7px;
+  font-size: var(--fs-label);
   line-height: 1;
   background: color-mix(in srgb, var(--cyan) 16%, transparent);
   border: 1px solid var(--cyan);
@@ -245,7 +245,7 @@
 /* Overflow counter when more conditions are running than there is room for. */
 .more {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: var(--fs-label);
   color: var(--muted);
   cursor: help;
 }
@@ -285,8 +285,8 @@
 .ac .k {
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: 8px;
-  letter-spacing: 0.18em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--cyan);
   text-transform: uppercase;
 }

@@ -56,6 +56,19 @@
   /* Backdrop texture over the .stage gradient (global.css). */
   --texture: url("https://www.transparenttextures.com/patterns/dark-leather.png");
 
+  /* Legibility floor. Anything that carries meaning — a label, chip, button,
+     stat caption, meta line — is at least --fs-label; section titles use
+     --fs-kicker. Only aria-hidden telemetry may drop to --fs-micro. Tracking
+     comes down as size goes up so mono labels keep roughly their old width. */
+  --fs-micro:  8px;
+  --fs-label:  10.5px;
+  --fs-kicker: 11px;
+  --ls-label:  0.12em;
+  --ls-kicker: 0.2em;
+  /* The beige for small text that must be read: --beige-dim fails 4.5:1 on
+     --bg, this passes (5.3:1) and keeps the warm hierarchy below --beige. */
+  --beige-mid: #a08f5a;
+
   --font-display: "Cinzel", serif;
   --font-prose:   "EB Garamond", serif;
   --font-mono:    "JetBrains Mono", ui-monospace, monospace;

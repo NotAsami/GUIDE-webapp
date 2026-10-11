@@ -23,10 +23,10 @@
 
 .gLabel {
   font-family: var(--font-mono);
-  font-size: 7.5px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
-  color: var(--beige-dim);
+  color: var(--beige-mid);
 }
 
 .rider {
@@ -43,7 +43,7 @@
 /* Waiting on a human. Shows its FORMULA, not a number (see Riders.tsx). */
 .rider.manual { --tone: var(--cyan); }
 
-.box { font-size: 9px; color: var(--tone, var(--beige-dim)); }
+.box { font-size: var(--fs-label); color: var(--tone, var(--beige-dim)); }
 
 .rLabel {
   font-family: var(--font-prose);
@@ -57,7 +57,7 @@
 
 .rVal {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-label);
   color: var(--tone, var(--beige));
   white-space: nowrap;
 }
@@ -67,7 +67,7 @@
 .rSrc {
   grid-column: 2 / -1;
   font-family: var(--font-mono);
-  font-size: 7.5px;
+  font-size: var(--fs-label);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
@@ -79,7 +79,7 @@
   align-items: flex-start;
   gap: 7px;
   font-family: var(--font-mono);
-  font-size: 8.5px;
+  font-size: var(--fs-label);
   line-height: 1.6;
   letter-spacing: 0.02em;
 }

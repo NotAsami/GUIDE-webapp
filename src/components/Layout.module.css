@@ -81,9 +81,9 @@
 }
 .statLabel {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-label);
   color: var(--cyan);
-  letter-spacing: 0.22em;
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
 }
 .bar {
@@ -122,8 +122,8 @@
 @keyframes blink { 50% { opacity: 0; } }
 .charSub {
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.3em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--muted);
   margin-top: 4px;
   text-transform: uppercase;
@@ -152,8 +152,8 @@
 .coinBlock :global(.lab), .burdenBlock :global(.lab), .hpBlock :global(.lab) {
   font-family: var(--font-mono);
   color: var(--cyan);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
 }
 
@@ -180,20 +180,22 @@
    .charName, since .topCenter is an `auto`-width grid column with no floor
    of its own. Measured live: on the DM account (extra Rest/DM/fullscreen/
    sign-out controls in .topRight) the two side columns plus the name need
-   ~1355px; dropping Burden brings that down to ~1166px. 1450px hides it with
-   margin before the overlap actually starts. */
-@media (max-width: 1450px) {
+   ~1355px; dropping Burden brings that down to ~1166px. Re-measured after the
+   legibility floor (10.5px labels, sign-out as an icon): ~1453px with Burden
+   on the DM account, so 1480px hides it with margin. */
+@media (max-width: 1480px) {
   .burdenBlock { display: none; }
 }
 .signOut {
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--muted);
   text-transform: uppercase;
   margin-left: 4px;
   padding: 4px 8px;
   border: 1px solid transparent;
+  white-space: nowrap;
   transition: color 120ms, border-color 120ms;
 }
 .signOut:hover { color: var(--cyan); border-color: var(--beige-dim); }
@@ -292,8 +294,8 @@
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.16em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--cyan);
   padding: 4px 9px;
   background: color-mix(in srgb, var(--cyan) 6%, transparent);
@@ -333,7 +335,7 @@
   border-radius: 999px;
   background: var(--amber);
   color: #17130a;
-  font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+  font-family: var(--font-mono); font-size: var(--fs-label); font-weight: 700;
   letter-spacing: 0;
   box-shadow: 0 0 0 2px var(--bg), 0 0 9px color-mix(in srgb, var(--amber) 75%, transparent);
   animation: bbBadgePulse 2.6s ease-in-out infinite;

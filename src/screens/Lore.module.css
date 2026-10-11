@@ -50,13 +50,13 @@
   border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
   background: rgba(10, 18, 22, 0.92);
 }
-.cHead { display: flex; align-items: baseline; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+.cHead { display: flex; align-items: baseline; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--cyan); }
 .cHead span:last-child { margin-left: auto; color: var(--muted); letter-spacing: 0.1em; }
 .cGroup { margin-top: 12px; }
 .cGroupRow { display: flex; align-items: baseline; gap: 8px; }
 .cGroupName { font-family: var(--font-display); font-weight: 700; font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--beige); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
 .cGroupName:hover { color: var(--cyan-hot); }
-.cPct { margin-left: auto; font-family: var(--font-mono); font-size: 8.5px; color: var(--cyan); }
+.cPct { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-label); color: var(--cyan); }
 .cBar { height: 2px; margin: 4px 0 5px; background: color-mix(in srgb, var(--cyan) 15%, transparent); }
 .cBar i { display: block; height: 2px; background: var(--cyan); }
 .cSec {
@@ -77,14 +77,14 @@
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
   padding: 9px 14px; margin-bottom: 26px;
   border: 1px solid color-mix(in srgb, var(--cyan) 30%, transparent); background: rgba(0, 20, 28, 0.6);
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted);
 }
 .readout .sys { color: var(--cyan-hot); }
 .readout .end { margin-left: auto; color: var(--cyan); }
-.kicker { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+.kicker { font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
 .title { margin: 6px 0 8px; font-family: var(--font-display); font-weight: 700; font-size: 46px; letter-spacing: 0.05em; line-height: 1.1; color: var(--beige); }
 .chips { display: flex; gap: 10px; margin-bottom: 8px; }
-.chip { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--cyan) 50%, transparent); color: var(--cyan-hot); }
+.chip { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--cyan) 50%, transparent); color: var(--cyan-hot); }
 .chip.taking { border-color: color-mix(in srgb, var(--amber) 50%, transparent); color: var(--amber); }
 
 /* One reading measure for every block of the record. */
@@ -93,7 +93,7 @@
 .record strong { color: #e6d5a3; font-weight: 600; }
 .record :global(.prose-quote) { margin: 24px 20px 26px; padding-left: 24px; border-left: 2px solid var(--cyan); }
 .record :global(.prose-quote) blockquote { font-size: 22px; line-height: 1.45; color: var(--text); }
-.record :global(.prose-quote) figcaption { font-size: 9.5px; }
+.record :global(.prose-quote) figcaption { font-size: var(--fs-label); }
 /* The drop cap: the first letter of the first paragraph of the record. */
 .intro > p:first-of-type::first-letter {
   float: left; margin: 7px 12px 0 0;
@@ -109,11 +109,11 @@
 .section { scroll-margin-top: 16px; }
 .secName { margin: 32px 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige); }
 .secName.taking { color: var(--amber); }
-.takingNote { margin: -4px 0 14px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--amber); }
+.takingNote { margin: -4px 0 14px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--amber); }
 
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 6px 0 14px; align-items: start; }
 .cardCol { display: flex; flex-direction: column; gap: 12px; }
-.cardLabel { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; }
+.cardLabel { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; }
 .card { border: 1px solid color-mix(in srgb, var(--beige) 25%, transparent); border-top: 2px solid var(--tone, var(--beige)); background: #161614; padding: 12px 15px 13px; }
 .cardName { font-family: var(--font-prose); font-weight: 700; font-size: 18px; color: var(--tone, #e6d5a3); }
 .cardNote { font-weight: 400; color: var(--muted); }
@@ -137,7 +137,7 @@
 .onward:hover { color: var(--cyan-hot); border-bottom-color: var(--cyan); }
 .onward b { color: #e6d5a3; font-weight: 600; }
 .go { color: var(--cyan); }
-.subhead { margin: 22px 0 8px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige); }
+.subhead { margin: 22px 0 8px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige); }
 .learnGrid { display: flex; flex-wrap: wrap; gap: 12px; }
 .handout {
   display: flex; flex-direction: column; align-items: center; gap: 7px; width: 104px; cursor: pointer;
@@ -157,8 +157,8 @@
 }
 a.place:hover { border-color: var(--cyan); }
 .placeName { font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--beige); }
-.placeHome { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cyan); }
-.placeLine { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; color: var(--muted); }
+.placeHome { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--cyan); }
+.placeLine { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.08em; color: var(--muted); }
 
 .webBox { position: relative; height: 560px; border: 1px solid color-mix(in srgb, var(--cyan) 25%, transparent); }
 /* Full screen: the same box, lifted over the whole app (above the bars and the
@@ -241,13 +241,13 @@ a.place:hover { border-color: var(--cyan); }
 .bpCorner.br { bottom: 11px; right: 11px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
 .bpIdx {
   position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.24em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--cyan); opacity: 0.7; z-index: 3;
 }
 .bpTag {
   position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 6px;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   text-transform: uppercase; color: var(--beige);
   z-index: 3;
 }
@@ -261,7 +261,7 @@ a.place:hover { border-color: var(--cyan); }
 }
 .npSub {
   margin-top: 4px;
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.22em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--cyan); text-transform: uppercase;
 }
 .sep { color: var(--beige-dim); }
@@ -269,7 +269,7 @@ a.place:hover { border-color: var(--cyan); }
 .vitalsRule { margin-top: 16px; height: 1px; background: color-mix(in srgb, var(--beige) 25%, transparent); flex: 0 0 auto; }
 .vitalsLabel {
   margin-top: 10px; margin-bottom: 6px;
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--muted); text-transform: uppercase; flex: 0 0 auto;
 }
 .vitalsLabel :global(.acc) { color: var(--cyan); }
@@ -330,8 +330,8 @@ a.place:hover { border-color: var(--cyan); }
   display: flex; flex-direction: column; gap: 6px;
 }
 .ncKey {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.16em;
-  color: var(--beige-dim); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase;
   display: flex; align-items: center; gap: 6px;
 }
 .ncKey i { color: var(--cyan); font-size: 9px; opacity: 0.8; }
@@ -368,8 +368,8 @@ a.place:hover { border-color: var(--cyan); }
      Layout only: a transform would blur the 1px border at fractional zoom. */
   margin-bottom: 2px;
   font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--cyan);
   border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
