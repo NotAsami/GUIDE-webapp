@@ -13,7 +13,7 @@ import { RECALL, filePatch, pushPatch, stateOf, takeBackPatch, type DmHandoutsSt
 import type { VoiceMsg } from '../lib/voice'
 import { proseField } from '../lib/textareaHooks'
 import { ProsePreview } from '../components/ProsePreview'
-import { Btn } from './OperatorBtn'
+import { Btn, ConfirmBtn } from './OperatorBtn'
 import styles from './OperatorConsole.module.css'
 
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')
@@ -201,7 +201,7 @@ function HandoutForm({ h, quests, members, onNew, onCreate, onSave, onDelete, on
 
       <div className={styles.qActions}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : h ? 'Save Handout' : 'Create Handout'} onClick={() => void save()} disabled={busy || imagePending || !fields.title} />
-        {h && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={() => void onDelete(h.id)} disabled={busy || imagePending} />}
+        {h && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel={h.recipients.length ? 'Delete — players lose it too' : 'Delete for good'} onClick={() => void onDelete(h.id)} disabled={busy || imagePending} />}
       </div>
 
       {h && (
