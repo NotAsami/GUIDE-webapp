@@ -86,7 +86,7 @@ function NavBtn({
       onClick={atSelf ? e => { e.preventDefault(); nav('/') } : undefined}
     >
       <span className={styles.frame} />
-      {item.marker && <span className={styles.marker}>{item.marker}</span>}
+      {item.marker && <span className={styles.marker} aria-hidden="true">{item.marker}</span>}
       <span className={styles.inner}>
         <span className={styles.icon}><Icon name={item.icon} /></span>
         <span className={styles.label}>{item.label}</span>
