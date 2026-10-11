@@ -1245,7 +1245,7 @@ function GrantBar({ members, items, effectLib, onGrantItem, onApplyEffect }: {
             <button key={p.id} type="button" className={styles.gbTarget} disabled={busy} onClick={() => void give([p])}>{firstName(p.name)}</button>
           ))}
           <button type="button" className={styles.gbTarget} disabled={busy} onClick={() => void give(members)}>Whole party</button>
-          <button type="button" className={styles.areaClear} disabled={busy} onClick={() => setSel(null)}>Cancel</button>
+          <button type="button" className={styles.areaClear} disabled={busy} onClick={() => { setSel(null); setQuery('') }}>Cancel</button>
         </div>
       )}
     </div>
