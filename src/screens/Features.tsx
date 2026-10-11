@@ -321,8 +321,8 @@ export function Features() {
   return (
     <>
       <Deco
-        left={<><span className="acc">FEATURES</span> &nbsp;//&nbsp; GRAPH RESOLVED &nbsp;//&nbsp; GATES OK</>}
-        right={<>Nodes {rows.length} &nbsp;//&nbsp; <span className="acc">GEAR :: BOUND</span> &nbsp;//&nbsp; Live Derive</>}
+        left={<><span className="acc">FEATURES</span> &nbsp;//&nbsp; GRAPH</>}
+        right={<>Nodes <span className="acc">{rows.length}</span></>}
       />
       <Nav variant="dock" meta={meta} />
 

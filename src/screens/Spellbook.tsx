@@ -380,8 +380,8 @@ export function Spellbook() {
   return (
     <>
       <Deco
-        left={<><span className="acc">SPELLBOOK</span> &nbsp;//&nbsp; GRIMOIRE &nbsp;//&nbsp; WEAVE {caster ? 'OK' : 'INERT'}</>}
-        right={<>Grimoire <span className="acc">{character.name.toUpperCase()}</span> &nbsp;//&nbsp; DM-Authored</>}
+        left={<><span className="acc">SPELLBOOK</span> &nbsp;//&nbsp; GRIMOIRE</>}
+        right={<>Grimoire <span className="acc">{character.name.toUpperCase()}</span></>}
       />
       <Nav variant="dock" meta={meta} />
 

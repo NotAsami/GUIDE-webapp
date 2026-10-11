@@ -435,18 +435,11 @@ export function Layout() {
       <div className="vignette" />
       <Sweep />
 
-      {/* ticker fragments hugging the top divider (cosmetic HUD telemetry) */}
-      <div className={`${styles.ticker} ${styles.above}`} aria-hidden="true">
-        <span>TASK_MANAGER_SD11S</span><span className="gap" />
-        <span className="dim">// AURUM_LEDGER_OK</span><span className="gap" />
-        <span>PROTOCOL: 6920-A44</span><span className="gap" />
-        <span className="dim">0001 0110 1001 0011 1100</span>
-      </div>
+      {/* One fragment under the top divider (cosmetic HUD telemetry). Kept
+          deliberately sparse: every line of fake readout competes with the
+          real labels for the same small mono type. */}
       <div className={`${styles.ticker} ${styles.below}`} aria-hidden="true">
-        <span>FRAME 04 // SECTOR 12</span><span className="gap" />
-        <span className="dim">PARTY.OK</span><span className="gap" />
-        <span>SOULBOND 0x4F1A</span><span className="gap" />
-        <span className="dim">CHANNEL 1F-Δ</span>
+        <span>SOULBOND 0x4F1A</span>
       </div>
 
       {/* Side-rails + corner frame are now per-screen (Codex owns the frame);

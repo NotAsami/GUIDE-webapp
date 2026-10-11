@@ -120,8 +120,8 @@ export function Character() {
   return (
     <>
       <Deco
-        left={<><span className="acc">ROLLS</span> &nbsp;//&nbsp; ABILITY_ARRAY &nbsp;//&nbsp; SYNC OK</>}
-        right={<>Castella-08 &nbsp;//&nbsp; <span className="acc">PROF {formatMod(proficiency(view))}</span> &nbsp;//&nbsp; d20 Ready</>}
+        left={<><span className="acc">ROLLS</span> &nbsp;//&nbsp; ABILITY_ARRAY</>}
+        right={<>Proficiency <span className="acc">{formatMod(proficiency(view))}</span></>}
       />
       <Nav variant="dock" meta={meta} />
 

@@ -382,10 +382,7 @@
   overflow: hidden;
   white-space: nowrap;
 }
-.ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
 .ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: color-mix(in srgb, var(--beige) 45%, transparent); }
-.ticker :global(.gap) { width: 32px; display: inline-block; }
-.ticker :global(.dim) { color: color-mix(in srgb, var(--muted) 40%, transparent); }
 
 /* Side-rails + corner frame moved to components/Deco.tsx (per-screen). */
 

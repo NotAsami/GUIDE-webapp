@@ -277,8 +277,7 @@ export function Equipment() {
   return (
     <>
       <Deco
-        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; LOADOUT 02 &nbsp;//&nbsp; SYNC OK</>}
-        right={<>Castella-08 &nbsp;//&nbsp; <span className="acc">SHARD: VACANT</span> &nbsp;//&nbsp; Loadout 02</>}
+        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; LOADOUT</>}
       />
       <Nav variant="dock" meta={meta} />
 

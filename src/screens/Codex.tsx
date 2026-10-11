@@ -44,8 +44,7 @@ export function Codex() {
     <>
       <Deco
         corners
-        left={<><span className="acc">G.U.I.D.E.</span> &nbsp;//&nbsp; v 2.4.7 &nbsp;//&nbsp; Castella Mainframe</>}
-        right={<>Session 04F1A &nbsp;//&nbsp; <span className="acc">Brettany Theater</span> &nbsp;//&nbsp; DM Online</>}
+        left={<><span className="acc">G.U.I.D.E.</span> &nbsp;//&nbsp; v 2.4.7</>}
       />
       <Glyph />
       {/* Above the story row and only while a class has actually asked
@@ -156,9 +155,7 @@ function Glyph() {
 
         <g fill="currentColor" stroke="none" style={{ fontFamily: 'var(--font-mono)' }} fontSize="9" opacity="0.55" letterSpacing="2">
           <text x="320" y="32" textAnchor="middle">0x4F1A · 22:08:47</text>
-          <text x="608" y="324" textAnchor="end">SECTOR.12</text>
           <text x="320" y="616" textAnchor="middle">NODE → CASTELLA-08</text>
-          <text x="32" y="324" textAnchor="start">CH. 1F-Δ</text>
         </g>
       </svg>
     </div>
