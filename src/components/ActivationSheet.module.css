@@ -34,9 +34,9 @@
   font-family: var(--font-prose); font-size: 14.5px;
 }
 .cfRow i { font-size: 11px; color: var(--good); width: 14px; }
-.cfAsk { cursor: pointer; border-left-color: var(--amber); }
-.cfAsk i { color: var(--amber); }
-.cfAsk:hover { background: color-mix(in srgb, var(--amber) 8%, transparent); }
+.cfAsk { cursor: pointer; border-left-color: var(--gold); }
+.cfAsk i { color: var(--gold); }
+.cfAsk:hover { background: color-mix(in srgb, var(--gold) 8%, transparent); }
 .cfOn { border-left-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 8%, transparent); }
 .cfOn i { color: var(--cyan-hot); }
 .cfLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

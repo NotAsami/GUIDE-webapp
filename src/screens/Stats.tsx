@@ -247,7 +247,7 @@ function Combat({ sheet, onRollInit, flash }: {
           const body = (
             <>
               <span className={styles.abFrame} /><span className={styles.abInner} />
-              <span className={styles.pbMarker}>{c.marker}</span>
+              <span className={styles.pbMarker} aria-hidden="true">{c.marker}</span>
               <div className={styles.pbContent}>
                 <div className={styles.pbValue}>{c.value}</div>
                 <div className={styles.pbLabel}>{c.label}</div>

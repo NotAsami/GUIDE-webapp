@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useCharacter } from '../lib/character'
 import { useAuth } from '../lib/auth'
 import { useShardCatalog } from '../lib/shardCatalog'
@@ -45,6 +45,14 @@ export function Layout() {
   const { catalog: shardTrees } = useShardCatalog()
   const { character, loading, error, saveError, dismissSaveError, updateSection, updateSections, refetch } = useCharacter(shardTrees)
   const nav = useNavigate()
+
+  // Where am I — for the tab title and the screen reader. Unknown routes get
+  // no name: NotFound carries its own <h1>.
+  const { pathname } = useLocation()
+  const screenName = screenNameFor(pathname)
+  useEffect(() => {
+    document.title = screenName && character ? `${screenName} · ${character.name} — G.U.I.D.E.` : 'G.U.I.D.E. Codex'
+  }, [screenName, character?.name])
 
   /* Announce this character on the party-presence channel while the app is
      open — lights the Link LED on the DM's Operator Console, and carries the
@@ -458,8 +466,10 @@ export function Layout() {
           <span>{saveError}</span>{' '}
           <button type="button" onClick={dismissSaveError}>Dismiss</button>
         </div>}
+        <a href="#main" className="skip-link">Skip to content</a>
         <Topbar character={character} updateSections={updateSections} shardTrees={shardTrees} />
-        <main className={styles.main}>
+        <main id="main" tabIndex={-1} className={styles.main}>
+          {screenName && <h1 className="sr-only">{screenName}</h1>}
           <Outlet context={{
             character, updateSection, updateSections, shardTrees,
             handouts, seenHandouts, markHandoutSeen: markSeen, openHandout: (id: string) => setDock({ id, arrive: false }),
@@ -582,4 +592,14 @@ function CenterMessage({ children }: { children: React.ReactNode }) {
       <div>{children}</div>
     </div>
   )
+}
+
+const SCREEN_NAMES: Record<string, string> = {
+  '/': 'Codex', '/equipment': 'Equipment', '/inventory': 'Inventory', '/stat-panel': 'Stat Panel',
+  '/features': 'Features', '/character': 'Rolls', '/shard': 'Shard', '/lore': 'Lore',
+  '/journal': 'Journal', '/spellbook': 'Spellbook',
+}
+
+function screenNameFor(pathname: string): string | undefined {
+  return pathname.startsWith('/story/') ? 'Story' : SCREEN_NAMES[pathname]
 }

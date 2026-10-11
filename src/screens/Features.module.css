@@ -271,7 +271,7 @@
 .armed {
   display: inline-flex; align-items: center; gap: 3px;
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
-  color: var(--amber); border: 1.5px solid color-mix(in srgb, var(--amber) 45%, transparent); padding: 2px 6px;
+  color: var(--gold); border: 1.5px solid color-mix(in srgb, var(--gold) 45%, transparent); padding: 2px 6px;
 }
 
 /* right rail: uses */

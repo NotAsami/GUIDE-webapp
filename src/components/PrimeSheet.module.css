@@ -82,7 +82,7 @@
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--gold);
   transition: background 160ms ease, color 160ms ease;
 }
-.use:hover .bIn { background: color-mix(in srgb, var(--amber) 20%, transparent); color: var(--amber-hot); }
+.use:hover .bIn { background: color-mix(in srgb, var(--gold) 20%, transparent); color: var(--gold); }
 .use i { font-size: 9px; }
 .oHead { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .oName { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige); }

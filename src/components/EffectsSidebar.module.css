@@ -103,9 +103,9 @@
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
   background: var(--cyan); box-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 50%, transparent);
 }
-.statusChip.cond { border-color: var(--amber); }
-.statusChip.cond::before { background: var(--amber); box-shadow: 0 0 10px color-mix(in srgb, var(--amber) 50%, transparent); }
-.statusChip.cond .scName { color: var(--amber-hot); }
+.statusChip.cond { border-color: var(--gold); }
+.statusChip.cond::before { background: var(--gold); box-shadow: 0 0 10px color-mix(in srgb, var(--gold) 50%, transparent); }
+.statusChip.cond .scName { color: var(--gold); }
 .statusChip.debuff { border-color: var(--danger-hot); }
 .statusChip.debuff::before { background: var(--danger-hot); box-shadow: 0 0 10px color-mix(in srgb, var(--danger-hot) 50%, transparent); }
 .statusChip.debuff .scIcon { color: var(--danger-hot); border-color: color-mix(in srgb, var(--danger-hot) 35%, transparent); }

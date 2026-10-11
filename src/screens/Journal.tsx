@@ -488,7 +488,7 @@ function SessionReader({ s, sessions, quests, handouts, onClose, onSession, onQu
       </div>
       <div className={`${styles.logBody} ${styles.scrollY}`}>
         <div className={styles.logDate}>{s.date}</div>
-        <h1 className={styles.logTitle}><span className={styles.num}>{roman(s.num)}</span> {s.title}</h1>
+        <h2 className={styles.logTitle}><span className={styles.num}>{roman(s.num)}</span> {s.title}</h2>
         <div className={styles.attrib}>Recorded by G.U.I.D.E. // Auto-Log</div>
         <Prose text={s.recap} className={styles.logProse} />
         {s.events.length > 0 && <>

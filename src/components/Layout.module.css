@@ -185,7 +185,13 @@
    ~1355px; dropping Burden brings that down to ~1166px. Re-measured after the
    legibility floor (10.5px labels, sign-out as an icon): ~1453px with Burden
    on the DM account, so 1480px hides it with margin. */
+/* First drop the BURDEN word (⚖ + number still say it), then the whole pill
+   only on genuinely narrow windows — players play on 1440px laptops, and
+   encumbrance is a rule the table needs to see. */
 @media (max-width: 1480px) {
+  .burdenBlock :global(.lab) { display: none; }
+}
+@media (max-width: 1340px) {
   .burdenBlock { display: none; }
 }
 .signOut {
@@ -335,11 +341,11 @@
   padding: 0 3px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 999px;
-  background: var(--amber);
+  background: var(--gold);
   color: #17130a;
   font-family: var(--font-mono); font-size: var(--fs-label); font-weight: 700;
   letter-spacing: 0;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 9px color-mix(in srgb, var(--amber) 75%, transparent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 9px color-mix(in srgb, var(--gold) 75%, transparent);
   animation: bbBadgePulse 2.6s ease-in-out infinite;
 }
 /* The ring: same loop, larger displacement, no layout cost. Peripheral vision
@@ -348,7 +354,7 @@
   content: "";
   position: absolute; inset: 0;
   border-radius: inherit;
-  border: 1.5px solid var(--amber);
+  border: 1.5px solid var(--gold);
   animation: bbBadgeRing 2.6s ease-out infinite;
   pointer-events: none;
 }
