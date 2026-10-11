@@ -93,7 +93,7 @@
    which reads as a layout bug rather than a state change. The name below it
    already ellipsizes, so the column can afford the width. */
 .kicker {
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.3em;
+  font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: var(--ls-kicker);
   color: var(--amber); text-transform: uppercase; white-space: nowrap;
 }
 .hname {
@@ -102,12 +102,12 @@
   text-shadow: 0 0 15px color-mix(in srgb, var(--amber) 30%, transparent);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.hclass { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
-.hclass .sep { color: var(--beige-dim); margin: 0 6px; }
+.hclass { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase; }
+.hclass .sep { color: var(--beige-mid); margin: 0 6px; }
 
 .trans { margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: 22px; }
 .stat { display: flex; flex-direction: column; align-items: center; gap: 5px; }
-.stat .l { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.26em; color: var(--beige-dim); text-transform: uppercase; }
+.stat .l { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); text-transform: uppercase; }
 .stat .v {
   display: flex; align-items: baseline; gap: 8px;
   font-family: var(--font-display); font-weight: 700; font-size: 30px; letter-spacing: 0.02em; line-height: 1;
@@ -157,14 +157,14 @@
 .rowIc { flex: 0 0 auto; width: 22px; text-align: center; color: var(--rar, var(--beige)); font-size: 15px; }
 .rowTx { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .rowT { font-family: var(--font-prose); font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rowS { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; color: var(--beige-dim); text-transform: uppercase; }
+.rowS { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); text-transform: uppercase; }
 .rowS .rar { color: var(--rar, var(--beige)); }
 
 .pick {
   flex: 0 0 auto; width: 168px; height: 32px; margin: 0;
   background: rgba(0, 0, 0, 0.45); color: var(--text);
   border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent);
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.08em;
   padding: 0 8px; cursor: pointer;
 }
 .pick:focus { outline: none; border-color: var(--amber); }
@@ -176,7 +176,7 @@
 }
 .assigned > i { color: var(--cyan); }
 .assigned .who { font-family: var(--font-prose); font-style: italic; font-size: 13.5px; color: var(--text); }
-.unassign { margin-left: 2px; cursor: pointer; color: var(--beige-dim); padding: 3px 5px; transition: color 130ms ease; background: none; border: 0; }
+.unassign { margin-left: 2px; cursor: pointer; color: var(--beige-mid); padding: 3px 5px; transition: color 130ms ease; background: none; border: 0; }
 .unassign:hover { color: var(--danger-hot); }
 
 /* An empty roll is a legitimate outcome, not a failure — every line missed its
@@ -185,10 +185,10 @@
 .empty {
   display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
   padding: 34px 16px;
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em;
-  color: var(--beige-dim); line-height: 1.7;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.08em;
+  color: var(--beige-mid); line-height: 1.7;
 }
-.empty > i { font-size: 20px; color: var(--beige-dim); }
+.empty > i { font-size: 20px; color: var(--beige-mid); }
 
 /* ---- footer ---- */
 .foot {
@@ -198,8 +198,8 @@
 }
 .sumhead { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
 .sumhead .sg { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; color: var(--amber); }
-.sumhead .st { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.3em; color: var(--beige); text-transform: uppercase; }
-.sumhead .warn { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; }
+.sumhead .st { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase; }
+.sumhead .warn { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); text-transform: uppercase; }
 .sumhead .warn.live { color: var(--cyan); }
 .footrow { display: flex; align-items: stretch; gap: 10px; }
 .footrow .grow { flex: 1 1 0; }

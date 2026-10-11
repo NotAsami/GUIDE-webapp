@@ -74,6 +74,9 @@
   /* The beige for small text that must be read: --beige-dim fails 4.5:1 on
      --bg, this passes (5.3:1) and keeps the warm hierarchy below --beige. */
   --beige-mid: #a08f5a;
+  /* Same job for the operator layer: --amber-dim fails 4.5:1 as text (3.4:1);
+     this passes on --bg (5.2:1) and on --amber-deep panels (4.9:1). */
+  --amber-mid: #b08a24;
 
   --font-display: "Cinzel", serif;
   --font-prose:   "EB Garamond", serif;

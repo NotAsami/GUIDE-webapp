@@ -40,7 +40,7 @@
   position: relative;
   z-index: 1;
   font-size: 10px;
-  color: var(--beige-dim);
+  color: var(--beige-mid);
   transition: color 150ms ease;
 }
 .btn:hover { background: var(--cyan); }
@@ -71,8 +71,8 @@
   border: 1px solid color-mix(in srgb, var(--beige) 28%, transparent);
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 8.5px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   cursor: pointer;
   transition: color 140ms ease, border-color 140ms ease;

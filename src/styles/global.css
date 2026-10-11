@@ -318,3 +318,7 @@ hr::after {
 }
 .skip-link:focus { transform: none; outline: 2px solid var(--cyan-hot); outline-offset: 2px; }
 #main:focus { outline: none; }
+
+/* Placeholders: the UA default (#757575) reads 2.2:1 on the dark fields. Lighter
+   than typed text so the two never get confused, but still 4.5:1+. */
+::placeholder { color: color-mix(in srgb, var(--muted) 88%, var(--bg)); opacity: 1; }
