@@ -109,7 +109,7 @@
 .count { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 
 .legend {
-  position: absolute; z-index: 6; left: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 7px;
+  position: absolute; z-index: 6; left: 14px; bottom: calc(14px + var(--tray-pad, 0px)); display: flex; flex-direction: column; gap: 7px;
   padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--beige) 20%, transparent); background: rgba(14, 13, 11, 0.92);
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted);
 }
