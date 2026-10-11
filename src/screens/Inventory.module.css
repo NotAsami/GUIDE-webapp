@@ -78,11 +78,13 @@
   flex: 1 1 auto;
   min-height: 0;
 }
-/* The right column holds exactly one region now (the detail panel is gone), so
-   it absorbs all the slack. NEVER give a .region `flex: 0 0 auto`: .rInner is
-   position:absolute, so the region has no intrinsic height and would collapse
-   to nothing. Slack routing per the standing layout convention. */
-.region.load { flex: 1 1 auto; }
+/* The right column holds one fixed-content region (burden + coin). Stretched
+   to the column it was ~60% empty frame, which reads as missing content, so it
+   sizes to its content instead (layout convention rule 2: in-flow .rInner,
+   scoped to THIS region — a bare `flex: 0 0 auto` would collapse it, since
+   .rInner is otherwise absolute). The column's leftover is plain stage. */
+.region.load { flex: 0 0 auto; }
+.region.load > .rInner { position: relative; inset: auto; margin: 5.5px; }
 .rFrame {
   position: absolute; inset: 0;
   background: var(--beige);

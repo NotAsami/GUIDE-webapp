@@ -194,7 +194,9 @@
 .sheet {
   position: relative; isolation: isolate; display: block;
   color: #2e271b; font-family: var(--font-prose);
-  background: radial-gradient(120% 90% at 42% 30%, #e8d8b0, #d6c090 60%, #b99c62);
+  /* Darkened a step into the chrome's value range (ink-vs-mono rule: world
+     surfaces are warm, not loud). Ink #2e271b still reads ~7:1 at the centre. */
+  background: radial-gradient(120% 90% at 42% 30%, #d2c196, #bba876 60%, #94794a);
 }
 .ink { position: relative; z-index: 5; display: flex; flex-direction: column; }
 /* Prose colours emphasis for the dark chrome; on paper it stays ink. */

@@ -173,6 +173,8 @@
   font-variant-numeric: tabular-nums;
 }
 .hpBlock :global(.val.low) { color: var(--danger); }
+.burdenBlock :global(.val.low) { color: var(--danger-hot); }
+.burdenBlock :global(.val.warn) { color: var(--gold); }
 
 /* topLeft/topRight are nowrap flex rows with fixed min-widths (.statBlock,
    the burden/gold/HP blocks) — below their combined min-content width they
