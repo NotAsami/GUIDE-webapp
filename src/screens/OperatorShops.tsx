@@ -92,7 +92,7 @@ export function OperatorShops({ shopLib, itemCatalog, members }: {
   if (error) {
     return (
       <div className={styles.soonPanel}>
-        <i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span>
+        <i className="fa-solid fa-triangle-exclamation" /><h2 className={styles.big}>Link Error</h2><span>{error}</span>
         <span style={{ marginTop: 6 }}>
           If this says the relation doesn't exist, paste <code>supabase/migrations/0009_shop_catalog.sql</code> into the Supabase SQL editor and run it.
         </span>

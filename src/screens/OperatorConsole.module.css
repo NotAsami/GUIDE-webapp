@@ -3288,3 +3288,8 @@ button.wtab { border: 0; cursor: pointer; }
   color: var(--beige); border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
 }
 .bcFoldBtn:hover, .bcFoldBtn:focus-visible { color: var(--amber-hot); border-color: var(--amber); outline: none; }
+
+/* Real headings now (h1 title, h2 region + view titles) — screen readers can
+   jump between the console's panels. Reset only what the UA adds. */
+h1.opTitle, h2.rhTitle, h2.big { margin: 0; }
+h2.rhTitle { font-weight: 400; }
