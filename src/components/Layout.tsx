@@ -390,10 +390,15 @@ export function Layout() {
         <div className="scanlines" />
         <div className="vignette" />
         <CenterMessage>
-          <p style={{ color: 'var(--danger)' }}>{error}</p>
-          <p style={{ color: 'var(--muted)', fontSize: 11 }}>
-            If this is an RLS error, confirm you've been seeded a character row owned by this auth user id.
+          <p style={{ color: 'var(--danger-hot)' }}>Link to the Codex failed</p>
+          <p style={{ color: 'var(--muted)', fontSize: 12, textTransform: 'none', letterSpacing: '0.04em', marginTop: 12 }}>
+            Your record could not be read. Reload to try again — if it keeps failing, tell your DM.
           </p>
+          <button type="button" onClick={() => window.location.reload()} style={RETRY_BTN}>Reload</button>
+          <TechDetail>
+            {error}
+            <br />If this is an RLS error, confirm a character row is owned by this auth user id.
+          </TechDetail>
           <SignOutButton onClick={handleSignOut} />
         </CenterMessage>
       </>
@@ -408,10 +413,13 @@ export function Layout() {
         <div className="vignette" />
         <CenterMessage>
           <p>No character is bound to this account yet.</p>
-          <p style={{ color: 'var(--muted)', fontSize: 12, maxWidth: 540, marginTop: 12 }}>
+          <p style={{ color: 'var(--muted)', fontSize: 12, textTransform: 'none', letterSpacing: '0.04em', marginTop: 12 }}>
+            Ask your DM to bind your character, then reload.
+          </p>
+          <TechDetail>
             Run <code>supabase/seed.sql</code> in the SQL editor with your auth user id substituted into the
             <code> :owner_id </code> placeholder. See <code>docs/GUIDE_Codex_Build_Handoff.md</code> §5 for the canon values.
-          </p>
+          </TechDetail>
           {session?.user?.email && (
             <p style={{ color: 'var(--beige-dim)', fontSize: 10, letterSpacing: '0.12em', marginTop: 16 }}>
               Signed in as {session.user.email}
@@ -541,6 +549,26 @@ function SignOutButton({ onClick }: { onClick: () => void }) {
       Sign Out
     </button>
   )
+}
+
+/** Developer-facing detail under an in-world message: the raw error or setup
+ *  steps stay one click away for the DM without being the first thing a
+ *  player reads. */
+function TechDetail({ children }: { children: React.ReactNode }) {
+  return (
+    <details style={{ marginTop: 18, maxWidth: 540, marginInline: 'auto', textAlign: 'left', textTransform: 'none', letterSpacing: '0.02em', fontSize: 11, color: 'var(--muted)' }}>
+      <summary style={{ cursor: 'pointer', color: 'var(--beige-mid)', textTransform: 'uppercase', letterSpacing: '0.16em', textAlign: 'center' }}>Technical detail</summary>
+      <div style={{ marginTop: 10, lineHeight: 1.6, wordBreak: 'break-word' }}>{children}</div>
+    </details>
+  )
+}
+
+const RETRY_BTN: React.CSSProperties = {
+  display: 'block', margin: '20px auto 0', padding: '10px 28px',
+  background: 'color-mix(in srgb, var(--cyan) 8%, transparent)',
+  border: '1px solid var(--cyan)', color: 'var(--cyan-hot)',
+  fontFamily: 'var(--font-display)', fontSize: 12, letterSpacing: '0.3em',
+  textTransform: 'uppercase', cursor: 'pointer',
 }
 
 function CenterMessage({ children }: { children: React.ReactNode }) {

@@ -5,7 +5,7 @@
   --edge: color-mix(in srgb, var(--beige) 55%, transparent);
   --glow: var(--cyan-hot);
   --rail: color-mix(in srgb, var(--beige-dim) 25%, transparent);
-  --lab: var(--cyan-dim);
+  --lab: var(--cyan);
   display: flex;
   flex-direction: column;
   align-items: center;
