@@ -141,8 +141,8 @@ export function Journal() {
   return (
     <>
       <Deco
-        left={<><span className="acc">JOURNAL</span> &nbsp;//&nbsp; QUEST_BOARD &nbsp;//&nbsp; SYNC OK</>}
-        right={<>Log <span className="acc">ENTRIES :: {quests.length + sessions.length}</span> &nbsp;//&nbsp; Auto-Log</>}
+        left={<><span className="acc">JOURNAL</span> &nbsp;//&nbsp; QUEST_BOARD</>}
+        right={<>Log <span className="acc">ENTRIES :: {quests.length + sessions.length}</span></>}
       />
       <Nav variant="dock" meta={meta} />
       {FILTERS}

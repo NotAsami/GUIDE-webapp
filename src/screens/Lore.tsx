@@ -136,8 +136,8 @@ export function Lore() {
   return (
     <>
       <Deco
-        left={<><span className="acc">LORE</span> &nbsp;//&nbsp; BIO_RECORD &nbsp;//&nbsp; SYNC OK</>}
-        right={<>Record <span className="acc">{character.name.toUpperCase()}</span> &nbsp;//&nbsp; DM-Authored</>}
+        left={<><span className="acc">LORE</span> &nbsp;//&nbsp; BIO_RECORD</>}
+        right={<>Record <span className="acc">{character.name.toUpperCase()}</span></>}
       />
       <Nav variant="dock" meta={meta} />
 

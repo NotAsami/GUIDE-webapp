@@ -134,8 +134,7 @@ export function Stats() {
   return (
     <>
       <Deco
-        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; STAT_READOUT &nbsp;//&nbsp; VITALS OK</>}
-        right={<>Castella-08 &nbsp;//&nbsp; <span className="acc">SHEET: COMPLETE</span> &nbsp;//&nbsp; Loadout 02</>}
+        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; STAT_READOUT</>}
       />
       <Nav variant="dock" meta={meta} />
       <div className={styles.dashScroll}>

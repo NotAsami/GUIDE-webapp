@@ -387,8 +387,8 @@ export function Inventory() {
   return (
     <>
       <Deco
-        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; CARGO_MANIFEST &nbsp;//&nbsp; PACK OK</>}
-        right={<>Castella-08 &nbsp;//&nbsp; <span className="acc">{overBurdened ? 'OVER CAPACITY' : 'STORAGE: OPEN'}</span> &nbsp;//&nbsp; Loadout 02</>}
+        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; CARGO_MANIFEST</>}
+        right={overBurdened ? <span className="acc">OVER CAPACITY</span> : undefined}
       />
       <Nav variant="dock" meta={meta} />
 

@@ -140,8 +140,8 @@ export function Shard() {
   return (
     <>
       <Deco
-        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; SHARD_LINK &nbsp;//&nbsp; NEURAL_IFACE</>}
-        right={<>Castella-08 &nbsp;//&nbsp; <span className="acc">PORT {occupied}/{SHARD_SLOT_KEYS.length}</span></>}
+        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; SHARD_LINK</>}
+        right={<>Port <span className="acc">{occupied}/{SHARD_SLOT_KEYS.length}</span></>}
       />
       <Nav variant="dock" meta={meta} />
 
