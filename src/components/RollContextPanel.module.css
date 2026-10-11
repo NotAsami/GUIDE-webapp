@@ -78,7 +78,7 @@
 .entry.latest { --edge: var(--cyan); }
 .entry.latest .eFrame { box-shadow: 0 0 16px color-mix(in srgb, var(--cyan) 35%, transparent); }
 .entry.crit { --edge: var(--gold); }
-.entry.crit .eFrame { box-shadow: 0 0 16px color-mix(in srgb, var(--amber) 35%, transparent); }
+.entry.crit .eFrame { box-shadow: 0 0 16px color-mix(in srgb, var(--gold) 35%, transparent); }
 .entry.fumble { --edge: var(--danger); }
 /* A natural 20 landing: the edge blooms cyan and settles into the crit gold
    (no end frame — it eases into whatever --edge now is). */
@@ -149,7 +149,7 @@
    you beat is most of the point of advantage. */
 .die.dropped { opacity: 0.42; text-decoration: line-through; border-style: dashed; border-color: var(--beige-dim); color: var(--muted); background: transparent; cursor: default; }
 .die.dropped:hover { box-shadow: none; color: var(--muted); }
-.die.critdie { border-color: color-mix(in srgb, var(--amber) 55%, transparent); background: color-mix(in srgb, var(--amber) 7%, transparent); }
+.die.critdie { border-color: color-mix(in srgb, var(--gold) 55%, transparent); background: color-mix(in srgb, var(--gold) 7%, transparent); }
 .die.rerolled::after { content: "↻"; position: absolute; top: -6px; right: -5px; font-size: var(--fs-label); color: var(--cyan-hot); text-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 80%, transparent); }
 .die.lockedDie { cursor: default; border-color: color-mix(in srgb, var(--beige) 40%, transparent); background: transparent; color: var(--text); }
 .die.lockedDie:hover { box-shadow: none; color: var(--text); background: transparent; border-color: color-mix(in srgb, var(--beige) 40%, transparent); }
@@ -276,7 +276,7 @@
   background: color-mix(in srgb, var(--gold) 10%, transparent); padding: 2px 7px;
   transition: background 150ms ease, color 150ms ease;
 }
-.consume:hover { background: color-mix(in srgb, var(--amber) 24%, transparent); color: #fff; }
+.consume:hover { background: color-mix(in srgb, var(--gold) 24%, transparent); color: #fff; }
 .consume i, .armedTag i { font-size: 7px; }
 .armedTag {
   display: inline-flex; align-items: center; gap: 5px;
@@ -510,7 +510,7 @@
 .catRider .rn { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige); display: flex; align-items: center; gap: 8px; }
 .catRider .rn span { margin-left: auto; font-size: var(--fs-label); color: var(--beige-mid); }
 .catRider .rt { margin-top: 6px; font-family: var(--font-prose); font-size: 14px; line-height: 1.45; color: var(--muted); }
-.catDm { margin-top: 20px; border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent); background: color-mix(in srgb, var(--amber) 4.5%, transparent); padding: 11px 12px; }
+.catDm { margin-top: 20px; border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); background: color-mix(in srgb, var(--gold) 4.5%, transparent); padding: 11px 12px; }
 .catDm .k { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--gold); display: flex; align-items: center; gap: 7px; }
 .catDm .v { margin-top: 7px; font-family: var(--font-prose); font-size: 14px; line-height: 1.5; color: var(--muted); font-style: italic; }
 /* The subject is gone from the sheet — unequipped, spent, or removed since the
@@ -538,11 +538,11 @@
   justify-content: center;
   /* Chamfer + border, so the diagonals need painting — a plain border draws
      nothing on a 45 degree clip-path edge. docs/Chamfered_clip-path_corners_fix.md */
-  --cut: 6px; --bc: color-mix(in srgb, var(--amber) 45%, transparent);
+  --cut: 6px; --bc: color-mix(in srgb, var(--gold) 45%, transparent);
   display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
-  background-color: color-mix(in srgb, var(--amber) 10%, transparent);
+  background-color: color-mix(in srgb, var(--gold) 10%, transparent);
   border: 1.5px solid var(--bc);
-  color: var(--amber);
+  color: var(--gold);
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
   padding: 7px 11px;
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
@@ -555,7 +555,7 @@
   background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
   transition: color 140ms ease, background-color 140ms ease;
 }
-.turnBtn:hover { --bc: var(--amber); color: var(--amber-hot); background-color: color-mix(in srgb, var(--amber) 20%, transparent); }
+.turnBtn:hover { --bc: var(--gold); color: var(--gold); background-color: color-mix(in srgb, var(--gold) 20%, transparent); }
 .turnBtn i { font-size: 10px; }
 .turnMeta {
   text-align: center;
@@ -632,9 +632,9 @@
 }
 .fvtt:hover:not(:disabled) { background: color-mix(in srgb, var(--violet) 15%, transparent); }
 .offerRow { display: flex; gap: 6px; }
-.offerUse { background: color-mix(in srgb, var(--amber) 7%, transparent); border-color: color-mix(in srgb, var(--amber) 35%, transparent); border-left-color: var(--amber); }
-.offerUse:hover:not(:disabled) { background: color-mix(in srgb, var(--amber) 16%, transparent); }
-.offerUse > i { color: var(--amber-hot); }
+.offerUse { background: color-mix(in srgb, var(--gold) 7%, transparent); border-color: color-mix(in srgb, var(--gold) 35%, transparent); border-left-color: var(--gold); }
+.offerUse:hover:not(:disabled) { background: color-mix(in srgb, var(--gold) 16%, transparent); }
+.offerUse > i { color: var(--gold); }
 .offerNo { width: auto; flex: 0 0 auto; background: transparent; border-color: color-mix(in srgb, var(--beige) 25%, transparent); border-left-color: color-mix(in srgb, var(--beige) 50%, transparent); }
 .offerNo .fvttLab { color: var(--muted); }
 .offerDone { margin-top: 9px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }

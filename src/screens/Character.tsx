@@ -261,8 +261,11 @@ function AbilityCluster({
         <span className={styles.hFrame} />
         <span className={styles.hInner}>
           <span className={styles.hName}>{ABILITY_ABBR[abilityKey].toUpperCase()}</span>
-          <span className={styles.hScore}>{flash ? flash.value : score}</span>
-          <span className={styles.hMod}>{formatMod(mod)}</span>
+          {/* Modifier big, score small — the same order as the Stat Panel, and
+              the number a player actually adds at the table. A fresh roll
+              still takes the big slot while it flashes. */}
+          <span className={styles.hScore}>{flash ? flash.value : formatMod(mod)}</span>
+          <span className={styles.hMod}>({score})</span>
           <button
             type="button"
             className={styles.hSav}

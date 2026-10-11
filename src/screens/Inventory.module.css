@@ -445,8 +445,8 @@ span.glyph,
   color: var(--text); letter-spacing: 0.02em; line-height: 1;
 }
 .coinBadge :global(.clab) {
-  font-family: var(--font-mono); font-size: var(--fs-micro);
-  letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase;
 }
 .coinBadge.gp { --bc: color-mix(in srgb, var(--beige) 60%, transparent); }
 .coinBadge.gp :global(.ci) { background: var(--beige); color: var(--bg); }

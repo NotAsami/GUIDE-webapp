@@ -284,7 +284,7 @@
    dashed-to-solid and a lock glyph, and it is a div rather than a button so
    there is nothing to press. */
 .weaponSlotLocked { cursor: not-allowed; color: var(--beige-dim); opacity: 0.72; }
-.weaponSlotLocked i { margin-right: 6px; color: var(--amber); }
+.weaponSlotLocked i { margin-right: 6px; color: var(--gold); }
 
 .weaponSlotEmpty .em {
   display: block;

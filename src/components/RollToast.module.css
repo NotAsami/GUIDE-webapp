@@ -126,9 +126,9 @@
   display: flex; align-items: center; gap: 7px;
   width: 100%; margin-top: 11px; padding: 7px 9px;
   cursor: pointer; text-align: left;
-  background: color-mix(in srgb, var(--amber) 10%, transparent);
-  border: 1.5px solid color-mix(in srgb, var(--amber) 45%, transparent);
-  color: var(--amber);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  color: var(--gold);
   font-family: var(--font-mono); font-size: var(--fs-label);
   letter-spacing: var(--ls-label); text-transform: uppercase;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
@@ -142,9 +142,9 @@
   color: var(--beige-dim);
 }
 .ctaQuiet:hover { background: rgba(255, 255, 255, 0.06); border-color: color-mix(in srgb, var(--beige) 50%, transparent); color: var(--beige); }
-.cta:hover { background: color-mix(in srgb, var(--amber) 20%, transparent); border-color: var(--amber); color: var(--amber-hot); }
+.cta:hover { background: color-mix(in srgb, var(--gold) 20%, transparent); border-color: var(--gold); color: var(--gold); }
 .cta:active { transform: translateY(1px); }
-.cta:focus-visible { outline: 2px solid var(--amber-hot); outline-offset: 2px; }
+.cta:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .cta i { font-size: 10px; }
 .ctaN { font-family: var(--font-display); font-size: 14px; line-height: 1; letter-spacing: 0; }
 .ctaGo { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; color: var(--beige); }

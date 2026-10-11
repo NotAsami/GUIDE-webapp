@@ -97,17 +97,17 @@
 }
 
 /* effect tones — Apply Effect toast reads ActiveEffect.kind: cyan buff (the
-   .toast default, no class needed), amber condition, red debuff. Recolor only
+   .toast default, no class needed), gold condition, red debuff. Recolor only
    (no glitch — that's reserved for the corrupted VOICE tone above, a
    different axis: who's speaking, not what landed on you). */
 .toast.cond {
-  --bc: var(--amber);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 20%, transparent), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px color-mix(in srgb, var(--amber) 30%, transparent);
+  --bc: var(--gold);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 20%, transparent), 0 14px 30px rgba(0, 0, 0, 0.6), 0 0 24px color-mix(in srgb, var(--gold) 30%, transparent);
 }
-.toast.cond .tgIc { color: var(--amber-hot); background: color-mix(in srgb, var(--amber) 50%, transparent); }
+.toast.cond .tgIc { color: var(--gold); background: color-mix(in srgb, var(--gold) 50%, transparent); }
 .toast.cond .tgIc::before { background: #28291e; }
-.toast.cond .tgT { color: var(--amber-hot); }
-.toast.cond .led { background: var(--amber); box-shadow: 0 0 6px color-mix(in srgb, var(--amber) 80%, transparent); }
+.toast.cond .tgT { color: var(--gold); }
+.toast.cond .led { background: var(--gold); box-shadow: 0 0 6px color-mix(in srgb, var(--gold) 80%, transparent); }
 
 .toast.debuff {
   --bc: var(--danger-hot);

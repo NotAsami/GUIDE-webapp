@@ -197,7 +197,7 @@ export function Lore() {
               <span className={styles.end}>Integrity {overall}%</span>
             </div>
             <div className={styles.kicker}>Bio-record · as {character.name.split(' ')[0]} remembers it</div>
-            <h1 className={styles.title}>{character.name}</h1>
+            <h2 className={styles.title}>{character.name}</h2>
             {sections.length > 0 && (
               <div className={styles.chips}>
                 <span className={styles.chip}>{sections.length - taking.length} sections intact</span>

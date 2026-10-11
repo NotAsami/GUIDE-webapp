@@ -270,7 +270,7 @@
 .daAttune:disabled .atInner { color: var(--muted); background: linear-gradient(180deg, var(--bg-2), #101010); }
 
 .pnTelemetry { position: relative; z-index: 3; flex: 0 0 auto; padding: 6px 26px 9px; border-top: 1px solid color-mix(in srgb, var(--beige) 18%, transparent); display: flex; align-items: center; }
-.tel { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.26em; text-transform: uppercase; color: color-mix(in srgb, var(--amber) 62%, transparent); }
+.tel { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.26em; text-transform: uppercase; color: color-mix(in srgb, var(--beige-dim) 62%, transparent); }
 
 /* Chamfered-border-corner fix (CLAUDE.md recipe) — see ShardLattice.module.css
    for the full explanation. */
