@@ -180,6 +180,15 @@ export function Character() {
             </button>
           </div>
 
+          {/* Every skill, always on screen. The hex flyouts only open on hover,
+              which a tablet at the table never has — and tapping a hex there
+              rolls the check instead. Same SkillCard, so one render path. */}
+          <div className={styles.skillGrid} role="list" aria-label="Skills">
+            {SKILLS.map(skill => (
+              <SkillCard key={skill.key} skill={skill} sheet={view} onRoll={() => rollSkill(skill)} />
+            ))}
+          </div>
+
           <div className={styles.rollLog} aria-live="polite">
             {rolls.length === 0
               ? <div className={styles.emptyLog}>Awaiting Roll</div>

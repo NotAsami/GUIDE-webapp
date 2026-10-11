@@ -24,21 +24,27 @@ const PRIMARY: NavItem[] = [
  *  Rendered above/below the parent in the hero variant; the dock always
  *  renders the parent as a plain button but still uses this map to light it
  *  for any route in its group. */
-const SUB_MODULES: Record<string, { above?: NavItem; below?: NavItem }> = {
+const SUB_MODULES: Record<string, { above?: NavItem[]; below?: NavItem[] }> = {
   '/equipment': {
-    above: { to: '/inventory', label: 'Inventory', marker: '◇', icon: 'fa-bag-shopping' },
-    below: { to: '/stat-panel', label: 'Stat Panel', marker: '◇', icon: 'fa-chart-simple' },
+    above: [{ to: '/inventory', label: 'Inventory', marker: '◇', icon: 'fa-bag-shopping' }],
+    below: [
+      { to: '/stat-panel', label: 'Stat Panel', marker: '◇', icon: 'fa-chart-simple' },
+      { to: '/shard', label: 'Shard', marker: '◇', icon: 'fa-brain' },
+    ],
   },
   '/character': {
-    below: { to: '/features', label: 'Features', marker: '◇', icon: 'fa-medal' },
+    below: [{ to: '/features', label: 'Features', marker: '◇', icon: 'fa-medal' }],
   },
 }
+
+/** Every sub-module, flat — the hero's always-visible link row. */
+const ALL_SUBS = Object.values(SUB_MODULES).flatMap(s => [...(s.above ?? []), ...(s.below ?? [])])
 
 /** `parent` plus every one of its sub-module routes — the set that lights the
  *  dock's parent button. */
 function groupFor(parent: string): string[] {
   const sub = SUB_MODULES[parent]
-  return [parent, sub?.above?.to, sub?.below?.to].filter((x): x is string => !!x)
+  return [parent, ...[...(sub?.above ?? []), ...(sub?.below ?? [])].map(s => s.to)]
 }
 
 type Variant = 'hero' | 'dock'
@@ -123,8 +129,8 @@ export function Nav({ variant = 'hero', meta }: Props) {
             // clip against it: hang both in one column below instead. The
             // hero (Codex home) floats mid-page and keeps the split.
             // (Stat Panel on top, Inventory under it.)
-            const above = isDock ? [] : [sub.above]
-            const below = isDock ? [sub.below, sub.above] : [sub.below]
+            const above = isDock ? [] : sub.above ?? []
+            const below = isDock ? [...(sub.below ?? []), ...(sub.above ?? [])] : sub.below ?? []
             return (
               <div key={item.to} className={`${styles.slot} ${styles.hasSub}`}>
                 {subStack(styles.above, above, pathname)}
@@ -144,10 +150,16 @@ export function Nav({ variant = 'hero', meta }: Props) {
       {isDock ? (
         meta && <div className={styles.navMeta}>{meta}</div>
       ) : (
-        <div className={styles.hint}>
-          Hover <span className={styles.k}>Equipment</span> or <span className={styles.k}>Rolls</span> to reveal sub-modules
-          &nbsp;·&nbsp; <NavLink to="/shard">Shard</NavLink>
-        </div>
+        /* Direct links, not "hover to reveal": a touch screen has no hover,
+           and Shard had no other way in from here. */
+        <nav className={styles.hint} aria-label="Sub-modules">
+          {ALL_SUBS.map((s, i) => (
+            <span key={s.to}>
+              {i > 0 && <span className={styles.hintSep} aria-hidden="true"> · </span>}
+              <NavLink to={s.to} className={styles.k}>{s.label}</NavLink>
+            </span>
+          ))}
+        </nav>
       )}
     </>
   )
