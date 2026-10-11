@@ -185,7 +185,7 @@ export function OperatorConsole() {
   // secrets) — safe to feed straight into effectiveSheet()'s shardTrees arg.
   const shardCatalog = useMemo<Record<string, ShardTree>>(
     () => Object.fromEntries(shardLib.trees.map(t => [t.id, t])), [shardLib.trees])
-  const { party, secrets, loading: partyLoading, error, updateCharacter, updateSecret } = useDmParty(shardCatalog)
+  const { party, secrets, loading: partyLoading, error, writeError, dismissWriteError, updateCharacter, updateSecret } = useDmParty(shardCatalog)
   const campaign = useDmCampaign()
   const handoutLib = useDmHandouts()
   const npcLib = useDmNpcs()
@@ -712,6 +712,15 @@ export function OperatorConsole() {
                 </div>
               </div>
             )}
+            {/* A failed WRITE is a banner over the controls, never a replacement
+                for them — the DM has to be able to press the same button again. */}
+            {writeError && (
+              <div className={styles.writeErr} role="alert">
+                <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
+                <span><b>Not saved.</b> {writeError}</span>
+                <button type="button" onClick={dismissWriteError}>Dismiss</button>
+              </div>
+            )}
             <div className={cx(styles.workBody, view === 'catalog' && styles.catBody, view === 'npcs' && styles.webBody)}>
               {error ? (
                 <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
@@ -1204,15 +1213,16 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
   const dsFail = ds.failures ?? 0
   const exh = (resources.exhaustion as number | undefined) ?? 0
 
-  // ---- writes (each pre-spreads its section; log lines are optimistic — the
-  //      log is a session aide-mémoire, and failures surface in the error rail) ----
+  // ---- writes (each pre-spreads its section). A log line is written only once
+  //      the write LANDS: the log is the DM's receipt, and a receipt for a
+  //      write that failed is worse than none. Failures show in the banner. ----
   const writeHp = (next: number, nextTemp = tempHp) =>
     onUpdate({ sheet: { ...sheet, hp: { ...hp, current: next, max: baseMax, temp: nextTemp } } })
-  const heal = () => { void writeHp(Math.min(hpMax, hpCur + hpAmt)); log(<>Healed {who} <span className={styles.obj}>+{hpAmt} HP</span></>) }
-  const damage = () => { void writeHp(Math.max(0, hpCur - hpAmt)); log(<>Damaged {who} <span className={styles.obj}>−{hpAmt} HP</span></>, 'danger') }
-  const setHp = () => { void writeHp(Math.max(0, Math.min(hpMax, hpAmt))); log(<>Set {who} HP to <span className={styles.obj}>{Math.max(0, Math.min(hpMax, hpAmt))}</span></>) }
-  const addTemp = () => { void writeHp(hpCur, tempHp + hpAmt); log(<>Granted {who} <span className={styles.obj}>+{hpAmt} temp HP</span></>) }
-  const longRest = () => { void onUpdate(longRestPatch(row, shardCatalog).patch); log(<>Applied <span className={styles.obj}>Long Rest</span> to {who}</>) }
+  const heal = async () => { if (await writeHp(Math.min(hpMax, hpCur + hpAmt))) log(<>Healed {who} <span className={styles.obj}>+{hpAmt} HP</span></>) }
+  const damage = async () => { if (await writeHp(Math.max(0, hpCur - hpAmt))) log(<>Damaged {who} <span className={styles.obj}>−{hpAmt} HP</span></>, 'danger') }
+  const setHp = async () => { if (await writeHp(Math.max(0, Math.min(hpMax, hpAmt)))) log(<>Set {who} HP to <span className={styles.obj}>{Math.max(0, Math.min(hpMax, hpAmt))}</span></>) }
+  const addTemp = async () => { if (await writeHp(hpCur, tempHp + hpAmt)) log(<>Granted {who} <span className={styles.obj}>+{hpAmt} temp HP</span></>) }
+  const longRest = async () => { if (await onUpdate(longRestPatch(row, shardCatalog).patch)) log(<>Applied <span className={styles.obj}>Long Rest</span> to {who}</>) }
 
   const coinVal = { gold, silver, copper }[coinKind]
   const moveCoins = async (op: 'award' | 'deduct') => {
