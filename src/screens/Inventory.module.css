@@ -696,4 +696,29 @@ span.glyph,
   font-family: var(--font-mono); font-size: var(--fs-label);
   letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige-mid);
 }
-.encNote .warn { color: var(--danger-hot); }
+.encNote .warn, .chMeta .warn { color: var(--danger-hot); }
+
+/* ---- 03 Weight: heaviest stacks first. Elastic region, scrolls. ---- */
+.region.weights { flex: 1 1 auto; min-height: 120px; }
+.wList {
+  position: relative; z-index: 1;
+  height: 100%; margin: 0; padding: 10px 18px; list-style: none;
+  overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--cyan) 40%, transparent) transparent;
+}
+.wRow {
+  display: grid; grid-template-columns: minmax(0, 1fr) 72px 64px; align-items: center; gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--beige) 12%, transparent);
+}
+.wName {
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.02em; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wQty { color: var(--muted); }
+.wBar { height: 4px; background: color-mix(in srgb, var(--beige-dim) 30%, transparent); }
+.wBar i { display: block; height: 100%; background: var(--cyan); }
+.wLb {
+  font-family: var(--font-mono); font-size: var(--fs-label); text-align: right;
+  color: var(--beige); font-variant-numeric: tabular-nums;
+}
+.wEmpty { font-family: var(--font-mono); font-size: var(--fs-label); color: var(--muted); padding: 6px 0; }

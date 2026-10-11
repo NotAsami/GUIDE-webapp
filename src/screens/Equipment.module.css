@@ -645,7 +645,7 @@
 /* At 8 slots the labels have half the width they had at 6 — step the type down
    rather than letting names wrap to three lines. */
 .gearGrid .sLabel { font-size: var(--fs-label); letter-spacing: var(--ls-label); }
-.gearGrid .sName { font-size: var(--fs-label); letter-spacing: 0.1em; }
+.gearGrid .sName { font-size: var(--fs-label); letter-spacing: 0.04em; }
 .gearGrid .sInner { padding: 8px 7px 9px; }
 .gearGrid .sIcon { font-size: clamp(19px, 2.6vh, 27px); }
 
@@ -707,13 +707,16 @@
 .sName {
   font-family: var(--font-mono);
   font-size: var(--fs-label);
-  letter-spacing: var(--ls-label);
+  /* Tighter than --ls-label: slot cells are ~80px, and a long single word
+     (PROTECTION) must fit whole rather than split mid-word. */
+  letter-spacing: 0.04em;
   color: var(--cyan-hot);
   text-transform: uppercase;
   text-align: center;
   line-height: 1.25;
   align-self: stretch;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 .slot[data-rarity="empty"] .sName { color: var(--muted); }
 .slot[data-rarity="common"] .sName { color: var(--text); }
