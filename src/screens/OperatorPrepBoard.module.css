@@ -15,13 +15,13 @@
 .head button:not(.discard) { flex: 0 0 auto; width: 152px; }
 .discard {
   flex: 0 0 auto; height: 31px; padding: 0 10px; cursor: pointer; border: 1px solid color-mix(in srgb, var(--beige) 28%, transparent); background: transparent;
-  color: var(--muted); font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted); font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .discard:hover { border-color: var(--amber); color: var(--amber-hot); }
 .discard.bin { width: 31px; padding: 0; }
 .discard.bin:hover, .discard.yes { border-color: var(--danger); color: var(--danger-hot); }
 .discard.yes:hover { background: color-mix(in srgb, var(--danger) 18%, transparent); }
-.discardAsk { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--danger-hot); }
+.discardAsk { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--danger-hot); }
 /* Gives way first: the subtitle wraps before the buttons are pushed to a row
    of their own. */
 .headTx { flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -31,14 +31,14 @@
   font-family: var(--font-display); font-weight: 600; font-size: 20px; letter-spacing: 0.06em; color: var(--beige);
 }
 .title:focus { outline: none; border-bottom-color: var(--amber); }
-.sub { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.sub { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 .acc { color: var(--amber); }
 .good { color: var(--good); }
-.dot { color: var(--beige-dim); margin: 0 7px; }
-.counts { margin-left: auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.dot { color: var(--beige-mid); margin: 0 7px; }
+.counts { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 .boardPick {
   height: 30px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent); background: rgba(0, 0, 0, 0.4); color: var(--beige);
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
 }
 
 .cols { flex: 1 1 auto; min-height: 0; display: flex; }
@@ -46,10 +46,10 @@
 .playedCol { flex: 0 0 286px; border-left: 1px solid color-mix(in srgb, var(--beige) 20%, transparent); padding: 14px; overflow-y: auto; scrollbar-width: thin; }
 .palette { flex: 0 0 300px; border-left: 1px solid color-mix(in srgb, var(--beige) 20%, transparent); padding: 14px; display: flex; flex-direction: column; gap: 10px; background: rgba(0, 0, 0, 0.16); overflow-y: auto; scrollbar-width: thin; }
 
-.colHead { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--amber); }
+.colHead { font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: var(--ls-kicker); text-transform: uppercase; color: var(--amber); }
 .goodHead { color: var(--good); }
-.hint { margin: 10px 0 0; font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.06em; line-height: 1.7; color: var(--beige-dim); }
-.note { margin-top: auto; padding: 10px 11px; border: 1px solid color-mix(in srgb, var(--cyan) 25%, transparent); background: color-mix(in srgb, var(--cyan) 5%, transparent); font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.06em; line-height: 1.7; color: var(--muted); }
+.hint { margin: 10px 0 0; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.06em; line-height: 1.7; color: var(--beige-mid); }
+.note { margin-top: auto; padding: 10px 11px; border: 1px solid color-mix(in srgb, var(--cyan) 25%, transparent); background: color-mix(in srgb, var(--cyan) 5%, transparent); font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.06em; line-height: 1.7; color: var(--muted); }
 
 /* ---- a staged card ---- */
 .cards { display: flex; flex-direction: column; gap: 9px; }
@@ -81,7 +81,7 @@
 .fire {
   flex: 0 0 auto; height: 32px; padding: 0 14px; cursor: pointer;
   border: 1px solid var(--amber); background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber-hot);
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .fire:hover { background: color-mix(in srgb, var(--amber) 28%, transparent); }
 .fire:disabled { cursor: wait; opacity: 0.6; }
@@ -90,7 +90,7 @@
 
 .meta {
   align-self: flex-start; padding: 0 0 0 26px; border: 0; background: transparent; cursor: pointer; text-align: left;
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted);
 }
 .more { margin-left: 10px; color: var(--amber); }
 .cardNote { padding-left: 26px; }
@@ -103,30 +103,30 @@
   font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6;
 }
 .targets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.targetsT { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--beige-dim); }
+.targetsT { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige-mid); }
 .chip {
   height: 26px; padding: 0 9px; cursor: pointer; border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent); background: transparent; color: var(--muted);
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .chip.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 12%, transparent); color: var(--cyan-hot); }
 
 /* ---- played ---- */
 .playedRow { display: grid; grid-template-columns: 46px 1fr; gap: 3px 10px; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--beige) 12%, transparent); }
-.time { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.14em; color: var(--beige-dim); }
+.time { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); }
 .playedTx { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .playedName { font-family: var(--font-prose); font-size: 15px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .undo {
   margin-left: auto; height: 24px; padding: 0 8px; cursor: pointer; border: 1px solid color-mix(in srgb, var(--beige) 28%, transparent); background: transparent;
-  color: var(--beige); font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--beige); font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .undo:hover { border-color: var(--amber); color: var(--amber-hot); }
-.playedWhat { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.playedWhat { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 
 /* ---- palette ---- */
 .kinds { display: flex; gap: 5px; flex-wrap: wrap; }
 .kindTab {
   height: 28px; padding: 0 9px; cursor: pointer; border: 1px solid color-mix(in srgb, var(--beige) 25%, transparent); background: transparent; color: var(--muted);
-  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .kindTab.on { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); color: var(--amber-hot); }
 .sourceList { display: flex; flex-direction: column; gap: 6px; }
@@ -139,7 +139,7 @@
 .sourceRow:disabled { cursor: default; }
 .sourceTx { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .sourceName { font-family: var(--font-prose); font-size: 14.5px; color: var(--text); }
-.sourceMeta { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige-dim); }
+.sourceMeta { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige-mid); }
 .plus { margin-left: auto; color: var(--amber); font-size: 13px; }
 
 /* ---- wrap ---- */
@@ -157,7 +157,7 @@
 
 .empty {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-  padding: 40px; text-align: center; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em; line-height: 1.8; color: var(--muted);
+  padding: 40px; text-align: center; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.1em; line-height: 1.8; color: var(--muted);
 }
 .emptyT { font-family: var(--font-display); font-size: 19px; letter-spacing: 0.1em; color: var(--beige); }
 .empty > span { max-width: 520px; }
@@ -182,7 +182,7 @@
 
 .trayName {
   flex: 0 0 auto; border: 0; background: transparent; cursor: pointer; padding: 0;
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--amber);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--amber);
 }
 .trayName:hover { color: var(--amber-hot); }
 .trayRule { flex: 0 0 auto; width: 1px; height: 24px; background: color-mix(in srgb, var(--beige) 25%, transparent); }
@@ -195,18 +195,18 @@
 .trayTitle { font-family: var(--font-prose); font-size: 14px; color: var(--text); white-space: nowrap; max-width: 210px; overflow: hidden; text-overflow: ellipsis; }
 .trayFire {
   height: 24px; padding: 0 9px; cursor: pointer; border: 1px solid var(--amber); background: color-mix(in srgb, var(--amber) 16%, transparent);
-  color: var(--amber-hot); font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--amber-hot); font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .trayFire:hover { background: color-mix(in srgb, var(--amber) 30%, transparent); }
 .trayFire:disabled { cursor: wait; opacity: 0.6; }
 .trayMore, .trayDone {
   flex: 0 0 auto; height: 30px; padding: 0 10px; border: 1px dashed color-mix(in srgb, var(--beige) 30%, transparent); background: transparent;
-  color: var(--muted); font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted); font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .trayMore { cursor: pointer; }
 .trayMore:hover { border-color: var(--amber); color: var(--amber-hot); }
 .trayDone { display: flex; align-items: center; border-style: solid; }
-.trayCount { flex: 0 0 auto; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.trayCount { flex: 0 0 auto; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 .trayShut { flex: 0 0 auto; width: 30px; height: 30px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
 .trayShut:hover { color: var(--amber-hot); }
 
@@ -216,6 +216,6 @@
   position: fixed; z-index: 55; right: 12px; bottom: calc(var(--op-bottom-h, 34px) + 12px);
   height: 28px; padding: 0 12px; cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); background: rgba(20, 17, 9, 0.97); color: var(--amber);
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
 }
 .trayTab:hover { color: var(--amber-hot); }
