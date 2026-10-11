@@ -22,7 +22,7 @@
  *  `dmgType` off an authored effect, so matching is case-insensitive by
  *  normalising here rather than at each of the call sites. */
 export const DAMAGE: Record<string, string> = {
-  radiant: 'gold-rare', fire: 'danger-hot', psychic: 'violet-hot', cold: 'teal',
+  radiant: 'gold', fire: 'danger-hot', psychic: 'violet-hot', cold: 'teal',
   necrotic: 'violet', poison: 'good', acid: 'good', lightning: 'cyan-hot',
   thunder: 'cyan', force: 'violet-hot', bludgeoning: 'muted', piercing: 'muted',
   slashing: 'muted',
@@ -32,7 +32,7 @@ export const DAMAGE: Record<string, string> = {
  *  Kept separate so the damage table stays a statement about damage — the roll
  *  panel iterates DAMAGE and must not pick up `beige` as a damage type. */
 const GENERIC: Record<string, string> = {
-  red: 'danger-hot', gold: 'gold-rare', amber: 'amber', cyan: 'cyan-hot',
+  red: 'danger-hot', gold: 'gold', amber: 'amber', cyan: 'cyan-hot',
   violet: 'violet', green: 'good', beige: 'beige', muted: 'muted',
   /** Not damage — what an attack roll's own contributions are tinted. */
   atk: 'cyan-hot',

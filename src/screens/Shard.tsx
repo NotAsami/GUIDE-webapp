@@ -425,7 +425,7 @@ function ShardCard({
         <div className={`${styles.scBuffs} ${variant === 'empty' ? styles.italic : ''}`}>
           {variant === 'empty' ? 'No shard installed. Insert a compatible module to bind.' : buffLines(t).map(line => (
             <span key={line} className={styles.b} style={{ display: 'block' }}>
-              <span style={{ color: variant === 'guide' ? 'var(--gold-rare)' : 'var(--cyan-hot)', marginRight: 6, fontWeight: 600 }}>+</span>{line}
+              <span style={{ color: variant === 'guide' ? 'var(--amber)' : 'var(--cyan-hot)', marginRight: 6, fontWeight: 600 }}>+</span>{line}
             </span>
           ))}
         </div>

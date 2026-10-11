@@ -52,8 +52,8 @@
 .pIcon {
   width: 44px; height: 44px; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
-  color: var(--gold-rare); font-size: 19px;
-  border: 1px solid color-mix(in srgb, var(--gold-rare) 50%, transparent);
+  color: var(--gold); font-size: 19px;
+  border: 1px solid color-mix(in srgb, var(--gold) 50%, transparent);
   background: rgba(0, 0, 0, 0.4);
 }
 .pTitles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

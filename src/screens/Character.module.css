@@ -191,7 +191,7 @@
 
 .hex.rolling .hScore { font-size: 50px; text-shadow: 0 0 22px color-mix(in srgb, var(--cyan) 90%, transparent); }
 .hex.critSuccess .hScore {
-  color: var(--gold-rare); text-shadow: 0 0 26px color-mix(in srgb, var(--gold-rare) 90%, transparent);
+  color: var(--gold); text-shadow: 0 0 26px color-mix(in srgb, var(--gold) 90%, transparent);
   animation: critShine 0.6s ease-out;
 }
 .hex.critFail .hScore {
@@ -373,7 +373,7 @@
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
 }
 .rollEntry.critSuccess .reFrame, .rollEntry.critFail .reFrame { opacity: 1; }
-.rollEntry.critSuccess .reFrame { background: var(--gold-rare); box-shadow: 0 0 14px color-mix(in srgb, var(--gold-rare) 50%, transparent); }
+.rollEntry.critSuccess .reFrame { background: var(--gold); box-shadow: 0 0 14px color-mix(in srgb, var(--gold) 50%, transparent); }
 .rollEntry.critFail .reFrame { background: var(--danger); box-shadow: 0 0 14px color-mix(in srgb, var(--danger) 50%, transparent); }
 .reInner {
   position: relative; margin: 1.5px;
@@ -394,7 +394,7 @@
   color: var(--cyan-hot); text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 40%, transparent);
   font-variant-numeric: tabular-nums;
 }
-.rollEntry.critSuccess .reTotal { color: var(--gold-rare); text-shadow: 0 0 12px color-mix(in srgb, var(--gold-rare) 60%, transparent); }
+.rollEntry.critSuccess .reTotal { color: var(--gold); text-shadow: 0 0 12px color-mix(in srgb, var(--gold) 60%, transparent); }
 .rollEntry.critFail .reTotal { color: var(--danger); text-shadow: 0 0 10px color-mix(in srgb, var(--danger) 55%, transparent); }
 .reD20 {
   grid-column: 1;
@@ -421,8 +421,8 @@
   position: absolute; top: -7px; right: 12px;
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   padding: 2px 6px;
-  background: var(--bg); border: 1.5px solid var(--gold-rare); color: var(--gold-rare);
-  text-transform: uppercase; box-shadow: 0 0 10px color-mix(in srgb, var(--gold-rare) 45%, transparent); z-index: 2;
+  background: var(--bg); border: 1.5px solid var(--gold); color: var(--gold);
+  text-transform: uppercase; box-shadow: 0 0 10px color-mix(in srgb, var(--gold) 45%, transparent); z-index: 2;
 }
 .rollEntry.critFail .reCrit { border-color: var(--danger); color: var(--danger); box-shadow: 0 0 10px color-mix(in srgb, var(--danger) 45%, transparent); }
 

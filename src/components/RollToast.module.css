@@ -105,8 +105,8 @@
 /* Crit is GOLD, the panel's colour for it. It was green here and gold there — one
    event, two colours — and green now means one thing: hit points coming back.
    The resolve's nat-20 flare is cyan and settles into this. */
-.res.crit .total { color: var(--gold-rare); text-shadow: 0 0 14px color-mix(in srgb, var(--gold-rare) 45%, transparent); }
-.res.crit .lab { color: var(--gold-rare); }
+.res.crit .total { color: var(--gold); text-shadow: 0 0 14px color-mix(in srgb, var(--gold) 45%, transparent); }
+.res.crit .lab { color: var(--gold); }
 /* A natural 1 lands red, after its stutter (Resolve.module.css). */
 .res.fumble .total { color: var(--danger-hot); text-shadow: 0 0 12px color-mix(in srgb, var(--danger) 50%, transparent); }
 .res.fumble .lab { color: var(--danger-hot); }

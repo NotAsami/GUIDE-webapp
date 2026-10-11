@@ -74,12 +74,12 @@
    inheriting the row's. */
 .oCommit { padding: 0 10px 10px 11px; }
 .use { --cut: 7px; position: relative; display: block; width: 100%; background: none; border: 0; padding: 0; cursor: pointer; height: 30px; }
-.use .bFrame { position: absolute; inset: 0; background: var(--gold-rare); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
+.use .bFrame { position: absolute; inset: 0; background: var(--gold); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }
 .use .bIn {
   position: absolute; inset: 1px; background: #17130a;
   clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
   display: flex; align-items: center; justify-content: center; gap: 7px;
-  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--gold-rare);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--gold);
   transition: background 160ms ease, color 160ms ease;
 }
 .use:hover .bIn { background: color-mix(in srgb, var(--amber) 20%, transparent); color: var(--amber-hot); }
@@ -95,7 +95,7 @@
 .tag { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; padding: 2px 7px; border: 1px solid; }
 .tag i { font-size: 7.5px; }
 .tag.stance { border-color: var(--cyan); color: var(--cyan-hot); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
-.tag.arm { border-color: color-mix(in srgb, var(--gold-rare) 55%, transparent); color: var(--gold-rare); background: color-mix(in srgb, var(--gold-rare) 10%, transparent); }
+.tag.arm { border-color: color-mix(in srgb, var(--gold) 55%, transparent); color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, transparent); }
 
 /* What it does, in the author's own words. A chip that names a feature and
    never says what it is is the whole complaint this screen answers. */
