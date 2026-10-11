@@ -61,7 +61,7 @@ import { FOUNDRY_CONDITIONS, conditionLabel } from '../lib/foundryDamage'
 import { useFullscreen } from '../lib/fullscreen'
 import { auditNode, buildContext, characterVars, immuneTo, normalizeTag, type AuditItem } from '../lib/graph'
 import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphState'
-import { stateOf, useDmHandouts } from '../lib/handouts'
+import { useDmHandouts } from '../lib/handouts'
 import { kitChoices, legacyKitText, resolvePool } from '../lib/kit'
 import {
   hpGainOf, levelUpPatch, levelUpPlan, pendingLevelStale, recallLevelPatch, releaseLevelPatch,
@@ -167,6 +167,13 @@ interface LogEntry {
   at: number
 }
 
+/** The console's campaign views, grouped for the header nav. */
+const VIEW_GROUPS: { label: string; views: { view: View; label: string }[] }[] = [
+  { label: 'Play', views: [{ view: 'overview', label: 'Overview' }, { view: 'prep', label: 'Prep' }] },
+  { label: 'World', views: [{ view: 'quests', label: 'Quests' }, { view: 'sessions', label: 'Sessions' }, { view: 'handouts', label: 'Handouts' }, { view: 'npcs', label: 'NPC web' }] },
+  { label: 'Library', views: [{ view: 'catalog', label: 'Catalog' }] },
+]
+
 /** What a log line's Undo can put back: a sheet field, or the effect list. */
 type RestoreField = 'hp' | 'coins' | 'activeEffects'
 
@@ -261,7 +268,18 @@ export function OperatorConsole() {
   const sendVoice = useGuideVoice()
   // Session-local activity log, newest first, capped like the mockup's logAct.
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
+  /* Broadcast folds to a strip; remembered per browser. While folded, a count
+     of log lines since folding keeps anything from landing unseen. */
+  const [bcOpen, setBcOpen] = useState(() => { try { return localStorage.getItem('guide.dm.bcOpen') !== '0' } catch { return true } })
+  const [logCount, setLogCount] = useState(0)
+  const [seenCount, setSeenCount] = useState(0)
+  const toggleBc = () => setBcOpen(o => {
+    try { localStorage.setItem('guide.dm.bcOpen', o ? '0' : '1') } catch { /* private mode: just don't remember */ }
+    setSeenCount(logCount)
+    return !o
+  })
   const log = (node: ReactNode, kind?: LogEntry['kind'], undo?: LogEntry['undo']) => {
+    setLogCount(n => n + 1)
     const id = crypto.randomUUID()
     setLogEntries(prev => [{ id, node, kind, time: nowStamp(), undo, at: Date.now() }, ...prev].slice(0, 24))
     if (undo) setTimeout(() => setLogEntries(prev => prev.map(e => (e.id === id ? { ...e, undo: undefined } : e))), UNDO_MS)
@@ -454,32 +472,8 @@ export function OperatorConsole() {
     }
   })()
 
-  function openOverview() {
-    setView('overview')
-    setSelectedId(null)
-  }
-  function openQuests() {
-    setView('quests')
-    setSelectedId(null)
-  }
-  function openSessions() {
-    setView('sessions')
-    setSelectedId(null)
-  }
-  function openHandouts() {
-    setView('handouts')
-    setSelectedId(null)
-  }
   function openPrep() {
     setView('prep')
-    setSelectedId(null)
-  }
-  function openNpcs() {
-    setView('npcs')
-    setSelectedId(null)
-  }
-  function openCatalog() {
-    setView('catalog')
     setSelectedId(null)
   }
   function openCharacter(id: string) {
@@ -499,11 +493,22 @@ export function OperatorConsole() {
         <div className={styles.opSigil}><i className="fa-solid fa-terminal" /></div>
         <div className={styles.opId}>
           <div className={styles.opTitle}>G.U.I.D.E.<span className={styles.slash}>//</span>Operator Console</div>
-          <div className={styles.opSub}>
-            <span className={styles.acc}>Root :: Architect View</span>
-            <span className={styles.sep}>//</span><span>DM Mode</span>
-            <span className={styles.sep}>//</span><span>Brettany Theater</span>
-          </div>
+          {/* Every campaign view, one click from anywhere — the rail below
+              holds only the party, so it never scrolls mid-combat. Grouped so
+              no group offers more than four choices. */}
+          <nav className={styles.viewNav} aria-label="Console views">
+            {VIEW_GROUPS.map(g => (
+              <div key={g.label} className={styles.vnGroup} role="group" aria-label={g.label}>
+                <span className={styles.vnLab} aria-hidden="true">{g.label}</span>
+                {g.views.map(v => (
+                  <button
+                    key={v.view} type="button" className={cx(styles.vnTab, view === v.view && styles.on)}
+                    aria-current={view === v.view ? 'page' : undefined} onClick={() => { setView(v.view); setSelectedId(null) }}
+                  >{v.label}</button>
+                ))}
+              </div>
+            ))}
+          </nav>
         </div>
         <div className={styles.opRight}>
           <div className={styles.opStat}><span className={styles.v}>{members.length}</span><span className={styles.l}>Linked PCs</span></div>
@@ -591,7 +596,7 @@ export function OperatorConsole() {
       </header>
 
       {/* ===== CONSOLE GRID ===== */}
-      <div className={styles.console}>
+      <div className={cx(styles.console, !bcOpen && !wide && styles.bcFolded)}>
         {/* LEFT — ROSTER */}
         <section className={styles.region} aria-label="Party roster">
           <div className={styles.rFrame} />
@@ -603,10 +608,8 @@ export function OperatorConsole() {
             </div>
             <div className={styles.rScroll}>
               <div className={styles.rosterList}>
-                {/* Characters FIRST: mid-session they are the targets, and the prep
-                    tray sits over the bottom of this column — campaign entries
-                    are the between-session doors, so they take the scroll. */}
-                <div className={styles.rosterDiv}>Characters</div>
+                {/* The party, and only the party: campaign views live in the
+                    header nav, so this column never scrolls past a PC. */}
                 {members.map(p => {
                   const hc = hpClassOf(p)
                   return (
@@ -640,62 +643,6 @@ export function OperatorConsole() {
                     </button>
                   )
                 })}
-
-                <div className={styles.rosterDiv}>Campaign</div>
-                <button className={cx(styles.ovEntry, view === 'overview' && styles.active)} onClick={openOverview}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-table-cells-large" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Party Overview</span>
-                    <span className={styles.ovS}>Combat Dashboard · All PCs</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'quests' && styles.active)} onClick={openQuests}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-scroll" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Quest Log</span>
-                    <span className={styles.ovS}>{campaign.quests.filter(q => q.status === 'active').length} active · {campaign.quests.length} total</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'sessions' && styles.active)} onClick={openSessions}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-book-bookmark" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Session Log</span>
-                    <span className={styles.ovS}>Recaps · {campaign.sessions.length} logged</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'handouts' && styles.active)} onClick={openHandouts}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-envelope-open-text" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Handouts</span>
-                    <span className={styles.ovS}>{handoutLib.handouts.filter(h => stateOf(h) === 'live').length} live · {handoutLib.handouts.length} authored</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'prep' && styles.active)} onClick={openPrep}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-clipboard-list" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Prep Board</span>
-                    <span className={styles.ovS}>{(() => {
-                      const board = planLib.plans.find(p => !p.session_id)
-                      if (!board) return 'Stage tonight'
-                      const cards = planLib.cards.filter(c => c.plan_id === board.id)
-                      return `${cards.filter(c => !c.fired_at).length} staged · ${cards.filter(c => c.fired_at).length} played`
-                    })()}</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'npcs' && styles.active)} onClick={openNpcs}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-circle-nodes" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>NPC Web</span>
-                    <span className={styles.ovS}>Who knows whom · {npcLib.npcs.length} recorded</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'catalog' && styles.active)} onClick={openCatalog}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-box-archive" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Catalog</span>
-                    <span className={styles.ovS}>{catalog.items.length} items · {featureLib.features.length} features · {spellLib.spells.length} spells</span>
-                  </span>
-                </button>
               </div>
             </div>
           </div>
@@ -858,13 +805,26 @@ export function OperatorConsole() {
 
         {/* RIGHT — BROADCAST + ACTIVITY LOG (slice 6). Stepped aside while the
             NPC web is open; the log keeps collecting, it lives in state above. */}
-        {!wide && <section className={styles.region} aria-label="Broadcast and system log">
+        {!wide && !bcOpen && (
+          <section className={styles.bcStrip} aria-label="Broadcast and system log, folded">
+            <button type="button" className={styles.bcOpenBtn} onClick={toggleBc} title="Open Broadcast" aria-label={`Open Broadcast${logCount - seenCount > 0 ? `, ${logCount - seenCount} new log lines` : ''}`}>
+              <i className="fa-solid fa-tower-broadcast" aria-hidden="true" />
+              {logCount - seenCount > 0 && <span className={styles.bcBadge}>{logCount - seenCount}</span>}
+              <span className={styles.bcVert} aria-hidden="true">Broadcast</span>
+            </button>
+            {/* Folded, the log still speaks: the newest line, read politely. */}
+            <div className="sr-only" role="log" aria-live="polite">{logEntries[0]?.node}</div>
+          </section>
+        )}
+        {!wide && bcOpen && <section className={styles.region} aria-label="Broadcast and system log">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
             <div className={styles.rHead}>
               <span className={styles.rhNum}>03</span>
               <span className={styles.rhTitle}>Broadcast</span>
-              <span className={styles.rhMeta}>G.U.I.D.E. Voice</span>
+              <button type="button" className={styles.bcFoldBtn} onClick={toggleBc} title="Fold Broadcast to a strip" aria-label="Fold Broadcast">
+                <i className="fa-solid fa-angles-right" aria-hidden="true" />
+              </button>
             </div>
             <div className={styles.rScroll}>
               <div className={styles.bcPad}>

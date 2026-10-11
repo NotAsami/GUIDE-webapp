@@ -3242,3 +3242,49 @@ button.wtab { border: 0; cursor: pointer; }
 .areaBar.idle .areaWho { color: var(--muted); }
 .kbdHint { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.04em; color: var(--muted); margin-left: 4px; white-space: nowrap; }
 .areaClear:disabled, .liveAmt:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ============================================================
+   HEADER VIEW NAV — Play / World / Library. The rail is party-only now.
+   ============================================================ */
+.viewNav { display: flex; align-items: center; gap: 18px; margin-top: 6px; flex-wrap: wrap; }
+.vnGroup { display: flex; align-items: center; gap: 4px; }
+.vnLab {
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  text-transform: uppercase; color: var(--amber-mid); margin-right: 4px;
+}
+.vnTab {
+  padding: 3px 9px; cursor: pointer; background: transparent;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
+  color: var(--beige); border: 1px solid color-mix(in srgb, var(--amber) 28%, transparent);
+  transition: background 120ms, border-color 120ms, color 120ms;
+}
+.vnTab:hover { border-color: var(--amber); color: var(--amber-hot); }
+.vnTab.on { background: color-mix(in srgb, var(--amber) 18%, transparent); border-color: var(--amber); color: var(--amber-hot); }
+.vnTab:focus-visible { outline: 2px solid var(--amber-hot); outline-offset: 2px; }
+
+/* ============================================================
+   BROADCAST, FOLDED — a strip; the work area takes the width.
+   ============================================================ */
+.console.bcFolded { grid-template-columns: 25.5% 1fr 44px; }
+.bcStrip { position: relative; min-height: 0; }
+.bcOpenBtn {
+  position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 14px 0; cursor: pointer; color: var(--amber-hot);
+  background: linear-gradient(180deg, rgba(20, 17, 9, 0.9), rgba(16, 15, 13, 0.9));
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+}
+.bcOpenBtn:hover, .bcOpenBtn:focus-visible { border-color: var(--amber-hot); outline: none; }
+.bcOpenBtn > i { font-size: 15px; }
+.bcBadge {
+  min-width: 20px; padding: 2px 5px; border-radius: 999px; text-align: center;
+  font-family: var(--font-mono); font-size: var(--fs-label); font-weight: 600; color: var(--bg); background: var(--amber);
+}
+.bcVert {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.22em; text-transform: uppercase; color: var(--beige);
+}
+.bcFoldBtn {
+  margin-left: auto; padding: 3px 7px; cursor: pointer; background: transparent;
+  color: var(--beige); border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+}
+.bcFoldBtn:hover, .bcFoldBtn:focus-visible { color: var(--amber-hot); border-color: var(--amber); outline: none; }
