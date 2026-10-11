@@ -3213,3 +3213,17 @@ div.skWarn { cursor: default; }
 .gbTarget:hover:not(:disabled) { background: color-mix(in srgb, var(--amber) 20%, transparent); }
 .opStat .v.dimV { color: var(--muted); }
 .opStat .downed { color: var(--danger-hot); }
+
+/* ============================================================
+   KEYBOARD FOCUS — the operator layer's one focus language. Chamfered
+   controls clip a normal outline, so focus lights the FRAME (the .bf layer /
+   the beige skin that IS the border) in amber-hot, plus the hover glow.
+   ============================================================ */
+button.wtab { border: 0; cursor: pointer; }
+.wtab:focus-visible { outline: none; background: var(--amber-hot); color: var(--amber-hot); }
+.btn:focus-visible { outline: none; }
+.btn:focus-visible .bf { background: var(--amber-hot); }
+.btn:focus-visible .bi { box-shadow: inset 0 0 18px color-mix(in srgb, var(--amber) 30%, transparent), 0 0 14px color-mix(in srgb, var(--amber) 45%, transparent); }
+.crTab:focus-visible { outline: 2px solid var(--amber-hot); outline-offset: 2px; }
+.ovEntry:focus-visible, .pcCard:focus-visible { outline: none; background: var(--amber-hot); }
+.searchIn:focus-visible, .numIn:focus-visible, .sessIn:focus-visible { outline: 1px solid var(--amber-hot); outline-offset: 1px; }
