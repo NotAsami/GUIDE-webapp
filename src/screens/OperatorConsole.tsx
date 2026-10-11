@@ -570,6 +570,44 @@ export function OperatorConsole() {
             </div>
             <div className={styles.rScroll}>
               <div className={styles.rosterList}>
+                {/* Characters FIRST: mid-session they are the targets, and the prep
+                    tray sits over the bottom of this column — campaign entries
+                    are the between-session doors, so they take the scroll. */}
+                <div className={styles.rosterDiv}>Characters</div>
+                {members.map(p => {
+                  const hc = hpClassOf(p)
+                  return (
+                    <button
+                      key={p.id}
+                      className={cx(styles.pcCard, view === 'character' && selectedId === p.id && styles.active)}
+                      onClick={() => openCharacter(p.id)}
+                    >
+                      <div className={styles.pcTop}>
+                        <span className={styles.pcPortrait}><Icon name={p.icon} /></span>
+                        <span className={styles.pcNamewrap}>
+                          <div className={styles.pcName}>{p.name}</div>
+                          <div className={styles.pcMeta}>{p.race} · {p.cls} · Lv {p.level}</div>
+                        </span>
+                        <span className={cx(styles.pcConn, p.online ? styles.on : styles.off)}>
+                          <span className={styles.led} />{p.online ? 'Link' : 'Off'}
+                        </span>
+                      </div>
+                      <div className={cx(styles.hpbar, hc && styles[hc])}><i style={{ width: `${pctOf(p)}%` }} /></div>
+                      <div className={cx(styles.hpRead, hc && styles[hc])}>
+                        <span className={styles.n}><b>{p.hp}</b> / {p.hpMax} HP{p.tempHp ? <span className={styles.temp}> +{p.tempHp}</span> : null}</span>
+                        <span className={styles.lvl}>Lv {p.level}</span>
+                      </div>
+                      <div className={styles.fxDots}>
+                        {p.effects.length
+                          ? p.effects.map((e, i) => (
+                              <span key={i} className={cx(styles.fxDot, styles[e.kind])} title={`${e.name}${e.source ? ` · From: ${e.source}` : ''}`}><i /></span>
+                            ))
+                          : <span className={styles.fxNone}>No active effects</span>}
+                      </div>
+                    </button>
+                  )
+                })}
+
                 <div className={styles.rosterDiv}>Campaign</div>
                 <button className={cx(styles.ovEntry, view === 'overview' && styles.active)} onClick={openOverview}>
                   <span className={styles.ovIc}><i className="fa-solid fa-table-cells-large" /></span>
@@ -625,41 +663,6 @@ export function OperatorConsole() {
                     <span className={styles.ovS}>{catalog.items.length} items · {featureLib.features.length} features · {spellLib.spells.length} spells</span>
                   </span>
                 </button>
-
-                <div className={styles.rosterDiv}>Characters</div>
-                {members.map(p => {
-                  const hc = hpClassOf(p)
-                  return (
-                    <button
-                      key={p.id}
-                      className={cx(styles.pcCard, view === 'character' && selectedId === p.id && styles.active)}
-                      onClick={() => openCharacter(p.id)}
-                    >
-                      <div className={styles.pcTop}>
-                        <span className={styles.pcPortrait}><Icon name={p.icon} /></span>
-                        <span className={styles.pcNamewrap}>
-                          <div className={styles.pcName}>{p.name}</div>
-                          <div className={styles.pcMeta}>{p.race} · {p.cls} · Lv {p.level}</div>
-                        </span>
-                        <span className={cx(styles.pcConn, p.online ? styles.on : styles.off)}>
-                          <span className={styles.led} />{p.online ? 'Link' : 'Off'}
-                        </span>
-                      </div>
-                      <div className={cx(styles.hpbar, hc && styles[hc])}><i style={{ width: `${pctOf(p)}%` }} /></div>
-                      <div className={cx(styles.hpRead, hc && styles[hc])}>
-                        <span className={styles.n}><b>{p.hp}</b> / {p.hpMax} HP{p.tempHp ? <span className={styles.temp}> +{p.tempHp}</span> : null}</span>
-                        <span className={styles.lvl}>Lv {p.level}</span>
-                      </div>
-                      <div className={styles.fxDots}>
-                        {p.effects.length
-                          ? p.effects.map((e, i) => (
-                              <span key={i} className={cx(styles.fxDot, styles[e.kind])} title={`${e.name}${e.source ? ` · From: ${e.source}` : ''}`}><i /></span>
-                            ))
-                          : <span className={styles.fxNone}>No active effects</span>}
-                      </div>
-                    </button>
-                  )
-                })}
               </div>
             </div>
           </div>
