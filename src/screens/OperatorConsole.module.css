@@ -345,7 +345,7 @@
 }
 .ovBanner .big { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: 0.16em; color: var(--beige); }
 .ovBanner .dmonly {
-  margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+  margin-left: auto; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: 0 0 auto;
   color: var(--amber-hot); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); padding: 4px 9px;
   font-size: var(--fs-label); letter-spacing: var(--ls-label);
   clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
@@ -1242,8 +1242,10 @@
 .catPrev .pvMeta { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); display: flex; flex-wrap: wrap; gap: 5px 10px; }
 
 .catDim { display: flex; align-items: center; gap: 9px; }
-.catDim .sessIn { width: 64px; margin-bottom: 0; text-align: center; }
-.catDim .selIn { width: 56px; margin-bottom: 0; padding-right: 16px; }
+/* Inputs give way before the unit select does: the Value cell is narrower
+   than 64 + 56 + gap, and the select used to be the one sliced off. */
+.catDim .sessIn { flex: 1 1 64px; min-width: 0; max-width: 64px; margin-bottom: 0; text-align: center; }
+.catDim .selIn { flex: 0 0 56px; width: 56px; margin-bottom: 0; padding-right: 16px; }
 .catDim .x { font-family: var(--font-mono); font-size: 12px; color: var(--beige-mid); }
 .catDim .unit { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
 
@@ -2020,13 +2022,15 @@ div.skWarn { cursor: default; }
    after it does not belong in a third of a row. */
 .catSpan3 { grid-column: 1 / -1; }
 .catCheck {
-  display: flex; align-items: center; gap: 9px; cursor: pointer;
-  /* The explanatory half wraps rather than forcing the row wider. */
-  flex-wrap: wrap; min-width: 0;
+  display: flex; align-items: flex-start; gap: 9px; cursor: pointer;
+  /* The explanatory half wraps INSIDE its span. Wrapping the row itself sent
+     the whole label to a line below its checkbox. */
+  min-width: 0; line-height: 1.4;
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--beige); text-transform: uppercase;
 }
-.catCheck input { width: 14px; height: 14px; accent-color: var(--amber); cursor: pointer; }
+.catCheck input { flex: 0 0 auto; width: 14px; height: 14px; margin: 1px 0 0; accent-color: var(--amber); cursor: pointer; }
+.catCheck > span { flex: 1; min-width: 0; }
 /* The qualifier after a field label — the part that explains rather than names. */
 .dimLab { color: var(--beige-mid); text-transform: none; letter-spacing: 0.04em; }
 
