@@ -55,7 +55,7 @@ import { useLocalDraft } from '../lib/draft'
 import { effectiveSheet } from '../lib/effects'
 import { prereqMet, prereqSummary } from '../lib/feats'
 import { leafOf } from '../lib/folders'
-import { sendFoundry, useFoundryMessages } from '../lib/foundry'
+import { sendFoundry, useFoundryMessages, type BridgeMsg } from '../lib/foundry'
 import { toFoundryActor } from '../lib/foundryActor'
 import { FOUNDRY_CONDITIONS, conditionLabel } from '../lib/foundryDamage'
 import { useFullscreen } from '../lib/fullscreen'
@@ -94,6 +94,7 @@ import { OperatorNpcWeb } from './OperatorNpcWeb'
 import { OperatorPrepBoard } from './OperatorPrepBoard'
 import { PrepTray } from './PrepTray'
 import { OperatorShops } from './OperatorShops'
+import { applyHp } from '../lib/hp'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
  *  Stat Panel / the Operator Console mockup. */
@@ -285,7 +286,22 @@ export function OperatorConsole() {
      the whole table, so it takes the last target anybody set. */
   const [fvttTarget, setFvttTarget] = useState<{ token: string; name: string } | null>(null)
   const [condition, setCondition] = useState<string>(FOUNDRY_CONDITIONS[0])
-  useFoundryMessages(msg => { if (msg.kind === 'target') setFvttTarget(msg.token) })
+  /* WHAT FOUNDRY HAS SAID THIS SESSION — the header's only claims about combat.
+     The bridge has no heartbeat and announces a turn only when a MAPPED PC's
+     turn begins (monster turns send nothing), so the strip says exactly that:
+     when it last heard anything, and whose PC turn came up last. */
+  const [fvtt, setFvtt] = useState<{ heard: number | null; turn?: { character: string; round: number }; downed?: string }>({ heard: null })
+  useFoundryMessages(msg => {
+    if (msg.kind === 'target') setFvttTarget(msg.token)
+    // Players' apps talk TO Foundry on the same channel; only what Foundry
+    // itself sends counts as having heard from it.
+    if (!FROM_FOUNDRY.has(msg.kind)) return
+    setFvtt(prev => ({
+      heard: Date.now(),
+      turn: msg.kind === 'turn' ? { character: msg.character, round: msg.round } : prev.turn,
+      downed: msg.kind === 'downed' ? msg.name : prev.downed,
+    }))
+  })
 
   /* Level Up is a portal too, and for the same reason as the loot roll: it
      belongs to the console rather than to a tab. Unlike the loot roll it has NO
@@ -474,7 +490,7 @@ export function OperatorConsole() {
         </div>
         <div className={styles.opRight}>
           <div className={styles.opStat}><span className={styles.v}>{members.length}</span><span className={styles.l}>Linked PCs</span></div>
-          <div className={styles.opStat}><span className={cx(styles.v, styles.cyan)}>Standby</span><span className={styles.l}>Encounter</span></div>
+          <FoundryStat state={fvtt} nameOf={id => firstName(members.find(m => m.id === id)?.name ?? 'A PC')} />
           {/* CONDITIONS ON THE TARGETED CREATURE. The DM's call, so it lives on
               the DM's screen — and it names what it will hit, because a control
               that acts on "whatever is targeted" and does not say what that is
@@ -808,7 +824,11 @@ export function OperatorConsole() {
                   <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} backgroundLib={backgroundLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onRestore={(field, value) => restoreSheet(selectedRow.id, field, value)} onVoice={sendVoice} log={log} />
                 )
               ) : (
-                <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
+                <OverviewDashboard
+                  members={members} party={party} selectedId={selectedId} onSelect={openCharacter}
+                  items={catalog.items} effectLib={effectLib.effects} shardCatalog={shardCatalog}
+                  onUpdate={updateCharacter} onRestore={restoreSheet} onVoice={sendVoice} log={log}
+                />
               )}
             </div>
           </div>
@@ -942,51 +962,293 @@ export function OperatorConsole() {
   )
 }
 
+/** The bridge kinds that only Foundry sends (lib/foundry.ts "Foundry → app"). */
+const FROM_FOUNDRY = new Set<BridgeMsg['kind']>(['turn', 'target', 'request', 'downed', 'conditions', 'mapped', 'initRequest'])
+
+/** The header's Foundry readout, in place of the old hardcoded "Encounter ·
+ *  Standby". Only what the bridge actually reported; "not heard" is a state,
+ *  not an error — Foundry simply isn't open. */
+function FoundryStat({ state, nameOf }: {
+  state: { heard: number | null; turn?: { character: string; round: number }; downed?: string }
+  nameOf: (characterId: string) => string
+}) {
+  const [, tick] = useState(0)
+  useEffect(() => { const t = setInterval(() => tick(n => n + 1), 5000); return () => clearInterval(t) }, [])
+  const ago = state.heard === null ? null : Math.max(0, Math.round((Date.now() - state.heard) / 1000))
+  const heard = ago === null ? 'Not heard' : ago < 60 ? `Heard ${ago}s ago` : `Heard ${Math.round(ago / 60)}m ago`
+  return (
+    <div className={styles.opStat} role="status" aria-live="polite" title="Foundry bridge — what it has reported this session">
+      <span className={cx(styles.v, state.turn ? styles.cyan : styles.dimV)}>
+        {state.turn ? `${nameOf(state.turn.character)} · R${state.turn.round}` : '—'}
+      </span>
+      <span className={styles.l}>
+        Foundry · {heard}{state.downed ? <> · <span className={styles.downed}>Down: {state.downed}</span></> : null}
+      </span>
+    </div>
+  )
+}
+
+/** PARTY OVERVIEW — the live-session view and the console's home. Everything
+ *  the DM does with players waiting is on this one screen: HP (one PC, or a
+ *  selection for area damage), conditions on and off, and a single grant bar.
+ *  Oversee keeps the deep work. Every write is the same write the Oversee cards
+ *  make — applyHp for HP, buildActiveEffect for effects, grantSnapshots for
+ *  items — and logs only once it lands, with Undo where undo is possible. */
 function OverviewDashboard({
-  members, selectedId, onSelect,
-}: { members: PartyMember[]; selectedId: string | null; onSelect: (id: string) => void }) {
+  members, party, selectedId, onSelect, items, effectLib, shardCatalog, onUpdate, onRestore, onVoice, log,
+}: {
+  members: PartyMember[]
+  party: CharacterRow[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+  items: CatalogItemRow[]
+  effectLib: CatalogEffectRow[]
+  shardCatalog: Record<string, ShardTree>
+  onUpdate: (id: string, patch: CharacterUpdate) => Promise<boolean>
+  onRestore: (id: string, field: 'hp' | 'coins', value: unknown) => Promise<boolean>
+  onVoice: (msg: VoiceMsg) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger', undo?: () => Promise<boolean>) => void
+}) {
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [areaAmt, setAreaAmt] = useState('')
+  const rowOf = (id: string) => party.find(c => c.id === id)
+  const toggle = (id: string) => setPicked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+
+  async function hpChange(p: PartyMember, kind: 'damage' | 'heal', amount: number) {
+    const row = rowOf(p.id)
+    if (!row?.sheet || !(amount > 0)) return
+    const prev = row.sheet.hp ?? { current: 0, max: 0 }
+    const who = <span className={styles.who}>{firstName(p.name)}</span>
+    if (kind === 'damage' && prev.current <= 0 && !(prev.temp ?? 0)) { log(<>{who} is already at 0 HP — skipped</>, 'danger'); return }
+    const next = applyHp(prev, p.hpMax, { kind, amount })
+    if (!(await onUpdate(p.id, { sheet: { ...row.sheet, hp: next } }))) return
+    const undo = () => onRestore(p.id, 'hp', prev)
+    if (kind === 'damage') log(<>Damaged {who} <span className={styles.obj}>−{amount} HP</span></>, 'danger', undo)
+    else log(<>Healed {who} <span className={styles.obj}>+{next.current - prev.current} HP</span></>, undefined, undo)
+  }
+
+  /* Area damage: each PC is its own write, its own log line and its own Undo —
+     one failure shows against the PC it failed for instead of sinking the lot. */
+  async function area(kind: 'damage' | 'heal') {
+    const n = Math.floor(Number(areaAmt))
+    for (const p of members) if (picked.has(p.id)) await hpChange(p, kind, n)
+  }
+
+  async function addEffect(p: PartyMember, e: CatalogEffectRow) {
+    const row = rowOf(p.id)
+    if (!row) return false
+    const who = <span className={styles.who}>{firstName(p.name)}</span>
+    if (immuneTo(buildContext(row, shardCatalog), e.data.name)) { log(<>“{e.data.name}” does not stick — {who} is immune</>, 'danger'); return false }
+    const { eff, dur } = buildActiveEffect(e.data)
+    const res = row.resources ?? {}
+    const active = (res.activeEffects as ActiveEffect[] | undefined) ?? []
+    if (!(await onUpdate(p.id, { resources: { ...res, activeEffects: [...active, eff] } as CharacterRow['resources'] }))) return false
+    void onVoice({ kind: 'effect', target: p.id, name: e.data.name, dur, fxKind: EFFECT_KIND_TO_ACTIVE[e.data.kind] })
+    log(<>Applied <span className={styles.obj}>{e.data.name}</span> to {who}</>, e.data.kind === 'buff' ? 'cyan' : 'danger')
+    return true
+  }
+
+  async function clearEffect(p: PartyMember, id: string) {
+    const row = rowOf(p.id)
+    const res = row?.resources ?? {}
+    const active = (res.activeEffects as ActiveEffect[] | undefined) ?? []
+    const gone = active.find(e => e.id === id)
+    if (!row || !gone) return
+    if (await onUpdate(p.id, { resources: { ...res, activeEffects: active.filter(e => e.id !== id) } as CharacterRow['resources'] }))
+      log(<>Cleared <span className={styles.obj}>{gone.name}</span> from <span className={styles.who}>{firstName(p.name)}</span></>)
+  }
+
+  async function grantItem(p: PartyMember, it: CatalogItemRow) {
+    const row = rowOf(p.id)
+    if (!row) return false
+    const inv = ((row.inventory as unknown as InventoryItem[]) ?? [])
+    const gear = (row.equipped ?? {}) as EquippedGear
+    if (!(await onUpdate(p.id, { inventory: grantSnapshots(it, 1, gear, inv) as unknown as Json[] }))) return false
+    const d = it.data
+    void onVoice({ kind: 'item', target: p.id, name: d?.name ?? 'Item', icon: d?.icon, rarity: d?.rarity })
+    log(<>Granted <span className={styles.obj}>{d?.name ?? 'Item'}</span> to <span className={styles.who}>{firstName(p.name)}</span></>, 'cyan')
+    return true
+  }
+
+  const areaN = Math.floor(Number(areaAmt))
+
   return (
     <>
       <div className={styles.ovBanner}>
         <span className={styles.big}>Party Overview</span>
-        <span>Combat dashboard · live vitals</span>
+        <span>Live session</span>
         <span className={styles.dmonly}><i className="fa-solid fa-eye-slash" /> Digitization — DM only</span>
       </div>
-      {members.map(p => {
-        const hc = hpClassOf(p)
-        const pct = pctOf(p)
-        const hpColor = hc === 'crit' ? 'var(--danger-hot)' : hc === 'warn' ? 'var(--amber)' : 'var(--good)'
-        const high = p.digitization >= 50
-        return (
-          <button key={p.id} className={cx(styles.dashRow, selectedId === p.id && styles.active)} onClick={() => onSelect(p.id)}>
-            <div className={styles.drMain}>
-              <div className={styles.drName}>
-                <span className={styles.nm}>{p.name}</span>
-                <span className={styles.cl}><span className={cx(styles.led, p.online ? styles.on : styles.off)} />{p.race} · {p.cls} · Lv {p.level}</span>
-              </div>
-              <div className={styles.drHp}>
-                <div className={styles.lab}>
-                  <span><b style={{ color: hpColor }}>{p.hp}</b>/{p.hpMax}{p.tempHp ? ` +${p.tempHp}` : ''}</span>
-                  <span>{pct}%</span>
-                </div>
-                <div className={cx(styles.hpbar, hc && styles[hc])}><i style={{ width: `${pct}%` }} /></div>
-              </div>
-              <div className={styles.drFx}>
-                {p.effects.length
-                  ? p.effects.map((e, i) => (
-                      <span key={i} className={cx(styles.chip, styles[e.kind])} title={e.source ? `From: ${e.source}` : undefined}>{e.name}</span>
-                    ))
-                  : <span className={styles.none}>— clear —</span>}
-              </div>
-            </div>
-            <div className={styles.drInt}>
-              <div className={styles.lab}><span className={styles.t}>Digitization</span><span className={cx(styles.v, high && styles.high)}>{p.digitization}%</span></div>
-              <div className={styles.intbar}><i style={{ width: `${p.digitization}%` }} /></div>
-            </div>
-          </button>
-        )
-      })}
+
+      <GrantBar members={members} items={items} effectLib={effectLib} onGrantItem={grantItem} onApplyEffect={addEffect} />
+
+      {picked.size > 0 && (
+        <div className={styles.areaBar} role="group" aria-label="Area damage">
+          <span className={styles.areaWho}>{picked.size} selected</span>
+          <input
+            className={styles.liveAmt} type="number" inputMode="numeric" min={1} placeholder="Amount"
+            aria-label="Amount for all selected" value={areaAmt} onChange={e => setAreaAmt(e.target.value)}
+          />
+          <button type="button" className={cx(styles.liveBtn, styles.dmg)} disabled={!(areaN > 0)} onClick={() => void area('damage')}>Damage all</button>
+          <button type="button" className={cx(styles.liveBtn, styles.heal)} disabled={!(areaN > 0)} onClick={() => void area('heal')}>Heal all</button>
+          <button type="button" className={styles.areaClear} onClick={() => setPicked(new Set())}>Clear selection</button>
+        </div>
+      )}
+
+      {members.map(p => (
+        <LiveTile
+          key={p.id} p={p} row={rowOf(p.id)} active={selectedId === p.id} picked={picked.has(p.id)}
+          effectLib={effectLib} onPick={() => toggle(p.id)} onOpen={() => onSelect(p.id)}
+          onHp={(kind, n) => hpChange(p, kind, n)} onAddEffect={e => addEffect(p, e)} onClearEffect={id => clearEffect(p, id)}
+        />
+      ))}
     </>
+  )
+}
+
+/** One PC on the live overview. The name opens Oversee; everything else acts in place. */
+function LiveTile({ p, row, active, picked, effectLib, onPick, onOpen, onHp, onAddEffect, onClearEffect }: {
+  p: PartyMember; row: CharacterRow | undefined; active: boolean; picked: boolean
+  effectLib: CatalogEffectRow[]
+  onPick: () => void; onOpen: () => void
+  onHp: (kind: 'damage' | 'heal', n: number) => Promise<void>
+  onAddEffect: (e: CatalogEffectRow) => Promise<boolean>
+  onClearEffect: (id: string) => Promise<void>
+}) {
+  const [amt, setAmt] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [query, setQuery] = useState('')
+  const hc = hpClassOf(p)
+  const pct = pctOf(p)
+  const hpColor = hc === 'crit' ? 'var(--danger-hot)' : hc === 'warn' ? 'var(--gold)' : 'var(--good)'
+  const high = p.digitization >= 50
+  const n = Math.floor(Number(amt))
+  const first = firstName(p.name)
+  const fx = ((row?.resources?.activeEffects as ActiveEffect[] | undefined) ?? [])
+  const q = query.trim().toLowerCase()
+  const matches = (q ? effectLib.filter(e => e.data.name.toLowerCase().includes(q) || (e.data.tags ?? []).some(t => t.includes(q))) : effectLib).slice(0, 6)
+
+  async function hp(kind: 'damage' | 'heal') { await onHp(kind, n); setAmt('') }
+
+  return (
+    <div className={cx(styles.dashRow, styles.live, active && styles.active, picked && styles.picked)}>
+      <div className={styles.drMain}>
+        <div className={styles.drTop}>
+          <input type="checkbox" className={styles.pick} checked={picked} onChange={onPick} aria-label={`Select ${first} for area damage`} />
+          <button type="button" className={styles.drName} onClick={onOpen} title={`Open ${first} in Oversee`}>
+            <span className={styles.nm}>{p.name}</span>
+            <span className={styles.cl}><span className={cx(styles.led, p.online ? styles.on : styles.off)} />{p.race} · {p.cls} · Lv {p.level}</span>
+          </button>
+        </div>
+        <div className={styles.drHp}>
+          <div className={styles.lab}>
+            <span><b style={{ color: hpColor }}>{p.hp}</b>/{p.hpMax}{p.tempHp ? ` +${p.tempHp}` : ''}</span>
+            <span>{pct}%</span>
+          </div>
+          <div className={cx(styles.hpbar, hc && styles[hc])}><i style={{ width: `${pct}%` }} /></div>
+        </div>
+        <div className={styles.liveHp}>
+          <input
+            className={styles.liveAmt} type="number" inputMode="numeric" min={1} placeholder="Amount"
+            aria-label={`HP amount for ${first}`} value={amt} onChange={e => setAmt(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && n > 0) void hp(e.shiftKey ? 'heal' : 'damage') }}
+          />
+          <button type="button" className={cx(styles.liveBtn, styles.dmg)} disabled={!(n > 0)} onClick={() => void hp('damage')}>Damage</button>
+          <button type="button" className={cx(styles.liveBtn, styles.heal)} disabled={!(n > 0) || p.hp >= p.hpMax} onClick={() => void hp('heal')}>Heal</button>
+        </div>
+        <div className={styles.drFx}>
+          {fx.map(e => (
+            <span key={e.id} className={cx(styles.chip, styles[e.kind ?? 'buff'])}>
+              {e.name}
+              <button type="button" className={styles.chipX} aria-label={`Clear ${e.name} from ${first}`} onClick={() => void onClearEffect(e.id)}>×</button>
+            </span>
+          ))}
+          <button type="button" className={styles.fxAdd} aria-expanded={adding} onClick={() => setAdding(v => !v)}>+ Effect</button>
+        </div>
+        {adding && (
+          <div className={styles.fxPick}>
+            <input
+              className={styles.liveAmt} autoFocus placeholder="Search effects…" aria-label={`Search effects to apply to ${first}`}
+              value={query} onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Escape') setAdding(false) }}
+            />
+            {matches.length === 0
+              ? <span className={styles.none}>Nothing matches.</span>
+              : matches.map(e => (
+                <button key={e.id} type="button" className={cx(styles.fxOpt, styles[EFFECT_KIND_TO_ACTIVE[e.data.kind]])}
+                  onClick={() => void onAddEffect(e).then(ok => { if (ok) { setAdding(false); setQuery('') } })}>{e.data.name}</button>
+              ))}
+          </div>
+        )}
+      </div>
+      <div className={styles.drInt}>
+        <div className={styles.lab}><span className={styles.t}>Digitization</span><span className={cx(styles.v, high && styles.high)}>{p.digitization}%</span></div>
+        <div className={styles.intbar}><i style={{ width: `${p.digitization}%` }} /></div>
+      </div>
+    </div>
+  )
+}
+
+/** One search for the two things a DM hands out mid-session: catalog items and
+ *  effects. Pick a result, then a PC — or the whole party. */
+function GrantBar({ members, items, effectLib, onGrantItem, onApplyEffect }: {
+  members: PartyMember[]
+  items: CatalogItemRow[]
+  effectLib: CatalogEffectRow[]
+  onGrantItem: (p: PartyMember, it: CatalogItemRow) => Promise<boolean>
+  onApplyEffect: (p: PartyMember, e: CatalogEffectRow) => Promise<boolean>
+}) {
+  const [query, setQuery] = useState('')
+  const [sel, setSel] = useState<{ kind: 'item'; row: CatalogItemRow } | { kind: 'effect'; row: CatalogEffectRow } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const q = query.trim().toLowerCase()
+  const hits = q.length < 2 ? [] : [
+    ...items.filter(it => (it.data?.name ?? '').toLowerCase().includes(q)).slice(0, 6).map(row => ({ kind: 'item' as const, row })),
+    ...effectLib.filter(e => e.data.name.toLowerCase().includes(q)).slice(0, 4).map(row => ({ kind: 'effect' as const, row })),
+  ]
+  const selName = sel ? (sel.kind === 'item' ? sel.row.data?.name ?? 'Item' : sel.row.data.name) : ''
+
+  async function give(targets: PartyMember[]) {
+    if (!sel) return
+    setBusy(true)
+    for (const p of targets) await (sel.kind === 'item' ? onGrantItem(p, sel.row) : onApplyEffect(p, sel.row))
+    setBusy(false)
+    setSel(null)
+    setQuery('')
+  }
+
+  return (
+    <div className={styles.grantBar}>
+      <div className={styles.searchWrap}>
+        <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+        <input
+          className={styles.searchIn} value={sel ? selName : query} aria-label="Grant an item or apply an effect"
+          placeholder="Grant… type an item or effect" readOnly={!!sel}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') { setSel(null); setQuery('') } }}
+        />
+      </div>
+      {!sel && hits.length > 0 && (
+        <div className={styles.gbHits} role="listbox" aria-label="Matches">
+          {hits.map(h => (
+            <button key={`${h.kind}:${h.row.id}`} type="button" role="option" aria-selected={false} className={styles.gbHit} onClick={() => setSel(h)}>
+              <span className={styles.gbKind}>{h.kind === 'item' ? 'Item' : 'Effect'}</span>
+              {h.kind === 'item' ? h.row.data?.name : h.row.data.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {sel && (
+        <div className={styles.gbTargets} role="group" aria-label={`Give ${selName} to`}>
+          <span className={styles.gbKind}>{sel.kind === 'item' ? 'Grant to' : 'Apply to'}</span>
+          {members.map(p => (
+            <button key={p.id} type="button" className={styles.gbTarget} disabled={busy} onClick={() => void give([p])}>{firstName(p.name)}</button>
+          ))}
+          <button type="button" className={styles.gbTarget} disabled={busy} onClick={() => void give(members)}>Whole party</button>
+          <button type="button" className={styles.areaClear} disabled={busy} onClick={() => setSel(null)}>Cancel</button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -2592,6 +2854,33 @@ const DUR_UNITS = ['round', 'minute', 'hour', 'day'] as const
  *  'cond'. Bridges the two vocabularies at the one point they meet. */
 const EFFECT_KIND_TO_ACTIVE: Record<'buff' | 'debuff' | 'condition', 'buff' | 'cond' | 'debuff'> = { buff: 'buff', debuff: 'debuff', condition: 'cond' }
 
+/** A catalog effect → the ActiveEffect a sheet carries. The ONE builder: card C
+ *  and the live overview's quick-apply both go through it, so an effect applied
+ *  from either surface is the same object. `durN`/`durUnit` absent = until rest
+ *  (untracked: never ticks, never expires on its own). */
+function buildActiveEffect(d: EffectDef, o: { durN?: number; durUnit?: typeof DUR_UNITS[number]; tick?: string; conc?: boolean } = {}): { eff: ActiveEffect; dur: string } {
+  const timed = o.durN !== undefined && o.durUnit !== undefined
+  const dur = timed ? `${o.durN} ${o.durUnit}${o.durN === 1 ? '' : 's'}` : 'until rest'
+  // Modifiers compile into the same ItemEffects the engine already reads
+  // (compileEffects, mirrors the item form's Effects Granted). Flags are never
+  // numeric, so they surface as note text; a pure-prose effect falls back to a
+  // clipped description.
+  const noteParts = [dur, ...d.flags.map(flagText), d.mods.length === 0 && d.flags.length === 0 ? clipTx(d.desc, 60) : undefined]
+  const turns = timed ? durationTurns(o.durN!, o.durUnit!) : undefined
+  const eff: ActiveEffect = {
+    id: crypto.randomUUID(), name: d.name, icon: d.icon, kind: EFFECT_KIND_TO_ACTIVE[d.kind],
+    effects: compileEffects(d.mods) ?? {}, source: 'G.U.I.D.E. Operator',
+    note: noteParts.filter(Boolean).join(' · '),
+    // Full description, snapshotted — the player never reads the effect
+    // catalog, so this is the one copy their Effects panel tooltip has.
+    desc: d.desc.trim() || undefined, at: Date.now(),
+    ...(turns ? { turns } : {}),
+    ...(o.tick?.trim() ? { tick: o.tick.trim() } : {}),
+    ...(o.conc ? { concentration: true } : {}),
+  }
+  return { eff, dur }
+}
+
 /** Apply Effect (card C): push a status onto the PC's `resources.activeEffects` —
  *  the SAME field the player's potion-drinking writes and the effects tray reads,
  *  so the DM's push shows up in the tray, layers into the effective sheet, clears
@@ -2647,25 +2936,8 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
     }
     const d = selected.data
     setBusy(true)
-    // Modifiers compile into the same ItemEffects the engine already reads
-    // (compileEffects, mirrors the item form's Effects Granted). Flags are
-    // never numeric, so they surface as note text alongside the duration —
-    // a pure-prose effect falls back to a clipped description.
-    const noteParts = [dur, ...d.flags.map(flagText), d.mods.length === 0 && d.flags.length === 0 ? clipTx(d.desc, 60) : undefined]
-    const eff: ActiveEffect = {
-      id: crypto.randomUUID(), name: d.name, icon: d.icon, kind: EFFECT_KIND_TO_ACTIVE[d.kind],
-      effects: compileEffects(d.mods) ?? {}, source: 'G.U.I.D.E. Operator',
-      note: noteParts.filter(Boolean).join(' · '),
-      // Full description, snapshotted — the player never reads the effect
-      // catalog, so this is the one copy their Effects panel tooltip has.
-      desc: d.desc.trim() || undefined, at: Date.now(),
-      /* DERIVED from the duration already chosen, not re-typed: the DM picks
-         "1 minute" and the tracker gets 10. "Until rest" yields undefined, which
-         means UNTRACKED — it never ticks and never expires on its own. */
-      ...(untilRest ? {} : (() => { const t = durationTurns(durN, durUnit); return t ? { turns: t } : {} })()),
-      ...(tick.trim() ? { tick: tick.trim() } : {}),
-      ...(conc ? { concentration: true } : {}),
-    }
+    // Turns are DERIVED from the duration chosen: "1 minute" → 10.
+    const { eff } = buildActiveEffect(d, untilRest ? { tick, conc } : { durN, durUnit, tick, conc })
     const ok = await onUpdate({ resources: { ...resources, activeEffects: [...active, eff] } as CharacterRow['resources'] })
     setBusy(false)
     if (!ok) return
