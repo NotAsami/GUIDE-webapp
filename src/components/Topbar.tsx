@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus } from '../lib/dm'
 import type { CharacterRow, CharacterSection, ShardTree } from '../lib/database.types'
-import { burden } from '../lib/burden'
+import { burden, burdenTier } from '../lib/burden'
 import { effectiveSheet } from '../lib/effects'
 import { useFullscreen } from '../lib/fullscreen'
 import { RestButton } from './RestButton'
@@ -37,6 +37,12 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
   // capacity — one shared helper, also read by the Inventory screen.
   const { current: burdenCurrent, max: burdenMax, ratio: burdenRatio } = burden(character, shardTrees)
   const overBurdened = burdenRatio > 1
+  // The SRD tiers the Inventory already states, surfaced before capacity: a
+  // slowed character should see it in the bar, not only when they are stuck.
+  const tier = burdenTier(burdenCurrent, burdenMax)
+  const burdenNote = overBurdened ? 'Over capacity'
+    : tier === 'heavy' ? 'Heavily encumbered — speed −20 ft'
+    : tier === 'encumbered' ? 'Encumbered — speed −10 ft' : undefined
 
   const flavor = [character.identity?.race, character.identity?.class].filter(Boolean) as string[]
   if (character.identity?.archetype) flavor.push(character.identity.archetype)
@@ -77,9 +83,9 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
       </div>
 
       <div className={styles.topRight}>
-        <div className={styles.burdenBlock} aria-label="Burden" title={overBurdened ? 'Over capacity' : undefined}>
+        <div className={styles.burdenBlock} aria-label={burdenNote ? `Burden, ${burdenNote}` : 'Burden'} title={burdenNote}>
           <span className="ic">⚖</span>
-          <span className={`val${overBurdened ? ' low' : ''}`}>{burdenCurrent} / {burdenMax}</span>
+          <span className={`val${overBurdened || tier === 'heavy' ? ' low' : tier === 'encumbered' ? ' warn' : ''}`}>{burdenCurrent} / {burdenMax}</span>
           <span className="lab">Burden</span>
         </div>
         <div className={styles.coinBlock} aria-label="Gold">
