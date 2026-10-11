@@ -43,7 +43,7 @@ export function OperatorHandouts({ lib, quests, members, onVoice, log }: {
   return (
     <>
       <div className={styles.ovBanner}>
-        <span className={styles.big}>Handouts</span>
+        <h2 className={styles.big}>Handouts</h2>
         <span>Documents and images for players · filed in their Journal</span>
         <span className={styles.sessCount}>{handouts.length} authored</span>
       </div>

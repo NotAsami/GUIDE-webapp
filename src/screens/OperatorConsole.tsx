@@ -492,7 +492,7 @@ export function OperatorConsole() {
       <header className={styles.opbar}>
         <div className={styles.opSigil}><i className="fa-solid fa-terminal" /></div>
         <div className={styles.opId}>
-          <div className={styles.opTitle}>G.U.I.D.E.<span className={styles.slash}>//</span>Operator Console</div>
+          <h1 className={styles.opTitle}>G.U.I.D.E.<span className={styles.slash}>//</span>Operator Console</h1>
           {/* Every campaign view, one click from anywhere — the rail below
               holds only the party, so it never scrolls mid-combat. Grouped so
               no group offers more than four choices. */}
@@ -596,14 +596,14 @@ export function OperatorConsole() {
       </header>
 
       {/* ===== CONSOLE GRID ===== */}
-      <div className={cx(styles.console, !bcOpen && !wide && styles.bcFolded)}>
+      <div role="main" className={cx(styles.console, !bcOpen && !wide && styles.bcFolded)}>
         {/* LEFT — ROSTER */}
         <section className={styles.region} aria-label="Party roster">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
             <div className={styles.rHead}>
               <span className={styles.rhNum}>01</span>
-              <span className={styles.rhTitle}>Party Roster</span>
+              <h2 className={styles.rhTitle}>Party Roster</h2>
               <span className={styles.rhMeta}><span className={styles.acc}>{members.length}</span> Tracked</span>
             </div>
             <div className={styles.rScroll}>
@@ -744,7 +744,7 @@ export function OperatorConsole() {
             )}
             <div className={cx(styles.workBody, view === 'catalog' && styles.catBody, view === 'npcs' && styles.webBody)}>
               {error ? (
-                <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
+                <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><h2 className={styles.big}>Link Error</h2><span>{error}</span></div>
               ) : partyLoading ? (
                 <div className={styles.soonPanel} aria-busy="true">
                   {[0, 1, 2].map(i => (
@@ -821,7 +821,7 @@ export function OperatorConsole() {
           <div className={styles.rInner}>
             <div className={styles.rHead}>
               <span className={styles.rhNum}>03</span>
-              <span className={styles.rhTitle}>Broadcast</span>
+              <h2 className={styles.rhTitle}>Broadcast</h2>
               <button type="button" className={styles.bcFoldBtn} onClick={toggleBc} title="Fold Broadcast to a strip" aria-label="Fold Broadcast">
                 <i className="fa-solid fa-angles-right" aria-hidden="true" />
               </button>
@@ -1061,7 +1061,7 @@ function OverviewDashboard({
   return (
     <>
       <div className={styles.ovBanner}>
-        <span className={styles.big}>Party Overview</span>
+        <h2 className={styles.big}>Party Overview</h2>
         <span>Live session</span>
         <span className={styles.dmonly}><i className="fa-solid fa-eye-slash" /> Digitization — DM only</span>
       </div>
@@ -3151,14 +3151,14 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
   return (
     <>
       <div className={styles.ovBanner}>
-        <span className={styles.big}>Catalog</span>
+        <h2 className={styles.big}>Catalog</h2>
         <span>Content library · author once, grant from anywhere</span>
         <span className={styles.dmonly}><i className="fa-solid fa-box-archive" /> Templates — not a grant</span>
       </div>
 
       {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : tab === 'classes' ? classLib.error : tab === 'races' ? raceLib.error : tab === 'loot' ? lootLib.error : error) ? (
         <div className={styles.soonPanel}>
-          <i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span>
+          <i className="fa-solid fa-triangle-exclamation" /><h2 className={styles.big}>Link Error</h2>
           <span>{tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : tab === 'classes' ? classLib.error : tab === 'races' ? raceLib.error : tab === 'loot' ? lootLib.error : error}</span>
         </div>
       ) : tab === 'spells' ? (
@@ -7924,13 +7924,13 @@ function QuestsSurface({ campaign, party }: { campaign: DmCampaignState; party: 
   return (
     <>
       <div className={styles.ovBanner}>
-        <span className={styles.big}>Quest Log</span>
+        <h2 className={styles.big}>Quest Log</h2>
         <span>Campaign quests · authoring twin of the player Journal</span>
         <span className={styles.sessCount}>{quests.length} quests</span>
       </div>
 
       {error ? (
-        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
+        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><h2 className={styles.big}>Link Error</h2><span>{error}</span></div>
       ) : (
         <div className={styles.questLayout}>
           {/* index */}
@@ -8170,13 +8170,13 @@ function SessionsSurface({ campaign }: { campaign: DmCampaignState }) {
   return (
     <>
       <div className={styles.ovBanner}>
-        <span className={styles.big}>Session Log</span>
+        <h2 className={styles.big}>Session Log</h2>
         <span>Campaign recap · Brettany Theater</span>
         <span className={styles.sessCount}>{sessions.length} logged</span>
       </div>
 
       {error ? (
-        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
+        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><h2 className={styles.big}>Link Error</h2><span>{error}</span></div>
       ) : (
         <>
           <div className={styles.sessPick}>

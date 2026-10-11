@@ -756,7 +756,7 @@ select.in option { background: #14130f; }
 
 /* ---------- bottom bar ---------- */
 .botbar { position: fixed; left: 0; right: 0; bottom: 0; height: 38px; z-index: 60; display: flex; align-items: center; gap: 14px; padding: 0 16px; background: linear-gradient(to top, rgba(18,16,10,.97), rgba(14,13,11,.9)); border-top: 1px solid color-mix(in srgb, var(--beige) 28%, transparent); }
-.tel { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: color-mix(in srgb, var(--amber) 60%, transparent); }
+.tel { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--amber-mid); }
 .tel .sep { color: color-mix(in srgb, var(--amber) 30%, transparent); margin: 0 7px; }
 .status { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--good); }
 .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 7px color-mix(in srgb, var(--good) 70%, transparent); }

@@ -397,7 +397,7 @@ export function ShardLattice() {
                     <button type="button" className={`${styles.tool} ${tool === 'link' ? styles.on : ''}`} onClick={() => { setTool('link'); setLinkSrc(null) }}><i className="fa-solid fa-link" /> <span className={styles.lbl}>Link</span> <span className={styles.kbd}>L</span></button>
                     <span className={styles.toolDiv} />
                     <button type="button" className={`${styles.tool} ${snap ? styles.on : ''}`} onClick={() => setSnap(s => !s)}><i className="fa-solid fa-bullseye" /> <span className={styles.lbl}>Snap 15°</span></button>
-                    <button type="button" className={styles.tool} onClick={() => setRings(r => Math.max(1, r - 1))}><i className="fa-solid fa-circle-minus" /></button>
+                    <button type="button" className={styles.tool} onClick={() => setRings(r => Math.max(1, r - 1))} aria-label="Remove ring" title="Remove ring"><i className="fa-solid fa-circle-minus" aria-hidden="true" /></button>
                     <button type="button" className={styles.tool} onClick={() => setRings(r => Math.min(10, r + 1))}><i className="fa-solid fa-circle-plus" /> <span className={styles.lbl}>Ring</span></button>
                     <span className={styles.toolDiv} />
                     <button type="button" className={`${styles.tool} ${styles.danger}`} onClick={deleteSel}><i className="fa-solid fa-trash" /> <span className={styles.lbl}>Delete</span> <span className={styles.kbd}>⌫</span></button>
