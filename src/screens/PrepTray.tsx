@@ -50,6 +50,9 @@ export function PrepTray({ lib, campaign, shopLib, handoutLib, npcLib, party, on
     const what = await fireCard(c, { party, shopLib, handoutLib, npcLib, campaign, rollLoot: onRollLoot, plans: lib })
     setBusy(null)
     if (what) log(<>{c.title || 'A card'} <span className={con.obj}>{what}</span></>, 'cyan')
+    // A refusal used to log nothing, which reads exactly like "it fired". The
+    // card stays staged; say so.
+    else log(<>{c.title || 'A card'} <span className={con.obj}>did not fire</span> — still staged</>, 'danger')
   }
 
   if (shut) {

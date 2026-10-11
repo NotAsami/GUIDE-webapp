@@ -3088,3 +3088,25 @@ div.skWarn { cursor: default; }
 .advNote b { color: var(--amber); font-weight: 500; }
 
 @media (prefers-reduced-motion: reduce) { .advDot { animation: none; } }
+
+/* A failed write: a banner above the work area, so the controls stay put. */
+.writeErr {
+  /* Above the region's frame layers, inset like .workBody's own padding. */
+  position: relative; z-index: 3;
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 10px;
+  margin: 13px 13px 0; padding: 8px 12px;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.04em; line-height: 1.4;
+  color: var(--text);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border: 1px solid var(--danger);
+}
+.writeErr > i { color: var(--danger-hot); }
+.writeErr b { color: var(--danger-hot); font-weight: 600; }
+.writeErr > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.writeErr button {
+  flex: 0 0 auto; padding: 4px 10px;
+  font: inherit; text-transform: uppercase; letter-spacing: var(--ls-label);
+  color: var(--beige); background: transparent; border: 1px solid var(--beige-dim); cursor: pointer;
+}
+.writeErr button:hover, .writeErr button:focus-visible { border-color: var(--beige); outline: none; }
