@@ -68,8 +68,8 @@
 .line {
   margin-top: 20px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.36em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--lab);
 }

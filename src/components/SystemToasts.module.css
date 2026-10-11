@@ -57,7 +57,7 @@
   to { transform: translateX(calc(120% + 26px)); opacity: 0; }
 }
 
-.tgTag { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.22em; color: var(--beige-dim); text-transform: uppercase; margin-bottom: 6px; }
+.tgTag { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); text-transform: uppercase; margin-bottom: 6px; }
 .tgHead { display: flex; align-items: center; gap: 11px; }
 /* hexagon: nearly ALL its edges are angled, so a border would vanish entirely —
    two-layer frame instead (outer = border color, ::before inset = fill), same
@@ -76,8 +76,8 @@
 .tgTx { min-width: 0; }
 .tgT { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--cyan); text-transform: uppercase; line-height: 1.2; }
 .tgN { font-family: var(--font-prose); font-size: 16.5px; color: var(--text); line-height: 1.25; margin-top: 3px; }
-.tgN .rar, .rar { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-.tgFoot { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; color: var(--beige-dim); text-transform: uppercase; margin-top: 9px; display: flex; align-items: center; gap: 6px; }
+.tgN .rar, .rar { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.tgFoot { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); text-transform: uppercase; margin-top: 9px; display: flex; align-items: center; gap: 6px; }
 .led { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 80%, transparent); }
 
 /* corrupted tone — amber, glitched title */

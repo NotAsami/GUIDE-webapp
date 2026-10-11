@@ -91,6 +91,7 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
         <button
           type="button" className={styles.signOut} onClick={toggleFullscreen}
           title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
         >
           <i className={`fa-solid ${isFullscreen ? 'fa-compress' : 'fa-expand'}`} aria-hidden="true" />
         </button>
@@ -103,7 +104,12 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
             <i className="fa-solid fa-terminal" aria-hidden="true" /> DM
           </Link>
         )}
-        <button type="button" className={styles.signOut} onClick={() => signOut()}>Sign out</button>
+        {/* Icon-only like fullscreen: the topbar's right run has no width to
+            spare once labels sit at the legibility floor, and sign-out is the
+            rarest action on it. Named for screen readers and on hover. */}
+        <button type="button" className={styles.signOut} onClick={() => signOut()} title="Sign out" aria-label="Sign out">
+          <i className="fa-solid fa-right-from-bracket" aria-hidden="true" />
+        </button>
       </div>
     </header>
   )

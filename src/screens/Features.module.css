@@ -28,11 +28,11 @@
   border-bottom: 1px solid color-mix(in srgb, var(--beige) 35%, transparent);
   flex: 0 0 auto;
 }
-.chNum { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85; }
+.chNum { font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: var(--ls-kicker); color: var(--cyan); opacity: 0.85; }
 .chTitle { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.4em; color: var(--beige); text-transform: uppercase; }
 .chMeta {
   margin-left: auto;
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em;
+  font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: 0.2em;
   color: var(--muted); text-transform: uppercase;
   display: flex; align-items: center; gap: 10px;
 }
@@ -40,7 +40,7 @@
 .chMeta :global(.dim) { color: var(--beige-dim); }
 .closeScreen {
   margin-left: 14px;
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--muted); text-transform: uppercase;
   background: transparent; border: 1.5px solid color-mix(in srgb, var(--beige) 35%, transparent);
   padding: 4px 9px; cursor: pointer;
@@ -100,7 +100,7 @@
 .chipZero { opacity: 0.45; }
 .gearNote {
   margin-left: auto; display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--cyan); text-transform: uppercase;
 }
 .gearNote :global(.dim) { color: var(--beige-dim); }
@@ -156,7 +156,7 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--beige) 20%, transparent);
 }
 .geGlyph { font-size: 17px; color: var(--beige-dim); margin-bottom: 8px; }
-.geT { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.28em; color: var(--beige); text-transform: uppercase; }
+.geT { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase; }
 .geS { font-family: var(--font-prose); font-size: 14px; color: var(--muted); margin-top: 6px; }
 
 /* ---- feature card ---- */
@@ -215,7 +215,7 @@
 .usable:disabled { cursor: wait; opacity: 0.7; }
 .hxPip {
   position: absolute; left: 50%; bottom: -13px; transform: translateX(-50%);
-  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--cyan); text-transform: uppercase; white-space: nowrap;
 }
 .pipOff { color: var(--danger); }
@@ -238,7 +238,7 @@
 .fcMeta { display: flex; align-items: center; gap: 9px; margin-top: 7px; flex-wrap: wrap; }
 
 .srcTag {
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; color: var(--beige);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige);
   text-transform: uppercase; white-space: nowrap; border: 1.5px solid color-mix(in srgb, var(--beige) 35%, transparent); padding: 2px 6px;
 }
 .gearTag { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 45%, transparent); }
@@ -249,7 +249,7 @@
    edge. See docs/Chamfered_clip-path_corners_fix.md. */
 .actBadge {
   --cut: 4px; --bw: 1.5px; --bc: var(--beige);
-  font-family: var(--font-mono); font-size: 8.5px; font-weight: 500; letter-spacing: 0.24em;
+  font-family: var(--font-mono); font-size: var(--fs-label); font-weight: 500; letter-spacing: var(--ls-label);
   text-transform: uppercase; white-space: nowrap; padding: 3px 8px;
   color: #0b1114; background-color: var(--bc);
   border: var(--bw) solid var(--bc);
@@ -265,12 +265,12 @@
 .reaction { --bc: var(--cyan); color: #08171c; }
 .free { background-color: transparent; color: var(--beige); }
 .passBadge {
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.26em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
   color: var(--muted); border-left: 1px solid color-mix(in srgb, var(--beige) 40%, transparent); padding-left: 10px; white-space: nowrap;
 }
 .armed {
   display: inline-flex; align-items: center; gap: 3px;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--amber); border: 1.5px solid color-mix(in srgb, var(--amber) 45%, transparent); padding: 2px 6px;
 }
 
@@ -279,8 +279,8 @@
 .useCount { font-family: var(--font-display); font-weight: 600; font-size: 19px; letter-spacing: 0.04em; color: var(--cyan-hot); line-height: 1; }
 .of { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: 0.08em; }
 .empty { color: var(--danger); }
-.useLab { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; }
-.atwill { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.24em; color: var(--cyan); text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+.useLab { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase; }
+.atwill { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--cyan); text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
 .inf { font-size: 13px; line-height: 1; color: var(--cyan-hot); }
 
 /* effect sub-rows */
@@ -290,10 +290,10 @@
 .fxOp { font-family: var(--font-mono); font-size: 11px; color: var(--cyan); opacity: 0.85; text-align: center; line-height: 1; }
 .fxTxt { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; color: var(--muted); text-transform: uppercase; }
 .fxTxt p { margin: 0; }
-.fxTag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; color: var(--beige-dim); text-transform: uppercase; }
+.fxTag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); text-transform: uppercase; }
 /* The damage type, in the damage colour. `--dt` is set inline from lib/palette.ts,
    so this file names no damage types - the roll panel follows the same rule. */
-.fxType { color: var(--dt, var(--beige)); font-size: 8.5px; letter-spacing: 0.18em; }
+.fxType { color: var(--dt, var(--beige)); font-size: var(--fs-label); letter-spacing: var(--ls-label); }
 /* Without this the type ran straight into the target: "radiantmelee damage". */
 .fxSep { color: var(--beige-dim); opacity: 0.7; }
 /* The popup's qualifier column is a plain span, so it needs the same row layout
@@ -344,18 +344,18 @@
 .exHead {
   display: flex; align-items: center; gap: 9px; padding-bottom: 8px; margin-bottom: 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--beige) 20%, transparent);
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.28em; color: var(--beige); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase;
 }
 .exHead i { color: var(--cyan); }
 .exCount { margin-left: auto; font-family: var(--font-display); font-size: 13px; color: var(--beige-dim); }
 .looseState { display: flex; flex-wrap: wrap; gap: 12px; }
 .pState { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.psHead { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; color: var(--beige-dim); text-transform: uppercase; }
+.psHead { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); text-transform: uppercase; }
 .psRow {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
   background: rgba(0, 0, 0, 0.3); border: 1.5px solid color-mix(in srgb, var(--beige) 22%, transparent);
   color: var(--muted); padding: 6px 9px; cursor: pointer;
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
   transition: color 140ms ease, border-color 140ms ease;
 }
 .psRow:hover:not(:disabled) { color: var(--text); border-color: color-mix(in srgb, var(--cyan) 45%, transparent); }
@@ -493,10 +493,10 @@
 .imBody::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--cyan) 40%, transparent); }
 
 .imOrigin { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding-bottom: 13px; border-bottom: 1px dashed color-mix(in srgb, var(--beige) 25%, transparent); }
-.ok { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.24em; color: var(--beige-dim); text-transform: uppercase; width: 100%; margin-bottom: 3px; }
+.ok { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); text-transform: uppercase; width: 100%; margin-bottom: 3px; }
 .step {
   --cut: 4px; --bc: color-mix(in srgb, var(--beige) 28%, transparent);
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; color: var(--muted);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--muted);
   text-transform: uppercase; white-space: nowrap; padding: 3px 8px;
   border: 1.5px solid var(--bc);
   background-color: transparent;
@@ -513,11 +513,11 @@
   background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
 .step.last { --bc: color-mix(in srgb, var(--cyan) 55%, transparent); color: var(--cyan-hot); }
-.arw { font-family: var(--font-mono); font-size: 10px; color: var(--beige-dim); }
+.arw { font-family: var(--font-mono); font-size: var(--fs-label); color: var(--beige-mid); }
 
 .imFacts { display: flex; flex-wrap: wrap; gap: 9px 26px; margin-top: 13px; }
 .fact { display: flex; flex-direction: column; gap: 4px; }
-.fact .k { color: var(--beige-dim); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; }
+.fact .k { color: var(--beige-mid); font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; }
 .fact .v { color: var(--text); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
 .fact .v.acc { color: var(--cyan-hot); }
 .fact .v.emptyV { color: var(--danger); }
@@ -528,10 +528,10 @@
 .imDesc p { margin: 0 0 6px; }
 .imSec { margin-top: 17px; }
 .imSecH {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.28em; color: var(--cyan); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: var(--ls-kicker); color: var(--cyan); text-transform: uppercase;
   display: flex; align-items: center; gap: 8px; padding-bottom: 8px;
 }
-.imSecH :global(.dim) { color: var(--beige-dim); letter-spacing: 0.2em; font-size: 8.5px; }
+.imSecH :global(.dim) { color: var(--beige-mid); letter-spacing: 0.2em; font-size: var(--fs-kicker); }
 .imSecH::after { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--cyan) 22%, transparent); }
 .imFx { display: flex; flex-direction: column; gap: 5px; }
 .imRow {
@@ -541,7 +541,7 @@
 }
 .imRowTxt p { margin: 0; }
 .imRow .op { color: var(--cyan); text-align: center; }
-.imRow .s { color: var(--beige-dim); font-size: 8.5px; letter-spacing: 0.18em; }
+.imRow .s { color: var(--beige-mid); font-size: var(--fs-label); letter-spacing: var(--ls-label); }
 .imRow.aff { border-left-color: var(--beige); }
 .imRow.aff .op { color: var(--beige); }
 .imRow.aff .op.link { color: var(--cyan); }
@@ -564,7 +564,7 @@
   position: absolute; inset: 1.5px; background: linear-gradient(180deg, #141a1d, #0e1316);
   clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  color: var(--cyan-hot); font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase;
+  color: var(--cyan-hot); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
   transition: box-shadow 160ms ease, color 160ms ease;
 }
 .ia:hover .ai { color: #fff; box-shadow: inset 0 0 20px color-mix(in srgb, var(--cyan) 30%, transparent), 0 0 15px color-mix(in srgb, var(--cyan) 40%, transparent); }

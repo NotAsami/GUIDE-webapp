@@ -67,8 +67,8 @@
 
 .ttSub {
   color: var(--beige);
-  font-size: 9.5px;
-  letter-spacing: 0.24em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   margin-bottom: 10px;
   padding-bottom: 8px;
@@ -77,8 +77,8 @@
 .ttRow { display: flex; gap: 8px; margin: 4px 0; align-items: baseline; }
 .ttRow .k {
   color: var(--beige);
-  font-size: 9.5px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   min-width: 84px;
 }
@@ -96,8 +96,8 @@
 }
 .ttAttune {
   margin-top: 6px;
-  font-size: 9.5px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--cyan);
   text-transform: uppercase;
 }

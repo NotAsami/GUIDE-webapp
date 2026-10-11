@@ -168,8 +168,8 @@
   font-size: 18px;
 }
 .sub .btn .label {
-  font-size: 9.5px;
-  letter-spacing: 0.24em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
 }
 .sub .btn:hover .inner,
 .sub .btn.active .inner {
@@ -204,8 +204,8 @@
   transform: translateX(-50%);
   top: calc(58% + 78px);
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.3em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--muted);
   text-transform: uppercase;
   z-index: 24;
@@ -217,7 +217,7 @@
   margin: 0 4px;
   border: 1px solid var(--beige-dim);
   color: var(--beige);
-  font-size: 9px;
+  font-size: var(--fs-label);
 }
 
 /* ============================================================
@@ -230,7 +230,7 @@
 .dock .btn { --w: 156px; --h: var(--nav-h); --cut: 11px; }
 .dock .btn .inner { gap: 6px; }
 .dock .btn .icon { font-size: 20px; }
-.dock .btn .label { font-size: 10px; letter-spacing: 0.26em; }
+.dock .btn .label { font-size: var(--fs-label); letter-spacing: var(--ls-label); }
 .dock .btn .marker { top: 6px; left: 12px; font-size: 8px; }
 
 /* Dock renders every sub in the .below column (Nav.tsx): an "above" sub would
@@ -238,7 +238,7 @@
 .dock .sub.below { top: calc(50% + 44px); }
 .dock .sub .btn { --w: 122px; --h: 56px; --cut: 9px; }
 .dock .sub .btn .icon { font-size: 14px; }
-.dock .sub .btn .label { font-size: 8.5px; letter-spacing: 0.22em; }
+.dock .sub .btn .label { font-size: var(--fs-label); letter-spacing: var(--ls-label); }
 
 /* Lit state: active = current top-level (or its open group), subActive =
    current sub-module. Both get the cyan frame; only the parent gets the tick. */
@@ -274,8 +274,8 @@
   transform: translateX(-50%);
   top: calc(var(--bar-top-h) + var(--nav-top-gap) + var(--nav-h) + 8px);
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.32em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--muted);
   text-transform: uppercase;
   z-index: 44;

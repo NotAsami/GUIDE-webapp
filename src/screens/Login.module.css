@@ -138,10 +138,10 @@
   justify-content: center;
   gap: 10px;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.34em;
+  font-size: var(--fs-kicker);
+  letter-spacing: var(--ls-kicker);
   text-transform: uppercase;
-  color: var(--cyan-dim);
+  color: var(--cyan);
 }
 .kicker span {
   width: 6px;
@@ -192,8 +192,8 @@
 .label {
   display: block;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.3em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--cyan);
   margin-bottom: 8px;
@@ -276,10 +276,10 @@
   gap: 9px;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
-  color: var(--beige-dim);
+  color: var(--beige-mid);
 }
 
 /* ---- Dispatched ---- */
@@ -341,15 +341,15 @@
   justify-content: space-between;
   align-items: center;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
-  color: var(--beige-dim);
+  color: var(--beige-mid);
 }
 .linkBtn {
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--cyan-hot);
   border-bottom: 1px solid color-mix(in srgb, var(--cyan-hot) 50%, transparent);
@@ -366,8 +366,8 @@
 }
 .errTitle {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.24em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--danger-hot);
 }
@@ -381,7 +381,7 @@
 .errRaw {
   margin: 8px 0 0;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-label);
   line-height: 1.5;
   color: var(--muted);
 }

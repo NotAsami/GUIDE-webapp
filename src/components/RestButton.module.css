@@ -6,8 +6,8 @@
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--cyan);
   margin-left: 0;
@@ -90,8 +90,8 @@
   text-transform: uppercase; line-height: 1;
 }
 .sub {
-  font-family: var(--font-mono); font-size: 8.5px;
-  letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase;
 }
 
 /* ---- mode tabs ---- */
@@ -103,7 +103,7 @@
 .tab {
   flex: 1;
   padding: 8px 0;
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   text-transform: uppercase; color: var(--muted);
   background: transparent;
   border: 1.5px solid var(--beige-dim);
@@ -131,8 +131,8 @@
   gap: 10px;
 }
 .lab {
-  font-family: var(--font-mono); font-size: 9.5px;
-  letter-spacing: 0.2em; color: var(--beige); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase;
 }
 .total {
   font-family: var(--font-display); font-weight: 600;
@@ -144,7 +144,7 @@
 .bd {
   flex: 1 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-family: var(--font-mono); font-size: 9px;
+  font-family: var(--font-mono); font-size: var(--fs-label);
   letter-spacing: 0.04em; color: var(--muted);
 }
 .total { margin-left: auto; flex: 0 0 auto; }
@@ -157,8 +157,8 @@
   padding: 6px 0 8px;
 }
 .spendLab {
-  font-family: var(--font-mono); font-size: 10px;
-  letter-spacing: 0.2em; color: var(--beige); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase;
 }
 .stepper { display: flex; align-items: center; gap: 2px; }
 .stepper button {
@@ -181,13 +181,13 @@
   gap: 12px;
   padding: 2px 0 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--beige) 8%, transparent);
-  font-family: var(--font-mono); font-size: 9px;
+  font-family: var(--font-mono); font-size: var(--fs-label);
   letter-spacing: 0.06em; color: var(--beige);
 }
 .spendMeta .dim { color: var(--cyan); }
 .note {
   margin: 10px 0 2px;
-  font-family: var(--font-mono); font-size: 9.5px;
+  font-family: var(--font-mono); font-size: var(--fs-label);
   letter-spacing: 0.04em; color: var(--muted); line-height: 1.5;
 }
 

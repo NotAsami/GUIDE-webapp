@@ -204,8 +204,8 @@
 .sideRule {
   display: flex; align-items: center; gap: 11px;
   height: 30px; box-sizing: border-box; padding-top: 12px;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.3em;
-  color: var(--beige-dim); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase;
 }
 .sideRule::after {
   content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--beige) 14%, transparent);
@@ -221,7 +221,7 @@
 }
 .sideRow .rowGlyph { font-size: 11px; color: var(--beige-dim); }
 .sideRow .rowTitle { font-size: 16px; color: var(--muted); }
-.sideRow .rowTone { font-size: 7px; color: var(--beige-dim); }
+.sideRow .rowTone { font-size: var(--fs-label); color: var(--beige-mid); }
 .sideRow.closed .rowTitle { color: var(--beige-dim); }
 .sideRow:hover .rowTitle, .sideRow.open .rowTitle { color: var(--text); }
 
@@ -238,8 +238,8 @@
   z-index: 2;
 }
 .centreLabel {
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.32em;
-  color: var(--beige-dim); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase;
 }
 .pct {
   font-family: var(--font-display); font-weight: 700; font-size: 74px; line-height: 1;
@@ -248,7 +248,7 @@
 }
 .pctSign { font-size: 36px; color: var(--muted); text-shadow: none; }
 .centreDone {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--muted); text-transform: uppercase; margin-top: 10px;
 }
 .centreRule { width: 54px; height: 1px; background: color-mix(in srgb, var(--beige) 50%, transparent); margin: 12px auto; }
@@ -263,8 +263,8 @@
 .centre { transition: opacity 300ms ease; }
 
 .centreMeta {
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.28em;
-  color: var(--beige-dim); text-transform: uppercase; margin-top: 11px;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase; margin-top: 11px;
 }
 
 /* ---------- the dossier ---------- */
@@ -280,12 +280,12 @@
 .back {
   position: absolute; top: 0; left: 0;
   display: flex; align-items: center; gap: 9px;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.28em;
-  color: var(--beige-dim); text-transform: uppercase; text-decoration: none;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase; text-decoration: none;
   transition: color 160ms ease;
 }
 .back:hover { color: var(--cyan-hot); }
-.backGlyph { font-size: 9px; }
+.backGlyph { font-size: var(--fs-label); }
 
 .tabs {
   position: absolute; top: 30px; left: 0; right: 0;
@@ -294,7 +294,7 @@
 }
 .tab {
   position: relative; padding-bottom: 11px; text-decoration: none;
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.3em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--muted); text-transform: uppercase;
   transition: color 160ms ease;
 }
@@ -312,7 +312,7 @@
 .tab.on .tabPct { color: var(--cyan-hot); }
 
 .head {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.34em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--beige); text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -375,11 +375,11 @@
 }
 .rowTone {
   flex: 0 0 auto; margin-left: auto;
-  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.22em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   text-transform: uppercase; color: var(--cyan);
 }
 .rowMeta {
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em;
+  font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: 0.18em;
   color: var(--muted); text-transform: uppercase; margin: 8px 0 0 22px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -392,13 +392,13 @@
 /* ---------- the thread record ---------- */
 .recMeta {
   display: flex; flex-wrap: wrap; gap: 4px 18px;
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--text); text-transform: uppercase; margin-bottom: 4px;
 }
 .recK { color: var(--beige); }
 
 .objRow { display: flex; align-items: baseline; gap: 12px; padding: 6px 2px; }
-.objBox { flex: 0 0 auto; width: 13px; color: var(--cyan); font-size: 10px; }
+.objBox { flex: 0 0 auto; width: 13px; color: var(--cyan); font-size: var(--fs-label); }
 .objText {
   font-family: var(--font-prose); font-size: 15.5px; line-height: 1.5; color: var(--text);
 }
@@ -414,7 +414,7 @@
 }
 /* Only an <a> chip (a real url) reacts; an inert <span> chip does not. */
 a.chip:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); }
-.chipLink { font-size: 8px; margin-left: 6px; opacity: 0.8; }
+.chipLink { font-size: var(--fs-label); margin-left: 6px; opacity: 0.8; }
 
 /* The one scroller. Capped so a wide window cannot produce unreadable line
    lengths (Journal's .readInner does the same at 680). */
@@ -425,7 +425,7 @@ a.chip:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); }
 }
 .subHead {
   display: flex; align-items: center; gap: 12px;
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+  font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: var(--ls-kicker);
   color: var(--beige); text-transform: uppercase; margin: 26px 0 4px;
 }
 .subHead::after {
@@ -438,8 +438,8 @@ a.chip:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); }
   text-wrap: balance;
 }
 .sessDate {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em;
-  color: var(--beige-dim); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase;
 }
 .prose p {
   font-family: var(--font-prose); font-size: 16px; line-height: 1.72;
@@ -468,8 +468,8 @@ a.chip:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); }
 }
 .logNow .logTitle { color: var(--text); }
 .logDate {
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
-  color: var(--beige-dim); text-transform: uppercase; margin-top: 5px;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase; margin-top: 5px;
 }
 /* A handout row is a button — the same row, reset to read like one. */
 .hoRow {

@@ -155,8 +155,8 @@
 
 .title {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.28em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--text);
   text-transform: uppercase;
   align-self: stretch;
@@ -171,7 +171,7 @@
 .cueOpen {
   position: absolute; right: 0; top: 50%; transform: translateY(-50%);
   white-space: nowrap;
-  font-size: 8.5px; letter-spacing: 0.22em;
+  font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--cyan-hot); text-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 60%, transparent);
   opacity: 0; transition: opacity 180ms ease;
 }
@@ -200,8 +200,8 @@
 .pctSign { color: var(--beige-dim); font-size: 24px; }
 .pctLabel {
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.32em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--muted);
   text-transform: uppercase;
   margin-top: 6px;
@@ -238,9 +238,9 @@
   font-weight: 500;
   display: block;
   margin-bottom: 3px;
-  letter-spacing: 0.16em;
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
-  font-size: 9.5px;
+  font-size: var(--fs-label);
 }
 .cardWrap:hover .tooltip { opacity: 1; transform: translateX(-50%) translateY(0); }
 
