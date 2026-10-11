@@ -8,7 +8,7 @@ import type {
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
 import { useItemTooltip } from '../components/ItemTooltip'
-import { burden, burdenTier, fmtWeight, itemWeight } from '../lib/burden'
+import { burden, burdenTier, fmtWeight, heldWeights, itemWeight } from '../lib/burden'
 import { useGraph } from '../lib/useGraph'
 import { consumeEffect } from '../lib/consume'
 import {
@@ -368,6 +368,13 @@ export function Inventory() {
   const encAt = Math.round((load.max / 3) * 10) / 10
   const heavyAt = Math.round((load.max * 2 / 3) * 10) / 10
   const tier = burdenTier(load.current, load.max)
+  // What the total is made of, and how far the next tier is — the answer to
+  // "what do I drop?" once the bar turns.
+  const weights = heldWeights(character)
+  const nextTier = overBurdened ? null
+    : tier === 'heavy' ? { at: load.max, name: 'capacity' }
+    : tier === 'encumbered' ? { at: heavyAt, name: 'Heavy' }
+    : { at: encAt, name: 'Encumbered' }
 
   const weightless = !!active.container?.container?.weightless
   const viewWeight = contents.reduce((n, i) => n + itemWeight(i), 0)
@@ -599,6 +606,36 @@ export function Inventory() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className={`${styles.colHeader} ${styles.tight}`}>
+            <span className={styles.chNum}>03</span>
+            <span className={styles.chTitle}>Weight</span>
+            <span className={styles.chMeta}>
+              {nextTier
+                ? <><span className="acc">{fmtWeight(Math.max(0, nextTier.at - load.current))} lb</span> until {nextTier.name}</>
+                : <span className={styles.warn}>{fmtWeight(load.current - load.max)} lb over capacity</span>}
+            </span>
+          </div>
+          {/* The column's elastic child (layout rule 1): burden and coin take
+              their natural height above, this list takes the rest and scrolls. */}
+          <div className={`${styles.region} ${styles.weights}`}>
+            <div className={styles.rFrame} />
+            <div className={styles.rGap} />
+            <div className={styles.rLine} />
+            <div className={styles.rInner}>
+              <ol className={styles.wList} aria-label="Heaviest items">
+                {weights.length === 0
+                  ? <li className={styles.wEmpty}>Nothing you carry weighs anything.</li>
+                  : weights.map((w, i) => (
+                    <li key={i} className={styles.wRow}>
+                      <span className={styles.wName}>{w.name}{w.qty > 1 && <span className={styles.wQty}> ×{w.qty}</span>}</span>
+                      <span className={styles.wBar} aria-hidden="true"><i style={{ width: `${Math.min(100, (w.lb / weights[0].lb) * 100)}%` }} /></span>
+                      <span className={styles.wLb}>{fmtWeight(w.lb)} lb</span>
+                    </li>
+                  ))}
+              </ol>
             </div>
           </div>
         </section>
