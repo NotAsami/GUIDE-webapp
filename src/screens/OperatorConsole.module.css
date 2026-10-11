@@ -128,6 +128,9 @@
 .rHead .rhMeta .acc { color: var(--amber); }
 
 .rScroll { position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* The prep tray is fixed over the bottom ~70px of every column; room so the
+   last roster entry can scroll clear of it instead of hiding underneath. */
+.rScroll > :last-child { padding-bottom: 76px; }
 .rScroll::-webkit-scrollbar { width: 7px; }
 .rScroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
 .rScroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--amber) 35%, transparent); }
