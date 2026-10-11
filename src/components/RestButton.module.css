@@ -25,13 +25,7 @@
 .restBtn i { font-size: 10px; }
 
 /* ---- modal ---- */
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 400;
-  display: grid;
-  place-items: center;
-  padding: 24px;
+.panel::backdrop {
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(2px);
   animation: overlayIn 160ms ease;
@@ -45,7 +39,10 @@
   --cut: 14px;
   --bc: var(--beige);
   width: 400px;
-  max-width: 100%;
+  max-width: calc(100% - 48px);
+  /* <dialog> UA defaults: centred by margin:auto, but padded and recoloured. */
+  padding: 0;
+  color: inherit;
   background-color: rgba(10, 10, 10, 0.98);
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),

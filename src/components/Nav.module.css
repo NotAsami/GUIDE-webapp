@@ -291,3 +291,15 @@
 .navMeta :global(.acc) { color: var(--cyan); }
 .navMeta :global(.dim) { color: var(--beige-dim); }
 .navMeta :global(.stamp) { color: var(--beige); }
+
+/* Keyboard focus (last, so it beats the .sub/.dock frame colours): the browser's ring is clipped by the chamfer and invisible
+   on beige, so focus lights the frame (it IS the border) and the hover glow. */
+.btn:focus-visible { outline: none; }
+.btn:focus-visible .frame,
+.sub .btn:focus-visible .frame,
+.dock .btn:focus-visible .frame { background: var(--cyan-hot); }
+.btn:focus-visible .inner {
+  box-shadow:
+    inset 0 0 28px color-mix(in srgb, var(--cyan) 18%, transparent),
+    0 0 18px color-mix(in srgb, var(--cyan) 35%, transparent);
+}
