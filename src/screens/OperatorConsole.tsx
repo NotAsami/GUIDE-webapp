@@ -163,6 +163,20 @@ interface LogEntry {
   /** Puts back what this line did. Offered for UNDO_MS, then dropped. */
   undo?: () => Promise<boolean>
   undone?: boolean
+  /** When it was logged — the Undo counts down from here. */
+  at: number
+}
+
+/** What a log line's Undo can put back: a sheet field, or the effect list. */
+type RestoreField = 'hp' | 'coins' | 'activeEffects'
+
+/** The log line's Undo, with the seconds it has left — an Undo that vanishes
+ *  mid-sentence reads as a glitch; one that counts down reads as a window. */
+function LogUndo({ at, onUndo }: { at: number; onUndo: () => void }) {
+  const [, tick] = useState(0)
+  useEffect(() => { const t = setInterval(() => tick(n => n + 1), 1000); return () => clearInterval(t) }, [])
+  const left = Math.max(0, Math.ceil((UNDO_MS - (Date.now() - at)) / 1000))
+  return <button type="button" className={styles.lgUndo} onClick={onUndo}>Undo · {left}s</button>
 }
 
 /** How long a log line offers its undo. Long enough to notice the typo'd 50,
@@ -249,7 +263,7 @@ export function OperatorConsole() {
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
   const log = (node: ReactNode, kind?: LogEntry['kind'], undo?: LogEntry['undo']) => {
     const id = crypto.randomUUID()
-    setLogEntries(prev => [{ id, node, kind, time: nowStamp(), undo }, ...prev].slice(0, 24))
+    setLogEntries(prev => [{ id, node, kind, time: nowStamp(), undo, at: Date.now() }, ...prev].slice(0, 24))
     if (undo) setTimeout(() => setLogEntries(prev => prev.map(e => (e.id === id ? { ...e, undo: undefined } : e))), UNDO_MS)
   }
   const undoEntry = async (e: LogEntry) => {
@@ -269,9 +283,12 @@ export function OperatorConsole() {
   partyRef.current = party
   const updateRef = useRef(updateCharacter)
   updateRef.current = updateCharacter
-  const restoreSheet = (id: string, field: 'hp' | 'coins', value: unknown) => {
+  const restoreSheet = (id: string, field: RestoreField, value: unknown) => {
     const latest = partyRef.current.find(c => c.id === id)
-    if (!latest?.sheet) return Promise.resolve(false)
+    if (!latest) return Promise.resolve(false)
+    // Effects live on resources; HP and coins on the sheet.
+    if (field === 'activeEffects') return updateRef.current(id, { resources: { ...(latest.resources ?? {}), activeEffects: value } as CharacterRow['resources'] })
+    if (!latest.sheet) return Promise.resolve(false)
     return updateRef.current(id, { sheet: { ...latest.sheet, [field]: value } })
   }
 
@@ -864,7 +881,7 @@ export function OperatorConsole() {
                       <div className={styles.lgLine}>{e.node}</div>
                       <div className={styles.lgTime}>
                         {e.time} · {e.undone ? 'undone' : 'this session'}
-                        {e.undo && <button type="button" className={styles.lgUndo} onClick={() => void undoEntry(e)}>Undo</button>}
+                        {e.undo && <LogUndo at={e.at} onUndo={() => void undoEntry(e)} />}
                       </div>
                     </div>
                   ))}
@@ -1014,7 +1031,7 @@ function OverviewDashboard({
   effectLib: CatalogEffectRow[]
   shardCatalog: Record<string, ShardTree>
   onUpdate: (id: string, patch: CharacterUpdate) => Promise<boolean>
-  onRestore: (id: string, field: 'hp' | 'coins', value: unknown) => Promise<boolean>
+  onRestore: (id: string, field: RestoreField, value: unknown) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
   log: (node: ReactNode, kind?: 'cyan' | 'danger', undo?: () => Promise<boolean>) => void
 }) {
@@ -1053,7 +1070,7 @@ function OverviewDashboard({
     const active = (res.activeEffects as ActiveEffect[] | undefined) ?? []
     if (!(await onUpdate(p.id, { resources: { ...res, activeEffects: [...active, eff] } as CharacterRow['resources'] }))) return false
     void onVoice({ kind: 'effect', target: p.id, name: e.data.name, dur, fxKind: EFFECT_KIND_TO_ACTIVE[e.data.kind] })
-    log(<>Applied <span className={styles.obj}>{e.data.name}</span> to {who}</>, e.data.kind === 'buff' ? 'cyan' : 'danger')
+    log(<>Applied <span className={styles.obj}>{e.data.name}</span> to {who}</>, e.data.kind === 'buff' ? 'cyan' : 'danger', () => onRestore(p.id, 'activeEffects', active))
     return true
   }
 
@@ -1064,7 +1081,7 @@ function OverviewDashboard({
     const gone = active.find(e => e.id === id)
     if (!row || !gone) return
     if (await onUpdate(p.id, { resources: { ...res, activeEffects: active.filter(e => e.id !== id) } as CharacterRow['resources'] }))
-      log(<>Cleared <span className={styles.obj}>{gone.name}</span> from <span className={styles.who}>{firstName(p.name)}</span></>)
+      log(<>Cleared <span className={styles.obj}>{gone.name}</span> from <span className={styles.who}>{firstName(p.name)}</span></>, undefined, () => onRestore(p.id, 'activeEffects', active))
   }
 
   async function grantItem(p: PartyMember, it: CatalogItemRow) {
@@ -1091,18 +1108,18 @@ function OverviewDashboard({
 
       <GrantBar members={members} items={items} effectLib={effectLib} onGrantItem={grantItem} onApplyEffect={addEffect} />
 
-      {picked.size > 0 && (
-        <div className={styles.areaBar} role="group" aria-label="Area damage">
-          <span className={styles.areaWho}>{picked.size} selected</span>
+      {/* Always rendered: a bar that appeared on the first tick pushed every
+          card down under the cursor. Idle, it just says what ticking does. */}
+        <div className={cx(styles.areaBar, picked.size === 0 && styles.idle)} role="group" aria-label="Area damage">
+          <span className={styles.areaWho}>{picked.size ? `${picked.size} selected` : 'Tick PCs for area damage'}</span>
           <input
             className={styles.liveAmt} type="number" inputMode="numeric" min={1} placeholder="Amount"
-            aria-label="Amount for all selected" value={areaAmt} onChange={e => setAreaAmt(e.target.value)}
+            aria-label="Amount for all selected" value={areaAmt} onChange={e => setAreaAmt(e.target.value)} disabled={!picked.size}
           />
-          <button type="button" className={cx(styles.liveBtn, styles.dmg)} disabled={!(areaN > 0)} onClick={() => void area('damage')}>Damage all</button>
-          <button type="button" className={cx(styles.liveBtn, styles.heal)} disabled={!(areaN > 0)} onClick={() => void area('heal')}>Heal all</button>
-          <button type="button" className={styles.areaClear} onClick={() => setPicked(new Set())}>Clear selection</button>
+          <button type="button" className={cx(styles.liveBtn, styles.dmg)} disabled={!picked.size || !(areaN > 0)} onClick={() => void area('damage')}>Damage all</button>
+          <button type="button" className={cx(styles.liveBtn, styles.heal)} disabled={!picked.size || !(areaN > 0)} onClick={() => void area('heal')}>Heal all</button>
+          <button type="button" className={styles.areaClear} disabled={!picked.size} onClick={() => setPicked(new Set())}>Clear</button>
         </div>
-      )}
 
       {members.map(p => (
         <LiveTile
@@ -1164,6 +1181,7 @@ function LiveTile({ p, row, active, picked, effectLib, onPick, onOpen, onHp, onA
           />
           <button type="button" className={cx(styles.liveBtn, styles.dmg)} disabled={!(n > 0)} onClick={() => void hp('damage')}>Damage</button>
           <button type="button" className={cx(styles.liveBtn, styles.heal)} disabled={!(n > 0) || p.hp >= p.hpMax} onClick={() => void hp('heal')}>Heal</button>
+          <span className={styles.kbdHint} aria-hidden="true">↵ damage · ⇧↵ heal</span>
         </div>
         <div className={styles.drFx}>
           {fx.map(e => (
@@ -1179,7 +1197,11 @@ function LiveTile({ p, row, active, picked, effectLib, onPick, onOpen, onHp, onA
             <input
               className={styles.liveAmt} autoFocus placeholder="Search effects…" aria-label={`Search effects to apply to ${first}`}
               value={query} onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') setAdding(false) }}
+              onKeyDown={e => {
+                if (e.key === 'Escape') setAdding(false)
+                // Enter takes the top match — the search IS the picker.
+                if (e.key === 'Enter' && matches[0]) void onAddEffect(matches[0]).then(ok => { if (ok) { setAdding(false); setQuery('') } })
+              }}
             />
             {matches.length === 0
               ? <span className={styles.none}>Nothing matches.</span>
@@ -1491,7 +1513,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
   shardCatalog: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   /** Puts one sheet field back, against the latest row — the log's Undo. */
-  onRestore: (field: 'hp' | 'coins', value: unknown) => Promise<boolean>
+  onRestore: (field: RestoreField, value: unknown) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
   log: (node: ReactNode, kind?: 'cyan' | 'danger', undo?: () => Promise<boolean>) => void
 }) {
@@ -1638,7 +1660,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
         </div>
 
         {/* C — APPLY EFFECT: push a status effect onto this PC (slice 6) */}
-        <ApplyEffectCard member={member} effectLib={effectLib} row={row} shardTrees={shardCatalog} onUpdate={onUpdate} onVoice={onVoice} log={log} />
+        <ApplyEffectCard member={member} effectLib={effectLib} row={row} shardTrees={shardCatalog} onUpdate={onUpdate} onRestore={onRestore} onVoice={onVoice} log={log} />
 
         {/* D — GRANT ITEM: snapshot a catalog template into this PC's inventory */}
         <GrantItemCard member={member} catalog={catalog} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
@@ -2894,7 +2916,7 @@ function buildActiveEffect(d: EffectDef, o: { durN?: number; durUnit?: typeof DU
  *  the SAME field the player's potion-drinking writes and the effects tray reads,
  *  so the DM's push shows up in the tray, layers into the effective sheet, clears
  *  on rest, and the player can shrug it off manually (all existing behavior). */
-function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice, log }: {
+function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onRestore, onVoice, log }: {
   member: PartyMember
   effectLib: CatalogEffectRow[]
   row: CharacterRow
@@ -2904,7 +2926,8 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
   shardTrees: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
-  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+  onRestore: (field: RestoreField, value: unknown) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger', undo?: () => Promise<boolean>) => void
 }) {
   const [query, setQuery] = useState('')
   const [effId, setEffId] = useState<string | null>(null)
@@ -2951,7 +2974,7 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
     setBusy(false)
     if (!ok) return
     void onVoice({ kind: 'effect', target: member.id, name: d.name, dur, fxKind: EFFECT_KIND_TO_ACTIVE[d.kind] })
-    log(<>Applied <span className={styles.obj}>{d.name}</span> to <span className={styles.who}>{first}</span></>, d.kind === 'buff' ? 'cyan' : 'danger')
+    log(<>Applied <span className={styles.obj}>{d.name}</span> to <span className={styles.who}>{first}</span></>, d.kind === 'buff' ? 'cyan' : 'danger', () => onRestore('activeEffects', active))
     setEffId(null)
     setQuery('')
   }
@@ -2959,7 +2982,7 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
   async function remove(id: string) {
     const gone = active.find(e => e.id === id)
     const ok = await onUpdate({ resources: { ...resources, activeEffects: active.filter(e => e.id !== id) } as CharacterRow['resources'] })
-    if (ok && gone) log(<>Cleared <span className={styles.obj}>{gone.name}</span> from <span className={styles.who}>{first}</span></>)
+    if (ok && gone) log(<>Cleared <span className={styles.obj}>{gone.name}</span> from <span className={styles.who}>{first}</span></>, undefined, () => onRestore('activeEffects', active))
   }
 
   return (

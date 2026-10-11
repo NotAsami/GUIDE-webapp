@@ -278,6 +278,12 @@
 .workBody { position: relative; z-index: 2; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 13px; }
 /* The NPC web draws edge to edge and never scrolls: it scales itself to fit. */
 .workBody.webBody { padding: 0; overflow: hidden; }
+/* The prep tray (fixed, ~70px with its gap) floats over the bottom of every
+   view. Reserve it, so the last row of every panel can be reached rather than
+   sitting underneath. The web draws edge to edge, so it lifts its legend
+   instead (NpcWebView reads --tray-pad). */
+.workBody { padding-bottom: 76px; }
+.workBody.webBody { padding-bottom: 0; --tray-pad: 70px; }
 /* The catalog view, which needs two things this panel does not do by default.
    Only this view; every other surface keeps the plain scrolling body.
 
@@ -3231,3 +3237,8 @@ button.wtab { border: 0; cursor: pointer; }
 .crTab:focus-visible { outline: 2px solid var(--amber-hot); outline-offset: 2px; }
 .ovEntry:focus-visible, .pcCard:focus-visible { outline: none; background: var(--amber-hot); }
 .searchIn:focus-visible, .numIn:focus-visible, .sessIn:focus-visible { outline: 1px solid var(--amber-hot); outline-offset: 1px; }
+
+.areaBar.idle { background: transparent; border-color: color-mix(in srgb, var(--beige) 22%, transparent); }
+.areaBar.idle .areaWho { color: var(--muted); }
+.kbdHint { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.04em; color: var(--muted); margin-left: 4px; white-space: nowrap; }
+.areaClear:disabled, .liveAmt:disabled { opacity: 0.4; cursor: not-allowed; }
