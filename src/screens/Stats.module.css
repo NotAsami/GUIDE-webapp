@@ -199,7 +199,7 @@
 .pbLabel { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase; text-align: center; margin-top: 2px; }
 /* The rolled total, in the slot the modifier normally holds — same colours the
    Character screen's hexagons flash, so a 20 reads the same on both. */
-.crit { color: var(--gold-rare); text-shadow: 0 0 22px color-mix(in srgb, var(--gold-rare) 80%, transparent); }
+.crit { color: var(--gold); text-shadow: 0 0 22px color-mix(in srgb, var(--gold) 80%, transparent); }
 .fumble { color: var(--danger); text-shadow: 0 0 18px color-mix(in srgb, var(--danger) 80%, transparent); }
 .acBreakdown {
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase;

@@ -253,7 +253,7 @@
 .daPerks { flex: 0 0 auto; margin-top: 12px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.04em; color: var(--beige); }
 .daPerks .perk { display: block; margin-top: 5px; }
 .daPerks .plus { color: var(--cyan); margin-right: 6px; }
-.daNote { margin-top: 10px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--gold-rare); min-height: 13px; }
+.daNote { margin-top: 10px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--gold); min-height: 13px; }
 
 .daAttune { margin-top: 12px; flex: 0 0 auto; --cut: 9px; position: relative; background: transparent; border: 0; padding: 0; height: 46px; width: 100%; cursor: pointer; font-family: var(--font-mono); }
 .daAttune .atFrame { position: absolute; inset: 0; background: var(--cyan); clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); }

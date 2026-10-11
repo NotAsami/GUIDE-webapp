@@ -1735,7 +1735,7 @@
 }
 .invTitle {
   font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.3em;
-  color: var(--gold-rare); text-transform: uppercase;
+  color: var(--amber); text-transform: uppercase;
 }
 .invMeta {
   margin-left: auto;

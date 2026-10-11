@@ -210,7 +210,7 @@
   pointer-events: none; opacity: 0; transition: opacity 200ms ease;
 }
 .slotPort:hover .spLabel, .slotPort.linked .spLabel { opacity: 1; color: var(--cyan); }
-.slotPort.locked:hover .spLabel, .slotPort.locked.linked .spLabel { color: var(--gold-rare); }
+.slotPort.locked:hover .spLabel, .slotPort.locked.linked .spLabel { color: var(--amber); }
 
 /* ---------- Connectors: SVG overlay spanning the whole two-column body ---------- */
 .connectors { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 6; overflow: visible; }
@@ -225,11 +225,11 @@
   stroke: var(--cyan-hot); opacity: 1; stroke-width: 1.8;
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--cyan) 85%, transparent)) drop-shadow(0 0 8px color-mix(in srgb, var(--cyan) 55%, transparent));
 }
-.conn.guide.linked { stroke: var(--gold-rare); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gold-rare) 85%, transparent)) drop-shadow(0 0 8px color-mix(in srgb, var(--gold-rare) 50%, transparent)); }
+.conn.guide.linked { stroke: var(--amber); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--amber) 85%, transparent)) drop-shadow(0 0 8px color-mix(in srgb, var(--amber) 50%, transparent)); }
 .connCap { fill: var(--beige); }
-.connCap.guide { fill: var(--gold-rare); }
+.connCap.guide { fill: var(--amber); }
 .connPulse { fill: var(--cyan-hot); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--cyan) 90%, transparent)); }
-.connPulse.guide { fill: var(--gold-rare); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gold-rare) 85%, transparent)); }
+.connPulse.guide { fill: var(--amber); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--amber) 85%, transparent)); }
 
 /* ============================================================
    SHARD MANIFEST CARDS
@@ -281,7 +281,7 @@
     linear-gradient(180deg, #1c1813, #14110b);
 }
 .shardCard.guide:hover .scInner, .shardCard.guide.linked .scInner { box-shadow: inset 0 0 30px color-mix(in srgb, var(--amber) 20%, transparent), 0 0 22px color-mix(in srgb, var(--amber) 32%, transparent); }
-.scCorner { position: absolute; width: 16px; height: 16px; border-color: var(--gold-rare); opacity: 0.85; z-index: 3; pointer-events: none; }
+.scCorner { position: absolute; width: 16px; height: 16px; border-color: var(--amber); opacity: 0.85; z-index: 3; pointer-events: none; }
 .scCorner.tl { top: 8px; left: 8px; border-top: 1.5px solid; border-left: 1.5px solid; }
 .scCorner.br { bottom: 8px; right: 8px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
 
@@ -299,12 +299,12 @@
 .scHead { grid-area: head; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .scNameGroup { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .scName { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: 0.10em; color: var(--cyan-hot); line-height: 1.05; text-transform: uppercase; }
-.shardCard.guide .scName { color: var(--gold-rare); letter-spacing: 0.13em; }
+.shardCard.guide .scName { color: var(--amber); letter-spacing: 0.13em; }
 .shardCard.empty .scName { color: var(--muted); font-size: 15px; letter-spacing: 0.16em; }
 .scSub { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase; line-height: 1.25; }
 .shardCard.guide .scSub { color: color-mix(in srgb, var(--amber) 70%, transparent); }
 .scBadge { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-.scBadge .lock { color: var(--gold-rare); font-size: 11px; }
+.scBadge .lock { color: var(--amber); font-size: 11px; }
 .scRarity { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--cyan); text-transform: uppercase; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .scRarity::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 70%, transparent); }
 .scRarity.vacant::before { background: transparent; border: 1.5px dashed var(--beige-dim); box-shadow: none; }
@@ -318,12 +318,12 @@
 .scStats .k { color: var(--beige); }
 .scStats .v { color: var(--text); }
 .scStats .v.acc { color: var(--cyan-hot); }
-.shardCard.guide .scStats .v.acc { color: var(--gold-rare); }
+.shardCard.guide .scStats .v.acc { color: var(--amber); }
 
 .scBuffs { grid-area: buffs; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.04em; color: var(--text); line-height: 1.5; min-width: 0; }
 .scBuffs .b { display: block; }
 .scBuffs .plus { color: var(--cyan-hot); margin-right: 6px; font-weight: 600; }
-.shardCard.guide .scBuffs .plus { color: var(--gold-rare); }
+.shardCard.guide .scBuffs .plus { color: var(--amber); }
 .shardCard.guide .scBuffs .b { color: rgba(255, 236, 196, 0.85); }
 .scBuffs.italic { color: var(--muted); font-style: italic; font-family: var(--font-prose); font-size: 12px; letter-spacing: 0.02em; line-height: 1.4; }
 
@@ -353,7 +353,7 @@
   transition: opacity 160ms ease, transform 160ms ease; z-index: 10; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
 }
 .scBtn:hover::after { opacity: 1; transform: translateY(-50%) translateX(0); }
-.scBtn.disabled:hover::after { color: var(--amber-hot); border-color: var(--gold-rare); }
+.scBtn.disabled:hover::after { color: var(--amber-hot); border-color: var(--amber); }
 .scBtn.eject:hover::after { color: rgba(220, 120, 120, 0.95); border-color: color-mix(in srgb, var(--danger) 60%, transparent); }
 
 @keyframes integrityFlicker {
@@ -372,7 +372,7 @@
   50% { opacity: 1; transform: scale(1.06); text-shadow: 0 0 16px color-mix(in srgb, var(--cyan) 60%, transparent); }
 }
 
-.guideEmblem { width: 58px; height: 58px; color: var(--gold-rare); opacity: 0.95; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--gold-rare) 45%, transparent)); }
+.guideEmblem { width: 58px; height: 58px; color: var(--amber); opacity: 0.95; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--amber) 45%, transparent)); }
 .vigorEmblem { width: 48px; height: 58px; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--cyan) 55%, transparent)); }
 .vigorEmblem .core { fill: color-mix(in srgb, var(--cyan) 25%, transparent); stroke: var(--cyan-hot); stroke-width: 1.4; }
 .vigorEmblem .facet { fill: color-mix(in srgb, var(--cyan) 10%, transparent); stroke: var(--cyan); stroke-width: 1.1; }

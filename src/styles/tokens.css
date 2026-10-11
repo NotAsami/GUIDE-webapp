@@ -13,7 +13,13 @@
   --text:      #dedede;
   --muted:     #aaaaaa;
   --danger:    #b93a3a;
-  --gold-rare: #e2b021;
+  /* Legendary / rare-gold accent. NOT amber: amber on a player screen is the
+     reveal's colour (the G.U.I.D.E. Shard wears it on purpose), so the loot
+     tier moved to the orange gaming players already read as "legendary". */
+  --gold-rare: #f2994a;
+  /* Plain gold — radiant light, a crit, a value spent and armed. Lighter and
+     cooler than amber so the two never read as one colour. */
+  --gold:      #f0cf6a;
 
   /* Amber = the system-truth accent of the DM / Operator Console layer (the
      player layer is cyan-led; the operator layer is amber-led). Ported from
@@ -42,7 +48,7 @@
   --rar-uncommon: #4fae6b;
   --rar-rare:     #00a6d6;
   --rar-vrare:    #a07ad6;
-  --rar-legend:   #e2b021;
+  --rar-legend:   #f2994a;
   /* Artifact — above legendary. A dull red-bronze rather than another gold, so
      the top tier does not read as "legendary but bigger". */
   --rar-artifact: #c96f3f;

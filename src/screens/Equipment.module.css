@@ -214,9 +214,9 @@
 .wcArmed {
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
-  text-transform: uppercase; color: var(--gold-rare);
-  border: 1px solid color-mix(in srgb, var(--gold-rare) 55%, transparent);
-  background: color-mix(in srgb, var(--gold-rare) 12%, transparent);
+  text-transform: uppercase; color: var(--gold);
+  border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
   padding: 2px 6px;
 }
 .wcArmed i { font-size: 7px; }
@@ -233,8 +233,8 @@
   transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
 }
 .wcArmable:hover {
-  color: var(--gold-rare); border-color: color-mix(in srgb, var(--gold-rare) 60%, transparent);
-  background: color-mix(in srgb, var(--gold-rare) 10%, transparent);
+  color: var(--gold); border-color: color-mix(in srgb, var(--gold) 60%, transparent);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
 }
 .wcArmable i { font-size: 7px; }
 
@@ -1355,4 +1355,4 @@
 }
 /* flat damage an ammunition stack adds, shown before you fire rather than only
    in the toast afterwards */
-.amDmg { flex: 0 0 auto; color: var(--gold-rare); font-size: var(--fs-label); letter-spacing: 0.1em; }
+.amDmg { flex: 0 0 auto; color: var(--gold); font-size: var(--fs-label); letter-spacing: 0.1em; }

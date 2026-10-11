@@ -77,7 +77,7 @@
 }
 .entry.latest { --edge: var(--cyan); }
 .entry.latest .eFrame { box-shadow: 0 0 16px color-mix(in srgb, var(--cyan) 35%, transparent); }
-.entry.crit { --edge: var(--gold-rare); }
+.entry.crit { --edge: var(--gold); }
 .entry.crit .eFrame { box-shadow: 0 0 16px color-mix(in srgb, var(--amber) 35%, transparent); }
 .entry.fumble { --edge: var(--danger); }
 /* A natural 20 landing: the edge blooms cyan and settles into the crit gold
@@ -92,7 +92,7 @@
 .eHead { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 11px; padding: 11px 13px; cursor: pointer; user-select: none; }
 .eHead:hover .eName { color: var(--cyan-hot); }
 .eGlyph { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--beige) 35%, transparent); background: rgba(0, 0, 0, 0.4); color: var(--beige); font-size: 13px; }
-.entry.crit .eGlyph { border-color: color-mix(in srgb, var(--gold-rare) 60%, transparent); color: var(--gold-rare); }
+.entry.crit .eGlyph { border-color: color-mix(in srgb, var(--gold) 60%, transparent); color: var(--gold); }
 .eName { font-family: var(--font-display); font-weight: 600; font-size: 14px; letter-spacing: 0.09em; color: var(--text); transition: color 160ms ease; display: inline-flex; align-items: center; gap: 7px; }
 /* The dotted underline and the book are the catalog affordance — drawn only when
    there IS an entry to open. A save has no subject and gets neither. */
@@ -108,8 +108,8 @@
 .eTag {
   position: absolute; top: -7px; right: 14px; z-index: 3;
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
-  padding: 2px 8px; background: #0d0d0d; border: 1px solid var(--gold-rare); color: var(--gold-rare);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--gold-rare) 35%, transparent);
+  padding: 2px 8px; background: #0d0d0d; border: 1px solid var(--gold); color: var(--gold);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--gold) 35%, transparent);
 }
 .entry.fumble .eTag { border-color: var(--danger); color: var(--danger-hot); box-shadow: 0 0 12px color-mix(in srgb, var(--danger) 35%, transparent); }
 .eBody { padding: 0 13px 12px; }
@@ -128,7 +128,7 @@
    tinted one hue and outlined another. */
 .lType { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--dt, var(--beige-dim)); border: 1px solid var(--dt-edge, color-mix(in srgb, var(--beige) 28%, transparent)); padding: 1px 6px; }
 .lSum { margin-left: auto; font-family: var(--font-display); font-weight: 600; font-size: 19px; line-height: 1; color: var(--text); letter-spacing: 0.02em; }
-.line.critLine .lSum { color: var(--gold-rare); text-shadow: 0 0 10px color-mix(in srgb, var(--gold-rare) 45%, transparent); }
+.line.critLine .lSum { color: var(--gold); text-shadow: 0 0 10px color-mix(in srgb, var(--gold) 45%, transparent); }
 .line.fumbleLine .lSum { color: var(--danger-hot); text-shadow: 0 0 10px color-mix(in srgb, var(--danger) 45%, transparent); }
 .lMath { margin-top: 7px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.06em; color: var(--muted); }
 .form { color: var(--beige); letter-spacing: 0.1em; }
@@ -143,7 +143,7 @@
   border: 1px solid color-mix(in srgb, var(--cyan) 42%, transparent); padding: 1px 7px; cursor: pointer; transition: all 150ms ease;
 }
 .die:hover { background: color-mix(in srgb, var(--cyan) 20%, transparent); border-color: var(--cyan-hot); color: var(--cyan-hot); box-shadow: 0 0 10px color-mix(in srgb, var(--cyan) 30%, transparent); }
-.die.max { border-color: var(--gold-rare); color: var(--gold-rare); background: color-mix(in srgb, var(--gold-rare) 10%, transparent); }
+.die.max { border-color: var(--gold); color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, transparent); }
 .die.min { border-color: color-mix(in srgb, var(--danger) 60%, transparent); color: var(--danger-hot); background: color-mix(in srgb, var(--danger) 9%, transparent); }
 /* The die that lost an adv/dis contest. Struck through, not hidden — seeing what
    you beat is most of the point of advantage. */
@@ -153,7 +153,7 @@
 .die.rerolled::after { content: "↻"; position: absolute; top: -6px; right: -5px; font-size: var(--fs-label); color: var(--cyan-hot); text-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 80%, transparent); }
 .die.lockedDie { cursor: default; border-color: color-mix(in srgb, var(--beige) 40%, transparent); background: transparent; color: var(--text); }
 .die.lockedDie:hover { box-shadow: none; color: var(--text); background: transparent; border-color: color-mix(in srgb, var(--beige) 40%, transparent); }
-.die.lockedDie.max { border-color: color-mix(in srgb, var(--gold-rare) 55%, transparent); color: var(--gold-rare); }
+.die.lockedDie.max { border-color: color-mix(in srgb, var(--gold) 55%, transparent); color: var(--gold); }
 .die.lockedDie.min { border-color: color-mix(in srgb, var(--danger) 50%, transparent); color: var(--danger-hot); }
 .mod { font-family: var(--font-mono); font-size: 11px; color: var(--text); border-bottom: 1px dotted color-mix(in srgb, var(--beige) 50%, transparent); cursor: help; background: none; border-top: 0; border-left: 0; border-right: 0; padding: 0; }
 .mod:hover { color: var(--beige); }
@@ -272,8 +272,8 @@
 .consume {
   display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
-  color: var(--gold-rare); border: 1px solid color-mix(in srgb, var(--gold-rare) 55%, transparent);
-  background: color-mix(in srgb, var(--gold-rare) 10%, transparent); padding: 2px 7px;
+  color: var(--gold); border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  background: color-mix(in srgb, var(--gold) 10%, transparent); padding: 2px 7px;
   transition: background 150ms ease, color 150ms ease;
 }
 .consume:hover { background: color-mix(in srgb, var(--amber) 24%, transparent); color: #fff; }
@@ -281,7 +281,7 @@
 .armedTag {
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
-  color: var(--gold-rare); border: 1px solid color-mix(in srgb, var(--gold-rare) 40%, transparent); padding: 2px 7px;
+  color: var(--gold); border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent); padding: 2px 7px;
 }
 .spentTag {
   font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
@@ -291,7 +291,7 @@
 /* ---------- granted flags ---------- */
 .flag { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; padding: 2px 7px; border: 1px solid var(--cyan); color: var(--cyan-hot); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
 .flag i { font-size: 7.5px; }
-.flag[data-f="crit"] { border-color: var(--gold-rare); color: var(--gold-rare); background: color-mix(in srgb, var(--gold-rare) 9%, transparent); }
+.flag[data-f="crit"] { border-color: var(--gold); color: var(--gold); background: color-mix(in srgb, var(--gold) 9%, transparent); }
 .flag[data-f="disadvantage"] { border-color: color-mix(in srgb, var(--danger) 60%, transparent); color: var(--danger-hot); background: color-mix(in srgb, var(--danger) 9%, transparent); }
 .flag.ghost { border-style: dashed; border-color: color-mix(in srgb, var(--beige) 35%, transparent); color: var(--beige-dim); background: transparent; }
 
@@ -444,7 +444,7 @@
 .tot .k { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige-mid); }
 .tot .v { font-family: var(--font-display); font-weight: 700; font-size: 27px; line-height: 1; letter-spacing: 0.02em; color: var(--beige); }
 .tot.atk .v { color: var(--cyan-hot); text-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 35%, transparent); }
-.entry.crit .tot.atk .v { color: var(--gold-rare); text-shadow: 0 0 14px color-mix(in srgb, var(--gold-rare) 45%, transparent); }
+.entry.crit .tot.atk .v { color: var(--gold); text-shadow: 0 0 14px color-mix(in srgb, var(--gold) 45%, transparent); }
 .entry.fumble .tot.atk .v { color: var(--danger-hot); }
 .tot .split { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
 /* THE TYPE IS COLOURED, NOT JUST ITS NUMBER. With the split now the only place
@@ -511,7 +511,7 @@
 .catRider .rn span { margin-left: auto; font-size: var(--fs-label); color: var(--beige-mid); }
 .catRider .rt { margin-top: 6px; font-family: var(--font-prose); font-size: 14px; line-height: 1.45; color: var(--muted); }
 .catDm { margin-top: 20px; border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent); background: color-mix(in srgb, var(--amber) 4.5%, transparent); padding: 11px 12px; }
-.catDm .k { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--gold-rare); display: flex; align-items: center; gap: 7px; }
+.catDm .k { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--gold); display: flex; align-items: center; gap: 7px; }
 .catDm .v { margin-top: 7px; font-family: var(--font-prose); font-size: 14px; line-height: 1.5; color: var(--muted); font-style: italic; }
 /* The subject is gone from the sheet — unequipped, spent, or removed since the
    roll. Say that, rather than showing an empty entry. */
