@@ -702,7 +702,7 @@ export function OperatorConsole() {
                   + (t.soon ? ' · its own later slice' : leaves ? ' · opens its own screen' : '')
                 return (
                   <button key={t.key} className={cx(styles.crTab, t.key === catTab && styles.sel, t.soon && styles.stub)}
-                    disabled={t.soon} title={title}
+                    disabled={t.soon} title={title} aria-label={title}
                     onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setCatTab(t.key as CatTab) }}>
                     <Icon name={t.icon} className={styles.crGlyph} />
                     <span className={styles.crLab}>{t.label}</span>
@@ -722,36 +722,41 @@ export function OperatorConsole() {
             {/* Per-character tabs — campaign surfaces (overview / quests /
                 sessions / catalog) have no tab modes, so no bar at all. */}
             {view === 'character' && (
-              <div className={styles.workTabs}>
-                <div
+              <div className={styles.workTabs} role="tablist" aria-label="Character views">
+                <button
+                  type="button" role="tab" aria-selected={charTab === 'actions'}
                   className={cx(styles.wtab, charTab === 'actions' && styles.active)}
                   onClick={() => setCharTab('actions')}
                   title="Action console"
                 >
                   Oversee
-                </div>
-                <div
+                </button>
+                <button
+                  type="button" role="tab" aria-selected={charTab === 'inventory'}
                   className={cx(styles.wtab, charTab === 'inventory' && styles.active)}
                   onClick={() => setCharTab('inventory')}
                   title="Browse, lock and confiscate carried items"
                 >
                   Inventory
-                </div>
-                <div
+                </button>
+                <button
+                  type="button" role="tab" aria-selected={charTab === 'lore'}
                   className={cx(styles.wtab, charTab === 'lore' && styles.active)}
                   onClick={() => setCharTab('lore')}
                   title="Lore & corruption (DM-only)"
                 >
                   Lore Editor
-                </div>
-                <div
+                </button>
+                <button
+                  type="button" role="tab" aria-selected={charTab === 'shards'}
                   className={cx(styles.wtab, charTab === 'shards' && styles.active)}
                   onClick={() => setCharTab('shards')}
                   title="Shard slots, points, reveals"
                 >
                   Shards
-                </div>
-                <div
+                </button>
+                <button
+                  type="button" role="tab" aria-selected={charTab === 'advance'}
                   className={cx(styles.wtab, styles.lvl, charTab === 'advance' && styles.active)}
                   onClick={() => setCharTab('advance')}
                   title={`Release or run ${selected?.name ?? 'this character'}'s level-up`}
@@ -761,7 +766,7 @@ export function OperatorConsole() {
                     {' '}<span className={styles.arr}>·</span> {selected.level}
                     {' '}<span className={styles.arr}>→</span> {selected.level + 1}
                   </>}
-                </div>
+                </button>
               </div>
             )}
             {/* A failed WRITE is a banner over the controls, never a replacement
@@ -849,6 +854,9 @@ export function OperatorConsole() {
                 <BroadcastPanel selected={selected} onSend={sendVoice} log={log} />
                 <div className={styles.bcDivider}>Activity Log</div>
               </div>
+              {/* The live region must exist BEFORE its first entry, or the first
+                  action is never announced — so it wraps both branches. */}
+              <div role="log" aria-live="polite" aria-label="Activity log">
               {logEntries.length ? (
                 <div className={styles.logList}>
                   {logEntries.map(e => (
@@ -864,6 +872,7 @@ export function OperatorConsole() {
               ) : (
                 <div className={styles.logEmpty}>No operator actions yet.</div>
               )}
+              </div>
             </div>
           </div>
         </section>}
@@ -1586,7 +1595,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
           </div>
           <div className={cx(styles.vitBar, hc && styles[hc])}><i style={{ width: `${pct}%` }} /></div>
           <div className={styles.stepper}>
-            <input className={styles.numIn} type="number" min={1} value={hpAmt}
+            <input className={styles.numIn} type="number" min={1} value={hpAmt} aria-label="HP amount — for Heal, Damage, Set HP and +Temp"
               onChange={e => setHpAmt(Math.max(0, parseInt(e.target.value || '0', 10) || 0))} />
           </div>
           <div className={styles.btnRow} style={{ marginBottom: 7 }}>
@@ -1619,7 +1628,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
             </button>
           </div>
           <div className={styles.stepper}>
-            <input className={styles.numIn} type="number" min={1} value={coinAmt}
+            <input className={styles.numIn} type="number" min={1} value={coinAmt} aria-label="Coin amount"
               onChange={e => setCoinAmt(Math.max(0, parseInt(e.target.value || '0', 10) || 0))} />
           </div>
           <div className={styles.btnRow}>
@@ -1954,7 +1963,7 @@ function LootLibrarySurface({ lib, itemCatalog, onRoll, openLootId, onResume }: 
         </div>
         <div className={cx(styles.searchWrap, styles.catSearch)}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          <input className={styles.searchIn} aria-label="Search loot tables" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Search loot tables…" autoComplete="off" spellCheck={false} />
           {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
         </div>
@@ -2345,7 +2354,7 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
         </div>
         <div className={styles.searchWrap}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={pickQ} onChange={e => setPickQ(e.target.value)}
+          <input className={styles.searchIn} aria-label="Search the item catalog" value={pickQ} onChange={e => setPickQ(e.target.value)}
             placeholder="Search the item catalog…" autoComplete="off" spellCheck={false} />
         </div>
         <div className={styles.skFilters}>
@@ -2494,7 +2503,7 @@ function LootItemPicker({ catalog, onPick, onClose }: {
         </div>
         <div className={cx(styles.searchWrap, styles.catSearch)}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={q} onChange={e => setQ(e.target.value)} autoFocus
+          <input className={styles.searchIn} aria-label="Search items, or tag:fire" value={q} onChange={e => setQ(e.target.value)} autoFocus
             placeholder="Search items, or tag:fire" autoComplete="off" spellCheck={false} />
         </div>
         <div className={styles.lootPopList}>
@@ -2814,7 +2823,7 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
       <div className={styles.acTitle}><i className="fa-solid fa-box-open lead" /><span className={styles.num}>D</span><span className={styles.t}>Grant Item</span></div>
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search catalog…" />
+        <input className={styles.searchIn} aria-label="Search catalog" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search catalog…" />
       </div>
       <div className={styles.catList}>
         {catalog.length === 0 ? (
@@ -2959,7 +2968,7 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
 
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search effects by name or tag…" />
+        <input className={styles.searchIn} aria-label="Search effects by name or tag" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search effects by name or tag…" />
       </div>
       <div className={styles.catList}>
         {effectLib.length === 0 ? (
@@ -3001,7 +3010,7 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
           derived from the row above rather than typed again. */}
       <div className={styles.durRow}>
         <span className={styles.fieldLab}>Per turn</span>
-        <input className={styles.sessIn} value={tick} onChange={e => setTick(e.target.value)}
+        <input className={styles.sessIn} value={tick} onChange={e => setTick(e.target.value)} aria-label="Per-turn effect"
           placeholder="1d6 — damage at the start of each turn, left blank for none" spellCheck={false} />
         <button className={cx(styles.durOpt, conc && styles.sel)} onClick={() => setConc(c => !c)} aria-pressed={conc}
           title="Marked only — losing concentration is a save made at the table, never something the app decides">
@@ -3093,6 +3102,7 @@ function BroadcastPanel({ selected, onSend, log }: {
         value={message}
         onChange={e => setMessage(e.target.value)}
         placeholder="Compose a G.U.I.D.E. system notice to push to the player…"
+        aria-label="System message to push"
       />
 
       <span className={styles.fieldLab}>Tone</span>
@@ -3203,7 +3213,7 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
                 stop. */}
             <div className={cx(styles.searchWrap, styles.catSearch)}>
               <i className="fa-solid fa-magnifying-glass" />
-              <input className={styles.searchIn} value={itemQuery} onChange={e => setItemQuery(e.target.value)}
+              <input className={styles.searchIn} aria-label="Search items, or tag:fire_damage" value={itemQuery} onChange={e => setItemQuery(e.target.value)}
                 placeholder="Search items, or tag:fire_damage" autoComplete="off" spellCheck={false} />
               {itemQuery && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setItemQuery('')} />}
             </div>
@@ -3321,7 +3331,7 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
           <span className={styles.fieldLab}>Library · roleplay boons &amp; perks</span>
           <div className={styles.searchWrap}>
             <i className="fa-solid fa-magnifying-glass" />
-            <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+            <input className={styles.searchIn} aria-label="Search features by name, source or kind" value={query} onChange={e => setQuery(e.target.value)}
               placeholder="Search features by name, source or kind…" />
           </div>
           <div className={styles.catList}>
@@ -4489,7 +4499,7 @@ function GrantSpellCard({ member, row, spellLib, onUpdate, onVoice, log }: {
           <span className={styles.fieldLab}>Library · Catalog · Spells tab</span>
           <div className={styles.searchWrap}>
             <i className="fa-solid fa-magnifying-glass" />
-            <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+            <input className={styles.searchIn} aria-label="Search spells by name, school or level" value={query} onChange={e => setQuery(e.target.value)}
               placeholder="Search spells by name, school or level…" />
           </div>
           <div className={styles.catList}>
@@ -4747,7 +4757,7 @@ function ClassLibrarySurface({ lib, featureLib, itemCatalog, members }: {
         </div>
         <div className={cx(styles.searchWrap, styles.catSearch)}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          <input className={styles.searchIn} aria-label="Search classes, or tag:martial" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Search classes, or tag:martial" autoComplete="off" spellCheck={false} />
           {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
         </div>
@@ -5034,7 +5044,7 @@ function ClassFeaturePicker({ refs, featureLib, onChange }: {
 
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+        <input className={styles.searchIn} aria-label="Search the feature library, or tag:sanctity" value={query} onChange={e => setQuery(e.target.value)}
           placeholder="Search the feature library, or tag:sanctity" autoComplete="off" spellCheck={false} />
       </div>
       {query.trim() && (
@@ -5291,7 +5301,7 @@ function KitEditor({ raw, itemCatalog, onChange }: {
                   <div className={styles.koPick}>
                     <div className={styles.searchWrap}>
                       <i className="fa-solid fa-magnifying-glass" />
-                      <input className={styles.searchIn} value={query} autoFocus
+                      <input className={styles.searchIn} aria-label="Search the item catalog" value={query} autoFocus
                         onChange={e => setQuery(e.target.value)}
                         placeholder="Search the item catalog…" {...NO_AUTOFILL} />
                     </div>
@@ -6084,7 +6094,7 @@ function AssignRaceCard({ member, row, raceLib, featureLib, shardCatalog, onUpda
       <span className={styles.fieldLab}>Library · published races only</span>
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+        <input className={styles.searchIn} aria-label="Search races" value={query} onChange={e => setQuery(e.target.value)}
           placeholder="Search races…" autoComplete="off" spellCheck={false} />
       </div>
       <div className={styles.catList}>
@@ -6270,7 +6280,7 @@ function AssignBackgroundCard({ member, row, backgroundLib, featureLib, itemCata
       <span className={styles.fieldLab}>Library · published backgrounds only</span>
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+        <input className={styles.searchIn} aria-label="Search backgrounds" value={query} onChange={e => setQuery(e.target.value)}
           placeholder="Search backgrounds…" autoComplete="off" spellCheck={false} />
       </div>
       <div className={styles.catList}>
@@ -6475,7 +6485,7 @@ function AssignClassCard({ member, row, classLib, featureLib, itemCatalog, shard
       <span className={styles.fieldLab}>Library · published classes only</span>
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+        <input className={styles.searchIn} aria-label="Search classes" value={query} onChange={e => setQuery(e.target.value)}
           placeholder="Search classes…" autoComplete="off" spellCheck={false} />
       </div>
       <div className={styles.catList}>
@@ -6734,7 +6744,7 @@ function RaceLibrarySurface({ lib, featureLib, members }: {
         </div>
         <div className={cx(styles.searchWrap, styles.catSearch)}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          <input className={styles.searchIn} aria-label="Search races, or tag:fey" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Search races, or tag:fey" autoComplete="off" spellCheck={false} />
           {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
         </div>
@@ -7200,7 +7210,7 @@ function BackgroundLibrarySurface({ lib, featureLib }: {
         </div>
         <div className={cx(styles.searchWrap, styles.catSearch)}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          <input className={styles.searchIn} aria-label="Search backgrounds" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Search backgrounds…" autoComplete="off" spellCheck={false} />
           {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
         </div>
