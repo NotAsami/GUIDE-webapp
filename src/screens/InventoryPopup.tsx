@@ -24,6 +24,7 @@ import { CAT_LABEL, rarityLabel } from '../lib/items'
 import styles from './InventoryPopup.module.css'
 import { Icon } from '../components/Icon'
 import { Inline } from '../lib/markdown'
+import { RenamedNote } from '../components/RenamedNote'
 
 /** Every place this item can be moved to: ON PERSON when a footprint-sized space
  *  is free, plus every equipped container that accepts its category and has room.
@@ -160,6 +161,7 @@ export function ItemPopup({
             <span className={styles.imCrystal}><Icon name={item.icon ?? 'fa-cube'} aria-hidden="true" /></span>
             <div className={styles.imTitles}>
               <span className={styles.imName}>{item.name}</span>
+              <RenamedNote obj={item} />
               <span className={styles.imTags}>
                 <span className={styles.imTag}>{CAT_LABEL[cat]}</span>
                 <span className={`${styles.imTag}${rarity !== 'common' ? ' ' + styles.acc : ''}`}>{rarityLabel(rarity)}</span>

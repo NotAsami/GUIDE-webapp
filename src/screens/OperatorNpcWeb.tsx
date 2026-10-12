@@ -21,7 +21,7 @@ import type { DmNpcsState } from '../lib/npcs'
 import { Prose } from '../lib/markdown'
 import { proseField } from '../lib/textareaHooks'
 import { ProsePreview } from '../components/ProsePreview'
-import { Btn } from './OperatorBtn'
+import { Btn, ConfirmBtn } from './OperatorBtn'
 import styles from './OperatorNpcWeb.module.css'
 import web from '../components/NpcWebView.module.css'
 import con from './OperatorConsole.module.css'
@@ -353,7 +353,7 @@ function NpcForm({ record, notes, startName, locations, error, onSave, onDelete,
       {error && <div className={styles.err}>{error}</div>}
       <div className={styles.fActions}>
         <Btn tone="amber" icon="fa-floppy-disk" label={record ? 'Save NPC' : 'Add to the web'} onClick={() => onSave(fields, gm)} disabled={!fields.name || imagePending} />
-        {onDelete && <Btn tone="danger" icon="fa-trash" label="Delete" onClick={onDelete} />}
+        {onDelete && <ConfirmBtn tone="danger" icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} />}
       </div>
     </div>
   )

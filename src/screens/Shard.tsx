@@ -140,8 +140,8 @@ export function Shard() {
   return (
     <>
       <Deco
-        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; SHARD_LINK &nbsp;//&nbsp; NEURAL_IFACE</>}
-        right={<>Castella-08 &nbsp;//&nbsp; <span className="acc">PORT {occupied}/{SHARD_SLOT_KEYS.length}</span></>}
+        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; SHARD_LINK</>}
+        right={<>Port <span className="acc">{occupied}/{SHARD_SLOT_KEYS.length}</span></>}
       />
       <Nav variant="dock" meta={meta} />
 
@@ -425,7 +425,7 @@ function ShardCard({
         <div className={`${styles.scBuffs} ${variant === 'empty' ? styles.italic : ''}`}>
           {variant === 'empty' ? 'No shard installed. Insert a compatible module to bind.' : buffLines(t).map(line => (
             <span key={line} className={styles.b} style={{ display: 'block' }}>
-              <span style={{ color: variant === 'guide' ? 'var(--gold-rare)' : 'var(--cyan-hot)', marginRight: 6, fontWeight: 600 }}>+</span>{line}
+              <span style={{ color: variant === 'guide' ? 'var(--amber)' : 'var(--cyan-hot)', marginRight: 6, fontWeight: 600 }}>+</span>{line}
             </span>
           ))}
         </div>
@@ -504,7 +504,7 @@ function VigorEmblem() {
       <polygon className={styles.facet} points="10,38 40,38 40,96" />
       <polygon className={styles.facet} points="70,38 40,38 40,96" />
       <polygon className={styles.high} points="40,8 56,30 40,30" opacity="0.65" />
-      <ellipse cx="40" cy="50" rx="34" ry="6" fill="none" stroke="#00a6d6" strokeWidth="0.6" opacity="0.4" />
+      <ellipse cx="40" cy="50" rx="34" ry="6" fill="none" style={{ stroke: 'var(--cyan)' }} strokeWidth="0.6" opacity="0.4" />
     </svg>
   )
 }

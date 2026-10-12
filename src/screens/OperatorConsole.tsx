@@ -55,13 +55,13 @@ import { useLocalDraft } from '../lib/draft'
 import { effectiveSheet } from '../lib/effects'
 import { prereqMet, prereqSummary } from '../lib/feats'
 import { leafOf } from '../lib/folders'
-import { sendFoundry, useFoundryMessages } from '../lib/foundry'
+import { sendFoundry, useFoundryMessages, type BridgeMsg } from '../lib/foundry'
 import { toFoundryActor } from '../lib/foundryActor'
 import { FOUNDRY_CONDITIONS, conditionLabel } from '../lib/foundryDamage'
 import { useFullscreen } from '../lib/fullscreen'
 import { auditNode, buildContext, characterVars, immuneTo, normalizeTag, type AuditItem } from '../lib/graph'
 import { consumeArmed, scopedVars, setDmVars, type VarRow } from '../lib/graphState'
-import { stateOf, useDmHandouts } from '../lib/handouts'
+import { useDmHandouts } from '../lib/handouts'
 import { kitChoices, legacyKitText, resolvePool } from '../lib/kit'
 import {
   hpGainOf, levelUpPatch, levelUpPlan, pendingLevelStale, recallLevelPatch, releaseLevelPatch,
@@ -78,6 +78,7 @@ import { usePartyPresence } from '../lib/presence'
 import { assignRace } from '../lib/races'
 import { longRestPatch } from '../lib/rest'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
+import { ConfirmBtn } from './OperatorBtn'
 import { pactSlotCount, pactSlotLevel } from '../lib/spells'
 import { proseField } from '../lib/textareaHooks'
 import { durationTurns } from '../lib/turns'
@@ -93,6 +94,7 @@ import { OperatorNpcWeb } from './OperatorNpcWeb'
 import { OperatorPrepBoard } from './OperatorPrepBoard'
 import { PrepTray } from './PrepTray'
 import { OperatorShops } from './OperatorShops'
+import { applyHp } from '../lib/hp'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
  *  Stat Panel / the Operator Console mockup. */
@@ -158,7 +160,35 @@ interface LogEntry {
   node: ReactNode
   kind?: 'cyan' | 'danger'
   time: string
+  /** Puts back what this line did. Offered for UNDO_MS, then dropped. */
+  undo?: () => Promise<boolean>
+  undone?: boolean
+  /** When it was logged — the Undo counts down from here. */
+  at: number
 }
+
+/** The console's campaign views, grouped for the header nav. */
+const VIEW_GROUPS: { label: string; views: { view: View; label: string }[] }[] = [
+  { label: 'Play', views: [{ view: 'overview', label: 'Overview' }, { view: 'prep', label: 'Prep' }] },
+  { label: 'World', views: [{ view: 'quests', label: 'Quests' }, { view: 'sessions', label: 'Sessions' }, { view: 'handouts', label: 'Handouts' }, { view: 'npcs', label: 'NPC web' }] },
+  { label: 'Library', views: [{ view: 'catalog', label: 'Catalog' }] },
+]
+
+/** What a log line's Undo can put back: a sheet field, or the effect list. */
+type RestoreField = 'hp' | 'coins' | 'activeEffects'
+
+/** The log line's Undo, with the seconds it has left — an Undo that vanishes
+ *  mid-sentence reads as a glitch; one that counts down reads as a window. */
+function LogUndo({ at, onUndo }: { at: number; onUndo: () => void }) {
+  const [, tick] = useState(0)
+  useEffect(() => { const t = setInterval(() => tick(n => n + 1), 1000); return () => clearInterval(t) }, [])
+  const left = Math.max(0, Math.ceil((UNDO_MS - (Date.now() - at)) / 1000))
+  return <button type="button" className={styles.lgUndo} onClick={onUndo}>Undo · {left}s</button>
+}
+
+/** How long a log line offers its undo. Long enough to notice the typo'd 50,
+ *  short enough that an undo never lands on a sheet that has moved on. */
+const UNDO_MS = 10_000
 
 const nowStamp = () => {
   const d = new Date()
@@ -185,7 +215,7 @@ export function OperatorConsole() {
   // secrets) — safe to feed straight into effectiveSheet()'s shardTrees arg.
   const shardCatalog = useMemo<Record<string, ShardTree>>(
     () => Object.fromEntries(shardLib.trees.map(t => [t.id, t])), [shardLib.trees])
-  const { party, secrets, loading: partyLoading, error, updateCharacter, updateSecret } = useDmParty(shardCatalog)
+  const { party, secrets, loading: partyLoading, error, writeError, dismissWriteError, updateCharacter, updateSecret } = useDmParty(shardCatalog)
   const campaign = useDmCampaign()
   const handoutLib = useDmHandouts()
   const npcLib = useDmNpcs()
@@ -238,8 +268,47 @@ export function OperatorConsole() {
   const sendVoice = useGuideVoice()
   // Session-local activity log, newest first, capped like the mockup's logAct.
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
-  const log = (node: ReactNode, kind?: LogEntry['kind']) =>
-    setLogEntries(prev => [{ id: crypto.randomUUID(), node, kind, time: nowStamp() }, ...prev].slice(0, 24))
+  /* Broadcast folds to a strip; remembered per browser. While folded, a count
+     of log lines since folding keeps anything from landing unseen. */
+  const [bcOpen, setBcOpen] = useState(() => { try { return localStorage.getItem('guide.dm.bcOpen') !== '0' } catch { return true } })
+  const [logCount, setLogCount] = useState(0)
+  const [seenCount, setSeenCount] = useState(0)
+  const toggleBc = () => setBcOpen(o => {
+    try { localStorage.setItem('guide.dm.bcOpen', o ? '0' : '1') } catch { /* private mode: just don't remember */ }
+    setSeenCount(logCount)
+    return !o
+  })
+  const log = (node: ReactNode, kind?: LogEntry['kind'], undo?: LogEntry['undo']) => {
+    setLogCount(n => n + 1)
+    const id = crypto.randomUUID()
+    setLogEntries(prev => [{ id, node, kind, time: nowStamp(), undo, at: Date.now() }, ...prev].slice(0, 24))
+    if (undo) setTimeout(() => setLogEntries(prev => prev.map(e => (e.id === id ? { ...e, undo: undefined } : e))), UNDO_MS)
+  }
+  const undoEntry = async (e: LogEntry) => {
+    if (!e.undo) return
+    const ok = await e.undo()
+    if (ok) setLogEntries(prev => prev.map(x => (x.id === e.id ? { ...x, undo: undefined, undone: true } : x)))
+  }
+
+  /* An undo restores one sheet field from the LATEST row, not the one its
+     handler closed over: in the seconds between, the DM may have moved coins
+     on the same sheet, and spreading a stale sheet would silently revert that. */
+  /* Both through refs: the undo closure is built BEFORE its write lands, so a
+     captured updateCharacter would still hold the pre-write party as its merge
+     base — and a three-way merge of "172" over a base of 172 is a no-op that
+     reports success. The latest updateCharacter merges against the latest row. */
+  const partyRef = useRef(party)
+  partyRef.current = party
+  const updateRef = useRef(updateCharacter)
+  updateRef.current = updateCharacter
+  const restoreSheet = (id: string, field: RestoreField, value: unknown) => {
+    const latest = partyRef.current.find(c => c.id === id)
+    if (!latest) return Promise.resolve(false)
+    // Effects live on resources; HP and coins on the sheet.
+    if (field === 'activeEffects') return updateRef.current(id, { resources: { ...(latest.resources ?? {}), activeEffects: value } as CharacterRow['resources'] })
+    if (!latest.sheet) return Promise.resolve(false)
+    return updateRef.current(id, { sheet: { ...latest.sheet, [field]: value } })
+  }
 
   /* The loot roll lives at console level, not inside the catalog tab: it has to
      survive the DM navigating away (the mockup's index row offers "Resume"),
@@ -252,7 +321,22 @@ export function OperatorConsole() {
      the whole table, so it takes the last target anybody set. */
   const [fvttTarget, setFvttTarget] = useState<{ token: string; name: string } | null>(null)
   const [condition, setCondition] = useState<string>(FOUNDRY_CONDITIONS[0])
-  useFoundryMessages(msg => { if (msg.kind === 'target') setFvttTarget(msg.token) })
+  /* WHAT FOUNDRY HAS SAID THIS SESSION — the header's only claims about combat.
+     The bridge has no heartbeat and announces a turn only when a MAPPED PC's
+     turn begins (monster turns send nothing), so the strip says exactly that:
+     when it last heard anything, and whose PC turn came up last. */
+  const [fvtt, setFvtt] = useState<{ heard: number | null; turn?: { character: string; round: number }; downed?: string }>({ heard: null })
+  useFoundryMessages(msg => {
+    if (msg.kind === 'target') setFvttTarget(msg.token)
+    // Players' apps talk TO Foundry on the same channel; only what Foundry
+    // itself sends counts as having heard from it.
+    if (!FROM_FOUNDRY.has(msg.kind)) return
+    setFvtt(prev => ({
+      heard: Date.now(),
+      turn: msg.kind === 'turn' ? { character: msg.character, round: msg.round } : prev.turn,
+      downed: msg.kind === 'downed' ? msg.name : prev.downed,
+    }))
+  })
 
   /* Level Up is a portal too, and for the same reason as the loot roll: it
      belongs to the console rather than to a tab. Unlike the loot roll it has NO
@@ -388,32 +472,8 @@ export function OperatorConsole() {
     }
   })()
 
-  function openOverview() {
-    setView('overview')
-    setSelectedId(null)
-  }
-  function openQuests() {
-    setView('quests')
-    setSelectedId(null)
-  }
-  function openSessions() {
-    setView('sessions')
-    setSelectedId(null)
-  }
-  function openHandouts() {
-    setView('handouts')
-    setSelectedId(null)
-  }
   function openPrep() {
     setView('prep')
-    setSelectedId(null)
-  }
-  function openNpcs() {
-    setView('npcs')
-    setSelectedId(null)
-  }
-  function openCatalog() {
-    setView('catalog')
     setSelectedId(null)
   }
   function openCharacter(id: string) {
@@ -432,16 +492,27 @@ export function OperatorConsole() {
       <header className={styles.opbar}>
         <div className={styles.opSigil}><i className="fa-solid fa-terminal" /></div>
         <div className={styles.opId}>
-          <div className={styles.opTitle}>G.U.I.D.E.<span className={styles.slash}>//</span>Operator Console</div>
-          <div className={styles.opSub}>
-            <span className={styles.acc}>Root :: Architect View</span>
-            <span className={styles.sep}>//</span><span>DM Mode</span>
-            <span className={styles.sep}>//</span><span>Brettany Theater</span>
-          </div>
+          <h1 className={styles.opTitle}>G.U.I.D.E.<span className={styles.slash}>//</span>Operator Console</h1>
+          {/* Every campaign view, one click from anywhere — the rail below
+              holds only the party, so it never scrolls mid-combat. Grouped so
+              no group offers more than four choices. */}
+          <nav className={styles.viewNav} aria-label="Console views">
+            {VIEW_GROUPS.map(g => (
+              <div key={g.label} className={styles.vnGroup} role="group" aria-label={g.label}>
+                <span className={styles.vnLab} aria-hidden="true">{g.label}</span>
+                {g.views.map(v => (
+                  <button
+                    key={v.view} type="button" className={cx(styles.vnTab, view === v.view && styles.on)}
+                    aria-current={view === v.view ? 'page' : undefined} onClick={() => { setView(v.view); setSelectedId(null) }}
+                  >{v.label}</button>
+                ))}
+              </div>
+            ))}
+          </nav>
         </div>
         <div className={styles.opRight}>
           <div className={styles.opStat}><span className={styles.v}>{members.length}</span><span className={styles.l}>Linked PCs</span></div>
-          <div className={styles.opStat}><span className={cx(styles.v, styles.cyan)}>Standby</span><span className={styles.l}>Encounter</span></div>
+          <FoundryStat state={fvtt} nameOf={id => firstName(members.find(m => m.id === id)?.name ?? 'A PC')} />
           {/* CONDITIONS ON THE TARGETED CREATURE. The DM's call, so it lives on
               the DM's screen — and it names what it will hit, because a control
               that acts on "whatever is targeted" and does not say what that is
@@ -525,75 +596,20 @@ export function OperatorConsole() {
       </header>
 
       {/* ===== CONSOLE GRID ===== */}
-      <div className={styles.console}>
+      <div role="main" className={cx(styles.console, !bcOpen && !wide && styles.bcFolded)}>
         {/* LEFT — ROSTER */}
         <section className={styles.region} aria-label="Party roster">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
             <div className={styles.rHead}>
               <span className={styles.rhNum}>01</span>
-              <span className={styles.rhTitle}>Party Roster</span>
+              <h2 className={styles.rhTitle}>Party Roster</h2>
               <span className={styles.rhMeta}><span className={styles.acc}>{members.length}</span> Tracked</span>
             </div>
             <div className={styles.rScroll}>
               <div className={styles.rosterList}>
-                <div className={styles.rosterDiv}>Campaign</div>
-                <button className={cx(styles.ovEntry, view === 'overview' && styles.active)} onClick={openOverview}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-table-cells-large" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Party Overview</span>
-                    <span className={styles.ovS}>Combat Dashboard · All PCs</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'quests' && styles.active)} onClick={openQuests}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-scroll" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Quest Log</span>
-                    <span className={styles.ovS}>{campaign.quests.filter(q => q.status === 'active').length} active · {campaign.quests.length} total</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'sessions' && styles.active)} onClick={openSessions}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-book-bookmark" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Session Log</span>
-                    <span className={styles.ovS}>Recaps · {campaign.sessions.length} logged</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'handouts' && styles.active)} onClick={openHandouts}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-envelope-open-text" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Handouts</span>
-                    <span className={styles.ovS}>{handoutLib.handouts.filter(h => stateOf(h) === 'live').length} live · {handoutLib.handouts.length} authored</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'prep' && styles.active)} onClick={openPrep}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-clipboard-list" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Prep Board</span>
-                    <span className={styles.ovS}>{(() => {
-                      const board = planLib.plans.find(p => !p.session_id)
-                      if (!board) return 'Stage tonight'
-                      const cards = planLib.cards.filter(c => c.plan_id === board.id)
-                      return `${cards.filter(c => !c.fired_at).length} staged · ${cards.filter(c => c.fired_at).length} played`
-                    })()}</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'npcs' && styles.active)} onClick={openNpcs}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-circle-nodes" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>NPC Web</span>
-                    <span className={styles.ovS}>Who knows whom · {npcLib.npcs.length} recorded</span>
-                  </span>
-                </button>
-                <button className={cx(styles.ovEntry, view === 'catalog' && styles.active)} onClick={openCatalog}>
-                  <span className={styles.ovIc}><i className="fa-solid fa-box-archive" /></span>
-                  <span className={styles.ovTx}>
-                    <span className={styles.ovT}>Catalog</span>
-                    <span className={styles.ovS}>{catalog.items.length} items · {featureLib.features.length} features · {spellLib.spells.length} spells</span>
-                  </span>
-                </button>
-
-                <div className={styles.rosterDiv}>Characters</div>
+                {/* The party, and only the party: campaign views live in the
+                    header nav, so this column never scrolls past a PC. */}
                 {members.map(p => {
                   const hc = hpClassOf(p)
                   return (
@@ -650,7 +666,7 @@ export function OperatorConsole() {
                   + (t.soon ? ' · its own later slice' : leaves ? ' · opens its own screen' : '')
                 return (
                   <button key={t.key} className={cx(styles.crTab, t.key === catTab && styles.sel, t.soon && styles.stub)}
-                    disabled={t.soon} title={title}
+                    disabled={t.soon} title={title} aria-label={title}
                     onClick={() => { if (t.soon) return; if (t.key === 'shards') nav('/dm/shards'); else if (t.key === 'features') nav('/dm/features'); else setCatTab(t.key as CatTab) }}>
                     <Icon name={t.icon} className={styles.crGlyph} />
                     <span className={styles.crLab}>{t.label}</span>
@@ -670,36 +686,41 @@ export function OperatorConsole() {
             {/* Per-character tabs — campaign surfaces (overview / quests /
                 sessions / catalog) have no tab modes, so no bar at all. */}
             {view === 'character' && (
-              <div className={styles.workTabs}>
-                <div
+              <div className={styles.workTabs} role="tablist" aria-label="Character views">
+                <button
+                  type="button" role="tab" aria-selected={charTab === 'actions'}
                   className={cx(styles.wtab, charTab === 'actions' && styles.active)}
                   onClick={() => setCharTab('actions')}
                   title="Action console"
                 >
                   Oversee
-                </div>
-                <div
+                </button>
+                <button
+                  type="button" role="tab" aria-selected={charTab === 'inventory'}
                   className={cx(styles.wtab, charTab === 'inventory' && styles.active)}
                   onClick={() => setCharTab('inventory')}
                   title="Browse, lock and confiscate carried items"
                 >
                   Inventory
-                </div>
-                <div
+                </button>
+                <button
+                  type="button" role="tab" aria-selected={charTab === 'lore'}
                   className={cx(styles.wtab, charTab === 'lore' && styles.active)}
                   onClick={() => setCharTab('lore')}
                   title="Lore & corruption (DM-only)"
                 >
                   Lore Editor
-                </div>
-                <div
+                </button>
+                <button
+                  type="button" role="tab" aria-selected={charTab === 'shards'}
                   className={cx(styles.wtab, charTab === 'shards' && styles.active)}
                   onClick={() => setCharTab('shards')}
                   title="Shard slots, points, reveals"
                 >
                   Shards
-                </div>
-                <div
+                </button>
+                <button
+                  type="button" role="tab" aria-selected={charTab === 'advance'}
                   className={cx(styles.wtab, styles.lvl, charTab === 'advance' && styles.active)}
                   onClick={() => setCharTab('advance')}
                   title={`Release or run ${selected?.name ?? 'this character'}'s level-up`}
@@ -709,12 +730,21 @@ export function OperatorConsole() {
                     {' '}<span className={styles.arr}>·</span> {selected.level}
                     {' '}<span className={styles.arr}>→</span> {selected.level + 1}
                   </>}
-                </div>
+                </button>
+              </div>
+            )}
+            {/* A failed WRITE is a banner over the controls, never a replacement
+                for them — the DM has to be able to press the same button again. */}
+            {writeError && (
+              <div className={styles.writeErr} role="alert">
+                <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
+                <span><b>Not saved.</b> {writeError}</span>
+                <button type="button" onClick={dismissWriteError}>Dismiss</button>
               </div>
             )}
             <div className={cx(styles.workBody, view === 'catalog' && styles.catBody, view === 'npcs' && styles.webBody)}>
               {error ? (
-                <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
+                <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><h2 className={styles.big}>Link Error</h2><span>{error}</span></div>
               ) : partyLoading ? (
                 <div className={styles.soonPanel} aria-busy="true">
                   {[0, 1, 2].map(i => (
@@ -760,10 +790,14 @@ export function OperatorConsole() {
                     log={log}
                   />
                 ) : (
-                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} backgroundLib={backgroundLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onVoice={sendVoice} log={log} />
+                  <ActionsTab row={selectedRow} member={selected} catalog={catalog.items} featureLib={featureLib.features} effectLib={effectLib.effects} spellLib={spellLib.spells} classLib={classLib} raceLib={raceLib} backgroundLib={backgroundLib} shardCatalog={shardCatalog} onUpdate={patch => updateCharacter(selectedRow.id, patch)} onRestore={(field, value) => restoreSheet(selectedRow.id, field, value)} onVoice={sendVoice} log={log} />
                 )
               ) : (
-                <OverviewDashboard members={members} selectedId={selectedId} onSelect={openCharacter} />
+                <OverviewDashboard
+                  members={members} party={party} selectedId={selectedId} onSelect={openCharacter}
+                  items={catalog.items} effectLib={effectLib.effects} shardCatalog={shardCatalog}
+                  onUpdate={updateCharacter} onRestore={restoreSheet} onVoice={sendVoice} log={log}
+                />
               )}
             </div>
           </div>
@@ -771,31 +805,51 @@ export function OperatorConsole() {
 
         {/* RIGHT — BROADCAST + ACTIVITY LOG (slice 6). Stepped aside while the
             NPC web is open; the log keeps collecting, it lives in state above. */}
-        {!wide && <section className={styles.region} aria-label="Broadcast and system log">
+        {!wide && !bcOpen && (
+          <section className={styles.bcStrip} aria-label="Broadcast and system log, folded">
+            <button type="button" className={styles.bcOpenBtn} onClick={toggleBc} title="Open Broadcast" aria-label={`Open Broadcast${logCount - seenCount > 0 ? `, ${logCount - seenCount} new log lines` : ''}`}>
+              <i className="fa-solid fa-tower-broadcast" aria-hidden="true" />
+              {logCount - seenCount > 0 && <span className={styles.bcBadge}>{logCount - seenCount}</span>}
+              <span className={styles.bcVert} aria-hidden="true">Broadcast</span>
+            </button>
+            {/* Folded, the log still speaks: the newest line, read politely. */}
+            <div className="sr-only" role="log" aria-live="polite">{logEntries[0]?.node}</div>
+          </section>
+        )}
+        {!wide && bcOpen && <section className={styles.region} aria-label="Broadcast and system log">
           <div className={styles.rFrame} />
           <div className={styles.rInner}>
             <div className={styles.rHead}>
               <span className={styles.rhNum}>03</span>
-              <span className={styles.rhTitle}>Broadcast</span>
-              <span className={styles.rhMeta}>G.U.I.D.E. Voice</span>
+              <h2 className={styles.rhTitle}>Broadcast</h2>
+              <button type="button" className={styles.bcFoldBtn} onClick={toggleBc} title="Fold Broadcast to a strip" aria-label="Fold Broadcast">
+                <i className="fa-solid fa-angles-right" aria-hidden="true" />
+              </button>
             </div>
             <div className={styles.rScroll}>
               <div className={styles.bcPad}>
                 <BroadcastPanel selected={selected} onSend={sendVoice} log={log} />
                 <div className={styles.bcDivider}>Activity Log</div>
               </div>
+              {/* The live region must exist BEFORE its first entry, or the first
+                  action is never announced — so it wraps both branches. */}
+              <div role="log" aria-live="polite" aria-label="Activity log">
               {logEntries.length ? (
                 <div className={styles.logList}>
                   {logEntries.map(e => (
-                    <div key={e.id} className={cx(styles.logItem, e.kind && styles[e.kind])}>
+                    <div key={e.id} className={cx(styles.logItem, e.kind && styles[e.kind], e.undone && styles.undone)}>
                       <div className={styles.lgLine}>{e.node}</div>
-                      <div className={styles.lgTime}>{e.time} · this session</div>
+                      <div className={styles.lgTime}>
+                        {e.time} · {e.undone ? 'undone' : 'this session'}
+                        {e.undo && <LogUndo at={e.at} onUndo={() => void undoEntry(e)} />}
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className={styles.logEmpty}>No operator actions yet.</div>
               )}
+              </div>
             </div>
           </div>
         </section>}
@@ -894,51 +948,298 @@ export function OperatorConsole() {
   )
 }
 
+/** The bridge kinds that only Foundry sends (lib/foundry.ts "Foundry → app"). */
+const FROM_FOUNDRY = new Set<BridgeMsg['kind']>(['turn', 'target', 'request', 'downed', 'conditions', 'mapped', 'initRequest'])
+
+/** The header's Foundry readout, in place of the old hardcoded "Encounter ·
+ *  Standby". Only what the bridge actually reported; "not heard" is a state,
+ *  not an error — Foundry simply isn't open. */
+function FoundryStat({ state, nameOf }: {
+  state: { heard: number | null; turn?: { character: string; round: number }; downed?: string }
+  nameOf: (characterId: string) => string
+}) {
+  const [, tick] = useState(0)
+  useEffect(() => { const t = setInterval(() => tick(n => n + 1), 5000); return () => clearInterval(t) }, [])
+  const ago = state.heard === null ? null : Math.max(0, Math.round((Date.now() - state.heard) / 1000))
+  const heard = ago === null ? 'Not heard' : ago < 60 ? `Heard ${ago}s ago` : `Heard ${Math.round(ago / 60)}m ago`
+  return (
+    <div className={styles.opStat} role="status" aria-live="polite" title="Foundry bridge — what it has reported this session">
+      <span className={cx(styles.v, state.turn ? styles.cyan : styles.dimV)}>
+        {state.turn ? `${nameOf(state.turn.character)} · R${state.turn.round}` : '—'}
+      </span>
+      <span className={styles.l}>
+        Foundry · {heard}{state.downed ? <> · <span className={styles.downed}>Down: {state.downed}</span></> : null}
+      </span>
+    </div>
+  )
+}
+
+/** PARTY OVERVIEW — the live-session view and the console's home. Everything
+ *  the DM does with players waiting is on this one screen: HP (one PC, or a
+ *  selection for area damage), conditions on and off, and a single grant bar.
+ *  Oversee keeps the deep work. Every write is the same write the Oversee cards
+ *  make — applyHp for HP, buildActiveEffect for effects, grantSnapshots for
+ *  items — and logs only once it lands, with Undo where undo is possible. */
 function OverviewDashboard({
-  members, selectedId, onSelect,
-}: { members: PartyMember[]; selectedId: string | null; onSelect: (id: string) => void }) {
+  members, party, selectedId, onSelect, items, effectLib, shardCatalog, onUpdate, onRestore, onVoice, log,
+}: {
+  members: PartyMember[]
+  party: CharacterRow[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+  items: CatalogItemRow[]
+  effectLib: CatalogEffectRow[]
+  shardCatalog: Record<string, ShardTree>
+  onUpdate: (id: string, patch: CharacterUpdate) => Promise<boolean>
+  onRestore: (id: string, field: RestoreField, value: unknown) => Promise<boolean>
+  onVoice: (msg: VoiceMsg) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger', undo?: () => Promise<boolean>) => void
+}) {
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [areaAmt, setAreaAmt] = useState('')
+  const rowOf = (id: string) => party.find(c => c.id === id)
+  const toggle = (id: string) => setPicked(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+
+  async function hpChange(p: PartyMember, kind: 'damage' | 'heal', amount: number) {
+    const row = rowOf(p.id)
+    if (!row?.sheet || !(amount > 0)) return
+    const prev = row.sheet.hp ?? { current: 0, max: 0 }
+    const who = <span className={styles.who}>{firstName(p.name)}</span>
+    if (kind === 'damage' && prev.current <= 0 && !(prev.temp ?? 0)) { log(<>{who} is already at 0 HP — skipped</>, 'danger'); return }
+    const next = applyHp(prev, p.hpMax, { kind, amount })
+    if (!(await onUpdate(p.id, { sheet: { ...row.sheet, hp: next } }))) return
+    const undo = () => onRestore(p.id, 'hp', prev)
+    if (kind === 'damage') log(<>Damaged {who} <span className={styles.obj}>−{amount} HP</span></>, 'danger', undo)
+    else log(<>Healed {who} <span className={styles.obj}>+{next.current - prev.current} HP</span></>, undefined, undo)
+  }
+
+  /* Area damage: each PC is its own write, its own log line and its own Undo —
+     one failure shows against the PC it failed for instead of sinking the lot. */
+  async function area(kind: 'damage' | 'heal') {
+    const n = Math.floor(Number(areaAmt))
+    for (const p of members) if (picked.has(p.id)) await hpChange(p, kind, n)
+  }
+
+  async function addEffect(p: PartyMember, e: CatalogEffectRow) {
+    const row = rowOf(p.id)
+    if (!row) return false
+    const who = <span className={styles.who}>{firstName(p.name)}</span>
+    if (immuneTo(buildContext(row, shardCatalog), e.data.name)) { log(<>“{e.data.name}” does not stick — {who} is immune</>, 'danger'); return false }
+    const { eff, dur } = buildActiveEffect(e.data)
+    const res = row.resources ?? {}
+    const active = (res.activeEffects as ActiveEffect[] | undefined) ?? []
+    if (!(await onUpdate(p.id, { resources: { ...res, activeEffects: [...active, eff] } as CharacterRow['resources'] }))) return false
+    void onVoice({ kind: 'effect', target: p.id, name: e.data.name, dur, fxKind: EFFECT_KIND_TO_ACTIVE[e.data.kind] })
+    log(<>Applied <span className={styles.obj}>{e.data.name}</span> to {who}</>, e.data.kind === 'buff' ? 'cyan' : 'danger', () => onRestore(p.id, 'activeEffects', active))
+    return true
+  }
+
+  async function clearEffect(p: PartyMember, id: string) {
+    const row = rowOf(p.id)
+    const res = row?.resources ?? {}
+    const active = (res.activeEffects as ActiveEffect[] | undefined) ?? []
+    const gone = active.find(e => e.id === id)
+    if (!row || !gone) return
+    if (await onUpdate(p.id, { resources: { ...res, activeEffects: active.filter(e => e.id !== id) } as CharacterRow['resources'] }))
+      log(<>Cleared <span className={styles.obj}>{gone.name}</span> from <span className={styles.who}>{firstName(p.name)}</span></>, undefined, () => onRestore(p.id, 'activeEffects', active))
+  }
+
+  async function grantItem(p: PartyMember, it: CatalogItemRow) {
+    const row = rowOf(p.id)
+    if (!row) return false
+    const inv = ((row.inventory as unknown as InventoryItem[]) ?? [])
+    const gear = (row.equipped ?? {}) as EquippedGear
+    if (!(await onUpdate(p.id, { inventory: grantSnapshots(it, 1, gear, inv) as unknown as Json[] }))) return false
+    const d = it.data
+    void onVoice({ kind: 'item', target: p.id, name: d?.name ?? 'Item', icon: d?.icon, rarity: d?.rarity })
+    log(<>Granted <span className={styles.obj}>{d?.name ?? 'Item'}</span> to <span className={styles.who}>{firstName(p.name)}</span></>, 'cyan')
+    return true
+  }
+
+  const areaN = Math.floor(Number(areaAmt))
+
   return (
     <>
       <div className={styles.ovBanner}>
-        <span className={styles.big}>Party Overview</span>
-        <span>Combat dashboard · live vitals</span>
+        <h2 className={styles.big}>Party Overview</h2>
+        <span>Live session</span>
         <span className={styles.dmonly}><i className="fa-solid fa-eye-slash" /> Digitization — DM only</span>
       </div>
-      {members.map(p => {
-        const hc = hpClassOf(p)
-        const pct = pctOf(p)
-        const hpColor = hc === 'crit' ? 'var(--danger-hot)' : hc === 'warn' ? 'var(--amber)' : 'var(--good)'
-        const high = p.digitization >= 50
-        return (
-          <button key={p.id} className={cx(styles.dashRow, selectedId === p.id && styles.active)} onClick={() => onSelect(p.id)}>
-            <div className={styles.drMain}>
-              <div className={styles.drName}>
-                <span className={styles.nm}>{p.name}</span>
-                <span className={styles.cl}><span className={cx(styles.led, p.online ? styles.on : styles.off)} />{p.race} · {p.cls} · Lv {p.level}</span>
-              </div>
-              <div className={styles.drHp}>
-                <div className={styles.lab}>
-                  <span><b style={{ color: hpColor }}>{p.hp}</b>/{p.hpMax}{p.tempHp ? ` +${p.tempHp}` : ''}</span>
-                  <span>{pct}%</span>
-                </div>
-                <div className={cx(styles.hpbar, hc && styles[hc])}><i style={{ width: `${pct}%` }} /></div>
-              </div>
-              <div className={styles.drFx}>
-                {p.effects.length
-                  ? p.effects.map((e, i) => (
-                      <span key={i} className={cx(styles.chip, styles[e.kind])} title={e.source ? `From: ${e.source}` : undefined}>{e.name}</span>
-                    ))
-                  : <span className={styles.none}>— clear —</span>}
-              </div>
-            </div>
-            <div className={styles.drInt}>
-              <div className={styles.lab}><span className={styles.t}>Digitization</span><span className={cx(styles.v, high && styles.high)}>{p.digitization}%</span></div>
-              <div className={styles.intbar}><i style={{ width: `${p.digitization}%` }} /></div>
-            </div>
-          </button>
-        )
-      })}
+
+      <GrantBar members={members} items={items} effectLib={effectLib} onGrantItem={grantItem} onApplyEffect={addEffect} />
+
+      {/* Always rendered: a bar that appeared on the first tick pushed every
+          card down under the cursor. Idle, it just says what ticking does. */}
+        <div className={cx(styles.areaBar, picked.size === 0 && styles.idle)} role="group" aria-label="Area damage">
+          <span className={styles.areaWho}>{picked.size ? `${picked.size} selected` : 'Tick PCs for area damage'}</span>
+          <input
+            className={styles.liveAmt} type="number" inputMode="numeric" min={1} placeholder="Amount"
+            aria-label="Amount for all selected" value={areaAmt} onChange={e => setAreaAmt(e.target.value)} disabled={!picked.size}
+          />
+          <button type="button" className={cx(styles.liveBtn, styles.dmg)} disabled={!picked.size || !(areaN > 0)} onClick={() => void area('damage')}>Damage all</button>
+          <button type="button" className={cx(styles.liveBtn, styles.heal)} disabled={!picked.size || !(areaN > 0)} onClick={() => void area('heal')}>Heal all</button>
+          <button type="button" className={styles.areaClear} disabled={!picked.size} onClick={() => setPicked(new Set())}>Clear</button>
+        </div>
+
+      {members.map(p => (
+        <LiveTile
+          key={p.id} p={p} row={rowOf(p.id)} active={selectedId === p.id} picked={picked.has(p.id)}
+          effectLib={effectLib} onPick={() => toggle(p.id)} onOpen={() => onSelect(p.id)}
+          onHp={(kind, n) => hpChange(p, kind, n)} onAddEffect={e => addEffect(p, e)} onClearEffect={id => clearEffect(p, id)}
+        />
+      ))}
     </>
+  )
+}
+
+/** One PC on the live overview. The name opens Oversee; everything else acts in place. */
+function LiveTile({ p, row, active, picked, effectLib, onPick, onOpen, onHp, onAddEffect, onClearEffect }: {
+  p: PartyMember; row: CharacterRow | undefined; active: boolean; picked: boolean
+  effectLib: CatalogEffectRow[]
+  onPick: () => void; onOpen: () => void
+  onHp: (kind: 'damage' | 'heal', n: number) => Promise<void>
+  onAddEffect: (e: CatalogEffectRow) => Promise<boolean>
+  onClearEffect: (id: string) => Promise<void>
+}) {
+  const [amt, setAmt] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [query, setQuery] = useState('')
+  const hc = hpClassOf(p)
+  const pct = pctOf(p)
+  const hpColor = hc === 'crit' ? 'var(--danger-hot)' : hc === 'warn' ? 'var(--gold)' : 'var(--good)'
+  const high = p.digitization >= 50
+  const n = Math.floor(Number(amt))
+  const first = firstName(p.name)
+  const fx = ((row?.resources?.activeEffects as ActiveEffect[] | undefined) ?? [])
+  const q = query.trim().toLowerCase()
+  const matches = (q ? effectLib.filter(e => e.data.name.toLowerCase().includes(q) || (e.data.tags ?? []).some(t => t.includes(q))) : effectLib).slice(0, 6)
+
+  async function hp(kind: 'damage' | 'heal') { await onHp(kind, n); setAmt('') }
+
+  return (
+    <div className={cx(styles.dashRow, styles.live, active && styles.active, picked && styles.picked)}>
+      <div className={styles.drMain}>
+        <div className={styles.drTop}>
+          <input type="checkbox" className={styles.pick} checked={picked} onChange={onPick} aria-label={`Select ${first} for area damage`} />
+          <button type="button" className={styles.drName} onClick={onOpen} title={`Open ${first} in Oversee`}>
+            <span className={styles.nm}>{p.name}</span>
+            <span className={styles.cl}><span className={cx(styles.led, p.online ? styles.on : styles.off)} />{p.race} · {p.cls} · Lv {p.level}</span>
+          </button>
+        </div>
+        <div className={styles.drHp}>
+          <div className={styles.lab}>
+            <span><b style={{ color: hpColor }}>{p.hp}</b>/{p.hpMax}{p.tempHp ? ` +${p.tempHp}` : ''}</span>
+            <span>{pct}%</span>
+          </div>
+          <div className={cx(styles.hpbar, hc && styles[hc])}><i style={{ width: `${pct}%` }} /></div>
+        </div>
+        <div className={styles.liveHp}>
+          <input
+            className={styles.liveAmt} type="number" inputMode="numeric" min={1} placeholder="Amount"
+            aria-label={`HP amount for ${first}`} value={amt} onChange={e => setAmt(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && n > 0) void hp(e.shiftKey ? 'heal' : 'damage') }}
+          />
+          <button type="button" className={cx(styles.liveBtn, styles.dmg)} disabled={!(n > 0)} onClick={() => void hp('damage')}>Damage</button>
+          <button type="button" className={cx(styles.liveBtn, styles.heal)} disabled={!(n > 0) || p.hp >= p.hpMax} onClick={() => void hp('heal')}>Heal</button>
+          <span className={styles.kbdHint} aria-hidden="true">↵ damage · ⇧↵ heal</span>
+        </div>
+        <div className={styles.drFx}>
+          {fx.map(e => (
+            <span key={e.id} className={cx(styles.chip, styles[e.kind ?? 'buff'])}>
+              {e.name}
+              <button type="button" className={styles.chipX} aria-label={`Clear ${e.name} from ${first}`} onClick={() => void onClearEffect(e.id)}>×</button>
+            </span>
+          ))}
+          <button type="button" className={styles.fxAdd} aria-expanded={adding} onClick={() => setAdding(v => !v)}>+ Effect</button>
+        </div>
+        {adding && (
+          <div className={styles.fxPick}>
+            <input
+              className={styles.liveAmt} autoFocus placeholder="Search effects…" aria-label={`Search effects to apply to ${first}`}
+              value={query} onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') setAdding(false)
+                // Enter takes the top match — the search IS the picker.
+                if (e.key === 'Enter' && matches[0]) void onAddEffect(matches[0]).then(ok => { if (ok) { setAdding(false); setQuery('') } })
+              }}
+            />
+            {matches.length === 0
+              ? <span className={styles.none}>Nothing matches.</span>
+              : matches.map(e => (
+                <button key={e.id} type="button" className={cx(styles.fxOpt, styles[EFFECT_KIND_TO_ACTIVE[e.data.kind]])}
+                  onClick={() => void onAddEffect(e).then(ok => { if (ok) { setAdding(false); setQuery('') } })}>{e.data.name}</button>
+              ))}
+          </div>
+        )}
+      </div>
+      <div className={styles.drInt}>
+        <div className={styles.lab}><span className={styles.t}>Digitization</span><span className={cx(styles.v, high && styles.high)}>{p.digitization}%</span></div>
+        <div className={styles.intbar}><i style={{ width: `${p.digitization}%` }} /></div>
+      </div>
+    </div>
+  )
+}
+
+/** One search for the two things a DM hands out mid-session: catalog items and
+ *  effects. Pick a result, then a PC — or the whole party. */
+function GrantBar({ members, items, effectLib, onGrantItem, onApplyEffect }: {
+  members: PartyMember[]
+  items: CatalogItemRow[]
+  effectLib: CatalogEffectRow[]
+  onGrantItem: (p: PartyMember, it: CatalogItemRow) => Promise<boolean>
+  onApplyEffect: (p: PartyMember, e: CatalogEffectRow) => Promise<boolean>
+}) {
+  const [query, setQuery] = useState('')
+  const [sel, setSel] = useState<{ kind: 'item'; row: CatalogItemRow } | { kind: 'effect'; row: CatalogEffectRow } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const q = query.trim().toLowerCase()
+  const hits = q.length < 2 ? [] : [
+    ...items.filter(it => (it.data?.name ?? '').toLowerCase().includes(q)).slice(0, 6).map(row => ({ kind: 'item' as const, row })),
+    ...effectLib.filter(e => e.data.name.toLowerCase().includes(q)).slice(0, 4).map(row => ({ kind: 'effect' as const, row })),
+  ]
+  const selName = sel ? (sel.kind === 'item' ? sel.row.data?.name ?? 'Item' : sel.row.data.name) : ''
+
+  async function give(targets: PartyMember[]) {
+    if (!sel) return
+    setBusy(true)
+    for (const p of targets) await (sel.kind === 'item' ? onGrantItem(p, sel.row) : onApplyEffect(p, sel.row))
+    setBusy(false)
+    setSel(null)
+    setQuery('')
+  }
+
+  return (
+    <div className={styles.grantBar}>
+      <div className={styles.searchWrap}>
+        <i className="fa-solid fa-magnifying-glass" aria-hidden="true" />
+        <input
+          className={styles.searchIn} value={sel ? selName : query} aria-label="Grant an item or apply an effect"
+          placeholder="Grant… type an item or effect" readOnly={!!sel}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') { setSel(null); setQuery('') } }}
+        />
+      </div>
+      {!sel && hits.length > 0 && (
+        <div className={styles.gbHits} role="listbox" aria-label="Matches">
+          {hits.map(h => (
+            <button key={`${h.kind}:${h.row.id}`} type="button" role="option" aria-selected={false} className={styles.gbHit} onClick={() => setSel(h)}>
+              <span className={styles.gbKind}>{h.kind === 'item' ? 'Item' : 'Effect'}</span>
+              {h.kind === 'item' ? h.row.data?.name : h.row.data.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {sel && (
+        <div className={styles.gbTargets} role="group" aria-label={`Give ${selName} to`}>
+          <span className={styles.gbKind}>{sel.kind === 'item' ? 'Grant to' : 'Apply to'}</span>
+          {members.map(p => (
+            <button key={p.id} type="button" className={styles.gbTarget} disabled={busy} onClick={() => void give([p])}>{firstName(p.name)}</button>
+          ))}
+          <button type="button" className={styles.gbTarget} disabled={busy} onClick={() => void give(members)}>Whole party</button>
+          <button type="button" className={styles.areaClear} disabled={busy} onClick={() => { setSel(null); setQuery('') }}>Cancel</button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1159,7 +1460,7 @@ function AdvStat({ label, from, to, mono, flat }: {
   )
 }
 
-function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, backgroundLib, shardCatalog, onUpdate, onVoice, log }: {
+function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, classLib, raceLib, backgroundLib, shardCatalog, onUpdate, onRestore, onVoice, log }: {
   row: CharacterRow
   member: PartyMember
   catalog: CatalogItemRow[]
@@ -1171,8 +1472,10 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
   backgroundLib: DmBackgroundsState
   shardCatalog: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
+  /** Puts one sheet field back, against the latest row — the log's Undo. */
+  onRestore: (field: RestoreField, value: unknown) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
-  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+  log: (node: ReactNode, kind?: 'cyan' | 'danger', undo?: () => Promise<boolean>) => void
 }) {
   const [hpAmt, setHpAmt] = useState(5)
   const [coinAmt, setCoinAmt] = useState(50)
@@ -1204,24 +1507,29 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
   const dsFail = ds.failures ?? 0
   const exh = (resources.exhaustion as number | undefined) ?? 0
 
-  // ---- writes (each pre-spreads its section; log lines are optimistic — the
-  //      log is a session aide-mémoire, and failures surface in the error rail) ----
+  // ---- writes (each pre-spreads its section). A log line is written only once
+  //      the write LANDS: the log is the DM's receipt, and a receipt for a
+  //      write that failed is worse than none. Failures show in the banner. ----
   const writeHp = (next: number, nextTemp = tempHp) =>
     onUpdate({ sheet: { ...sheet, hp: { ...hp, current: next, max: baseMax, temp: nextTemp } } })
-  const heal = () => { void writeHp(Math.min(hpMax, hpCur + hpAmt)); log(<>Healed {who} <span className={styles.obj}>+{hpAmt} HP</span></>) }
-  const damage = () => { void writeHp(Math.max(0, hpCur - hpAmt)); log(<>Damaged {who} <span className={styles.obj}>−{hpAmt} HP</span></>, 'danger') }
-  const setHp = () => { void writeHp(Math.max(0, Math.min(hpMax, hpAmt))); log(<>Set {who} HP to <span className={styles.obj}>{Math.max(0, Math.min(hpMax, hpAmt))}</span></>) }
-  const addTemp = () => { void writeHp(hpCur, tempHp + hpAmt); log(<>Granted {who} <span className={styles.obj}>+{hpAmt} temp HP</span></>) }
-  const longRest = () => { void onUpdate(longRestPatch(row, shardCatalog).patch); log(<>Applied <span className={styles.obj}>Long Rest</span> to {who}</>) }
+  // Every HP write can be undone from its log line: hp before the write.
+  const undoHp = () => { const prev = hp; return () => onRestore('hp', prev) }
+  const heal = async () => { const u = undoHp(); if (await writeHp(Math.min(hpMax, hpCur + hpAmt))) log(<>Healed {who} <span className={styles.obj}>+{hpAmt} HP</span></>, undefined, u) }
+  const damage = async () => { const u = undoHp(); if (await writeHp(Math.max(0, hpCur - hpAmt))) log(<>Damaged {who} <span className={styles.obj}>−{hpAmt} HP</span></>, 'danger', u) }
+  const setHp = async () => { const u = undoHp(); if (await writeHp(Math.max(0, Math.min(hpMax, hpAmt)))) log(<>Set {who} HP to <span className={styles.obj}>{Math.max(0, Math.min(hpMax, hpAmt))}</span></>, undefined, u) }
+  const addTemp = async () => { const u = undoHp(); if (await writeHp(hpCur, tempHp + hpAmt)) log(<>Granted {who} <span className={styles.obj}>+{hpAmt} temp HP</span></>, undefined, u) }
+  const longRest = async () => { if (await onUpdate(longRestPatch(row, shardCatalog).patch)) log(<>Applied <span className={styles.obj}>Long Rest</span> to {who}</>) }
 
   const coinVal = { gold, silver, copper }[coinKind]
   const moveCoins = async (op: 'award' | 'deduct') => {
     const next = op === 'award' ? coinVal + coinAmt : Math.max(0, coinVal - coinAmt)
+    const prev = coins
     const ok = await onUpdate({ sheet: { ...sheet, coins: { ...coins, [coinKind]: next } } })
     if (!ok) return
     void onVoice({ kind: 'coins', target: member.id, amount: coinAmt, coin: coinKind, op })
-    if (op === 'award') log(<>Awarded <span className={styles.obj}>{coinAmt} {coinKind} coins</span> to {who}</>)
-    else log(<>Deducted <span className={styles.obj}>{coinAmt} {coinKind} coins</span> from {who}</>, 'danger')
+    const undo = () => onRestore('coins', prev)
+    if (op === 'award') log(<>Awarded <span className={styles.obj}>{coinAmt} {coinKind} coins</span> to {who}</>, undefined, undo)
+    else log(<>Deducted <span className={styles.obj}>{coinAmt} {coinKind} coins</span> from {who}</>, 'danger', undo)
   }
   const award = () => void moveCoins('award')
   const deduct = () => void moveCoins('deduct')
@@ -1269,7 +1577,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
           </div>
           <div className={cx(styles.vitBar, hc && styles[hc])}><i style={{ width: `${pct}%` }} /></div>
           <div className={styles.stepper}>
-            <input className={styles.numIn} type="number" min={1} value={hpAmt}
+            <input className={styles.numIn} type="number" min={1} value={hpAmt} aria-label="HP amount — for Heal, Damage, Set HP and +Temp"
               onChange={e => setHpAmt(Math.max(0, parseInt(e.target.value || '0', 10) || 0))} />
           </div>
           <div className={styles.btnRow} style={{ marginBottom: 7 }}>
@@ -1281,7 +1589,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
             <Btn tone="cyan" sm icon="fa-shield" label="+Temp" onClick={addTemp} />
           </div>
           <div className={styles.restRow}>
-            <Btn tone="amber" sm icon="fa-campground" label="Long Rest" onClick={longRest} />
+            <ConfirmBtn tone="amber" sm icon="fa-campground" label="Long Rest" confirmLabel="Rest — resets HP, slots, effects" onClick={longRest} />
           </div>
         </div>
 
@@ -1302,7 +1610,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
             </button>
           </div>
           <div className={styles.stepper}>
-            <input className={styles.numIn} type="number" min={1} value={coinAmt}
+            <input className={styles.numIn} type="number" min={1} value={coinAmt} aria-label="Coin amount"
               onChange={e => setCoinAmt(Math.max(0, parseInt(e.target.value || '0', 10) || 0))} />
           </div>
           <div className={styles.btnRow}>
@@ -1312,7 +1620,7 @@ function ActionsTab({ row, member, catalog, featureLib, effectLib, spellLib, cla
         </div>
 
         {/* C — APPLY EFFECT: push a status effect onto this PC (slice 6) */}
-        <ApplyEffectCard member={member} effectLib={effectLib} row={row} shardTrees={shardCatalog} onUpdate={onUpdate} onVoice={onVoice} log={log} />
+        <ApplyEffectCard member={member} effectLib={effectLib} row={row} shardTrees={shardCatalog} onUpdate={onUpdate} onRestore={onRestore} onVoice={onVoice} log={log} />
 
         {/* D — GRANT ITEM: snapshot a catalog template into this PC's inventory */}
         <GrantItemCard member={member} catalog={catalog} row={row} onUpdate={onUpdate} onVoice={onVoice} log={log} />
@@ -1637,7 +1945,7 @@ function LootLibrarySurface({ lib, itemCatalog, onRoll, openLootId, onResume }: 
         </div>
         <div className={cx(styles.searchWrap, styles.catSearch)}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          <input className={styles.searchIn} aria-label="Search loot tables" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Search loot tables…" autoComplete="off" spellCheck={false} />
           {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
         </div>
@@ -2028,7 +2336,7 @@ function LootForm({ row, creating, lib, itemCatalog, onSelected, onCleared }: {
         </div>
         <div className={styles.searchWrap}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={pickQ} onChange={e => setPickQ(e.target.value)}
+          <input className={styles.searchIn} aria-label="Search the item catalog" value={pickQ} onChange={e => setPickQ(e.target.value)}
             placeholder="Search the item catalog…" autoComplete="off" spellCheck={false} />
         </div>
         <div className={styles.skFilters}>
@@ -2177,7 +2485,7 @@ function LootItemPicker({ catalog, onPick, onClose }: {
         </div>
         <div className={cx(styles.searchWrap, styles.catSearch)}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={q} onChange={e => setQ(e.target.value)} autoFocus
+          <input className={styles.searchIn} aria-label="Search items, or tag:fire" value={q} onChange={e => setQ(e.target.value)} autoFocus
             placeholder="Search items, or tag:fire" autoComplete="off" spellCheck={false} />
         </div>
         <div className={styles.lootPopList}>
@@ -2497,7 +2805,7 @@ function GrantItemCard({ member, catalog, row, onUpdate, onVoice, log }: {
       <div className={styles.acTitle}><i className="fa-solid fa-box-open lead" /><span className={styles.num}>D</span><span className={styles.t}>Grant Item</span></div>
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search catalog…" />
+        <input className={styles.searchIn} aria-label="Search catalog" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search catalog…" />
       </div>
       <div className={styles.catList}>
         {catalog.length === 0 ? (
@@ -2537,11 +2845,38 @@ const DUR_UNITS = ['round', 'minute', 'hour', 'day'] as const
  *  'cond'. Bridges the two vocabularies at the one point they meet. */
 const EFFECT_KIND_TO_ACTIVE: Record<'buff' | 'debuff' | 'condition', 'buff' | 'cond' | 'debuff'> = { buff: 'buff', debuff: 'debuff', condition: 'cond' }
 
+/** A catalog effect → the ActiveEffect a sheet carries. The ONE builder: card C
+ *  and the live overview's quick-apply both go through it, so an effect applied
+ *  from either surface is the same object. `durN`/`durUnit` absent = until rest
+ *  (untracked: never ticks, never expires on its own). */
+function buildActiveEffect(d: EffectDef, o: { durN?: number; durUnit?: typeof DUR_UNITS[number]; tick?: string; conc?: boolean } = {}): { eff: ActiveEffect; dur: string } {
+  const timed = o.durN !== undefined && o.durUnit !== undefined
+  const dur = timed ? `${o.durN} ${o.durUnit}${o.durN === 1 ? '' : 's'}` : 'until rest'
+  // Modifiers compile into the same ItemEffects the engine already reads
+  // (compileEffects, mirrors the item form's Effects Granted). Flags are never
+  // numeric, so they surface as note text; a pure-prose effect falls back to a
+  // clipped description.
+  const noteParts = [dur, ...d.flags.map(flagText), d.mods.length === 0 && d.flags.length === 0 ? clipTx(d.desc, 60) : undefined]
+  const turns = timed ? durationTurns(o.durN!, o.durUnit!) : undefined
+  const eff: ActiveEffect = {
+    id: crypto.randomUUID(), name: d.name, icon: d.icon, kind: EFFECT_KIND_TO_ACTIVE[d.kind],
+    effects: compileEffects(d.mods) ?? {}, source: 'G.U.I.D.E. Operator',
+    note: noteParts.filter(Boolean).join(' · '),
+    // Full description, snapshotted — the player never reads the effect
+    // catalog, so this is the one copy their Effects panel tooltip has.
+    desc: d.desc.trim() || undefined, at: Date.now(),
+    ...(turns ? { turns } : {}),
+    ...(o.tick?.trim() ? { tick: o.tick.trim() } : {}),
+    ...(o.conc ? { concentration: true } : {}),
+  }
+  return { eff, dur }
+}
+
 /** Apply Effect (card C): push a status onto the PC's `resources.activeEffects` —
  *  the SAME field the player's potion-drinking writes and the effects tray reads,
  *  so the DM's push shows up in the tray, layers into the effective sheet, clears
  *  on rest, and the player can shrug it off manually (all existing behavior). */
-function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice, log }: {
+function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onRestore, onVoice, log }: {
   member: PartyMember
   effectLib: CatalogEffectRow[]
   row: CharacterRow
@@ -2551,7 +2886,8 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
   shardTrees: Record<string, ShardTree>
   onUpdate: (patch: CharacterUpdate) => Promise<boolean>
   onVoice: (msg: VoiceMsg) => Promise<boolean>
-  log: (node: ReactNode, kind?: 'cyan' | 'danger') => void
+  onRestore: (field: RestoreField, value: unknown) => Promise<boolean>
+  log: (node: ReactNode, kind?: 'cyan' | 'danger', undo?: () => Promise<boolean>) => void
 }) {
   const [query, setQuery] = useState('')
   const [effId, setEffId] = useState<string | null>(null)
@@ -2592,30 +2928,13 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
     }
     const d = selected.data
     setBusy(true)
-    // Modifiers compile into the same ItemEffects the engine already reads
-    // (compileEffects, mirrors the item form's Effects Granted). Flags are
-    // never numeric, so they surface as note text alongside the duration —
-    // a pure-prose effect falls back to a clipped description.
-    const noteParts = [dur, ...d.flags.map(flagText), d.mods.length === 0 && d.flags.length === 0 ? clipTx(d.desc, 60) : undefined]
-    const eff: ActiveEffect = {
-      id: crypto.randomUUID(), name: d.name, icon: d.icon, kind: EFFECT_KIND_TO_ACTIVE[d.kind],
-      effects: compileEffects(d.mods) ?? {}, source: 'G.U.I.D.E. Operator',
-      note: noteParts.filter(Boolean).join(' · '),
-      // Full description, snapshotted — the player never reads the effect
-      // catalog, so this is the one copy their Effects panel tooltip has.
-      desc: d.desc.trim() || undefined, at: Date.now(),
-      /* DERIVED from the duration already chosen, not re-typed: the DM picks
-         "1 minute" and the tracker gets 10. "Until rest" yields undefined, which
-         means UNTRACKED — it never ticks and never expires on its own. */
-      ...(untilRest ? {} : (() => { const t = durationTurns(durN, durUnit); return t ? { turns: t } : {} })()),
-      ...(tick.trim() ? { tick: tick.trim() } : {}),
-      ...(conc ? { concentration: true } : {}),
-    }
+    // Turns are DERIVED from the duration chosen: "1 minute" → 10.
+    const { eff } = buildActiveEffect(d, untilRest ? { tick, conc } : { durN, durUnit, tick, conc })
     const ok = await onUpdate({ resources: { ...resources, activeEffects: [...active, eff] } as CharacterRow['resources'] })
     setBusy(false)
     if (!ok) return
     void onVoice({ kind: 'effect', target: member.id, name: d.name, dur, fxKind: EFFECT_KIND_TO_ACTIVE[d.kind] })
-    log(<>Applied <span className={styles.obj}>{d.name}</span> to <span className={styles.who}>{first}</span></>, d.kind === 'buff' ? 'cyan' : 'danger')
+    log(<>Applied <span className={styles.obj}>{d.name}</span> to <span className={styles.who}>{first}</span></>, d.kind === 'buff' ? 'cyan' : 'danger', () => onRestore('activeEffects', active))
     setEffId(null)
     setQuery('')
   }
@@ -2623,7 +2942,7 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
   async function remove(id: string) {
     const gone = active.find(e => e.id === id)
     const ok = await onUpdate({ resources: { ...resources, activeEffects: active.filter(e => e.id !== id) } as CharacterRow['resources'] })
-    if (ok && gone) log(<>Cleared <span className={styles.obj}>{gone.name}</span> from <span className={styles.who}>{first}</span></>)
+    if (ok && gone) log(<>Cleared <span className={styles.obj}>{gone.name}</span> from <span className={styles.who}>{first}</span></>, undefined, () => onRestore('activeEffects', active))
   }
 
   return (
@@ -2632,7 +2951,7 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
 
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search effects by name or tag…" />
+        <input className={styles.searchIn} aria-label="Search effects by name or tag" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search effects by name or tag…" />
       </div>
       <div className={styles.catList}>
         {effectLib.length === 0 ? (
@@ -2674,7 +2993,7 @@ function ApplyEffectCard({ member, effectLib, row, shardTrees, onUpdate, onVoice
           derived from the row above rather than typed again. */}
       <div className={styles.durRow}>
         <span className={styles.fieldLab}>Per turn</span>
-        <input className={styles.sessIn} value={tick} onChange={e => setTick(e.target.value)}
+        <input className={styles.sessIn} value={tick} onChange={e => setTick(e.target.value)} aria-label="Per-turn effect"
           placeholder="1d6 — damage at the start of each turn, left blank for none" spellCheck={false} />
         <button className={cx(styles.durOpt, conc && styles.sel)} onClick={() => setConc(c => !c)} aria-pressed={conc}
           title="Marked only — losing concentration is a save made at the table, never something the app decides">
@@ -2766,6 +3085,7 @@ function BroadcastPanel({ selected, onSend, log }: {
         value={message}
         onChange={e => setMessage(e.target.value)}
         placeholder="Compose a G.U.I.D.E. system notice to push to the player…"
+        aria-label="System message to push"
       />
 
       <span className={styles.fieldLab}>Tone</span>
@@ -2831,14 +3151,14 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
   return (
     <>
       <div className={styles.ovBanner}>
-        <span className={styles.big}>Catalog</span>
+        <h2 className={styles.big}>Catalog</h2>
         <span>Content library · author once, grant from anywhere</span>
         <span className={styles.dmonly}><i className="fa-solid fa-box-archive" /> Templates — not a grant</span>
       </div>
 
       {(tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : tab === 'classes' ? classLib.error : tab === 'races' ? raceLib.error : tab === 'loot' ? lootLib.error : error) ? (
         <div className={styles.soonPanel}>
-          <i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span>
+          <i className="fa-solid fa-triangle-exclamation" /><h2 className={styles.big}>Link Error</h2>
           <span>{tab === 'features' ? featureLib.error : tab === 'spells' ? spellLib.error : tab === 'effects' ? effectLib.error : tab === 'shops' ? shopLib.error : tab === 'classes' ? classLib.error : tab === 'races' ? raceLib.error : tab === 'loot' ? lootLib.error : error}</span>
         </div>
       ) : tab === 'spells' ? (
@@ -2876,7 +3196,7 @@ function CatalogSurface({ tab, catalog, featureLib, effectLib, spellLib, shopLib
                 stop. */}
             <div className={cx(styles.searchWrap, styles.catSearch)}>
               <i className="fa-solid fa-magnifying-glass" />
-              <input className={styles.searchIn} value={itemQuery} onChange={e => setItemQuery(e.target.value)}
+              <input className={styles.searchIn} aria-label="Search items, or tag:fire_damage" value={itemQuery} onChange={e => setItemQuery(e.target.value)}
                 placeholder="Search items, or tag:fire_damage" autoComplete="off" spellCheck={false} />
               {itemQuery && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setItemQuery('')} />}
             </div>
@@ -2994,7 +3314,7 @@ function GrantFeatureCard({ member, row, featureLib, onUpdate, onVoice, log }: {
           <span className={styles.fieldLab}>Library · roleplay boons &amp; perks</span>
           <div className={styles.searchWrap}>
             <i className="fa-solid fa-magnifying-glass" />
-            <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+            <input className={styles.searchIn} aria-label="Search features by name, source or kind" value={query} onChange={e => setQuery(e.target.value)}
               placeholder="Search features by name, source or kind…" />
           </div>
           <div className={styles.catList}>
@@ -3661,7 +3981,7 @@ function EffectForm({ effect, effectLib, onSubmit, onDelete }: {
 
       <div className={styles.qActions}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : effect ? 'Save Effect' : 'Create Effect'} onClick={() => void submit()} disabled={busy || !name.trim()} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+        {onDelete && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} disabled={busy} />}
       </div>
     </>
   )
@@ -4080,7 +4400,7 @@ function SpellForm({ spell, onSubmit, onDelete }: {
 
       <div className={styles.qActions}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : spell ? 'Save Spell' : 'Create Spell'} onClick={() => void submit()} disabled={busy || !name.trim() || gErrs.length > 0} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+        {onDelete && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} disabled={busy} />}
       </div>
     </>
   )
@@ -4162,7 +4482,7 @@ function GrantSpellCard({ member, row, spellLib, onUpdate, onVoice, log }: {
           <span className={styles.fieldLab}>Library · Catalog · Spells tab</span>
           <div className={styles.searchWrap}>
             <i className="fa-solid fa-magnifying-glass" />
-            <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+            <input className={styles.searchIn} aria-label="Search spells by name, school or level" value={query} onChange={e => setQuery(e.target.value)}
               placeholder="Search spells by name, school or level…" />
           </div>
           <div className={styles.catList}>
@@ -4420,7 +4740,7 @@ function ClassLibrarySurface({ lib, featureLib, itemCatalog, members }: {
         </div>
         <div className={cx(styles.searchWrap, styles.catSearch)}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          <input className={styles.searchIn} aria-label="Search classes, or tag:martial" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Search classes, or tag:martial" autoComplete="off" spellCheck={false} />
           {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
         </div>
@@ -4707,7 +5027,7 @@ function ClassFeaturePicker({ refs, featureLib, onChange }: {
 
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+        <input className={styles.searchIn} aria-label="Search the feature library, or tag:sanctity" value={query} onChange={e => setQuery(e.target.value)}
           placeholder="Search the feature library, or tag:sanctity" autoComplete="off" spellCheck={false} />
       </div>
       {query.trim() && (
@@ -4964,7 +5284,7 @@ function KitEditor({ raw, itemCatalog, onChange }: {
                   <div className={styles.koPick}>
                     <div className={styles.searchWrap}>
                       <i className="fa-solid fa-magnifying-glass" />
-                      <input className={styles.searchIn} value={query} autoFocus
+                      <input className={styles.searchIn} aria-label="Search the item catalog" value={query} autoFocus
                         onChange={e => setQuery(e.target.value)}
                         placeholder="Search the item catalog…" {...NO_AUTOFILL} />
                     </div>
@@ -5757,7 +6077,7 @@ function AssignRaceCard({ member, row, raceLib, featureLib, shardCatalog, onUpda
       <span className={styles.fieldLab}>Library · published races only</span>
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+        <input className={styles.searchIn} aria-label="Search races" value={query} onChange={e => setQuery(e.target.value)}
           placeholder="Search races…" autoComplete="off" spellCheck={false} />
       </div>
       <div className={styles.catList}>
@@ -5943,7 +6263,7 @@ function AssignBackgroundCard({ member, row, backgroundLib, featureLib, itemCata
       <span className={styles.fieldLab}>Library · published backgrounds only</span>
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+        <input className={styles.searchIn} aria-label="Search backgrounds" value={query} onChange={e => setQuery(e.target.value)}
           placeholder="Search backgrounds…" autoComplete="off" spellCheck={false} />
       </div>
       <div className={styles.catList}>
@@ -6148,7 +6468,7 @@ function AssignClassCard({ member, row, classLib, featureLib, itemCatalog, shard
       <span className={styles.fieldLab}>Library · published classes only</span>
       <div className={styles.searchWrap}>
         <i className="fa-solid fa-magnifying-glass" />
-        <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+        <input className={styles.searchIn} aria-label="Search classes" value={query} onChange={e => setQuery(e.target.value)}
           placeholder="Search classes…" autoComplete="off" spellCheck={false} />
       </div>
       <div className={styles.catList}>
@@ -6407,7 +6727,7 @@ function RaceLibrarySurface({ lib, featureLib, members }: {
         </div>
         <div className={cx(styles.searchWrap, styles.catSearch)}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          <input className={styles.searchIn} aria-label="Search races, or tag:fey" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Search races, or tag:fey" autoComplete="off" spellCheck={false} />
           {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
         </div>
@@ -6873,7 +7193,7 @@ function BackgroundLibrarySurface({ lib, featureLib }: {
         </div>
         <div className={cx(styles.searchWrap, styles.catSearch)}>
           <i className="fa-solid fa-magnifying-glass" />
-          <input className={styles.searchIn} value={query} onChange={e => setQuery(e.target.value)}
+          <input className={styles.searchIn} aria-label="Search backgrounds" value={query} onChange={e => setQuery(e.target.value)}
             placeholder="Search backgrounds…" autoComplete="off" spellCheck={false} />
           {query && <i className={cx('fa-solid fa-xmark', styles.catSearchClr)} onClick={() => setQuery('')} />}
         </div>
@@ -7604,13 +7924,13 @@ function QuestsSurface({ campaign, party }: { campaign: DmCampaignState; party: 
   return (
     <>
       <div className={styles.ovBanner}>
-        <span className={styles.big}>Quest Log</span>
+        <h2 className={styles.big}>Quest Log</h2>
         <span>Campaign quests · authoring twin of the player Journal</span>
         <span className={styles.sessCount}>{quests.length} quests</span>
       </div>
 
       {error ? (
-        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
+        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><h2 className={styles.big}>Link Error</h2><span>{error}</span></div>
       ) : (
         <div className={styles.questLayout}>
           {/* index */}
@@ -7810,7 +8130,7 @@ function QuestForm({ quest, gmNotes, party, onSubmit, onDelete, onNew }: {
 
       <div className={styles.qActions}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : quest ? 'Save Quest' : 'Create Quest'} onClick={() => void submit()} disabled={busy || !title.trim()} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+        {onDelete && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} disabled={busy} />}
       </div>
     </>
   )
@@ -7850,13 +8170,13 @@ function SessionsSurface({ campaign }: { campaign: DmCampaignState }) {
   return (
     <>
       <div className={styles.ovBanner}>
-        <span className={styles.big}>Session Log</span>
+        <h2 className={styles.big}>Session Log</h2>
         <span>Campaign recap · Brettany Theater</span>
         <span className={styles.sessCount}>{sessions.length} logged</span>
       </div>
 
       {error ? (
-        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span></div>
+        <div className={styles.soonPanel}><i className="fa-solid fa-triangle-exclamation" /><h2 className={styles.big}>Link Error</h2><span>{error}</span></div>
       ) : (
         <>
           <div className={styles.sessPick}>
@@ -7944,7 +8264,7 @@ function SessionForm({ session, nextNum, onSubmit, onDelete }: {
 
       <div className={styles.qActions}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : session ? 'Save Session' : 'Create Session'} onClick={() => void submit()} disabled={busy || !title.trim()} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+        {onDelete && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} disabled={busy} />}
       </div>
     </>
   )

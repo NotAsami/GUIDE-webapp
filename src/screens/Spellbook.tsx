@@ -23,6 +23,7 @@ import {
 } from '../lib/spells'
 import { Icon } from '../components/Icon'
 import styles from './Spellbook.module.css'
+import { RenamedNote } from '../components/RenamedNote'
 
 interface RouteContext {
   character: CharacterRow
@@ -380,8 +381,8 @@ export function Spellbook() {
   return (
     <>
       <Deco
-        left={<><span className="acc">SPELLBOOK</span> &nbsp;//&nbsp; GRIMOIRE &nbsp;//&nbsp; WEAVE {caster ? 'OK' : 'INERT'}</>}
-        right={<>Grimoire <span className="acc">{character.name.toUpperCase()}</span> &nbsp;//&nbsp; DM-Authored</>}
+        left={<><span className="acc">SPELLBOOK</span> &nbsp;//&nbsp; GRIMOIRE</>}
+        right={<>Grimoire <span className="acc">{character.name.toUpperCase()}</span></>}
       />
       <Nav variant="dock" meta={meta} />
 
@@ -753,6 +754,7 @@ function SpellDetail({
           <span className={styles.school}><Icon name={ic} className={styles.schoolIc} style={spell.iconColor ? { color: spell.iconColor } : undefined} />{spell.school}</span>
         </div>
         <div className={styles.daName}>{spell.name}</div>
+        <RenamedNote obj={spell} />
         {flags && <div className={styles.daSub}>{flags}</div>}
       </div>
 

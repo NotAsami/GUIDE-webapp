@@ -123,7 +123,7 @@ export function Story() {
   return (
     <>
       <Deco
-        left={<><span className="acc">CODEX</span> &nbsp;//&nbsp; {story.title.toUpperCase()} &nbsp;//&nbsp; SYNC OK</>}
+        left={<><span className="acc">CODEX</span> &nbsp;//&nbsp; {story.title.toUpperCase()}</>}
         right={<>{story.telemetry ?? 'Story Lattice'} &nbsp;//&nbsp; <span className="acc">{pct}%</span></>}
       />
       <Nav

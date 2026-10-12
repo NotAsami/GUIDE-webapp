@@ -120,8 +120,8 @@ export function Character() {
   return (
     <>
       <Deco
-        left={<><span className="acc">ROLLS</span> &nbsp;//&nbsp; ABILITY_ARRAY &nbsp;//&nbsp; SYNC OK</>}
-        right={<>Castella-08 &nbsp;//&nbsp; <span className="acc">PROF {formatMod(proficiency(view))}</span> &nbsp;//&nbsp; d20 Ready</>}
+        left={<><span className="acc">ROLLS</span> &nbsp;//&nbsp; ABILITY_ARRAY</>}
+        right={<>Proficiency <span className="acc">{formatMod(proficiency(view))}</span></>}
       />
       <Nav variant="dock" meta={meta} />
 
@@ -178,6 +178,15 @@ export function Character() {
               <span className={styles.abFrame} />
               <span className={styles.abInner}><span className={styles.abDot} />DIS</span>
             </button>
+          </div>
+
+          {/* Every skill, always on screen. The hex flyouts only open on hover,
+              which a tablet at the table never has — and tapping a hex there
+              rolls the check instead. Same SkillCard, so one render path. */}
+          <div className={styles.skillGrid} role="list" aria-label="Skills">
+            {SKILLS.map(skill => (
+              <SkillCard key={skill.key} skill={skill} sheet={view} onRoll={() => rollSkill(skill)} />
+            ))}
           </div>
 
           <div className={styles.rollLog} aria-live="polite">
@@ -252,8 +261,11 @@ function AbilityCluster({
         <span className={styles.hFrame} />
         <span className={styles.hInner}>
           <span className={styles.hName}>{ABILITY_ABBR[abilityKey].toUpperCase()}</span>
-          <span className={styles.hScore}>{flash ? flash.value : score}</span>
-          <span className={styles.hMod}>{formatMod(mod)}</span>
+          {/* Modifier big, score small — the same order as the Stat Panel, and
+              the number a player actually adds at the table. A fresh roll
+              still takes the big slot while it flashes. */}
+          <span className={styles.hScore}>{flash ? flash.value : formatMod(mod)}</span>
+          <span className={styles.hMod}>({score})</span>
           <button
             type="button"
             className={styles.hSav}
@@ -341,8 +353,8 @@ function RingGlyph() {
           <polygon points="320,250 380,355 260,355" strokeOpacity={0.8} />
           <polygon points="320,390 260,285 380,285" strokeOpacity={0.8} />
           <g className={styles.pulse}>
-            <circle cx={320} cy={320} r={14} fill="rgba(0,166,214,0.45)" stroke="#00a6d6" strokeOpacity={0.9} strokeWidth={0.8} />
-            <circle cx={320} cy={320} r={4} fill="#00a6d6" />
+            <circle cx={320} cy={320} r={14} style={{ fill: 'color-mix(in srgb, var(--cyan) 45%, transparent)', stroke: 'var(--cyan)' }} strokeOpacity={0.9} strokeWidth={0.8} />
+            <circle cx={320} cy={320} r={4} style={{ fill: 'var(--cyan)' }} />
           </g>
         </g>
       </svg>

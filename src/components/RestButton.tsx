@@ -1,6 +1,5 @@
 import type { SaveResult } from '../lib/saveResult'
-import { useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useRef, useState } from 'react'
 import type { CharacterRow, CharacterSection, ShardTree } from '../lib/database.types'
 import { useRollLog, type RollLine } from '../lib/rolls'
 import { effectiveSheet } from '../lib/effects'
@@ -20,7 +19,15 @@ interface Props {
 type Mode = 'short' | 'long'
 
 export function RestButton({ character, updateSections, shardTrees = {} }: Props) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpenState] = useState(false)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  /* Closing hands focus back to the Rest button. The <dialog> unmounts rather
+     than calling close(), so the browser's own focus return never runs — and
+     while the modal is still up the button is inert, hence after the commit. */
+  function setOpen(next: boolean) {
+    setOpenState(next)
+    if (!next) setTimeout(() => btnRef.current?.focus())
+  }
   const [mode, setMode] = useState<Mode>('long')
   const [busy, setBusy] = useState(false)
   /** Hit dice chosen to spend on a short rest. */
@@ -89,13 +96,24 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
 
   return (
     <>
-      <button type="button" className={styles.restBtn} onClick={openModal}>
+      <button ref={btnRef} type="button" className={styles.restBtn} onClick={openModal}>
         <i className="fa-solid fa-moon" aria-hidden="true" /> Rest
       </button>
 
-      {open && createPortal(
-        <div className={styles.overlay} onClick={() => setOpen(false)}>
-          <div className={styles.panel} onClick={e => e.stopPropagation()} role="dialog" aria-label="Rest">
+      {/* Native modal <dialog>: the top layer escapes every z-index trap the
+          portal used to work around, and showModal() brings the focus trap,
+          inert background and Escape (→ onCancel) for free. */}
+      {open && (
+        <dialog
+          ref={d => { if (d && !d.open) d.showModal() }}
+          className={styles.panel} aria-label="Rest"
+          onCancel={e => { e.preventDefault(); setOpen(false) }}
+          onClick={e => {
+            // A click on ::backdrop targets the dialog itself, outside its box.
+            const r = e.currentTarget.getBoundingClientRect()
+            if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) setOpen(false)
+          }}
+        >
             <div className={styles.head}>
               <span className={styles.icon}><i className={`fa-solid ${mode === 'long' ? 'fa-moon' : 'fa-campground'}`} /></span>
               <div className={styles.titles}>
@@ -147,9 +165,7 @@ export function RestButton({ character, updateSections, shardTrees = {} }: Props
                 </button>
               )}
             </div>
-          </div>
-        </div>,
-        document.body,
+        </dialog>
       )}
     </>
   )

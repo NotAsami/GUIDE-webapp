@@ -24,6 +24,7 @@ import { CAT_LABEL, CAT_ORDER, RARITY_ORDER, rarityLabel } from '../lib/items'
 import { parseCatalogQuery, matchesCatalogQuery } from '../lib/catalogSearch'
 import { ProsePreview } from '../components/ProsePreview'
 import styles from './OperatorConsole.module.css'
+import { ConfirmBtn } from './OperatorBtn'
 import pop from './InventoryPopup.module.css'
 import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'
@@ -91,7 +92,7 @@ export function OperatorShops({ shopLib, itemCatalog, members }: {
   if (error) {
     return (
       <div className={styles.soonPanel}>
-        <i className="fa-solid fa-triangle-exclamation" /><span className={styles.big}>Link Error</span><span>{error}</span>
+        <i className="fa-solid fa-triangle-exclamation" /><h2 className={styles.big}>Link Error</h2><span>{error}</span>
         <span style={{ marginTop: 6 }}>
           If this says the relation doesn't exist, paste <code>supabase/migrations/0009_shop_catalog.sql</code> into the Supabase SQL editor and run it.
         </span>
@@ -428,7 +429,7 @@ function ShopForm({ shop, itemCatalog, onSubmit, onDelete }: {
 
       <div className={cx(styles.qActions, styles.skActions)} style={{ marginTop: 14 }}>
         <Btn tone="amber" lg icon="fa-floppy-disk" label={busy ? 'Saving…' : shop ? 'Save Shopkeeper' : 'Create Shopkeeper'} onClick={() => void submit()} disabled={busy || !name.trim()} />
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={busy} />}
+        {onDelete && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} disabled={busy} />}
       </div>
     </>
   )

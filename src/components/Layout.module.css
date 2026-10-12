@@ -22,10 +22,10 @@
   padding: 0 36px;
   background: linear-gradient(to bottom,
     rgba(15, 15, 15, 0.95) 0%,
-    rgba(22, 22, 22, 0.92) 100%);
+    color-mix(in srgb, var(--bg-2) 92%, transparent) 100%);
   border-bottom: 1px solid var(--beige);
   box-shadow:
-    0 1px 0 rgba(212, 191, 125, 0.15),
+    0 1px 0 color-mix(in srgb, var(--beige) 15%, transparent),
     0 8px 24px -8px rgba(0, 0, 0, 0.6);
 }
 .topbar::before {
@@ -48,7 +48,7 @@
   left: 0; right: 0; bottom: -1px;
   height: 1px;
   background: var(--beige);
-  box-shadow: 0 0 8px rgba(212, 191, 125, 0.4);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--beige) 40%, transparent);
 }
 
 .topLeft, .topRight {
@@ -81,9 +81,9 @@
 }
 .statLabel {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-label);
   color: var(--cyan);
-  letter-spacing: 0.22em;
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
 }
 .bar {
@@ -98,7 +98,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
-  box-shadow: 0 0 6px rgba(0, 166, 214, 0.6);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 60%, transparent);
   display: block;
 }
 
@@ -122,8 +122,8 @@
 @keyframes blink { 50% { opacity: 0; } }
 .charSub {
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.3em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--muted);
   margin-top: 4px;
   text-transform: uppercase;
@@ -152,8 +152,8 @@
 .coinBlock :global(.lab), .burdenBlock :global(.lab), .hpBlock :global(.lab) {
   font-family: var(--font-mono);
   color: var(--cyan);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
 }
 
@@ -173,6 +173,8 @@
   font-variant-numeric: tabular-nums;
 }
 .hpBlock :global(.val.low) { color: var(--danger); }
+.burdenBlock :global(.val.low) { color: var(--danger-hot); }
+.burdenBlock :global(.val.warn) { color: var(--gold); }
 
 /* topLeft/topRight are nowrap flex rows with fixed min-widths (.statBlock,
    the burden/gold/HP blocks) — below their combined min-content width they
@@ -180,45 +182,28 @@
    .charName, since .topCenter is an `auto`-width grid column with no floor
    of its own. Measured live: on the DM account (extra Rest/DM/fullscreen/
    sign-out controls in .topRight) the two side columns plus the name need
-   ~1355px; dropping Burden brings that down to ~1166px. 1450px hides it with
-   margin before the overlap actually starts. */
-@media (max-width: 1450px) {
+   ~1355px; dropping Burden brings that down to ~1166px. Re-measured after the
+   legibility floor (10.5px labels, sign-out as an icon): ~1453px with Burden
+   on the DM account, so 1480px hides it with margin. */
+/* First drop the BURDEN word (⚖ + number still say it), then the whole pill
+   only on genuinely narrow windows — players play on 1440px laptops, and
+   encumbrance is a rule the table needs to see. */
+@media (max-width: 1480px) {
+  .burdenBlock :global(.lab) { display: none; }
+}
+@media (max-width: 1340px) {
   .burdenBlock { display: none; }
 }
-.hpStepper {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: 4px;
-}
-.hpStepper button {
-  width: 18px;
-  height: 18px;
-  border: 1px solid var(--beige-dim);
-  color: var(--beige);
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 13px;
-  line-height: 1;
-  background: rgba(0, 0, 0, 0.4);
-  transition: border-color 120ms, color 120ms, background 120ms;
-}
-.hpStepper button:hover:not(:disabled) {
-  border-color: var(--cyan);
-  color: var(--cyan);
-  background: rgba(0, 166, 214, 0.08);
-}
-.hpStepper button:disabled { opacity: 0.35; cursor: not-allowed; }
-
 .signOut {
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--muted);
   text-transform: uppercase;
   margin-left: 4px;
   padding: 4px 8px;
   border: 1px solid transparent;
+  white-space: nowrap;
   transition: color 120ms, border-color 120ms;
 }
 .signOut:hover { color: var(--cyan); border-color: var(--beige-dim); }
@@ -231,10 +216,10 @@
   align-items: center;
   gap: 6px;
   text-decoration: none;
-  color: var(--amber, #e2b021);
-  border-color: rgba(226, 176, 33, 0.35);
+  color: var(--amber, var(--amber));
+  border-color: color-mix(in srgb, var(--amber) 35%, transparent);
 }
-.dmLink:hover { color: var(--amber-hot, #ffcc3d); border-color: var(--amber, #e2b021); }
+.dmLink:hover { color: var(--amber-hot, #ffcc3d); border-color: var(--amber, var(--amber)); }
 .dmLink i { font-size: 9px; }
 
 /* ---- Main ---- */
@@ -257,10 +242,10 @@
   background:
     linear-gradient(to top,
       rgba(15, 15, 15, 0.95) 0%,
-      rgba(22, 22, 22, 0.92) 100%);
+      color-mix(in srgb, var(--bg-2) 92%, transparent) 100%);
   border-top: 1px solid var(--beige);
   box-shadow:
-    0 -1px 0 rgba(212, 191, 125, 0.15),
+    0 -1px 0 color-mix(in srgb, var(--beige) 15%, transparent),
     0 -8px 24px -8px rgba(0, 0, 0, 0.6);
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -306,7 +291,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--cyan);
-  box-shadow: 0 0 8px rgba(0, 166, 214, 0.7);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 70%, transparent);
 }
 
 /* Bottombar action buttons (Reopen Shop / Roll Context) — same compact pill
@@ -317,11 +302,11 @@
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.16em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--cyan);
   padding: 4px 9px;
-  background: rgba(0, 166, 214, 0.06);
+  background: color-mix(in srgb, var(--cyan) 6%, transparent);
   border: 1.5px solid var(--cyan-dim);
   cursor: pointer;
   transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
@@ -329,13 +314,13 @@
 .bbBtn:hover {
   color: var(--cyan-hot);
   border-color: var(--cyan);
-  background: rgba(0, 166, 214, 0.12);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
 }
 .bbBtn.on {
   color: var(--cyan-hot);
   border-color: var(--cyan);
-  background: rgba(0, 166, 214, 0.16);
-  box-shadow: inset 0 0 10px rgba(0, 166, 214, 0.2);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  box-shadow: inset 0 0 10px color-mix(in srgb, var(--cyan) 20%, transparent);
 }
 .bbBtn i { font-size: 9px; }
 
@@ -356,11 +341,11 @@
   padding: 0 3px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 999px;
-  background: var(--amber);
+  background: var(--gold);
   color: #17130a;
-  font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+  font-family: var(--font-mono); font-size: var(--fs-label); font-weight: 700;
   letter-spacing: 0;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 9px rgba(226, 176, 33, 0.75);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 9px color-mix(in srgb, var(--gold) 75%, transparent);
   animation: bbBadgePulse 2.6s ease-in-out infinite;
 }
 /* The ring: same loop, larger displacement, no layout cost. Peripheral vision
@@ -369,7 +354,7 @@
   content: "";
   position: absolute; inset: 0;
   border-radius: inherit;
-  border: 1.5px solid var(--amber);
+  border: 1.5px solid var(--gold);
   animation: bbBadgeRing 2.6s ease-out infinite;
   pointer-events: none;
 }
@@ -402,15 +387,12 @@
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 0.18em;
-  color: rgba(0, 166, 214, 0.55);
+  color: color-mix(in srgb, var(--cyan) 55%, transparent);
   pointer-events: none;
   overflow: hidden;
   white-space: nowrap;
 }
-.ticker.above { top: calc(var(--bar-top-h) - 12px); justify-content: flex-end; }
-.ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: rgba(212, 191, 125, 0.45); }
-.ticker :global(.gap) { width: 32px; display: inline-block; }
-.ticker :global(.dim) { color: rgba(170, 170, 170, 0.4); }
+.ticker.below { top: calc(var(--bar-top-h) + 2px); justify-content: flex-start; color: color-mix(in srgb, var(--beige) 45%, transparent); }
 
 /* Side-rails + corner frame moved to components/Deco.tsx (per-screen). */
 

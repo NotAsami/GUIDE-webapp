@@ -16,7 +16,7 @@ import { MASTERIES, masteryOf } from '../lib/weapons'
 import { featureOrigin } from './operatorCatalogFields'
 import styles from './OperatorConsole.module.css'
 
-import { Btn } from './OperatorBtn'
+import { Btn, ConfirmBtn } from './OperatorBtn'
 import { CAT_DEF, CAT_ORDER, EFFECT_KINDS, EF_COUNTED, EF_DURATIONS, EF_TICKING, RAR_DEF, RAR_ORDER, SLOT_LABEL, SLOT_OPTIONS, WEAPON_ABILITIES, clipTx, effectParts, isSlotted } from './operatorCatalogFields'
 const cx = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' ')
 export function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete, onCreated }: {
@@ -625,7 +625,7 @@ export function CatalogForm({ item, featureLib, effectLib, onSubmit, onDelete, o
         <span className={styles.autoState}>
           <AutoSaveStatus state={autosave} savedLabel="Saved automatically" blocked={!name.trim() || gErrs.length ? 'Not saved — needs a name, and no graph errors' : undefined} />
         </span>
-        {onDelete && <Btn tone="danger" lg icon="fa-trash" label="Delete" onClick={onDelete} disabled={autoBusy} />}
+        {onDelete && <ConfirmBtn tone="danger" lg icon="fa-trash" label="Delete" confirmLabel="Delete for good" onClick={onDelete} disabled={autoBusy} />}
       </div>
     </>
   )

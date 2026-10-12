@@ -47,12 +47,12 @@ export const catDef = (c?: ItemCategory) => CAT_DEF[c ?? 'misc'] ?? CAT_DEF.misc
 export const EFFECT_KIND_ORDER: EffectKind[] = ['buff', 'debuff', 'condition']
 /** Colour deviates from the mockup (which ties debuff AND condition to the
  *  same red) to match the vocabulary the rest of the app already uses for
- *  ActiveEffect.kind — "cyan buff, amber condition, red debuff"
+ *  ActiveEffect.kind — "cyan buff, gold condition, red debuff"
  *  (database.types.ts) — and the roster chips already fixed to that scheme. */
 export const EFFECT_KINDS: Record<EffectKind, { label: string; icon: string; color: string }> = {
   buff: { label: 'Buff', icon: 'fa-arrow-up-right-dots', color: 'var(--cyan)' },
   debuff: { label: 'Debuff', icon: 'fa-arrow-down-short-wide', color: 'var(--danger)' },
-  condition: { label: 'Condition', icon: 'fa-triangle-exclamation', color: 'var(--amber)' },
+  condition: { label: 'Condition', icon: 'fa-triangle-exclamation', color: 'var(--gold)' },
 }
 export const EF_FLAG_ORDER: EffectFlagMode[] = ['advantage', 'disadvantage', 'resistance', 'vulnerability', 'immunity']
 export const EF_FLAG_MODES: Record<EffectFlagMode, { label: string; short: string; on: 'roll' | 'dmg' }> = {

@@ -4,6 +4,7 @@ import type { CharacterRow, CharacterSection, CharacterUpdate, ShardTree } from 
 import { useAuth } from './auth'
 import { characterStore } from './characterStore'
 import { writeCharacter } from './characterWrite'
+import { stripRenames } from './rename'
 import type { SaveResult } from './saveResult'
 
 function applyIfNewer(prev: CharacterRow | null, next: CharacterRow): CharacterRow {
@@ -68,7 +69,9 @@ export function useCharacter(shardTrees: Record<string, ShardTree> = {}): Charac
 
   const updateSections: CharacterState['updateSections'] = useCallback(async patch => {
     if (!character) return { ok: false, message: 'No character is loaded.' }
-    const result = await writeCharacter(characterStore, character, patch as CharacterUpdate, shardTrees)
+    // Renames are display-only: a screen may hand back a section built from the
+    // renamed row, so put the stored names back before anything is written.
+    const result = await writeCharacter(characterStore, character, stripRenames(patch) as CharacterUpdate, shardTrees)
     if (activeUser.current !== userId) return { ok: false, message: 'The signed-in account changed.' }
     if (result.row) setCharacter(prev => applyIfNewer(prev, result.row!))
     if (!result.ok) { setSaveError(result.message); return { ok: false, message: result.message } }

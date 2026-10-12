@@ -13,7 +13,13 @@
   --text:      #dedede;
   --muted:     #aaaaaa;
   --danger:    #b93a3a;
-  --gold-rare: #e2b021;
+  /* Legendary / rare-gold accent. NOT amber: amber on a player screen is the
+     reveal's colour (the G.U.I.D.E. Shard wears it on purpose), so the loot
+     tier moved to the orange gaming players already read as "legendary". */
+  --gold-rare: #f2994a;
+  /* Plain gold — radiant light, a crit, a value spent and armed. Lighter and
+     cooler than amber so the two never read as one colour. */
+  --gold:      #f0cf6a;
 
   /* Amber = the system-truth accent of the DM / Operator Console layer (the
      player layer is cyan-led; the operator layer is amber-led). Ported from
@@ -42,7 +48,7 @@
   --rar-uncommon: #4fae6b;
   --rar-rare:     #00a6d6;
   --rar-vrare:    #a07ad6;
-  --rar-legend:   #e2b021;
+  --rar-legend:   #f2994a;
   /* Artifact — above legendary. A dull red-bronze rather than another gold, so
      the top tier does not read as "legendary but bigger". */
   --rar-artifact: #c96f3f;
@@ -52,6 +58,25 @@
   --nav-h:        72px;   /* compact dock-nav button height (content screens) */
   --nav-top-gap:  26px;   /* gap between topbar and the docked navbar */
   --danger-hot:   #ff5454;
+
+  /* Backdrop texture over the .stage gradient (global.css). */
+  --texture: url("https://www.transparenttextures.com/patterns/dark-leather.png");
+
+  /* Legibility floor. Anything that carries meaning — a label, chip, button,
+     stat caption, meta line — is at least --fs-label; section titles use
+     --fs-kicker. Only aria-hidden telemetry may drop to --fs-micro. Tracking
+     comes down as size goes up so mono labels keep roughly their old width. */
+  --fs-micro:  8px;
+  --fs-label:  10.5px;
+  --fs-kicker: 11px;
+  --ls-label:  0.12em;
+  --ls-kicker: 0.2em;
+  /* The beige for small text that must be read: --beige-dim fails 4.5:1 on
+     --bg, this passes (5.3:1) and keeps the warm hierarchy below --beige. */
+  --beige-mid: #a08f5a;
+  /* Same job for the operator layer: --amber-dim fails 4.5:1 as text (3.4:1);
+     this passes on --bg (5.2:1) and on --amber-deep panels (4.9:1). */
+  --amber-mid: #b08a24;
 
   --font-display: "Cinzel", serif;
   --font-prose:   "EB Garamond", serif;

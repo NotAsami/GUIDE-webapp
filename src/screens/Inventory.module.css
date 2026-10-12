@@ -32,10 +32,10 @@
 }
 .inv::-webkit-scrollbar { width: 8px; }
 .inv::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.5); border-left: 1px solid rgba(212, 191, 125, 0.15);
+  background: rgba(0, 0, 0, 0.5); border-left: 1px solid color-mix(in srgb, var(--beige) 15%, transparent);
 }
 .inv::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  background: linear-gradient(180deg, var(--cyan-dim), color-mix(in srgb, var(--beige) 55%, transparent));
   border: 2px solid #111;
 }
 
@@ -51,13 +51,13 @@
   display: flex; align-items: baseline; gap: 14px;
   margin-bottom: 10px;
   padding: 0 2px 7px;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.35);
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 35%, transparent);
   flex: 0 0 auto;
 }
 .colHeader.tight { margin-top: 12px; }
 .chNum {
-  font-family: var(--font-mono); font-size: 10px;
-  letter-spacing: 0.28em; color: var(--cyan); opacity: 0.85;
+  font-family: var(--font-mono); font-size: var(--fs-kicker);
+  letter-spacing: var(--ls-kicker); color: var(--cyan); opacity: 0.85;
 }
 .chTitle {
   font-family: var(--font-mono); font-size: 12px;
@@ -65,7 +65,7 @@
 }
 .chMeta {
   margin-left: auto;
-  font-family: var(--font-mono); font-size: 9px;
+  font-family: var(--font-mono); font-size: var(--fs-kicker);
   letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase;
 }
 .chMeta :global(.acc) { color: var(--cyan); }
@@ -78,11 +78,13 @@
   flex: 1 1 auto;
   min-height: 0;
 }
-/* The right column holds exactly one region now (the detail panel is gone), so
-   it absorbs all the slack. NEVER give a .region `flex: 0 0 auto`: .rInner is
-   position:absolute, so the region has no intrinsic height and would collapse
-   to nothing. Slack routing per the standing layout convention. */
-.region.load { flex: 1 1 auto; }
+/* The right column holds one fixed-content region (burden + coin). Stretched
+   to the column it was ~60% empty frame, which reads as missing content, so it
+   sizes to its content instead (layout convention rule 2: in-flow .rInner,
+   scoped to THIS region — a bare `flex: 0 0 auto` would collapse it, since
+   .rInner is otherwise absolute). The column's leftover is plain stage. */
+.region.load { flex: 0 0 auto; }
+.region.load > .rInner { position: relative; inset: auto; margin: 5.5px; }
 .rFrame {
   position: absolute; inset: 0;
   background: var(--beige);
@@ -107,7 +109,7 @@
 .rInner {
   position: absolute; inset: 5.5px;
   background:
-    radial-gradient(130% 100% at 50% 0%, rgba(0, 166, 214, 0.05), transparent 60%),
+    radial-gradient(130% 100% at 50% 0%, color-mix(in srgb, var(--cyan) 5%, transparent), transparent 60%),
     linear-gradient(180deg, #151515, #0e0e0e);
   clip-path: polygon(calc(var(--cut) - 5px) 0, 100% 0,
     100% calc(100% - var(--cut) + 5px), calc(100% - var(--cut) + 5px) 100%,
@@ -118,7 +120,7 @@
 .rInner::before {
   content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background: repeating-linear-gradient(to bottom,
-    rgba(0, 166, 214, 0.035) 0px, rgba(0, 166, 214, 0.035) 1px,
+    color-mix(in srgb, var(--cyan) 3.5%, transparent) 0px, color-mix(in srgb, var(--cyan) 3.5%, transparent) 1px,
     transparent 1px, transparent 4px);
   mix-blend-mode: screen; opacity: 0.6;
 }
@@ -178,9 +180,9 @@
 
 /* empty cell */
 .cellEmpty {
-  border: 1px solid rgba(212, 191, 125, 0.10);
+  border: 1px solid color-mix(in srgb, var(--beige) 10%, transparent);
   background:
-    radial-gradient(circle at 50% 50%, rgba(0, 166, 214, 0.10) 0.5px, transparent 1.6px),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--cyan) 10%, transparent) 0.5px, transparent 1.6px),
     rgba(0, 0, 0, 0.22);
   border-radius: 1px;
 }
@@ -217,12 +219,23 @@
 }
 .catCorner {
   position: absolute; top: 3px; left: 4px;
-  font-size: 10px; color: var(--muted); opacity: 0.85;
+  font-size: var(--fs-label); color: var(--muted); opacity: 0.85;
   z-index: 3; line-height: 1;
 }
+/* The name, on the cell — icons alone made every item a hover. Bottom-left,
+   clear of the ×qty stack, truncated rather than wrapped. */
+.itemName {
+  position: absolute; left: 5px; right: 28px; bottom: 3px;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.02em;
+  color: var(--muted); text-align: left; line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none; z-index: 2;
+}
+.itemName.solo { right: 5px; }
 .stack {
   position: absolute; right: 4px; bottom: 3px;
-  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  font-family: var(--font-mono); font-size: var(--fs-label); font-weight: 500;
   letter-spacing: 0.04em; color: var(--text);
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.9), 0 1px 1px rgba(0, 0, 0, 0.9);
   z-index: 3; line-height: 1;
@@ -232,11 +245,11 @@
  * hover (docs/notes.md:63). Shares the app's cyan "system/info" accent (see
  * this file's .acc / .sys / .tick) rather than a dedicated colour. */
 .newBadge {
-  font-family: var(--font-mono); font-size: 7px; font-weight: 600;
+  font-family: var(--font-mono); font-size: var(--fs-label); font-weight: 600;
   letter-spacing: 0.12em; color: var(--cyan-hot); text-transform: uppercase;
-  background: rgba(0, 166, 214, 0.18); border: 1px solid var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 18%, transparent); border: 1px solid var(--cyan);
   padding: 1px 4px; line-height: 1.5;
-  text-shadow: 0 0 6px rgba(0, 166, 214, 0.6);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 60%, transparent);
   pointer-events: none;
 }
 .cellItem .newBadge { position: absolute; top: 3px; right: 4px; z-index: 4; }
@@ -247,7 +260,7 @@
 .tabDot {
   position: absolute; top: 5px; right: 7px; z-index: 5;
   width: 6px; height: 6px; border-radius: 50%;
-  background: var(--cyan); box-shadow: 0 0 6px rgba(0, 166, 214, 0.85);
+  background: var(--cyan); box-shadow: 0 0 6px color-mix(in srgb, var(--cyan) 85%, transparent);
   pointer-events: none;
 }
 .cellItem:hover { transform: translateY(-1px); filter: brightness(1.16); z-index: 4; }
@@ -275,45 +288,45 @@ span.glyph,
 .crow .ri span { width: 1.25em; height: 1.25em; }
 
 /* category tints (very low alpha) */
-.cellItem[data-cat="weapon"]     { background: rgba(0, 166, 214, 0.07); }
-.cellItem[data-cat="gear"]       { background: rgba(212, 191, 125, 0.07); }
-.cellItem[data-cat="consumable"] { background: rgba(63, 199, 180, 0.07); }
+.cellItem[data-cat="weapon"]     { background: color-mix(in srgb, var(--cyan) 7%, transparent); }
+.cellItem[data-cat="gear"]       { background: color-mix(in srgb, var(--beige) 7%, transparent); }
+.cellItem[data-cat="consumable"] { background: color-mix(in srgb, var(--teal) 7%, transparent); }
 .cellItem[data-cat="misc"]       { background: rgba(0, 0, 0, 0.3); }
 
 /* rarity borders (dominant read) */
-.cellItem[data-rarity="common"]   { border: 1px solid rgba(212, 191, 125, 0.42); }
+.cellItem[data-rarity="common"]   { border: 1px solid color-mix(in srgb, var(--beige) 42%, transparent); }
 .cellItem[data-rarity="common"] .catCorner { color: var(--beige-dim); }
 
 .cellItem[data-rarity="uncommon"] {
   border: 1px solid var(--cyan);
-  box-shadow: 0 0 8px rgba(0, 166, 214, 0.22), inset 0 0 10px rgba(0, 166, 214, 0.08);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 22%, transparent), inset 0 0 10px color-mix(in srgb, var(--cyan) 8%, transparent);
 }
 .cellItem[data-rarity="uncommon"] .glyph { color: var(--cyan-hot); }
 .cellItem[data-rarity="uncommon"] .catCorner { color: var(--cyan); }
 
 .cellItem[data-rarity="rare"] {
   border: 1px solid var(--cyan-hot);
-  box-shadow: 0 0 12px rgba(77, 214, 255, 0.3);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--cyan-hot) 30%, transparent);
   animation: rarePulse 9s ease-in-out infinite;
 }
-.cellItem[data-rarity="rare"] .glyph { color: var(--cyan-hot); text-shadow: 0 0 8px rgba(77, 214, 255, 0.5); }
+.cellItem[data-rarity="rare"] .glyph { color: var(--cyan-hot); text-shadow: 0 0 8px color-mix(in srgb, var(--cyan-hot) 50%, transparent); }
 @keyframes rarePulse {
-  0%, 100% { box-shadow: 0 0 12px rgba(77, 214, 255, 0.3), inset 0 0 6px rgba(77, 214, 255, 0.05); }
-  50%      { box-shadow: 0 0 18px rgba(77, 214, 255, 0.5), inset 0 0 16px rgba(77, 214, 255, 0.2); }
+  0%, 100% { box-shadow: 0 0 12px color-mix(in srgb, var(--cyan-hot) 30%, transparent), inset 0 0 6px color-mix(in srgb, var(--cyan-hot) 5%, transparent); }
+  50%      { box-shadow: 0 0 18px color-mix(in srgb, var(--cyan-hot) 50%, transparent), inset 0 0 16px color-mix(in srgb, var(--cyan-hot) 20%, transparent); }
 }
 
 .cellItem[data-rarity="legendary"] {
   border: 1px solid var(--gold-rare);
-  box-shadow: 0 0 12px rgba(226, 176, 33, 0.3);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--gold-rare) 30%, transparent);
 }
-.cellItem[data-rarity="legendary"] .glyph { color: var(--gold-rare); text-shadow: 0 0 8px rgba(226, 176, 33, 0.5); }
+.cellItem[data-rarity="legendary"] .glyph { color: var(--gold-rare); text-shadow: 0 0 8px color-mix(in srgb, var(--gold-rare) 50%, transparent); }
 .cellItem[data-rarity="legendary"] .catCorner { color: var(--gold-rare); }
 
 /* selected (pinned) */
 .cellItem.selected {
   outline: 1px solid var(--cyan);
   outline-offset: 1px;
-  box-shadow: 0 0 14px rgba(0, 166, 214, 0.4), inset 0 0 14px rgba(0, 166, 214, 0.12);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 40%, transparent), inset 0 0 14px color-mix(in srgb, var(--cyan) 12%, transparent);
   z-index: 5;
 }
 
@@ -323,14 +336,14 @@ span.glyph,
 /* drag placement preview (rendered as a grid item over the target cells) */
 .preview {
   border: 1px dashed var(--cyan);
-  background: rgba(0, 166, 214, 0.16);
-  box-shadow: inset 0 0 14px rgba(0, 166, 214, 0.25);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  box-shadow: inset 0 0 14px color-mix(in srgb, var(--cyan) 25%, transparent);
   border-radius: 1px; z-index: 6; pointer-events: none;
 }
 .preview.bad {
   border-color: var(--danger);
-  background: rgba(185, 58, 58, 0.18);
-  box-shadow: inset 0 0 14px rgba(185, 58, 58, 0.3);
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  box-shadow: inset 0 0 14px color-mix(in srgb, var(--danger) 30%, transparent);
 }
 
 /* ============================================================
@@ -344,14 +357,14 @@ span.glyph,
   overflow: hidden;
 }
 .subHead {
-  font-family: var(--font-mono); font-size: 9.5px;
-  letter-spacing: 0.3em; color: var(--cyan); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-kicker);
+  letter-spacing: var(--ls-kicker); color: var(--cyan); text-transform: uppercase;
   display: flex; align-items: center; gap: 8px;
   padding-bottom: 6px;
 }
 .subHead::after {
   content: ""; flex: 1; height: 1px;
-  background: rgba(0, 166, 214, 0.25);
+  background: color-mix(in srgb, var(--cyan) 25%, transparent);
 }
 
 /* burden */
@@ -362,9 +375,9 @@ span.glyph,
 }
 .burdenReadout :global(.cur) {
   font-size: 26px; font-weight: 500; color: var(--cyan-hot);
-  line-height: 1; text-shadow: 0 0 12px rgba(0, 166, 214, 0.4);
+  line-height: 1; text-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 40%, transparent);
 }
-.burdenReadout.over :global(.cur) { color: var(--danger-hot); text-shadow: 0 0 12px rgba(185, 58, 58, 0.5); }
+.burdenReadout.over :global(.cur) { color: var(--danger-hot); text-shadow: 0 0 12px color-mix(in srgb, var(--danger) 50%, transparent); }
 .burdenReadout :global(.slash) { font-size: 16px; color: var(--beige-dim); }
 .burdenReadout :global(.max) { font-size: 18px; color: var(--muted); }
 .burdenReadout :global(.unit) {
@@ -378,31 +391,31 @@ span.glyph,
 .burdenBar :global(.fill) {
   position: absolute; left: 0; top: 0; bottom: 0;
   background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
-  box-shadow: 0 0 8px rgba(0, 166, 214, 0.5);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 50%, transparent);
 }
 .burdenBar.over :global(.fill) {
   background: linear-gradient(90deg, var(--danger), var(--danger-hot));
-  box-shadow: 0 0 8px rgba(185, 58, 58, 0.6);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 60%, transparent);
 }
 .burdenBar :global(.tick) {
   position: absolute; top: -3px; bottom: -3px; width: 1px;
-  background: rgba(212, 191, 125, 0.7);
+  background: color-mix(in srgb, var(--beige) 70%, transparent);
 }
 .burdenTicks {
   position: relative; height: 11px;
-  font-family: var(--font-mono); font-size: 7.5px;
-  letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase;
 }
 .burdenTicks span { position: absolute; transform: translateX(-50%); top: 2px; white-space: nowrap; }
 .slotRow {
   display: flex; gap: 7px; margin-top: 6px;
-  font-family: var(--font-mono); font-size: 9px;
-  letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase;
 }
 .slotRow :global(.acc) { color: var(--cyan); }
 .slotRow :global(.sep) { color: var(--beige-dim); }
 
-.ldDivider { height: 1px; background: rgba(212, 191, 125, 0.2); margin: 8px 0; flex: 0 0 auto; }
+.ldDivider { height: 1px; background: color-mix(in srgb, var(--beige) 20%, transparent); margin: 8px 0; flex: 0 0 auto; }
 
 /* coin purse */
 .coin { flex: 0 0 auto; display: flex; flex-direction: column; min-height: 0; }
@@ -432,18 +445,18 @@ span.glyph,
   color: var(--text); letter-spacing: 0.02em; line-height: 1;
 }
 .coinBadge :global(.clab) {
-  font-family: var(--font-mono); font-size: 7px;
-  letter-spacing: 0.16em; color: var(--muted); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase;
 }
-.coinBadge.gp { --bc: rgba(212, 191, 125, 0.6); }
-.coinBadge.gp :global(.ci) { background: var(--beige); color: #1d1d1d; }
+.coinBadge.gp { --bc: color-mix(in srgb, var(--beige) 60%, transparent); }
+.coinBadge.gp :global(.ci) { background: var(--beige); color: var(--bg); }
 /* All three discs are FILLED, differing only in metal — silver and copper used
    to be hollow rings, which reads as "empty" beside a solid gold coin rather
    than as a different currency. */
-.coinBadge.sp { --bc: rgba(194, 200, 204, 0.5); }
-.coinBadge.sp :global(.ci) { background: var(--silver); color: #1d1d1d; }
-.coinBadge.cp { --bc: rgba(192, 133, 82, 0.55); }
-.coinBadge.cp :global(.ci) { background: var(--copper); color: #1d1d1d; }
+.coinBadge.sp { --bc: color-mix(in srgb, var(--silver) 50%, transparent); }
+.coinBadge.sp :global(.ci) { background: var(--silver); color: var(--bg); }
+.coinBadge.cp { --bc: color-mix(in srgb, var(--copper) 55%, transparent); }
+.coinBadge.cp :global(.ci) { background: var(--copper); color: var(--bg); }
 
 /* Cut-corner border fix (see OperatorConsole.module.css for the full note):
    the border is clipped away along the 45° cuts, so corner-anchored gradient
@@ -481,7 +494,7 @@ span.glyph,
 }
 .sgFrame {
   position: absolute; inset: 0;
-  background: rgba(212, 191, 125, 0.4);
+  background: color-mix(in srgb, var(--beige) 40%, transparent);
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   transition: background 180ms ease;
 }
@@ -490,30 +503,30 @@ span.glyph,
   background: linear-gradient(180deg, #191919, #101010);
   clip-path: polygon(calc(var(--cut) - 1px) 0, 100% 0, 100% calc(100% - var(--cut) + 1px), calc(100% - var(--cut) + 1px) 100%, 0 100%, 0 calc(var(--cut) - 1px));
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  color: var(--muted); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--muted); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase;
   white-space: nowrap; overflow: hidden;
   transition: color 180ms ease, box-shadow 180ms ease, background 180ms ease;
 }
 .sgInner i { font-size: 11px; opacity: 0.9; }
-.sgN { color: var(--beige-dim); font-size: 8.5px; letter-spacing: 0.14em; }
-.segBtn:hover .sgInner { color: var(--text); box-shadow: inset 0 0 18px rgba(0, 166, 214, 0.14); }
+.sgN { color: var(--beige-mid); font-size: var(--fs-label); letter-spacing: var(--ls-label); }
+.segBtn:hover .sgInner { color: var(--text); box-shadow: inset 0 0 18px color-mix(in srgb, var(--cyan) 14%, transparent); }
 .segBtn.on .sgFrame { background: var(--cyan); }
 .segBtn.on .sgInner {
   color: var(--cyan-hot);
   background:
-    radial-gradient(120% 90% at 50% 60%, rgba(0, 166, 214, 0.16), transparent 60%),
+    radial-gradient(120% 90% at 50% 60%, color-mix(in srgb, var(--cyan) 16%, transparent), transparent 60%),
     linear-gradient(180deg, #16252b, #0f1b21);
-  box-shadow: inset 0 0 22px rgba(0, 166, 214, 0.26);
+  box-shadow: inset 0 0 22px color-mix(in srgb, var(--cyan) 26%, transparent);
 }
 .segBtn.on .sgN { color: var(--cyan); }
 
 /* locked = an empty slot to fill, not a disabled control to hide */
 .segBtn.locked { cursor: not-allowed; }
-.segBtn.locked .sgFrame { background: rgba(212, 191, 125, 0.18); }
+.segBtn.locked .sgFrame { background: color-mix(in srgb, var(--beige) 18%, transparent); }
 .segBtn.locked .sgInner {
   color: var(--beige-dim); opacity: 0.65;
   background:
-    repeating-linear-gradient(115deg, transparent 0 7px, rgba(212, 191, 125, 0.045) 7px 8px),
+    repeating-linear-gradient(115deg, transparent 0 7px, color-mix(in srgb, var(--beige) 4.5%, transparent) 7px 8px),
     linear-gradient(180deg, #141414, #0d0d0d);
 }
 .segBtn.locked:hover .sgInner { color: var(--beige-dim); box-shadow: none; }
@@ -528,9 +541,9 @@ span.glyph,
 .ctrLine {
   flex: 0 0 auto; height: 22px;
   display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono); font-size: 9.5px;
-  letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
-  border-bottom: 1px dashed rgba(212, 191, 125, 0.22);
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted);
+  border-bottom: 1px dashed color-mix(in srgb, var(--beige) 22%, transparent);
   padding-bottom: 2px;
 }
 .ctrLine .nm { color: var(--beige); }
@@ -539,7 +552,7 @@ span.glyph,
 .ctrLine .sys { margin-left: auto; color: var(--cyan); opacity: 0.8; display: flex; align-items: center; gap: 7px; }
 .ctrLine .tick {
   width: 5px; height: 5px; background: var(--cyan);
-  box-shadow: 0 0 7px rgba(0, 166, 214, 0.8);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--cyan) 80%, transparent);
   animation: ctrBlink 2.4s steps(2, end) infinite;
 }
 @keyframes ctrBlink { 50% { opacity: 0; } }
@@ -553,21 +566,21 @@ span.glyph,
 }
 .searchIn {
   width: 100%; height: 24px; background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(212, 191, 125, 0.3);
-  color: var(--text); font-family: var(--font-mono); font-size: 8.5px;
+  border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent);
+  color: var(--text); font-family: var(--font-mono); font-size: var(--fs-label);
   letter-spacing: 0.08em; padding: 0 8px 0 22px;
   outline: none;
 }
 .searchIn:focus { border-color: var(--cyan); }
 .searchIn::placeholder { color: var(--beige-dim); letter-spacing: 0.12em; text-transform: uppercase; }
 .chip {
-  --cut: 5px; --bc: rgba(212, 191, 125, 0.28);
+  --cut: 5px; --bc: color-mix(in srgb, var(--beige) 28%, transparent);
   position: relative; height: 24px; padding: 0 11px;
   background-color: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--bc);
   color: var(--muted);
-  font-family: var(--font-mono); font-size: 8.5px;
-  letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); text-transform: uppercase; cursor: pointer;
   clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
   transition: color 150ms ease, box-shadow 150ms ease;
   /* cut-corner border fix — redraw the two diagonals clip-path removes */
@@ -579,31 +592,31 @@ span.glyph,
   background-position: top left, bottom right;
   background-size: calc(var(--cut) + 1px) calc(var(--cut) + 1px);
 }
-.chip:hover { color: var(--text); --bc: rgba(0, 166, 214, 0.5); }
+.chip:hover { color: var(--text); --bc: color-mix(in srgb, var(--cyan) 50%, transparent); }
 .chip.on {
   color: var(--cyan-hot); --bc: var(--cyan);
-  box-shadow: inset 0 0 14px rgba(0, 166, 214, 0.18), 0 0 10px rgba(0, 166, 214, 0.22);
+  box-shadow: inset 0 0 14px color-mix(in srgb, var(--cyan) 18%, transparent), 0 0 10px color-mix(in srgb, var(--cyan) 22%, transparent);
 }
 .chip .n { color: var(--beige-dim); margin-left: 6px; }
 .chip.on .n { color: var(--cyan); }
 
 .sortWrap { margin-left: auto; display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
 .sortWrap .lab {
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em;
-  color: var(--beige-dim); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase;
 }
 .sortSel {
   height: 24px; background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(212, 191, 125, 0.3);
-  color: var(--text); font-family: var(--font-mono); font-size: 8.5px;
-  letter-spacing: 0.16em; text-transform: uppercase; padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--beige) 30%, transparent);
+  color: var(--text); font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); text-transform: uppercase; padding: 0 6px;
   cursor: pointer; outline: none;
 }
 .sortSel:focus { border-color: var(--cyan); }
 
 .reachRead {
   display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--muted); text-transform: uppercase;
 }
 .reachRead .k { color: var(--beige-dim); }
@@ -623,7 +636,7 @@ span.glyph,
 .clist::-webkit-scrollbar { width: 7px; }
 .clist::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
 .clist::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.5));
+  background: linear-gradient(180deg, var(--cyan-dim), color-mix(in srgb, var(--beige) 50%, transparent));
   border: 1px solid #111;
 }
 .crow {
@@ -631,12 +644,12 @@ span.glyph,
   align-items: center; gap: 12px;
   height: 42px; padding: 0 12px 0 0;
   background: rgba(0, 0, 0, 0.24);
-  border: 1px solid rgba(212, 191, 125, 0.13);
-  border-left: 2px solid var(--rowc, rgba(212, 191, 125, 0.4));
+  border: 1px solid color-mix(in srgb, var(--beige) 13%, transparent);
+  border-left: 2px solid var(--rowc, color-mix(in srgb, var(--beige) 40%, transparent));
   cursor: pointer; text-align: left; font-family: var(--font-mono);
   transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
 }
-.crow:hover { background: rgba(0, 166, 214, 0.07); border-color: rgba(0, 166, 214, 0.4); transform: translateX(2px); }
+.crow:hover { background: color-mix(in srgb, var(--cyan) 7%, transparent); border-color: color-mix(in srgb, var(--cyan) 40%, transparent); transform: translateX(2px); }
 .crow .ri { display: flex; align-items: center; justify-content: center; font-size: 15px; color: var(--beige); height: 100%; }
 .crow .rn {
   font-family: var(--font-prose); font-size: 16px; letter-spacing: 0.01em; color: var(--text);
@@ -645,16 +658,16 @@ span.glyph,
 /* the name text truncates on its own so a trailing .newBadge never gets
    clipped off the end of a long name. */
 .rnText { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rowLock { font-size: 10px; color: var(--danger); flex: 0 0 auto; }
-.crow .rq { font-size: 10px; letter-spacing: 0.1em; color: var(--muted); text-align: right; }
+.rowLock { font-size: var(--fs-label); color: var(--danger); flex: 0 0 auto; }
+.crow .rq { font-size: var(--fs-label); letter-spacing: 0.1em; color: var(--muted); text-align: right; }
 .crow .rq.none { opacity: 0.35; }
-.crow .rw { font-size: 10px; letter-spacing: 0.1em; color: var(--muted); text-align: right; }
-.crow .rc { font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--beige-dim); text-align: right; }
+.crow .rw { font-size: var(--fs-label); letter-spacing: 0.1em; color: var(--muted); text-align: right; }
+.crow .rc { font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige-mid); text-align: right; }
 .crow[data-rar="uncommon"] { --rowc: var(--cyan); }
 .crow[data-rar="uncommon"] .rn { color: var(--cyan-hot); }
 .crow[data-rar="uncommon"] .ri { color: var(--cyan); }
 .crow[data-rar="rare"] { --rowc: var(--cyan-hot); }
-.crow[data-rar="rare"] .rn { color: var(--cyan-hot); text-shadow: 0 0 9px rgba(77, 214, 255, 0.4); }
+.crow[data-rar="rare"] .rn { color: var(--cyan-hot); text-shadow: 0 0 9px color-mix(in srgb, var(--cyan-hot) 40%, transparent); }
 .crow[data-rar="rare"] .ri { color: var(--cyan-hot); }
 .crow[data-rar="legendary"] { --rowc: var(--gold-rare); }
 .crow[data-rar="legendary"] .rn { color: var(--gold-rare); }
@@ -666,21 +679,46 @@ span.glyph,
   font-family: var(--font-mono); color: var(--muted);
 }
 .listNone .p { font-size: 12px; letter-spacing: 0.4em; text-transform: uppercase; }
-.listNone .h { font-size: 9px; letter-spacing: 0.24em; color: var(--beige-dim); text-transform: uppercase; }
+.listNone .h { font-size: var(--fs-label); letter-spacing: var(--ls-label); color: var(--beige-mid); text-transform: uppercase; }
 
 /* a locked item is carried and weighed, but refuses to be used */
 .lockedItem { filter: saturate(0.35); }
 .lockedItem:hover { filter: saturate(0.5) brightness(1.1); }
 .lockPip {
   position: absolute; left: 5px; bottom: 4px;
-  font-size: 10px; color: var(--danger); z-index: 3;
+  font-size: var(--fs-label); color: var(--danger); z-index: 3;
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
 }
 
 /* encumbrance note — the tiers SLOW the character, they never block a pickup */
 .encNote {
   margin-top: 8px;
-  font-family: var(--font-mono); font-size: 8.5px;
-  letter-spacing: 0.14em; text-transform: uppercase; color: var(--beige-dim);
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige-mid);
 }
-.encNote .warn { color: var(--danger-hot); }
+.encNote .warn, .chMeta .warn { color: var(--danger-hot); }
+
+/* ---- 03 Weight: heaviest stacks first. Elastic region, scrolls. ---- */
+.region.weights { flex: 1 1 auto; min-height: 120px; }
+.wList {
+  position: relative; z-index: 1;
+  height: 100%; margin: 0; padding: 10px 18px; list-style: none;
+  overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--cyan) 40%, transparent) transparent;
+}
+.wRow {
+  display: grid; grid-template-columns: minmax(0, 1fr) 72px 64px; align-items: center; gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--beige) 12%, transparent);
+}
+.wName {
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.02em; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wQty { color: var(--muted); }
+.wBar { height: 4px; background: color-mix(in srgb, var(--beige-dim) 30%, transparent); }
+.wBar i { display: block; height: 100%; background: var(--cyan); }
+.wLb {
+  font-family: var(--font-mono); font-size: var(--fs-label); text-align: right;
+  color: var(--beige); font-variant-numeric: tabular-nums;
+}
+.wEmpty { font-family: var(--font-mono); font-size: var(--fs-label); color: var(--muted); padding: 6px 0; }

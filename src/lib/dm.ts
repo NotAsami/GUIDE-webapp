@@ -19,6 +19,7 @@ import type {
 import { useAuth } from './auth'
 import { characterStore } from './characterStore'
 import { writeCharacter } from './characterWrite'
+import { stripRenames } from './rename'
 
 /** Is the current user the DM? Checked against the `dm_users` table — the same
  *  membership the `dm_all` RLS policy uses to grant cross-character access
@@ -68,7 +69,14 @@ interface DmPartyState {
    *  (no player RLS policy on `character_secrets`), so it can never reach a player. */
   secrets: Record<string, CharacterSecret>
   loading: boolean
+  /** The party could not be LOADED — nothing to act on, so the console shows
+   *  the Link Error panel in place of its work area. */
   error: string | null
+  /** A single WRITE failed. Separate on purpose: a failed damage must not
+   *  replace the controls the DM needs to retry it — it is a banner, not a
+   *  wall. Cleared by the next successful write or by dismissing it. */
+  writeError: string | null
+  dismissWriteError: () => void
   refetch: () => Promise<void>
   /** Patch any character row BY ID — the operator's cross-character write. The
    *  caller pre-spreads the JSONB section (e.g. `{ sheet: { ...row.sheet, hp } }`)
@@ -95,6 +103,7 @@ export function useDmParty(shardTrees: Record<string, ShardTree> = {}): DmPartyS
   const [secrets, setSecrets] = useState<Record<string, CharacterSecret>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [writeError, setWriteError] = useState<string | null>(null)
 
   const fetchAll = useCallback(async () => {
     if (!session) {
@@ -166,11 +175,12 @@ export function useDmParty(shardTrees: Record<string, ShardTree> = {}): DmPartyS
 
   const updateCharacter = useCallback<DmPartyState['updateCharacter']>(async (id, patch) => {
     const base = party.find(c => c.id === id)
-    if (!base) { setError('Character is no longer loaded. Refresh and try again.'); return false }
-    const result = await writeCharacter(characterStore, base, patch, shardTrees)
+    if (!base) { setWriteError('Character is no longer loaded. Refresh and try again.'); return false }
+    // The DM reads raw rows, but strip anyway: a rename must never become stored.
+    const result = await writeCharacter(characterStore, base, stripRenames(patch), shardTrees)
     if (result.row) setParty(prev => prev.map(c =>
       c.id === id && result.row!.updated_at >= c.updated_at ? result.row! : c))
-    setError(result.ok ? null : result.message)
+    setWriteError(result.ok ? null : result.message)
     return result.ok
   }, [party, shardTrees])
 
@@ -188,7 +198,7 @@ export function useDmParty(shardTrees: Record<string, ShardTree> = {}): DmPartyS
       .select()
       .single<CharacterSecret>()
     if (err) {
-      setError(err.message)
+      setWriteError(err.message)
       setSecrets(prev => {
         const next = { ...prev }
         if (previous) next[characterId] = previous
@@ -200,7 +210,10 @@ export function useDmParty(shardTrees: Record<string, ShardTree> = {}): DmPartyS
     }
   }, [])
 
-  return { party, secrets, loading, error, refetch: fetchAll, updateCharacter, updateSecret }
+  return {
+    party, secrets, loading, error, writeError, dismissWriteError: () => setWriteError(null),
+    refetch: fetchAll, updateCharacter, updateSecret,
+  }
 }
 
 export interface DmCampaignState {

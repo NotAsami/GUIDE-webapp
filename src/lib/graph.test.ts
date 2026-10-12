@@ -1534,7 +1534,7 @@ test('every GraphEffect field is authorable, or is explicitly recorded as not ye
        universal target list, which is exactly why it needed no new field type. */
     threshold: 'schema', dmgType: 'schema', once: 'schema', stat: 'schema',
     ability: 'schema', cap: 'schema', minimum: 'schema', level: 'schema', oneOf: 'schema', keep: 'schema', faces: 'schema',
-    budget: 'schema', maxLevel: 'schema',
+    budget: 'schema', maxLevel: 'schema', to: 'schema',
     // Nothing is deferred today. The category stays because it is the honest
     // place to put a field that is stored but not yet authorable, and saying so
     // out loud beats leaving it silently uncovered.
@@ -2820,4 +2820,9 @@ test('an older arm with no effect id falls back to op and label', () => {
     label: 'Rage Damage', kind: 'damage', value: '2', at: 0,
   }]
   assert.deepEqual(staleArmed(buildContext(withFeatures([feat], { vars: { isRaging: false }, armed }))), ['a2'])
+})
+
+test('tier is the cantrip tier off character level — the table spells scale by', () => {
+  const at = (level: number) => baseScope({ identity: { level }, sheet: {} } as unknown as CharacterRow).tier
+  assert.deepEqual([1, 4, 5, 10, 11, 16, 17, 20].map(at), [1, 1, 2, 2, 3, 3, 4, 4])
 })

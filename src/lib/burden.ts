@@ -65,6 +65,16 @@ function allHeldItems(character: CharacterRow): (EquippedItem | InventoryItem)[]
   return items
 }
 
+/** Every stack that counts toward burden, heaviest first — the same set
+ *  currentBurden() sums, so the Inventory's breakdown can never disagree with
+ *  the total above it. Weightless entries are dropped: they explain nothing. */
+export function heldWeights(character: CharacterRow): { name: string; qty: number; lb: number }[] {
+  return allHeldItems(character)
+    .map(it => ({ name: it.name ?? 'Unnamed', qty: it.qty ?? 1, lb: itemWeight(it) }))
+    .filter(r => r.lb > 0)
+    .sort((a, b) => b.lb - a.lb)
+}
+
 /** Total carried weight in pounds (carried + equipped). */
 export function currentBurden(character: CharacterRow): number {
   const total = allHeldItems(character).reduce((n, it) => n + itemWeight(it), 0)

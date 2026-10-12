@@ -134,8 +134,7 @@ export function Stats() {
   return (
     <>
       <Deco
-        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; STAT_READOUT &nbsp;//&nbsp; VITALS OK</>}
-        right={<>Castella-08 &nbsp;//&nbsp; <span className="acc">SHEET: COMPLETE</span> &nbsp;//&nbsp; Loadout 02</>}
+        left={<><span className="acc">EQUIPMENT</span> &nbsp;//&nbsp; STAT_READOUT</>}
       />
       <Nav variant="dock" meta={meta} />
       <div className={styles.dashScroll}>
@@ -202,10 +201,10 @@ function hasDisadvantage(key: AbilityKey, exhaustion: number, tier: BurdenTier):
 /* ---------- shared widget chassis ---------- */
 
 function Widget(props: {
-  num: string; title: string; meta?: React.ReactNode; span: number; children: React.ReactNode
+  num: string; title: string; meta?: React.ReactNode; span: number; children: React.ReactNode; id?: string
 }) {
   return (
-    <section className={styles.widget} style={{ gridColumn: `span ${props.span}` }}>
+    <section id={props.id} className={styles.widget} style={{ gridColumn: `span ${props.span}` }}>
       <div className={styles.wHead}>
         <span className={styles.wNum}>{props.num}</span>
         <span className={styles.wTitle}>{props.title}</span>
@@ -248,7 +247,7 @@ function Combat({ sheet, onRollInit, flash }: {
           const body = (
             <>
               <span className={styles.abFrame} /><span className={styles.abInner} />
-              <span className={styles.pbMarker}>{c.marker}</span>
+              <span className={styles.pbMarker} aria-hidden="true">{c.marker}</span>
               <div className={styles.pbContent}>
                 <div className={styles.pbValue}>{c.value}</div>
                 <div className={styles.pbLabel}>{c.label}</div>
@@ -332,6 +331,14 @@ function HitPoints({ sheet, character, updateSection }: {
             <span className={styles.sep}>·</span>
             <span className={`${styles.pct}${danger ? ' ' + styles.danger : ''}`}>{pct}% Vitals</span>
           </div>
+          {/* Death saves live in row three, below the fold on a laptop — and
+              they matter exactly when HP reads 0. Point there, don't duplicate. */}
+          {cur === 0 && max > 0 && (
+            <button
+              type="button" className={styles.downCue}
+              onClick={() => document.getElementById('death-saves')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            >Down — roll death saves ↓</button>
+          )}
           <div className={styles.hpBar} aria-hidden="true">
             <div className={`${styles.fill}${danger ? ' ' + styles.danger : ''}`} style={{ width: `${pct}%` }} />
             <div className={styles.notch} title="25% danger threshold" />
@@ -388,32 +395,20 @@ function HitDice({ sheet, character, updateSection }: {
   }
 
   return (
-    <Widget
-      num="03" title="Hit Dice" span={3}
-      meta={<button className={styles.metaBtn} disabled title="Long rest restores hit dice — wired in Phase 1">Rest</button>}
-    >
-      <div className={styles.hdSummary}>
-        <span className={styles.v}>{max}{die}</span>
-        <span className={styles.lab}>Pool</span>
-        <span className={styles.rem}><span className="acc">{cur}</span> / {max} left</span>
+    /* One counter, not a tile per die: at level 18 the tiles were eighteen
+       identical buttons. The bar still shows the pool at a glance; Rest (topbar)
+       restores dice, so the old disabled "Rest" stub here is gone. */
+    <Widget num="03" title="Hit Dice" span={3} meta={<><span className="dim">Pool</span> {max}{die}</>}>
+      <div className={styles.hdCount}>
+        <span className={styles.hdCur}>{cur}</span>
+        <span className={styles.hdOf}>/ {max} {die} left</span>
       </div>
-      <div className={styles.hdPips}>
-        {Array.from({ length: max }, (_, i) => {
-          const spent = i >= cur
-          return (
-            <button
-              key={i} className={`${styles.hdPip}${spent ? ' ' + styles.spent : ''}`}
-              title={spent ? 'Restore one hit die' : 'Spend one hit die'}
-              onClick={() => setRemaining(i < cur ? i : i + 1)}
-            >
-              <span className={styles.hpFrame} />
-              <span className={styles.hpInner}>
-                <span className={styles.num}>{die}</span>
-                <span className={styles.pipLab}>{String(i + 1).padStart(2, '0')}</span>
-              </span>
-            </button>
-          )
-        })}
+      <div className={styles.hdBar} aria-hidden="true">
+        {Array.from({ length: max }, (_, i) => <i key={i} className={i < cur ? styles.on : undefined} />)}
+      </div>
+      <div className={styles.hdActions}>
+        <button type="button" className={styles.hdBtn} disabled={cur <= 0} onClick={() => void setRemaining(cur - 1)}>Spend one</button>
+        <button type="button" className={styles.hdBtn} disabled={cur >= max} onClick={() => void setRemaining(cur + 1)}>Restore one</button>
       </div>
     </Widget>
   )
@@ -558,7 +553,7 @@ function DeathSavesWidget({ character, updateSection }: {
       : { text: 'Conscious · Standing', cls: '' }
 
   return (
-    <Widget num="07" title="Death Saves" span={3}
+    <Widget id="death-saves" num="07" title="Death Saves" span={3}
       meta={<button className={styles.metaBtn} onClick={() => void write({ successes: 0, failures: 0 })} title="Clear all marks">Clear</button>}
     >
       <div className={styles.deathRows}>

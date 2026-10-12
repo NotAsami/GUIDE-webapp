@@ -20,29 +20,29 @@
   display: flex; align-items: center; gap: 14px; text-align: left;
   width: min(760px, calc(100vw - 48px)); padding: 14px 16px; cursor: pointer;
   box-shadow: 0 18px 40px -18px #000;
-  background: rgba(226, 176, 33, 0.07);
-  border: 1px solid rgba(226, 176, 33, 0.34); border-left: 3px solid var(--amber);
+  background: color-mix(in srgb, var(--gold) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 34%, transparent); border-left: 3px solid var(--gold);
   transition: background 150ms ease, border-color 150ms ease;
 }
-.prompt:hover, .prompt:focus-visible { background: rgba(226, 176, 33, 0.13); border-color: var(--amber); }
+.prompt:hover, .prompt:focus-visible { background: color-mix(in srgb, var(--gold) 13%, transparent); border-color: var(--gold); }
 .prompt .pIc {
   flex: 0 0 34px; height: 34px; display: flex; align-items: center; justify-content: center;
-  font-size: 15px; color: var(--amber-hot); background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(226, 176, 33, 0.3);
+  font-size: 15px; color: var(--gold); background: rgba(0, 0, 0, 0.35);
+  border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
 }
 .prompt .pTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .prompt .pT {
   font-family: var(--font-display); font-size: 15px; font-weight: 600;
-  letter-spacing: 0.04em; color: var(--amber-hot);
+  letter-spacing: 0.04em; color: var(--gold);
 }
 .prompt .pS {
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.16em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   text-transform: uppercase; color: var(--muted);
 }
 .prompt .pGo {
   flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--amber);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  text-transform: uppercase; color: var(--gold);
 }
 
 /* ---- OPEN PANEL ----
@@ -62,7 +62,7 @@
   max-height: min(80vh, 760px); overflow-y: auto; overscroll-behavior: contain;
   padding: 15px 17px 16px;
   background: #121110;
-  border: 1px solid rgba(226, 176, 33, 0.3); border-left: 3px solid var(--amber);
+  border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent); border-left: 3px solid var(--gold);
   box-shadow: 0 30px 70px -24px #000;
 }
 /* Sticky, so "Later" stays reachable in a panel with four questions in it. */
@@ -72,27 +72,27 @@
   background: #121110;
 }
 .kHead { display: flex; align-items: center; gap: 10px; }
-.kHead i { color: var(--amber-hot); font-size: 13px; }
+.kHead i { color: var(--gold); font-size: 13px; }
 .kT {
   font-family: var(--font-display); font-size: 15px; font-weight: 600;
-  letter-spacing: 0.05em; color: var(--amber-hot);
+  letter-spacing: 0.05em; color: var(--gold);
 }
 .kS {
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   text-transform: uppercase; color: var(--muted);
 }
 .kX {
   margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer;
   background: none; border: 0; padding: 4px 2px;
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--beige-dim);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  text-transform: uppercase; color: var(--beige-mid);
 }
-.kX:hover { color: var(--amber); }
+.kX:hover { color: var(--gold); }
 
 .kChoice { margin-top: 16px; }
 .kcLab {
   margin-bottom: 8px;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.2em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   text-transform: uppercase; color: var(--beige);
 }
 .kcOpts { display: flex; flex-direction: column; gap: 7px; }
@@ -100,34 +100,34 @@
 .kOpt {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
   padding: 11px 13px;
-  background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(212, 191, 125, 0.2);
+  background: rgba(0, 0, 0, 0.35); border: 1px solid color-mix(in srgb, var(--beige) 20%, transparent);
   border-left: 2px solid var(--beige-dim);
   transition: background 140ms ease, border-color 140ms ease;
 }
 .kOpt:hover:not(:disabled), .kOpt:focus-visible:not(:disabled) {
-  background: rgba(226, 176, 33, 0.1); border-color: rgba(226, 176, 33, 0.45); border-left-color: var(--amber);
+  background: color-mix(in srgb, var(--gold) 10%, transparent); border-color: color-mix(in srgb, var(--gold) 45%, transparent); border-left-color: var(--gold);
 }
 .kOpt.busy, .kOpt:disabled { opacity: 0.45; cursor: wait; }
 .kOpt .koN {
   flex: 0 0 24px; height: 24px; display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; color: var(--amber);
-  background: rgba(226, 176, 33, 0.1); border: 1px solid rgba(226, 176, 33, 0.28);
+  font-family: var(--font-mono); font-size: var(--fs-label); text-transform: uppercase; color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 10%, transparent); border: 1px solid color-mix(in srgb, var(--gold) 28%, transparent);
 }
 /* min-width:0 or a long item list refuses to wrap and pushes the arrow off the
    card — the same flex-child floor .catGrid2 documents. */
 .kOpt .koTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .kOpt .koL { font-family: var(--font-prose); font-size: 15px; color: var(--text); line-height: 1.25; }
 .kOpt .koI {
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--muted); line-height: 1.5;
 }
-.kOpt .koGo { flex: 0 0 auto; font-size: 10px; color: var(--beige-dim); }
-.kOpt:hover:not(:disabled) .koGo { color: var(--amber-hot); }
+.kOpt .koGo { flex: 0 0 auto; font-size: var(--fs-label); color: var(--beige-mid); }
+.kOpt:hover:not(:disabled) .koGo { color: var(--gold); }
 
 .kcCount {
   margin-left: 9px; padding: 2px 7px;
-  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em;
-  color: var(--amber); background: rgba(226, 176, 33, 0.1); border: 1px solid rgba(226, 176, 33, 0.3);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, transparent); border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
 }
 
 /* ---- A POOL ("which martial weapon") ----
@@ -138,12 +138,12 @@
 .poolItem {
   display: flex; align-items: center; gap: 9px; text-align: left; cursor: pointer;
   padding: 9px 11px;
-  background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(212, 191, 125, 0.2);
+  background: rgba(0, 0, 0, 0.35); border: 1px solid color-mix(in srgb, var(--beige) 20%, transparent);
   border-left: 2px solid var(--beige-dim);
   transition: background 140ms ease, border-color 140ms ease;
 }
 .poolItem:hover:not(:disabled), .poolItem:focus-visible:not(:disabled) {
-  background: rgba(226, 176, 33, 0.1); border-color: rgba(226, 176, 33, 0.45); border-left-color: var(--amber);
+  background: color-mix(in srgb, var(--gold) 10%, transparent); border-color: color-mix(in srgb, var(--gold) 45%, transparent); border-left-color: var(--gold);
 }
 .poolItem.busy, .poolItem:disabled { opacity: 0.45; cursor: wait; }
 .poolItem .piIc { flex: 0 0 16px; text-align: center; font-size: 12px; color: var(--beige); }
@@ -160,17 +160,17 @@
 .skillChip {
   display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
   padding: 7px 11px;
-  background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(212, 191, 125, 0.22);
+  background: rgba(0, 0, 0, 0.35); border: 1px solid color-mix(in srgb, var(--beige) 22%, transparent);
   font-family: var(--font-prose); font-size: 13.5px; color: var(--beige-dim);
   transition: color 130ms ease, border-color 130ms ease, background 130ms ease;
 }
 .skillChip .scDot { width: 5px; height: 5px; background: transparent; transform: rotate(45deg); }
-.skillChip:hover:not(:disabled) { color: var(--amber); border-color: rgba(226, 176, 33, 0.45); }
+.skillChip:hover:not(:disabled) { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
 .skillChip.on {
-  color: var(--amber-hot); background: rgba(226, 176, 33, 0.12); border-color: var(--amber);
-  box-shadow: inset 0 0 10px rgba(226, 176, 33, 0.14);
+  color: var(--gold); background: color-mix(in srgb, var(--gold) 12%, transparent); border-color: var(--gold);
+  box-shadow: inset 0 0 10px color-mix(in srgb, var(--gold) 14%, transparent);
 }
-.skillChip.on .scDot { background: var(--amber); }
+.skillChip.on .scDot { background: var(--gold); }
 .skillChip:disabled:not(.on) { opacity: 0.4; cursor: not-allowed; }
 
 /* A path carries prose the kit options do not — it is the most characterful
@@ -182,14 +182,14 @@
 /* Said once, under the question it applies to, rather than in the card footer
    where it would read as covering the gear too. */
 .kcNote {
-  margin: 9px 0 0; font-family: var(--font-mono); font-size: 7.5px;
-  letter-spacing: 0.08em; color: var(--beige-dim); line-height: 1.7;
+  margin: 9px 0 0; font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: 0.08em; color: var(--beige-mid); line-height: 1.7;
 }
 
 .kFoot {
-  margin: 16px 0 0; padding-top: 11px; border-top: 1px solid rgba(212, 191, 125, 0.14);
-  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.08em;
-  color: var(--beige-dim); line-height: 1.7;
+  margin: 16px 0 0; padding-top: 11px; border-top: 1px solid color-mix(in srgb, var(--beige) 14%, transparent);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.08em;
+  color: var(--beige-mid); line-height: 1.7;
 }
 
 @media (max-width: 620px) {
@@ -213,25 +213,25 @@
    edges with the gradient and eats the hairline.
    ============================================================ */
 .prompt.hasLevel {
-  background: linear-gradient(90deg, rgba(226,176,33,0.07), rgba(0,166,214,0.09) 60%, rgba(0,166,214,0.05));
-  border-color: rgba(0,166,214,0.34);
-  border-left: 1px solid rgba(0,166,214,0.34);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 7%, transparent), color-mix(in srgb, var(--cyan) 9%, transparent) 60%, color-mix(in srgb, var(--cyan) 5%, transparent));
+  border-color: color-mix(in srgb, var(--cyan) 34%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--cyan) 34%, transparent);
   overflow: hidden;
 }
 .prompt.hasLevel::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-  background: linear-gradient(180deg, var(--amber), var(--cyan));
+  background: linear-gradient(180deg, var(--gold), var(--cyan));
 }
 /* A slow breath across the top edge. It marks the card as live without moving
    anything or asking for a click — a level that pulses at you is a nag. */
 .prompt.hasLevel::after {
   content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(77,214,255,0.7), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--cyan-hot) 70%, transparent), transparent);
   animation: skSweep 3.4s ease-in-out infinite;
 }
 @keyframes skSweep { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
 .prompt.hasLevel:hover, .prompt.hasLevel:focus-visible {
-  background: linear-gradient(90deg, rgba(226,176,33,0.1), rgba(0,166,214,0.14) 60%, rgba(0,166,214,0.08));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 10%, transparent), color-mix(in srgb, var(--cyan) 14%, transparent) 60%, color-mix(in srgb, var(--cyan) 8%, transparent));
   border-color: var(--cyan);
   border-left-color: var(--cyan);
 }
@@ -245,7 +245,7 @@
   position: relative; isolation: isolate;
   flex: 0 0 40px; width: 40px; height: 40px; border: 0; background: var(--cyan);
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  filter: drop-shadow(0 0 10px rgba(0,166,214,0.45));
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--cyan) 45%, transparent));
 }
 .pIc.pHex::before {
   content: ""; position: absolute; inset: 1.5px; z-index: -1; background: #0d1114;
@@ -253,7 +253,7 @@
 }
 .pLv {
   font-family: var(--font-display); font-weight: 700; font-size: 18px; line-height: 1;
-  color: var(--cyan-hot); text-shadow: 0 0 12px rgba(0,166,214,0.5);
+  color: var(--cyan-hot); text-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 50%, transparent);
 }
 
 /* DIAMOND PIPS carry the count so the copy does not have to. Same shape as the
@@ -261,37 +261,37 @@
    hexagon. */
 .pips { flex: 0 0 auto; display: flex; gap: 5px; margin-left: auto; }
 .pip {
-  position: relative; width: 11px; height: 11px; background: rgba(226,176,33,0.55);
+  position: relative; width: 11px; height: 11px; background: color-mix(in srgb, var(--gold) 55%, transparent);
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 .pip::before {
   content: ""; position: absolute; inset: 1.5px; background: #121110;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
-.pip.pipLevel { background: var(--cyan); filter: drop-shadow(0 0 5px rgba(0,166,214,0.6)); }
+.pip.pipLevel { background: var(--cyan); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--cyan) 60%, transparent)); }
 .pip.pipLevel::before { background: var(--cyan); }
 
 /* ---- THE LEVEL ROW inside the open card ----
    Deliberately the loudest thing on it: this is the one decision a player
    looks forward to, and it should not queue behind "which martial weapon". */
-.kcCyan { color: var(--cyan); background: rgba(0,166,214,0.1); border-color: rgba(0,166,214,0.3); }
+.kcCyan { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); border-color: color-mix(in srgb, var(--cyan) 30%, transparent); }
 .lvRow {
   position: relative; overflow: hidden;
   display: flex; align-items: center; gap: 15px; width: 100%; padding: 15px 16px;
-  background: linear-gradient(90deg, rgba(0,166,214,0.13), rgba(0,166,214,0.05));
-  border: 1px solid rgba(0,166,214,0.45); border-left: 2px solid var(--cyan);
-  box-shadow: inset 0 0 34px rgba(0,166,214,0.08);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 13%, transparent), color-mix(in srgb, var(--cyan) 5%, transparent));
+  border: 1px solid color-mix(in srgb, var(--cyan) 45%, transparent); border-left: 2px solid var(--cyan);
+  box-shadow: inset 0 0 34px color-mix(in srgb, var(--cyan) 8%, transparent);
 }
 .lvRow::after {
   content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(77,214,255,0.7), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--cyan-hot) 70%, transparent), transparent);
   animation: skSweep 3.4s ease-in-out infinite;
 }
 /* Out of date: the plan was resolved against a level this character has left,
    and it cannot be recomputed here — the catalogs it came from are DM-only. */
 .lvRow.lvStale {
-  background: rgba(185,58,58,0.06);
-  border-color: rgba(185,58,58,0.45); border-left-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent); border-left-color: var(--danger);
   box-shadow: none;
 }
 .lvRow.lvStale::after { display: none; }
@@ -303,7 +303,7 @@
   position: relative; isolation: isolate; flex: 0 0 52px; width: 52px; height: 52px;
   display: flex; align-items: center; justify-content: center; background: var(--cyan);
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  filter: drop-shadow(0 0 12px rgba(0,166,214,0.45));
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--cyan) 45%, transparent));
 }
 .lvHex::before {
   content: ""; position: absolute; inset: 1.5px; z-index: -1; background: #0d1114;
@@ -311,7 +311,7 @@
 }
 .lvN {
   font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1;
-  color: var(--cyan-hot); text-shadow: 0 0 14px rgba(0,166,214,0.5);
+  color: var(--cyan-hot); text-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 50%, transparent);
 }
 .lvTx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .lvT {
@@ -324,18 +324,18 @@
 .lvD { font-family: var(--font-prose); font-size: 14px; line-height: 1.5; color: var(--muted); }
 .lvMeta { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 4px; }
 .mchip {
-  padding: 3px 8px; background: rgba(0,0,0,0.35); border: 1px solid rgba(0,166,214,0.35);
-  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.16em;
+  padding: 3px 8px; background: rgba(0,0,0,0.35); border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   text-transform: uppercase; color: var(--cyan);
 }
 .lvGo {
   flex: 0 0 auto; display: flex; align-items: center; gap: 8px; cursor: pointer;
-  padding: 11px 18px; background: rgba(0,166,214,0.12); border: 1px solid var(--cyan);
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.18em;
+  padding: 11px 18px; background: color-mix(in srgb, var(--cyan) 12%, transparent); border: 1px solid var(--cyan);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   text-transform: uppercase; color: var(--cyan-hot);
   transition: background 140ms ease, box-shadow 140ms ease;
 }
-.lvGo:hover:not(:disabled) { background: rgba(0,166,214,0.22); box-shadow: 0 0 14px rgba(0,166,214,0.35); }
+.lvGo:hover:not(:disabled) { background: color-mix(in srgb, var(--cyan) 22%, transparent); box-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 35%, transparent); }
 .lvGo:disabled { opacity: 0.45; cursor: wait; }
 
 @media (max-width: 620px) {
@@ -349,10 +349,10 @@
 /* The open panel carries the same amber→cyan bar as the collapsed prompt when
    a level is waiting in it — the two are one card in two states, and a bar that
    changes colour on open would say they are not. */
-.kit.hasLevel { border-color: rgba(0,166,214,0.3); border-left: 1px solid rgba(0,166,214,0.3); }
+.kit.hasLevel { border-color: color-mix(in srgb, var(--cyan) 30%, transparent); border-left: 1px solid color-mix(in srgb, var(--cyan) 30%, transparent); }
 .kit.hasLevel::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; z-index: 2;
-  background: linear-gradient(180deg, var(--amber), var(--cyan));
+  background: linear-gradient(180deg, var(--gold), var(--cyan));
 }
 .kit.hasLevel { position: fixed; }
 .kit.hasLevel .kHead i { color: var(--cyan-hot); }

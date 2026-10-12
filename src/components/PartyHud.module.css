@@ -73,7 +73,7 @@
   height: 36px;
   padding: 0 10px 0 0;
   background: linear-gradient(90deg, rgba(28, 26, 23, 0.92), rgba(16, 15, 13, 0.82));
-  border: 1px solid rgba(212, 191, 125, 0.28);
+  border: 1px solid color-mix(in srgb, var(--beige) 28%, transparent);
   pointer-events: auto;
   overflow: hidden;
   transition: opacity 260ms ease, transform 260ms ease, border-color 260ms ease;
@@ -90,7 +90,7 @@
    closes a tab. */
 .off {
   opacity: 0.4;
-  border-color: rgba(212, 191, 125, 0.14);
+  border-color: color-mix(in srgb, var(--beige) 14%, transparent);
 }
 
 /* Coming online pops the row out from its own screen edge. */
@@ -130,7 +130,7 @@
   height: 22px;
   margin-left: 7px;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  background: rgba(0, 166, 214, 0.14);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -140,9 +140,9 @@
 .dia i {
   font-size: 10px;
   color: var(--cyan);
-  text-shadow: 0 0 8px rgba(0, 166, 214, 0.55);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 55%, transparent);
 }
-.off .dia { background: rgba(170, 170, 170, 0.1); }
+.off .dia { background: color-mix(in srgb, var(--muted) 10%, transparent); }
 .off .dia i { color: var(--muted); text-shadow: none; }
 
 /* ---- name ---------------------------------------------------------------- */
@@ -177,13 +177,13 @@
   color: var(--text);
   line-height: 1;
 }
-.hp .sl { font-family: var(--font-mono); font-weight: 400; font-size: 9px; color: var(--muted); }
+.hp .sl { font-family: var(--font-mono); font-weight: 400; font-size: var(--fs-label); color: var(--muted); }
 .crit .hp { color: #ff8f8f; }
 
 /* Temp HP reads as its own cyan number, never folded into current HP. */
 .temp {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-label);
   color: var(--cyan);
 }
 
@@ -199,10 +199,10 @@
   top: 0; bottom: 0; left: 0;
   display: block;
   background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
-  box-shadow: 0 0 8px rgba(0, 166, 214, 0.5);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 50%, transparent);
 }
 .right .track i { left: auto; right: 0; background: linear-gradient(270deg, var(--cyan-dim), var(--cyan)); }
-.crit .track i { background: linear-gradient(90deg, #7a2424, var(--danger)); box-shadow: 0 0 8px rgba(185, 58, 58, 0.5); }
+.crit .track i { background: linear-gradient(90deg, #7a2424, var(--danger)); box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 50%, transparent); }
 .right .crit .track i { background: linear-gradient(270deg, #7a2424, var(--danger)); }
 
 /* ---- status pips --------------------------------------------------------- */
@@ -223,12 +223,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 7px;
+  font-size: var(--fs-label);
   line-height: 1;
-  background: rgba(0, 166, 214, 0.16);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
   border: 1px solid var(--cyan);
   color: var(--cyan);
-  box-shadow: 0 0 5px rgba(0, 166, 214, 0.4);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--cyan) 40%, transparent);
   cursor: help;
 }
 .pip i { display: block; line-height: 1; }
@@ -237,15 +237,15 @@
   outline-offset: 2px;
 }
 .pip.bad {
-  background: rgba(185, 58, 58, 0.18);
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
   border-color: var(--danger);
   color: #ff9d9d;
-  box-shadow: 0 0 5px rgba(185, 58, 58, 0.45);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--danger) 45%, transparent);
 }
 /* Overflow counter when more conditions are running than there is room for. */
 .more {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: var(--fs-label);
   color: var(--muted);
   cursor: help;
 }
@@ -263,11 +263,11 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  border: 1px solid rgba(212, 191, 125, 0.45);
+  border: 1px solid color-mix(in srgb, var(--beige) 45%, transparent);
   background: rgba(0, 0, 0, 0.5);
 }
-.ds b.ok { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 5px rgba(0, 166, 214, 0.6); }
-.ds b.fail { background: var(--danger); border-color: var(--danger); box-shadow: 0 0 5px rgba(185, 58, 58, 0.6); }
+.ds b.ok { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 5px color-mix(in srgb, var(--cyan) 60%, transparent); }
+.ds b.fail { background: var(--danger); border-color: var(--danger); box-shadow: 0 0 5px color-mix(in srgb, var(--danger) 60%, transparent); }
 
 /* ---- AC ------------------------------------------------------------------ */
 
@@ -285,8 +285,8 @@
 .ac .k {
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: 8px;
-  letter-spacing: 0.18em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   color: var(--cyan);
   text-transform: uppercase;
 }

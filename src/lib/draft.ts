@@ -29,6 +29,39 @@ const DEBOUNCE_MS = 400
 
 type Stored<T> = { at: number; value: T }
 
+/* ---------- undo / redo ---------- */
+
+/** Edits closer together than this are ONE undo step — typing a name is one
+ *  change, not one per letter. */
+export const COALESCE_MS = 600
+/** How far back undo reaches. A draft is small; a hundred copies is nothing. */
+export const HISTORY_CAP = 100
+
+export type History<T> = { past: T[]; future: T[]; lastAt: number }
+export const emptyHistory = <T>(): History<T> => ({ past: [], future: [], lastAt: 0 })
+
+/** An edit happened: remember the state BEFORE it, unless it continues the
+ *  burst the last entry already covers. Any new edit ends the redo branch. */
+export function recordEdit<T>(h: History<T>, before: T, at: number): History<T> {
+  const burst = at - h.lastAt < COALESCE_MS && h.past.length > 0
+  const past = burst ? h.past : [...h.past, before].slice(-HISTORY_CAP)
+  return { past, future: [], lastAt: at }
+}
+
+/** Step back: the current state goes onto `future`. Null when there is nothing. */
+export function stepUndo<T>(h: History<T>, current: T): { h: History<T>; value: T } | null {
+  if (!h.past.length) return null
+  const value = h.past[h.past.length - 1]
+  return { h: { past: h.past.slice(0, -1), future: [...h.future, current], lastAt: 0 }, value }
+}
+
+/** Step forward again — only along the branch an undo left behind. */
+export function stepRedo<T>(h: History<T>, current: T): { h: History<T>; value: T } | null {
+  if (!h.future.length) return null
+  const value = h.future[h.future.length - 1]
+  return { h: { past: [...h.past, current], future: h.future.slice(0, -1), lastAt: 0 }, value }
+}
+
 function read<T>(key: string): Stored<T> | null {
   try {
     const raw = localStorage.getItem(PREFIX + key)
@@ -88,6 +121,12 @@ export interface DraftBox<T> {
   reset: (to: T | null) => void
   /** After a successful publish — the local tier has nothing left to hold. */
   clear: () => void
+  /** Ctrl+Z / Ctrl+Y. Every `update` is undoable; reset and switching the thing
+   *  being edited start a fresh history. */
+  undo: () => void
+  redo: () => void
+  canUndo: boolean
+  canRedo: boolean
 }
 
 /**
@@ -112,11 +151,18 @@ export function useLocalDraft<T>(key: string, base: T | null, baseAt?: string | 
   // The key the current `draft` belongs to. Without this, switching selection
   // races the debounce and writes one feature's edits under another's key.
   const owner = useRef(key)
+  // History in a ref: it changes on every keystroke and nothing renders it but
+  // the two booleans, which `tick` refreshes.
+  const hist = useRef<History<T>>(emptyHistory())
+  const [, setTick] = useState(0)
+  const latest = useRef<T | null>(draft)
+  latest.current = draft
 
   useEffect(() => {
     const seed = seedFrom(read<T>(key), base, baseAt)
     if (seed.drop) { try { localStorage.removeItem(PREFIX + key) } catch { /* see read() */ } }
     owner.current = key
+    hist.current = emptyHistory()
     setDraft(seed.value)
     setSavedAt(seed.savedAt)
     return () => window.clearTimeout(timer.current)
@@ -125,19 +171,27 @@ export function useLocalDraft<T>(key: string, base: T | null, baseAt?: string | 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
+  // Autosave one state to the local tier — every edit, and every undo/redo,
+  // since an undone draft is still the draft the DM wants back after a refresh.
+  const persist = useCallback((next: T) => {
+    window.clearTimeout(timer.current)
+    const at = Date.now()
+    try {
+      localStorage.setItem(PREFIX + owner.current, JSON.stringify({ at, value: next } satisfies Stored<T>))
+      timer.current = window.setTimeout(() => setSavedAt(new Date(at)), DEBOUNCE_MS)
+    } catch { /* Retain the in-memory draft and dirty indicator. */ }
+  }, [])
+
   const update = useCallback((fn: (t: T) => T) => {
     setDraft(prev => {
       if (prev === null) return prev
       const next = fn(prev)
-      const k = owner.current
-      window.clearTimeout(timer.current)
-      const at = Date.now()
-      try {
-        localStorage.setItem(PREFIX + k, JSON.stringify({ at, value: next } satisfies Stored<T>))
-        timer.current = window.setTimeout(() => setSavedAt(new Date(at)), DEBOUNCE_MS)
-      } catch { /* Retain the in-memory draft and dirty indicator. */ }
+      if (next === prev) return prev
+      hist.current = recordEdit(hist.current, prev, Date.now())
+      persist(next)
       return next
     })
+    setTick(t => t + 1)
   }, [])
 
   const clear = useCallback(() => {
@@ -148,13 +202,56 @@ export function useLocalDraft<T>(key: string, base: T | null, baseAt?: string | 
 
   const reset = useCallback((to: T | null) => {
     clear()
+    hist.current = emptyHistory()
     setDraft(to)
   }, [clear])
+
+  /* NOT inside a setDraft updater: StrictMode runs updaters twice, and a step
+     that mutates the history there would undo two edits per keypress. The
+     current draft comes from a ref kept in step with every render instead. */
+  const step = useCallback((dir: 'undo' | 'redo') => {
+    const cur = latest.current
+    if (cur === null) return
+    const r = dir === 'undo' ? stepUndo(hist.current, cur) : stepRedo(hist.current, cur)
+    if (!r) return
+    hist.current = r.h
+    latest.current = r.value
+    persist(r.value)
+    setDraft(r.value)
+    setTick(t => t + 1)
+  }, [persist])
+  const undo = useCallback(() => step('undo'), [step])
+  const redo = useCallback(() => step('redo'), [step])
 
   // On the selection-change render, never expose the previous record's draft
   // to autosave before the hydration effect runs.
   const visibleDraft = owner.current === key ? draft : base
   const dirty = visibleDraft !== null && JSON.stringify(visibleDraft) !== JSON.stringify(base)
 
-  return { draft: visibleDraft, dirty, savedAt, update, reset, clear }
+  return {
+    draft: visibleDraft, dirty, savedAt, update, reset, clear, undo, redo,
+    canUndo: hist.current.past.length > 0, canRedo: hist.current.future.length > 0,
+  }
+}
+
+/**
+ * Ctrl/⌘+Z undoes, Ctrl/⌘+Y and Ctrl/⌘+Shift+Z redo — for an editor built on
+ * useLocalDraft. While the cursor is in a text field the browser's own text
+ * undo answers instead: that is what anyone pressing Ctrl+Z mid-word expects.
+ */
+export function useUndoKeys(undo: () => void, redo: () => void, enabled = true): void {
+  useEffect(() => {
+    if (!enabled) return
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.isContentEditable || t.tagName === 'TEXTAREA'
+        || (t.tagName === 'INPUT' && !['checkbox', 'radio', 'range', 'button', 'submit', 'color'].includes((t as HTMLInputElement).type)))) return
+      const k = e.key.toLowerCase()
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
+      else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undo, redo, enabled])
 }

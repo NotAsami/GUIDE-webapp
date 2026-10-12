@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { useRollLog } from '../lib/rolls'
 import { pendingTotal } from '../lib/rollView'
 import styles from './Layout.module.css'
@@ -11,17 +10,11 @@ interface Props {
   onToggleRollPanel: () => void
 }
 
-/** Telemetry strip ported from Codex.html lines 1203–1224. All values are
- *  cosmetic for now (no character data feeds them in Phase 0); the save
- *  counter ticks once per second to match the mockup's "live" feel. */
+/** Bottom strip: one line of flavour, then the real controls. Nothing here
+ *  may look like live status unless it is — a ticking "Save" counter or a
+ *  hardcoded "DM Online" reads as fact to a player. */
 export function Bottombar({ shopOpen, shopDismissed, onReopenShop, rollPanelOpen, onToggleRollPanel }: Props) {
-  const [tick, setTick] = useState(14)
   const { rolls } = useRollLog()
-
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => (t + 1) % 60), 1000)
-    return () => clearInterval(id)
-  }, [])
 
   /* THE REMINDER THAT OUTLIVES THE TOAST.
      The toast is the glance — five seconds, gone whether or not anyone looked.
@@ -41,16 +34,8 @@ export function Bottombar({ shopOpen, shopDismissed, onReopenShop, rollPanelOpen
   return (
     <footer className={styles.bottombar} role="contentinfo">
       <div className={styles.bbLine}>
-        <span className={styles.bbDot} />
-        <span className="lab">Neural Link:</span><span className="val">Stable</span>
-        <span className="sep">|</span>
-        <span className="lab">Shard Integrity:</span><span className="val">98.2%</span>
-        <span className="sep">|</span>
-        <span className="lab">Last Sync:</span><span className="val">0.07 ms</span>
-        <span className="sep">|</span>
-        <span className="lab">Castella-08:</span><span className="dim">Clear · Wind NNW 4kt</span>
-        <span className="sep">|</span>
-        <span className="lab">Tide:</span><span className="dim">Low @ 03:47</span>
+        <span className={styles.bbDot} aria-hidden="true" />
+        <span className="lab" aria-hidden="true">Neural Link:</span><span className="val" aria-hidden="true">Stable</span>
 
         <div className={styles.bbRight}>
           {/* Left the shop takeover open with "Leave Shop" — the DM hasn't
@@ -65,17 +50,13 @@ export function Bottombar({ shopOpen, shopDismissed, onReopenShop, rollPanelOpen
             onClick={onToggleRollPanel}
             title={badge > 0 ? `Roll context — ${badge} unresolved` : 'Roll context'}
           >
-            <i className="fa-solid fa-dice-d20" /> ROLLS
+            <i className="fa-solid fa-dice-d20" aria-hidden="true" /> ROLL CONTEXT
             {badge > 0 && (
               <span className={styles.bbBadge} aria-label={`${badge} unresolved`}>{badge}</span>
             )}
           </button>
-          <span className="sep">|</span>
-          <span className="lab">Codex</span><span className="val">v 2.4.7</span>
-          <span className="sep">|</span>
-          <span className={styles.bbDot} /><span className="val">DM Online</span>
-          <span className="sep">|</span>
-          <span className="lab">Save · 00:{tick.toString().padStart(2, '0')}</span>
+          <span className="sep" aria-hidden="true">|</span>
+          <span className="lab" aria-hidden="true">Codex</span><span className="val" aria-hidden="true">v 2.4.7</span>
         </div>
       </div>
     </footer>

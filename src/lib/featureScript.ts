@@ -24,6 +24,7 @@ function rule(e: GraphEffect, armed: boolean): string {
       : e.op === 'setVar' ? `set ${e.variable ?? '?'} = ${e.value ?? ''}`
       : e.op === 'addVar' ? `addVar ${e.variable ?? '?'} + ${e.value ?? ''}`
       : e.op === 'boost' ? `sheet boost ${e.stat ?? '?'} +${e.value ?? ''}`
+      : e.op === 'rename' ? `rename "${e.to ?? ''}"`
       : IS_SHEET(e.op) ? `sheet ${e.op}`
       : e.value ? `${e.op} ${amt(e.value)}` : e.op
   return `${head} "${e.label ?? ''}"${to}${!armed && e.once ? ' once' : ''}${e.oneOf ? ' oneOf' : ''}`

@@ -72,6 +72,7 @@ export const OP_GLYPH: Record<GraphOp, string> = {
   floor: '⊻',      // raises a total to a minimum — never a bonus
   reroll: '↻',    // re-runs a roll already made — the only op that acts afterwards
   note: '⊙',      // says something without changing a number
+  rename: '✎',    // changes what a thing is called, never a number
   boost: '◈',     // moves a number on the sheet, not on a roll
   useability: '◈', // also the sheet layer — which ability may swing the weapon
   unarmored: '◈',  // and again — the base AC of an unarmoured character
