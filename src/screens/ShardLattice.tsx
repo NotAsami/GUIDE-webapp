@@ -6,7 +6,7 @@ import { useAuth } from '../lib/auth'
 import { useDmStatus, useDmFeatures, type DmFeaturesState } from '../lib/dm'
 import { BootMark } from '../components/BootMark'
 import { useDmShards, type EditorNode, type EditorTree } from '../lib/dmShards'
-import { useLocalDraft } from '../lib/draft'
+import { useLocalDraft, useUndoKeys } from '../lib/draft'
 import { usePanZoom } from '../lib/usePanZoom'
 import { RING_GAP, branchColor, nodeXY } from '../lib/shards'
 import { MOD_STATS, SKILL_STATS, isAbility, compileEffects, effectsToMods, type Mod } from '../lib/modEditor'
@@ -130,8 +130,9 @@ export function ShardLattice() {
   // the catalog. `base` is the parked draft if there is one, else the published
   // tree — so reopening parked work reads clean rather than instantly dirty.
   const base = activeId ? drafts[activeId] ?? trees.find(t => t.id === activeId) ?? null : null
-  const { draft, dirty, savedAt, update: updateDraft, reset, clear } =
+  const { draft, dirty, savedAt, update: updateDraft, reset, clear, undo, redo, canUndo, canRedo } =
     useLocalDraft<EditorTree>(`shard:${activeId ?? 'none'}`, base, activeId ? rowSavedAt[activeId] : null)
+  useUndoKeys(undo, redo, !!draft)
   // Shim so the sub-inspectors keep their existing `Dispatch<SetStateAction>`
   // prop and none of them had to change: functional updates route to the
   // autosaving path, direct assignment to the reverting one.
@@ -399,6 +400,9 @@ export function ShardLattice() {
                     <button type="button" className={`${styles.tool} ${snap ? styles.on : ''}`} onClick={() => setSnap(s => !s)}><i className="fa-solid fa-bullseye" /> <span className={styles.lbl}>Snap 15°</span></button>
                     <button type="button" className={styles.tool} onClick={() => setRings(r => Math.max(1, r - 1))} aria-label="Remove ring" title="Remove ring"><i className="fa-solid fa-circle-minus" aria-hidden="true" /></button>
                     <button type="button" className={styles.tool} onClick={() => setRings(r => Math.min(10, r + 1))}><i className="fa-solid fa-circle-plus" /> <span className={styles.lbl}>Ring</span></button>
+                    <span className={styles.toolDiv} />
+                    <button type="button" className={styles.tool} disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)" aria-label="Undo"><i className="fa-solid fa-rotate-left" aria-hidden="true" /> <span className={styles.kbd}>⌘Z</span></button>
+                    <button type="button" className={styles.tool} disabled={!canRedo} onClick={redo} title="Redo (Ctrl+Y)" aria-label="Redo"><i className="fa-solid fa-rotate-right" aria-hidden="true" /> <span className={styles.kbd}>⌘Y</span></button>
                     <span className={styles.toolDiv} />
                     <button type="button" className={`${styles.tool} ${styles.danger}`} onClick={deleteSel}><i className="fa-solid fa-trash" /> <span className={styles.lbl}>Delete</span> <span className={styles.kbd}>⌫</span></button>
                   </div>
