@@ -891,3 +891,5 @@ select.in, .opSel {
 @media (prefers-reduced-motion: reduce) {
   [data-flash] { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 50%, transparent); }
 }
+/* Undo / Redo in the mode bar: inert when there is nothing to step to. */
+.modeSeg button:disabled { opacity: 0.35; cursor: not-allowed; }
