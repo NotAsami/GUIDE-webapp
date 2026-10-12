@@ -93,9 +93,9 @@ export function Login() {
           {loading ? (
             <div aria-busy="true" style={{ display: 'flex', flexDirection: 'column' }}>
               <span className="sk" style={{ display: 'block', width: 118, height: 9 }} />
-              <span className="sk" style={{ display: 'block', width: '100%', height: 48, marginTop: 14, border: '1px solid rgba(138, 122, 74, 0.4)' }} />
+              <span className="sk" style={{ display: 'block', width: '100%', height: 48, marginTop: 14, border: '1px solid color-mix(in srgb, var(--beige-dim) 40%, transparent)' }} />
               <span className="sk" style={{ display: 'block', width: '82%', height: 11, marginTop: 14 }} />
-              <span className="sk" style={{ display: 'block', width: '100%', height: 48, marginTop: 22, border: '1px solid rgba(13, 110, 140, 0.45)' }} />
+              <span className="sk" style={{ display: 'block', width: '100%', height: 48, marginTop: 22, border: '1px solid color-mix(in srgb, var(--cyan-dim) 45%, transparent)' }} />
             </div>
           ) : sent ? (
             <div className={styles.sent}>

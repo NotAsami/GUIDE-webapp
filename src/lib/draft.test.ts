@@ -101,3 +101,27 @@ test('no local copy at all just opens the row, dropping nothing', () => {
   assert.equal(seed.drop, false)
   assert.equal(seed.savedAt, null)
 })
+
+test('undo history: bursts coalesce, undo/redo walk it, a new edit ends the redo branch', async () => {
+  const { COALESCE_MS, emptyHistory, recordEdit, stepRedo, stepUndo } = await import('./draft.ts')
+  let h = emptyHistory<string>()
+  h = recordEdit(h, 'a', 1000)              // a → ab
+  h = recordEdit(h, 'ab', 1000 + 100)       // same burst: ab → abc is still one step
+  assert.deepEqual(h.past, ['a'])
+  h = recordEdit(h, 'abc', 1000 + 100 + COALESCE_MS + 1)   // a pause: new step
+  assert.deepEqual(h.past, ['a', 'abc'])
+
+  const u1 = stepUndo(h, 'abcd')!
+  assert.equal(u1.value, 'abc')
+  const u2 = stepUndo(u1.h, 'abc')!
+  assert.equal(u2.value, 'a')
+  assert.equal(stepUndo(u2.h, 'a'), null, 'nothing left to undo')
+
+  const r1 = stepRedo(u2.h, 'a')!
+  assert.equal(r1.value, 'abc')
+  // An edit after an undo drops what redo could have restored.
+  const branched = recordEdit(r1.h, 'abc', 99999)
+  assert.equal(stepRedo(branched, 'abcX'), null)
+  // An edit right after an undo is a NEW step, never folded into an older burst.
+  assert.equal(stepUndo(branched, 'abcX')!.value, 'abc')
+})

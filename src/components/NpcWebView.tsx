@@ -27,7 +27,7 @@ export const initials = (name: string) => {
   return (words[0]![0]! + (words.length > 1 ? words[words.length - 1]![0]! : '')).toUpperCase()
 }
 
-export const ATT_VAR: Record<string, string> = { friendly: 'var(--good)', neutral: 'var(--muted)', wary: 'var(--amber)', hostile: 'var(--danger-hot)' }
+export const ATT_VAR: Record<string, string> = { friendly: 'var(--good)', neutral: 'var(--muted)', wary: 'var(--gold)', hostile: 'var(--danger-hot)' }
 
 /** One line under a node: how the party knows them, or through whom. */
 function caption(web: Web, n: WebNode, nameOf: (id: string) => string): string {

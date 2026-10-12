@@ -32,6 +32,7 @@ import { abilities, abilityMod, proficiency } from './dnd.ts'
 /* No cycle: featureView imports only database.types, opSchema and expr. */
 import { usesOf } from './featureView.ts'
 import { rolledDiceTerms, type RolledDie } from './dice.ts'
+import { cantripTier } from './spells.ts'
 
 /** Lifted from ShardLattice.tsx so the engine and the lattice editor share one
  *  audit vocabulary rather than growing two. `t` is the title, `s` the sentence,
@@ -216,7 +217,10 @@ export function baseScope(character: CharacterRow, shardTrees: Record<string, Sh
      permanent grant. */
   const has: ExprScope = {}
   for (const f of character.sheet?.features ?? []) {
-    if (f.name) has[hasIdent(f.name)] = true
+    // The STORED name: a rename (lib/rename.ts) changes what the screens show,
+    // never what `has<Feature>` is called.
+    const nm = '__baseName' in f ? (f as { __baseName?: string }).__baseName : f.name
+    if (nm) has[hasIdent(nm)] = true
   }
 
   return {
@@ -241,6 +245,7 @@ export function baseScope(character: CharacterRow, shardTrees: Record<string, Sh
        an authored variable and has no VarDef to carry an initial. */
     attacksThisTurn:
       ((character.resources as { graph?: GraphState } | undefined)?.graph?.attacks) ?? 0,
+    tier: cantripTier(character.identity?.level ?? 1),
   }
 }
 
@@ -1097,6 +1102,10 @@ export function resolve(ctx: GraphContext, req: ResolveReq): Resolution {
     // the score the roll is built from, and again as a contribution.
     if (IS_SHEET(eff.op)) continue
 
+    // A rename is about what a thing is CALLED, never about a number on a roll —
+    // lib/rename.ts applies it to the row the screens read.
+    if (eff.op === 'rename') continue
+
     // §16: a `once` effect ARMS, it does not apply. It waits in
     // resources.graph.armed for the next matching roll, and the armed loop
     // below is what puts it on a number. Skipping it here is the whole
@@ -1714,6 +1723,15 @@ export function auditNode(
           s: `${eff.label || eff.id} names ${ts.length} rolls, which places ${ts.length} separate bonuses on the recipient — they can use every one. For "their next D20 Test", target roll:d20 alone.`,
         })
       }
+    }
+
+    /* A RENAME NAMES SOMETHING. With no target it would rename nothing (its own
+       node has no display to change), and an `ask` would make a name a per-roll
+       choice — the screens read names off the row, where there is no roll to ask
+       at. Both silent no-ops, so both refused. */
+    if (eff.op === 'rename') {
+      if (!(eff.target ?? []).length) out.push({ sev: 'err', id: eff.id, t: 'Rename needs a target', s: `${eff.label || eff.id} renames nothing — pick the spell, item or feature it renames.` })
+      if (eff.ask?.trim()) out.push({ sev: 'err', id: eff.id, t: 'Rename cannot ask', s: `${eff.label || eff.id} has an ask, but a name is not chosen per roll. Gate it with when (e.g. level >= 7).` })
     }
 
     if (IS_SHEET(eff.op)) {

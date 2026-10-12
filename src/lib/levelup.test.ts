@@ -585,3 +585,27 @@ test('a feature with NO prerequisite is unaffected — the old behaviour is inta
   const patch = levelUpPatch(row, plan(row), { ...NO_CHOICE, die: 6, featureIds: ['cls:arbiter:f_at8'] })
   assert.ok((patch.sheet?.features ?? []).some(f => f.name === 'Indomitable'))
 })
+
+test('levelUnlocks lists what an owned feature turns ON at the new level, and only that', async () => {
+  const { levelUnlocks } = await import('./levelup.ts')
+  const row = {
+    id: 'c1', owner: 'u1', name: 'Ros', identity: { level: 6 }, resources: {}, inventory: [], equipped: {},
+    shards: {}, spellbook: {}, lore: {}, progress: {}, updated_at: '',
+    sheet: {
+      abilities: { str: 10, dex: 10, con: 10, int: 16, wis: 10, cha: 10 }, hp: { current: 40, max: 40 }, proficiencyBonus: 3,
+      features: [{
+        id: 'pyro', feature_id: 'pyro', name: 'Pyromancer', graph: [
+          { id: 'beam', op: 'note', label: 'Fire Beam', when: 'level >= 7', target: ['spell:fb'], text: 'Fire Bolt is now a beam: {tier}d10 to every creature in a line.' },
+          { id: 'always', op: 'note', label: 'Warm hands', text: 'Always on.' },
+          { id: 'later', op: 'note', label: 'Inferno', when: 'level >= 11', text: 'Later.' },
+          { id: 'roll', op: 'note', label: 'On hit', when: 'hit', text: 'Per roll.' },
+        ],
+      }],
+    },
+  } as unknown as CharacterRow
+  const at7 = levelUnlocks(row, {}, 7)
+  assert.deepEqual(at7.map(u => u.label), ['Fire Beam'])
+  assert.equal(at7[0].source, 'Pyromancer')
+  assert.equal(at7[0].text, 'Fire Bolt is now a beam: 2d10 to every creature in a line.')
+  assert.deepEqual(levelUnlocks(row, {}, 6), [], 'no level change, nothing turns on')
+})

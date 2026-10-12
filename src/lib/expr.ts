@@ -41,6 +41,12 @@ export const VAR_IDENTS = [
      of §33's line. "On your FIRST attack roll" — the decision point Reckless
      Attack and its family are worded around — is `attacksThisTurn == 0`. */
   'attacksThisTurn',
+  /* THE CANTRIP TIER — 1 to 4, stepping at character level 5, 11 and 17. The
+     same number lib/spells.ts damageAt applies a cantrip's `scaling` by, so a
+     feature that scales "like a cantrip" reads the one table rather than
+     re-deriving it: `1d8 * tier` is Green-Flame Blade's rider, `tier - 1` is
+     the number of extra dice a cantrip has picked up. */
+  'tier',
 ] as const
 export const ROLL_IDENTS = ['cast', 'proficient', 'targetAc', 'hit'] as const
 

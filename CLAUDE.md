@@ -41,7 +41,7 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 
 ## Phase 0 smoke test (proves the loop)
 - Login → land on `/` → topbar shows HP 52/52 and the three story cards render from `progress.stories`.
-- Topbar HP `−` / `+` writes through to `characters.sheet.hp.current`; reload preserves the new value.
+- Topbar HP pill → Damage/Heal writes through to `characters.sheet.hp.current`; reload preserves the new value.
 - A second account (no character row, not in `dm_users`) sees the "no character bound" screen — RLS holds.
 
 ## Project layout

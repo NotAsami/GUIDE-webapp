@@ -20,6 +20,7 @@ import type { ExprScope } from '../lib/expr'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Features.module.css'
 import { Icon } from '../components/Icon'
+import { RenamedNote } from '../components/RenamedNote'
 
 interface RouteContext {
   character: CharacterRow
@@ -321,8 +322,8 @@ export function Features() {
   return (
     <>
       <Deco
-        left={<><span className="acc">FEATURES</span> &nbsp;//&nbsp; GRAPH RESOLVED &nbsp;//&nbsp; GATES OK</>}
-        right={<>Nodes {rows.length} &nbsp;//&nbsp; <span className="acc">GEAR :: BOUND</span> &nbsp;//&nbsp; Live Derive</>}
+        left={<><span className="acc">FEATURES</span> &nbsp;//&nbsp; GRAPH</>}
+        right={<>Nodes <span className="acc">{rows.length}</span></>}
       />
       <Nav variant="dock" meta={meta} />
 
@@ -640,6 +641,7 @@ function FeaturePopup({ row, busy, scope, on, vars, gate, back, affected, resolv
             </div>
             <div className={styles.imTitles}>
               <div className={cx(styles.imName, on && styles.on)}>{f.name}</div>
+              <RenamedNote obj={f} />
               <div className={styles.imTags}>
                 {f.activation && f.activation !== 'none'
                   ? <span className={cx(styles.actBadge, styles[f.activation])}>{ACTS[f.activation]}</span>

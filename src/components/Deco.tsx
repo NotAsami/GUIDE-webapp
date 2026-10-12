@@ -3,7 +3,8 @@ import styles from './Deco.module.css'
 
 interface Props {
   left: ReactNode
-  right: ReactNode
+  /** Only for real, data-derived readouts — omit rather than fake one. */
+  right?: ReactNode
   /** Codex-only corner brackets (the "mainframe" frame). Other screens drop
    *  them and keep just the vertical side-rail flavour text. */
   corners?: boolean
@@ -24,7 +25,7 @@ export function Deco({ left, right, corners }: Props) {
         </>
       )}
       <div className={`${styles.sideLabel} ${styles.left}`}>{left}</div>
-      <div className={`${styles.sideLabel} ${styles.right}`}>{right}</div>
+      {right && <div className={`${styles.sideLabel} ${styles.right}`}>{right}</div>}
     </div>
   )
 }

@@ -28,14 +28,15 @@ import {
   casterSlots, castingNumbers, featureSnapshot, gateLevel, gateOpen, hitDieAverage, CLASS_GRANT_PREFIX,
 } from './classes.ts'
 import { abilities, abilityMod } from './dnd.ts'
-import { characterVars } from './graph.ts'
+import { buildContext, characterVars } from './graph.ts'
+import { evalExpr, interpolate } from './expr.ts'
 import { effectiveSheet } from './effects.ts'
 import { prereqMet } from './feats.ts'
 import { pactSlotCount, pactSlotLevel } from './spells.ts'
 import type { ExprScope } from './expr.ts'
 import type {
   AbilityKey, CatalogClassRow, CatalogFeatureData, CatalogFeatureRow, CharacterRow,
-  CharacterUpdate, ClassCasterType, ClassDef, Feature, FeatureOffer, HP, LevelUpPlan,
+  CharacterUpdate, ClassCasterType, ClassDef, Feature, FeatureOffer, GraphOp, HP, LevelUpPlan,
   PendingLevel, ShardTree, SpellSlot,
 } from './database.types.ts'
 
@@ -430,4 +431,49 @@ export function levelUpPatch(
     sheet: nextSheet,
     ...(Object.keys(spellbookPatch).length ? { spellbook: { ...sb, ...spellbookPatch } } : {}),
   }
+}
+
+
+/** One thing the character ALREADY OWNS that switches on at the new level. */
+export type LevelUnlock = {
+  /** The feature / item / shard node the effect is authored on. */
+  source: string
+  op: GraphOp
+  label: string
+  /** The sentence the player reads — a note's `text`, interpolated at the new
+   *  level so "{tier}d10" reads as the number it will be. */
+  text: string
+}
+
+/**
+ * WHAT CHANGES — effects on things the character already has whose `when`
+ * reads false now and true at `toLevel`.
+ *
+ * The level-up plan has always listed what a level ADDS (hit points, slots, new
+ * class features) and never what it TURNS ON: a feature authored "at level 7,
+ * Fire Bolt becomes a beam" is a note gated `level >= 7`, which only ever
+ * surfaced on the next Fire Bolt roll. Same contexts the roller builds, once at
+ * each level, so this cannot disagree with what the roll will then do.
+ *
+ * Ungated effects are skipped (they were already on), and so are ones that read
+ * roll context (`hit`, `cast`) — those are decided per roll, not per level.
+ */
+export function levelUnlocks(row: CharacterRow, shardTrees: Record<string, ShardTree>, toLevel: number): LevelUnlock[] {
+  const before = buildContext(row, shardTrees)
+  const after = buildContext({ ...row, identity: { ...(row.identity ?? {}), level: toLevel } } as CharacterRow, shardTrees)
+  const on = (when: string, scope: ExprScope) => { const v = evalExpr(when, scope); return !!v && v.t === 'bool' && v.v }
+  const out: LevelUnlock[] = []
+  const seen = new Set<string>()
+  for (const effs of after.byOwner.values()) {
+    for (const { eff, from } of effs) {
+      if (!eff.when || seen.has(eff.id)) continue
+      seen.add(eff.id)
+      if (!on(eff.when, after.scope) || on(eff.when, before.scope)) continue
+      out.push({
+        source: from.obj.name, op: eff.op, label: eff.label,
+        text: interpolate(eff.text || (eff.op === 'rename' && eff.to ? `Now called **${eff.to}**.` : eff.label), after.scope).text,
+      })
+    }
+  }
+  return out
 }

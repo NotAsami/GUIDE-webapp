@@ -214,6 +214,19 @@ export const OPS: Record<GraphOp, OpDef> = {
        reveals nothing. */
     ONCE, ONE_OF],
   },
+  rename: {
+    label: 'rename', group: 'passive', icon: 'fa-signature',
+    blurb: 'Shows the targeted spell, item or feature under a NEW NAME while the condition holds — "at level 7, Fire Bolt becomes Fire Beam". Gate it with when (level >= 7). The stored name never changes, so removing this feature puts the old name back. The level-up screen lists it under What Changes, and the player sees where the new name came from the first time they meet it.',
+    fields: [{
+      key: 'to', type: 'text', label: 'New name', required: true,
+      desc: 'What the target is called from now on, everywhere the player sees it.',
+      example: 'Fire Beam',
+    }, {
+      key: 'text', type: 'text', label: 'What changed', wide: true,
+      desc: 'Optional. The sentence the level-up screen and the first-time "altered by" line show. {braces} compute.',
+      example: 'Fire Bolt is now a beam: it strikes every creature in a 60-foot line.',
+    }],
+  },
   resist: flag('resist', 'fa-shield-halved', 'Halves incoming damage of the matched kind. Target a tag — the tag names the damage type.'),
   vuln: flag('vuln', 'fa-heart-crack', 'Doubles incoming damage of the matched kind.'),
   immune: flag('immune', 'fa-shield', 'Nullifies incoming damage of the matched kind.'),
@@ -313,7 +326,7 @@ export const OPS: Record<GraphOp, OpDef> = {
 
 /** Palette order — what an author reaches for first, and what hides behind MORE. */
 export const PALETTE = ['add', 'adv', 'dis', 'crit', 'resist'] as const satisfies readonly GraphOp[]
-export const PALETTE_MORE = ['vuln', 'immune', 'floor', 'reroll', 'note'] as const satisfies readonly GraphOp[]
+export const PALETTE_MORE = ['vuln', 'immune', 'floor', 'reroll', 'note', 'rename'] as const satisfies readonly GraphOp[]
 /** Activation outcomes get their own palette group — they answer a different
  *  question ("what happens when I press this") from every op above. */
 export const PALETTE_ACT = ['setVar', 'addVar', 'addUses', 'addSlot', 'setHp', 'grant'] as const satisfies readonly GraphOp[]
@@ -345,7 +358,7 @@ export const IS_SHEET = (op: GraphOp) => OPS[op].group === 'sheet'
 export const HAS_TARGET = (op: GraphOp) => OPS[op].group === 'passive' || op === 'addUses' || op === 'grant'
 
 export const OP_TITLE: Record<GraphOp, string> = {
-  add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', floor: 'Floor', reroll: 'Reroll', note: 'Note', boost: 'Boost',
+  add: 'Add', adv: 'Adv', dis: 'Dis', crit: 'Crit', floor: 'Floor', reroll: 'Reroll', note: 'Note', rename: 'Rename', boost: 'Boost',
   useability: 'Use Ability', unarmored: 'Unarmored AC',
   resist: 'Resist', vuln: 'Vuln', immune: 'Immune',
   setVar: 'Set Var', addVar: 'Add Var', addUses: 'Add Uses', addSlot: 'Add Slot', setHp: 'Set HP', grant: 'Grant',

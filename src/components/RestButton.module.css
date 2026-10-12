@@ -6,13 +6,13 @@
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--cyan);
   margin-left: 0;
   padding: 4px 8px;
-  background: rgba(0, 166, 214, 0.06);
+  background: color-mix(in srgb, var(--cyan) 6%, transparent);
   border: 1px solid var(--cyan-dim);
   cursor: pointer;
   transition: color 120ms, border-color 120ms, background 120ms;
@@ -20,18 +20,12 @@
 .restBtn:hover {
   color: var(--cyan-hot);
   border-color: var(--cyan);
-  background: rgba(0, 166, 214, 0.12);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
 }
 .restBtn i { font-size: 10px; }
 
 /* ---- modal ---- */
-.overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 400;
-  display: grid;
-  place-items: center;
-  padding: 24px;
+.panel::backdrop {
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(2px);
   animation: overlayIn 160ms ease;
@@ -45,12 +39,15 @@
   --cut: 14px;
   --bc: var(--beige);
   width: 400px;
-  max-width: 100%;
+  max-width: calc(100% - 48px);
+  /* <dialog> UA defaults: centred by margin:auto, but padded and recoloured. */
+  padding: 0;
+  color: inherit;
   background-color: rgba(10, 10, 10, 0.98);
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
     linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
-    radial-gradient(120% 90% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 60%);
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--cyan) 8%, transparent), transparent 60%);
   background-repeat: no-repeat;
   background-origin: border-box;
   background-position: top left, bottom right, 0 0;
@@ -58,7 +55,7 @@
   border: 1.5px solid var(--bc);
   box-shadow:
     0 18px 40px rgba(0, 0, 0, 0.7),
-    0 0 28px rgba(0, 166, 214, 0.18);
+    0 0 28px color-mix(in srgb, var(--cyan) 18%, transparent);
   clip-path: polygon(var(--cut) 0, 100% 0,
     100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%,
     0 100%, 0 var(--cut));
@@ -74,13 +71,13 @@
   align-items: center;
   gap: 12px;
   padding: 16px 18px 14px;
-  border-bottom: 1px dashed rgba(212, 191, 125, 0.3);
+  border-bottom: 1px dashed color-mix(in srgb, var(--beige) 30%, transparent);
 }
 .icon {
   width: 38px; height: 38px; flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   color: var(--cyan-hot); font-size: 17px;
-  border: 1px solid rgba(0, 166, 214, 0.4);
+  border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
   background: rgba(0, 0, 0, 0.4);
 }
 .titles { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -90,8 +87,8 @@
   text-transform: uppercase; line-height: 1;
 }
 .sub {
-  font-family: var(--font-mono); font-size: 8.5px;
-  letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--muted); text-transform: uppercase;
 }
 
 /* ---- mode tabs ---- */
@@ -103,7 +100,7 @@
 .tab {
   flex: 1;
   padding: 8px 0;
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   text-transform: uppercase; color: var(--muted);
   background: transparent;
   border: 1.5px solid var(--beige-dim);
@@ -114,7 +111,7 @@
 .tabOn {
   color: var(--cyan-hot);
   border-color: var(--cyan);
-  background: rgba(0, 166, 214, 0.1);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
 }
 
 .body { padding: 10px 18px 4px; min-height: 96px; }
@@ -122,7 +119,7 @@
 /* label + value on one line; value flush-right and never wrapping. */
 .line {
   padding: 10px 0;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 8%, transparent);
 }
 .line:last-child { border-bottom: none; }
 .lineMain {
@@ -131,8 +128,8 @@
   gap: 10px;
 }
 .lab {
-  font-family: var(--font-mono); font-size: 9.5px;
-  letter-spacing: 0.2em; color: var(--beige); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase;
 }
 .total {
   font-family: var(--font-display); font-weight: 600;
@@ -144,7 +141,7 @@
 .bd {
   flex: 1 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-family: var(--font-mono); font-size: 9px;
+  font-family: var(--font-mono); font-size: var(--fs-label);
   letter-spacing: 0.04em; color: var(--muted);
 }
 .total { margin-left: auto; flex: 0 0 auto; }
@@ -157,19 +154,19 @@
   padding: 6px 0 8px;
 }
 .spendLab {
-  font-family: var(--font-mono); font-size: 10px;
-  letter-spacing: 0.2em; color: var(--beige); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: var(--ls-label); color: var(--beige); text-transform: uppercase;
 }
 .stepper { display: flex; align-items: center; gap: 2px; }
 .stepper button {
   width: 30px; height: 30px;
   font-family: var(--font-display); font-size: 16px; line-height: 1;
   color: var(--cyan-hot);
-  background: rgba(0, 166, 214, 0.08);
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
   border: 1px solid var(--cyan-dim);
   cursor: pointer;
 }
-.stepper button:hover:not(:disabled) { background: rgba(0, 166, 214, 0.16); }
+.stepper button:hover:not(:disabled) { background: color-mix(in srgb, var(--cyan) 16%, transparent); }
 .stepper button:disabled { opacity: 0.35; cursor: default; }
 .stepVal {
   min-width: 34px; text-align: center;
@@ -180,14 +177,14 @@
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 12px;
   padding: 2px 0 10px;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.08);
-  font-family: var(--font-mono); font-size: 9px;
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 8%, transparent);
+  font-family: var(--font-mono); font-size: var(--fs-label);
   letter-spacing: 0.06em; color: var(--beige);
 }
 .spendMeta .dim { color: var(--cyan); }
 .note {
   margin: 10px 0 2px;
-  font-family: var(--font-mono); font-size: 9.5px;
+  font-family: var(--font-mono); font-size: var(--fs-label);
   letter-spacing: 0.04em; color: var(--muted); line-height: 1.5;
 }
 
@@ -209,11 +206,11 @@
 }
 .cancel:hover { color: var(--beige); border-color: var(--beige); }
 .confirm {
-  background: rgba(0, 166, 214, 0.1);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
   border: 1.5px solid var(--cyan);
   color: var(--cyan-hot);
 }
-.confirm:hover { background: rgba(0, 166, 214, 0.18); }
+.confirm:hover { background: color-mix(in srgb, var(--cyan) 18%, transparent); }
 .cancel:disabled, .confirm:disabled { opacity: 0.5; cursor: default; }
 
 /* Cut-corner border fix (see OperatorConsole.module.css): redraw the border
@@ -225,7 +222,7 @@
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
     linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
-    radial-gradient(120% 90% at 50% 0%, rgba(0, 166, 214, 0.08), transparent 60%);
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--cyan) 8%, transparent), transparent 60%);
   background-color: rgba(10, 10, 10, 0.98);
   background-repeat: no-repeat;
   background-origin: border-box;

@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useDmStatus } from '../lib/dm'
 import type { CharacterRow, CharacterSection, ShardTree } from '../lib/database.types'
-import { burden } from '../lib/burden'
+import { burden, burdenTier } from '../lib/burden'
 import { effectiveSheet } from '../lib/effects'
 import { useFullscreen } from '../lib/fullscreen'
 import { RestButton } from './RestButton'
+import { HpControl } from './HpControl'
 import styles from './Layout.module.css'
 
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ')
@@ -18,7 +19,7 @@ interface Props {
   shardTrees?: Record<string, ShardTree>
 }
 
-/** Shared chrome. The HP pill shows current/max (editing lives in the Stat Panel);
+/** Shared chrome. The HP pill opens damage/heal from any screen (HpControl);
  *  the Rest button beside it resets daily resources. */
 export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
   const { signOut } = useAuth()
@@ -28,16 +29,20 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
   const level = character.identity?.level ?? 1
   const reputation = character.identity?.reputation ?? 0
   const gold = character.sheet?.coins?.gold ?? 0
-  const hpCurrent = character.sheet?.hp?.current ?? 0
   // Effective max — base + slotted-shard bonuses (lib/effects.ts). Current
   // HP itself is never shard-boosted; only the ceiling moves.
   const hpMax = effectiveSheet(character, shardTrees).hp?.max ?? character.sheet?.hp?.max ?? 0
-  const hpLow = hpMax > 0 && hpCurrent / hpMax <= 0.25
 
   // Burden is derived from item weights (carried + equipped) vs STR-based
   // capacity — one shared helper, also read by the Inventory screen.
   const { current: burdenCurrent, max: burdenMax, ratio: burdenRatio } = burden(character, shardTrees)
   const overBurdened = burdenRatio > 1
+  // The SRD tiers the Inventory already states, surfaced before capacity: a
+  // slowed character should see it in the bar, not only when they are stuck.
+  const tier = burdenTier(burdenCurrent, burdenMax)
+  const burdenNote = overBurdened ? 'Over capacity'
+    : tier === 'heavy' ? 'Heavily encumbered — speed −20 ft'
+    : tier === 'encumbered' ? 'Encumbered — speed −10 ft' : undefined
 
   const flavor = [character.identity?.race, character.identity?.class].filter(Boolean) as string[]
   if (character.identity?.archetype) flavor.push(character.identity.archetype)
@@ -60,11 +65,7 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
           </div>
           <div className={styles.bar} aria-hidden="true"><i style={{ width: `${pct(reputation, 100)}%` }} /></div>
         </div>
-        <div className={styles.hpBlock} aria-label="HP">
-          <span className="ic">♥</span>
-          <span className={`val${hpLow ? ' low' : ''}`}>{hpCurrent} / {hpMax}</span>
-          <span className="lab">HP</span>
-        </div>
+        <HpControl character={character} effMax={hpMax} updateSections={updateSections} />
       </div>
 
       <div className={styles.topCenter}>
@@ -82,9 +83,9 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
       </div>
 
       <div className={styles.topRight}>
-        <div className={styles.burdenBlock} aria-label="Burden" title={overBurdened ? 'Over capacity' : undefined}>
+        <div className={styles.burdenBlock} aria-label={burdenNote ? `Burden, ${burdenNote}` : 'Burden'} title={burdenNote}>
           <span className="ic">⚖</span>
-          <span className={`val${overBurdened ? ' low' : ''}`}>{burdenCurrent} / {burdenMax}</span>
+          <span className={`val${overBurdened || tier === 'heavy' ? ' low' : tier === 'encumbered' ? ' warn' : ''}`}>{burdenCurrent} / {burdenMax}</span>
           <span className="lab">Burden</span>
         </div>
         <div className={styles.coinBlock} aria-label="Gold">
@@ -96,6 +97,7 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
         <button
           type="button" className={styles.signOut} onClick={toggleFullscreen}
           title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
         >
           <i className={`fa-solid ${isFullscreen ? 'fa-compress' : 'fa-expand'}`} aria-hidden="true" />
         </button>
@@ -108,7 +110,12 @@ export function Topbar({ character, updateSections, shardTrees = {} }: Props) {
             <i className="fa-solid fa-terminal" aria-hidden="true" /> DM
           </Link>
         )}
-        <button type="button" className={styles.signOut} onClick={() => signOut()}>Sign out</button>
+        {/* Icon-only like fullscreen: the topbar's right run has no width to
+            spare once labels sit at the legibility floor, and sign-out is the
+            rarest action on it. Named for screen readers and on hover. */}
+        <button type="button" className={styles.signOut} onClick={() => signOut()} title="Sign out" aria-label="Sign out">
+          <i className="fa-solid fa-right-from-bracket" aria-hidden="true" />
+        </button>
       </div>
     </header>
   )

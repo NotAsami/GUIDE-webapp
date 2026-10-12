@@ -29,7 +29,7 @@ import {
   useDmClasses, useDmRaces, useDmBackgrounds, classContent, raceContent, backgroundContent,
 } from '../lib/dm'
 import { BootMark } from '../components/BootMark'
-import { useLocalDraft } from '../lib/draft'
+import { useLocalDraft, useUndoKeys } from '../lib/draft'
 /* Features keep their manual publish, so they do not pass through the
  * autosave hooks that stamp this — the 44 imported SRD features would
  * otherwise never be marked edited, and a re-import would overwrite them. */
@@ -164,8 +164,10 @@ export default function FeatureEditor() {
   // one, else the published content. Reopening a parked draft must read clean,
   // not instantly dirty.
   const base = creating ? BLANK : row ? featureContent(row) : null
-  const { draft, dirty, savedAt, update, reset, clear } =
+  const { draft, dirty, savedAt, update, reset, clear, undo, redo, canUndo, canRedo } =
     useLocalDraft<CatalogFeatureData>(creating ? 'feature:__new__' : `feature:${selId ?? 'none'}`, base, row?.updated_at)
+  // Ctrl+Z / Ctrl+Y over every edit, in all three views — they share this draft.
+  useUndoKeys(undo, redo, !!draft)
 
   useEffect(() => {
     const t = window.setTimeout(() => setToast(null), 2400)
@@ -854,6 +856,10 @@ export default function FeatureEditor() {
                     <Icon name={ic} />{l}
                   </button>
                 ))}
+              </div>
+              <div className={styles.modeSeg} role="group" aria-label="History">
+                <button type="button" disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)" aria-label="Undo"><Icon name="fa-rotate-left" /></button>
+                <button type="button" disabled={!canRedo} onClick={redo} title="Redo (Ctrl+Y)" aria-label="Redo"><Icon name="fa-rotate-right" /></button>
               </div>
               <span className={styles.toolsGrow} />
               <span className={styles.sync}><i className="fa-solid fa-link" />one object · three views</span>

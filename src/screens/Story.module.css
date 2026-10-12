@@ -41,7 +41,7 @@
 .story::-webkit-scrollbar { width: 8px; }
 .story::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.5); }
 .story::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.55));
+  background: linear-gradient(180deg, var(--cyan-dim), color-mix(in srgb, var(--beige) 55%, transparent));
   border: 2px solid #111;
 }
 
@@ -110,7 +110,7 @@
 .ring { stroke: var(--beige); stroke-opacity: 0.13; }
 .arc {
   stroke: var(--cyan);
-  filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.85));
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--cyan) 85%, transparent));
   /* A TRANSITION, deliberately not a keyframe. The dash length and offset are
      set inline from lib/storyLattice (ARC_LEN, arcOffset), and this tweens the
      offset between any two values — the first open from empty, every story
@@ -149,7 +149,7 @@
   animation: node-in 380ms cubic-bezier(.2, .7, .2, 1) 80ms backwards;
 }
 @keyframes node-in { from { opacity: 0; transform: scale(0.3); } }
-.node { fill: var(--cyan); stroke: none; filter: drop-shadow(0 0 8px rgba(0, 166, 214, 0.85)); }
+.node { fill: var(--cyan); stroke: none; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--cyan) 85%, transparent)); }
 .wireOff .node { fill: var(--muted); fill-opacity: 0.55; filter: none; }
 .halo { fill: none; stroke: var(--cyan); stroke-opacity: 0.5; }
 
@@ -175,7 +175,7 @@
 }
 .nodeHit:hover::after {
   border-color: var(--cyan-hot);
-  box-shadow: 0 0 14px rgba(0, 166, 214, 0.5);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 50%, transparent);
 }
 /* The open one already wears the halo; a hover ring on top would double it. */
 .nodeOpen { cursor: default; }
@@ -193,7 +193,7 @@
      outer circle, and a truly hollow node let that circle's line run straight
      through it — at this size the pair read as a stray digit. A --bg fill knocks
      the line out and still LOOKS hollow. Measured: the page behind is solid
-     #1d1d1d with no image, so the disc is invisible. */
+     var(--bg) with no image, so the disc is invisible. */
   fill: var(--bg); stroke: var(--muted); stroke-opacity: 0.7; stroke-width: 1.4;
 }
 .wireSide .sideNode { stroke-opacity: 0.7; }
@@ -204,11 +204,11 @@
 .sideRule {
   display: flex; align-items: center; gap: 11px;
   height: 30px; box-sizing: border-box; padding-top: 12px;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.3em;
-  color: var(--beige-dim); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase;
 }
 .sideRule::after {
-  content: ""; flex: 1; height: 1px; background: rgba(212, 191, 125, 0.14);
+  content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--beige) 14%, transparent);
   order: 1;
 }
 .sideCount { order: 2; color: var(--beige-dim); }
@@ -221,7 +221,7 @@
 }
 .sideRow .rowGlyph { font-size: 11px; color: var(--beige-dim); }
 .sideRow .rowTitle { font-size: 16px; color: var(--muted); }
-.sideRow .rowTone { font-size: 7px; color: var(--beige-dim); }
+.sideRow .rowTone { font-size: var(--fs-label); color: var(--beige-mid); }
 .sideRow.closed .rowTitle { color: var(--beige-dim); }
 .sideRow:hover .rowTitle, .sideRow.open .rowTitle { color: var(--text); }
 
@@ -238,20 +238,20 @@
   z-index: 2;
 }
 .centreLabel {
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.32em;
-  color: var(--beige-dim); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase;
 }
 .pct {
   font-family: var(--font-display); font-weight: 700; font-size: 74px; line-height: 1;
-  color: var(--cyan-hot); text-shadow: 0 0 32px rgba(0, 166, 214, 0.5);
+  color: var(--cyan-hot); text-shadow: 0 0 32px color-mix(in srgb, var(--cyan) 50%, transparent);
   font-variant-numeric: tabular-nums; margin-top: 9px;
 }
 .pctSign { font-size: 36px; color: var(--muted); text-shadow: none; }
 .centreDone {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.24em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--muted); text-transform: uppercase; margin-top: 10px;
 }
-.centreRule { width: 54px; height: 1px; background: rgba(212, 191, 125, 0.5); margin: 12px auto; }
+.centreRule { width: 54px; height: 1px; background: color-mix(in srgb, var(--beige) 50%, transparent); margin: 12px auto; }
 .chapter {
   font-family: var(--font-display); font-weight: 600; font-size: 24px;
   letter-spacing: 0.04em; color: var(--beige); line-height: 1.2;
@@ -263,8 +263,8 @@
 .centre { transition: opacity 300ms ease; }
 
 .centreMeta {
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.28em;
-  color: var(--beige-dim); text-transform: uppercase; margin-top: 11px;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase; margin-top: 11px;
 }
 
 /* ---------- the dossier ---------- */
@@ -280,21 +280,21 @@
 .back {
   position: absolute; top: 0; left: 0;
   display: flex; align-items: center; gap: 9px;
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.28em;
-  color: var(--beige-dim); text-transform: uppercase; text-decoration: none;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase; text-decoration: none;
   transition: color 160ms ease;
 }
 .back:hover { color: var(--cyan-hot); }
-.backGlyph { font-size: 9px; }
+.backGlyph { font-size: var(--fs-label); }
 
 .tabs {
   position: absolute; top: 30px; left: 0; right: 0;
   display: flex; gap: 30px; align-items: baseline; flex-wrap: wrap;
-  border-bottom: 1px solid rgba(212, 191, 125, 0.3);
+  border-bottom: 1px solid color-mix(in srgb, var(--beige) 30%, transparent);
 }
 .tab {
   position: relative; padding-bottom: 11px; text-decoration: none;
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.3em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--muted); text-transform: uppercase;
   transition: color 160ms ease;
 }
@@ -303,7 +303,7 @@
 .tab.on::after {
   content: ""; position: absolute; bottom: -1px; left: 0; right: 12%; height: 2px;
   background: var(--cyan);
-  box-shadow: 0 0 10px var(--cyan), 0 0 18px rgba(0, 166, 214, 0.5);
+  box-shadow: 0 0 10px var(--cyan), 0 0 18px color-mix(in srgb, var(--cyan) 50%, transparent);
 }
 .tabPct {
   font-family: var(--font-display); font-weight: 700; font-size: 13px;
@@ -312,7 +312,7 @@
 .tab.on .tabPct { color: var(--cyan-hot); }
 
 .head {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.34em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--beige); text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -335,12 +335,12 @@
    definite row but an auto column is placed BEFORE the auto-flow items, which
    sent this 1px divider into column 1 and squeezed the whole threads column
    into the 1px slot meant for the divider. Pin both axes. */
-.vrule { grid-column: 2; grid-row: 1 / -1; background: rgba(212, 191, 125, 0.14); }
+.vrule { grid-column: 2; grid-row: 1 / -1; background: color-mix(in srgb, var(--beige) 14%, transparent); }
 
 .rows { position: relative; min-width: 0; }
 .row {
   display: flex; flex-direction: column; justify-content: flex-start;
-  border-top: 1px solid rgba(212, 191, 125, 0.14);
+  border-top: 1px solid color-mix(in srgb, var(--beige) 14%, transparent);
   border-left: 2px solid transparent;
   padding-left: 0;
   min-width: 0;
@@ -350,13 +350,13 @@
 /* A row is the way into a thread, so it has to advertise itself — same treatment
    as the Journal's own index rows. */
 .row:hover, .row:focus-visible {
-  background: linear-gradient(90deg, rgba(0, 166, 214, 0.07), transparent 78%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 7%, transparent), transparent 78%);
   outline: none;
 }
 .row:focus-visible { border-left-color: var(--cyan); }
 /* The open thread. Not a hover state — this one persists while you read it. */
 .row.open {
-  background: linear-gradient(90deg, rgba(0, 166, 214, 0.13), transparent 82%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 13%, transparent), transparent 82%);
   border-left-color: var(--cyan);
 }
 .row.open .rowTitle { color: var(--cyan-hot); }
@@ -375,11 +375,11 @@
 }
 .rowTone {
   flex: 0 0 auto; margin-left: auto;
-  font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.22em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   text-transform: uppercase; color: var(--cyan);
 }
 .rowMeta {
-  font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.18em;
+  font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: 0.18em;
   color: var(--muted); text-transform: uppercase; margin: 8px 0 0 22px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -392,13 +392,13 @@
 /* ---------- the thread record ---------- */
 .recMeta {
   display: flex; flex-wrap: wrap; gap: 4px 18px;
-  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.16em;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
   color: var(--text); text-transform: uppercase; margin-bottom: 4px;
 }
 .recK { color: var(--beige); }
 
 .objRow { display: flex; align-items: baseline; gap: 12px; padding: 6px 2px; }
-.objBox { flex: 0 0 auto; width: 13px; color: var(--cyan); font-size: 10px; }
+.objBox { flex: 0 0 auto; width: 13px; color: var(--cyan); font-size: var(--fs-label); }
 .objText {
   font-family: var(--font-prose); font-size: 15.5px; line-height: 1.5; color: var(--text);
 }
@@ -409,12 +409,12 @@
 .chip {
   font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
   color: var(--cyan); padding: 1px 0 2px;
-  border-bottom: 1px solid rgba(0, 166, 214, 0.4);
+  border-bottom: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
   text-decoration: none;
 }
 /* Only an <a> chip (a real url) reacts; an inert <span> chip does not. */
 a.chip:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); }
-.chipLink { font-size: 8px; margin-left: 6px; opacity: 0.8; }
+.chipLink { font-size: var(--fs-label); margin-left: 6px; opacity: 0.8; }
 
 /* The one scroller. Capped so a wide window cannot produce unreadable line
    lengths (Journal's .readInner does the same at 680). */
@@ -425,11 +425,11 @@ a.chip:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); }
 }
 .subHead {
   display: flex; align-items: center; gap: 12px;
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.3em;
+  font-family: var(--font-mono); font-size: var(--fs-kicker); letter-spacing: var(--ls-kicker);
   color: var(--beige); text-transform: uppercase; margin: 26px 0 4px;
 }
 .subHead::after {
-  content: ""; flex: 1; height: 1px; background: rgba(212, 191, 125, 0.18);
+  content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--beige) 18%, transparent);
 }
 
 .sessTitle {
@@ -438,8 +438,8 @@ a.chip:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); }
   text-wrap: balance;
 }
 .sessDate {
-  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.2em;
-  color: var(--beige-dim); text-transform: uppercase;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase;
 }
 .prose p {
   font-family: var(--font-prose); font-size: 16px; line-height: 1.72;
@@ -456,7 +456,7 @@ a.chip:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); }
 
 .logRow {
   display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 0 13px;
-  padding: 12px 0; border-top: 1px solid rgba(212, 191, 125, 0.14);
+  padding: 12px 0; border-top: 1px solid color-mix(in srgb, var(--beige) 14%, transparent);
 }
 .logNow .logNum { color: var(--cyan-hot); }
 .logNum {
@@ -468,13 +468,13 @@ a.chip:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); }
 }
 .logNow .logTitle { color: var(--text); }
 .logDate {
-  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.18em;
-  color: var(--beige-dim); text-transform: uppercase; margin-top: 5px;
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label);
+  color: var(--beige-mid); text-transform: uppercase; margin-top: 5px;
 }
 /* A handout row is a button — the same row, reset to read like one. */
 .hoRow {
   width: 100%; text-align: left; cursor: pointer; background: transparent;
-  border: 0; border-top: 1px solid rgba(212, 191, 125, 0.14); color: inherit;
+  border: 0; border-top: 1px solid color-mix(in srgb, var(--beige) 14%, transparent); color: inherit;
 }
 .hoRow .logNum { font-size: 13px; color: var(--cyan); }
 .hoRow:hover .logTitle { color: var(--cyan-hot); }
@@ -491,7 +491,7 @@ a.chip:hover { color: var(--cyan-hot); border-color: var(--cyan-hot); }
 .scrollY::-webkit-scrollbar { width: 7px; }
 .scrollY::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
 .scrollY::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, var(--cyan-dim), rgba(212, 191, 125, 0.45));
+  background: linear-gradient(180deg, var(--cyan-dim), color-mix(in srgb, var(--beige) 45%, transparent));
   border: 2px solid #111;
 }
 

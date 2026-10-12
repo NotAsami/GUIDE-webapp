@@ -93,6 +93,20 @@ export function cantripTier(charLevel: number): 1 | 2 | 3 | 4 {
   return 1
 }
 
+/** A spell's `scaling` dice, read off its "At Higher Levels" prose. Covers the
+ *  two shapes the SRD writes damage scaling in:
+ *    levelled — "The damage increases by 1d6 for each spell slot level above 3."
+ *    cantrip  — "The damage increases by 1d10 when you reach levels 5 (2d10)…"
+ *  Anything else (more darts, more beams, more targets) is NOT dice-per-step,
+ *  so it returns undefined and stays a hand-authoring job rather than a wrong
+ *  number. Shared by the SRD import and the catalog backfill, so the two can
+ *  never derive differently. */
+export function scalingFromText(text: string | undefined | null): string | undefined {
+  if (!text) return undefined
+  const m = /\bincreases? by (\d+d\d+)\b[^.]*?(?:for (?:each|every) (?:spell )?slot level above|when you reach levels?)/i.exec(text)
+  return m ? m[1].toLowerCase() : undefined
+}
+
 /** Warlock Pact Magic slot COUNT by character level — a separate, much
  *  smaller table than the standard full-caster progression: 1/1/2/2..2/3..
  *  3/4.. (breakpoints at 1, 2, 11, 17). Caps at 4 slots total, forever —

@@ -7,6 +7,7 @@ import {
   pactSlotCount, pactSlotLevel, pactSlotsAvail, preparedUsed, preparesSpells, rollSpellDamage,
   shortDuration, shortTime,
 } from './spells.ts'
+import { scalingFromText } from './spells.ts'
 import type { Rider } from './graph.ts'
 
 function spell(over: Partial<Spell>): Spell {
@@ -301,4 +302,16 @@ test('shortDuration shortens counts and leaves prose alone', () => {
     ['Instantaneous', 'Inst.'], ['instantaneous', 'Inst.'], ['1 minute', '1 min'], ['up to 1 hour', '1 hr'],
     ['10 days', '10 days'], ['1 day', '1 day'], ['until dispelled', 'Until dispelled'], ['', '—'],
   ] as const) assert.equal(shortDuration(raw), want, String(raw))
+})
+
+test('scalingFromText reads dice-per-step scaling and nothing else', () => {
+  assert.equal(scalingFromText('**At Higher Levels.** The damage increases by 1d6 for each spell slot level above 3.'), '1d6')
+  assert.equal(scalingFromText('**At Higher Levels.** The damage increases by 1d10 when you reach levels 5 (2d10), 11 (3d10), and 17 (4d10).'), '1d10')
+  assert.equal(scalingFromText('The Cold damage increases by 2D8 for each slot level above 2.'), '2d8')
+  assert.equal(scalingFromText('The damage increases by 1d8 for every slot level above 2.'), '1d8')
+  // Not dice per step: more darts, more beams, more targets.
+  assert.equal(scalingFromText('The spell creates one more dart for each spell slot level above 1.'), undefined)
+  assert.equal(scalingFromText('The spell creates two beams at level 5, three beams at level 11.'), undefined)
+  assert.equal(scalingFromText('You can target one additional creature for each spell slot level above 2.'), undefined)
+  assert.equal(scalingFromText(undefined), undefined)
 })

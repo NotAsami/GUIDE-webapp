@@ -67,7 +67,7 @@ test('every damage type the roll panel colours has a name here', () => {
   // These four are styled as `[data-t="…"]` in RollContextPanel.module.css. If
   // one is missing, prose about that damage type cannot match the number the
   // panel shows for it.
-  for (const [type, token] of [['radiant', 'gold-rare'], ['fire', 'danger-hot'],
+  for (const [type, token] of [['radiant', 'gold'], ['fire', 'danger-hot'],
     ['psychic', 'violet-hot'], ['cold', 'teal']]) {
     assert.equal(html(renderInline(`[x]{${type}}`)),
       `<div><span style="color:var(--${token})">x</span></div>`)

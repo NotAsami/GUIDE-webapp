@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useCharacter } from '../lib/character'
 import { useAuth } from '../lib/auth'
 import { useShardCatalog } from '../lib/shardCatalog'
@@ -39,12 +39,25 @@ import type { ActiveEffect, EquippedWeapon } from '../lib/database.types'
 import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { applyRenames } from '../lib/rename'
 
 export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
   const { catalog: shardTrees } = useShardCatalog()
   const { character, loading, error, saveError, dismissSaveError, updateSection, updateSections, refetch } = useCharacter(shardTrees)
   const nav = useNavigate()
+
+  // Where am I — for the tab title and the screen reader. Unknown routes get
+  // no name: NotFound carries its own <h1>.
+  const { pathname } = useLocation()
+  const screenName = screenNameFor(pathname)
+  /* What every player screen reads: the row with active renames applied
+     ("Fire Bolt" shown as "Fire Beam" from level 7). Display-only — character.ts
+     strips them from every write. Same object when nothing is renamed. */
+  const shown = useMemo(() => (character ? applyRenames(character, shardTrees) : character), [character, shardTrees])
+  useEffect(() => {
+    document.title = screenName && character ? `${screenName} · ${character.name} — G.U.I.D.E.` : 'G.U.I.D.E. Codex'
+  }, [screenName, character?.name])
 
   /* Announce this character on the party-presence channel while the app is
      open — lights the Link LED on the DM's Operator Console, and carries the
@@ -372,7 +385,7 @@ export function Layout() {
                 className="sk"
                 style={{
                   width: 'min(900px, 80%)', height: 168,
-                  border: '1px solid rgba(138, 122, 74, 0.35)',
+                  border: '1px solid color-mix(in srgb, var(--beige-dim) 35%, transparent)',
                 }}
               />
             </div>
@@ -390,10 +403,15 @@ export function Layout() {
         <div className="scanlines" />
         <div className="vignette" />
         <CenterMessage>
-          <p style={{ color: 'var(--danger)' }}>{error}</p>
-          <p style={{ color: 'var(--muted)', fontSize: 11 }}>
-            If this is an RLS error, confirm you've been seeded a character row owned by this auth user id.
+          <p style={{ color: 'var(--danger-hot)' }}>Link to the Codex failed</p>
+          <p style={{ color: 'var(--muted)', fontSize: 12, textTransform: 'none', letterSpacing: '0.04em', marginTop: 12 }}>
+            Your record could not be read. Reload to try again — if it keeps failing, tell your DM.
           </p>
+          <button type="button" onClick={() => window.location.reload()} style={RETRY_BTN}>Reload</button>
+          <TechDetail>
+            {error}
+            <br />If this is an RLS error, confirm a character row is owned by this auth user id.
+          </TechDetail>
           <SignOutButton onClick={handleSignOut} />
         </CenterMessage>
       </>
@@ -408,10 +426,13 @@ export function Layout() {
         <div className="vignette" />
         <CenterMessage>
           <p>No character is bound to this account yet.</p>
-          <p style={{ color: 'var(--muted)', fontSize: 12, maxWidth: 540, marginTop: 12 }}>
+          <p style={{ color: 'var(--muted)', fontSize: 12, textTransform: 'none', letterSpacing: '0.04em', marginTop: 12 }}>
+            Ask your DM to bind your character, then reload.
+          </p>
+          <TechDetail>
             Run <code>supabase/seed.sql</code> in the SQL editor with your auth user id substituted into the
             <code> :owner_id </code> placeholder. See <code>docs/GUIDE_Codex_Build_Handoff.md</code> §5 for the canon values.
-          </p>
+          </TechDetail>
           {session?.user?.email && (
             <p style={{ color: 'var(--beige-dim)', fontSize: 10, letterSpacing: '0.12em', marginTop: 16 }}>
               Signed in as {session.user.email}
@@ -435,18 +456,11 @@ export function Layout() {
       <div className="vignette" />
       <Sweep />
 
-      {/* ticker fragments hugging the top divider (cosmetic HUD telemetry) */}
-      <div className={`${styles.ticker} ${styles.above}`} aria-hidden="true">
-        <span>TASK_MANAGER_SD11S</span><span className="gap" />
-        <span className="dim">// AURUM_LEDGER_OK</span><span className="gap" />
-        <span>PROTOCOL: 6920-A44</span><span className="gap" />
-        <span className="dim">0001 0110 1001 0011 1100</span>
-      </div>
+      {/* One fragment under the top divider (cosmetic HUD telemetry). Kept
+          deliberately sparse: every line of fake readout competes with the
+          real labels for the same small mono type. */}
       <div className={`${styles.ticker} ${styles.below}`} aria-hidden="true">
-        <span>FRAME 04 // SECTOR 12</span><span className="gap" />
-        <span className="dim">PARTY.OK</span><span className="gap" />
-        <span>SOULBOND 0x4F1A</span><span className="gap" />
-        <span className="dim">CHANNEL 1F-Δ</span>
+        <span>SOULBOND 0x4F1A</span>
       </div>
 
       {/* Side-rails + corner frame are now per-screen (Codex owns the frame);
@@ -457,10 +471,12 @@ export function Layout() {
           <span>{saveError}</span>{' '}
           <button type="button" onClick={dismissSaveError}>Dismiss</button>
         </div>}
+        <a href="#main" className="skip-link">Skip to content</a>
         <Topbar character={character} updateSections={updateSections} shardTrees={shardTrees} />
-        <main className={styles.main}>
+        <main id="main" tabIndex={-1} className={styles.main}>
+          {screenName && <h1 className="sr-only">{screenName}</h1>}
           <Outlet context={{
-            character, updateSection, updateSections, shardTrees,
+            character: shown, updateSection, updateSections, shardTrees,
             handouts, seenHandouts, markHandoutSeen: markSeen, openHandout: (id: string) => setDock({ id, arrive: false }),
           }} />
         </main>
@@ -538,7 +554,7 @@ function SignOutButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       style={{
         marginTop: 24, padding: '10px 28px',
-        background: 'rgba(185, 58, 58, 0.08)',
+        background: 'color-mix(in srgb, var(--danger) 8%, transparent)',
         border: '1px solid var(--danger)',
         color: 'var(--danger-hot)',
         fontFamily: 'var(--font-display)', fontSize: 12, letterSpacing: '0.3em',
@@ -548,6 +564,26 @@ function SignOutButton({ onClick }: { onClick: () => void }) {
       Sign Out
     </button>
   )
+}
+
+/** Developer-facing detail under an in-world message: the raw error or setup
+ *  steps stay one click away for the DM without being the first thing a
+ *  player reads. */
+function TechDetail({ children }: { children: React.ReactNode }) {
+  return (
+    <details style={{ marginTop: 18, maxWidth: 540, marginInline: 'auto', textAlign: 'left', textTransform: 'none', letterSpacing: '0.02em', fontSize: 11, color: 'var(--muted)' }}>
+      <summary style={{ cursor: 'pointer', color: 'var(--beige-mid)', textTransform: 'uppercase', letterSpacing: '0.16em', textAlign: 'center' }}>Technical detail</summary>
+      <div style={{ marginTop: 10, lineHeight: 1.6, wordBreak: 'break-word' }}>{children}</div>
+    </details>
+  )
+}
+
+const RETRY_BTN: React.CSSProperties = {
+  display: 'block', margin: '20px auto 0', padding: '10px 28px',
+  background: 'color-mix(in srgb, var(--cyan) 8%, transparent)',
+  border: '1px solid var(--cyan)', color: 'var(--cyan-hot)',
+  fontFamily: 'var(--font-display)', fontSize: 12, letterSpacing: '0.3em',
+  textTransform: 'uppercase', cursor: 'pointer',
 }
 
 function CenterMessage({ children }: { children: React.ReactNode }) {
@@ -561,4 +597,14 @@ function CenterMessage({ children }: { children: React.ReactNode }) {
       <div>{children}</div>
     </div>
   )
+}
+
+const SCREEN_NAMES: Record<string, string> = {
+  '/': 'Codex', '/equipment': 'Equipment', '/inventory': 'Inventory', '/stat-panel': 'Stat Panel',
+  '/features': 'Features', '/character': 'Rolls', '/shard': 'Shard', '/lore': 'Lore',
+  '/journal': 'Journal', '/spellbook': 'Spellbook',
+}
+
+function screenNameFor(pathname: string): string | undefined {
+  return pathname.startsWith('/story/') ? 'Story' : SCREEN_NAMES[pathname]
 }

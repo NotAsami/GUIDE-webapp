@@ -319,11 +319,35 @@ State a node carries. Two axes:
 
 What a formula can read: `level`, `prof`, `str`…`cha` (modifiers),
 `strScore`…`chaScore` (the raw scores — Indomitable Might wants 20, not +5),
-`hp`, `hpMax`, `saveDc`, `attacksThisTurn`, plus every variable in scope.
+`hp`, `hpMax`, `saveDc`, `attacksThisTurn`, `tier`, plus every variable in scope.
+
+`tier` is the cantrip tier — 1 to 4, stepping at character levels 5, 11 and 17,
+the same table a cantrip's `scaling` uses. A feature that scales "like a
+cantrip" reads it instead of re-deriving the breakpoints: `1d8 * tier` (one die
+per tier), `1d8 * (tier - 1)` (only the extra dice). A spell's own scaling is
+authored on the spell (catalog → Spells → *Per Level Above*): once per slot
+level above the spell's level, or once per tier above 1 for a cantrip.
 Contribution formulas can also read `cast` (the level a spell was cast at),
 plus two that come from the Foundry bridge: `targetAc` (the targeted creature's
 Armour Class, **0 when nothing is targeted** — no creature has AC 0, so the
 absence is readable) and `hit` (did the attack land).
+
+### Something that changes at a level — "at 7, Fire Bolt becomes Fire Beam"
+
+Two effects on the feature, both gated `when: level >= 7`:
+
+- a **`rename`** targeting the spell (or an item, or a feature): *New name*
+  `Fire Beam`, and optionally *What changed* — the sentence the player reads.
+- a **`note`** (or an `add`) targeting the same spell for what it now *does*.
+
+The rename is display-only. The stored spell keeps its name, so removing the
+feature puts "Fire Bolt" back; prerequisites and `has_<feature>` keep matching
+the stored name too. A rename needs a target and cannot take `ask`.
+
+On the level that turns it on, the level-up screen lists it under **06 · What
+Changes**, and the first time the player opens the renamed spell, item or
+feature they see *"Was Fire Bolt · altered by <feature>"* with your sentence.
+Any effect gated on `level` shows up under What Changes, not only renames.
 
 ### Writing an on-hit effect
 

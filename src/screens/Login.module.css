@@ -26,7 +26,7 @@
 }
 .input:focus {
   border-color: var(--cyan);
-  box-shadow: 0 0 0 1px var(--cyan-dim), 0 0 18px rgba(0, 166, 214, 0.25);
+  box-shadow: 0 0 0 1px var(--cyan-dim), 0 0 18px color-mix(in srgb, var(--cyan) 25%, transparent);
 }
 .input:disabled {
   opacity: 0.5;
@@ -138,10 +138,10 @@
   justify-content: center;
   gap: 10px;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.34em;
+  font-size: var(--fs-kicker);
+  letter-spacing: var(--ls-kicker);
   text-transform: uppercase;
-  color: var(--cyan-dim);
+  color: var(--cyan);
 }
 .kicker span {
   width: 6px;
@@ -179,9 +179,9 @@
 .divider i {
   flex-grow: 1;
   height: 1px;
-  background-image: linear-gradient(to right, rgba(138, 122, 74, 0), var(--beige-dim));
+  background-image: linear-gradient(to right, color-mix(in srgb, var(--beige-dim) 0%, transparent), var(--beige-dim));
 }
-.divider i + i { background-image: linear-gradient(to left, rgba(138, 122, 74, 0), var(--beige-dim)); }
+.divider i + i { background-image: linear-gradient(to left, color-mix(in srgb, var(--beige-dim) 0%, transparent), var(--beige-dim)); }
 .divider span {
   width: 5px;
   height: 5px;
@@ -192,8 +192,8 @@
 .label {
   display: block;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.3em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--cyan);
   margin-bottom: 8px;
@@ -227,7 +227,7 @@
     calc(100% - var(--cut)) 100%,
     0 100%,
     0 var(--cut));
-  background-color: rgba(0, 166, 214, 0.1);
+  background-color: color-mix(in srgb, var(--cyan) 10%, transparent);
   background-image:
     linear-gradient(135deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0),
     linear-gradient(315deg, transparent calc(var(--cut) * 0.7071 - 1px), var(--bc) 0, var(--bc) calc(var(--cut) * 0.7071 + 1px), transparent 0);
@@ -244,7 +244,7 @@
   text-transform: uppercase;
   transition: background-color 140ms ease, color 140ms ease;
 }
-.submit:hover:not(:disabled) { background-color: rgba(0, 166, 214, 0.2); }
+.submit:hover:not(:disabled) { background-color: color-mix(in srgb, var(--cyan) 20%, transparent); }
 .submit:disabled { color: var(--cyan-dim); cursor: not-allowed; }
 
 /* Busy: the button owns the wait, the address stays readable. */
@@ -270,16 +270,16 @@
 .foot {
   margin-top: 22px;
   padding-top: 16px;
-  border-top: 1px solid rgba(138, 122, 74, 0.35);
+  border-top: 1px solid color-mix(in srgb, var(--beige-dim) 35%, transparent);
   display: flex;
   align-items: center;
   gap: 9px;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
-  color: var(--beige-dim);
+  color: var(--beige-mid);
 }
 
 /* ---- Dispatched ---- */
@@ -318,7 +318,7 @@
 .chip {
   margin-top: 16px;
   padding: 9px 14px;
-  border: 1px solid rgba(13, 110, 140, 0.55);
+  border: 1px solid color-mix(in srgb, var(--cyan-dim) 55%, transparent);
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--beige);
@@ -336,23 +336,23 @@
   width: 100%;
   margin-top: 26px;
   padding-top: 18px;
-  border-top: 1px solid rgba(13, 110, 140, 0.4);
+  border-top: 1px solid color-mix(in srgb, var(--cyan-dim) 40%, transparent);
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
-  color: var(--beige-dim);
+  color: var(--beige-mid);
 }
 .linkBtn {
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.22em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--cyan-hot);
-  border-bottom: 1px solid rgba(77, 214, 255, 0.5);
+  border-bottom: 1px solid color-mix(in srgb, var(--cyan-hot) 50%, transparent);
   padding: 12px 0;
 }
 .linkBtn:disabled { color: var(--beige-dim); border-bottom-color: transparent; cursor: default; }
@@ -361,13 +361,13 @@
 .err {
   margin-top: 14px;
   padding: 12px 14px;
-  border: 1px solid rgba(185, 58, 58, 0.5);
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
   background: rgba(40, 10, 10, 0.4);
 }
 .errTitle {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.24em;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--danger-hot);
 }
@@ -381,7 +381,7 @@
 .errRaw {
   margin: 8px 0 0;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-label);
   line-height: 1.5;
   color: var(--muted);
 }

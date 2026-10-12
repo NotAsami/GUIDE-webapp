@@ -29,7 +29,7 @@ import { createPortal } from 'react-dom'
 import type { AbilityKey, CatalogFeatureRow, CatalogFeatureData, CharacterRow, Feature, ShardTree } from '../lib/database.types'
 import { ABILITY_ABBR, ABILITY_ORDER, formatMod } from '../lib/dnd'
 import { ordinal } from '../lib/classes'
-import { ASI_LEVELS, asiUsed, hpGainOf, nextCurrentHp, type LevelUpChoices, type LevelUpPlan } from '../lib/levelup'
+import { ASI_LEVELS, asiUsed, hpGainOf, levelUnlocks, nextCurrentHp, type LevelUpChoices, type LevelUpPlan } from '../lib/levelup'
 import { prereqMet, prereqSummary } from '../lib/feats'
 import { useBackdropFreeze } from '../lib/backdropFreeze'
 import { Inline } from '../lib/markdown'
@@ -132,6 +132,9 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, tone = 'dm', 
   const effectivePicks = picks.filter(id => offerPrereq.get(id)?.ok !== false)
 
   const isAsiLevel = ASI_LEVELS.includes(plan.toLevel)
+  /* What things the character ALREADY HAS turn on at the new level — a note
+     gated `level >= 7` used to surface only on the next roll it touched. */
+  const unlocks = useMemo(() => levelUnlocks(row, shardTrees, plan.toLevel), [row, shardTrees, plan.toLevel])
   const profChanged = plan.profTo !== plan.profFrom
   const dcChanged = !!plan.castFrom && !!plan.castTo && plan.castTo.saveDC !== plan.castFrom.saveDC
 
@@ -588,6 +591,28 @@ export function LevelUpOverlay({ plan, feats, row, shardTrees, hp, tone = 'dm', 
                 </>}
               </div>
             </section>
+
+            {/* ---- 06 WHAT CHANGES ---- */}
+            {unlocks.length > 0 && (
+              <section className={styles.step}>
+                <div className={styles.stepHead}>
+                  <span className={styles.sn}>06</span>
+                  <span className={styles.st}>What Changes</span>
+                  <span className={cx(styles.tag, styles.cond)}>Unlocked at {plan.toLevel}</span>
+                </div>
+                <div className={styles.card}>
+                  <ul className={styles.unlocks}>
+                    {unlocks.map((u, i) => (
+                      <li key={i}>
+                        <span className={styles.ulSrc}>{u.source}</span>
+                        <span className={styles.ulLab}>{u.label}</span>
+                        {u.text !== u.label && <span className={styles.ulText}><Inline text={u.text} /></span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
           </div>
 
           {/* ---- footer ---- */}
