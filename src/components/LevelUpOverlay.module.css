@@ -571,3 +571,10 @@
   .overlay, .panel, .die.flash, .slot .pip.new { animation: none !important; }
   .panel { transform: none !important; }
 }
+
+/* 06 What Changes — owned effects that switch on at the new level. */
+.unlocks { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.unlocks li { display: grid; gap: 3px; }
+.ulSrc { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--beige-mid); }
+.ulLab { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--acc); }
+.ulText { font-family: var(--font-prose); font-size: 15px; line-height: 1.45; color: var(--text); }
