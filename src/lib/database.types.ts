@@ -710,6 +710,11 @@ export type GraphState = {
  *  lib/graph.ts reads them through damageFlags(), never through resolve(). */
 export type GraphOp =
   | 'add' | 'adv' | 'dis' | 'crit' | 'note'
+  /** RENAMES the targeted spell, item or feature while `when` holds — "at level
+   *  7, Fire Bolt is a Fire Beam". A display change only: lib/rename.ts applies it
+   *  to the row every player screen reads and strips it again before any write,
+   *  so the stored name never changes and dropping the feature undoes it. */
+  | 'rename'
   /** RE-RUNS A D20 ROLL THAT HAS ALREADY HAPPENED. The only op whose moment is
    *  AFTER the roll: every other contribution is decided while the roll is being
    *  built, and this one is offered on the finished entry in the roll panel,
@@ -866,6 +871,8 @@ export type GraphEffect = {
    *  `resources.graph.armed` for the next matching roll rather than riding every
    *  one. Live — see ArmedMod. */
   once?: boolean
+  /** `rename` only. The new name the target is shown under. */
+  to?: string
   /** `note` only. The rule the player reads. `label` is the short line in a
    *  breakdown; this is the sentence. Absent falls back to `label`, which is what
    *  notes authored before this field existed relied on. */

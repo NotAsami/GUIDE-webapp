@@ -122,6 +122,7 @@ function effSummary(e: GraphEffect): ReactNode {
     case 'boost': return <>{e.stat} +{e.value}</>
     case 'useability': return <>may use {e.ability}</>
     case 'note': return <>“<Inline text={e.text ?? ''} />”</>
+    case 'rename': return <>now called “{e.to ?? ''}”</>
     case 'crit': return <>crits on {e.threshold ?? e.value}</>
     case 'floor': return <>at least {e.minimum}</>
     case 'reroll': return <>reroll · {e.keep ?? 'new'}</>

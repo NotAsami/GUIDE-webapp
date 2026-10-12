@@ -20,6 +20,7 @@ import type { ExprScope } from '../lib/expr'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Features.module.css'
 import { Icon } from '../components/Icon'
+import { RenamedNote } from '../components/RenamedNote'
 
 interface RouteContext {
   character: CharacterRow
@@ -640,6 +641,7 @@ function FeaturePopup({ row, busy, scope, on, vars, gate, back, affected, resolv
             </div>
             <div className={styles.imTitles}>
               <div className={cx(styles.imName, on && styles.on)}>{f.name}</div>
+              <RenamedNote obj={f} />
               <div className={styles.imTags}>
                 {f.activation && f.activation !== 'none'
                   ? <span className={cx(styles.actBadge, styles[f.activation])}>{ACTS[f.activation]}</span>

@@ -1,0 +1,9 @@
+/* The first-time "altered by" line under a renamed spell, item or feature. */
+.note {
+  display: grid; gap: 4px; margin: 6px 0 2px; padding: 7px 10px;
+  border-left: 1px solid color-mix(in srgb, var(--gold) 60%, transparent);
+  background: color-mix(in srgb, var(--gold) 7%, transparent);
+}
+.head { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label); text-transform: uppercase; color: var(--muted); }
+.head b { color: var(--gold); font-weight: 500; }
+.text { font-family: var(--font-prose); font-size: 15px; line-height: 1.45; color: var(--text); }

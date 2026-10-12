@@ -471,7 +471,7 @@ export function levelUnlocks(row: CharacterRow, shardTrees: Record<string, Shard
       if (!on(eff.when, after.scope) || on(eff.when, before.scope)) continue
       out.push({
         source: from.obj.name, op: eff.op, label: eff.label,
-        text: interpolate(eff.text || eff.label, after.scope).text,
+        text: interpolate(eff.text || (eff.op === 'rename' && eff.to ? `Now called **${eff.to}**.` : eff.label), after.scope).text,
       })
     }
   }
