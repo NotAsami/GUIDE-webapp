@@ -1534,7 +1534,7 @@ test('every GraphEffect field is authorable, or is explicitly recorded as not ye
        universal target list, which is exactly why it needed no new field type. */
     threshold: 'schema', dmgType: 'schema', once: 'schema', stat: 'schema',
     ability: 'schema', cap: 'schema', minimum: 'schema', level: 'schema', oneOf: 'schema', keep: 'schema', faces: 'schema',
-    budget: 'schema', maxLevel: 'schema',
+    budget: 'schema', maxLevel: 'schema', to: 'schema',
     // Nothing is deferred today. The category stays because it is the honest
     // place to put a field that is stored but not yet authorable, and saying so
     // out loud beats leaving it silently uncovered.

@@ -23,6 +23,7 @@ import {
 } from '../lib/spells'
 import { Icon } from '../components/Icon'
 import styles from './Spellbook.module.css'
+import { RenamedNote } from '../components/RenamedNote'
 
 interface RouteContext {
   character: CharacterRow
@@ -753,6 +754,7 @@ function SpellDetail({
           <span className={styles.school}><Icon name={ic} className={styles.schoolIc} style={spell.iconColor ? { color: spell.iconColor } : undefined} />{spell.school}</span>
         </div>
         <div className={styles.daName}>{spell.name}</div>
+        <RenamedNote obj={spell} />
         {flags && <div className={styles.daSub}>{flags}</div>}
       </div>
 

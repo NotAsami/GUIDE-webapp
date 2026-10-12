@@ -127,7 +127,8 @@ export function prereqMet(
   // the base score here would refuse a feat the character genuinely meets.
   const scores = effectiveSheet(character, shardTrees).abilities
   const featureNames = new Set(
-    (character.sheet?.features ?? []).map(f => (f.name ?? '').trim().toLowerCase()).filter(Boolean),
+    // Stored names — a rename is display-only (lib/rename.ts).
+    (character.sheet?.features ?? []).map(f => (('__baseName' in f ? (f as { __baseName?: string }).__baseName : f.name) ?? '').trim().toLowerCase()).filter(Boolean),
   )
   const casts = character.spellbook?.spellcasting === true
 

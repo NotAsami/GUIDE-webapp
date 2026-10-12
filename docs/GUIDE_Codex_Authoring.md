@@ -332,6 +332,23 @@ plus two that come from the Foundry bridge: `targetAc` (the targeted creature's
 Armour Class, **0 when nothing is targeted** — no creature has AC 0, so the
 absence is readable) and `hit` (did the attack land).
 
+### Something that changes at a level — "at 7, Fire Bolt becomes Fire Beam"
+
+Two effects on the feature, both gated `when: level >= 7`:
+
+- a **`rename`** targeting the spell (or an item, or a feature): *New name*
+  `Fire Beam`, and optionally *What changed* — the sentence the player reads.
+- a **`note`** (or an `add`) targeting the same spell for what it now *does*.
+
+The rename is display-only. The stored spell keeps its name, so removing the
+feature puts "Fire Bolt" back; prerequisites and `has_<feature>` keep matching
+the stored name too. A rename needs a target and cannot take `ask`.
+
+On the level that turns it on, the level-up screen lists it under **06 · What
+Changes**, and the first time the player opens the renamed spell, item or
+feature they see *"Was Fire Bolt · altered by <feature>"* with your sentence.
+Any effect gated on `level` shows up under What Changes, not only renames.
+
 ### Writing an on-hit effect
 
 `when: 'hit'` is how "on a hit, deal an extra…" is said. Three states, not two:

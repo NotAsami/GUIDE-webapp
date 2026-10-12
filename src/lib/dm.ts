@@ -19,6 +19,7 @@ import type {
 import { useAuth } from './auth'
 import { characterStore } from './characterStore'
 import { writeCharacter } from './characterWrite'
+import { stripRenames } from './rename'
 
 /** Is the current user the DM? Checked against the `dm_users` table — the same
  *  membership the `dm_all` RLS policy uses to grant cross-character access
@@ -175,7 +176,8 @@ export function useDmParty(shardTrees: Record<string, ShardTree> = {}): DmPartyS
   const updateCharacter = useCallback<DmPartyState['updateCharacter']>(async (id, patch) => {
     const base = party.find(c => c.id === id)
     if (!base) { setWriteError('Character is no longer loaded. Refresh and try again.'); return false }
-    const result = await writeCharacter(characterStore, base, patch, shardTrees)
+    // The DM reads raw rows, but strip anyway: a rename must never become stored.
+    const result = await writeCharacter(characterStore, base, stripRenames(patch), shardTrees)
     if (result.row) setParty(prev => prev.map(c =>
       c.id === id && result.row!.updated_at >= c.updated_at ? result.row! : c))
     setWriteError(result.ok ? null : result.message)

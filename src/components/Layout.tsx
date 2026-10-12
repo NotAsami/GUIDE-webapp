@@ -39,6 +39,7 @@ import type { ActiveEffect, EquippedWeapon } from '../lib/database.types'
 import type { CharacterRow } from '../lib/database.types'
 import styles from './Layout.module.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { applyRenames } from '../lib/rename'
 
 export function Layout() {
   const { session, loading: authLoading, signOut } = useAuth()
@@ -50,6 +51,10 @@ export function Layout() {
   // no name: NotFound carries its own <h1>.
   const { pathname } = useLocation()
   const screenName = screenNameFor(pathname)
+  /* What every player screen reads: the row with active renames applied
+     ("Fire Bolt" shown as "Fire Beam" from level 7). Display-only — character.ts
+     strips them from every write. Same object when nothing is renamed. */
+  const shown = useMemo(() => (character ? applyRenames(character, shardTrees) : character), [character, shardTrees])
   useEffect(() => {
     document.title = screenName && character ? `${screenName} · ${character.name} — G.U.I.D.E.` : 'G.U.I.D.E. Codex'
   }, [screenName, character?.name])
@@ -471,7 +476,7 @@ export function Layout() {
         <main id="main" tabIndex={-1} className={styles.main}>
           {screenName && <h1 className="sr-only">{screenName}</h1>}
           <Outlet context={{
-            character, updateSection, updateSections, shardTrees,
+            character: shown, updateSection, updateSections, shardTrees,
             handouts, seenHandouts, markHandoutSeen: markSeen, openHandout: (id: string) => setDock({ id, arrive: false }),
           }} />
         </main>
