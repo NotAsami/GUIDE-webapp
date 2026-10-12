@@ -27,6 +27,7 @@
  * guarantee, and the report counts what it rejected.
  */
 
+import { scalingFromText } from '../src/lib/spells.ts'
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { normalizeTag } from '../src/lib/graph.ts'
@@ -355,9 +356,10 @@ function toSpell(r) {
   const school = SCHOOLS.find(s => s.toLowerCase() === (r.school?.key ?? '').toLowerCase())
   if (!school) { report.warnings.push(`spell ${r.key}: unknown school ${r.school?.key}`); return null }
 
-  // Q8, the simple choice: higher_level appended, canUpcast from the structured
-  // options, `scaling` left empty for hand-authoring. Deriving scaling from
-  // casting_options is parsing-adjacent and this file does not parse.
+  // Q8: higher_level appended, canUpcast from the structured options. `scaling`
+  // is read off the higher_level prose by lib/spells.ts scalingFromText — the
+  // same function the catalog backfill used — and left empty where the scaling
+  // is not dice-per-step (darts, beams, targets), for hand-authoring.
   const desc = [r.desc, r.higher_level && `\n\n**At Higher Levels.** ${r.higher_level}`]
     .filter(Boolean).join('')
 
@@ -375,6 +377,7 @@ function toSpell(r) {
     desc,
     hasDamage: !!r.damage_roll,
     dice: r.damage_roll || undefined,
+    scaling: (r.damage_roll && scalingFromText(r.higher_level)) || undefined,
     dmgType: r.damage_types?.[0] || undefined,
     save: ABILITY[(r.saving_throw_ability ?? '').toLowerCase()] || undefined,
     canUpcast: (r.casting_options ?? []).length > 0,

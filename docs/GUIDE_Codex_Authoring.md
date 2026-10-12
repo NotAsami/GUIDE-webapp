@@ -319,7 +319,14 @@ State a node carries. Two axes:
 
 What a formula can read: `level`, `prof`, `str`…`cha` (modifiers),
 `strScore`…`chaScore` (the raw scores — Indomitable Might wants 20, not +5),
-`hp`, `hpMax`, `saveDc`, `attacksThisTurn`, plus every variable in scope.
+`hp`, `hpMax`, `saveDc`, `attacksThisTurn`, `tier`, plus every variable in scope.
+
+`tier` is the cantrip tier — 1 to 4, stepping at character levels 5, 11 and 17,
+the same table a cantrip's `scaling` uses. A feature that scales "like a
+cantrip" reads it instead of re-deriving the breakpoints: `1d8 * tier` (one die
+per tier), `1d8 * (tier - 1)` (only the extra dice). A spell's own scaling is
+authored on the spell (catalog → Spells → *Per Level Above*): once per slot
+level above the spell's level, or once per tier above 1 for a cantrip.
 Contribution formulas can also read `cast` (the level a spell was cast at),
 plus two that come from the Foundry bridge: `targetAc` (the targeted creature's
 Armour Class, **0 when nothing is targeted** — no creature has AC 0, so the

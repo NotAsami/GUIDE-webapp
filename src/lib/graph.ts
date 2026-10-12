@@ -32,6 +32,7 @@ import { abilities, abilityMod, proficiency } from './dnd.ts'
 /* No cycle: featureView imports only database.types, opSchema and expr. */
 import { usesOf } from './featureView.ts'
 import { rolledDiceTerms, type RolledDie } from './dice.ts'
+import { cantripTier } from './spells.ts'
 
 /** Lifted from ShardLattice.tsx so the engine and the lattice editor share one
  *  audit vocabulary rather than growing two. `t` is the title, `s` the sentence,
@@ -241,6 +242,7 @@ export function baseScope(character: CharacterRow, shardTrees: Record<string, Sh
        an authored variable and has no VarDef to carry an initial. */
     attacksThisTurn:
       ((character.resources as { graph?: GraphState } | undefined)?.graph?.attacks) ?? 0,
+    tier: cantripTier(character.identity?.level ?? 1),
   }
 }
 
