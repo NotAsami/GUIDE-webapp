@@ -32,12 +32,12 @@
   display: flex;
   justify-content: center;
 }
-.slot.hasSub {
-  /* extend hover area vertically so the cursor can travel onto the revealed
-     sub-buttons without leaving the slot (margin cancels the layout effect) */
-  padding: 120px 0;
-  margin: -120px 0;
-}
+/* The slot is exactly its button. It used to be padded 120px (60px docked)
+   above and below so the cursor could travel to the sub-buttons — an
+   invisible box that sat over whatever lay under the nav (Story's back link)
+   and stole its clicks while nothing was even open. The gap is now bridged by
+   the sub column itself (.sub::before), which only catches the pointer while
+   the column is showing. */
 
 .btn {
   --w: 180px;
@@ -150,6 +150,11 @@
   z-index: 1; /* behind main btn so the "slide from behind" reads right */
 }
 .sub.above { bottom: calc(50% + 56px); }
+/* The bridge across the few px between the button and its sub column. Part of
+   .sub, so it inherits pointer-events:none while the column is hidden. */
+.sub::before { content: ""; position: absolute; left: 0; right: 0; height: 20px; }
+.sub.below::before { bottom: 100%; }
+.sub.above::before { top: 100%; }
 .sub.below { top:    calc(50% + 56px); }
 
 .sub .btn {
@@ -229,7 +234,6 @@
    (sizes/positions ported from the Stat Panel mockup navbar)
    ============================================================ */
 .dock .slot { width: 156px; }
-.dock .slot.hasSub { padding: 60px 0; margin: -60px 0; }
 
 .dock .btn { --w: 156px; --h: var(--nav-h); --cut: 11px; }
 .dock .btn .inner { gap: 6px; }
