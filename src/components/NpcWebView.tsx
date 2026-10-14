@@ -5,12 +5,13 @@
  * transform, and the read-only card. Selection state belongs to the caller.
  */
 import { ManagedImage } from './ManagedImage'
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ATTITUDE_LABEL, LABEL_GAP, LABEL_W, NAME_LINE, NODE_SIZE, PARTY, PC_SIZE, SUB_LINE, SYSTEM_TYPE,
-  endpoint, fitView, focusView, neighbourhood, onEllipse, type Orbit, type Web, type WebEdge, type WebNode,
+  endpoint, fitView, focusView, neighbourhood, onEllipse, type Orbit, type Web, type WebEdge, type WebNode, placeTieLabels,
 } from '../lib/npcWeb'
 import { Prose } from '../lib/markdown'
+import { usePanZoom } from '../lib/usePanZoom'
 import styles from './NpcWebView.module.css'
 
 const cx = (...xs: (string | false | undefined | null)[]) => xs.filter(Boolean).join(' ')
@@ -59,7 +60,7 @@ export function NpcWebView({ web, orbit, sel, onSelect, show = SHOW_ALL, drawerO
   /** Overlays: the toolbar, the drawer. */
   children?: ReactNode
 }) {
-  const paneRef = useRef<HTMLDivElement>(null)
+  const paneRef = useRef<HTMLDivElement | null>(null)
   const [pane, setPane] = useState({ w: 1040, h: 744 })
   useLayoutEffect(() => {
     const el = paneRef.current
@@ -72,21 +73,62 @@ export function NpcWebView({ web, orbit, sel, onSelect, show = SHOW_ALL, drawerO
   const nodeById = new Map(web.nodes.map(n => [n.id, n]))
   const nameOf = (id: string) => (id === PARTY ? 'The party' : nodeById.get(id)?.name ?? web.pcs.find(p => p.id === id)?.name ?? '?')
   const selected = sel ? nodeById.get(sel) ?? null : null
-  const view = selected
+  /* THE FRAMED VIEW — the whole web, or the selection and everything it
+     touches. It is where the view GOES on a selection, a resize or a new web;
+     from there the reader can drag and wheel anywhere, as on the shard
+     lattice, because a tie to the far side of the map is unreadable at the
+     zoom that fits both ends. */
+  const framed = selected
     ? focusView(orbit, web, selected.id, { w: pane.w, h: pane.h, drawer: drawerW, top: TOOLBAR_H })
     : (() => {
         const v = fitView(orbit, pane.w - (drawerOpen ? drawerW : 0), pane.h - TOOLBAR_H)
         return { ...v, y: v.y + TOOLBAR_H }
       })()
+  const pz = usePanZoom({ min: 0.2, max: 3, skip: t => !!t.closest('button, [data-chrome]') })
+  // Identity of the last view WE set: while pz.view is still that object the
+  // move came from a selection and glides; a drag or a wheel makes a new one.
+  const autoView = useRef<{ x: number; y: number; z: number } | null>(null)
+  const frameKey = `${sel ?? ''}|${pane.w}|${pane.h}|${drawerOpen}|${drawerW}|${orbit.w}|${orbit.h}`
+  const { setView } = pz
+  useLayoutEffect(() => {
+    const v = { x: framed.x, y: framed.y, z: framed.k }
+    autoView.current = v
+    setView(v)
+    // `framed` is a fresh object every render; frameKey is what changes it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frameKey, setView])
+  const view = pz.view
+  const glide = view === autoView.current
+  const frame = () => { const v = { x: framed.x, y: framed.y, z: framed.k }; autoView.current = v; setView(v) }
   const near = selected ? neighbourhood(web, selected.id) : null
   const lit = (e: WebEdge) => !selected || e.from === selected.id || e.to === selected.id
+  /* Ties spelled out for the selection, each placed clear of every name
+     (placeTieLabels) — a fixed spot along the line kept landing on one. */
+  const labels = selected
+    ? web.edges.filter(e => lit(e) && shown(e, show)).map(e => ({
+        id: e.id, from: e.from, to: e.to, kind: e.kind,
+        text: e.kind === 'quest' ? `Quest · ${e.label}` : e.kind === 'mention' ? `Named · ${e.label}` : e.label,
+      }))
+    : []
+  const labelAt = useMemo(() => placeTieLabels(orbit, web, labels), [orbit, web, labels.map(l => l.id).join()])  // eslint-disable-line react-hooks/exhaustive-deps
   const edgeRing = orbit.rings[orbit.rings.length - 1]!
   const outer = { rx: edgeRing.rx + 24, ry: edgeRing.ry + (24 * edgeRing.ry) / edgeRing.rx }
 
   return (
-    <div className={cx(styles.pane, tone === 'player' && styles.player)} ref={paneRef}>
+    <div
+      className={cx(styles.pane, tone === 'player' && styles.player, pz.grabbing && styles.grabbing)}
+      ref={n => { paneRef.current = n; pz.ref(n) }}
+      onPointerDown={pz.onPointerDown}
+      onClick={e => {
+        // Empty canvas closes the selection. Not after a drag (that was a pan),
+        // and not inside a node, the toolbar, the drawer or the legend.
+        if (pz.wasDrag() || !sel) return
+        if ((e.target as Element).closest('button, a, input, textarea, select, [data-chrome]')) return
+        onSelect(null)
+      }}
+    >
       {web.nodes.length === 0 && empty ? empty : (
-        <div className={styles.world} style={{ width: orbit.w, height: orbit.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
+        <div className={cx(styles.world, glide && styles.glide)} style={{ width: orbit.w, height: orbit.h, transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
           <svg className={styles.svg} width={orbit.w} height={orbit.h} viewBox={`0 0 ${orbit.w} ${orbit.h}`} fill="none" aria-hidden="true">
             {orbit.rings.map((r, i) => (
               <ellipse key={i} cx={orbit.cx} cy={orbit.cy} rx={r.rx} ry={r.ry} className={i ? styles.ring2 : styles.ring1} />
@@ -120,12 +162,9 @@ export function NpcWebView({ web, orbit, sel, onSelect, show = SHOW_ALL, drawerO
           {/* Ties spelled out, only for the selection — a label on every line at
               once is what makes a web unreadable. A party or PC tie is short and
               ends on a node's name, so its tag sits nearer the party end. */}
-          {selected && web.edges.filter(e => lit(e) && shown(e, show)).map(e => {
-            const a = endpoint(orbit, e.from), b = endpoint(orbit, e.to)
-            if (!a || !b) return null
-            const text = e.kind === 'quest' ? `Quest · ${e.label}` : e.kind === 'mention' ? `Named · ${e.label}` : e.label
-            const t = e.kind === 'link' ? 0.5 : 0.4
-            return <span key={e.id} className={styles.eLabel} style={{ left: a.x + (b.x - a.x) * t, top: a.y + (b.y - a.y) * t }}>{text}</span>
+          {labels.map(l => {
+            const p = labelAt.get(l.id)
+            return p ? <span key={l.id} className={styles.eLabel} style={{ left: p.x, top: p.y }}>{l.text}</span> : null
           })}
 
           {web.nodes.map(n => {
@@ -166,13 +205,22 @@ export function NpcWebView({ web, orbit, sel, onSelect, show = SHOW_ALL, drawerO
         </div>
       )}
 
-      <div className={styles.legend} aria-hidden="true">
+      <div className={styles.zoomCtl} data-chrome style={drawerOpen ? { right: 14 + drawerW } : undefined}>
+        <button type="button" onClick={() => pz.zoomAt(1 / 1.25)} aria-label="Zoom out" title="Zoom out (wheel)"><i className="fa-solid fa-minus" aria-hidden="true" /></button>
+        <button type="button" onClick={frame} aria-label="Fit to view" title="Back to the framed view"><i className="fa-solid fa-expand" aria-hidden="true" /></button>
+        <button type="button" onClick={() => pz.zoomAt(1.25)} aria-label="Zoom in" title="Zoom in (wheel)"><i className="fa-solid fa-plus" aria-hidden="true" /></button>
+      </div>
+
+      <div className={styles.legend} aria-hidden="true" data-chrome>
         <span><i className={styles.lgRel} />Relation{tone === 'player' ? ' · your lore' : ' · a PC’s lore'}</span>
         <span><i className={styles.lgQuest} />Quest · the Quest Log</span>
         <span><i className={styles.lgLink} />{tone === 'player' ? 'Tie · learned from the Operator' : 'NPC link · authored here'}</span>
       </div>
 
-      {children}
+      {/* Overlays (toolbar, drawer) are chrome: clicks there never close the
+          selection and never start a pan. display:contents keeps their own
+          positioning against the pane. */}
+      <div data-chrome style={{ display: 'contents' }}>{children}</div>
     </div>
   )
 }

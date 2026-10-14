@@ -111,5 +111,5 @@ export function usePanZoom({ min = 0.25, max = 2.2, fitMax = 1.15, skip }: {
   }, [])
 
   /** `ref` goes on the stage; `node` reads it; `el` changes when it mounts. */
-  return { ref, node, el, view, zoomAt, fit, centreOn, toWorld, onPointerDown, grabbing, wasDrag: () => dragged.current }
+  return { ref, node, el, view, setView, zoomAt, fit, centreOn, toWorld, onPointerDown, grabbing, wasDrag: () => dragged.current }
 }
