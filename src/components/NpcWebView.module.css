@@ -16,8 +16,19 @@
 }
 
 /* The one transform: fit the whole web, or zoom to a selection. */
-.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; transition: transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1); }
-@media (prefers-reduced-motion: reduce) { .world { transition: none; } }
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+/* Only a framed move (a selection, a resize) glides; a drag or a wheel tracks
+   the pointer directly, or the canvas lags behind the hand. */
+.world.glide { transition: transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) { .world.glide { transition: none; } }
+.pane { cursor: grab; }
+.pane.grabbing { cursor: grabbing; }
+.pane.grabbing .world { pointer-events: none; }
+.zoomCtl { position: absolute; z-index: 7; right: 14px; bottom: calc(14px + var(--tray-pad, 0px)); display: flex; border: 1px solid color-mix(in srgb, var(--beige) 25%, transparent); background: rgba(14, 13, 11, 0.92); }
+.zoomCtl button { width: 32px; height: 30px; display: grid; place-items: center; background: none; border: 0; color: var(--beige); cursor: pointer; font-size: 12px; }
+.zoomCtl button + button { border-left: 1px solid color-mix(in srgb, var(--beige) 18%, transparent); }
+.zoomCtl button:hover, .zoomCtl button:focus-visible { color: var(--amber-hot); outline: none; background: color-mix(in srgb, var(--amber) 10%, transparent); }
+.player .zoomCtl button:hover, .player .zoomCtl button:focus-visible { color: var(--cyan-hot); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
 .svg { position: absolute; inset: 0; overflow: visible; }
 
 .ring1 { stroke: var(--beige); stroke-opacity: 0.26; stroke-dasharray: 3 6; }

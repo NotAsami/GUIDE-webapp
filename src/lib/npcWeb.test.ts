@@ -6,7 +6,7 @@
 // the same geometry the screen renders, not a box somebody guessed.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PARTY, TIE_SECTORS, asSeenBy, derive, groupByTie, sectorOrder, endpoint, focusView, layout, neighbourhood, nodeBox, pcBox, revealNpc, revealTie, sectorBox, type Box, type Web } from './npcWeb.ts'
+import { PARTY, TIE_SECTORS, asSeenBy, derive, groupByTie, sectorOrder, endpoint, focusView, layout, neighbourhood, nodeBox, pcBox, placeTieLabels, revealNpc, revealTie, sectorBox, tieBox, type Box, type Web } from './npcWeb.ts'
 import type { NpcLinkRow, NpcRow } from './database.types.ts'
 
 const npc = (name: string, over: Partial<NpcRow> = {}): NpcRow => ({
@@ -205,4 +205,29 @@ test('groupByTie: bonds, quest givers, the named, and the rest — strongest tie
 
 test('groupByTie leaves the layout sound: nothing overlaps', () => {
   assert.deepEqual(overlaps(groupByTie(derive([], [], [ROS as never], QUESTS as never))), [])
+})
+
+test('tie labels for a selection clear every name, place and each other', () => {
+  const w = synthetic({ Brettany: 8, Davelguay: 7, Castella: 6, Unplaced: 5, Waterfront: 4 })
+  const o = layout(w)
+  const obstacles = [
+    ...w.nodes.map(n => nodeBox(n, o.pos.get(n.id)!)), ...w.pcs.map(p => pcBox(o.pcs.get(p.id)!)), ...o.sectors.map(sectorBox),
+  ]
+  const over = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
+  let clean = 0, total = 0
+  // Every node selected in turn: label all its ties, as the screen does.
+  for (const sel of w.nodes) {
+    const ties = w.edges.filter(e => e.from === sel.id || e.to === sel.id)
+      .map(e => ({ id: e.id, from: e.from, to: e.to, kind: e.kind, text: `Quest · ${e.label}` }))
+    const at = placeTieLabels(o, w, ties)
+    const placed = ties.map(t => tieBox(t.text, at.get(t.id)!))
+    placed.forEach((b, i) => {
+      total++
+      if (!obstacles.some(x => over(x, b)) && !placed.some((y, j) => j !== i && over(y, b))) clean++
+    })
+  }
+  // Not every label can always be placed clear on a crowded web (the fallback
+  // keeps its midpoint) — but the old fixed 40% spot is the bar to beat.
+  assert.ok(total > 0)
+  assert.ok(clean / total >= 0.9, `${clean}/${total} labels placed clear`)
 })
