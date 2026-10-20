@@ -7,6 +7,7 @@ import { Deco } from '../components/Deco'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardOwned, shardSlots, type ShardSlotKey } from '../lib/shards'
 import { summarizeEffects } from '../lib/effects'
 import { ShardTreeModal } from './ShardTree'
+import { HeadModel, type SlotAnchors } from './HeadModel'
 import styles from './Shard.module.css'
 import { Icon } from '../components/Icon'
 
@@ -14,15 +15,6 @@ interface RouteContext {
   character: CharacterRow
   updateSection: <K extends CharacterSection>(section: K, next: CharacterRow[K]) => Promise<SaveResult>
   shardTrees?: Record<string, ShardTree>
-}
-
-/** Fixed head-scan overlay positions, calibrated to head-scan.png — percentage
- *  coords relative to .headStage (the image's own display rect, so they stay
- *  correct at any screen size). Ported 1:1 from the mockup's inline styles. */
-const SLOT_POS: Record<ShardSlotKey, { top: string; left: string; height?: string }> = {
-  slot1: { top: '38%', left: '73%', height: '30px' },
-  slot2: { top: '48%', left: '71%' },
-  slot3: { top: '58%', left: '69%' },
 }
 
 type Variant = 'guide' | 'filled' | 'empty'
@@ -46,7 +38,6 @@ export function Shard() {
   const cardRefs = useRef<Partial<Record<ShardSlotKey, HTMLElement | null>>>({})
   const mainRef = useRef<HTMLElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
-  const headImgRef = useRef<HTMLImageElement | null>(null)
 
   /* ---------- connector routing: slot's right edge -> card's left edge, one
      angular bend, same algorithm as the mockup's connectors() IIFE. ---------- */
@@ -78,14 +69,25 @@ export function Shard() {
     }
   }, [])
 
+  /* The head model owns the port positions: each frame it projects its slot
+     anchors and the ports follow (set imperatively — no re-render per frame). */
+  const placePorts = useCallback((anchors: SlotAnchors) => {
+    for (const key of SHARD_SLOT_KEYS) {
+      const el = slotRefs.current[key]
+      if (!el) continue
+      el.style.left = `${anchors[key].x}%`
+      el.style.top = `${anchors[key].y}%`
+      el.style.visibility = 'visible'
+    }
+    draw()
+  }, [draw])
+
   useLayoutEffect(() => {
     const redraw = () => requestAnimationFrame(draw)
     redraw()
     window.addEventListener('resize', redraw)
     window.addEventListener('scroll', redraw, true)
     document.fonts?.ready?.then(redraw)
-    const img = headImgRef.current
-    if (img && !img.complete) img.addEventListener('load', redraw, { once: true })
     return () => {
       window.removeEventListener('resize', redraw)
       window.removeEventListener('scroll', redraw, true)
@@ -168,7 +170,7 @@ export function Shard() {
               <div className={styles.hpMeta2}>PORT MATRIX <span className="dim">//</span> CLASS&nbsp;IV</div>
 
               <div className={styles.headStage}>
-                <img ref={headImgRef} className={styles.headImg} src="/head-scan.png" alt="Cranial bio-scan showing brain and vasculature" onLoad={draw} />
+                <HeadModel onFrame={placePorts} />
 
                 {SHARD_SLOT_KEYS.map(key => {
                   const slot = slots[key]
@@ -180,7 +182,6 @@ export function Shard() {
                       type="button"
                       ref={el => { slotRefs.current[key] = el }}
                       className={`${styles.slotPort} ${variant === 'guide' ? styles.locked : styles[variant]} ${linked === key ? styles.linked : ''}`}
-                      style={{ top: SLOT_POS[key].top, left: SLOT_POS[key].left, height: SLOT_POS[key].height }}
                       onMouseEnter={() => setLinked(key)}
                       onMouseLeave={() => setLinked(l => (l === key ? null : l))}
                       onFocus={() => setLinked(key)}
