@@ -132,21 +132,19 @@
     radial-gradient(45% 55% at 50% 78%, color-mix(in srgb, var(--cyan) 18%, transparent), transparent 70%);
   z-index: 0; pointer-events: none; filter: blur(2px);
 }
-.headImg {
-  display: block; width: 100%; height: 100%; object-fit: contain;
+.headCanvas {
+  display: block; width: 100%; height: 100%;
   position: relative; z-index: 1;
-  user-select: none; pointer-events: none;
-  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--cyan) 35%, transparent)) drop-shadow(0 0 36px color-mix(in srgb, var(--cyan) 18%, transparent));
-  transition: transform 280ms ease, filter 280ms ease;
+  pointer-events: none;
+  /* No drop-shadow filter here: on an animating canvas it re-blurs every frame.
+     The glow comes from .headStage::before (static) and the model's emissive. */
 }
-.headStage:hover .headImg {
-  transform: scale(1.012);
-  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--cyan) 45%, transparent)) drop-shadow(0 0 44px color-mix(in srgb, var(--cyan) 22%, transparent));
-}
+.headCanvas > canvas { display: block; width: 100%; height: 100%; }
 
 /* ---------- Embedded shard slot — a recessed floppy port, no clip-path ---------- */
 .slotPort {
   position: absolute;
+  visibility: hidden; /* until HeadModel projects the first frame */
   transform: translate(-50%, -50%);
   width: 96px; height: 20px;
   padding: 0; border: 0; cursor: pointer;
