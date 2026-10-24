@@ -107,10 +107,9 @@ public/        Static assets (favicon, logo)
 ## Design principles
 
 - **One source of truth per value.** Current HP lives at `sheet.hp.current` and
-  nowhere else; every screen reads and writes that one field. Same for spell slots,
-  attunement, equipped-vs-carried, and prepared spells.
-- **Render from data, never from markup.** Screens are driven by the character
-  object — no hardcoded values in the JSX.
+  nowhere else; every screen reads and writes that one field. Same for others.
+- **Render from data.** Screens are driven by the character
+  object, no hardcoded values.
 
 ## Content licences
 
