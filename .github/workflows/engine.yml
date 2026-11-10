@@ -1,0 +1,60 @@
+name: Engine
+# Builds the Rust rules engine and keeps packages/engine-wasm/ in step with it.
+# Vercel never compiles Rust: it deploys the committed build, and the Checks
+# workflow fails if that build is older than the source.
+on:
+  push:
+    paths:
+      - 'engine/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'scripts/engine-*.mjs'
+      - '.github/workflows/engine.yml'
+permissions:
+  contents: write
+env:
+  BINARYEN: '133'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Installs exactly the toolchain rust-toolchain.toml pins.
+      - run: rustup show
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: engine-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+      - name: Install wasm-bindgen (the version in Cargo.lock) and wasm-opt
+        run: |
+          want=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/[^0-9.]/, ""); print; exit }' Cargo.lock)
+          wasm-bindgen --version 2>/dev/null | grep -qx "wasm-bindgen $want" \
+            || cargo install wasm-bindgen-cli --version "$want" --locked
+          curl -sSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN}/binaryen-version_${BINARYEN}-x86_64-linux.tar.gz" \
+            | tar xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/binaryen-version_${BINARYEN}/bin" >> "$GITHUB_PATH"
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      # Native, and includes the property tests with the TypeScript engine as oracle.
+      - run: cargo test -p engine_core
+      - run: npm run engine:build
+      - run: npm run test:parity
+      - name: Commit the refreshed build
+        run: |
+          if [ -n "$(git status --porcelain packages/engine-wasm)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add packages/engine-wasm
+            git commit -m "Engine: rebuild packages/engine-wasm"
+            git push
+          fi

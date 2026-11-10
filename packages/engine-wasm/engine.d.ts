@@ -1,0 +1,87 @@
+/* tslint:disable */
+/* eslint-disable */
+
+export type Scope = Record<string, number | boolean>;
+export type EngineConstants = {
+    VAR_IDENTS: string[]; ROLL_IDENTS: string[]; BOOST_IDENTS: string[];
+    ROLL_IDENT_PROBE: Scope; HIT_ASK: string; HAS_PREFIX: string;
+};
+
+
+/**
+ * expr.ts:15. `num` carries a flat part and unrolled dice terms.
+ */
+export type FormulaValue = { t: "num"; flat: number; dice: string[] } | { t: "bool"; v: boolean } | { t: "arr"; v: number[] } | { t: "str"; v: string };
+
+export interface Interpolated {
+    text: string;
+    bad: string[];
+}
+
+
+/**
+ * The engine's constant lists, read once at boot.
+ */
+export function engineConstants(): EngineConstants;
+
+export function evalExpr(src: string, scope: Scope): FormulaValue | null;
+
+export function freeIdents(src: string): string[];
+
+export function hasIdent(feature_name: string): string;
+
+export function interpolate(text: string | null | undefined, scope: Scope): Interpolated;
+
+export function interpolations(text?: string | null): string[];
+
+export function isHasIdent(id: string): boolean;
+
+/**
+ * Development only: a panic prints its message instead of `unreachable`.
+ */
+export function start(): void;
+
+export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
+
+export interface InitOutput {
+    readonly memory: WebAssembly.Memory;
+    readonly engineConstants: () => [number, number, number];
+    readonly evalExpr: (a: number, b: number, c: any) => [number, number, number];
+    readonly freeIdents: (a: number, b: number) => [number, number];
+    readonly hasIdent: (a: number, b: number) => [number, number];
+    readonly interpolate: (a: number, b: number, c: any) => [number, number, number];
+    readonly interpolations: (a: number, b: number) => [number, number];
+    readonly isHasIdent: (a: number, b: number) => number;
+    readonly start: () => void;
+    readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __wbindgen_exn_store: (a: number) => void;
+    readonly __externref_table_alloc: () => number;
+    readonly __wbindgen_externrefs: WebAssembly.Table;
+    readonly __externref_table_dealloc: (a: number) => void;
+    readonly __externref_drop_slice: (a: number, b: number) => void;
+    readonly __wbindgen_start: () => void;
+}
+
+export type SyncInitInput = BufferSource | WebAssembly.Module;
+
+/**
+ * Instantiates the given `module`, which can either be bytes or
+ * a precompiled `WebAssembly.Module`.
+ *
+ * @param {{ module: SyncInitInput }} module - Passing `SyncInitInput` directly is deprecated.
+ *
+ * @returns {InitOutput}
+ */
+export function initSync(module: { module: SyncInitInput } | SyncInitInput): InitOutput;
+
+/**
+ * If `module_or_path` is {RequestInfo} or {URL}, makes a request and
+ * for everything else, calls `WebAssembly.instantiate` directly.
+ *
+ * @param {{ module_or_path: InitInput | Promise<InitInput> }} module_or_path - Passing `InitInput` directly is deprecated.
+ *
+ * @returns {Promise<InitOutput>}
+ */
+export default function __wbg_init (module_or_path?: { module_or_path: InitInput | Promise<InitInput> } | InitInput | Promise<InitInput>): Promise<InitOutput>;

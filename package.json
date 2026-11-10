@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "node --test src/lib/*.test.ts",
-    "check": "npm test && npm run build"
+    "test:parity": "ENGINE=shadow node --test src/lib/*.test.ts",
+    "engine:build": "node scripts/engine-build.mjs",
+    "engine:check": "node scripts/engine-build.mjs --check",
+    "check": "npm run engine:check && npm test && npm run test:parity && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

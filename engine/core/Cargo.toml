@@ -1,0 +1,21 @@
+[package]
+name = "engine_core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+# TypeScript declarations for the wasm build. Off by default so the core has no
+# WebAssembly dependency and `cargo test` runs natively.
+ts = ["dep:tsify", "dep:wasm-bindgen"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+indexmap = { version = "2", features = ["serde"] }
+ryu-js = "1"
+tsify = { version = "0.5", optional = true }
+wasm-bindgen = { version = "=0.2.130", optional = true }
+
+[dev-dependencies]
+proptest = "1"
+serde_json = "1"

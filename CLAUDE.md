@@ -39,6 +39,21 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - `npm run typecheck` — `tsc -b --noEmit`
 - `npm run preview` — serve the production build locally
 
+## Rules engine (TypeScript → Rust/WebAssembly port, in progress)
+- The engine is being ported to `engine/core` (pure Rust, native `cargo test`) with thin
+  bindings in `engine/wasm`. The build output in `packages/engine-wasm/` IS committed;
+  Vercel never compiles Rust.
+- It is a PORT: same output as the TypeScript engine for every input. Wrong-looking
+  behaviour is recorded in `docs/engine-port-fixes.md` and kept, never fixed in passing.
+- `src/lib/engine/index.ts` is the facade; `setting.ts` picks `ts` | `wasm` | `shadow`
+  (localStorage `guide.engine`, or `ENGINE=` in the environment).
+- `npm run engine:build` — rebuild after any change under `engine/` (needs cargo on PATH:
+  `~/.cargo/bin`, plus `wasm-bindgen-cli` at the Cargo.lock version and `wasm-opt`).
+- `npm run test:parity` — the whole suite with both engines answering; any difference fails.
+- `cargo test -p engine_core` — native tests, including property tests that use the
+  TypeScript engine as oracle (`scripts/engine-oracle.mjs`; needs `node`).
+- Slice 1 (expr) is done. Next: dice → sheet layer (`effects.ts`) → graph → callers → delete TS.
+
 ## Phase 0 smoke test (proves the loop)
 - Login → land on `/` → topbar shows HP 52/52 and the three story cards render from `progress.stories`.
 - Topbar HP pill → Damage/Heal writes through to `characters.sheet.hp.current`; reload preserves the new value.
