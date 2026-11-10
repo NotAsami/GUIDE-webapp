@@ -43,3 +43,6 @@ brag-output
 # artboards any time, and the live canvas lives at its artifact URL.
 .design/**/*.html
 !.design/**/*.dc.html
+
+# Rust build directory (the engine crate). The built .wasm IS committed, under packages/engine-wasm/.
+target

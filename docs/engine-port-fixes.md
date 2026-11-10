@@ -1,0 +1,93 @@
+# Rules engine port — deviations, measurements and the fix list
+
+The engine is being ported from TypeScript (`src/lib/expr.ts`, `dice.ts`, `graph.ts`) to Rust
+(`engine/`), compiled to WebAssembly (`packages/engine-wasm/`). The port's rule is **same output
+for every input**, including outputs that look wrong. This file is where the exceptions to that
+rule and the wrong-looking behaviour are written down.
+
+Status: **slice 1 (the expression evaluator) is done.** Callers still use the TypeScript engine;
+they move in slice 4.
+
+## 1. Where the two engines differ on purpose
+
+Shadow mode reports each of these if it ever happens in play.
+
+| # | Input | TypeScript | Rust | Why |
+|---|---|---|---|---|
+| 1 | An expression nested more than 256 deep | Evaluates, until it dies with a RangeError near 10,000 | Throws at 257 (`MAX_DEPTH`, `engine/core/src/expr.rs`) | A fixed limit is what guarantees the port never overflows the stack. Authored formulas nest about 10 deep. Approved in the plan. |
+| 2 | Indexing an array with NaN, e.g. `[1,2][x]` with `x = NaN` | `flat: undefined` | `flat: NaN` | Reachable only when NaN is already in the scope. Matching it would make every `flat` optional. Approved in the plan. |
+| 3 | Lowercasing one of 28 capital letters added in Unicode 17 (U+A7CE, U+A7D2, U+A7D4, U+16EA0–U+16EB8) | Depends on the browser: Node 24 leaves them unchanged | Lowercases them | Rust's tables are fixed by the pinned toolchain; JavaScript's follow whatever the host ships. Found by the every-code-point test. Affects `hasIdent` not at all (non-ASCII collapses to `_`) and `normalizeTag` only for tags in Beria Erfe or three rare Latin letters. |
+| 4 | A scope value that is neither a number nor a boolean (`null`, a string) | Coerces it (`null + 1` is `1`) | Throws | The type forbids it and no scope builder produces one. Only a value a formula actually reads is checked. |
+
+## 2. Step 0 measurements (Apple silicon, Node 24.11.1, Rust 1.99.1, wasm-bindgen 0.2.130)
+
+**Size.** `engine_bg.wasm` with the evaluator only: **96 KB raw, 58 KB gzipped**, after `wasm-opt -Oz`.
+It will grow with dice and the resolver. Not worth lazy-loading: the engine is needed for the
+first render, and Vite already emits it as a separate hashed asset fetched alongside the main chunk
+(516 KB raw, 157 KB gzipped).
+
+**Per-call cost.** `evalExpr("level / 2 + wis", scope)` with a 51-name scope:
+
+| | per call |
+|---|---|
+| TypeScript | 0.9 µs |
+| WebAssembly, scope serialised with serde-wasm-bindgen | **175 µs** |
+| WebAssembly, scope read in place, one property per identifier used | 1.3 µs |
+
+Serialising the scope on every call was 200× slower than the original, and the evaluator is called
+in loops. So a scope is **never serialised**: the binding hands Rust the JavaScript object and the
+evaluator reads only the names the formula mentions (`Lookup` in `expr.rs`, `JsScope` in
+`engine/wasm/src/lib.rs`). `interpolate`: 1.7 µs → 2.3 µs. String-only calls such as `hasIdent`:
+0.2 µs → 0.5 µs.
+
+**Whole-character payload** (72 KB of JSON: 30 features, 20 spells, 11 equipped items, 40 carried),
+in and back out through an untyped value:
+
+| | round trip |
+|---|---|
+| serde-wasm-bindgen | 1.32 ms |
+| JSON string (including `JSON.stringify` and `JSON.parse`) | 0.86 ms |
+
+JSON is 1.5× faster, under the plan's 2× threshold, and both are about a millisecond once per
+character change. **Decision: serde-wasm-bindgen stays** (it carries NaN, Infinity and -0; JSON
+cannot). To be re-measured with the real typed structs in slice 3a, where skipping unread fields
+should help both.
+
+**Loading.** The one `--target web` build loads under Node (`initSync` with file bytes,
+`scripts/engine-node.mjs`), Deno (`init` with a file URL) and a Vite production build.
+Handle finalisation is unverified: no handle exists until slice 3b.
+
+## 3. Corrections to the plan found while building
+
+- **No top-level `await` in `main.tsx`.** Vite's default build target rejects it. Slice 4 wraps
+  boot in an async function (`initEngine().then(render)`) instead.
+- **`wasm-opt` needs its feature flags named**, and the release profile must not strip the
+  `target_features` section. Both are handled in `scripts/engine-build.mjs` and `Cargo.toml`.
+- **The oracle's wire format is ASCII-only.** Node's `readline` also breaks lines at U+2028/U+2029.
+
+## 4. Behaviour to fix after the port
+
+All of this is reproduced faithfully by the port. Line numbers are `src/lib/`.
+
+1. `evalExpr` throws, despite its "never throws" contract, on a dice count past 1e21 scaled twice (expr.ts:159), on runaway nesting, and on `when: null` in data.
+2. A guarded division still rejects: `x == 0 ? 0 : 10 / x` fails when `x` is 0, because both ternary branches are evaluated (expr.ts:340).
+3. `boost()` ignores the booster's `when`, `ask`, `once` and `match` (graph.ts:982).
+4. Two `add` effects on one owner each receive that owner's full chained boost, so the booster counts twice.
+5. `when` is evaluated, and can report a problem, for ops that are then skipped (graph.ts:1048 against 1092–1115).
+6. A `once` note with no `ask` is printed on every matching roll (graph.ts:1083 runs before 1115).
+7. A hit-gated note with unknown hit and no `ask` is shown as if the attack hit.
+8. `ask: ''` with unknown hit applies the effect as active.
+9. `when: ''` passes the audit and fails on every roll.
+10. `rider.formula` and `parts` show `eff.value` even when a level table supplied the formula (graph.ts:994 against 1174).
+11. Every use-counter variable logs a false "Variable did not resolve" (`characterVars` walks it before binding it).
+12. Runtime never receives `catalogTypes`, so a condition reading a variable from an inactive feature fails instead of reading zero.
+13. Runtime and author time disagree on derived variables holding dice or strings (graph.ts:310 against 162).
+14. A stored variable named `level` overrides the real level; roll names override declared variables.
+15. `name in scope` walks the prototype chain: a variable called `constructor` or `toString` is skipped.
+16. The AND-clash audit has false positives: `roll:d20` with `roll:attack`, and `roll:attack.melee` with `roll:attack.str`.
+17. `roll:attack.melee.x` passes the audit (graph.ts:1903).
+18. Sheet ops skip the target, identifier and level-table checks (graph.ts:1771, 1821); `minimum` and `faces` are never identifier-checked.
+19. An armed `crit` sets no threshold; armed `floor` and `reroll` are ignored (graph.ts:1276–1278).
+20. The comments at expr.ts:147–156 say `parseDice` rejects a leading sign. It accepts one.
+21. `rollDiceTerms` (dice.ts:86) has no callers.
+22. `docs/GUIDE_Codex_Authoring.md:387` says arithmetic is integer. Only `/` floors; `1.5 + 1` is `2.5`.

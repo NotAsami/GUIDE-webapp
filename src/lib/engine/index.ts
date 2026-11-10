@@ -1,0 +1,94 @@
+/**
+ * THE ENGINE, as the rest of the app sees it.
+ *
+ * Two implementations sit behind these names — the TypeScript original
+ * (lib/expr.ts, and later dice and graph) and the Rust port compiled to
+ * WebAssembly (packages/engine-wasm, built from engine/). lib/engine/setting.ts
+ * says which one answers. Callers import from here and never learn which.
+ *
+ * This file holds no rules. It dispatches, and in shadow mode it compares.
+ *
+ * Every function stays SYNCHRONOUS: the engine runs inside render. The one
+ * async step is `initEngine`, awaited once at boot before anything renders.
+ */
+import init, * as wasm from '../../../packages/engine-wasm/engine.js'
+import * as ts from '../expr.ts'
+import { attempt, sameOutcome, type Outcome } from './compare.ts'
+import { STRICT, engineMode } from './setting.ts'
+
+export type { ExprScope, FormulaValue } from '../expr.ts'
+
+// The constant lists are read at module scope by several callers, before any
+// async init could have run — so they stay static. engine.parity.test.ts holds
+// them equal to the Rust copies.
+export { BOOST_IDENTS, HAS_PREFIX, HIT_ASK, ROLL_IDENTS, ROLL_IDENT_PROBE, VAR_IDENTS } from '../expr.ts'
+
+let ready = false
+
+/** Load the WebAssembly engine. Awaited once, at boot. */
+export async function initEngine(): Promise<void> {
+  await init({ module_or_path: new URL('../../../packages/engine-wasm/engine_bg.wasm', import.meta.url) })
+  ready = true
+}
+
+/** The same, from bytes already in hand — Node (tests), where there is no fetch of a file. */
+export function initEngineSync(bytes: BufferSource): void {
+  wasm.initSync({ module: bytes })
+  ready = true
+}
+
+/** The Rust engine's own constants, for the test that pins the static copies to them. */
+export const wasmConstants = () => wasm.engineConstants()
+
+// --- shadow mode ---------------------------------------------------------------
+
+export type EngineDiff = { fn: string; args: unknown[]; ts: Outcome<unknown>; wasm: Outcome<unknown> }
+
+const DIFF_KEY = 'guide.engine.diffs'
+const DIFF_CAP = 50
+
+function report(diff: EngineDiff): void {
+  if (STRICT) throw new Error(`engines disagree on ${diff.fn}: ${JSON.stringify(diff)}`)
+  console.warn('[engine shadow] engines disagree', diff)
+  try {
+    const kept: unknown[] = JSON.parse(localStorage.getItem(DIFF_KEY) ?? '[]')
+    localStorage.setItem(DIFF_KEY, JSON.stringify([...kept, diff].slice(-DIFF_CAP)))
+  } catch { /* storage full or unavailable: the console line is the record */ }
+}
+
+/** The differences shadow mode has recorded on this device, oldest first. */
+export function engineDiffs(): EngineDiff[] {
+  try { return JSON.parse(localStorage.getItem(DIFF_KEY) ?? '[]') } catch { return [] }
+}
+
+let warned = false
+
+/** One engine function, answered by whichever implementation the setting names. */
+function dispatch<A extends unknown[], R>(fn: string, original: (...a: A) => R, port: (...a: A) => R): (...a: A) => R {
+  return (...args) => {
+    const mode = engineMode()
+    if (mode === 'ts') return original(...args)
+    if (!ready) {
+      // Asked for before boot finished, or the module failed to load. The
+      // original is still here, so the app keeps working and says so once.
+      if (!warned) { warned = true; console.warn('[engine] WebAssembly engine not loaded; using the TypeScript engine') }
+      return original(...args)
+    }
+    if (mode === 'wasm') return port(...args)
+
+    const a = attempt(() => original(...args))
+    const b = attempt(() => port(...args))
+    if (!sameOutcome(a, b)) report({ fn, args, ts: a, wasm: b })
+    if ('threw' in a) throw a.threw
+    return a.ok
+  }
+}
+
+// --- the expression evaluator (slice 1) ------------------------------------------
+
+export const evalExpr = dispatch('evalExpr', ts.evalExpr, wasm.evalExpr)
+export const freeIdents = dispatch('freeIdents', ts.freeIdents, wasm.freeIdents)
+export const interpolate = dispatch('interpolate', ts.interpolate, wasm.interpolate)
+export const interpolations = dispatch('interpolations', ts.interpolations, wasm.interpolations)
+export const hasIdent = dispatch('hasIdent', ts.hasIdent, wasm.hasIdent)
+export const isHasIdent = dispatch('isHasIdent', ts.isHasIdent, wasm.isHasIdent)
