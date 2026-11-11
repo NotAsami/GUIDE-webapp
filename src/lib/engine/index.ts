@@ -12,13 +12,19 @@
  * async step is `initEngine`, awaited once at boot before anything renders.
  */
 import init, * as wasm from '../../../packages/engine-wasm/engine.js'
+import type { CharacterRow, EffectDef, EffectiveSheet, Feature, GraphEffect, ItemEffects, Mod, ShardTree } from '../database.types.ts'
+import * as tsBurden from '../burden.ts'
 import * as tsDice from '../dice.ts'
+import * as tsFx from '../effects.ts'
+import * as tsMods from '../modEditor.ts'
+import * as tsShards from '../shards.ts'
 import * as ts from '../expr.ts'
 import { attempt, sameOutcome, type Outcome } from './compare.ts'
 import { STRICT, engineMode } from './setting.ts'
 
 export type { ExprScope, FormulaValue } from '../expr.ts'
 export type { RolledDie } from '../dice.ts'
+export type { ActiveSource } from '../effects.ts'
 
 // The constant lists are read at module scope by several callers, before any
 // async init could have run — so they stay static. engine.parity.test.ts holds
@@ -141,3 +147,37 @@ const terms = rolling('rolledDiceTerms', tsDice.rolledDiceTerms as (exprs: strin
 /** `double` is filled in HERE: the port's randomness is its last argument, so an
  *  omitted optional before it would shift the source into the wrong slot. */
 export const rolledDiceTerms = (exprs: string[], double = false) => terms(exprs, double)
+
+// --- the sheet layer (slice 3a) ----------------------------------------------------
+//
+// Character data crosses the boundary as plain values, so the port's functions
+// are untyped at the edge; the casts below restore the types the originals declare.
+
+type Trees = Record<string, ShardTree>
+/** One shared default, so an omitted catalog is the SAME object on every call. */
+const NO_TREES: Trees = {}
+
+const sheet = dispatch('effectiveSheet', tsFx.effectiveSheet as (c: CharacterRow, t: Trees) => EffectiveSheet,
+  (c, t) => wasm.effectiveSheet(c, t) as EffectiveSheet)
+export const effectiveSheet = (character: CharacterRow, shardTrees: Trees = NO_TREES) => sheet(character, shardTrees)
+
+const sources = dispatch('activeSources', tsFx.activeSources as (c: CharacterRow, t: Trees) => tsFx.ActiveSource[],
+  (c, t) => wasm.activeSources(c, t) as tsFx.ActiveSource[])
+export const activeSources = (character: CharacterRow, shardTrees: Trees = NO_TREES) => sources(character, shardTrees)
+
+const carry = dispatch('carryMultiplier', tsFx.carryMultiplier as (c: CharacterRow, t: Trees) => number,
+  (c, t) => wasm.carryMultiplier(c, t))
+export const carryMultiplier = (character: CharacterRow, shardTrees: Trees = NO_TREES) => carry(character, shardTrees)
+
+export const gearFeatures = dispatch('gearFeatures', tsFx.gearFeatures, c => wasm.gearFeatures(c) as Feature[])
+export const shardFeatures = dispatch('shardFeatures', tsShards.shardFeatures, (c, t) => wasm.shardFeatures(c, t) as Feature[])
+export const currentBurden = dispatch('currentBurden', tsBurden.currentBurden, c => wasm.currentBurden(c))
+
+type Skills = Pick<EffectDef, 'skillProficiencies' | 'skillExpertise'>[]
+const compile = dispatch('compileEffects', tsMods.compileEffects as (m: Mod[], s: Skills | undefined) => ItemEffects | undefined,
+  (m, s) => wasm.compileEffects(m, s) as ItemEffects | undefined)
+export const compileEffects = (mods: Mod[], skills?: Skills) => compile(mods, skills)
+
+const fxOf = dispatch('sheetEffects', tsMods.sheetEffects as (g: GraphEffect[] | undefined, s: ts.ExprScope | undefined) => ItemEffects | undefined,
+  (g, s) => wasm.sheetEffects(g, s) as ItemEffects | undefined)
+export const sheetEffects = (graph?: GraphEffect[], scope?: ts.ExprScope | undefined) => fxOf(graph, scope)

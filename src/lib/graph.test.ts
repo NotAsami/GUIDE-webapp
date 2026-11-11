@@ -12,7 +12,7 @@ import {
   damageFlags, immuneTo, matchCount, nodeGid, normalizeTag, probeScope, resolve, suppressedEffects, total, varCollisions, type ResolveReq,
   staleArmed,
 } from './graph.ts'
-import { activeSources } from './effects.ts'
+import { activeSources } from './engine/index.ts'
 import { composeCheck } from './dnd.ts'
 import { OPS, OP_ORDER, OP_TITLE, ROLL_SELECTORS } from './opSchema.ts'
 import type { GraphOp } from './database.types.ts'

@@ -47,6 +47,16 @@ export interface Interpolated {
 }
 
 
+export function activeSources(character: any, shard_trees: any): any;
+
+export function carryMultiplier(character: any, shard_trees: any): number;
+
+export function compileEffects(mods: any, skills: any): any;
+
+export function currentBurden(character: any): number;
+
+export function effectiveSheet(character: any, shard_trees: any): any;
+
 /**
  * The engine's constant lists, read once at boot.
  */
@@ -55,6 +65,8 @@ export function engineConstants(): EngineConstants;
 export function evalExpr(src: string, scope: Scope): FormulaValue | null;
 
 export function freeIdents(src: string): string[];
+
+export function gearFeatures(character: any): any;
 
 export function hasIdent(feature_name: string): string;
 
@@ -76,6 +88,13 @@ export function rolledDice(count: number, sides: number, random: () => number): 
 
 export function rolledDiceTerms(exprs: string[], double: boolean, random: () => number): RolledDie[];
 
+export function shardFeatures(character: any, catalog: any): any;
+
+/**
+ * `scope` is read in place, like every scope; omit it and every boost must be a literal.
+ */
+export function sheetEffects(graph: any, scope: any): any;
+
 /**
  * Development only: a panic prints its message instead of `unreachable`.
  */
@@ -85,9 +104,15 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly activeSources: (a: any, b: any) => [number, number, number];
+    readonly carryMultiplier: (a: any, b: any) => [number, number, number];
+    readonly compileEffects: (a: any, b: any) => any;
+    readonly currentBurden: (a: any) => number;
+    readonly effectiveSheet: (a: any, b: any) => [number, number, number];
     readonly engineConstants: () => [number, number, number];
     readonly evalExpr: (a: number, b: number, c: any) => [number, number, number];
     readonly freeIdents: (a: number, b: number) => [number, number];
+    readonly gearFeatures: (a: any) => any;
     readonly hasIdent: (a: number, b: number) => [number, number];
     readonly interpolate: (a: number, b: number, c: any) => [number, number, number];
     readonly interpolations: (a: number, b: number) => [number, number];
@@ -98,6 +123,8 @@ export interface InitOutput {
     readonly rollHeal: (a: any, b: any) => [number, number, number];
     readonly rolledDice: (a: number, b: number, c: any) => [number, number, number];
     readonly rolledDiceTerms: (a: number, b: number, c: number, d: any) => [number, number, number];
+    readonly shardFeatures: (a: any, b: any) => any;
+    readonly sheetEffects: (a: any, b: any) => [number, number, number];
     readonly start: () => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
