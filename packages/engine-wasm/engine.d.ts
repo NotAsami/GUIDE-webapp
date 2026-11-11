@@ -9,6 +9,34 @@ export type EngineConstants = {
 
 
 /**
+ * dice.ts:18's result. `mod` is always present, 0 when the expression has none.
+ */
+export interface ParsedDice {
+    count: number;
+    sides: number;
+    mod: number;
+}
+
+/**
+ * dice.ts:47. One die as it sits in a roll record.
+ */
+export interface RolledDie {
+    v: number;
+    sides: number;
+    orig?: number;
+    rerolled?: boolean;
+    crit?: boolean;
+}
+
+/**
+ * dice.ts:62's result.
+ */
+export interface HealRoll {
+    total: number;
+    breakdown: string;
+}
+
+/**
  * expr.ts:15. `num` carries a flat part and unrolled dice terms.
  */
 export type FormulaValue = { t: "num"; flat: number; dice: string[] } | { t: "bool"; v: boolean } | { t: "arr"; v: number[] } | { t: "str"; v: string };
@@ -36,6 +64,18 @@ export function interpolations(text?: string | null): string[];
 
 export function isHasIdent(id: string): boolean;
 
+export function parseDice(expr: string): ParsedDice | null;
+
+export function rerollDie(die: RolledDie, random: () => number): RolledDie;
+
+export function rollDice(count: number, sides: number, random: () => number): number[];
+
+export function rollHeal(amount: number | string, random: () => number): HealRoll;
+
+export function rolledDice(count: number, sides: number, random: () => number): RolledDie[];
+
+export function rolledDiceTerms(exprs: string[], double: boolean, random: () => number): RolledDie[];
+
 /**
  * Development only: a panic prints its message instead of `unreachable`.
  */
@@ -52,6 +92,12 @@ export interface InitOutput {
     readonly interpolate: (a: number, b: number, c: any) => [number, number, number];
     readonly interpolations: (a: number, b: number) => [number, number];
     readonly isHasIdent: (a: number, b: number) => number;
+    readonly parseDice: (a: number, b: number) => [number, number, number];
+    readonly rerollDie: (a: any, b: any) => [number, number, number];
+    readonly rollDice: (a: number, b: number, c: any) => [number, number, number];
+    readonly rollHeal: (a: any, b: any) => [number, number, number];
+    readonly rolledDice: (a: number, b: number, c: any) => [number, number, number];
+    readonly rolledDiceTerms: (a: number, b: number, c: number, d: any) => [number, number, number];
     readonly start: () => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

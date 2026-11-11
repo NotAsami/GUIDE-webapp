@@ -11,6 +11,7 @@
  * and no -0, and those are exactly the values the two engines could disagree on.
  */
 import { createInterface } from 'node:readline'
+import * as dice from '../src/lib/dice.ts'
 import * as expr from '../src/lib/expr.ts'
 
 const num = n => (Object.is(n, -0) ? '-0' : String(n))
@@ -18,7 +19,21 @@ const unnum = s => (s === '-0' ? -0 : Number(s))
 const encode = v => JSON.parse(JSON.stringify(v, (_k, x) => (typeof x === 'number' ? num(x) : x)) ?? 'null')
 const scope = s => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, typeof v === 'string' ? unnum(v) : v]))
 
+/** Run a rolling function against a recorded tape instead of Math.random, and
+ *  say how many draws it took — drawing a different number is a difference. */
+function rolled(tape, f) {
+  const real = Math.random
+  let used = 0
+  Math.random = () => (used < tape.length ? unnum(tape[used++]) : (used++, NaN))
+  try { return { out: f(), used } } finally { Math.random = real }
+}
+
 const FNS = {
+  parseDice: r => dice.parseDice(r.src),
+  rollDice: r => rolled(r.tape, () => dice.rollDice(unnum(r.count), unnum(r.sides))),
+  rolledDiceTerms: r => rolled(r.tape, () => dice.rolledDiceTerms(r.exprs, r.double)),
+  rerollDie: r => rolled(r.tape, () => dice.rerollDie(scope(r.die))),
+  rollHeal: r => rolled(r.tape, () => dice.rollHeal(r.text ?? unnum(r.number))),
   evalExpr: r => expr.evalExpr(r.src, scope(r.scope)),
   freeIdents: r => expr.freeIdents(r.src),
   interpolate: r => expr.interpolate(r.src, scope(r.scope)),

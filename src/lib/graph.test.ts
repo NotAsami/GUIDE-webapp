@@ -4,7 +4,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.types.ts'
 import { HIT_ASK, VAR_IDENTS, evalExpr } from './expr.ts'
-import { parseDice, rerollDie, rollDice } from './dice.ts'
+// Through the facade, so `npm run test:parity` rolls these on both engines.
+import '../../scripts/engine-node.mjs'
+import { parseDice, rerollDie, rollDice } from './engine/index.ts'
 import {
   armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid, reqKeys, rollResolution,
   damageFlags, immuneTo, matchCount, nodeGid, normalizeTag, probeScope, resolve, suppressedEffects, total, varCollisions, type ResolveReq,

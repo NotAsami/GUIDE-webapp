@@ -12,11 +12,13 @@
  * async step is `initEngine`, awaited once at boot before anything renders.
  */
 import init, * as wasm from '../../../packages/engine-wasm/engine.js'
+import * as tsDice from '../dice.ts'
 import * as ts from '../expr.ts'
 import { attempt, sameOutcome, type Outcome } from './compare.ts'
 import { STRICT, engineMode } from './setting.ts'
 
 export type { ExprScope, FormulaValue } from '../expr.ts'
+export type { RolledDie } from '../dice.ts'
 
 // The constant lists are read at module scope by several callers, before any
 // async init could have run — so they stay static. engine.parity.test.ts holds
@@ -92,3 +94,50 @@ export const interpolate = dispatch('interpolate', ts.interpolate, wasm.interpol
 export const interpolations = dispatch('interpolations', ts.interpolations, wasm.interpolations)
 export const hasIdent = dispatch('hasIdent', ts.hasIdent, wasm.hasIdent)
 export const isHasIdent = dispatch('isHasIdent', ts.isHasIdent, wasm.isHasIdent)
+
+// --- dice (slice 2) --------------------------------------------------------------
+
+/**
+ * A function that ROLLS. The Rust engine is handed its randomness rather than
+ * generating it, so the port takes one more argument than the original: the
+ * source, `Math.random` here.
+ *
+ * Shadow mode needs both engines to see the SAME dice, or every roll would be
+ * a difference. The original reads `Math.random` directly, so it is wrapped for
+ * the length of the call to record what it drew, and the port replays that
+ * tape. Drawing a different NUMBER of times is itself a difference.
+ */
+function rolling<A extends unknown[], R>(
+  fn: string,
+  original: (...a: A) => R,
+  port: (...a: [...A, () => number]) => R,
+): (...a: A) => R {
+  return (...args) => {
+    const mode = engineMode()
+    if (mode === 'ts' || !ready) return original(...args)
+    if (mode === 'wasm') return port(...args, Math.random)
+
+    const tape: number[] = []
+    const real = Math.random
+    Math.random = () => { const r = real(); tape.push(r); return r }
+    let a: Outcome<R>
+    try { a = attempt(() => original(...args)) } finally { Math.random = real }
+    let used = 0
+    const b = attempt(() => port(...args, () => tape[used++] ?? NaN))
+    if (!sameOutcome(a, b) || used !== tape.length) {
+      report({ fn, args: [...args, { draws: tape.length, portDrew: used }], ts: a, wasm: b })
+    }
+    if ('threw' in a) throw a.threw
+    return a.ok
+  }
+}
+
+export const parseDice = dispatch('parseDice', tsDice.parseDice, wasm.parseDice)
+export const rollDice = rolling('rollDice', tsDice.rollDice, wasm.rollDice)
+export const rolledDice = rolling('rolledDice', tsDice.rolledDice, wasm.rolledDice)
+export const rerollDie = rolling('rerollDie', tsDice.rerollDie, wasm.rerollDie)
+export const rollHeal = rolling('rollHeal', tsDice.rollHeal, wasm.rollHeal)
+const terms = rolling('rolledDiceTerms', tsDice.rolledDiceTerms as (exprs: string[], double: boolean) => tsDice.RolledDie[], wasm.rolledDiceTerms)
+/** `double` is filled in HERE: the port's randomness is its last argument, so an
+ *  omitted optional before it would shift the source into the wrong slot. */
+export const rolledDiceTerms = (exprs: string[], double = false) => terms(exprs, double)

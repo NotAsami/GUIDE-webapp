@@ -52,7 +52,7 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - `npm run test:parity` — the whole suite with both engines answering; any difference fails.
 - `cargo test -p engine_core` — native tests, including property tests that use the
   TypeScript engine as oracle (`scripts/engine-oracle.mjs`; needs `node`).
-- Slice 1 (expr) is done. Next: dice → sheet layer (`effects.ts`) → graph → callers → delete TS.
+- Slices 1 (expr) and 2 (dice) are done. Next: sheet layer (`effects.ts`) → graph → callers → delete TS.
 
 ## Phase 0 smoke test (proves the loop)
 - Login → land on `/` → topbar shows HP 52/52 and the three story cards render from `progress.stories`.

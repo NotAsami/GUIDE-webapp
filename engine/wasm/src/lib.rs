@@ -5,6 +5,7 @@
 //! a rejected formula is `null`, and an input the original throws on is a thrown
 //! `Error`.
 
+use engine_core::dice;
 use engine_core::expr::{self, Eval, EvalError, Lookup, Scope, ScopeVal};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -129,4 +130,84 @@ pub fn engine_constants() -> Result<JsValue, JsError> {
         HIT_ASK: expr::HIT_ASK,
         HAS_PREFIX: expr::HAS_PREFIX,
     })
+}
+
+// --- dice (slice 2) ------------------------------------------------------------
+//
+// The engine never generates randomness: each rolling function is handed the
+// source, `Math.random` in the app and a recorded tape in tests.
+
+fn draws(random: &js_sys::Function) -> impl FnMut() -> f64 + '_ {
+    move || {
+        random
+            .call0(&JsValue::NULL)
+            .ok()
+            .and_then(|v| v.as_f64())
+            .unwrap_or(f64::NAN)
+    }
+}
+
+fn rolled<T: Serialize>(r: Eval<T>) -> Result<JsValue, JsError> {
+    match r {
+        Ok(v) => out(&v),
+        Err(EvalError::Reject(msg) | EvalError::Fault(msg)) => Err(fail(msg)),
+    }
+}
+
+#[wasm_bindgen(js_name = parseDice, unchecked_return_type = "ParsedDice | null")]
+pub fn parse_dice(expr: &str) -> Result<JsValue, JsError> {
+    match dice::parse_dice(expr) {
+        Some(p) => out(&p),
+        None => Ok(JsValue::NULL),
+    }
+}
+
+#[wasm_bindgen(js_name = rollDice, unchecked_return_type = "number[]")]
+pub fn roll_dice(
+    count: f64,
+    sides: f64,
+    #[wasm_bindgen(unchecked_param_type = "() => number")] random: &js_sys::Function,
+) -> Result<JsValue, JsError> {
+    rolled(dice::roll_dice(count, sides, &mut draws(random)))
+}
+
+#[wasm_bindgen(js_name = rolledDice, unchecked_return_type = "RolledDie[]")]
+pub fn rolled_dice(
+    count: f64,
+    sides: f64,
+    #[wasm_bindgen(unchecked_param_type = "() => number")] random: &js_sys::Function,
+) -> Result<JsValue, JsError> {
+    rolled(dice::rolled_dice(count, sides, &mut draws(random)))
+}
+
+#[wasm_bindgen(js_name = rerollDie, unchecked_return_type = "RolledDie")]
+pub fn reroll_die(
+    #[wasm_bindgen(unchecked_param_type = "RolledDie")] die: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "() => number")] random: &js_sys::Function,
+) -> Result<JsValue, JsError> {
+    let die: dice::RolledDie = serde_wasm_bindgen::from_value(die).map_err(fail)?;
+    out(&dice::reroll_die(&die, &mut draws(random)))
+}
+
+#[wasm_bindgen(js_name = rollHeal, unchecked_return_type = "HealRoll")]
+pub fn roll_heal(
+    #[wasm_bindgen(unchecked_param_type = "number | string")] amount: JsValue,
+    #[wasm_bindgen(unchecked_param_type = "() => number")] random: &js_sys::Function,
+) -> Result<JsValue, JsError> {
+    let text = amount.as_string();
+    let amount = match (amount.as_f64(), &text) {
+        (Some(n), _) => dice::Amount::Number(n),
+        (None, Some(t)) => dice::Amount::Text(t),
+        (None, None) => return Err(fail("a heal amount is a number or a dice expression")),
+    };
+    rolled(dice::roll_heal(amount, &mut draws(random)))
+}
+
+#[wasm_bindgen(js_name = rolledDiceTerms, unchecked_return_type = "RolledDie[]")]
+pub fn rolled_dice_terms(
+    exprs: Vec<String>,
+    double: bool,
+    #[wasm_bindgen(unchecked_param_type = "() => number")] random: &js_sys::Function,
+) -> Result<JsValue, JsError> {
+    rolled(dice::rolled_dice_terms(&exprs, double, &mut draws(random)))
 }
