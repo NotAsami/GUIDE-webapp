@@ -5,8 +5,8 @@ The engine is being ported from TypeScript (`src/lib/expr.ts`, `dice.ts`, `graph
 for every input**, including outputs that look wrong. This file is where the exceptions to that
 rule and the wrong-looking behaviour are written down.
 
-Status: **slice 1 (the expression evaluator) is done.** Callers still use the TypeScript engine;
-they move in slice 4.
+Status: **slices 1 (expression evaluator) and 2 (dice) are done.** Callers still use the
+TypeScript engine; they move in slice 4.
 
 ## 1. Where the two engines differ on purpose
 
@@ -18,11 +18,15 @@ Shadow mode reports each of these if it ever happens in play.
 | 2 | Indexing an array with NaN, e.g. `[1,2][x]` with `x = NaN` | `flat: undefined` | `flat: NaN` | Reachable only when NaN is already in the scope. Matching it would make every `flat` optional. Approved in the plan. |
 | 3 | Lowercasing one of 28 capital letters added in Unicode 17 (U+A7CE, U+A7D2, U+A7D4, U+16EA0–U+16EB8) | Depends on the browser: Node 24 leaves them unchanged | Lowercases them | Rust's tables are fixed by the pinned toolchain; JavaScript's follow whatever the host ships. Found by the every-code-point test. Affects `hasIdent` not at all (non-ASCII collapses to `_`) and `normalizeTag` only for tags in Beria Erfe or three rare Latin letters. |
 | 4 | A scope value that is neither a number nor a boolean (`null`, a string) | Coerces it (`null + 1` is `1`) | Throws | The type forbids it and no scope builder produces one. Only a value a formula actually reads is checked. |
+| 5 | Rolling more than 100,000 dice in one call | Allocates and rolls until the tab runs out of memory | Throws (`MAX_DICE`, `engine/core/src/dice.rs`) | Same reasoning as the nesting limit. The largest roll in the SRD is 40d6. |
+| 6 | `rerollDie` given a die carrying fields other than `v`, `sides`, `orig`, `rerolled`, `crit` | Copies them through | Drops them | The `RolledDie` type has exactly those five; no caller adds more. |
+| 7 | `rollHeal` given something that is neither a number nor a string | Coerces it to a string | Throws | The type forbids it. |
 
 ## 2. Step 0 measurements (Apple silicon, Node 24.11.1, Rust 1.99.1, wasm-bindgen 0.2.130)
 
 **Size.** `engine_bg.wasm` with the evaluator only: **96 KB raw, 58 KB gzipped**, after `wasm-opt -Oz`.
-It will grow with dice and the resolver. Not worth lazy-loading: the engine is needed for the
+With dice added (slice 2): **127 KB raw, 71 KB gzipped** — most of the growth is the first use of
+serde deserialisation, not dice. It will grow again with the resolver. Not worth lazy-loading: the engine is needed for the
 first render, and Vite already emits it as a separate hashed asset fetched alongside the main chunk
 (516 KB raw, 157 KB gzipped).
 
@@ -58,6 +62,11 @@ should help both.
 Handle finalisation is unverified: no handle exists until slice 3b.
 
 ## 3. Corrections to the plan found while building
+
+- **Randomness is the LAST argument of every rolling function in the port**, so the facade fills in
+  optional arguments before it (`rolledDiceTerms`' `double`). Shadow mode records what the original
+  drew from `Math.random` and replays that tape into the port; drawing a different number of times
+  is reported as a difference.
 
 - **No top-level `await` in `main.tsx`.** Vite's default build target rejects it. Slice 4 wraps
   boot in an async function (`initEngine().then(render)`) instead.

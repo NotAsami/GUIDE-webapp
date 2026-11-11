@@ -71,6 +71,25 @@ pub fn max(a: f64, b: f64) -> f64 {
     }
 }
 
+/// The leading run of `s` that satisfies `pred`, and what follows it — the
+/// hand-written stand-in for a regex's `\d+` or `\s*`.
+pub fn take_while(s: &str, pred: impl Fn(char) -> bool) -> (&str, &str) {
+    let end = s.find(|c: char| !pred(c)).unwrap_or(s.len());
+    s.split_at(end)
+}
+
+/// `parseInt(s, 10)`: leading whitespace, an optional sign, then digits; NaN if
+/// there are none. Whatever follows the digits is ignored, and `"-0"` is -0.
+pub fn parse_int(s: &str) -> f64 {
+    let s = s.trim_start_matches(is_whitespace);
+    let (sign, s) = match s.strip_prefix('-') {
+        Some(rest) => (-1.0, rest),
+        None => (1.0, s.strip_prefix('+').unwrap_or(s)),
+    };
+    let (digits, _) = take_while(s, |c| c.is_ascii_digit());
+    digits.parse::<f64>().map_or(f64::NAN, |n| sign * n)
+}
+
 /// `Number.isInteger(n)`.
 pub fn is_integer(n: f64) -> bool {
     n.is_finite() && n.trunc() == n

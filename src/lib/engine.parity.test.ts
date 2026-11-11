@@ -8,7 +8,10 @@ import assert from 'node:assert/strict'
 import '../../scripts/engine-node.mjs'
 import * as ts from './expr.ts'
 import { same } from './engine/compare.ts'
-import { evalExpr, freeIdents, hasIdent, interpolate, interpolations, isHasIdent, wasmConstants } from './engine/index.ts'
+import {
+  evalExpr, freeIdents, hasIdent, interpolate, interpolations, isHasIdent, wasmConstants,
+  parseDice, rerollDie, rollDice, rollHeal, rolledDice, rolledDiceTerms,
+} from './engine/index.ts'
 import type { ExprScope } from './engine/index.ts'
 
 const VARS: ExprScope = { level: 7, prof: 3, wis: 4, half: 0.5, on: true }
@@ -79,4 +82,35 @@ test('strings, identifiers and prose spans', () => {
   for (const name of ['Improved Brutal Strike (Enhanced)', 'İnfo KelvinK', '', '___', 'ΌΣΟΣ', 'ǅ']) {
     isHasIdent(hasIdent(name))
   }
+})
+
+// --- dice ------------------------------------------------------------------
+
+test('parseDice: every spelling, and the signs', () => {
+  for (const src of [
+    '2d6', 'd8', '3d4 + 3', '3d4+3', '1d10 - 2', '-1d4', '- 2 D 6 - 0', '-0d6', '2d6-0', ' \uFEFF2d6\u00A0', '2\u0085d6',
+    '', 'not dice', '2d', '2d6+', '2d6+1+1', '+1d4', '2d6x', '1e3d6', '2d6\n', 'ⅱd6', '٢d6', '1d6 + -1',
+    `${'9'.repeat(30)}d6`, `2d${'9'.repeat(400)}`,
+  ]) parseDice(src)
+  assert.ok(Object.is(parseDice('-0d6')!.count, -0))
+})
+
+test('rolling draws the same dice in the same order on both engines', () => {
+  for (let i = 0; i < 200; i++) {
+    rollDice(3, 6); rollDice(0, 6); rollDice(-2, 6); rollDice(2.9, 6); rollDice(NaN, 6); rollDice(2, 0); rollDice(2, -4); rollDice(2, 2.5)
+    rolledDice(2, 20)
+    rolledDiceTerms(['1d4', '-1d6', 'junk', '2d8 + 3', '0d6', '-0d4'], i % 2 === 0)
+    rolledDiceTerms(['1d6'])
+    rerollDie(rerollDie({ v: 12, sides: 20 }))
+    rerollDie({ v: 3, sides: 6, crit: true })
+    for (const amount of [5, -3, 0, -0, 2.5, NaN, '2d4', '2d4 + 2', '02d4 - 1', '0d6 - 2', '1D8+0', '3 apples', 'd8', '-2', '-0', '', ' 7 ', '+4', '1d6 + -1']) rollHeal(amount)
+  }
+})
+
+test('a rolled die is one draw: face = floor(random * sides) + 1', () => {
+  const real = Math.random
+  const tape = [0, 0.5, 0.999999]
+  let i = 0
+  Math.random = () => tape[i++]
+  try { assert.deepEqual(rollDice(3, 6), [1, 4, 6]) } finally { Math.random = real }
 })

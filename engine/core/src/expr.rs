@@ -193,12 +193,6 @@ fn neg_dice(dice: Vec<String>) -> Vec<String> {
         .collect()
 }
 
-/// The leading run of `s` that satisfies `pred`, and what follows it.
-fn take_while(s: &str, pred: impl Fn(char) -> bool) -> (&str, &str) {
-    let end = s.find(|c: char| !pred(c)).unwrap_or(s.len());
-    s.split_at(end)
-}
-
 /// expr.ts:157. `n * 2d6` multiplies the COUNT. A term that is not `-?N dM` —
 /// which only an earlier scaling can produce, e.g. `1e+21d6` — is where the
 /// original dereferences a failed regex match and throws a TypeError.
@@ -209,7 +203,7 @@ fn scale_dice(dice: &[String], k: f64) -> Eval<Vec<String>> {
             Some(rest) => (true, rest),
             None => (false, s.as_str()),
         };
-        let (count_digits, after) = take_while(body, |c| c.is_ascii_digit());
+        let (count_digits, after) = js::take_while(body, |c| c.is_ascii_digit());
         let sides = after.strip_prefix('d').unwrap_or("");
         let well_formed = !count_digits.is_empty() && !sides.is_empty() && sides.chars().all(|c| c.is_ascii_digit());
         let parsed = count_digits.parse::<f64>();
@@ -351,10 +345,10 @@ pub fn lex(src: &str) -> Eval<Vec<Tok>> {
             continue;
         }
         if digit(first) {
-            let (whole, after) = take_while(rest, digit);
+            let (whole, after) = js::take_while(rest, digit);
             // Dice before number, or `2d6` lexes as `2` followed by an identifier `d6`.
             if let Some(tail) = after.strip_prefix('d') {
-                let (sides, after_dice) = take_while(tail, digit);
+                let (sides, after_dice) = js::take_while(tail, digit);
                 if !sides.is_empty() {
                     out.push(Tok::Dice(format!("{whole}d{sides}")));
                     rest = after_dice;
@@ -365,7 +359,7 @@ pub fn lex(src: &str) -> Eval<Vec<Tok>> {
             let mut literal_len = whole.len();
             let mut next = after;
             if let Some(tail) = after.strip_prefix('.') {
-                let (frac, after_frac) = take_while(tail, digit);
+                let (frac, after_frac) = js::take_while(tail, digit);
                 if !frac.is_empty() {
                     literal_len += 1 + frac.len();
                     next = after_frac;
@@ -391,7 +385,7 @@ pub fn lex(src: &str) -> Eval<Vec<Tok>> {
         }
         // Must START lowercase; `_` is allowed after that, for `has_*`.
         if first.is_ascii_lowercase() {
-            let (id, after) = take_while(rest, |c| c.is_ascii_alphanumeric() || c == '_');
+            let (id, after) = js::take_while(rest, |c| c.is_ascii_alphanumeric() || c == '_');
             out.push(Tok::Ident(id.to_owned()));
             rest = after;
             continue;
