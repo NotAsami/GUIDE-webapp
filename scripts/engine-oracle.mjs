@@ -11,7 +11,11 @@
  * and no -0, and those are exactly the values the two engines could disagree on.
  */
 import { createInterface } from 'node:readline'
+import * as burden from '../src/lib/burden.ts'
 import * as dice from '../src/lib/dice.ts'
+import * as fx from '../src/lib/effects.ts'
+import * as mods from '../src/lib/modEditor.ts'
+import * as shards from '../src/lib/shards.ts'
 import * as expr from '../src/lib/expr.ts'
 
 const num = n => (Object.is(n, -0) ? '-0' : String(n))
@@ -29,6 +33,17 @@ function rolled(tape, f) {
 }
 
 const FNS = {
+  // The sheet layer. Inputs are plain JSON (finite numbers only), so they travel as they are.
+  effectiveSheet: r => fx.effectiveSheet(r.character, r.trees),
+  activeSources: r => fx.activeSources(r.character, r.trees),
+  gearFeatures: r => fx.gearFeatures(r.character),
+  shardFeatures: r => shards.shardFeatures(r.character, r.trees),
+  carryMultiplier: r => fx.carryMultiplier(r.character, r.trees),
+  currentBurden: r => burden.currentBurden(r.character),
+  sheetEffects: r => mods.sheetEffects(r.graph, r.scope ?? undefined),
+  compileEffects: r => mods.compileEffects(r.mods, r.skills ?? undefined),
+  toNumber: r => Number(r.src),
+  round: r => Math.round(unnum(r.src)),
   parseDice: r => dice.parseDice(r.src),
   rollDice: r => rolled(r.tape, () => dice.rollDice(unnum(r.count), unnum(r.sides))),
   rolledDiceTerms: r => rolled(r.tape, () => dice.rolledDiceTerms(r.exprs, r.double)),

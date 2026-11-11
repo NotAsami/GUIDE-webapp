@@ -3,7 +3,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, EquippedItem, ShardTree, Feature } from './database.types.ts'
-import { activeSources, carryMultiplier, effectiveSheet, gearFeatures } from './effects.ts'
+// Through the facade, so `npm run test:parity` runs these on both engines.
+import '../../scripts/engine-node.mjs'
+import { activeSources, carryMultiplier, effectiveSheet, gearFeatures } from './engine/index.ts'
 
 function character(over: Partial<CharacterRow>): CharacterRow {
   return {

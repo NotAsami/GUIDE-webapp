@@ -52,7 +52,10 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - `npm run test:parity` — the whole suite with both engines answering; any difference fails.
 - `cargo test -p engine_core` — native tests, including property tests that use the
   TypeScript engine as oracle (`scripts/engine-oracle.mjs`; needs `node`).
-- Slices 1 (expr) and 2 (dice) are done. Next: sheet layer (`effects.ts`) → graph → callers → delete TS.
+- Slices 1 (expr), 2 (dice) and 3a (sheet layer: `effects.ts` and its helpers) are done.
+  Next: graph → callers → delete TS.
+- `src/lib/engine.corpus.test.ts` runs every row of `supabase/catalog_snapshot.sql` through both
+  engines. Character data is read in Rust as `Val` (`engine/core/src/value.rs`), a JS-shaped value.
 
 ## Phase 0 smoke test (proves the loop)
 - Login → land on `/` → topbar shows HP 52/52 and the three story cards render from `progress.stories`.

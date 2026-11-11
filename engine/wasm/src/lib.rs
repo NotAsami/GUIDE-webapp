@@ -7,6 +7,8 @@
 
 use engine_core::dice;
 use engine_core::expr::{self, Eval, EvalError, Lookup, Scope, ScopeVal};
+use engine_core::sheet;
+use engine_core::value::{Map, Val};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -210,4 +212,118 @@ pub fn rolled_dice_terms(
     #[wasm_bindgen(unchecked_param_type = "() => number")] random: &js_sys::Function,
 ) -> Result<JsValue, JsError> {
     rolled(dice::rolled_dice_terms(&exprs, double, &mut draws(random)))
+}
+
+// --- the sheet layer (slice 3a) --------------------------------------------------
+//
+// Character data crosses as `Val`: a JavaScript value walked into Rust as it
+// stands, with `undefined`, `null` and a missing key still three different things.
+
+fn val_in(v: &JsValue) -> Val {
+    if v.is_undefined() {
+        Val::Undefined
+    } else if v.is_null() {
+        Val::Null
+    } else if let Some(b) = v.as_bool() {
+        Val::Bool(b)
+    } else if let Some(n) = v.as_f64() {
+        Val::Num(n)
+    } else if let Some(s) = v.as_string() {
+        Val::str(&s)
+    } else if let Some(array) = v.dyn_ref::<js_sys::Array>() {
+        Val::arr(array.iter().map(|item| val_in(&item)).collect())
+    } else if let Some(object) = v.dyn_ref::<js_sys::Object>().filter(|_| v.is_object()) {
+        let mut map = Map::new();
+        for key in js_sys::Object::keys(object).iter() {
+            let value = js_sys::Reflect::get(object, &key).unwrap_or(JsValue::UNDEFINED);
+            map.insert(key.as_string().unwrap_or_default(), val_in(&value));
+        }
+        Val::obj(map)
+    } else {
+        // A function, a symbol, a bigint: nothing the engine reads.
+        Val::Undefined
+    }
+}
+
+fn val_out(v: &Val) -> JsValue {
+    match v {
+        Val::Undefined => JsValue::UNDEFINED,
+        Val::Null => JsValue::NULL,
+        Val::Bool(b) => JsValue::from_bool(*b),
+        Val::Num(n) => JsValue::from_f64(*n),
+        Val::Str(s) => JsValue::from_str(s),
+        Val::Arr(items) => items.iter().map(val_out).collect::<js_sys::Array>().into(),
+        Val::Obj(map) => {
+            let object = js_sys::Object::new();
+            for (key, value) in map.iter() {
+                let _ = js_sys::Reflect::set(&object, &JsValue::from_str(key), &val_out(value));
+            }
+            object.into()
+        }
+    }
+}
+
+fn faulted<T>(r: Eval<T>) -> Result<T, JsError> {
+    r.map_err(|e| match e {
+        EvalError::Reject(msg) | EvalError::Fault(msg) => fail(msg),
+    })
+}
+
+#[wasm_bindgen(js_name = effectiveSheet)]
+pub fn effective_sheet(character: &JsValue, shard_trees: &JsValue) -> Result<JsValue, JsError> {
+    Ok(val_out(&faulted(sheet::effective_sheet(
+        &val_in(character),
+        &val_in(shard_trees),
+    ))?))
+}
+
+#[wasm_bindgen(js_name = activeSources)]
+pub fn active_sources(character: &JsValue, shard_trees: &JsValue) -> Result<JsValue, JsError> {
+    let sources = faulted(sheet::active_sources(&val_in(character), &val_in(shard_trees)))?;
+    Ok(sources
+        .iter()
+        .map(|s| val_out(&s.to_val()))
+        .collect::<js_sys::Array>()
+        .into())
+}
+
+#[wasm_bindgen(js_name = gearFeatures)]
+pub fn gear_features(character: &JsValue) -> JsValue {
+    sheet::gear_features(&val_in(character))
+        .iter()
+        .map(val_out)
+        .collect::<js_sys::Array>()
+        .into()
+}
+
+#[wasm_bindgen(js_name = shardFeatures)]
+pub fn shard_features(character: &JsValue, catalog: &JsValue) -> JsValue {
+    sheet::shard_features(&val_in(character), &val_in(catalog))
+        .iter()
+        .map(val_out)
+        .collect::<js_sys::Array>()
+        .into()
+}
+
+#[wasm_bindgen(js_name = carryMultiplier)]
+pub fn carry_multiplier(character: &JsValue, shard_trees: &JsValue) -> Result<f64, JsError> {
+    faulted(sheet::carry_multiplier(&val_in(character), &val_in(shard_trees)))
+}
+
+#[wasm_bindgen(js_name = currentBurden)]
+pub fn current_burden(character: &JsValue) -> f64 {
+    sheet::current_burden(&val_in(character))
+}
+
+#[wasm_bindgen(js_name = compileEffects)]
+pub fn compile_effects(mods: &JsValue, skills: &JsValue) -> JsValue {
+    val_out(&sheet::compile_effects(val_in(mods).items(), &val_in(skills)))
+}
+
+/// `scope` is read in place, like every scope; omit it and every boost must be a literal.
+#[wasm_bindgen(js_name = sheetEffects)]
+pub fn sheet_effects(graph: &JsValue, scope: JsValue) -> Result<JsValue, JsError> {
+    let scope = (!scope.is_undefined()).then(|| JsScope(scope));
+    let lookup = scope.as_ref().map(|s| s as &dyn Lookup);
+    Ok(val_out(&faulted(sheet::sheet_effects(&val_in(graph), lookup))?))
 }

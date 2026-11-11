@@ -5,8 +5,8 @@ The engine is being ported from TypeScript (`src/lib/expr.ts`, `dice.ts`, `graph
 for every input**, including outputs that look wrong. This file is where the exceptions to that
 rule and the wrong-looking behaviour are written down.
 
-Status: **slices 1 (expression evaluator) and 2 (dice) are done.** Callers still use the
-TypeScript engine; they move in slice 4.
+Status: **slices 1 (expression evaluator), 2 (dice) and 3a (the sheet layer) are done.** Callers
+still use the TypeScript engine; they move in slice 4.
 
 ## 1. Where the two engines differ on purpose
 
@@ -21,12 +21,16 @@ Shadow mode reports each of these if it ever happens in play.
 | 5 | Rolling more than 100,000 dice in one call | Allocates and rolls until the tab runs out of memory | Throws (`MAX_DICE`, `engine/core/src/dice.rs`) | Same reasoning as the nesting limit. The largest roll in the SRD is 40d6. |
 | 6 | `rerollDie` given a die carrying fields other than `v`, `sides`, `orig`, `rerolled`, `crit` | Copies them through | Drops them | The `RolledDie` type has exactly those five; no caller adds more. |
 | 7 | `rollHeal` given something that is neither a number nor a string | Coerces it to a string | Throws | The type forbids it. |
+| 8 | Malformed character data where reading a property of `undefined` or `null` is unguarded (`attuned: null` on a shard slot, `saves: null` on an effect) | Throws a TypeError | Reads the property as absent and carries on | The sheet layer is written against a JavaScript-shaped value (`engine/core/src/value.rs`); tracking every unguarded read to throw in the same places is not worth its weight. About 10% of generated characters hit this and are skipped by the property test. |
+| 9 | A string or an object where a number belongs (`ac: "3"`) | JavaScript coercion: `"3" + 5` is `"35"` | The arithmetic reads it as NaN | The types forbid it. `null` (0), booleans (0/1) and `undefined` (NaN) do match. |
+| 10 | An object with integer-like keys (`{"2": …, "1": …}`) | Iterates them in numeric order first | Iterates in the order written | No engine-read object is keyed that way; variable names must start with a letter. |
 
 ## 2. Step 0 measurements (Apple silicon, Node 24.11.1, Rust 1.99.1, wasm-bindgen 0.2.130)
 
 **Size.** `engine_bg.wasm` with the evaluator only: **96 KB raw, 58 KB gzipped**, after `wasm-opt -Oz`.
 With dice added (slice 2): **127 KB raw, 71 KB gzipped** — most of the growth is the first use of
-serde deserialisation, not dice. It will grow again with the resolver. Not worth lazy-loading: the engine is needed for the
+serde deserialisation, not dice. It will grow again with the resolver.
+With the sheet layer (slice 3a): **171 KB raw, 91 KB gzipped.** Not worth lazy-loading: the engine is needed for the
 first render, and Vite already emits it as a separate hashed asset fetched alongside the main chunk
 (516 KB raw, 157 KB gzipped).
 
@@ -61,7 +65,41 @@ should help both.
 `scripts/engine-node.mjs`), Deno (`init` with a file URL) and a Vite production build.
 Handle finalisation is unverified: no handle exists until slice 3b.
 
+### Slice 3a: a whole character across the boundary
+
+An 88 KB character (30 features, 20 spells, 6 equipped items, 40 carried), per call:
+
+| | TypeScript | WebAssembly, stateless |
+|---|---|---|
+| `effectiveSheet` | 14 µs | **1,460 µs** |
+| `activeSources` | 4 µs | **1,850 µs** |
+
+The port's own work is negligible; the cost is copying the character in and the result out, and it
+is 100× the original. `effectiveSheet` is called without a memo from about eleven render paths and
+many library functions, so **the sheet layer must not be called statelessly once callers move.**
+Slice 4 has to put a per-character cache in front of it — the character converted once per change
+and held in the engine (the handle the plan already calls for in `buildContext`), with results
+cached on the JavaScript side by the character object's identity. That is a design decision for
+slice 4, not something this slice settles.
+
 ## 3. Corrections to the plan found while building
+
+- **The sheet layer reads a JavaScript-shaped value, not typed structs.** The originals lean on
+  `undefined` against `null` against a missing key, on `{...spread}` carrying unknown fields
+  through, and on object identity. `Val` (`engine/core/src/value.rs`) keeps all three, so the port
+  follows the original line by line. The plan's "reading view" of each row type is this, made
+  dynamic. Whether the five engine-owned types (`GraphEffect`, `VarDef`, …) become typed Rust
+  structs is decided in slice 3b.
+- **Small helpers now exist twice.** `abilityMod`, `proficiency`, `isPrepared`, `shardSlots`,
+  `getGear` and a dozen like them are used all over the UI and are also needed inside the engine.
+  They are ported, and the TypeScript copies stay for now. Slice 5 has to choose, helper by helper,
+  between the UI calling the engine and an accepted duplicate held equal by a parity test.
+- **Snapshots of real characters are not committed.** The repository is public. The catalog
+  corpus below does not need them.
+- **The catalog corpus reads `supabase/catalog_snapshot.sql`**, which is already committed and
+  holds every authored row with its graph: 393 features, classes, races and backgrounds, 962
+  items, 340 spells, 5 shard trees, 9 effects. `src/lib/engine.corpus.test.ts` places each on a
+  level-10 character and asks the sheet layer about it on both engines.
 
 - **Randomness is the LAST argument of every rolling function in the port**, so the facade fills in
   optional arguments before it (`rolledDiceTerms`' `double`). Shadow mode records what the original
@@ -99,4 +137,7 @@ All of this is reproduced faithfully by the port. Line numbers are `src/lib/`.
 19. An armed `crit` sets no threshold; armed `floor` and `reroll` are ignored (graph.ts:1276–1278).
 20. The comments at expr.ts:147–156 say `parseDice` rejects a leading sign. It accepts one.
 21. `rollDiceTerms` (dice.ts:86) has no callers.
+23. An armour or sheet AC of `null` is treated as set: `baseAc: null` makes the item body armour worth 0, and `sheet.ac: null` overrides the computed AC with 0 while the breakdown shows `base: null` (effects.ts:275, 323).
+24. `armorClass` finds the shield's own source with `s.obj.id === shield.id`; when neither has an id, `undefined === undefined` picks the first source without one (effects.ts:333).
+25. `compileEffects` looks stats up on plain objects, so a stat named `constructor` or `toString` matches an inherited property (modEditor.ts:57, 69). Not reproduced by the port.
 22. `docs/GUIDE_Codex_Authoring.md:387` says arithmetic is integer. Only `/` floors; `1.5 + 1` is `2.5`.

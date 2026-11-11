@@ -1,9 +1,15 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const activeSources: (a: any, b: any) => [number, number, number];
+export const carryMultiplier: (a: any, b: any) => [number, number, number];
+export const compileEffects: (a: any, b: any) => any;
+export const currentBurden: (a: any) => number;
+export const effectiveSheet: (a: any, b: any) => [number, number, number];
 export const engineConstants: () => [number, number, number];
 export const evalExpr: (a: number, b: number, c: any) => [number, number, number];
 export const freeIdents: (a: number, b: number) => [number, number];
+export const gearFeatures: (a: any) => any;
 export const hasIdent: (a: number, b: number) => [number, number];
 export const interpolate: (a: number, b: number, c: any) => [number, number, number];
 export const interpolations: (a: number, b: number) => [number, number];
@@ -14,6 +20,8 @@ export const rollDice: (a: number, b: number, c: any) => [number, number, number
 export const rollHeal: (a: any, b: any) => [number, number, number];
 export const rolledDice: (a: number, b: number, c: any) => [number, number, number];
 export const rolledDiceTerms: (a: number, b: number, c: number, d: any) => [number, number, number];
+export const shardFeatures: (a: any, b: any) => any;
+export const sheetEffects: (a: any, b: any) => [number, number, number];
 export const start: () => void;
 export const __wbindgen_malloc: (a: number, b: number) => number;
 export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

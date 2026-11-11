@@ -24,3 +24,5 @@
 pub mod dice;
 pub mod expr;
 pub mod js;
+pub mod sheet;
+pub mod value;

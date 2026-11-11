@@ -1,6 +1,64 @@
 /* @ts-self-types="./engine.d.ts" */
 
 /**
+ * @param {any} character
+ * @param {any} shard_trees
+ * @returns {any}
+ */
+export function activeSources(character, shard_trees) {
+    const ret = wasm.activeSources(character, shard_trees);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * @param {any} character
+ * @param {any} shard_trees
+ * @returns {number}
+ */
+export function carryMultiplier(character, shard_trees) {
+    const ret = wasm.carryMultiplier(character, shard_trees);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0];
+}
+
+/**
+ * @param {any} mods
+ * @param {any} skills
+ * @returns {any}
+ */
+export function compileEffects(mods, skills) {
+    const ret = wasm.compileEffects(mods, skills);
+    return ret;
+}
+
+/**
+ * @param {any} character
+ * @returns {number}
+ */
+export function currentBurden(character) {
+    const ret = wasm.currentBurden(character);
+    return ret;
+}
+
+/**
+ * @param {any} character
+ * @param {any} shard_trees
+ * @returns {any}
+ */
+export function effectiveSheet(character, shard_trees) {
+    const ret = wasm.effectiveSheet(character, shard_trees);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * The engine's constant lists, read once at boot.
  * @returns {EngineConstants}
  */
@@ -38,6 +96,15 @@ export function freeIdents(src) {
     var v2 = getArrayJsValueFromWasm0(ret[0], ret[1]);
     wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
     return v2;
+}
+
+/**
+ * @param {any} character
+ * @returns {any}
+ */
+export function gearFeatures(character) {
+    const ret = wasm.gearFeatures(character);
+    return ret;
 }
 
 /**
@@ -184,6 +251,30 @@ export function rolledDiceTerms(exprs, double, random) {
 }
 
 /**
+ * @param {any} character
+ * @param {any} catalog
+ * @returns {any}
+ */
+export function shardFeatures(character, catalog) {
+    const ret = wasm.shardFeatures(character, catalog);
+    return ret;
+}
+
+/**
+ * `scope` is read in place, like every scope; omit it and every boost must be a literal.
+ * @param {any} graph
+ * @param {any} scope
+ * @returns {any}
+ */
+export function sheetEffects(graph, scope) {
+    const ret = wasm.sheetEffects(graph, scope);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Development only: a panic prints its message instead of `unreachable`.
  */
 export function start() {
@@ -217,6 +308,10 @@ function __wbg_get_imports() {
         },
         __wbg___wbindgen_in_3f58a9d3b3a7eed2: function(arg0, arg1) {
             const ret = arg0 in arg1;
+            return ret;
+        },
+        __wbg___wbindgen_is_null_c22311b1cc228e3a: function(arg0) {
+            const ret = arg0 === null;
             return ret;
         },
         __wbg___wbindgen_is_object_8b968c3ab8e96595: function(arg0) {
@@ -261,6 +356,10 @@ function __wbg_get_imports() {
             const ret = Reflect.get(arg0, arg1);
             return ret;
         }, arguments); },
+        __wbg_get_unchecked_e6325ad374eff861: function(arg0, arg1) {
+            const ret = arg0[arg1 >>> 0];
+            return ret;
+        },
         __wbg_get_with_ref_key_fc601247060b7204: function(arg0, arg1) {
             const ret = arg0[arg1];
             return ret;
@@ -299,7 +398,19 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
+        __wbg_isArray_bcf1376d0d732d08: function(arg0) {
+            const ret = Array.isArray(arg0);
+            return ret;
+        },
+        __wbg_keys_105f5c0857898f84: function(arg0) {
+            const ret = Object.keys(arg0);
+            return ret;
+        },
         __wbg_length_186163212ffe79c3: function(arg0) {
+            const ret = arg0.length;
+            return ret;
+        },
+        __wbg_length_b03a0fabb109b1e9: function(arg0) {
             const ret = arg0.length;
             return ret;
         },
@@ -318,6 +429,14 @@ function __wbg_get_imports() {
         __wbg_prototypesetcall_13162965d1fe7aa3: function(arg0, arg1, arg2) {
             Uint8Array.prototype.set.call(getArrayU8FromWasm0(arg0, arg1), arg2);
         },
+        __wbg_push_c9f4893fc209f768: function(arg0, arg1) {
+            const ret = arg0.push(arg1);
+            return ret;
+        },
+        __wbg_set_2793479888329cb6: function() { return handleError(function (arg0, arg1, arg2) {
+            const ret = Reflect.set(arg0, arg1, arg2);
+            return ret;
+        }, arguments); },
         __wbg_set_d2d33b52458e984a: function(arg0, arg1, arg2) {
             arg0[arg1 >>> 0] = arg2;
         },

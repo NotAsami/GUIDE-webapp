@@ -4,7 +4,9 @@ import assert from 'node:assert/strict'
 import type { CatalogFeatureData, CharacterRow, ClassDef, RaceDef } from './database.types.ts'
 import { RACE_GRANT_PREFIX, assignRace } from './races.ts'
 import { CLASS_GRANT_PREFIX, assignClass } from './classes.ts'
-import { effectiveSheet } from './effects.ts'
+// Through the facade, so `npm run test:parity` runs these on both engines.
+import '../../scripts/engine-node.mjs'
+import { effectiveSheet } from './engine/index.ts'
 
 const FEAT = (name: string): CatalogFeatureData => ({ name, published: true } as CatalogFeatureData)
 
