@@ -1,8 +1,10 @@
+// Engine calls go through the facade, so `npm run test:parity` runs them on both engines.
+import '../../scripts/engine-node.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { classHas, grantLevels, previewBool, previewScope, progressionScope, progressionState, PREVIEW_LEVEL } from './previewScope.ts'
 import { interpolate } from './expr.ts'
-import { probeScope } from './graph.ts'
+import { probeScope } from './engine/index.ts'
 
 const barbarian = {
   features: [{ feature_id: 'weapon-mastery' }],

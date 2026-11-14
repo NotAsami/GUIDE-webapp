@@ -14,6 +14,7 @@ import { createInterface } from 'node:readline'
 import * as burden from '../src/lib/burden.ts'
 import * as dice from '../src/lib/dice.ts'
 import * as fx from '../src/lib/effects.ts'
+import * as graph from '../src/lib/graph.ts'
 import * as mods from '../src/lib/modEditor.ts'
 import * as shards from '../src/lib/shards.ts'
 import * as expr from '../src/lib/expr.ts'
@@ -32,7 +33,36 @@ function rolled(tape, f) {
   try { return { out: f(), used } } finally { Math.random = real }
 }
 
+const dump = m => [...m].map(([k, es]) => [k, es])
+
 const FNS = {
+  // The feature graph. One request asks everything about one character, so a
+  // context is built once per case, as the app builds it once per character.
+  characterVars: r => graph.characterVars(r.character, r.trees, r.types),
+  baseScope: r => graph.baseScope(r.character, r.trees),
+  context: r => {
+    const ctx = graph.buildContext(r.character, r.trees, r.types)
+    return { scope: ctx.scope, problems: ctx.problems, armed: ctx.armed, index: dump(ctx.index), byOwner: dump(ctx.byOwner) }
+  },
+  rolls: r => {
+    const ctx = graph.buildContext(r.character, r.trees, r.types)
+    return r.reqs.map(req => {
+      const res = graph.resolve(ctx, req)
+      return { keys: graph.reqKeys(req), res, total: graph.total(res), rolled: rolled(r.tape, () => graph.rollResolution(res, r.double, r.own ?? undefined)),
+        armed: ctx.armed.map(m => graph.armedMatches(m, req)) }
+    })
+  },
+  queries: r => {
+    const ctx = graph.buildContext(r.character, r.trees, r.types)
+    return { stale: graph.staleArmed(ctx), staleAt: graph.staleArmed(ctx, scope(r.scope)), flags: r.kinds.map(k => graph.damageFlags(ctx, k)),
+      suppressed: [...graph.suppressedEffects(ctx, r.character)], affected: graph.affectedBy(ctx, r.target, r.tags) }
+  },
+  auditNode: r => graph.auditNode(r.node, r.nodes, r.types),
+  auditVars: r => graph.auditVars(r.defs, r.types),
+  probeScope: r => { const audit = []; return { scope: graph.probeScope(r.defs, audit, r.types), audit } },
+  varCollisions: r => graph.varCollisions(r.decls, r.sev),
+  strings: r => ({ tag: graph.normalizeTag(r.src), ask: graph.askKey(r.src), key: graph.asKey(r.src), node: graph.nodeGid(r.src, r.src),
+    count: graph.matchCount(r.src, r.nodes), gid: graph.gid('feature', r.x) }),
   // The sheet layer. Inputs are plain JSON (finite numbers only), so they travel as they are.
   effectiveSheet: r => fx.effectiveSheet(r.character, r.trees),
   activeSources: r => fx.activeSources(r.character, r.trees),
@@ -78,8 +108,9 @@ for await (const line of createInterface({ input: process.stdin })) {
   try {
     const req = JSON.parse(line)
     answer = { ok: encode(FNS[req.fn](req)) }
-  } catch {
-    answer = { threw: true }
+  } catch (e) {
+    // ORACLE_WHY=1 adds the reason, for working out why a generated case is being skipped.
+    answer = process.env.ORACLE_WHY ? { threw: true, why: String(e?.stack ?? e).split('\n').slice(0, 3).join(' | ') } : { threw: true }
   }
   process.stdout.write(JSON.stringify(answer) + '\n')
 }

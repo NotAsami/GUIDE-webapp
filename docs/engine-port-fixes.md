@@ -5,8 +5,9 @@ The engine is being ported from TypeScript (`src/lib/expr.ts`, `dice.ts`, `graph
 for every input**, including outputs that look wrong. This file is where the exceptions to that
 rule and the wrong-looking behaviour are written down.
 
-Status: **slices 1 (expression evaluator), 2 (dice) and 3a (the sheet layer) are done.** Callers
-still use the TypeScript engine; they move in slice 4.
+Status: **slices 1 (expression evaluator), 2 (dice), 3a (the sheet layer) and 3b (the feature
+graph: variables, resolver, audits) are done.** The whole engine now exists in Rust. Callers still
+use the TypeScript engine; they move in slice 4.
 
 ## 1. Where the two engines differ on purpose
 
@@ -24,13 +25,16 @@ Shadow mode reports each of these if it ever happens in play.
 | 8 | Malformed character data where reading a property of `undefined` or `null` is unguarded (`attuned: null` on a shard slot, `saves: null` on an effect) | Throws a TypeError | Reads the property as absent and carries on | The sheet layer is written against a JavaScript-shaped value (`engine/core/src/value.rs`); tracking every unguarded read to throw in the same places is not worth its weight. About 10% of generated characters hit this and are skipped by the property test. |
 | 9 | A string or an object where a number belongs (`ac: "3"`) | JavaScript coercion: `"3" + 5` is `"35"` | The arithmetic reads it as NaN | The types forbid it. `null` (0), booleans (0/1) and `undefined` (NaN) do match. |
 | 10 | An object with integer-like keys (`{"2": …, "1": …}`) | Iterates them in numeric order first | Iterates in the order written | No engine-read object is keyed that way; variable names must start with a letter. |
+| 11 | A variable named after an inherited object property (`constructor`, `toString`) | `name in scope` finds the inherited property, so the variable is skipped | Treated like any other name | Fix-list item 15, not reproduced: it would mean modelling JavaScript's prototype chain. |
+| 12 | An effect with no `op`, or an op the schema does not know | Throws a TypeError in `IS_ACTIVATION` — in the audit AND on every roll that matches it | Treats it as a passive op with no fields | Covered by deviation 8's rule (malformed data reads as absent), but worth its own line: one bad row breaks a character's rolls in the original. |
 
 ## 2. Step 0 measurements (Apple silicon, Node 24.11.1, Rust 1.99.1, wasm-bindgen 0.2.130)
 
 **Size.** `engine_bg.wasm` with the evaluator only: **96 KB raw, 58 KB gzipped**, after `wasm-opt -Oz`.
 With dice added (slice 2): **127 KB raw, 71 KB gzipped** — most of the growth is the first use of
-serde deserialisation, not dice. It will grow again with the resolver.
-With the sheet layer (slice 3a): **171 KB raw, 91 KB gzipped.** Not worth lazy-loading: the engine is needed for the
+serde deserialisation, not dice. With the sheet layer (slice 3a): 171 KB raw, 91 KB gzipped.
+With the whole engine (slice 3b): **276 KB raw, 135 KB gzipped.** The main JS chunk it sits beside
+is 516 KB raw, 157 KB gzipped. Not worth lazy-loading: the engine is needed for the
 first render, and Vite already emits it as a separate hashed asset fetched alongside the main chunk
 (516 KB raw, 157 KB gzipped).
 
@@ -82,7 +86,42 @@ and held in the engine (the handle the plan already calls for in `buildContext`)
 cached on the JavaScript side by the character object's identity. That is a design decision for
 slice 4, not something this slice settles.
 
+### Slice 3b: the graph, through a handle
+
+The same 88 KB character, 30 features with graphs:
+
+| | TypeScript | WebAssembly |
+|---|---|---|
+| `buildContext` | 100 µs | 1,620 µs, once per character change |
+| `resolve`, one roll | 12 µs | **14 µs**, through the handle |
+| `characterVars`, stateless | 77 µs | 1,570 µs |
+| `auditNode` against 1,633 catalog nodes | 132 µs | 3,610 µs |
+| `auditNode` with no node list | — | 116 µs |
+| `normalizeTag`, `gid` and other string helpers | under 1 µs | under 1 µs |
+
+The handle does what the plan wanted: a roll costs the same in either engine, because only the
+request and the result cross. Everything stateless that takes a whole character or the whole
+catalog pays the copy. For slice 4 that means two more things need the handle treatment before
+their callers move: `characterVars` (called from rest, level-up, classes, races, backgrounds and
+the DM console) should be read off a context, and `auditNode` needs the catalog's node list held
+in the engine rather than sent on every keystroke in the editor.
+
 ## 3. Corrections to the plan found while building
+
+- **`GraphContext` is a handle with a plain face.** `buildContext` in the facade returns the object
+  callers already expect (`scope`, `armed`, `problems`, and the two index maps, built on first
+  read) with the WebAssembly handle attached out of sight. A caller that spreads a context to
+  change part of it gets an object without the handle, and is answered by the TypeScript engine.
+  Slice 4 has to find those callers; slice 5 cannot delete the original until none are left.
+- **The five engine-owned types stay in `database.types.ts` for now.** The graph reads
+  `GraphEffect`, `VarDef`, `ArmedMod` and `GraphState` as `Val`, like the rest of the character.
+  Generating their TypeScript from Rust would mean typed structs that re-decide `undefined`
+  against `null` field by field, which is the thing `Val` exists to avoid. What Rust does own, and
+  a test pins, is the op schema table the audit reads. Whether to go further is a slice 5 question.
+- **A generator that produces `null` freely proves nothing.** The first run of the graph property
+  tests passed while skipping nearly every case, because the original throws on a stray `null`.
+  The generators now produce missing fields but few nulls, and the skip rate is measured: none for
+  audits and variables, about a tenth for rolls.
 
 - **The sheet layer reads a JavaScript-shaped value, not typed structs.** The originals lean on
   `undefined` against `null` against a missing key, on `{...spread}` carrying unknown fields
@@ -139,5 +178,8 @@ All of this is reproduced faithfully by the port. Line numbers are `src/lib/`.
 21. `rollDiceTerms` (dice.ts:86) has no callers.
 23. An armour or sheet AC of `null` is treated as set: `baseAc: null` makes the item body armour worth 0, and `sheet.ac: null` overrides the computed AC with 0 while the breakdown shows `base: null` (effects.ts:275, 323).
 24. `armorClass` finds the shield's own source with `s.obj.id === shield.id`; when neither has an id, `undefined === undefined` picks the first source without one (effects.ts:333).
+26. An effect with a missing or unknown `op` throws in `IS_ACTIVATION` (opSchema.ts:351), from the audit (graph.ts:1545) and from `resolve` (graph.ts:1097), so one malformed row stops every roll that matches it.
+27. A variable declared with no `name` is walked, reported with no id, and bound in the scope under the key `"undefined"` (graph.ts:74, 100).
+28. `suppressedEffects` throws when an applied effect has no `name` (graph.ts:1356 into 460).
 25. `compileEffects` looks stats up on plain objects, so a stat named `constructor` or `toString` matches an inherited property (modEditor.ts:57, 69). Not reproduced by the port.
 22. `docs/GUIDE_Codex_Authoring.md:387` says arithmetic is integer. Only `/` floors; `1.5 + 1` is `2.5`.

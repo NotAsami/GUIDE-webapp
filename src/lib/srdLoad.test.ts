@@ -5,6 +5,8 @@
 // the one that cannot be seen failing: an upsert reports success whether or not
 // it just overwrote a DM's hand-authored effects.
 
+// Engine calls go through the facade, so `npm run test:parity` runs them on both engines.
+import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { plan, deadRefs } from '../../scripts/srd-load.mjs'
@@ -409,7 +411,7 @@ test('A COLUMN NAMED AFTER A FEATURE TRAVELS WITH IT', () => {
 test("a feature's own prose counts as reading its variable", async () => {
   // Otherwise moving a progression variable onto the feature that prints it
   // earns a "never used" warning for doing the right thing.
-  const { auditNode } = await import('./graph.ts')
+  const { auditNode } = await import('./engine/index.ts')
   const node = {
     vars: [{ name: 'weaponMastery', kind: 'derived' as const, formula: '[0,2,2][level]' }],
     prose: ['mastery of {weaponMastery} kinds of weapons'],
