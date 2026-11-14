@@ -11,7 +11,7 @@ import {
   armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid, reqKeys, rollResolution,
   damageFlags, immuneTo, matchCount, nodeGid, normalizeTag, probeScope, resolve, suppressedEffects, total, varCollisions, type ResolveReq,
   staleArmed,
-} from './graph.ts'
+} from './engine/index.ts'
 import { activeSources } from './engine/index.ts'
 import { composeCheck } from './dnd.ts'
 import { OPS, OP_ORDER, OP_TITLE, ROLL_SELECTORS } from './opSchema.ts'

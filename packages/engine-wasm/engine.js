@@ -1,6 +1,121 @@
 /* @ts-self-types="./engine.d.ts" */
 
 /**
+ * The feature graph of one character, built once and asked many times. It lives
+ * in WebAssembly memory so that a roll sends a small request across the
+ * boundary, not the whole character.
+ */
+export class GraphContext {
+    static __wrap(ptr) {
+        const obj = Object.create(GraphContext.prototype);
+        obj.__wbg_ptr = ptr;
+        GraphContextFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        GraphContextFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_graphcontext_free(ptr, 0);
+    }
+    /**
+     * @param {string} target
+     * @param {any} tags
+     * @returns {any}
+     */
+    affectedBy(target, tags) {
+        const ptr0 = passStringToWasm0(target, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.graphcontext_affectedBy(this.__wbg_ptr, ptr0, len0, tags);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    get armed() {
+        const ret = wasm.graphcontext_armed(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * `{ resist, vuln, immune }`.
+     * @param {string} dmg_type
+     * @returns {any}
+     */
+    damageFlags(dmg_type) {
+        const ptr0 = passStringToWasm0(dmg_type, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.graphcontext_damageFlags(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * `[index, byOwner]`, each a list of `[key, entries]` in order. Large: only
+     * the two callers that walk the whole index should ask.
+     * @returns {any}
+     */
+    indexDump() {
+        const ret = wasm.graphcontext_indexDump(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    get problems() {
+        const ret = wasm.graphcontext_problems(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @param {any} req
+     * @returns {any}
+     */
+    resolve(req) {
+        const ret = wasm.graphcontext_resolve(this.__wbg_ptr, req);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @returns {any}
+     */
+    get scope() {
+        const ret = wasm.graphcontext_scope(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * `scope` defaults to the context's own.
+     * @param {any} scope
+     * @returns {any}
+     */
+    staleArmed(scope) {
+        const ret = wasm.graphcontext_staleArmed(this.__wbg_ptr, scope);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * The ids, in order; the facade makes the `Set`.
+     * @param {any} character
+     * @returns {any}
+     */
+    suppressedEffects(character) {
+        const ret = wasm.graphcontext_suppressedEffects(this.__wbg_ptr, character);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+}
+if (Symbol.dispose) GraphContext.prototype[Symbol.dispose] = GraphContext.prototype.free;
+
+/**
  * @param {any} character
  * @param {any} shard_trees
  * @returns {any}
@@ -14,6 +129,108 @@ export function activeSources(character, shard_trees) {
 }
 
 /**
+ * @param {any} m
+ * @param {any} req
+ * @returns {boolean}
+ */
+export function armedMatches(m, req) {
+    const ret = wasm.armedMatches(m, req);
+    return ret !== 0;
+}
+
+/**
+ * @param {string} target
+ * @returns {string}
+ */
+export function asKey(target) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(target, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.asKey(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * @param {string} raw
+ * @returns {string}
+ */
+export function askKey(raw) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(raw, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.askKey(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * @param {any} node
+ * @param {any} nodes
+ * @param {any} catalog_types
+ * @returns {any}
+ */
+export function auditNode(node, nodes, catalog_types) {
+    const ret = wasm.auditNode(node, nodes, catalog_types);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * @param {any} defs
+ * @param {any} catalog_types
+ * @returns {any}
+ */
+export function auditVars(defs, catalog_types) {
+    const ret = wasm.auditVars(defs, catalog_types);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * @param {any} character
+ * @param {any} shard_trees
+ * @returns {any}
+ */
+export function baseScope(character, shard_trees) {
+    const ret = wasm.baseScope(character, shard_trees);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * @param {any} character
+ * @param {any} shard_trees
+ * @param {any} catalog_types
+ * @returns {GraphContext}
+ */
+export function buildContext(character, shard_trees, catalog_types) {
+    const ret = wasm.buildContext(character, shard_trees, catalog_types);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return GraphContext.__wrap(ret[0]);
+}
+
+/**
  * @param {any} character
  * @param {any} shard_trees
  * @returns {number}
@@ -24,6 +241,30 @@ export function carryMultiplier(character, shard_trees) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return ret[0];
+}
+
+/**
+ * @param {any} character
+ * @param {any} shard_trees
+ * @param {any} catalog_types
+ * @returns {any}
+ */
+export function characterVars(character, shard_trees, catalog_types) {
+    const ret = wasm.characterVars(character, shard_trees, catalog_types);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * `[name, { def, from }]` pairs, in order; the facade makes the `Map`.
+ * @param {any} sources
+ * @returns {any}
+ */
+export function collectVars(sources) {
+    const ret = wasm.collectVars(sources);
+    return ret;
 }
 
 /**
@@ -108,6 +349,26 @@ export function gearFeatures(character) {
 }
 
 /**
+ * @param {string} kind
+ * @param {any} x
+ * @returns {string}
+ */
+export function gid(kind, x) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.gid(ptr0, len0, x);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * @param {string} feature_name
  * @returns {string}
  */
@@ -166,6 +427,66 @@ export function isHasIdent(id) {
 }
 
 /**
+ * @param {string} selector
+ * @param {any} nodes
+ * @returns {number}
+ */
+export function matchCount(selector, nodes) {
+    const ptr0 = passStringToWasm0(selector, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.matchCount(ptr0, len0, nodes);
+    return ret;
+}
+
+/**
+ * @param {string} shard_id
+ * @param {string} node_id
+ * @returns {string}
+ */
+export function nodeGid(shard_id, node_id) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(shard_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(node_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        const ret = wasm.nodeGid(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * @param {string} raw
+ * @returns {string}
+ */
+export function normalizeTag(raw) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(raw, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.normalizeTag(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * @param {string} expr
  * @returns {ParsedDice | null}
  */
@@ -177,6 +498,31 @@ export function parseDice(expr) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * `{ scope, audit }`. The original appends to an array it is handed; the facade does that part.
+ * @param {any} defs
+ * @param {any} catalog_types
+ * @returns {any}
+ */
+export function probeScope(defs, catalog_types) {
+    const ret = wasm.probeScope(defs, catalog_types);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * @param {any} req
+ * @returns {string[]}
+ */
+export function reqKeys(req) {
+    const ret = wasm.reqKeys(req);
+    var v1 = getArrayJsValueFromWasm0(ret[0], ret[1]);
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v1;
 }
 
 /**
@@ -213,6 +559,21 @@ export function rollDice(count, sides, random) {
  */
 export function rollHeal(amount, random) {
     const ret = wasm.rollHeal(amount, random);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * @param {any} res
+ * @param {boolean} double
+ * @param {any} own_type
+ * @param {Function} random
+ * @returns {any}
+ */
+export function rollResolution(res, double, own_type, random) {
+    const ret = wasm.rollResolution(res, double, own_type, random);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -279,6 +640,28 @@ export function sheetEffects(graph, scope) {
  */
 export function start() {
     wasm.start();
+}
+
+/**
+ * @param {any} res
+ * @returns {any}
+ */
+export function total(res) {
+    const ret = wasm.total(res);
+    return ret;
+}
+
+/**
+ * `decls` is `[{ name, from }]`.
+ * @param {any} decls
+ * @param {string} sev
+ * @returns {any}
+ */
+export function varCollisions(decls, sev) {
+    const ptr0 = passStringToWasm0(sev, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.varCollisions(decls, ptr0, len0);
+    return ret;
 }
 function __wbg_get_imports() {
     const import0 = {
@@ -422,6 +805,10 @@ function __wbg_get_imports() {
             const ret = new Array();
             return ret;
         },
+        __wbg_new_7075786089b89c5e: function() {
+            const ret = new Map();
+            return ret;
+        },
         __wbg_new_cd4348290afae586: function() {
             const ret = new Object();
             return ret;
@@ -437,6 +824,10 @@ function __wbg_get_imports() {
             const ret = Reflect.set(arg0, arg1, arg2);
             return ret;
         }, arguments); },
+        __wbg_set_8282f7e0d2d01336: function(arg0, arg1, arg2) {
+            const ret = arg0.set(arg1, arg2);
+            return ret;
+        },
         __wbg_set_d2d33b52458e984a: function(arg0, arg1, arg2) {
             arg0[arg1 >>> 0] = arg2;
         },
@@ -467,6 +858,10 @@ function __wbg_get_imports() {
         "./engine_bg.js": import0,
     };
 }
+
+const GraphContextFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_graphcontext_free(ptr, 1));
 
 function addToExternrefTable0(obj) {
     const idx = wasm.__externref_table_alloc();

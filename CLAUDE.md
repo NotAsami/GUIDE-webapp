@@ -52,8 +52,11 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - `npm run test:parity` — the whole suite with both engines answering; any difference fails.
 - `cargo test -p engine_core` — native tests, including property tests that use the
   TypeScript engine as oracle (`scripts/engine-oracle.mjs`; needs `node`).
-- Slices 1 (expr), 2 (dice) and 3a (sheet layer: `effects.ts` and its helpers) are done.
-  Next: graph → callers → delete TS.
+- Slices 1 (expr), 2 (dice), 3a (sheet layer) and 3b (graph: variables, resolver, audits) are
+  done: the whole engine exists in Rust. Next: slice 4, moving callers behind the setting.
+- Nothing in `src/` outside the tests calls the facade yet. Do not point a render path at a
+  stateless wasm function that takes a whole character: it costs ~1.5 ms a call
+  (`docs/engine-port-fixes.md`, section 2). `resolve` through a context handle is fine.
 - `src/lib/engine.corpus.test.ts` runs every row of `supabase/catalog_snapshot.sql` through both
   engines. Character data is read in Rust as `Val` (`engine/core/src/value.rs`), a JS-shaped value.
 

@@ -5,8 +5,10 @@
 //! a rejected formula is `null`, and an input the original throws on is a thrown
 //! `Error`.
 
+use engine_core::audit;
 use engine_core::dice;
 use engine_core::expr::{self, Eval, EvalError, Lookup, Scope, ScopeVal};
+use engine_core::graph::{self, AuditItem};
 use engine_core::sheet;
 use engine_core::value::{Map, Val};
 use serde::Serialize;
@@ -18,6 +20,7 @@ export type Scope = Record<string, number | boolean>;
 export type EngineConstants = {
   VAR_IDENTS: string[]; ROLL_IDENTS: string[]; BOOST_IDENTS: string[];
   ROLL_IDENT_PROBE: Scope; HIT_ASK: string; HAS_PREFIX: string;
+  OPS: Record<string, { group: string; fields: { key: string; label: string; required: boolean; array: boolean }[] }>;
 };
 "#;
 
@@ -119,6 +122,8 @@ struct Constants {
     ROLL_IDENT_PROBE: Scope,
     HIT_ASK: &'static str,
     HAS_PREFIX: &'static str,
+    /// op → `{ group, fields: [{ key, label, required, array }] }`, as the audit reads it.
+    OPS: Val,
 }
 
 /// The engine's constant lists, read once at boot.
@@ -131,6 +136,26 @@ pub fn engine_constants() -> Result<JsValue, JsError> {
         ROLL_IDENT_PROBE: expr::roll_ident_probe(),
         HIT_ASK: expr::HIT_ASK,
         HAS_PREFIX: expr::HAS_PREFIX,
+        OPS: Val::obj(
+            audit::OPS
+                .iter()
+                .map(|(op, group, fields)| {
+                    let fields = fields.iter().map(|(key, label, required, array)| {
+                        Val::obj(Map::from([
+                            ("key".to_owned(), Val::str(key)),
+                            ("label".to_owned(), Val::str(label)),
+                            ("required".to_owned(), Val::Bool(*required)),
+                            ("array".to_owned(), Val::Bool(*array)),
+                        ]))
+                    });
+                    let def = Map::from([
+                        ("group".to_owned(), Val::str(group)),
+                        ("fields".to_owned(), Val::arr(fields.collect())),
+                    ]);
+                    ((*op).to_owned(), Val::obj(def))
+                })
+                .collect(),
+        ),
     })
 }
 
@@ -326,4 +351,239 @@ pub fn sheet_effects(graph: &JsValue, scope: JsValue) -> Result<JsValue, JsError
     let scope = (!scope.is_undefined()).then(|| JsScope(scope));
     let lookup = scope.as_ref().map(|s| s as &dyn Lookup);
     Ok(val_out(&faulted(sheet::sheet_effects(&val_in(graph), lookup))?))
+}
+
+// --- the feature graph (slice 3b) --------------------------------------------------
+
+fn list_out<'a>(items: impl IntoIterator<Item = &'a Val>) -> JsValue {
+    items.into_iter().map(val_out).collect::<js_sys::Array>().into()
+}
+
+fn audit_out(items: &[AuditItem]) -> JsValue {
+    items
+        .iter()
+        .map(|a| val_out(&a.to_val()))
+        .collect::<js_sys::Array>()
+        .into()
+}
+
+fn scoped(scope: Map, audit: &[AuditItem]) -> JsValue {
+    let out = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(&out, &"scope".into(), &val_out(&Val::obj(scope)));
+    let _ = js_sys::Reflect::set(&out, &"audit".into(), &audit_out(audit));
+    out.into()
+}
+
+/// `{ scope, audit }`. The original appends to an array it is handed; the facade does that part.
+#[wasm_bindgen(js_name = probeScope)]
+pub fn probe_scope(defs: &JsValue, catalog_types: &JsValue) -> Result<JsValue, JsError> {
+    let (scope, audit) = faulted(graph::probe_scope(val_in(defs).items(), &val_in(catalog_types)))?;
+    Ok(scoped(scope, &audit))
+}
+
+#[wasm_bindgen(js_name = characterVars)]
+pub fn character_vars(character: &JsValue, shard_trees: &JsValue, catalog_types: &JsValue) -> Result<JsValue, JsError> {
+    let (scope, audit) = faulted(graph::character_vars(
+        &val_in(character),
+        &val_in(shard_trees),
+        &val_in(catalog_types),
+    ))?;
+    Ok(scoped(scope, &audit))
+}
+
+#[wasm_bindgen(js_name = baseScope)]
+pub fn base_scope(character: &JsValue, shard_trees: &JsValue) -> Result<JsValue, JsError> {
+    Ok(val_out(&Val::obj(faulted(graph::base_scope(
+        &val_in(character),
+        &val_in(shard_trees),
+    ))?)))
+}
+
+/// `[name, { def, from }]` pairs, in order; the facade makes the `Map`.
+#[wasm_bindgen(js_name = collectVars)]
+pub fn collect_vars(sources: &JsValue) -> JsValue {
+    let sources: Vec<sheet::Source> = val_in(sources).items().iter().map(sheet::Source::from_val).collect();
+    let pairs = graph::collect_vars(&sources).into_iter().map(|(name, b)| {
+        let binding = Val::obj(Map::from([
+            ("def".to_owned(), b.def.clone()),
+            ("from".to_owned(), b.from.to_val()),
+        ]));
+        Val::arr(vec![Val::str(&name), binding])
+    });
+    list_out(&pairs.collect::<Vec<_>>())
+}
+
+/// `decls` is `[{ name, from }]`.
+#[wasm_bindgen(js_name = varCollisions)]
+pub fn var_collisions(decls: &JsValue, sev: &str) -> JsValue {
+    let decls: Vec<(Val, Val)> = val_in(decls)
+        .items()
+        .iter()
+        .map(|d| (d.get("name").clone(), d.get("from").clone()))
+        .collect();
+    audit_out(&graph::var_collisions(
+        &decls,
+        if sev == "warn" { "warn" } else { "err" },
+    ))
+}
+
+#[wasm_bindgen(js_name = auditVars)]
+pub fn audit_vars(defs: &JsValue, catalog_types: &JsValue) -> Result<JsValue, JsError> {
+    Ok(audit_out(&faulted(audit::audit_vars(
+        val_in(defs).items(),
+        &val_in(catalog_types),
+    ))?))
+}
+
+#[wasm_bindgen(js_name = auditNode)]
+pub fn audit_node(node: &JsValue, nodes: &JsValue, catalog_types: &JsValue) -> Result<JsValue, JsError> {
+    let items = audit::audit_node(&val_in(node), val_in(nodes).items(), &val_in(catalog_types));
+    Ok(audit_out(&faulted(items)?))
+}
+
+#[wasm_bindgen]
+pub fn gid(kind: &str, x: &JsValue) -> String {
+    graph::gid(kind, &val_in(x))
+}
+
+#[wasm_bindgen(js_name = nodeGid)]
+pub fn node_gid(shard_id: &str, node_id: &str) -> String {
+    graph::node_gid(shard_id, node_id)
+}
+
+#[wasm_bindgen(js_name = normalizeTag)]
+pub fn normalize_tag(raw: &str) -> String {
+    graph::normalize_tag(raw)
+}
+
+#[wasm_bindgen(js_name = askKey)]
+pub fn ask_key(raw: &str) -> String {
+    graph::ask_key(raw)
+}
+
+#[wasm_bindgen(js_name = asKey)]
+pub fn as_key(target: &str) -> String {
+    graph::as_key(target)
+}
+
+#[wasm_bindgen(js_name = reqKeys)]
+pub fn req_keys(req: &JsValue) -> Vec<String> {
+    graph::req_keys(&val_in(req))
+}
+
+#[wasm_bindgen(js_name = armedMatches)]
+pub fn armed_matches(m: &JsValue, req: &JsValue) -> bool {
+    graph::armed_matches(&val_in(m), &val_in(req))
+}
+
+#[wasm_bindgen(js_name = matchCount)]
+pub fn match_count(selector: &str, nodes: &JsValue) -> f64 {
+    graph::match_count(selector, val_in(nodes).items())
+}
+
+#[wasm_bindgen]
+pub fn total(res: &JsValue) -> JsValue {
+    val_out(&graph::total(&val_in(res)))
+}
+
+#[wasm_bindgen(js_name = rollResolution)]
+pub fn roll_resolution(
+    res: &JsValue,
+    double: bool,
+    own_type: &JsValue,
+    random: &js_sys::Function,
+) -> Result<JsValue, JsError> {
+    let rolled = graph::roll_resolution(&val_in(res), double, &val_in(own_type), &mut draws(random));
+    Ok(val_out(&faulted(rolled)?))
+}
+
+/// The feature graph of one character, built once and asked many times. It lives
+/// in WebAssembly memory so that a roll sends a small request across the
+/// boundary, not the whole character.
+#[wasm_bindgen]
+pub struct GraphContext {
+    inner: graph::Context,
+}
+
+#[wasm_bindgen(js_name = buildContext)]
+pub fn build_context(
+    character: &JsValue,
+    shard_trees: &JsValue,
+    catalog_types: &JsValue,
+) -> Result<GraphContext, JsError> {
+    let inner = graph::build_context(&val_in(character), &val_in(shard_trees), &val_in(catalog_types));
+    Ok(GraphContext { inner: faulted(inner)? })
+}
+
+#[wasm_bindgen]
+impl GraphContext {
+    #[wasm_bindgen(getter)]
+    pub fn scope(&self) -> JsValue {
+        val_out(&Val::obj(self.inner.scope.clone()))
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn problems(&self) -> JsValue {
+        audit_out(&self.inner.problems)
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn armed(&self) -> JsValue {
+        list_out(&self.inner.armed)
+    }
+
+    pub fn resolve(&self, req: &JsValue) -> Result<JsValue, JsError> {
+        Ok(val_out(&faulted(graph::resolve(&self.inner, &val_in(req)))?))
+    }
+
+    /// `scope` defaults to the context's own.
+    #[wasm_bindgen(js_name = staleArmed)]
+    pub fn stale_armed(&self, scope: JsValue) -> Result<JsValue, JsError> {
+        let stale = if scope.is_undefined() {
+            graph::stale_armed(&self.inner, &self.inner.scope)
+        } else {
+            graph::stale_armed(&self.inner, &JsScope(scope))
+        };
+        Ok(list_out(&faulted(stale)?))
+    }
+
+    #[wasm_bindgen(js_name = affectedBy)]
+    pub fn affected_by(&self, target: &str, tags: &JsValue) -> JsValue {
+        list_out(&graph::affected_by(&self.inner, target, val_in(tags).items()))
+    }
+
+    /// `{ resist, vuln, immune }`.
+    #[wasm_bindgen(js_name = damageFlags)]
+    pub fn damage_flags(&self, dmg_type: &str) -> Result<JsValue, JsError> {
+        let (resist, vuln, immune) = faulted(graph::damage_flags(&self.inner, dmg_type))?;
+        let flags = [("resist", resist), ("vuln", vuln), ("immune", immune)];
+        Ok(val_out(&Val::obj(
+            flags.into_iter().map(|(k, v)| (k.to_owned(), Val::Bool(v))).collect(),
+        )))
+    }
+
+    /// The ids, in order; the facade makes the `Set`.
+    #[wasm_bindgen(js_name = suppressedEffects)]
+    pub fn suppressed_effects(&self, character: &JsValue) -> Result<JsValue, JsError> {
+        Ok(list_out(&faulted(graph::suppressed_effects(
+            &self.inner,
+            &val_in(character),
+        ))?))
+    }
+
+    /// `[index, byOwner]`, each a list of `[key, entries]` in order. Large: only
+    /// the two callers that walk the whole index should ask.
+    #[wasm_bindgen(js_name = indexDump)]
+    pub fn index_dump(&self) -> JsValue {
+        let dump = |m: &indexmap::IndexMap<String, Vec<graph::Indexed>>| {
+            let pairs = m.iter().map(|(key, entries)| {
+                Val::arr(vec![
+                    Val::str(key),
+                    Val::arr(entries.iter().map(graph::Indexed::to_val).collect()),
+                ])
+            });
+            Val::arr(pairs.collect())
+        };
+        val_out(&Val::arr(vec![dump(&self.inner.index), dump(&self.inner.by_owner)]))
+    }
 }

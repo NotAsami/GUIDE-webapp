@@ -136,6 +136,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "engine_core",
+ "indexmap",
  "js-sys",
  "serde",
  "serde-wasm-bindgen",

@@ -7,6 +7,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import '../../scripts/engine-node.mjs'
 import * as ts from './expr.ts'
+import { OPS } from './opSchema.ts'
 import { same } from './engine/compare.ts'
 import {
   evalExpr, freeIdents, hasIdent, interpolate, interpolations, isHasIdent, wasmConstants,
@@ -113,4 +114,15 @@ test('a rolled die is one draw: face = floor(random * sides) + 1', () => {
   let i = 0
   Math.random = () => tape[i++]
   try { assert.deepEqual(rollDice(3, 6), [1, 4, 6]) } finally { Math.random = real }
+})
+
+// --- the op schema -----------------------------------------------------------
+
+test('the op schema the Rust audit reads is the one the editor renders from', () => {
+  const mine = wasmConstants().OPS
+  const theirs = Object.fromEntries(Object.entries(OPS).map(([op, d]) => [op, {
+    group: d.group,
+    fields: d.fields.map(f => ({ key: f.key, label: f.label, required: !!f.required, array: f.type === 'array' })),
+  }]))
+  assert.deepEqual(mine, theirs)
 })

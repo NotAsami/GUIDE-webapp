@@ -2,6 +2,8 @@
 //! the shapes both sides speak in.
 #![allow(dead_code)]
 
+pub mod gen;
+
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Mutex, OnceLock};

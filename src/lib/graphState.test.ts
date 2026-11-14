@@ -2,10 +2,12 @@
 //
 // Everything here is pure: each function returns a PATCH rather than writing, so
 // the whole write path is testable without a database or a renderer.
+// Engine calls go through the facade, so `npm run test:parity` runs them on both engines.
+import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ArmedMod, CharacterRow, CharacterSpellbook, Feature, GraphEffect, GraphState, Json, VarDef } from './database.types.ts'
-import {auditNode, buildContext, resolve, staleArmed } from './graph.ts'
+import {auditNode, buildContext, resolve, staleArmed } from './engine/index.ts'
 import { longRestPatch, shortRestPatch } from './rest.ts'
 import {
   answerArmed, applyOutcomes, armableFor, attackRolled, consumeArmed, gateOf, planActivation, playerVars, restVars, scopedVars, setDmVars,

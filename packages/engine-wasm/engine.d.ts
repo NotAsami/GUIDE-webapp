@@ -5,6 +5,7 @@ export type Scope = Record<string, number | boolean>;
 export type EngineConstants = {
     VAR_IDENTS: string[]; ROLL_IDENTS: string[]; BOOST_IDENTS: string[];
     ROLL_IDENT_PROBE: Scope; HIT_ASK: string; HAS_PREFIX: string;
+    OPS: Record<string, { group: string; fields: { key: string; label: string; required: boolean; array: boolean }[] }>;
 };
 
 
@@ -47,9 +48,63 @@ export interface Interpolated {
 }
 
 
+/**
+ * The feature graph of one character, built once and asked many times. It lives
+ * in WebAssembly memory so that a roll sends a small request across the
+ * boundary, not the whole character.
+ */
+export class GraphContext {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    affectedBy(target: string, tags: any): any;
+    /**
+     * `{ resist, vuln, immune }`.
+     */
+    damageFlags(dmg_type: string): any;
+    /**
+     * `[index, byOwner]`, each a list of `[key, entries]` in order. Large: only
+     * the two callers that walk the whole index should ask.
+     */
+    indexDump(): any;
+    resolve(req: any): any;
+    /**
+     * `scope` defaults to the context's own.
+     */
+    staleArmed(scope: any): any;
+    /**
+     * The ids, in order; the facade makes the `Set`.
+     */
+    suppressedEffects(character: any): any;
+    readonly armed: any;
+    readonly problems: any;
+    readonly scope: any;
+}
+
 export function activeSources(character: any, shard_trees: any): any;
 
+export function armedMatches(m: any, req: any): boolean;
+
+export function asKey(target: string): string;
+
+export function askKey(raw: string): string;
+
+export function auditNode(node: any, nodes: any, catalog_types: any): any;
+
+export function auditVars(defs: any, catalog_types: any): any;
+
+export function baseScope(character: any, shard_trees: any): any;
+
+export function buildContext(character: any, shard_trees: any, catalog_types: any): GraphContext;
+
 export function carryMultiplier(character: any, shard_trees: any): number;
+
+export function characterVars(character: any, shard_trees: any, catalog_types: any): any;
+
+/**
+ * `[name, { def, from }]` pairs, in order; the facade makes the `Map`.
+ */
+export function collectVars(sources: any): any;
 
 export function compileEffects(mods: any, skills: any): any;
 
@@ -68,6 +123,8 @@ export function freeIdents(src: string): string[];
 
 export function gearFeatures(character: any): any;
 
+export function gid(kind: string, x: any): string;
+
 export function hasIdent(feature_name: string): string;
 
 export function interpolate(text: string | null | undefined, scope: Scope): Interpolated;
@@ -76,13 +133,28 @@ export function interpolations(text?: string | null): string[];
 
 export function isHasIdent(id: string): boolean;
 
+export function matchCount(selector: string, nodes: any): number;
+
+export function nodeGid(shard_id: string, node_id: string): string;
+
+export function normalizeTag(raw: string): string;
+
 export function parseDice(expr: string): ParsedDice | null;
+
+/**
+ * `{ scope, audit }`. The original appends to an array it is handed; the facade does that part.
+ */
+export function probeScope(defs: any, catalog_types: any): any;
+
+export function reqKeys(req: any): string[];
 
 export function rerollDie(die: RolledDie, random: () => number): RolledDie;
 
 export function rollDice(count: number, sides: number, random: () => number): number[];
 
 export function rollHeal(amount: number | string, random: () => number): HealRoll;
+
+export function rollResolution(res: any, double: boolean, own_type: any, random: Function): any;
 
 export function rolledDice(count: number, sides: number, random: () => number): RolledDie[];
 
@@ -100,12 +172,29 @@ export function sheetEffects(graph: any, scope: any): any;
  */
 export function start(): void;
 
+export function total(res: any): any;
+
+/**
+ * `decls` is `[{ name, from }]`.
+ */
+export function varCollisions(decls: any, sev: string): any;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly __wbg_graphcontext_free: (a: number, b: number) => void;
     readonly activeSources: (a: any, b: any) => [number, number, number];
+    readonly armedMatches: (a: any, b: any) => number;
+    readonly asKey: (a: number, b: number) => [number, number];
+    readonly askKey: (a: number, b: number) => [number, number];
+    readonly auditNode: (a: any, b: any, c: any) => [number, number, number];
+    readonly auditVars: (a: any, b: any) => [number, number, number];
+    readonly baseScope: (a: any, b: any) => [number, number, number];
+    readonly buildContext: (a: any, b: any, c: any) => [number, number, number];
     readonly carryMultiplier: (a: any, b: any) => [number, number, number];
+    readonly characterVars: (a: any, b: any, c: any) => [number, number, number];
+    readonly collectVars: (a: any) => any;
     readonly compileEffects: (a: any, b: any) => any;
     readonly currentBurden: (a: any) => number;
     readonly effectiveSheet: (a: any, b: any) => [number, number, number];
@@ -113,19 +202,37 @@ export interface InitOutput {
     readonly evalExpr: (a: number, b: number, c: any) => [number, number, number];
     readonly freeIdents: (a: number, b: number) => [number, number];
     readonly gearFeatures: (a: any) => any;
+    readonly gid: (a: number, b: number, c: any) => [number, number];
+    readonly graphcontext_affectedBy: (a: number, b: number, c: number, d: any) => any;
+    readonly graphcontext_armed: (a: number) => any;
+    readonly graphcontext_damageFlags: (a: number, b: number, c: number) => [number, number, number];
+    readonly graphcontext_indexDump: (a: number) => any;
+    readonly graphcontext_problems: (a: number) => any;
+    readonly graphcontext_resolve: (a: number, b: any) => [number, number, number];
+    readonly graphcontext_scope: (a: number) => any;
+    readonly graphcontext_staleArmed: (a: number, b: any) => [number, number, number];
+    readonly graphcontext_suppressedEffects: (a: number, b: any) => [number, number, number];
     readonly hasIdent: (a: number, b: number) => [number, number];
     readonly interpolate: (a: number, b: number, c: any) => [number, number, number];
     readonly interpolations: (a: number, b: number) => [number, number];
     readonly isHasIdent: (a: number, b: number) => number;
+    readonly matchCount: (a: number, b: number, c: any) => number;
+    readonly nodeGid: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly normalizeTag: (a: number, b: number) => [number, number];
     readonly parseDice: (a: number, b: number) => [number, number, number];
+    readonly probeScope: (a: any, b: any) => [number, number, number];
+    readonly reqKeys: (a: any) => [number, number];
     readonly rerollDie: (a: any, b: any) => [number, number, number];
     readonly rollDice: (a: number, b: number, c: any) => [number, number, number];
     readonly rollHeal: (a: any, b: any) => [number, number, number];
+    readonly rollResolution: (a: any, b: number, c: any, d: any) => [number, number, number];
     readonly rolledDice: (a: number, b: number, c: any) => [number, number, number];
     readonly rolledDiceTerms: (a: number, b: number, c: number, d: any) => [number, number, number];
     readonly shardFeatures: (a: any, b: any) => any;
     readonly sheetEffects: (a: any, b: any) => [number, number, number];
     readonly start: () => void;
+    readonly total: (a: any) => any;
+    readonly varCollisions: (a: any, b: number, c: number) => any;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;

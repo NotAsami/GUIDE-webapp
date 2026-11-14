@@ -12,10 +12,13 @@
  * async step is `initEngine`, awaited once at boot before anything renders.
  */
 import init, * as wasm from '../../../packages/engine-wasm/engine.js'
-import type { CharacterRow, EffectDef, EffectiveSheet, Feature, GraphEffect, ItemEffects, Mod, ShardTree } from '../database.types.ts'
+import type {
+  ArmedMod, CharacterRow, EffectDef, EffectiveSheet, Feature, GraphEffect, ItemEffects, Mod, ShardTree, VarDef,
+} from '../database.types.ts'
 import * as tsBurden from '../burden.ts'
 import * as tsDice from '../dice.ts'
 import * as tsFx from '../effects.ts'
+import * as tsGraph from '../graph.ts'
 import * as tsMods from '../modEditor.ts'
 import * as tsShards from '../shards.ts'
 import * as ts from '../expr.ts'
@@ -25,6 +28,9 @@ import { STRICT, engineMode } from './setting.ts'
 export type { ExprScope, FormulaValue } from '../expr.ts'
 export type { RolledDie } from '../dice.ts'
 export type { ActiveSource } from '../effects.ts'
+export type {
+  AuditItem, AuditSev, AuthoredNode, Gid, GidKind, GraphContext, Resolution, ResolveReq, Rider, RollKind, VarBinding,
+} from '../graph.ts'
 
 // The constant lists are read at module scope by several callers, before any
 // async init could have run — so they stay static. engine.parity.test.ts holds
@@ -181,3 +187,142 @@ export const compileEffects = (mods: Mod[], skills?: Skills) => compile(mods, sk
 const fxOf = dispatch('sheetEffects', tsMods.sheetEffects as (g: GraphEffect[] | undefined, s: ts.ExprScope | undefined) => ItemEffects | undefined,
   (g, s) => wasm.sheetEffects(g, s) as ItemEffects | undefined)
 export const sheetEffects = (graph?: GraphEffect[], scope?: ts.ExprScope | undefined) => fxOf(graph, scope)
+
+// --- the feature graph (slice 3b) ----------------------------------------------------
+
+type Types = Record<string, 'num' | 'bool'>
+const NO_TYPES: Types = {}
+type Audit = tsGraph.AuditItem[]
+type Scoped = { scope: ts.ExprScope; audit: Audit }
+
+const vars = dispatch('characterVars', tsGraph.characterVars as (c: CharacterRow, t: Trees, k: Types) => Scoped,
+  (c, t, k) => wasm.characterVars(c, t, k) as Scoped)
+export const characterVars = (character: CharacterRow, shardTrees: Trees = NO_TREES, catalogTypes: Types = NO_TYPES) =>
+  vars(character, shardTrees, catalogTypes)
+
+const base = dispatch('baseScope', tsGraph.baseScope as (c: CharacterRow, t: Trees) => ts.ExprScope,
+  (c, t) => wasm.baseScope(c, t) as ts.ExprScope)
+export const baseScope = (character: CharacterRow, shardTrees: Trees = NO_TREES) => base(character, shardTrees)
+
+/** The original APPENDS what the walk reports to an array it is handed. Both
+ *  engines are asked for `{ scope, audit }` and the appending happens here, once. */
+const probed = dispatch('probeScope',
+  (defs: VarDef[], types: Types): Scoped => { const audit: Audit = []; return { scope: tsGraph.probeScope(defs, audit, types), audit } },
+  (defs, types) => wasm.probeScope(defs, types) as Scoped)
+export function probeScope(defs: VarDef[] = [], audit?: Audit, catalogTypes: Types = NO_TYPES): ts.ExprScope {
+  const out = probed(defs, catalogTypes)
+  audit?.push(...out.audit)
+  return out.scope
+}
+
+export const collectVars = dispatch('collectVars', tsGraph.collectVars,
+  sources => new Map(wasm.collectVars(sources) as [string, tsGraph.VarBinding][]))
+export const varCollisions = dispatch('varCollisions', tsGraph.varCollisions, (d, sev) => wasm.varCollisions(d, sev) as Audit)
+
+const varsAudit = dispatch('auditVars', tsGraph.auditVars as (d: VarDef[], k: Types) => Audit, (d, k) => wasm.auditVars(d, k) as Audit)
+export const auditVars = (defs: VarDef[], catalogTypes: Types = NO_TYPES) => varsAudit(defs, catalogTypes)
+
+type Node = Parameters<typeof tsGraph.auditNode>[0]
+const nodeAudit = dispatch('auditNode', tsGraph.auditNode as (n: Node, a: tsGraph.AuthoredNode[], k: Types) => Audit,
+  (n, a, k) => wasm.auditNode(n, a, k) as Audit)
+export const auditNode = (node: Node, nodes: tsGraph.AuthoredNode[] = [], catalogTypes: Types = NO_TYPES) =>
+  nodeAudit(node, nodes, catalogTypes)
+
+export const gid = dispatch('gid', tsGraph.gid, (kind, x) => wasm.gid(kind, x) as tsGraph.Gid)
+export const nodeGid = dispatch('nodeGid', tsGraph.nodeGid, (a, b) => wasm.nodeGid(a, b) as tsGraph.Gid)
+export const normalizeTag = dispatch('normalizeTag', tsGraph.normalizeTag, wasm.normalizeTag)
+export const askKey = dispatch('askKey', tsGraph.askKey, wasm.askKey)
+export const asKey = dispatch('asKey', tsGraph.asKey, wasm.asKey)
+export const reqKeys = dispatch('reqKeys', tsGraph.reqKeys, wasm.reqKeys)
+export const armedMatches = dispatch('armedMatches', tsGraph.armedMatches, wasm.armedMatches)
+export const matchCount = dispatch('matchCount', tsGraph.matchCount, wasm.matchCount)
+export const total = dispatch('total', tsGraph.total, r => wasm.total(r) as { flat: number; dice: string[] })
+export const isD20 = tsGraph.isD20
+
+type Rolled = ReturnType<typeof tsGraph.rollResolution>
+const rolledRes = rolling('rollResolution',
+  tsGraph.rollResolution as (r: tsGraph.Resolution, double: boolean, own: string | undefined) => Rolled,
+  (r, double, own, random) => wasm.rollResolution(r, double, own, random) as Rolled)
+export const rollResolution = (res: tsGraph.Resolution, double = false, ownType?: string) => rolledRes(res, double, ownType)
+
+/**
+ * THE CONTEXT. In the Rust engine it is a handle: the character's graph stays
+ * in WebAssembly memory and a roll sends only its request across. Callers still
+ * see the plain object the original returns — `scope`, `armed`, `problems`, and
+ * the two index maps — with the handle riding along out of sight.
+ *
+ * Non-enumerable on purpose: a caller that spreads a context to change part of
+ * it (`{ ...ctx, armed }`) gets an object WITHOUT the handle, and every function
+ * below then answers from the TypeScript engine for it. A stale handle would
+ * answer about a graph the caller no longer holds.
+ */
+const HANDLE = Symbol('engine.handle')
+type Ctx = tsGraph.GraphContext & { [HANDLE]?: wasm.GraphContext }
+const handleOf = (ctx: tsGraph.GraphContext) => (ready && engineMode() !== 'ts' ? (ctx as Ctx)[HANDLE] : undefined)
+
+type Dump = [string, { eff: GraphEffect; from: tsFx.ActiveSource; owner: tsGraph.Gid }[]][]
+
+/** A handle as the object callers expect. The index is large and two callers read it, so it is built on first touch. */
+function fromHandle(handle: wasm.GraphContext): tsGraph.GraphContext {
+  let dump: [Dump, Dump] | undefined
+  const maps = () => (dump ??= handle.indexDump() as [Dump, Dump])
+  const ctx = {
+    scope: handle.scope as ts.ExprScope,
+    problems: handle.problems as Audit,
+    armed: handle.armed as ArmedMod[],
+    get index() { return new Map(maps()[0]) },
+    get byOwner() { return new Map(maps()[1]) as tsGraph.GraphContext['byOwner'] },
+  }
+  Object.defineProperty(ctx, HANDLE, { value: handle })
+  return ctx
+}
+
+const plain = (c: tsGraph.GraphContext) => ({ scope: c.scope, problems: c.problems, armed: c.armed, index: c.index, byOwner: c.byOwner })
+
+export function buildContext(character: CharacterRow, shardTrees: Trees = NO_TREES, catalogTypes: Types = NO_TYPES): tsGraph.GraphContext {
+  const mode = engineMode()
+  if (mode === 'ts' || !ready) return tsGraph.buildContext(character, shardTrees, catalogTypes)
+  if (mode === 'wasm') return fromHandle(wasm.buildContext(character, shardTrees, catalogTypes))
+
+  const a = attempt(() => tsGraph.buildContext(character, shardTrees, catalogTypes))
+  const b = attempt(() => wasm.buildContext(character, shardTrees, catalogTypes))
+  const shown = 'ok' in b ? attempt(() => plain(fromHandle(b.ok))) : b
+  if (!sameOutcome('ok' in a ? { ok: plain(a.ok) } : a, shown)) report({ fn: 'buildContext', args: [character, shardTrees, catalogTypes], ts: a, wasm: shown })
+  if ('threw' in a) throw a.threw
+  if ('ok' in b) Object.defineProperty(a.ok, HANDLE, { value: b.ok })
+  return a.ok
+}
+
+/** A function of a context: answered by the handle when the context carries one. */
+function onContext<A extends unknown[], R>(
+  fn: string,
+  original: (ctx: tsGraph.GraphContext, ...a: A) => R,
+  port: (handle: wasm.GraphContext, ...a: A) => R,
+): (ctx: tsGraph.GraphContext, ...a: A) => R {
+  return (ctx, ...args) => {
+    const handle = handleOf(ctx)
+    if (!handle) return original(ctx, ...args)
+    if (engineMode() === 'wasm') return port(handle, ...args)
+    const a = attempt(() => original(ctx, ...args))
+    const b = attempt(() => port(handle, ...args))
+    if (!sameOutcome(a, b)) report({ fn, args: [plain(ctx), ...args], ts: a, wasm: b })
+    if ('threw' in a) throw a.threw
+    return a.ok
+  }
+}
+
+export const resolve = onContext('resolve', tsGraph.resolve, (h, req) => h.resolve(req) as tsGraph.Resolution)
+export const damageFlags = onContext('damageFlags', tsGraph.damageFlags,
+  (h, dmgType) => h.damageFlags(dmgType) as { resist: boolean; vuln: boolean; immune: boolean })
+export const immuneTo = (ctx: tsGraph.GraphContext, name: string): boolean => damageFlags(ctx, name).immune
+export const suppressedEffects = onContext('suppressedEffects', tsGraph.suppressedEffects,
+  (h, character) => new Set(h.suppressedEffects(character) as string[]))
+
+const stale = onContext('staleArmed', tsGraph.staleArmed as (c: tsGraph.GraphContext, s: ts.ExprScope | undefined) => string[],
+  (h, scope) => h.staleArmed(scope) as string[])
+export const staleArmed = (ctx: tsGraph.GraphContext, scope?: ts.ExprScope) => stale(ctx, scope)
+
+type Affecting = ReturnType<typeof tsGraph.affectedBy>
+const affecting = onContext('affectedBy', tsGraph.affectedBy as (c: tsGraph.GraphContext, t: tsGraph.Gid, tags: string[]) => Affecting,
+  (h, target, tags) => h.affectedBy(target, tags) as Affecting)
+export const affectedBy = (ctx: tsGraph.GraphContext, target: tsGraph.Gid, tags: string[] = []) => affecting(ctx, target, tags)

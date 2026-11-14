@@ -3,11 +3,13 @@
 // A rename is display-only. The failure that matters is the SILENT one: the new
 // name leaking into a write and becoming permanent, or a name-keyed lookup
 // (`has<Feature>`) quietly breaking because the name it matched on moved.
+// Engine calls go through the facade, so `npm run test:parity` runs them on both engines.
+import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow } from './database.types.ts'
 import { applyRenames, baseName, stripRenames } from './rename.ts'
-import { baseScope } from './graph.ts'
+import { baseScope } from './engine/index.ts'
 
 const ros = (level: number, extraEffects: object[] = []) => ({
   id: 'c1', owner: 'u1', name: 'Ros', identity: { level }, resources: {}, lore: {}, progress: {}, shards: {}, updated_at: '',

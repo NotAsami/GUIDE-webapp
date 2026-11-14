@@ -428,6 +428,20 @@ impl Source {
         }
     }
 
+    /// Read one back from the shape `activeSources()` returns.
+    pub fn from_val(v: &Val) -> Source {
+        let kind = ["feature", "shard", "shardnode", "spell", "weapon", "item", "effect"]
+            .into_iter()
+            .find(|k| v.get("kind").as_str() == Some(k))
+            .unwrap_or("");
+        Source {
+            kind,
+            obj: v.get("obj").clone(),
+            shard_id: v.get("shardId").clone(),
+            fx: v.get("fx").clone(),
+        }
+    }
+
     /// The shape `activeSources()` returns in TypeScript.
     pub fn to_val(&self) -> Val {
         let mut m = Map::from([
