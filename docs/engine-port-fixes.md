@@ -122,8 +122,18 @@ compare, the page requests `engine_bg-….wasm` once, logs no engine error and r
 screen; on the default setting it requests nothing. The same module also loads under Deno from
 the Foundry module's own copy and inside the edge-function proof of concept.
 
-**Not yet seen working:** anything behind the login in a browser — a roll in compare mode, the
-Operator Console switch on screen. The browser automation was not available when this was built.
+**Seen working, logged in, on a real level-18 character (2026-11-15).** In Compare: every player
+screen and the Operator Console; 126 ability checks, saves and skill checks with and without
+advantage and disadvantage; 8 weapon attacks with damage; the Reckless Attack stance into an armed
+Brutal Strike with its pick-two offer answered, then Advance Turn clearing six armed modifiers;
+the item catalog and the Feature Editor auditing all 332 features, with eight opened in each of
+its three views. **No differences recorded.** On Rust alone: every player screen, 42 rolls and the
+same Reckless Attack and Brutal Strike flow, with no console errors. Switching in the console
+loads the module in place, in 14 ms, with no reload.
+
+**Not exercised in the browser:** casting a spell and using a consumable (both spend stored
+resources), level-up, rest, and the shard screens' write paths. The test suite covers their engine
+calls in all three modes; a session in Compare is what covers them for real.
 
 ## 3. Corrections to the plan found while building
 
