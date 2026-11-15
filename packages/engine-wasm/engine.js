@@ -1,6 +1,161 @@
 /* @ts-self-types="./engine.d.ts" */
 
 /**
+ * The authored catalog as the audit sees it — every node's gid and tags, and
+ * the variables declared anywhere — converted once and kept. The editor audits
+ * on every keystroke; sending sixteen hundred nodes each time cost 3.6 ms.
+ */
+export class Catalog {
+    static __wrap(ptr) {
+        const obj = Object.create(Catalog.prototype);
+        obj.__wbg_ptr = ptr;
+        CatalogFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        CatalogFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_catalog_free(ptr, 0);
+    }
+    /**
+     * @param {any} node
+     * @returns {any}
+     */
+    auditNode(node) {
+        const ret = wasm.catalog_auditNode(this.__wbg_ptr, node);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @param {string} selector
+     * @returns {number}
+     */
+    matchCount(selector) {
+        const ptr0 = passStringToWasm0(selector, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.catalog_matchCount(this.__wbg_ptr, ptr0, len0);
+        return ret;
+    }
+}
+if (Symbol.dispose) Catalog.prototype[Symbol.dispose] = Catalog.prototype.free;
+
+/**
+ * A character and its shard catalog, converted ONCE and kept in WebAssembly
+ * memory. Copying a character across costs about a millisecond and every
+ * question about it used to pay that; the app asks a dozen per render. The
+ * facade keeps one of these per character object and asks it instead.
+ */
+export class CharacterView {
+    static __wrap(ptr) {
+        const obj = Object.create(CharacterView.prototype);
+        obj.__wbg_ptr = ptr;
+        CharacterViewFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        CharacterViewFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_characterview_free(ptr, 0);
+    }
+    /**
+     * @returns {any}
+     */
+    activeSources() {
+        const ret = wasm.characterview_activeSources(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @returns {any}
+     */
+    baseScope() {
+        const ret = wasm.characterview_baseScope(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @param {any} catalog_types
+     * @returns {GraphContext}
+     */
+    buildContext(catalog_types) {
+        const ret = wasm.characterview_buildContext(this.__wbg_ptr, catalog_types);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return GraphContext.__wrap(ret[0]);
+    }
+    /**
+     * @returns {number}
+     */
+    carryMultiplier() {
+        const ret = wasm.characterview_carryMultiplier(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0];
+    }
+    /**
+     * @param {any} catalog_types
+     * @returns {any}
+     */
+    characterVars(catalog_types) {
+        const ret = wasm.characterview_characterVars(this.__wbg_ptr, catalog_types);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @returns {number}
+     */
+    currentBurden() {
+        const ret = wasm.characterview_currentBurden(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    effectiveSheet() {
+        const ret = wasm.characterview_effectiveSheet(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * @returns {any}
+     */
+    gearFeatures() {
+        const ret = wasm.characterview_gearFeatures(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {any}
+     */
+    shardFeatures() {
+        const ret = wasm.characterview_shardFeatures(this.__wbg_ptr);
+        return ret;
+    }
+}
+if (Symbol.dispose) CharacterView.prototype[Symbol.dispose] = CharacterView.prototype.free;
+
+/**
  * The feature graph of one character, built once and asked many times. It lives
  * in WebAssembly memory so that a roll sends a small request across the
  * boundary, not the whole character.
@@ -424,6 +579,26 @@ export function isHasIdent(id) {
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.isHasIdent(ptr0, len0);
     return ret !== 0;
+}
+
+/**
+ * @param {any} nodes
+ * @param {any} catalog_types
+ * @returns {Catalog}
+ */
+export function loadCatalog(nodes, catalog_types) {
+    const ret = wasm.loadCatalog(nodes, catalog_types);
+    return Catalog.__wrap(ret);
+}
+
+/**
+ * @param {any} character
+ * @param {any} shard_trees
+ * @returns {CharacterView}
+ */
+export function loadCharacter(character, shard_trees) {
+    const ret = wasm.loadCharacter(character, shard_trees);
+    return CharacterView.__wrap(ret);
 }
 
 /**
@@ -859,6 +1034,12 @@ function __wbg_get_imports() {
     };
 }
 
+const CatalogFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_catalog_free(ptr, 1));
+const CharacterViewFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_characterview_free(ptr, 1));
 const GraphContextFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_graphcontext_free(ptr, 1));

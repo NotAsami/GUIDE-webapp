@@ -30,7 +30,7 @@ import {
   HAS_TARGET, IS_ACTIVATION, IS_DAMAGE_FLAG, IS_SHEET, blankEffect, type OpField,
 } from '../lib/opSchema'
 import { proseField, useAutoGrow } from '../lib/textareaHooks'
-import { matchCount, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/graph'
+import { matchCount, normalizeTag, type AuditItem, type AuthoredNode } from '../lib/engine'
 import styles from './authoring.module.css'
 import { Icon } from './Icon'
 

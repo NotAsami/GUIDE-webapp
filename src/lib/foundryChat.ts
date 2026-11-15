@@ -19,7 +19,7 @@ import { lineViews, riderAmount, riderViews, rollTotals } from './rollView.ts'
 import { chipOn, colorOf } from './palette.ts'
 import { FOUNDRY_CONDITIONS } from './foundryDamage.ts'
 import { renderInline } from './markdown.ts'
-import { interpolate, type ExprScope } from './expr.ts'
+import { interpolate, type ExprScope } from './engine/index.ts'
 
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')

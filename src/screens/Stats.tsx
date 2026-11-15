@@ -11,7 +11,8 @@ import {
   abilityMod, abilities, allSkillTotals, formatMod, passiveScore,
   proficientSkillCount, saveTotal,
 } from '../lib/dnd'
-import { activeEffects, effectiveSheet } from '../lib/effects'
+import { activeEffects } from '../lib/effects'
+import { effectiveSheet } from '../lib/engine'
 import { burden, burdenTier, type BurdenTier } from '../lib/burden'
 import { handLabel, weaponAttackBonus, weaponDamageString } from '../lib/weapons'
 import { EffectsSidebar } from '../components/EffectsSidebar'
@@ -20,7 +21,7 @@ import { initiativeRoll } from '../lib/initiative'
 import { useGraph } from '../lib/useGraph'
 import { useFoundryConditions } from '../lib/foundryConditions'
 import { mirroredEffects } from '../lib/foundryDamage'
-import { immuneTo, suppressedEffects } from '../lib/graph'
+import { immuneTo, suppressedEffects } from '../lib/engine'
 import styles from './Stats.module.css'
 import { Icon } from '../components/Icon'
 

@@ -14,7 +14,7 @@
  * honest answer to "what will the player see": the preview says it cannot know.
  */
 
-import { evalExpr, freeIdents, hasIdent, isHasIdent, type ExprScope } from './expr.ts'
+import { evalExpr, freeIdents, hasIdent, isHasIdent, type ExprScope } from './engine/index.ts'
 import type { VarDef, FeatureGrantRef } from './database.types.ts'
 
 /** Project canon (CLAUDE.md): the party is level 7. */

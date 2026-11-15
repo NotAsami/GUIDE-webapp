@@ -18,7 +18,7 @@
  * first pressed.
  */
 import type { ActiveEffect, Feature } from './database.types.ts'
-import type { ExprScope } from './expr.ts'
+import type { ExprScope } from './engine/index.ts'
 import { usesOf } from './featureView.ts'
 
 /** Rounds per unit. A 5e round is six seconds, so a minute is ten of them —

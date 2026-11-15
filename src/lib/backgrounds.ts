@@ -17,7 +17,7 @@
  * changes. The type's own comment says so and this is the code that obeys it.
  */
 import { gateOpen, mergeProficiencies } from './classes.ts'
-import { characterVars } from './graph.ts'
+import { characterVars } from './engine/index.ts'
 import { skillKey } from './dnd.ts'
 import { grantKitItems, snapshotKit } from './kit.ts'
 import type {

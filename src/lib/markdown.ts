@@ -1,7 +1,7 @@
 import { Fragment, createContext, createElement, useContext, type ReactNode } from 'react'
 import { colorOf } from './palette.ts'
 import { Icon } from '../components/Icon.ts'
-import { interpolate, type ExprScope } from './expr.ts'
+import { interpolate, type ExprScope } from './engine/index.ts'
 
 /**
  * THE LIVE SCOPE, supplied once and read by the renderer.

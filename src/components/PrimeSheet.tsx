@@ -25,7 +25,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Feature } from '../lib/database.types'
-import type { ExprScope } from '../lib/expr'
+import type { ExprScope } from '../lib/engine'
 import { usesOf } from '../lib/featureView'
 import { Prose } from '../lib/markdown'
 import styles from './PrimeSheet.module.css'

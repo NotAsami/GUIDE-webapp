@@ -14,8 +14,8 @@
  * must survive every edit that does not delete its node.
  */
 import type { CatalogFeatureData, FeatureLayout, GraphEffect, VarDef } from './database.types.ts'
-import { ROLL_IDENTS, VAR_IDENTS, freeIdents, interpolations, isHasIdent } from './expr.ts'
-import { askKey, asKey, auditNode, probeScope, type AuthoredNode } from './graph.ts'
+import { ROLL_IDENTS, VAR_IDENTS, freeIdents, interpolations, isHasIdent } from './engine/index.ts'
+import { askKey, asKey, auditNode, probeScope, type AuthoredNode } from './engine/index.ts'
 import { HAS_TARGET, OPS } from './opSchema.ts'
 import { isUsable, toggleVars } from './featureView.ts'
 

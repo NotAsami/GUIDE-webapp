@@ -587,3 +587,119 @@ impl GraphContext {
         val_out(&Val::arr(vec![dump(&self.inner.index), dump(&self.inner.by_owner)]))
     }
 }
+
+// --- one character, held (slice 4) -------------------------------------------------
+
+/// A character and its shard catalog, converted ONCE and kept in WebAssembly
+/// memory. Copying a character across costs about a millisecond and every
+/// question about it used to pay that; the app asks a dozen per render. The
+/// facade keeps one of these per character object and asks it instead.
+#[wasm_bindgen]
+pub struct CharacterView {
+    character: Val,
+    trees: Val,
+}
+
+#[wasm_bindgen(js_name = loadCharacter)]
+pub fn load_character(character: &JsValue, shard_trees: &JsValue) -> CharacterView {
+    CharacterView {
+        character: val_in(character),
+        trees: val_in(shard_trees),
+    }
+}
+
+#[wasm_bindgen]
+impl CharacterView {
+    #[wasm_bindgen(js_name = effectiveSheet)]
+    pub fn effective_sheet(&self) -> Result<JsValue, JsError> {
+        Ok(val_out(&faulted(sheet::effective_sheet(&self.character, &self.trees))?))
+    }
+
+    #[wasm_bindgen(js_name = activeSources)]
+    pub fn active_sources(&self) -> Result<JsValue, JsError> {
+        let sources = faulted(sheet::active_sources(&self.character, &self.trees))?;
+        Ok(sources
+            .iter()
+            .map(|s| val_out(&s.to_val()))
+            .collect::<js_sys::Array>()
+            .into())
+    }
+
+    #[wasm_bindgen(js_name = gearFeatures)]
+    pub fn gear_features(&self) -> JsValue {
+        list_out(&sheet::gear_features(&self.character))
+    }
+
+    #[wasm_bindgen(js_name = shardFeatures)]
+    pub fn shard_features(&self) -> JsValue {
+        list_out(&sheet::shard_features(&self.character, &self.trees))
+    }
+
+    #[wasm_bindgen(js_name = carryMultiplier)]
+    pub fn carry_multiplier(&self) -> Result<f64, JsError> {
+        faulted(sheet::carry_multiplier(&self.character, &self.trees))
+    }
+
+    #[wasm_bindgen(js_name = currentBurden)]
+    pub fn current_burden(&self) -> f64 {
+        sheet::current_burden(&self.character)
+    }
+
+    #[wasm_bindgen(js_name = baseScope)]
+    pub fn base_scope(&self) -> Result<JsValue, JsError> {
+        Ok(val_out(&Val::obj(faulted(graph::base_scope(
+            &self.character,
+            &self.trees,
+        ))?)))
+    }
+
+    #[wasm_bindgen(js_name = characterVars)]
+    pub fn character_vars(&self, catalog_types: &JsValue) -> Result<JsValue, JsError> {
+        let (scope, audit) = faulted(graph::character_vars(
+            &self.character,
+            &self.trees,
+            &val_in(catalog_types),
+        ))?;
+        Ok(scoped(scope, &audit))
+    }
+
+    #[wasm_bindgen(js_name = buildContext)]
+    pub fn build_context(&self, catalog_types: &JsValue) -> Result<GraphContext, JsError> {
+        let inner = graph::build_context(&self.character, &self.trees, &val_in(catalog_types));
+        Ok(GraphContext { inner: faulted(inner)? })
+    }
+}
+
+/// The authored catalog as the audit sees it — every node's gid and tags, and
+/// the variables declared anywhere — converted once and kept. The editor audits
+/// on every keystroke; sending sixteen hundred nodes each time cost 3.6 ms.
+#[wasm_bindgen]
+pub struct Catalog {
+    nodes: Val,
+    types: Val,
+}
+
+#[wasm_bindgen(js_name = loadCatalog)]
+pub fn load_catalog(nodes: &JsValue, catalog_types: &JsValue) -> Catalog {
+    Catalog {
+        nodes: val_in(nodes),
+        types: val_in(catalog_types),
+    }
+}
+
+#[wasm_bindgen]
+impl Catalog {
+    #[wasm_bindgen(js_name = auditNode)]
+    pub fn audit_node(&self, node: &JsValue) -> Result<JsValue, JsError> {
+        Ok(audit_out(&faulted(audit::audit_node(
+            &val_in(node),
+            self.nodes.items(),
+            &self.types,
+        ))?))
+    }
+
+    #[wasm_bindgen(js_name = matchCount)]
+    pub fn match_count(&self, selector: &str) -> f64 {
+        graph::match_count(selector, self.nodes.items())
+    }
+}

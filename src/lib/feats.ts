@@ -25,7 +25,7 @@
  *   Level 19+, Spellcasting Feature   → comma = AND, both of the above
  */
 import { ABILITY_NAMES, ABILITY_ORDER } from './dnd.ts'
-import { effectiveSheet } from './effects.ts'
+import { effectiveSheet } from './engine/index.ts'
 import type { AbilityKey, CharacterRow, ShardTree } from './database.types.ts'
 
 export type PrereqResult = {

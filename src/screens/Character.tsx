@@ -11,7 +11,7 @@ import {
   proficiency, saveTerms, saveTotal, skillTerms, skillTotal,
 } from '../lib/dnd'
 import type { Skill } from '../lib/dnd'
-import { effectiveSheet } from '../lib/effects'
+import { effectiveSheet } from '../lib/engine'
 import { buildCheck, useRollLog } from '../lib/rolls'
 import { armsSpent, armsSpentBy } from '../lib/graphState'
 import type { CheckRequest, RollEntry } from '../lib/rolls'

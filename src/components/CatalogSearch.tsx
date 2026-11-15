@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
-import { normalizeTag } from '../lib/graph'
+import { normalizeTag } from '../lib/engine'
 import styles from './CatalogSearch.module.css'
 
 const LIMIT = 40

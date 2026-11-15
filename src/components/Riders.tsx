@@ -15,7 +15,7 @@
  * away. Until then an `ask` rider renders as UNRESOLVED — visible, named, and
  * honestly not applied.
  */
-import type { AuditItem } from '../lib/graph'
+import type { AuditItem } from '../lib/engine'
 import { riderAmount } from '../lib/rollView'
 import type { RiderGroup } from '../lib/rolls'
 import styles from './Riders.module.css'

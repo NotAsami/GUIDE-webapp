@@ -15,8 +15,8 @@
  */
 
 import type { CharacterRow, EquippedGear, EquippedWeapon, ShardTree } from './database.types.ts'
-import { effectiveSheet } from './effects.ts'
-import { parseDice } from './dice.ts'
+import { effectiveSheet } from './engine/index.ts'
+import { parseDice } from './engine/index.ts'
 import { abilityMod } from './dnd.ts'
 import type { FoundryActorData } from './foundry.ts'
 

@@ -32,7 +32,7 @@
  * not needed by the party HUD it does not belong here — this is a hole in a
  * wall, and it should stay the size of the thing going through it.
  */
-import { effectiveSheet } from './effects.ts'
+import { effectiveSheet } from './engine/index.ts'
 import type { ActiveEffect, CharacterRow, PublicVitals, ShardTree } from './database.types.ts'
 
 /** Death saves live on `resources.deathSaves`, written by the player's own

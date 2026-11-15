@@ -14,10 +14,11 @@
  */
 
 import type { CharacterRow, EquippedItem, ShardTree } from './database.types'
-import { rollHeal } from './dice'
+import { rollHeal } from './engine/index.ts'
 import type { RollLine } from './rolls'
-import { activeEffects, effectiveSheet, summarizeEffects } from './effects'
-import { gid, resolve, rollResolution, type AuditItem, type GraphContext, type Rider } from './graph'
+import { activeEffects, summarizeEffects } from './effects'
+import { effectiveSheet } from './engine/index.ts'
+import { gid, resolve, rollResolution, type AuditItem, type GraphContext, type Rider } from './engine/index.ts'
 
 export interface ConsumeOutcome {
   /** True when using it would do nothing (a pure heal at full HP) — don't spend it. */

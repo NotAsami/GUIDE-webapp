@@ -14,7 +14,7 @@
  */
 import { useMemo } from 'react'
 import type { CharacterRow, ShardTree } from './database.types.ts'
-import { buildContext, type GraphContext } from './graph.ts'
+import { buildContext, type GraphContext } from './engine/index.ts'
 
 /** An empty context, for the window before a character has loaded. Callers get
  *  a real object rather than null so a roll never has to branch on it — a

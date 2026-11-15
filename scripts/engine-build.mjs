@@ -14,7 +14,7 @@
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -79,6 +79,13 @@ const wasm = join(out, 'engine_bg.wasm')
 run('wasm-opt', ['-Oz', '--enable-bulk-memory', '--enable-bulk-memory-opt', '--enable-nontrapping-float-to-int',
   '--enable-sign-ext', '--enable-mutable-globals', '--enable-multivalue', '--enable-reference-types', wasm, '-o', wasm])
 writeFileSync(stamp, sourceHash() + '\n')
+
+// The Foundry module is a plain folder linked into Foundry's own modules
+// directory: it has no build step and cannot import from outside itself, so it
+// carries its own copy of the two files it loads.
+const foundry = join(root, 'foundry/guide-bridge/lib/engine')
+mkdirSync(foundry, { recursive: true })
+for (const f of ['engine.js', 'engine_bg.wasm']) copyFileSync(join(out, f), join(foundry, f))
 
 const bytes = readFileSync(wasm)
 console.log(`engine_bg.wasm: ${bytes.length} bytes raw, ${gzipSync(bytes).length} gzipped`)

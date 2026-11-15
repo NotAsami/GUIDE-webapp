@@ -34,7 +34,7 @@
  * that resolved to the same answer by a different route.
  */
 
-import { normalizeTag } from './graph.ts'
+import { normalizeTag } from './engine/index.ts'
 
 export type QueryTerm = {
   /** `!` prefix — the entry must NOT match this term. */

@@ -5,9 +5,10 @@ The engine is being ported from TypeScript (`src/lib/expr.ts`, `dice.ts`, `graph
 for every input**, including outputs that look wrong. This file is where the exceptions to that
 rule and the wrong-looking behaviour are written down.
 
-Status: **slices 1 (expression evaluator), 2 (dice), 3a (the sheet layer) and 3b (the feature
-graph: variables, resolver, audits) are done.** The whole engine now exists in Rust. Callers still
-use the TypeScript engine; they move in slice 4.
+Status: **slices 1 to 4 are done.** The whole engine exists in Rust and every caller goes through
+the facade (`src/lib/engine`). The DEFAULT is still the TypeScript engine: nothing changes for a
+player until the setting is flipped on a device, in the Operator Console. What is left is the
+rollout itself (compare mode in real sessions, then Rust) and slice 5, deleting the original.
 
 ## 1. Where the two engines differ on purpose
 
@@ -106,7 +107,42 @@ their callers move: `characterVars` (called from rest, level-up, classes, races,
 the DM console) should be read off a context, and `auditNode` needs the catalog's node list held
 in the engine rather than sent on every keystroke in the editor.
 
+### Slice 4: with a character and the catalog held
+
+Stateless calls cost a copy, so the facade holds things instead. A character object is converted
+once and kept in the engine (`CharacterView`), and every answer about it is remembered against
+that object; the catalog's node list is held the same way for the audit (`Catalog`). In `wasm`
+mode a remembered answer is frozen, because several callers now share it.
+
+The whole test suite, 1,247 tests: 3.0 s on the TypeScript engine, 5.4 s on the Rust engine
+alone, 6.3 s with both compared.
+
+**Loading, in a real browser.** Headless Chrome against the production build: with the setting on
+compare, the page requests `engine_bg-….wasm` once, logs no engine error and renders the login
+screen; on the default setting it requests nothing. The same module also loads under Deno from
+the Foundry module's own copy and inside the edge-function proof of concept.
+
+**Not yet seen working:** anything behind the login in a browser — a roll in compare mode, the
+Operator Console switch on screen. The browser automation was not available when this was built.
+
 ## 3. Corrections to the plan found while building
+
+- **Engine files keep importing each other directly.** The facade imports the TypeScript engine,
+  so the engine's own files (`expr`, `dice`, `graph`, `effects`, `modEditor`, `featureView`,
+  `opSchema`, `dnd`, `spells`, `equip`, `burden`, `shards`) cannot import the facade without a
+  cycle. A few functions in those files are not engine functions but use one — `rollSpellDamage`
+  in `spells.ts` rolls with `dice.ts`, `burden()` calls `effectiveSheet` — and those stay on the
+  TypeScript engine in every mode until slice 5 moves or splits them.
+- **Held answers assume a character object is never changed in place.** React state is replaced,
+  not mutated, and the suite passes in all three modes. Code that mutated a row and asked again
+  would get the first answer in `wasm` mode.
+- **No caller spreads a context**, so none loses its handle. That worry from slice 3b is closed.
+- **The Foundry module carries its own copy** of `engine.js` and `engine_bg.wasm`
+  (`foundry/guide-bridge/lib/engine/`), written by `npm run engine:build` and refreshed by CI. It
+  is a linked folder with no build step and cannot import from outside itself.
+- **The edge function is not deployed and its deployment is unverified.** It runs under plain
+  Deno. Deployed, the `.wasm` sits outside the function folder and has to be listed as a static
+  file in a `supabase/config.toml` this repository does not have yet.
 
 - **`GraphContext` is a handle with a plain face.** `buildContext` in the facade returns the object
   callers already expect (`scope`, `armed`, `problems`, and the two index maps, built on first

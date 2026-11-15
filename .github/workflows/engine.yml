@@ -51,10 +51,10 @@ jobs:
       - run: npm run test:parity
       - name: Commit the refreshed build
         run: |
-          if [ -n "$(git status --porcelain packages/engine-wasm)" ]; then
+          if [ -n "$(git status --porcelain packages/engine-wasm foundry/guide-bridge/lib/engine)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add packages/engine-wasm
+            git add packages/engine-wasm foundry/guide-bridge/lib/engine
             git commit -m "Engine: rebuild packages/engine-wasm"
             git push
           fi

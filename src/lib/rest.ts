@@ -1,10 +1,10 @@
 import type { CharacterRow, CharacterSection, CharacterSheet, ShardTree } from './database.types.ts'
 import type { RollLine } from './rolls.tsx'
-import { effectiveSheet } from './effects.ts'
+import { effectiveSheet } from './engine/index.ts'
 import { restVarPatch, withArmedCleared, withVars } from './graphState.ts'
-import { characterVars } from './graph.ts'
+import { characterVars } from './engine/index.ts'
 import { usesOf } from './featureView.ts'
-import { evalExpr, type ExprScope } from './expr.ts'
+import { evalExpr, type ExprScope } from './engine/index.ts'
 
 /** `shortRecharge` as a number. A formula, like `uses.max` — see Feature. An
  *  unreadable one gives back nothing rather than guessing, which reads as "the

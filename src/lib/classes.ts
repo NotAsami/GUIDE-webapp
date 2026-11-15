@@ -11,9 +11,9 @@
  *  3. `assignClass` — the snapshot boundary. A class is a template; this is the
  *     one place it becomes state on a character.
  */
-import { evalExpr, type ExprScope } from './expr.ts'
+import { evalExpr, type ExprScope } from './engine/index.ts'
 import { pactSlotCount, pactSlotLevel } from './spells.ts'
-import { characterVars } from './graph.ts'
+import { characterVars } from './engine/index.ts'
 import { abilities, abilityMod, proficiency } from './dnd.ts'
 import { grantKitItems, snapshotKit } from './kit.ts'
 import type {

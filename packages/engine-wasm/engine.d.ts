@@ -49,6 +49,40 @@ export interface Interpolated {
 
 
 /**
+ * The authored catalog as the audit sees it — every node's gid and tags, and
+ * the variables declared anywhere — converted once and kept. The editor audits
+ * on every keystroke; sending sixteen hundred nodes each time cost 3.6 ms.
+ */
+export class Catalog {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    auditNode(node: any): any;
+    matchCount(selector: string): number;
+}
+
+/**
+ * A character and its shard catalog, converted ONCE and kept in WebAssembly
+ * memory. Copying a character across costs about a millisecond and every
+ * question about it used to pay that; the app asks a dozen per render. The
+ * facade keeps one of these per character object and asks it instead.
+ */
+export class CharacterView {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    activeSources(): any;
+    baseScope(): any;
+    buildContext(catalog_types: any): GraphContext;
+    carryMultiplier(): number;
+    characterVars(catalog_types: any): any;
+    currentBurden(): number;
+    effectiveSheet(): any;
+    gearFeatures(): any;
+    shardFeatures(): any;
+}
+
+/**
  * The feature graph of one character, built once and asked many times. It lives
  * in WebAssembly memory so that a roll sends a small request across the
  * boundary, not the whole character.
@@ -133,6 +167,10 @@ export function interpolations(text?: string | null): string[];
 
 export function isHasIdent(id: string): boolean;
 
+export function loadCatalog(nodes: any, catalog_types: any): Catalog;
+
+export function loadCharacter(character: any, shard_trees: any): CharacterView;
+
 export function matchCount(selector: string, nodes: any): number;
 
 export function nodeGid(shard_id: string, node_id: string): string;
@@ -183,6 +221,8 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly __wbg_catalog_free: (a: number, b: number) => void;
+    readonly __wbg_characterview_free: (a: number, b: number) => void;
     readonly __wbg_graphcontext_free: (a: number, b: number) => void;
     readonly activeSources: (a: any, b: any) => [number, number, number];
     readonly armedMatches: (a: any, b: any) => number;
@@ -193,7 +233,18 @@ export interface InitOutput {
     readonly baseScope: (a: any, b: any) => [number, number, number];
     readonly buildContext: (a: any, b: any, c: any) => [number, number, number];
     readonly carryMultiplier: (a: any, b: any) => [number, number, number];
+    readonly catalog_auditNode: (a: number, b: any) => [number, number, number];
+    readonly catalog_matchCount: (a: number, b: number, c: number) => number;
     readonly characterVars: (a: any, b: any, c: any) => [number, number, number];
+    readonly characterview_activeSources: (a: number) => [number, number, number];
+    readonly characterview_baseScope: (a: number) => [number, number, number];
+    readonly characterview_buildContext: (a: number, b: any) => [number, number, number];
+    readonly characterview_carryMultiplier: (a: number) => [number, number, number];
+    readonly characterview_characterVars: (a: number, b: any) => [number, number, number];
+    readonly characterview_currentBurden: (a: number) => number;
+    readonly characterview_effectiveSheet: (a: number) => [number, number, number];
+    readonly characterview_gearFeatures: (a: number) => any;
+    readonly characterview_shardFeatures: (a: number) => any;
     readonly collectVars: (a: any) => any;
     readonly compileEffects: (a: any, b: any) => any;
     readonly currentBurden: (a: any) => number;
@@ -216,6 +267,8 @@ export interface InitOutput {
     readonly interpolate: (a: number, b: number, c: any) => [number, number, number];
     readonly interpolations: (a: number, b: number) => [number, number];
     readonly isHasIdent: (a: number, b: number) => number;
+    readonly loadCatalog: (a: any, b: any) => number;
+    readonly loadCharacter: (a: any, b: any) => number;
     readonly matchCount: (a: number, b: number, c: any) => number;
     readonly nodeGid: (a: number, b: number, c: number, d: number) => [number, number];
     readonly normalizeTag: (a: number, b: number) => [number, number];

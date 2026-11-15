@@ -23,7 +23,7 @@ import * as tsMods from '../modEditor.ts'
 import * as tsShards from '../shards.ts'
 import * as ts from '../expr.ts'
 import { attempt, sameOutcome, type Outcome } from './compare.ts'
-import { STRICT, engineMode } from './setting.ts'
+import { STRICT, engineMode, setEngineMode, type EngineMode } from './setting.ts'
 
 export type { ExprScope, FormulaValue } from '../expr.ts'
 export type { RolledDie } from '../dice.ts'
@@ -51,6 +51,41 @@ export function initEngineSync(bytes: BufferSource): void {
   ready = true
 }
 
+/** Why the WebAssembly engine is not answering, when it was asked for and is not. */
+let loadFailure: unknown
+
+/** What is answering right now — for the DM's setting, which has to be able to
+ *  say "you asked for the Rust engine and it did not load". */
+export const engineStatus = (): { mode: EngineMode; loaded: boolean; failed: boolean } =>
+  ({ mode: engineMode(), loaded: ready, failed: loadFailure !== undefined })
+
+/**
+ * Choose the engine on this device. Loads the WebAssembly module first if the
+ * choice needs it and boot did not — so the switch takes effect at once, with
+ * no reload, and a module that will not load leaves the setting where it was.
+ */
+export async function selectEngine(mode: EngineMode): Promise<void> {
+  if (mode !== 'ts' && !ready) {
+    try { await initEngine() } catch (e) { loadFailure = e; throw e }
+  }
+  loadFailure = undefined
+  setEngineMode(mode)
+}
+
+/**
+ * Boot. Awaited before the first render when the setting asks for the Rust
+ * engine, because the engine runs inside render and cannot be awaited there.
+ * NEVER rejects: if the module will not load the app starts on the TypeScript
+ * engine, which is still here, and the setting says what happened.
+ */
+export async function bootEngine(): Promise<void> {
+  if (engineMode() === 'ts') return
+  try { await initEngine() } catch (e) {
+    loadFailure = e
+    console.error('[engine] the WebAssembly engine failed to load; running the TypeScript engine', e)
+  }
+}
+
 /** The Rust engine's own constants, for the test that pins the static copies to them. */
 export const wasmConstants = () => wasm.engineConstants()
 
@@ -68,6 +103,10 @@ function report(diff: EngineDiff): void {
     const kept: unknown[] = JSON.parse(localStorage.getItem(DIFF_KEY) ?? '[]')
     localStorage.setItem(DIFF_KEY, JSON.stringify([...kept, diff].slice(-DIFF_CAP)))
   } catch { /* storage full or unavailable: the console line is the record */ }
+}
+
+export function clearEngineDiffs(): void {
+  try { localStorage.removeItem(DIFF_KEY) } catch { /* nothing to clear */ }
 }
 
 /** The differences shadow mode has recorded on this device, oldest first. */
@@ -163,21 +202,92 @@ type Trees = Record<string, ShardTree>
 /** One shared default, so an omitted catalog is the SAME object on every call. */
 const NO_TREES: Trees = {}
 
-const sheet = dispatch('effectiveSheet', tsFx.effectiveSheet as (c: CharacterRow, t: Trees) => EffectiveSheet,
-  (c, t) => wasm.effectiveSheet(c, t) as EffectiveSheet)
-export const effectiveSheet = (character: CharacterRow, shardTrees: Trees = NO_TREES) => sheet(character, shardTrees)
+/**
+ * ONE CHARACTER, HELD. Copying a character into the Rust engine costs about a
+ * millisecond, and the app asks a dozen questions about one per render — so in
+ * the non-`ts` modes each character object is converted ONCE, kept in
+ * WebAssembly memory, and asked from there. Answers are remembered too: the
+ * same character object always gives the same answer.
+ *
+ * Keyed on IDENTITY, weakly. A character row is immutable state — an edit makes
+ * a new object, which is a new entry, and the old one is collected with its
+ * row. Code that mutates a row in place and asks again would get the first
+ * answer; nothing in the app does, and shadow mode is how one would be caught.
+ */
+type Held = { view: wasm.CharacterView; answers: Map<string, Map<unknown, Outcome<unknown>>> }
+const held = new WeakMap<object, WeakMap<object, Held>>()
 
-const sources = dispatch('activeSources', tsFx.activeSources as (c: CharacterRow, t: Trees) => tsFx.ActiveSource[],
-  (c, t) => wasm.activeSources(c, t) as tsFx.ActiveSource[])
-export const activeSources = (character: CharacterRow, shardTrees: Trees = NO_TREES) => sources(character, shardTrees)
+function holding(character: CharacterRow, trees: Trees): Held {
+  let byTrees = held.get(character)
+  if (!byTrees) held.set(character, byTrees = new WeakMap())
+  let h = byTrees.get(trees)
+  if (!h) byTrees.set(trees, h = { view: wasm.loadCharacter(character, trees), answers: new Map() })
+  return h
+}
 
-const carry = dispatch('carryMultiplier', tsFx.carryMultiplier as (c: CharacterRow, t: Trees) => number,
-  (c, t) => wasm.carryMultiplier(c, t))
-export const carryMultiplier = (character: CharacterRow, shardTrees: Trees = NO_TREES) => carry(character, shardTrees)
+/** An answer handed to more than one caller must not be changeable by any of them. */
+function frozen<T>(v: T): T {
+  if (v && typeof v === 'object' && !Object.isFrozen(v) && !(v instanceof Map) && !(v instanceof Set)) {
+    Object.freeze(v)
+    // Data properties only: a context's index maps are getters, built on first read.
+    for (const d of Object.values(Object.getOwnPropertyDescriptors(v))) if ('value' in d) frozen(d.value)
+  }
+  return v
+}
 
-export const gearFeatures = dispatch('gearFeatures', tsFx.gearFeatures, c => wasm.gearFeatures(c) as Feature[])
-export const shardFeatures = dispatch('shardFeatures', tsShards.shardFeatures, (c, t) => wasm.shardFeatures(c, t) as Feature[])
-export const currentBurden = dispatch('currentBurden', tsBurden.currentBurden, c => wasm.currentBurden(c))
+/**
+ * A question about one character. `extra` is the one further argument a few of
+ * them take (the catalog's variable types), and is part of the memo key.
+ *
+ *   ts      the original, every call.
+ *   wasm    the held character's answer, computed once and frozen.
+ *   shadow  the original every call — callers get exactly what they get today —
+ *           and the port ONCE per character, compared when it is first computed.
+ */
+function onCharacter<X, R>(
+  fn: string,
+  original: (c: CharacterRow, t: Trees, extra: X) => R,
+  port: (view: wasm.CharacterView, extra: X) => R,
+  after?: (fromOriginal: R, fromPort: Outcome<R>) => void,
+): (c: CharacterRow, t: Trees, extra: X) => R {
+  return (character, trees, extra) => {
+    const mode = engineMode()
+    if (mode === 'ts' || !ready || !character || typeof character !== 'object') return original(character, trees, extra)
+    const h = holding(character, trees)
+    let byExtra = h.answers.get(fn)
+    if (!byExtra) h.answers.set(fn, byExtra = new Map())
+    let b = byExtra.get(extra) as Outcome<R> | undefined
+    const fresh = !b
+    if (!b) byExtra.set(extra, b = attempt(() => port(h.view, extra)))
+    if (mode === 'wasm') {
+      if ('threw' in b) throw b.threw
+      return frozen(b.ok)
+    }
+    const a = attempt(() => original(character, trees, extra))
+    if (fresh && !sameOutcome(a, b)) report({ fn, args: [character, trees, extra], ts: a, wasm: b })
+    if ('threw' in a) throw a.threw
+    after?.(a.ok, b)
+    return a.ok
+  }
+}
+
+const sheet = onCharacter('effectiveSheet', (c, t) => tsFx.effectiveSheet(c, t), v => v.effectiveSheet() as EffectiveSheet)
+export const effectiveSheet = (character: CharacterRow, shardTrees: Trees = NO_TREES) => sheet(character, shardTrees, undefined)
+
+const sources = onCharacter('activeSources', (c, t) => tsFx.activeSources(c, t), v => v.activeSources() as tsFx.ActiveSource[])
+export const activeSources = (character: CharacterRow, shardTrees: Trees = NO_TREES) => sources(character, shardTrees, undefined)
+
+const carry = onCharacter('carryMultiplier', (c, t) => tsFx.carryMultiplier(c, t), v => v.carryMultiplier())
+export const carryMultiplier = (character: CharacterRow, shardTrees: Trees = NO_TREES) => carry(character, shardTrees, undefined)
+
+const gear = onCharacter('gearFeatures', c => tsFx.gearFeatures(c), v => v.gearFeatures() as Feature[])
+export const gearFeatures = (character: CharacterRow) => gear(character, NO_TREES, undefined)
+
+const fromShards = onCharacter('shardFeatures', (c, t) => tsShards.shardFeatures(c, t), v => v.shardFeatures() as Feature[])
+export const shardFeatures = (character: CharacterRow, catalog: Trees) => fromShards(character, catalog, undefined)
+
+const burdenOf = onCharacter('currentBurden', c => tsBurden.currentBurden(c), v => v.currentBurden())
+export const currentBurden = (character: CharacterRow) => burdenOf(character, NO_TREES, undefined)
 
 type Skills = Pick<EffectDef, 'skillProficiencies' | 'skillExpertise'>[]
 const compile = dispatch('compileEffects', tsMods.compileEffects as (m: Mod[], s: Skills | undefined) => ItemEffects | undefined,
@@ -195,14 +305,12 @@ const NO_TYPES: Types = {}
 type Audit = tsGraph.AuditItem[]
 type Scoped = { scope: ts.ExprScope; audit: Audit }
 
-const vars = dispatch('characterVars', tsGraph.characterVars as (c: CharacterRow, t: Trees, k: Types) => Scoped,
-  (c, t, k) => wasm.characterVars(c, t, k) as Scoped)
+const vars = onCharacter('characterVars', (c, t, k: Types) => tsGraph.characterVars(c, t, k) as Scoped, (v, k) => v.characterVars(k) as Scoped)
 export const characterVars = (character: CharacterRow, shardTrees: Trees = NO_TREES, catalogTypes: Types = NO_TYPES) =>
   vars(character, shardTrees, catalogTypes)
 
-const base = dispatch('baseScope', tsGraph.baseScope as (c: CharacterRow, t: Trees) => ts.ExprScope,
-  (c, t) => wasm.baseScope(c, t) as ts.ExprScope)
-export const baseScope = (character: CharacterRow, shardTrees: Trees = NO_TREES) => base(character, shardTrees)
+const base = onCharacter('baseScope', (c, t) => tsGraph.baseScope(c, t), v => v.baseScope() as ts.ExprScope)
+export const baseScope = (character: CharacterRow, shardTrees: Trees = NO_TREES) => base(character, shardTrees, undefined)
 
 /** The original APPENDS what the walk reports to an array it is handed. Both
  *  engines are asked for `{ scope, audit }` and the appending happens here, once. */
@@ -222,10 +330,25 @@ export const varCollisions = dispatch('varCollisions', tsGraph.varCollisions, (d
 const varsAudit = dispatch('auditVars', tsGraph.auditVars as (d: VarDef[], k: Types) => Audit, (d, k) => wasm.auditVars(d, k) as Audit)
 export const auditVars = (defs: VarDef[], catalogTypes: Types = NO_TYPES) => varsAudit(defs, catalogTypes)
 
+/**
+ * THE CATALOG, HELD — the same idea as a held character. The editor audits on
+ * every keystroke against every authored node; the node list is converted once
+ * per list object and kept in the engine, so an audit sends only the node being edited.
+ */
+const catalogs = new WeakMap<object, WeakMap<object, wasm.Catalog>>()
+function catalogOf(nodes: tsGraph.AuthoredNode[], types: Types): wasm.Catalog {
+  let byTypes = catalogs.get(nodes)
+  if (!byTypes) catalogs.set(nodes, byTypes = new WeakMap())
+  let c = byTypes.get(types)
+  if (!c) byTypes.set(types, c = wasm.loadCatalog(nodes, types))
+  return c
+}
+const NO_NODES: tsGraph.AuthoredNode[] = []
+
 type Node = Parameters<typeof tsGraph.auditNode>[0]
 const nodeAudit = dispatch('auditNode', tsGraph.auditNode as (n: Node, a: tsGraph.AuthoredNode[], k: Types) => Audit,
-  (n, a, k) => wasm.auditNode(n, a, k) as Audit)
-export const auditNode = (node: Node, nodes: tsGraph.AuthoredNode[] = [], catalogTypes: Types = NO_TYPES) =>
+  (n, a, k) => catalogOf(a, k).auditNode(n) as Audit)
+export const auditNode = (node: Node, nodes: tsGraph.AuthoredNode[] = NO_NODES, catalogTypes: Types = NO_TYPES) =>
   nodeAudit(node, nodes, catalogTypes)
 
 export const gid = dispatch('gid', tsGraph.gid, (kind, x) => wasm.gid(kind, x) as tsGraph.Gid)
@@ -235,7 +358,7 @@ export const askKey = dispatch('askKey', tsGraph.askKey, wasm.askKey)
 export const asKey = dispatch('asKey', tsGraph.asKey, wasm.asKey)
 export const reqKeys = dispatch('reqKeys', tsGraph.reqKeys, wasm.reqKeys)
 export const armedMatches = dispatch('armedMatches', tsGraph.armedMatches, wasm.armedMatches)
-export const matchCount = dispatch('matchCount', tsGraph.matchCount, wasm.matchCount)
+export const matchCount = dispatch('matchCount', tsGraph.matchCount, (selector, nodes) => catalogOf(nodes, NO_TYPES).matchCount(selector))
 export const total = dispatch('total', tsGraph.total, r => wasm.total(r) as { flat: number; dice: string[] })
 export const isD20 = tsGraph.isD20
 
@@ -279,19 +402,13 @@ function fromHandle(handle: wasm.GraphContext): tsGraph.GraphContext {
 
 const plain = (c: tsGraph.GraphContext) => ({ scope: c.scope, problems: c.problems, armed: c.armed, index: c.index, byOwner: c.byOwner })
 
-export function buildContext(character: CharacterRow, shardTrees: Trees = NO_TREES, catalogTypes: Types = NO_TYPES): tsGraph.GraphContext {
-  const mode = engineMode()
-  if (mode === 'ts' || !ready) return tsGraph.buildContext(character, shardTrees, catalogTypes)
-  if (mode === 'wasm') return fromHandle(wasm.buildContext(character, shardTrees, catalogTypes))
-
-  const a = attempt(() => tsGraph.buildContext(character, shardTrees, catalogTypes))
-  const b = attempt(() => wasm.buildContext(character, shardTrees, catalogTypes))
-  const shown = 'ok' in b ? attempt(() => plain(fromHandle(b.ok))) : b
-  if (!sameOutcome('ok' in a ? { ok: plain(a.ok) } : a, shown)) report({ fn: 'buildContext', args: [character, shardTrees, catalogTypes], ts: a, wasm: shown })
-  if ('threw' in a) throw a.threw
-  if ('ok' in b) Object.defineProperty(a.ok, HANDLE, { value: b.ok })
-  return a.ok
-}
+/** In shadow mode the caller gets the original's context, with the port's handle attached to it. */
+const context = onCharacter<Types, tsGraph.GraphContext>('buildContext',
+  (c, t, k) => tsGraph.buildContext(c, t, k),
+  (v, k) => fromHandle(v.buildContext(k)),
+  (mine, theirs) => { if ('ok' in theirs && !(HANDLE in mine)) Object.defineProperty(mine, HANDLE, { value: (theirs.ok as Ctx)[HANDLE] }) })
+export const buildContext = (character: CharacterRow, shardTrees: Trees = NO_TREES, catalogTypes: Types = NO_TYPES) =>
+  context(character, shardTrees, catalogTypes)
 
 /** A function of a context: answered by the handle when the context carries one. */
 function onContext<A extends unknown[], R>(

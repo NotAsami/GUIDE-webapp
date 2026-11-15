@@ -18,7 +18,7 @@ import type {
 } from './database.types.ts'
 import { containerContents } from './equip.ts'
 import { PERSON } from './placement.ts'
-import { gid, resolve, type GraphContext } from './graph.ts'
+import { gid, resolve, type GraphContext } from './engine/index.ts'
 import { armsSpentBy } from './graphState.ts'
 import { handLabel, isRanged, masteryActive, masteryOf, rollWeaponAttack, weaponAbilityKey } from './weapons.ts'
 import type { RollEntry } from './rolls.tsx'

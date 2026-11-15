@@ -1,6 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const __wbg_catalog_free: (a: number, b: number) => void;
+export const __wbg_characterview_free: (a: number, b: number) => void;
 export const __wbg_graphcontext_free: (a: number, b: number) => void;
 export const activeSources: (a: any, b: any) => [number, number, number];
 export const armedMatches: (a: any, b: any) => number;
@@ -11,7 +13,18 @@ export const auditVars: (a: any, b: any) => [number, number, number];
 export const baseScope: (a: any, b: any) => [number, number, number];
 export const buildContext: (a: any, b: any, c: any) => [number, number, number];
 export const carryMultiplier: (a: any, b: any) => [number, number, number];
+export const catalog_auditNode: (a: number, b: any) => [number, number, number];
+export const catalog_matchCount: (a: number, b: number, c: number) => number;
 export const characterVars: (a: any, b: any, c: any) => [number, number, number];
+export const characterview_activeSources: (a: number) => [number, number, number];
+export const characterview_baseScope: (a: number) => [number, number, number];
+export const characterview_buildContext: (a: number, b: any) => [number, number, number];
+export const characterview_carryMultiplier: (a: number) => [number, number, number];
+export const characterview_characterVars: (a: number, b: any) => [number, number, number];
+export const characterview_currentBurden: (a: number) => number;
+export const characterview_effectiveSheet: (a: number) => [number, number, number];
+export const characterview_gearFeatures: (a: number) => any;
+export const characterview_shardFeatures: (a: number) => any;
 export const collectVars: (a: any) => any;
 export const compileEffects: (a: any, b: any) => any;
 export const currentBurden: (a: any) => number;
@@ -34,6 +47,8 @@ export const hasIdent: (a: number, b: number) => [number, number];
 export const interpolate: (a: number, b: number, c: any) => [number, number, number];
 export const interpolations: (a: number, b: number) => [number, number];
 export const isHasIdent: (a: number, b: number) => number;
+export const loadCatalog: (a: any, b: any) => number;
+export const loadCharacter: (a: any, b: any) => number;
 export const matchCount: (a: number, b: number, c: any) => number;
 export const nodeGid: (a: number, b: number, c: number, d: number) => [number, number];
 export const normalizeTag: (a: number, b: number) => [number, number];
