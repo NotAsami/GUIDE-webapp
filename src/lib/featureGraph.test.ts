@@ -3,7 +3,7 @@
 // The Graph view draws claims the DM will believe: "this outcome only runs when
 // X", "this reads that", "this applies to those". Every one is re-derived from the
 // feature, so these pin the derivation. Fixtures follow the mockup's four
-// features (guide-hud/project/feature-graph.js).
+// features (the mockup feature-graph.js).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CatalogFeatureData, GraphEffect } from './database.types.ts'

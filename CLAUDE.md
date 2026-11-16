@@ -15,10 +15,12 @@ items/levels.
   every screen reads/writes that field. Same for spell slots, attunement, equipped-vs-carried,
   prepared spells. Never let two screens each "own" a value.
 - Render every screen FROM the character data object; never hardcode values into markup.
-  The Shard Tree and Spellbook mockups are the reference pattern.
+  The Shard Tree and Spellbook screens are the reference pattern.
 - CANON — do not regress to mockup placeholders: level 7, HP 52, hit dice 7d10, proficiency +3.
   Ability scores come from the seeded character, NOT the mockups (Character and Stat Panel
   mockups disagree with each other).
+- The HTML mockups the screens were ported from (`guide-hud/`, `.design/`) are deleted; they are
+  in git history up to commit b6e3572. The codebase is the reference now, never a mockup.
 - Do not invent lore. Treat mockup flavor (Castellan language/guard, Champion archetype,
   "Brettany Reclamation", named gear) as placeholder unless it's in the seeded data.
 - Cantrips scale by character level, not slot upcast.
@@ -67,7 +69,7 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 ## Project layout
 - `src/lib/` — `supabase.ts` (client), `auth.tsx` (session + magic link), `character.ts` (row hook + section update), `database.types.ts` (hand-written types, replace with `supabase gen types` later).
 - `src/components/Layout.tsx` + `Topbar.tsx` (HP pill = Phase 0 write surface) + `Bottombar.tsx` + `Nav.tsx` — the shared chrome from the Codex mockup, identical across routes.
-- All ten mockup screens are wired end-to-end (`Codex.tsx`, `Stats.tsx`, `Equipment.tsx`, `Inventory.tsx`, `Features.tsx`, `Journal.tsx`, `Character.tsx`, `Shard.tsx`, `Lore.tsx`, `Spellbook.tsx`). `Stub.tsx` is unused by any route now — kept only in case a future screen needs a placeholder.
+- All ten mockup screens are wired end-to-end (`Codex.tsx`, `Stats.tsx`, `Equipment.tsx`, `Inventory.tsx`, `Features.tsx`, `Journal.tsx`, `Character.tsx`, `Shard.tsx`, `Lore.tsx`, `Spellbook.tsx`).
 - The DM side has since grown past the mockups: `OperatorConsole.tsx` (the console and
   every catalog tab), `FeatureEditor.tsx`, `ShardLattice.tsx`, `OperatorShops.tsx`,
   `OperatorInventory.tsx`, `OperatorHandouts.tsx`, `OperatorNpcWeb.tsx` (the NPC web: layout and

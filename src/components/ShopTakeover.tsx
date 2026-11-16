@@ -2,7 +2,7 @@
  * The player-facing shop — a full-screen takeover that appears the instant
  * the DM fires a shop open (lib/shops.ts useOpenShop), buy-only, one item at
  * a time (docs/notes.md §SHOP FEATURE; ported pixel-for-pixel from
- * "guide-hud/project/G.U.I.D.E. Shop.html" — docs/notes.md: "Replicate the
+ * "the mockup G.U.I.D.E. Shop.html" — docs/notes.md: "Replicate the
  * design of the shop exactly like in the design").
  *
  * Payment, stock and delivery are a single server transaction. Repeating an

@@ -1,7 +1,7 @@
 /** Spellbook math — pure functions over a `CharacterSpellbook` + `Spell`. No
  *  DOM, no React; call `rollSpellDamage` from event handlers only (StrictMode
  *  double-invokes render). Mirrors the logic in the Spellbook mockup
- *  (guide-hud/project/G.U.I.D.E. Spellbook.html) with ONE deliberate change:
+ *  (the mockup G.U.I.D.E. Spellbook.html) with ONE deliberate change:
  *  cantrips scale by CHARACTER level, not by a chosen cast level (CLAUDE.md
  *  canon; the mockup's upcast stepper is dropped for cantrips). */
 

@@ -4,7 +4,7 @@
  * the same `CatalogFeatureData` the form edits, so the two views cannot drift.
  * The only thing the graph owns is `layout`, which the engine never reads.
  *
- * The mockup (guide-hud/project/feature-graph.js) draws conditions and asks as
+ * The mockup (feature-graph.js) draws conditions and asks as
  * nodes on the press's flow. The schema has neither: an activation outcome
  * carries its own `when` and `ask`. So a gate node IS the set of outcomes that
  * share that string, and there is no such thing as an outcome the press does

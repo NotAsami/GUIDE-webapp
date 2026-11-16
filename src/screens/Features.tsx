@@ -112,7 +112,7 @@ const live = (text: string, scope: ExprScope) => interpolate(text, scope).text
 /**
  * Features — the character's abilities as a single continuous stream.
  *
- * Ported from `guide-hud/project/G.U.I.D.E. Features.html`. Three things carry
+ * Ported from `the mockup G.U.I.D.E. Features.html`. Three things carry
  * the design and are worth naming, because each replaced something weaker:
  *
  *   THE HEXAGON IS THE USE CONTROL. Not a `Use` button beside the card — the

@@ -2280,7 +2280,7 @@ export type Shop = {
   name: string
   icon: string
   location: string
-  /** Optional header chips (mockup: "guide-hud/project/G.U.I.D.E. Shop.html").
+  /** Optional header chips (mockup: "G.U.I.D.E. Shop.html").
    *  Both blank = chip omitted, same convention as `location`. */
   keeper?: string
   hours?: string

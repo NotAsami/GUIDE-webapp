@@ -1,6 +1,6 @@
 /**
  * The Feature Editor's GRAPH and SCRIPT views, plus the graph inspector.
- * Ported from guide-hud/project/G.U.I.D.E. Feature Graph.html + feature-graph.js.
+ * Ported from the mockup G.U.I.D.E. Feature Graph.html + feature-graph.js.
  *
  * Everything drawn here is lib/featureGraph.ts `project()` of the draft the form
  * edits — the canvas owns nothing but `layout`. This slice DRAWS: selecting a
