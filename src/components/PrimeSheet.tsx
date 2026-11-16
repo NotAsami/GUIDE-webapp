@@ -10,7 +10,7 @@
  * was the Features screen, a toggle, and a walk back to the weapon.
  *
  * The engine has a harder version of the same rule: an ask-gated `adv`/`dis`/
- * `crit` is an authoring ERROR (graph.ts), because a flag cannot be decided
+ * `crit` is an authoring ERROR (the engine), because a flag cannot be decided
  * after the dice land. Every such decision needs somewhere legitimate to be
  * answered, and this is it.
  *

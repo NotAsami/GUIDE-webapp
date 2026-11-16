@@ -39,28 +39,25 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - `npm run typecheck` — `tsc -b --noEmit`
 - `npm run preview` — serve the production build locally
 
-## Rules engine (TypeScript → Rust/WebAssembly port, in progress)
-- The engine is being ported to `engine/core` (pure Rust, native `cargo test`) with thin
-  bindings in `engine/wasm`. The build output in `packages/engine-wasm/` IS committed;
-  Vercel never compiles Rust.
-- It is a PORT: same output as the TypeScript engine for every input. Wrong-looking
-  behaviour is recorded in `docs/engine-port-fixes.md` and kept, never fixed in passing.
-- `src/lib/engine/index.ts` is the facade; `setting.ts` picks `ts` | `wasm` | `shadow`
-  (localStorage `guide.engine`, or `ENGINE=` in the environment).
+## Rules engine (Rust, compiled to WebAssembly)
+- The engine is `engine/core` (pure Rust, native `cargo test`) with thin bindings in
+  `engine/wasm`. The build output in `packages/engine-wasm/` IS committed; Vercel never
+  compiles Rust. The TypeScript engine it was ported from is deleted (last at commit dde4217).
+- It reproduces the old engine's output, including wrong-looking behaviour. That behaviour is
+  listed in `docs/engine-port-fixes.md` and gets fixed as separate changes, never in passing.
+- `src/lib/engine/index.ts` is the facade and holds no rules; `engine/types.ts` holds the
+  types and the static constant lists. IMPORT ENGINE FUNCTIONS AND TYPES FROM `src/lib/engine`.
+- The engine loads once in `main.tsx` before the first render; if it cannot load, the page
+  says so. Nothing may call an engine function at module scope in code `main.tsx` imports statically.
 - `npm run engine:build` — rebuild after any change under `engine/` (needs cargo on PATH:
   `~/.cargo/bin`, plus `wasm-bindgen-cli` at the Cargo.lock version and `wasm-opt`).
-- `npm run test:parity` — the whole suite with both engines answering; any difference fails.
-- `cargo test -p engine_core` — native tests, including property tests that use the
-  TypeScript engine as oracle (`scripts/engine-oracle.mjs`; needs `node`).
-- Slices 1 to 4 are done: the whole engine exists in Rust and every caller imports it from
-  `src/lib/engine`. The DEFAULT engine is still TypeScript; the DM flips it per device in the
-  Operator Console (`screens/OperatorEngine.tsx`). Left: the rollout, then slice 5 (delete TS).
-- IMPORT ENGINE FUNCTIONS FROM `src/lib/engine`, never from `expr`/`dice`/`graph`/`effects`
-  directly — except inside those engine files themselves, which cannot import the facade.
-- `npm run test:wasm` runs the suite with the Rust engine alone; `npm run check` runs all three.
-- Never change a character row in place: the facade remembers answers by the row's identity.
-- `src/lib/engine.corpus.test.ts` runs every row of `supabase/catalog_snapshot.sql` through both
-  engines. Character data is read in Rust as `Val` (`engine/core/src/value.rs`), a JS-shaped value.
+- `npm test` preloads the engine (`scripts/engine-node.mjs`); a script that computes imports it first.
+  `npm run check` runs the staleness check, the tests and the build.
+- Never change a character row in place: the facade remembers answers by the row's identity,
+  and the answers it hands back are frozen.
+- A graph context must come from `buildContext()`; a copied one (`{ ...ctx }`) is refused.
+- `src/lib/engine.corpus.test.ts` runs every row of `supabase/catalog_snapshot.sql` through the
+  engine. Character data is read in Rust as `Val` (`engine/core/src/value.rs`), a JS-shaped value.
 
 ## Phase 0 smoke test (proves the loop)
 - Login → land on `/` → topbar shows HP 52/52 and the three story cards render from `progress.stories`.

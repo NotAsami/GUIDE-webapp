@@ -756,7 +756,7 @@ function SchemaField({ fd, eff, ei, setEffect, vars }: {
 /**
  * Take the DM to the thing the audit is complaining about.
  *
- * `AuditItem.id` is either a graph node's id or a variable's NAME (graph.ts) —
+ * `AuditItem.id` is either a graph node's id or a variable's NAME (the engine) —
  * both are rendered with a `data-audit` attribute, so one lookup serves both.
  *
  * POLLED on a TIMER, not on animation frames. Every caller opens a collapsed
@@ -1003,7 +1003,7 @@ export function VarsBlock({ vars, onChange, features }: {
  *  which meant `tag:` matched features and nothing else while `Equipment` and
  *  `Spellbook` were both dutifully passing tags into every resolve.
  *
- *  Normalised on save (lib/graph.ts normalizeTag), because free text fragments
+ *  Normalised on save (lib/engine normalizeTag), because free text fragments
  *  silently: `radiant` / `Radiant` / `radient` all look right and match nothing. */
 export function TagsBlock({ tags, tagUse, onChange }: {
   tags: string[]

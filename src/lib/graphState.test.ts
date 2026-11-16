@@ -2,7 +2,6 @@
 //
 // Everything here is pure: each function returns a PATCH rather than writing, so
 // the whole write path is testable without a database or a renderer.
-// Engine calls go through the facade, so `npm run test:parity` runs them on both engines.
 import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

@@ -1,11 +1,9 @@
-// Run: ENGINE=shadow node --test src/lib/engine.corpus.test.ts
+// Run: node --import ./scripts/engine-node.mjs --test src/lib/engine.corpus.test.ts
 //
-// THE WHOLE CATALOG, on both engines. Every authored feature, item, spell,
-// shard and effect in supabase/catalog_snapshot.sql is placed on a level-10
-// character and the sheet layer is asked about it. Under ENGINE=shadow the
-// facade runs the TypeScript engine and the Rust port side by side and throws
-// on the first difference; in the default mode this is a smoke test that none
-// of the real content makes the engine throw.
+// THE WHOLE CATALOG. Every authored feature, item, spell, shard and effect in
+// supabase/catalog_snapshot.sql is placed on a level-10 character and the
+// engine is asked about it: a smoke test that none of the real content makes
+// it throw.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import '../../scripts/engine-node.mjs'

@@ -1,16 +1,15 @@
-// Run: ENGINE=shadow node --test src/lib/engine.parity.test.ts
+// Run: node --test src/lib/engine.parity.test.ts
 //
-// What the two engines must agree on that no existing test happens to ask.
-// Under ENGINE=shadow the facade runs both and throws on a difference, so every
-// call below is a comparison even where it asserts nothing itself.
+// The edges of the engine that no other test happens to ask about, written when
+// it was ported from TypeScript: each case here was once a place the two could
+// have disagreed. Also pins the static constants and the op schema to Rust's.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import '../../scripts/engine-node.mjs'
-import * as ts from './expr.ts'
 import { OPS } from './opSchema.ts'
-import { same } from './engine/compare.ts'
 import {
-  evalExpr, freeIdents, hasIdent, interpolate, interpolations, isHasIdent, wasmConstants,
+  evalExpr, freeIdents, hasIdent, interpolate, interpolations, isHasIdent, engineConstants,
+  BOOST_IDENTS, HAS_PREFIX, HIT_ASK, ROLL_IDENTS, ROLL_IDENT_PROBE, VAR_IDENTS,
   parseDice, rerollDie, rollDice, rollHeal, rolledDice, rolledDiceTerms,
 } from './engine/index.ts'
 import type { ExprScope } from './engine/index.ts'
@@ -18,21 +17,13 @@ import type { ExprScope } from './engine/index.ts'
 const VARS: ExprScope = { level: 7, prof: 3, wis: 4, half: 0.5, on: true }
 
 test('the static constant lists equal the Rust engine\'s own', () => {
-  const c = wasmConstants()
-  assert.deepEqual(c.VAR_IDENTS, [...ts.VAR_IDENTS])
-  assert.deepEqual(c.ROLL_IDENTS, [...ts.ROLL_IDENTS])
-  assert.deepEqual(c.BOOST_IDENTS, [...ts.BOOST_IDENTS])
-  assert.deepEqual(c.ROLL_IDENT_PROBE, ts.ROLL_IDENT_PROBE)
-  assert.equal(c.HIT_ASK, ts.HIT_ASK)
-  assert.equal(c.HAS_PREFIX, ts.HAS_PREFIX)
-})
-
-test('the comparison rule tells -0 from 0 and keeps NaN equal to itself', () => {
-  assert.equal(same({ flat: -0 }, { flat: 0 }), false)
-  assert.equal(same([NaN], [NaN]), true)
-  assert.equal(same({ a: 1, b: undefined }, { a: 1 }), true)
-  assert.equal(same({ a: null }, {}), false)
-  assert.equal(same([1, 2], [2, 1]), false)
+  const c = engineConstants()
+  assert.deepEqual(c.VAR_IDENTS, [...VAR_IDENTS])
+  assert.deepEqual(c.ROLL_IDENTS, [...ROLL_IDENTS])
+  assert.deepEqual(c.BOOST_IDENTS, [...BOOST_IDENTS])
+  assert.deepEqual(c.ROLL_IDENT_PROBE, ROLL_IDENT_PROBE)
+  assert.equal(c.HIT_ASK, HIT_ASK)
+  assert.equal(c.HAS_PREFIX, HAS_PREFIX)
 })
 
 test('the four whitelist cases: variable, roll, boost, and the has_ exception', () => {
@@ -119,7 +110,7 @@ test('a rolled die is one draw: face = floor(random * sides) + 1', () => {
 // --- the op schema -----------------------------------------------------------
 
 test('the op schema the Rust audit reads is the one the editor renders from', () => {
-  const mine = wasmConstants().OPS
+  const mine = engineConstants().OPS
   const theirs = Object.fromEntries(Object.entries(OPS).map(([op, d]) => [op, {
     group: d.group,
     fields: d.fields.map(f => ({ key: f.key, label: f.label, required: !!f.required, array: f.type === 'array' })),

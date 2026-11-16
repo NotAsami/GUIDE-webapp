@@ -12,11 +12,11 @@
 import type { AbilityKey, CharacterSheet, EquippedWeapon, WeaponHand } from './database.types'
 import { abilityMod, formatMod, proficiency, type CheckTerm } from './dnd.ts'
 import { parseDice, rolledDice, type RolledDie } from './engine/index.ts'
-// Safe direction: graph.ts → effects.ts → equip/burden/shards, none of which
+// Safe direction: the engine → effects.ts → equip/burden/shards, none of which
 // reach back here, so this does not close a cycle.
 import { rollResolution, type Resolution, type Rider } from './engine/index.ts'
 /* Re-exported, not defined here: equip.ts owns the hand rules and this file
- * sits DOWNSTREAM of graph.ts -> effects.ts -> equip.ts. Defining it here and
+ * sits DOWNSTREAM of the engine -> effects.ts -> equip.ts. Defining it here and
  * importing it there closed that loop and every test in the repo failed to
  * load. See the direction note above. */
 export { isTwoHanded } from './equip.ts'

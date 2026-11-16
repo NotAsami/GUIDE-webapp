@@ -8,7 +8,7 @@ import {
   shortDuration, shortTime,
 } from './spells.ts'
 import { scalingFromText } from './spells.ts'
-import type { Rider } from './graph.ts'
+import type { Rider } from './engine/index.ts'
 
 function spell(over: Partial<Spell>): Spell {
   return {

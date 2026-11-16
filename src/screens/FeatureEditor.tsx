@@ -11,7 +11,7 @@
  * this file is untouched. That is the whole requirement; if you find yourself
  * adding `if (op === …)` to a renderer here, the schema was the place.
  *
- * The audit is lib/graph.ts's auditNode/matchCount rendered, never
+ * The audit is lib/engine's auditNode/matchCount rendered, never
  * reimplemented: one vocabulary for what blocks a publish, shared with the
  * Shard Lattice Editor.
  *

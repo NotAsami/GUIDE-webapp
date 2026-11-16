@@ -11,7 +11,7 @@
  */
 
 import type {
-  CharacterRow, Feature, ShardNode, ShardPerk, ShardSlot, ShardsField, ShardTree,
+  CharacterRow, ShardNode, ShardPerk, ShardSlot, ShardsField, ShardTree,
 } from './database.types.ts'
 
 export const SHARD_SLOT_KEYS = ['slot1', 'slot2', 'slot3'] as const
@@ -112,29 +112,6 @@ export type NodeState = 'attuned' | 'available' | 'locked'
 export function nodeState(node: ShardNode, slot: ShardSlot): NodeState {
   if (slot.attuned.includes(node.id)) return 'attuned'
   return node.prereqs.every(p => slot.attuned.includes(p)) ? 'available' : 'locked'
-}
-
-/** Features granted by every slotted shard, namespaced like gearFeatures()
- *  (Features.tsx) so two shards can't collide as React keys. Copies live on
- *  the shard/node, not on the character — unslot or reset and they vanish. */
-export function shardFeatures(character: CharacterRow, catalog: Record<string, ShardTree>): Feature[] {
-  const out: Feature[] = []
-  for (const [slotKey, slot] of Object.entries(shardSlots(character))) {
-    if (!slot.shardId) continue
-    const tree = catalog[slot.shardId]
-    if (!tree) continue
-    for (const [i, f] of (tree.baseFeatures ?? []).entries()) {
-      out.push({ ...f, id: `shard-${slotKey}-base-${f.id ?? i}`, kind: f.kind ?? 'equipment', source: f.source ?? tree.name })
-    }
-    for (const id of slot.attuned) {
-      const node = tree.nodes.find(n => n.id === id)
-      if (!node) continue
-      for (const [i, f] of (node.features ?? []).entries()) {
-        out.push({ ...f, id: `shard-${slotKey}-${id}-${f.id ?? i}`, kind: f.kind ?? 'equipment', source: f.source ?? node.name })
-      }
-    }
-  }
-  return out
 }
 
 /** Cosmetic flavor perks ("Darkvision") from every slotted shard's

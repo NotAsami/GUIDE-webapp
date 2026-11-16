@@ -5,7 +5,6 @@
 // the one that cannot be seen failing: an upsert reports success whether or not
 // it just overwrote a DM's hand-authored effects.
 
-// Engine calls go through the facade, so `npm run test:parity` runs them on both engines.
 import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -226,7 +225,7 @@ test('a row something still points at is never deleted', () => {
    ------------------------------------------------------------------ */
 
 test('CLASS TABLE COLUMNS READ AT THE LEVEL, not one below it', async () => {
-  const { evalExpr } = await import('./expr.ts')
+  const { evalExpr } = await import('./engine/index.ts')
   const classes = JSON.parse(readFileSync(join(ROOT, 'srd-data/classes.json'), 'utf8'))
   const features = JSON.parse(readFileSync(join(ROOT, 'srd-data/features.json'), 'utf8'))
   // Both homes — a column sits on its feature when one shares its name.

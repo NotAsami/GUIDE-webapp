@@ -2,7 +2,6 @@
 // (Node's built-in test runner + type stripping — no framework, no new dep.)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-// Through the facade, so `npm run test:parity` (ENGINE=shadow) runs every case
 // below on BOTH engines and fails on any difference.
 import '../../scripts/engine-node.mjs'
 import type { ExprScope } from './engine/index.ts'

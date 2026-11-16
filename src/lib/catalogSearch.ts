@@ -4,7 +4,7 @@
  * starting-kit pools, loot table pool rows, and shop stock generation.
  *
  * Tags are the same free-text targeting tags an item already carries (they are
- * what `tag:` selectors resolve against), normalised through lib/graph.ts's
+ * what `tag:` selectors resolve against), normalised through lib/engine's
  * normalizeTag so a query matches however the tag was typed when authored.
  *
  * ## The grammar

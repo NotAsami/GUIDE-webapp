@@ -95,7 +95,6 @@ import { OperatorNpcWeb } from './OperatorNpcWeb'
 import { OperatorPrepBoard } from './OperatorPrepBoard'
 import { PrepTray } from './PrepTray'
 import { OperatorShops } from './OperatorShops'
-import { OperatorEngine } from './OperatorEngine'
 import { applyHp } from '../lib/hp'
 
 /** Exhaustion effect text per level (SRD), indexed 0–6. Mirrors the player
@@ -831,7 +830,6 @@ export function OperatorConsole() {
             <div className={styles.rScroll}>
               <div className={styles.bcPad}>
                 <BroadcastPanel selected={selected} onSend={sendVoice} log={log} />
-                <OperatorEngine />
                 <div className={styles.bcDivider}>Activity Log</div>
               </div>
               {/* The live region must exist BEFORE its first entry, or the first

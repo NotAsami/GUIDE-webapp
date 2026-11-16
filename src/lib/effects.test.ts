@@ -3,7 +3,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, EquippedItem, ShardTree, Feature } from './database.types.ts'
-// Through the facade, so `npm run test:parity` runs these on both engines.
 import '../../scripts/engine-node.mjs'
 import { activeSources, carryMultiplier, effectiveSheet, gearFeatures } from './engine/index.ts'
 
@@ -543,7 +542,7 @@ test('worn gear grants it too, without gaining a second numeric path', () => {
    Before this, sheetEffects did `Number(g.value)` and `continue`d on NaN, so a
    formula did not fail — the whole boost vanished, and the card sat on the
    Features screen describing a rule that moved nothing. The scope is
-   deliberately two names wide (expr.ts BOOST_IDENTS): the value is computed
+   deliberately two names wide (the engine BOOST_IDENTS): the value is computed
    while the effective sheet is being built, so reading `str` would be asking
    for the answer it helps produce. */
 

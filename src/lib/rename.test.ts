@@ -3,7 +3,6 @@
 // A rename is display-only. The failure that matters is the SILENT one: the new
 // name leaking into a write and becoming permanent, or a name-keyed lookup
 // (`has<Feature>`) quietly breaking because the name it matched on moved.
-// Engine calls go through the facade, so `npm run test:parity` runs them on both engines.
 import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

@@ -4,7 +4,7 @@
 // player reads in Foundry and cannot check against the panel.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { Rider } from './graph.ts'
+import type { Rider } from './engine/index.ts'
 import type { RollEntry } from './rolls.tsx'
 import { rollChatHtml } from './foundryChat.ts'
 import { damageAmounts } from './foundryDamage.ts'

@@ -35,7 +35,7 @@ const KIND_LABEL: Record<'buff' | 'cond' | 'debuff', string> = { buff: 'Buff', c
 
 export function EffectsSidebar({ open, effects, suppressed, onRemove, onClose }: {
   open: boolean; effects: ActiveEffect[]
-  /** Ids an immunity is currently holding off — see graph.ts suppressedEffects.
+  /** Ids an immunity is currently holding off — see the engine suppressedEffects.
    *  SHOWN, not hidden: a condition that stopped applying because you started
    *  raging is a thing the player needs to see is still there, so it greys out
    *  and says why rather than vanishing and reappearing when the rage ends. */

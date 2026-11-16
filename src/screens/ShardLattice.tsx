@@ -42,7 +42,7 @@ type Mode = 'author' | 'preview'
  *  no-op (confirmed live too — the handler ran, scrollTop still never
  *  moved). Has to be a real `addEventListener('wheel', fn, {passive:false})`
  *  on the DOM node instead, which is what this hook wires up. */
-// AuditSev/AuditItem live in lib/graph.ts — the feature graph's audit and this
+// AuditSev/AuditItem live in lib/engine — the feature graph's audit and this
 // one report the same shape to the same UI, so they share one vocabulary.
 
 /** Lattice audit — a direct port of shard-lattice.js's audit(): orphan nodes,

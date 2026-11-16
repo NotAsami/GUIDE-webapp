@@ -4,7 +4,6 @@
 // feature does" (the effect sub-rows) and "this is what reaches it" (the popup's
 // Affected By). Both are assembled from optional fields, so both go wrong
 // quietly. These pin them.
-// Engine calls go through the facade, so `npm run test:parity` runs them on both engines.
 import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -13,7 +12,7 @@ import { OP_GLYPH, featureEffects, isUsable, originChain, runsActivation, toggle
 import type { Feature } from './database.types.ts'
 import { OPS } from './opSchema.ts'
 import { affectedBy, baseScope, buildContext, gid } from './engine/index.ts'
-import { interpolate } from './expr.ts'
+import { interpolate } from './engine/index.ts'
 
 const feat = (over: Partial<Feature> = {}): Feature =>
   ({ id: 'f1', name: 'Test Feature', ...over }) as Feature

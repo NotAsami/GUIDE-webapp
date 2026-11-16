@@ -141,7 +141,7 @@ export function progressionState(
 }
 
 /** The booleans a preview may enumerate: feature presence, and anything the
- *  AUDIT's type probe (graph.ts probeScope) types as boolean — declared
+ *  AUDIT's type probe (the engine probeScope) types as boolean — declared
  *  booleans, derived variables whose formula is boolean, catalog booleans, the
  *  boolean roll facts. One typing, the audit's, rather than a second guess. */
 export const previewBool = (probe: ExprScope) => (id: string) =>

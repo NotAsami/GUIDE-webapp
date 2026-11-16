@@ -463,10 +463,10 @@ export type Feature = {
   picks?: number | string
   /** Optional toast tone for the roll line ('heal' green / 'buff' cyan). */
   rollTone?: 'heal' | 'buff'
-  /** Variables this feature introduces (lib/graph.ts). Shape only for now — no
+  /** Variables this feature introduces (lib/engine). Shape only for now — no
    *  authoring UI writes it yet. */
   vars?: VarDef[]
-  /** Free-text targeting tags, normalised on save (lib/graph.ts normalizeTag).
+  /** Free-text targeting tags, normalised on save (lib/engine normalizeTag).
    *  Shape only for now. */
   tags?: string[]
   /** Structured roll contributions. Absent = a pure prose feature. */
@@ -539,7 +539,7 @@ export type FeatureLayout = {
  *
  *  The namespace is flat and global per character — `mercy` is `mercy`, not
  *  `feature:arbiter.mercy`. That buys the authoring ergonomics the whole system
- *  exists for; the price is collisions, which lib/graph.ts reports. */
+ *  exists for; the price is collisions, which lib/engine reports. */
 export type VarDef = {
   /** Identifier: /^[a-z][a-zA-Z0-9]*$/. Referenced bare in formulas — `mercy`. */
   name: string
@@ -553,7 +553,7 @@ export type VarDef = {
    *  zero a character WITHOUT this variable reads — a `num` substituted for a
    *  `bool` would make `isMercy && x` a type error on exactly those characters. */
   type?: 'num' | 'bool'
-  /** `derived` only. Expression over the VARIABLE whitelist (lib/expr.ts
+  /** `derived` only. Expression over the VARIABLE whitelist (lib/engine
    *  VAR_IDENTS) plus other variables — never roll context. */
   formula?: string
   /** `derived` only, INSTEAD of a formula: the gid of a feature whose USE
@@ -707,7 +707,7 @@ export type GraphState = {
  *
  *  `resist`/`vuln`/`immune` are damage flags: their target names the damage kind
  *  and they answer "what happens when fire lands on me", which is not a roll.
- *  lib/graph.ts reads them through damageFlags(), never through resolve(). */
+ *  lib/engine reads them through damageFlags(), never through resolve(). */
 export type GraphOp =
   | 'add' | 'adv' | 'dis' | 'crit' | 'note'
   /** RENAMES the targeted spell, item or feature while `when` holds — "at level
@@ -814,7 +814,7 @@ export type GraphEffect = {
    *  `tag:<tag>` (anything active carrying it), `roll:<kind>[.<sub>]`. */
   target?: string[]
   op: GraphOp
-  /** `add` only. A formula (lib/expr.ts); dice terms allowed and returned
+  /** `add` only. A formula (lib/engine); dice terms allowed and returned
    *  unrolled so a crit can still double them. Also carries the assigned value
    *  for `setVar` and the signed delta for `addVar`. */
   value?: string
@@ -1174,10 +1174,10 @@ export type EquippedItem = {
    *  It keeps its cell and still counts toward carry weight; it is in your pack and
    *  simply refusing you. Distinct from confiscation, which removes it outright. */
   locked?: boolean
-  /** Variables this item introduces while EQUIPPED (lib/graph.ts). Unequip and
+  /** Variables this item introduces while EQUIPPED (lib/engine). Unequip and
    *  they stop existing, exactly as `features` do. Shape only for now. */
   vars?: VarDef[]
-  /** Free-text targeting tags, normalised on save (lib/graph.ts normalizeTag). */
+  /** Free-text targeting tags, normalised on save (lib/engine normalizeTag). */
   tags?: string[]
   /** Structured roll contributions while EQUIPPED. Distinct from `effects`,
    *  which is the passive numeric layer — this is per-roll and conditional. */
@@ -1393,7 +1393,7 @@ export type ShardNode = {
    *  the player's real Features screen (lib/shards.ts shardFeatures() never
    *  reads this). Use `features` instead for anything with real game rules. */
   perks?: ShardPerk[]
-  /** Variables this node introduces while ATTUNED (lib/graph.ts). Travels
+  /** Variables this node introduces while ATTUNED (lib/engine). Travels
    *  through `shard_tree_secrets` for a concealed node, same as `mods` and
    *  `features` — see lib/dmShards.ts splitForSave(). Shape only for now. */
   vars?: VarDef[]
@@ -1755,7 +1755,7 @@ export type Spell = {
    *  status (no numeric modifiers — see ItemEffects) onto their active effects.
    *  Meaningful only when `partyCastable`. */
   partyCastMode?: 'heal' | 'effect'
-  /** Heal-mode dice expression, e.g. "1d8 + 3". Rolled client-side (lib/dice.ts
+  /** Heal-mode dice expression, e.g. "1d8 + 3". Rolled client-side (lib/engine
    *  rollHeal), same as a consumable's `heal` field — no upcast scaling. */
   healDice?: string
   /** Effect-mode status-chip color family. Absent = 'buff'. */
@@ -1763,10 +1763,10 @@ export type Spell = {
   /** Effect-mode free-text flavor shown on the status chip (e.g. "speed x2,
    *  extra action") — deliberately not modelled as numbers (ItemEffects doc). */
   effectNote?: string
-  /** Variables this spell introduces while in the book (lib/graph.ts). Shape
+  /** Variables this spell introduces while in the book (lib/engine). Shape
    *  only for now — no authoring UI writes it yet. */
   vars?: VarDef[]
-  /** Free-text targeting tags, normalised on save (lib/graph.ts normalizeTag). */
+  /** Free-text targeting tags, normalised on save (lib/engine normalizeTag). */
   tags?: string[]
   /** Structured roll contributions. */
   graph?: GraphEffect[]
@@ -1833,7 +1833,7 @@ export type CatalogSpellUpdate = { data?: CatalogSpellData }
 //      lib/spells.ts pactSlotCount/pactSlotLevel. Authoring the SRD progression
 //      would be a second answer to a settled question.
 //    * No per-level progression grid. A level is a gate condition on a feature
-//      reference (`when: "level >= 3"`), evaluated by the same lib/expr.ts
+//      reference (`when: "level >= 3"`), evaluated by the same lib/engine
 //      engine that already reads GraphEffect.when, or a level-indexed derived
 //      variable. A twenty-row table would duplicate both. ──
 
@@ -1875,7 +1875,7 @@ export type EquipChoice = { id: string; label: string; options: EquipOption[] }
  *  continuously while the campaign runs. */
 export type FeatureGrantRef = {
   feature_id: string
-  /** Boolean expression over the same scope as GraphEffect.when (lib/expr.ts —
+  /** Boolean expression over the same scope as GraphEffect.when (lib/engine —
    *  `level` is already whitelisted in VAR_IDENTS). Absent = granted from level
    *  1. This is where a class's progression lives; see the note above. */
   when?: string
@@ -1919,7 +1919,7 @@ export type ClassDef = {
    *  anything but 'none' — which the audit enforces. */
   castingAbility?: AbilityKey
   features: FeatureGrantRef[]
-  /** Free-text targeting tags, normalised on save (lib/graph.ts normalizeTag). */
+  /** Free-text targeting tags, normalised on save (lib/engine normalizeTag). */
   tags: string[]
   /** The class's SHARED variables — a save DC, a path counter. Reaches the
    *  engine on the carrier feature Assign writes (lib/classes.ts assignClass). */

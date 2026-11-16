@@ -5,7 +5,6 @@
 // asserting on ranges — a test that tolerates any number in a range would pass
 // while the contribution silently went missing, which is the failure shape this
 // whole engine exists to prevent.
-// Engine calls go through the facade, so `npm run test:parity` runs them on both engines.
 import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

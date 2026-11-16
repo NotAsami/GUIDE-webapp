@@ -30,7 +30,8 @@
 import { scalingFromText } from '../src/lib/spells.ts'
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { normalizeTag } from '../src/lib/graph.ts'
+import './engine-node.mjs'
+import { normalizeTag } from '../src/lib/engine/index.ts'
 import { ICONS } from '../src/lib/icons.ts'
 // `report` is aliased: this file already has a `report` object collecting
 // counts, and the gate's printer is a different thing entirely.
@@ -221,7 +222,7 @@ const WHITELIST = [
     id: 'weapon-attack-damage',
     desc: "You have a bonus to attack rolls and damage rolls made with this magic weapon. The bonus is determined by the weapon's rarity.",
     /* NO `target`. An untargeted node resolves against its OWN owner's roll
-       (graph.ts buildContext: "No target = this node's own roll"), which for a
+       (the engine buildContext: "No target = this node's own roll"), which for a
        weapon means the rolls made WITH that weapon. Targeting `roll:attack`
        instead — as this did — applies the bonus to every attack the character
        makes, so a +1 dagger in the off hand buffs a mundane greatsword. */

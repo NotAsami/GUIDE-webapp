@@ -45,10 +45,9 @@ jobs:
           echo "$RUNNER_TEMP/binaryen-version_${BINARYEN}/bin" >> "$GITHUB_PATH"
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      # Native, and includes the property tests with the TypeScript engine as oracle.
       - run: cargo test -p engine_core
       - run: npm run engine:build
-      - run: npm run test:parity
+      - run: npm test
       - name: Commit the refreshed build
         run: |
           if [ -n "$(git status --porcelain packages/engine-wasm foundry/guide-bridge/lib/engine)" ]; then

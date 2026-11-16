@@ -6,7 +6,6 @@
 // DM opens the form.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-// Through the facade, so `npm run test:parity` runs these on both engines.
 import '../../scripts/engine-node.mjs'
 import { SKILL_STATS, effectsToMods } from './modEditor.ts'
 import { compileEffects } from './engine/index.ts'

@@ -5,14 +5,35 @@ The engine is being ported from TypeScript (`src/lib/expr.ts`, `dice.ts`, `graph
 for every input**, including outputs that look wrong. This file is where the exceptions to that
 rule and the wrong-looking behaviour are written down.
 
-Status: **slices 1 to 4 are done.** The whole engine exists in Rust and every caller goes through
-the facade (`src/lib/engine`). The DEFAULT is still the TypeScript engine: nothing changes for a
-player until the setting is flipped on a device, in the Operator Console. What is left is the
-rollout itself (compare mode in real sessions, then Rust) and slice 5, deleting the original.
+Status: **the port is finished.** Slice 5 deleted the TypeScript engine (`expr.ts`, `dice.ts`,
+`graph.ts`, and the ported halves of `effects.ts`, `modEditor.ts`, `shards.ts` and `burden.ts`), the
+engine setting, compare mode and the DM's switch. The Rust engine is the only one. The original is
+in git history, last at commit `dde4217`.
+
+What slice 5 changed beyond deleting:
+
+- **The deviations in section 1 are now simply the behaviour.** They are kept as the record of
+  where the engine differs from the one it replaced.
+- **The property tests are gone.** They used the TypeScript engine as their oracle, so they could
+  not outlive it. What guards the engine now: its 22 native unit tests, the 1,246 app tests (all
+  of which run on it), and the catalog corpus. A change to the engine no longer has a second
+  implementation to be checked against.
+- **No fallback.** If the module does not load, the page says so and offers Reload. Before, the
+  TypeScript engine quietly answered instead.
+- **A context that did not come from `buildContext()` is refused** rather than answered by the
+  TypeScript engine. The one such object in the app, the empty context `useGraph` hands out
+  before a character has loaded, is now built from a blank character: its scope holds a level-1
+  character's defaults where it used to be empty.
+- **Two helpers that always ran the TypeScript engine now run this one:** spell damage
+  (`rollSpellDamage`) and `burden()`.
+- **Still twice, on purpose:** small readers the screens also need (`abilityMod`, `proficiency`,
+  `isPrepared`, `shardSlots`, `getGear`, `wornGear`, `usesOf`, `levelFormula`) and the op schema
+  (`opSchema.ts`, pinned to Rust's copy by `engine.parity.test.ts`). The five engine-owned types
+  are still hand-written in `database.types.ts`.
 
 ## 1. Where the two engines differ on purpose
 
-Shadow mode reports each of these if it ever happens in play.
+Each was a difference from the TypeScript engine while both existed.
 
 | # | Input | TypeScript | Rust | Why |
 |---|---|---|---|---|
