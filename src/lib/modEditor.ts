@@ -5,13 +5,8 @@
  * lattice editor's effect widgets can never drift into two different stat
  * lists or two different "bonus vs. set" rules.
  */
-import type { AbilityKey, EffectDef, GraphEffect, ItemEffects, Mod } from './database.types'
+import type { AbilityKey, ItemEffects, Mod } from './database.types'
 import { SKILLS } from './dnd.ts'
-import { evalExpr, type ExprScope } from './expr.ts'
-
-/* Declared here rather than imported from effects.ts: that module imports THIS
-   one (effects.ts:29), and reaching back would make the cycle. Six constants. */
-const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 
 export type { Mod }
 
@@ -33,125 +28,13 @@ export const MOD_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'AC', 'Attac
  *  Labelled by NAME and stored by KEY, both from lib/dnd.ts, so this list cannot
  *  drift from the one the Stats screen renders and skillRow scores. */
 export const SKILL_STATS: readonly string[] = SKILLS.map(s => s.name)
-const SKILL_KEY: Record<string, string> = Object.fromEntries(SKILLS.map(s => [s.name, s.key]))
 
 const ABIL_KEYS: Record<string, AbilityKey> = { STR: 'str', DEX: 'dex', CON: 'con', INT: 'int', WIS: 'wis', CHA: 'cha' }
 export const isAbility = (stat: string): boolean => stat in ABIL_KEYS
 
-/** Compile the GUI modifier rows into the structured `effects`/`mods` the
- *  engine layers over the sheet. Abilities can be a flat bonus OR a "set to"
- *  floor (Giant Strength); everything else is a flat bonus. */
-export function compileEffects(mods: Mod[], skills?: Pick<EffectDef, 'skillProficiencies' | 'skillExpertise'>[]): ItemEffects | undefined {
-  const eff: ItemEffects = {}
-  /* Skill proficiency rides along rather than living in its own compile step,
-     because `effects` is a single compiled cache — two compilers writing the same
-     field is how one of them silently wins. Unioned across every referenced
-     effect, so two rings granting different skills grant both. */
-  const profs = [...new Set((skills ?? []).flatMap(s => s.skillProficiencies ?? []))]
-  const exp = [...new Set((skills ?? []).flatMap(s => s.skillExpertise ?? []))]
-  if (profs.length) eff.skillProficiencies = profs
-  if (exp.length) eff.skillExpertise = exp
-  for (const m of mods) {
-    const n = m.amt
-    if (!Number.isFinite(n)) continue
-    const ak = ABIL_KEYS[m.stat]
-    if (ak) { if (m.set) (eff.abilitySet ??= {})[ak] = n; else (eff.abilities ??= {})[ak] = n }
-    else if (m.stat === 'AC') eff.ac = n
-    else if (m.stat === 'Attack') eff.attack = n
-    else if (m.stat === 'Extra Attacks') eff.extraAttacks = n
-    else if (m.stat === 'Damage') eff.damage = n
-    else if (m.stat === 'Saves') eff.saves = n
-    else if (m.stat === 'Speed') eff.speed = n
-    else if (m.stat === 'Initiative') eff.initiative = n
-    else if (m.stat === 'Darkvision') eff.darkvision = n
-    else if (m.stat === 'Max HP') eff.maxHp = n
-    else if (m.stat === 'Carry Capacity ×') eff.carryMult = n
-    else if (SKILL_KEY[m.stat]) (eff.skills ??= {})[SKILL_KEY[m.stat]] = n
-  }
-  return Object.keys(eff).length ? eff : undefined
-}
-
 /** Every stat a modifier row (or a `boost` op) may name. One set, so the audit
  *  and the compiler cannot disagree about what is spellable. */
 export const MOD_STAT_SET: ReadonlySet<string> = new Set<string>([...MOD_STATS, ...SKILL_STATS])
-
-/**
- * The sheet layer a node's graph declares — its `boost` ops, compiled.
- *
- * Compiled ON READ rather than cached on save. A cache would be a second copy
- * of something the graph already says, and this project has deleted enough of
- * those; the graph travels with the node (it is snapshotted onto the character
- * like everything else), so there is nothing to look up and nothing to drift.
- *
- * `when` is deliberately NOT honoured: effectiveSheet is a pure function of the
- * sheet with no expression scope, and a condition that silently never fires is
- * worse than one the audit refuses. auditNode says so at author time.
- *
- * ponytail: walks the graph on every effectiveSheet call. Graphs are a handful
- * of rows; memoize on the character row if a profile ever says otherwise.
- */
-export function sheetEffects(
-  graph?: GraphEffect[],
-  /** LEVEL AND PROF ONLY — see expr.ts BOOST_IDENTS for why it cannot be the
-   *  full character scope. Absent means every boost must be a literal, which is
-   *  what callers that only want `attackAbilities` pass. */
-  scope?: ExprScope,
-): ItemEffects | undefined {
-  if (!graph?.length) return undefined
-  const mods: Mod[] = []
-  /* `useability` is the one sheet op that is NOT a number, so it cannot go
-     through compileEffects with the rest — it is a set of permissions, collected
-     separately and unioned onto the compiled result. */
-  const attackAbilities: AbilityKey[] = []
-  /* A CAP IS NOT A MODIFIER ROW, so it goes the same way `useability` does —
-     beside compileEffects rather than through it. `Mod` is the item editor's
-     shape too, and the item form has no cap control; widening it would put a
-     field in that UI that nothing there can author. */
-  const abilityCap: Partial<Record<AbilityKey, number>> = {}
-  /* Unarmored AC rules, collected rather than summed — two of them compete and
-     armorClass takes the better, because 5e says you pick one. */
-  const unarmoredAc: { base: number; ability?: AbilityKey }[] = []
-  for (const g of graph) {
-    if (g.op === 'unarmored') {
-      const base = Number(g.value)
-      if (!Number.isFinite(base)) continue
-      const key = (g.ability ?? '').toLowerCase() as AbilityKey
-      unarmoredAc.push({ base, ...(ABILITY_KEYS.includes(key) ? { ability: key } : {}) })
-      continue
-    }
-    if (g.op === 'useability') {
-      const key = (g.ability ?? '').toLowerCase() as AbilityKey
-      if (ABILITY_KEYS.includes(key) && !attackAbilities.includes(key)) attackAbilities.push(key)
-      continue
-    }
-    if (g.op !== 'boost' || !g.stat) continue
-    /* A FORMULA IS ALLOWED HERE, over `level` and `prof`. "Your Hit Point
-       maximum increases by 1, and it increases by 1 again whenever you gain a
-       level" is one boost of `level`, not twenty edits to a stored number.
-       Dice are refused rather than rounded: a sheet stat has no roll to happen
-       at, so `1d4` would have to be re-rolled on every render. */
-    let amt = Number(g.value)
-    if (!Number.isFinite(amt)) {
-      const v = scope ? evalExpr(String(g.value ?? ''), scope) : null
-      if (v === null || v.t !== 'num' || v.dice.length) continue
-      amt = v.flat
-    }
-    mods.push({ stat: g.stat, amt })
-    const cap = Number(g.cap)
-    const ak = g.stat.toLowerCase() as AbilityKey
-    // Lowest wins: two "to a maximum of" clauses both have to hold.
-    if (g.cap !== undefined && String(g.cap).trim() !== '' && Number.isFinite(cap) && ABILITY_KEYS.includes(ak)) {
-      abilityCap[ak] = abilityCap[ak] === undefined ? cap : Math.min(abilityCap[ak], cap)
-    }
-  }
-  const caps = Object.keys(abilityCap).length ? abilityCap : undefined
-  if (!mods.length && !attackAbilities.length && !unarmoredAc.length) return undefined
-  const out: ItemEffects = mods.length ? (compileEffects(mods) ?? {}) : {}
-  if (attackAbilities.length) out.attackAbilities = attackAbilities
-  if (unarmoredAc.length) out.unarmoredAc = unarmoredAc
-  if (caps) out.abilityCap = caps
-  return out
-}
 
 /** Reverse of compileEffects, to seed the editor from an existing effects
  *  object. Object-form `saves` (per-ability) isn't round-tripped — nothing

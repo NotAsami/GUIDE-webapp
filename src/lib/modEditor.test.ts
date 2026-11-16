@@ -6,7 +6,9 @@
 // DM opens the form.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { SKILL_STATS, compileEffects, effectsToMods } from './modEditor.ts'
+import '../../scripts/engine-node.mjs'
+import { SKILL_STATS, effectsToMods } from './modEditor.ts'
+import { compileEffects } from './engine/index.ts'
 
 
 /* ---------- skill bonuses ---------- */

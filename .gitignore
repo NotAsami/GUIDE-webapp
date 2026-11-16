@@ -38,8 +38,9 @@ dist-ssr
 # git history should carry forever.
 brag-output
 
-# Design canvases (.design/): the .dc.html artboards are the SOURCE and are kept.
-# The page they seed into is a ~2.6MB build artifact — re-seedable from the
-# artboards any time, and the live canvas lives at its artifact URL.
-.design/**/*.html
-!.design/**/*.dc.html
+# Design canvases (.design/): local working files. The artboards for shipped
+# features were removed from the repo and are in git history.
+.design
+
+# Rust build directory (the engine crate). The built .wasm IS committed, under packages/engine-wasm/.
+target

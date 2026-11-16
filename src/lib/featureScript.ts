@@ -3,7 +3,7 @@
  * mock-up (docs/GUIDE_Codex_Deferred.md, "The feature Script view's
  * language") so the space exists and line ↔ node linking can be judged. Nothing
  * parses this and nothing writes it back. Ported from the mockup's `ser()`
- * (guide-hud/project/feature-script.js), walking the same projection the canvas
+ * (the mockup feature-script.js), walking the same projection the canvas
  * draws, so the three views cannot disagree about what a feature contains.
  */
 import type { CatalogFeatureData, GraphEffect } from './database.types.ts'

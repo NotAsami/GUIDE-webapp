@@ -5,7 +5,7 @@
 // that never reaches the total, is a number a player trusts and shouldn't.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { Rider } from './graph.ts'
+import type { Rider } from './engine/index.ts'
 import type { CheckRoll, RollEntry } from './rolls.tsx'
 import type { CharacterRow } from './database.types.ts'
 import {

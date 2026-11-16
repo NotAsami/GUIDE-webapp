@@ -11,9 +11,9 @@
  *  3. `assignClass` — the snapshot boundary. A class is a template; this is the
  *     one place it becomes state on a character.
  */
-import { evalExpr, type ExprScope } from './expr.ts'
+import { evalExpr, type ExprScope } from './engine/index.ts'
 import { pactSlotCount, pactSlotLevel } from './spells.ts'
-import { characterVars } from './graph.ts'
+import { characterVars } from './engine/index.ts'
 import { abilities, abilityMod, proficiency } from './dnd.ts'
 import { grantKitItems, snapshotKit } from './kit.ts'
 import type {
@@ -264,7 +264,7 @@ export function featureSnapshot(row: CatalogFeatureRow): Feature {
  *
  *  SEEDED AT ASSIGN, never recomputed on read. `spellbook.saveDC` stays the one
  *  source of truth — the expression engine reads `saveDc` straight off it
- *  (lib/graph.ts baseScope), and the DM can still override both in the
+ *  (lib/engine baseScope), and the DM can still override both in the
  *  Spellcasting card afterwards. Returns null when the sheet has no ability
  *  scores yet, because 8 + prof + abilityMod(0) is a confident wrong number
  *  rather than a missing one. */
@@ -464,7 +464,7 @@ export function assignSubclass(
  * The class's own `vars` and `graph` ride onto the sheet as ONE carrier feature
  * rather than a new engine source kind. `activeSources`, `collectVars`,
  * `sourceGid` and `useCatalogNodes` all already handle features, so this needs
- * no change to graph.ts at all — and the carrier renders on the player's
+ * no change to the engine at all — and the carrier renders on the player's
  * Features screen as the class's own card, which `category: 'class'` already
  * has a filter chip for.
  *

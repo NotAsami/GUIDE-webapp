@@ -2,8 +2,10 @@
 // (Node's built-in test runner + type stripping — no framework, no new dep.)
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { ExprScope } from './expr.ts'
-import { evalExpr, interpolate, interpolations, ROLL_IDENTS, VAR_IDENTS, hasIdent, isHasIdent} from './expr.ts'
+// below on BOTH engines and fails on any difference.
+import '../../scripts/engine-node.mjs'
+import type { ExprScope } from './engine/index.ts'
+import { evalExpr, interpolate, interpolations, ROLL_IDENTS, VAR_IDENTS, hasIdent, isHasIdent} from './engine/index.ts'
 
 /** A variable formula's scope (§33): the whitelist plus declared variables. The
  *  Arbiter path values are §21's, which is the content that forced this engine. */

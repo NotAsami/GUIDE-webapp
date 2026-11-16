@@ -3,14 +3,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, Feature, GraphEffect, VarDef } from './database.types.ts'
-import { HIT_ASK, VAR_IDENTS, evalExpr } from './expr.ts'
-import { parseDice, rerollDie, rollDice } from './dice.ts'
+import { HIT_ASK, VAR_IDENTS, evalExpr } from './engine/index.ts'
+import '../../scripts/engine-node.mjs'
+import { parseDice, rerollDie, rollDice } from './engine/index.ts'
 import {
   armedMatches, auditNode, auditVars, baseScope, buildContext, characterVars, collectVars, gid, reqKeys, rollResolution,
   damageFlags, immuneTo, matchCount, nodeGid, normalizeTag, probeScope, resolve, suppressedEffects, total, varCollisions, type ResolveReq,
   staleArmed,
-} from './graph.ts'
-import { activeSources } from './effects.ts'
+} from './engine/index.ts'
+import { activeSources } from './engine/index.ts'
 import { composeCheck } from './dnd.ts'
 import { OPS, OP_ORDER, OP_TITLE, ROLL_SELECTORS } from './opSchema.ts'
 import type { GraphOp } from './database.types.ts'
@@ -798,7 +799,7 @@ test('target: [] reaches the node\'s own roll exactly as an absent target does',
 /* THE PRESS ROLL IS LITERAL DICE, so a feature that scales is authored as a
    fixed `roll` plus a no-target `add` carrying the level table — Breath Weapon
    is `1d10` plus a table that adds 1d10 at 5, 2d10 at 11, 3d10 at 17.
-   `Feature.roll` cannot hold the formula: dice.ts rollHeal() parses `NdM + K`
+   `Feature.roll` cannot hold the formula: the engine rollHeal() parses `NdM + K`
    and falls back to the leading integer, so `1d20 + con` rolls a constant 1
    rather than failing loudly. That is what makes this the only shape available,
    and levelFormula's "0 below the first filled slot" is what keeps levels 1-4

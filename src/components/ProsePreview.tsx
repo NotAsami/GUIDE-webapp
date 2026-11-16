@@ -15,7 +15,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Prose } from '../lib/markdown'
-import { interpolate, type ExprScope } from '../lib/expr'
+import { interpolate, type ExprScope } from '../lib/engine'
 import styles from './ProsePreview.module.css'
 
 /** The left edge this popover will actually be cut off at.

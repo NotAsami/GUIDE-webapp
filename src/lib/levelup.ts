@@ -28,12 +28,12 @@ import {
   casterSlots, castingNumbers, featureSnapshot, gateLevel, gateOpen, hitDieAverage, CLASS_GRANT_PREFIX,
 } from './classes.ts'
 import { abilities, abilityMod } from './dnd.ts'
-import { buildContext, characterVars } from './graph.ts'
-import { evalExpr, interpolate } from './expr.ts'
-import { effectiveSheet } from './effects.ts'
+import { buildContext, characterVars } from './engine/index.ts'
+import { evalExpr, interpolate } from './engine/index.ts'
+import { effectiveSheet } from './engine/index.ts'
 import { prereqMet } from './feats.ts'
 import { pactSlotCount, pactSlotLevel } from './spells.ts'
-import type { ExprScope } from './expr.ts'
+import type { ExprScope } from './engine/index.ts'
 import type {
   AbilityKey, CatalogClassRow, CatalogFeatureData, CatalogFeatureRow, CharacterRow,
   CharacterUpdate, ClassCasterType, ClassDef, Feature, FeatureOffer, GraphOp, HP, LevelUpPlan,

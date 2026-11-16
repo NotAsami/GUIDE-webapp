@@ -14,7 +14,7 @@
  */
 
 import type { Feature } from './database.types.ts'
-import type { ExprScope } from './expr.ts'
+import type { ExprScope } from './engine/index.ts'
 import type { Outcome } from './graphState.ts'
 import { isUsable, usesOf } from './featureView.ts'
 

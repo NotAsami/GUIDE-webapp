@@ -426,3 +426,74 @@ export function revealTie(
 export function asSeenBy(npcs: NpcRow[], links: NpcLinkRow[], pcId: string): { npcs: NpcRow[]; links: NpcLinkRow[] } {
   return { npcs: npcs.filter(n => n.known_to.includes(pcId)), links: links.filter(l => l.known_to.includes(pcId)) }
 }
+
+/* ---------- tie labels ---------- */
+
+/* A tie label: 10.5px JetBrains Mono, uppercase, 0.12em tracking, 7px side
+   padding. ponytail: per-character estimate like SECTOR_CHAR — mono keeps it
+   close; the gap below absorbs the rest. */
+const TIE_CHAR = 7.6
+const TIE_PAD = 16
+const TIE_H = 20
+const TIE_GAP = 4
+
+const hits = (a: Box, b: Box) => a.x0 < b.x1 + TIE_GAP && b.x0 < a.x1 + TIE_GAP && a.y0 < b.y1 + TIE_GAP && b.y0 < a.y1 + TIE_GAP
+
+export function tieBox(text: string, at: Pt): Box {
+  const w = text.length * TIE_CHAR + TIE_PAD
+  return { x0: at.x - w / 2, x1: at.x + w / 2, y0: at.y - TIE_H / 2, y1: at.y + TIE_H / 2 }
+}
+
+/** Where a tie's line passes at `t` — straight, or the gentle inward curve an
+ *  NPC-to-NPC link is drawn with (NpcWebView's quadratic). */
+function alongTie(o: Orbit, kind: TieKind, a: Pt, b: Pt, t: number): Pt {
+  if (kind !== 'link') return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+  const q = { x: mx + (o.cx - mx) * 0.25, y: my + (o.cy - my) * 0.25 }
+  const u = 1 - t
+  return { x: u * u * a.x + 2 * u * t * q.x + t * t * b.x, y: u * u * a.y + 2 * u * t * q.y + t * t * b.y }
+}
+
+/* Middle out, then off the line in widening steps. A long tie across the map
+   crosses the crowded centre, where the first few spots are all taken. */
+const ALONG = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82, 0.12, 0.88]
+const ASIDE = [0, -22, 22, -40, 40, -60, 60, -80, 80]
+
+/**
+ * WHERE EACH TIE'S LABEL GOES — on its line, clear of every node and PC name,
+ * every place name and every label already placed.
+ *
+ * A fixed spot (40% along) put "QUEST · THE STOLEN TOME" straight across an
+ * NPC's or a PC's name whenever a line passed near one. This walks a few
+ * points along the line, then a little to either side of it, and takes the
+ * first that is clear. If nothing is, the label keeps the line's midpoint: an
+ * overlap is better than a tie with no name.
+ */
+export function placeTieLabels(o: Orbit, web: Web, ties: { id: string; from: string; to: string; kind: TieKind; text: string }[]): Map<string, Pt> {
+  const taken: Box[] = [
+    ...web.nodes.flatMap(n => { const p = o.pos.get(n.id); return p ? [nodeBox(n, p)] : [] }),
+    ...web.pcs.flatMap(pc => { const p = o.pcs.get(pc.id); return p ? [pcBox(p)] : [] }),
+    ...o.sectors.map(sectorBox),
+  ]
+  const out = new Map<string, Pt>()
+  for (const tie of ties) {
+    const a = endpoint(o, tie.from), b = endpoint(o, tie.to)
+    if (!a || !b) continue
+    // The unit normal, for stepping off the line when every point on it is taken.
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len
+    let at: Pt | null = null
+    search: for (const off of ASIDE) {
+      for (const t of ALONG) {
+        const p = alongTie(o, tie.kind, a, b, t)
+        const c = { x: p.x + nx * off, y: p.y + ny * off }
+        const box = tieBox(tie.text, c)
+        if (!taken.some(x => hits(x, box))) { at = c; break search }
+      }
+    }
+    const pt = at ?? alongTie(o, tie.kind, a, b, 0.5)
+    out.set(tie.id, pt)
+    taken.push(tieBox(tie.text, pt))
+  }
+  return out
+}

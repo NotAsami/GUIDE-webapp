@@ -1,6 +1,6 @@
 /**
  * The Feature Editor's GRAPH and SCRIPT views, plus the graph inspector.
- * Ported from guide-hud/project/G.U.I.D.E. Feature Graph.html + feature-graph.js.
+ * Ported from the mockup G.U.I.D.E. Feature Graph.html + feature-graph.js.
  *
  * Everything drawn here is lib/featureGraph.ts `project()` of the draft the form
  * edits — the canvas owns nothing but `layout`. This slice DRAWS: selecting a
@@ -19,10 +19,10 @@ import {
 } from '../lib/featureGraph'
 import { ROLL_SELECTORS, blankEffect } from '../lib/opSchema'
 import { classHas, grantLevels, previewBool, progressionScope, progressionState } from '../lib/previewScope'
-import { evalExpr, interpolate } from '../lib/expr'
+import { evalExpr, interpolate } from '../lib/engine'
 import type { FeatureGrantRef } from '../lib/database.types'
 import { colour, serialize } from '../lib/featureScript'
-import { asKey, matchCount, normalizeTag, probeScope, type AuditItem, type AuthoredNode } from '../lib/graph'
+import { asKey, matchCount, normalizeTag, probeScope, type AuditItem, type AuthoredNode } from '../lib/engine'
 import { OPS } from '../lib/opSchema'
 import { triggerOf } from '../lib/triggers'
 import { Inline } from '../lib/markdown'

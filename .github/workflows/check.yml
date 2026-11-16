@@ -14,5 +14,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # No Rust here: this only re-hashes engine/ against the committed build.
+      - run: npm run engine:check
       - run: npm test
       - run: npm run build

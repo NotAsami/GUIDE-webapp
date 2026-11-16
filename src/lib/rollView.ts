@@ -14,14 +14,14 @@
  *   (absent)   — §32's two non-surfacing rows never reach here at all; resolve()
  *                already dropped them, which is why there is no third case.
  */
-import type { Rider } from './graph.ts'
-import { characterVars } from './graph.ts'
+import type { Rider } from './engine/index.ts'
+import { characterVars } from './engine/index.ts'
 import { usesOf } from './featureView.ts'
 import type { RiderGroup, RollEntry } from './rolls.tsx'
 import { ABILITY_ABBR, composeCheck, type CheckTerm } from './dnd.ts'
 import type { CharacterRow, ShardTree } from './database.types.ts'
-import { activeSources } from './effects.ts'
-import { rerollDie, rolledDice, type RolledDie } from './dice.ts'
+import { activeSources } from './engine/index.ts'
+import { rerollDie, rolledDice, type RolledDie } from './engine/index.ts'
 
 /** `dropped` is a property of this LINE, not of the die — the same face is kept
  *  under advantage and discarded under disadvantage — so it lives here and not

@@ -5,11 +5,12 @@
 // asserting on ranges — a test that tolerates any number in a range would pass
 // while the contribution silently went missing, which is the failure shape this
 // whole engine exists to prevent.
+import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, CharacterSheet, EquippedWeapon } from './database.types.ts'
-import type { Resolution } from './graph.ts'
-import { buildContext, gid, resolve, total } from './graph.ts'
+import type { Resolution } from './engine/index.ts'
+import { buildContext, gid, resolve, total } from './engine/index.ts'
 import { MASTERIES, isRanged, masteryActive, masteryOf, rollAttack, rollWeaponAttack, weaponAbilityKey, weaponAttackBonus, weaponDamageBonus } from './weapons.ts'
 
 const SHEET = {

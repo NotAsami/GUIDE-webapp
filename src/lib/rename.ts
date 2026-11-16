@@ -14,11 +14,11 @@
  *
  * A renamed object carries its original under `__baseName` (and where the name
  * came from), which is what strip restores and what name-keyed lookups
- * (`has<Feature>` in graph.ts, prerequisites in feats.ts) read instead.
+ * (`has<Feature>` in the engine, prerequisites in feats.ts) read instead.
  */
 import type { CharacterRow, EquippedGear, EquippedItem, Feature, InventoryItem, ShardTree, Spell } from './database.types.ts'
-import { buildContext, gid, normalizeTag, type GidKind, type GraphContext } from './graph.ts'
-import { evalExpr, interpolate } from './expr.ts'
+import { buildContext, gid, normalizeTag, type GidKind, type GraphContext } from './engine/index.ts'
+import { evalExpr, interpolate } from './engine/index.ts'
 import { ITEM_SLOTS } from './equip.ts'
 
 /** What a renamed copy carries beside its new `name`. */

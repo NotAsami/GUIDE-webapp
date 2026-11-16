@@ -1,19 +1,18 @@
 /** Spellbook math — pure functions over a `CharacterSpellbook` + `Spell`. No
  *  DOM, no React; call `rollSpellDamage` from event handlers only (StrictMode
  *  double-invokes render). Mirrors the logic in the Spellbook mockup
- *  (guide-hud/project/G.U.I.D.E. Spellbook.html) with ONE deliberate change:
+ *  (the mockup G.U.I.D.E. Spellbook.html) with ONE deliberate change:
  *  cantrips scale by CHARACTER level, not by a chosen cast level (CLAUDE.md
  *  canon; the mockup's upcast stepper is dropped for cantrips). */
 
 import type { CharacterSpellbook, Spell, SpellSlot } from './database.types.ts'
-import { parseDice, rolledDice, type RolledDie } from './dice.ts'
-// One-way: graph.ts reaches effects/equip/shards, none of which import this.
+import { parseDice, rolledDice, type RolledDie, type Rider } from './engine/index.ts'
+// One-way: the engine reaches effects/equip/shards, none of which import this.
 // TYPE-ONLY, deliberately. effects.ts imports this module (isPrepared decides
-// which spells are active) and graph.ts imports effects.ts, so a runtime import
-// of graph.ts here would close a cycle. The caller rolls the contribution and
+// which spells are active) and the engine imports effects.ts, so a runtime import
+// of the engine here would close a cycle. The caller rolls the contribution and
 // hands it over — a spell has no crit to decide, so there is nothing to roll
 // inside that the screen cannot roll outside.
-import type { Rider } from './graph.ts'
 
 /** A caster is anyone flagged `spellcasting` with at least one known spell —
  *  a caster with an empty spell list still renders the empty state, exactly

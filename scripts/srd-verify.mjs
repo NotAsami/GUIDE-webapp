@@ -22,7 +22,8 @@
  *               unifying them would break one of the two
  */
 
-import { auditNode } from '../src/lib/graph.ts'
+import './engine-node.mjs'
+import { auditNode } from '../src/lib/engine/index.ts'
 import { ICONS } from '../src/lib/icons.ts'
 
 const VETTED = new Set(ICONS)

@@ -5,6 +5,7 @@
 // the one that cannot be seen failing: an upsert reports success whether or not
 // it just overwrote a DM's hand-authored effects.
 
+import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { plan, deadRefs } from '../../scripts/srd-load.mjs'
@@ -224,7 +225,7 @@ test('a row something still points at is never deleted', () => {
    ------------------------------------------------------------------ */
 
 test('CLASS TABLE COLUMNS READ AT THE LEVEL, not one below it', async () => {
-  const { evalExpr } = await import('./expr.ts')
+  const { evalExpr } = await import('./engine/index.ts')
   const classes = JSON.parse(readFileSync(join(ROOT, 'srd-data/classes.json'), 'utf8'))
   const features = JSON.parse(readFileSync(join(ROOT, 'srd-data/features.json'), 'utf8'))
   // Both homes — a column sits on its feature when one shares its name.
@@ -409,7 +410,7 @@ test('A COLUMN NAMED AFTER A FEATURE TRAVELS WITH IT', () => {
 test("a feature's own prose counts as reading its variable", async () => {
   // Otherwise moving a progression variable onto the feature that prints it
   // earns a "never used" warning for doing the right thing.
-  const { auditNode } = await import('./graph.ts')
+  const { auditNode } = await import('./engine/index.ts')
   const node = {
     vars: [{ name: 'weaponMastery', kind: 'derived' as const, formula: '[0,2,2][level]' }],
     prose: ['mastery of {weaponMastery} kinds of weapons'],

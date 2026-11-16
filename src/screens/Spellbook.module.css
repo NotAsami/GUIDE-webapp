@@ -2,7 +2,7 @@
    bottombar) lives in Layout / Nav / Deco; this module owns the body: a fixed-
    three columns: a CASTER rail (stats + slot gems), the GRIMOIRE table, and
    the SPELL DETAIL. The grimoire absorbs the slack; rail and detail are fixed.
-   Ported from guide-hud/project/G.U.I.D.E. Spellbook.html — chrome classes
+   Ported from the mockup G.U.I.D.E. Spellbook.html — chrome classes
    (.region/.rFrame/.rGap/.rLine/.rInner/.rCorner, .colHeader, .scrollY) copied
    verbatim from Lore.module.css, the established pattern for this shape.
 

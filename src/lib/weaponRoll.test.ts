@@ -3,10 +3,11 @@
 // The swing, now that it is shared: the Equipment button and a Foundry hotbar
 // macro both come through here, so anything that differs between them differs
 // because of this file.
+import '../../scripts/engine-node.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CharacterRow, EquippedWeapon, InventoryItem } from './database.types.ts'
-import { buildContext } from './graph.ts'
+import { buildContext } from './engine/index.ts'
 import { ammoStacksFor, rollWeapon } from './weaponRoll.ts'
 
 const SHEET = {

@@ -8,13 +8,13 @@
  * assembled from several optional fields, and both are wrong silently rather
  * than loudly. Here they are testable without a renderer.
  *
- * The reverse lookup ("Affected by") lives in graph.ts instead — it needs the
+ * The reverse lookup ("Affected by") lives in the engine instead — it needs the
  * engine's own index, and exporting that index's element type just to read it
  * from here would widen the engine's surface for one caller.
  */
 import type { Feature, GraphEffect, GraphOp, VarDef } from './database.types.ts'
 import { IS_ACTIVATION, levelFormula } from './opSchema.ts'
-import { evalExpr, type ExprScope } from './expr.ts'
+import { evalExpr, type ExprScope } from './engine/index.ts'
 
 
 /**

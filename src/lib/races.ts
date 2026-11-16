@@ -14,7 +14,7 @@
  * would make assigning a class silently delete the character's racial features,
  * and the two assigns are done minutes apart on a fresh character.
  */
-import { characterVars } from './graph.ts'
+import { characterVars } from './engine/index.ts'
 import { gateOpen, mergeProficiencies } from './classes.ts'
 import type {
   CatalogFeatureData, CharacterRow, CharacterUpdate, Feature, PendingSkills,

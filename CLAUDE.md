@@ -15,10 +15,12 @@ items/levels.
   every screen reads/writes that field. Same for spell slots, attunement, equipped-vs-carried,
   prepared spells. Never let two screens each "own" a value.
 - Render every screen FROM the character data object; never hardcode values into markup.
-  The Shard Tree and Spellbook mockups are the reference pattern.
+  The Shard Tree and Spellbook screens are the reference pattern.
 - CANON — do not regress to mockup placeholders: level 7, HP 52, hit dice 7d10, proficiency +3.
   Ability scores come from the seeded character, NOT the mockups (Character and Stat Panel
   mockups disagree with each other).
+- The HTML mockups the screens were ported from (`guide-hud/`, `.design/`) are deleted; they are
+  in git history up to commit b6e3572. The codebase is the reference now, never a mockup.
 - Do not invent lore. Treat mockup flavor (Castellan language/guard, Champion archetype,
   "Brettany Reclamation", named gear) as placeholder unless it's in the seeded data.
 - Cantrips scale by character level, not slot upcast.
@@ -39,6 +41,26 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 - `npm run typecheck` — `tsc -b --noEmit`
 - `npm run preview` — serve the production build locally
 
+## Rules engine (Rust, compiled to WebAssembly)
+- The engine is `engine/core` (pure Rust, native `cargo test`) with thin bindings in
+  `engine/wasm`. The build output in `packages/engine-wasm/` IS committed; Vercel never
+  compiles Rust. The TypeScript engine it was ported from is deleted (last at commit dde4217).
+- It reproduces the old engine's output, including wrong-looking behaviour. That behaviour is
+  listed in `docs/engine-port-fixes.md` and gets fixed as separate changes, never in passing.
+- `src/lib/engine/index.ts` is the facade and holds no rules; `engine/types.ts` holds the
+  types and the static constant lists. IMPORT ENGINE FUNCTIONS AND TYPES FROM `src/lib/engine`.
+- The engine loads once in `main.tsx` before the first render; if it cannot load, the page
+  says so. Nothing may call an engine function at module scope in code `main.tsx` imports statically.
+- `npm run engine:build` — rebuild after any change under `engine/` (needs cargo on PATH:
+  `~/.cargo/bin`, plus `wasm-bindgen-cli` at the Cargo.lock version and `wasm-opt`).
+- `npm test` preloads the engine (`scripts/engine-node.mjs`); a script that computes imports it first.
+  `npm run check` runs the staleness check, the tests and the build.
+- Never change a character row in place: the facade remembers answers by the row's identity,
+  and the answers it hands back are frozen.
+- A graph context must come from `buildContext()`; a copied one (`{ ...ctx }`) is refused.
+- `src/lib/engine.corpus.test.ts` runs every row of `supabase/catalog_snapshot.sql` through the
+  engine. Character data is read in Rust as `Val` (`engine/core/src/value.rs`), a JS-shaped value.
+
 ## Phase 0 smoke test (proves the loop)
 - Login → land on `/` → topbar shows HP 52/52 and the three story cards render from `progress.stories`.
 - Topbar HP pill → Damage/Heal writes through to `characters.sheet.hp.current`; reload preserves the new value.
@@ -47,7 +69,7 @@ Phase 0 (Supabase schema + auth/RLS + app shell + wire screens to DB)
 ## Project layout
 - `src/lib/` — `supabase.ts` (client), `auth.tsx` (session + magic link), `character.ts` (row hook + section update), `database.types.ts` (hand-written types, replace with `supabase gen types` later).
 - `src/components/Layout.tsx` + `Topbar.tsx` (HP pill = Phase 0 write surface) + `Bottombar.tsx` + `Nav.tsx` — the shared chrome from the Codex mockup, identical across routes.
-- All ten mockup screens are wired end-to-end (`Codex.tsx`, `Stats.tsx`, `Equipment.tsx`, `Inventory.tsx`, `Features.tsx`, `Journal.tsx`, `Character.tsx`, `Shard.tsx`, `Lore.tsx`, `Spellbook.tsx`). `Stub.tsx` is unused by any route now — kept only in case a future screen needs a placeholder.
+- All ten mockup screens are wired end-to-end (`Codex.tsx`, `Stats.tsx`, `Equipment.tsx`, `Inventory.tsx`, `Features.tsx`, `Journal.tsx`, `Character.tsx`, `Shard.tsx`, `Lore.tsx`, `Spellbook.tsx`).
 - The DM side has since grown past the mockups: `OperatorConsole.tsx` (the console and
   every catalog tab), `FeatureEditor.tsx`, `ShardLattice.tsx`, `OperatorShops.tsx`,
   `OperatorInventory.tsx`, `OperatorHandouts.tsx`, `OperatorNpcWeb.tsx` (the NPC web: layout and

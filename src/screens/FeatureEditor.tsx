@@ -11,7 +11,7 @@
  * this file is untouched. That is the whole requirement; if you find yourself
  * adding `if (op === …)` to a renderer here, the schema was the place.
  *
- * The audit is lib/graph.ts's auditNode/matchCount rendered, never
+ * The audit is lib/engine's auditNode/matchCount rendered, never
  * reimplemented: one vocabulary for what blocks a publish, shared with the
  * Shard Lattice Editor.
  *
@@ -37,7 +37,7 @@ import { markEdited } from '../lib/autopublish'
 import { proseField, useAutoGrow } from '../lib/textareaHooks'
 import { AuditPanel, GraphEffects, TagsBlock, VarsBlock, revealAudit, splitSel } from '../components/GraphEffects'
 import { useCatalogNodes } from '../lib/useCatalogNodes'
-import { auditNode, gid, normalizeTag, probeScope, type AuditItem, type AuthoredNode } from '../lib/graph'
+import { auditNode, gid, normalizeTag, probeScope, type AuditItem, type AuthoredNode } from '../lib/engine'
 import { prereqClauses } from '../lib/feats'
 import {
   SOURCES, ACTIVATIONS, ACT_ORDER, COLORS, DEFAULT_COLOR,
@@ -50,8 +50,8 @@ import { originChain, runsActivation, toggleVar } from '../lib/featureView'
 import { TRIGGERS, triggerOf, triggerProblem } from '../lib/triggers'
 import { SEP, depthOf, folderSet, hiddenUnder, leafOf } from '../lib/folders'
 import { previewScope, type VarOwner } from '../lib/previewScope'
-import type { ExprScope } from '../lib/expr'
-import { VAR_IDENTS, evalExpr, freeIdents } from '../lib/expr'
+import type { ExprScope } from '../lib/engine'
+import { VAR_IDENTS, evalExpr, freeIdents } from '../lib/engine'
 import styles from '../components/authoring.module.css'
 import { IconPicker } from '../components/IconPicker'
 import { Icon } from '../components/Icon'

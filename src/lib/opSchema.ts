@@ -4,7 +4,7 @@
  *   > Adding an op must not require editing the editor.
  *
  * Every field an effect shows comes from `OPS[op].fields`. A new op is an entry
- * here plus a case in lib/graph.ts; the renderer is untouched. That is the whole
+ * here plus a case in lib/engine; the renderer is untouched. That is the whole
  * requirement, and it is why this file has no JSX in it.
  *
  * FIELD TYPES ARE A CLOSED SET. Adding a field type is a considered change, made
@@ -22,7 +22,7 @@ import type { GraphEffect, GraphOp } from './database.types.ts'
 import { MOD_STATS, SKILL_STATS } from './modEditor.ts'
 
 export type FieldType =
-  | 'formula'   // number or expression, evaluated by lib/expr.ts
+  | 'formula'   // number or expression, evaluated by lib/engine
   | 'number'    // a plain number — no dice, no identifiers, nothing to evaluate
   | 'text'      // player-facing prose
   | 'selector'  // a target list — thing, tag or roll kind
@@ -369,7 +369,7 @@ export const OP_TITLE: Record<GraphOp, string> = {
  *  the resolver. */
 export const IS_DAMAGE_FLAG = (op: GraphOp) => op === 'resist' || op === 'vuln' || op === 'immune'
 
-/** Roll kinds a selector may name. `RollKind` in lib/graph.ts is the authority for
+/** Roll kinds a selector may name. `RollKind` in lib/engine is the authority for
  *  the left half; the sub-kinds are the ones the app actually raises today. */
 /** `roll:<kind>[.<sub>]`. The sub NARROWS: `roll:damage` is every damage roll,
  *  `roll:damage.melee` only a melee weapon's. Weapon damage is
@@ -433,9 +433,9 @@ export const DEFAULT_COLOR = '#d4bf7d'
  *  Index 0 is skipped on purpose: character levels start at 1, and putting that
  *  off-by-one in one place beats living with it in every authored expression.
  *
- *  LIVES HERE, not in graph.ts, because three modules read it and one of
- *  them (featureView) sits BELOW graph.ts in the import order — graph.ts
- *  imports featureView for usesOf, so a featureView -> graph.ts import would
+ *  LIVES HERE, not in the engine, because three modules read it and one of
+ *  them (featureView) sits BELOW the engine in the import order — the engine
+ *  imports featureView for usesOf, so a featureView -> the engine import would
  *  close a cycle. opSchema is what both ends already depend on.
  *
  *  EXPORTED because resolve() is not the only reader. An `once` contribution

@@ -13,16 +13,14 @@
  * rather than sent and silently undone by the database — a write that appears to
  * work and doesn't is the worst shape available.
  */
-import type {
-  ActiveSource,
-} from './effects.ts'
-import { activeSources } from './effects.ts'
+import type { ActiveSource } from './engine/index.ts'
+import { activeSources } from './engine/index.ts'
 import type {
   ArmedMod, CharacterRow, CharacterSpellbook, Feature, GraphEffect, GraphState, Json, ShardTree, VarDef,
 } from './database.types.ts'
-import { ROLL_IDENTS, evalExpr, freeIdents, interpolate, type ExprScope } from './expr.ts'
-import type { GraphContext, ResolveReq, Rider } from './graph.ts'
-import { armedMatches, asKey, gid, reqKeys, staleArmed } from './graph.ts'
+import { ROLL_IDENTS, evalExpr, freeIdents, interpolate, type ExprScope } from './engine/index.ts'
+import type { GraphContext, ResolveReq, Rider } from './engine/index.ts'
+import { armedMatches, asKey, gid, reqKeys, staleArmed } from './engine/index.ts'
 import { IS_ACTIVATION, levelFormula } from './opSchema.ts'
 import { usesOf } from './featureView.ts'
 import { pactSlotCount, pactSlotLevel } from './spells.ts'

@@ -15,7 +15,7 @@
  */
 
 import type { CharacterRow, CharacterSheet } from './database.types.ts'
-import type { GraphContext } from './graph.ts'
+import type { GraphContext } from './engine/index.ts'
 import { buildCheck, type RollEntry } from './rolls.tsx'
 import { armsSpent, armsSpentBy } from './graphState.ts'
 import { pendingOf } from './rollView.ts'

@@ -6,17 +6,18 @@ import type { CharacterRow, CharacterSection, Feature, ShardPerk, ShardTree } fr
 import type { CSSProperties } from 'react'
 import { Nav } from '../components/Nav'
 import { Deco } from '../components/Deco'
-import { gearFeatures } from '../lib/effects'
-import { shardFeatures, shardPerks } from '../lib/shards'
+import { gearFeatures } from '../lib/engine'
+import { shardPerks } from '../lib/shards'
+import { shardFeatures } from '../lib/engine'
 import { Prose } from '../lib/markdown'
-import { interpolate, HAS_PREFIX, isHasIdent } from '../lib/expr'
+import { interpolate, HAS_PREFIX, isHasIdent } from '../lib/engine'
 import { colorOf } from '../lib/palette'
-import { affectedBy, gid, type Gid } from '../lib/graph'
+import { affectedBy, gid, type Gid } from '../lib/engine'
 import { triggerOf } from '../lib/triggers'
 import { featureEffects, isCarrier, isUsable, originChain, runsActivation, toggleVar, usesOf } from '../lib/featureView'
 import { useGraph } from '../lib/useGraph'
 import { gateOf, playerVars, setVars, type VarRow } from '../lib/graphState'
-import type { ExprScope } from '../lib/expr'
+import type { ExprScope } from '../lib/engine'
 import { useActivation } from '../components/ActivationSheet'
 import styles from './Features.module.css'
 import { Icon } from '../components/Icon'
@@ -111,7 +112,7 @@ const live = (text: string, scope: ExprScope) => interpolate(text, scope).text
 /**
  * Features — the character's abilities as a single continuous stream.
  *
- * Ported from `guide-hud/project/G.U.I.D.E. Features.html`. Three things carry
+ * Ported from `the mockup G.U.I.D.E. Features.html`. Three things carry
  * the design and are worth naming, because each replaced something weaker:
  *
  *   THE HEXAGON IS THE USE CONTROL. Not a `Use` button beside the card — the

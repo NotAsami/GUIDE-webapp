@@ -18,8 +18,8 @@ import {
   backgroundContent, classContent, featureContent, raceContent,
 } from './dm.ts'
 import { useShardCatalog } from './shardCatalog.ts'
-import { gid, nodeGid, normalizeTag, probeScope, type AuthoredNode } from './graph.ts'
-import { hasIdent } from './expr.ts'
+import { gid, nodeGid, normalizeTag, probeScope, type AuthoredNode } from './engine/index.ts'
+import { hasIdent } from './engine/index.ts'
 import type { VarDef } from './database.types.ts'
 
 export type CatalogNodes = {

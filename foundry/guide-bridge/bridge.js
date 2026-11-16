@@ -66,6 +66,26 @@ Hooks.once('init', () => {
   })
 })
 
+/* THE RULES ENGINE, LOADED AND NOTHING MORE. The same WebAssembly module the
+   codex runs (lib/engine/, copied here by `npm run engine:build`) loads in
+   Foundry and answers one formula. A proof that the engine is portable: this
+   module still never rolls and still knows nothing about features — nothing
+   below reads `guideEngine`. A failure is a console line, never a broken bridge. */
+let guideEngine = null
+Hooks.once('ready', async () => {
+  if (!game.user.isGM) return
+  try {
+    const engine = await import('./lib/engine/engine.js')
+    await engine.default({ module_or_path: new URL('./lib/engine/engine_bg.wasm', import.meta.url) })
+    const probe = engine.evalExpr('level / 2 + 1d6', { level: 7 })
+    if (probe?.flat !== 3 || probe.dice?.[0] !== '1d6') throw new Error(`unexpected answer ${JSON.stringify(probe)}`)
+    guideEngine = engine
+    console.log(`${MOD} | rules engine loaded`)
+  } catch (err) {
+    console.warn(`${MOD} | rules engine did not load (the bridge does not need it)`, err)
+  }
+})
+
 Hooks.once('ready', async () => {
   if (!game.user.isGM) return
   const url = game.settings.get(MOD, 'url')

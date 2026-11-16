@@ -16,7 +16,7 @@
 
 import type { CharacterRow, EquippedItem, EquippedGear, InventoryItem, ShardTree } from './database.types.ts'
 import { ITEM_SLOTS, getGear, getInventory, getWeapons, getContainers } from './equip.ts'
-import { carryMultiplier, effectiveSheet } from './effects.ts'
+import { carryMultiplier, currentBurden, effectiveSheet } from './engine/index.ts'
 
 /** Per-stack weight: per-unit weight × quantity (both default sensibly). */
 export function itemWeight(item: { weight?: number; qty?: number }): number {
@@ -73,13 +73,6 @@ export function heldWeights(character: CharacterRow): { name: string; qty: numbe
     .map(it => ({ name: it.name ?? 'Unnamed', qty: it.qty ?? 1, lb: itemWeight(it) }))
     .filter(r => r.lb > 0)
     .sort((a, b) => b.lb - a.lb)
-}
-
-/** Total carried weight in pounds (carried + equipped). */
-export function currentBurden(character: CharacterRow): number {
-  const total = allHeldItems(character).reduce((n, it) => n + itemWeight(it), 0)
-  // Avoid float dust (0.1-lb arrows etc.) — round to one decimal.
-  return Math.round(total * 10) / 10
 }
 
 /** Carrying capacity in pounds: SRD STR × 15. Pure — no effectiveSheet call —
