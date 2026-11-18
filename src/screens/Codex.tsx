@@ -57,7 +57,7 @@ export function Codex() {
             fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase',
             textAlign: 'center', padding: '40px 0',
           }}>
-            No story progress entries yet. Seed `progress.stories` in the character row.
+            No story entries yet. Your DM adds them from the Operator Console.
           </div>
         )}
         {stories.map(story => (
