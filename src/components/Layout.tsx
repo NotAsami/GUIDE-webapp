@@ -430,8 +430,7 @@ export function Layout() {
             Ask your DM to bind your character, then reload.
           </p>
           <TechDetail>
-            Run <code>supabase/seed.sql</code> in the SQL editor with your auth user id substituted into the
-            <code> :owner_id </code> placeholder. See <code>docs/GUIDE_Codex_Build_Handoff.md</code> §5 for the canon values.
+            A row in <code>characters</code> owned by this account's user id binds it.
           </TechDetail>
           {session?.user?.email && (
             <p style={{ color: 'var(--beige-dim)', fontSize: 10, letterSpacing: '0.12em', marginTop: 16 }}>

@@ -38,6 +38,10 @@ dist-ssr
 # git history should carry forever.
 brag-output
 
+# Full catalog backup (scripts/catalog-snapshot.mjs): homebrew and shard secrets.
+# The public part is derived into supabase/seed.sql, which IS committed.
+supabase/catalog_snapshot.sql
+
 # Design canvases (.design/): local working files. The artboards for shipped
 # features were removed from the repo and are in git history.
 .design

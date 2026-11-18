@@ -1,11 +1,7 @@
 /**
- * The catalog, as test data for the engine port.
- *
- * supabase/catalog_snapshot.sql is every authored row in the project — SRD and
- * homebrew, graphs included — already committed. Reading it back gives the
- * side-by-side tests the real content to run both engines over, with nothing
- * to export and nothing private: the snapshot's own header explains why it is
- * safe to publish.
+ * The catalog, as test data: the rows of supabase/seed.sql (the public seed every
+ * install starts from) read back into objects. Also used by catalog-snapshot.mjs
+ * to rebuild the seed from a private snapshot without touching the network.
  */
 import { readFileSync } from 'node:fs'
 
@@ -20,15 +16,19 @@ function literal(sql, i) {
   throw new Error('unterminated SQL string')
 }
 
-/** table → [{ id, data }] */
-export function catalog() {
-  const sql = readFileSync(new URL('../supabase/catalog_snapshot.sql', import.meta.url), 'utf8')
+const SEED = new URL('../supabase/seed.sql', import.meta.url)
+
+/** table → [{ id, data, draft }] from one of our generated SQL files (one row per
+ *  `insert … values ('<id>', '<json>'::jsonb[, <draft>])`). */
+export function catalog(file = SEED) {
+  const sql = readFileSync(file, 'utf8')
   const tables = {}
   const head = /^insert into (\w+) \([^)]*\) values \(/gm
   for (let m; (m = head.exec(sql));) {
     const [id, afterId] = literal(sql, head.lastIndex)
-    const [json] = literal(sql, sql.indexOf("'", afterId))
-    ;(tables[m[1]] ??= []).push({ id, data: JSON.parse(json) })
+    const [json, afterJson] = literal(sql, sql.indexOf("'", afterId))
+    const draft = /^::jsonb, (true|false|null)\)/.exec(sql.slice(afterJson, afterJson + 20))?.[1]
+    ;(tables[m[1]] ??= []).push({ id, data: JSON.parse(json), draft: draft === 'true' })
   }
   return tables
 }

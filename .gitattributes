@@ -2,3 +2,4 @@
 packages/engine-wasm/** linguist-generated=true
 *.wasm binary
 foundry/guide-bridge/lib/engine/** linguist-generated=true
+supabase/seed.sql linguist-generated -diff

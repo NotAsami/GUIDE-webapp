@@ -1,9 +1,8 @@
 // Run: node --import ./scripts/engine-node.mjs --test src/lib/engine.corpus.test.ts
 //
-// THE WHOLE CATALOG. Every authored feature, item, spell, shard and effect in
-// supabase/catalog_snapshot.sql is placed on a level-10 character and the
-// engine is asked about it: a smoke test that none of the real content makes
-// it throw.
+// THE WHOLE STARTING CATALOG. Every row of supabase/seed.sql (what a new
+// install starts with) is placed on a level-10 character and the engine is
+// asked about it: a smoke test that none of the shipped content makes it throw.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import '../../scripts/engine-node.mjs'
@@ -19,6 +18,9 @@ import { armedFrom } from './graphState.ts'
 
 type Row = { id: string; data: Record<string, any> }
 const C = catalog() as Record<string, Row[]>
+/* The public seed ships no shard trees — they are campaign content — so the
+   shard cases run over whatever trees the seed has, which today is none. */
+C.shard_tree_catalog ??= []
 const SLOTS = ['helmet', 'armor', 'cloak', 'boots', 'gloves', 'neck', 'ring1', 'ring2']
 const TREES = Object.fromEntries(C.shard_tree_catalog.map(r => [r.id, r.data])) as Record<string, ShardTree>
 const character = (over: Record<string, unknown>) => level10(over) as unknown as CharacterRow
