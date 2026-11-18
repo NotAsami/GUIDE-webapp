@@ -33,13 +33,6 @@ The one caution: nodes are great for Sanctity and worse than a form for Second W
 The medieval skin — illuminated manuscript, gold leaf on parchment.
 A printable character sheet, styled as a G.U.I.D.E. dossier printout.
 
-## EVOLUTION
-Evolution. The core horror mechanic from your original pitch — invest enough points, evolve, gain power, lose something. Glitch marks, ones and zeroes on the body. It's the campaign's centrepiece and it has no screen.
-Death and respawn. Each death pulls you closer to digitization, and respawn points drift from the city to rooftops to falling from the sky. G.U.I.D.E. reconstituting you is a gorgeous screen.
-The corrupted skin. The whole app degrading as Cerberus takes hold — flickering labels, amber creeping in, helpful text turning wrong. The corrupted broadcast tone exists; the corrupted app doesn't.
-The reveal. What the interface looks like the moment the players learn what G.U.I.D.E. is.
-First boot — the villain's warm welcome, as onboarding.
-
 ## GAPS WHILE PORTING ARBITER
 - Magical Bonus: +1 to attack and damage rolls, increases with Path features, which put the bonus to +2 on 10 points, and ect. Possible now?
 
