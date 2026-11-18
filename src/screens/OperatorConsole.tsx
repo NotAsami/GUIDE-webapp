@@ -76,6 +76,7 @@ import { useDmPlans } from '../lib/plans'
 import { ATTITUDE_CYCLE, ATTITUDE_LABEL, REL_TYPES } from '../lib/npcWeb'
 import { grantMany, isStackable } from '../lib/placement'
 import { usePartyPresence } from '../lib/presence'
+import { OperatorAddPlayer } from './OperatorAddPlayer'
 import { assignRace } from '../lib/races'
 import { longRestPatch } from '../lib/rest'
 import { SHARD_SLOT_KEYS, ejectShard, installShard, shardAvailable, shardSpent, type ShardSlotKey } from '../lib/shards'
@@ -216,7 +217,7 @@ export function OperatorConsole() {
   // secrets) — safe to feed straight into effectiveSheet()'s shardTrees arg.
   const shardCatalog = useMemo<Record<string, ShardTree>>(
     () => Object.fromEntries(shardLib.trees.map(t => [t.id, t])), [shardLib.trees])
-  const { party, secrets, loading: partyLoading, error, writeError, dismissWriteError, updateCharacter, updateSecret } = useDmParty(shardCatalog)
+  const { party, secrets, loading: partyLoading, error, writeError, dismissWriteError, updateCharacter, updateSecret, addPlayer } = useDmParty(shardCatalog)
   const campaign = useDmCampaign()
   const handoutLib = useDmHandouts()
   const npcLib = useDmNpcs()
@@ -644,6 +645,7 @@ export function OperatorConsole() {
                     </button>
                   )
                 })}
+                {!partyLoading && !error && <OperatorAddPlayer empty={members.length === 0} onAdd={addPlayer} onAdded={openCharacter} />}
               </div>
             </div>
           </div>

@@ -2472,6 +2472,7 @@ export type Database = {
        *  sheet — the `grant` op's write. The mod is rebuilt from a whitelist
        *  server-side; see the migration's header comment for why. */
       grant_party_arm: { Args: { p_target: string; p_mod: Json }; Returns: Json }
+      add_player: { Args: { p_email: string; p_name: string }; Returns: Json }
     }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>

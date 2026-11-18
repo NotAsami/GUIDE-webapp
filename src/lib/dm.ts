@@ -91,6 +91,17 @@ interface DmPartyState {
    *  characters, so this UPSERTs (a plain update would silently hit zero rows);
    *  unspecified columns fall back to their defaults on first insert. Optimistic. */
   updateSecret: (characterId: string, patch: CharacterSecretUpdate) => Promise<void>
+  /** Create a blank level-1 character for the account that signs in with
+   *  `email` (migration 0030). The player must have signed in once. Resolves
+   *  with the new character's id, or with the sentence to show the DM. */
+  addPlayer: (email: string, name: string) => Promise<{ id: string } | { error: string }>
+}
+
+/** Why add_player said no, as the DM reads it. */
+const ADD_PLAYER_REFUSED: Record<string, string> = {
+  not_dm: 'Only the DM can add players.',
+  no_name: 'Give the character a name.',
+  no_account: 'No account uses that email yet. Ask the player to open the app and sign in once, then try again.',
 }
 
 /** Reads EVERY character row — the operator's cross-character view. Only returns
@@ -210,9 +221,24 @@ export function useDmParty(shardTrees: Record<string, ShardTree> = {}): DmPartyS
     }
   }, [])
 
+  const addPlayer = useCallback<DmPartyState['addPlayer']>(async (email, name) => {
+    const { data, error: err } = await supabase.rpc('add_player', { p_email: email, p_name: name })
+    if (err) return { error: err.message }
+    const r = data as { ok: boolean; id?: string; reason?: string; name?: string }
+    if (r.ok && r.id) {
+      // An INSERT is not streamed (the channel above listens for UPDATEs), so
+      // fetch the party again to show the new row.
+      await fetchAll()
+      return { id: r.id }
+    }
+    return { error: ADD_PLAYER_REFUSED[r.reason ?? ''] ?? (r.reason === 'has_character'
+      ? `That account already plays ${r.name}. One character per account.`
+      : 'The character could not be created.') }
+  }, [fetchAll])
+
   return {
     party, secrets, loading, error, writeError, dismissWriteError: () => setWriteError(null),
-    refetch: fetchAll, updateCharacter, updateSecret,
+    refetch: fetchAll, updateCharacter, updateSecret, addPlayer,
   }
 }
 
